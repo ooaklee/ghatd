@@ -19,6 +19,10 @@ go run main.go start-server
 
 ## Good to know
 
+### ASCI Art
+
+All ASCI related code in this template was created using [PatorJK](https://patorjk.com/software/taag/#p=display&h=2&f=Isometric3)
+
 ### Core internal packages
 
 Some core packages are used across the codebase without injection; they include:
