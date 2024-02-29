@@ -220,7 +220,7 @@ func initialiseThirdPartyClients(appSettings *settings.Settings) error {
 	// }
 
 	// placeholder
-	if appSettings.Environment == "local" {
+	if appSettings.Environment != "local" {
 		return fmt.Errorf("third-party-client-initialisation-placeholder-is-erroring: non-local environment in app settings (detected: %s)", appSettings.Environment)
 	}
 
