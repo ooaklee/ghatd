@@ -10,6 +10,8 @@ type Settings struct {
 	LogLevel              string `envconfig:"log_level" default:"info"`
 	Host                  string `default:"0.0.0.0"`
 	Port                  string `default:"4000"`
+	// Cors
+	AllowOrigins string `envconfig:"allow_origins" default:"http://localhost:3000" required:"true"`
 }
 
 // NewSettings returns app settings

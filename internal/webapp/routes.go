@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/ooaklee/courses/golang/template-golang-htmx-alpine-tailwind/internal/router"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/router"
 )
 
 // webAppHandler expected methods for valid web app handler

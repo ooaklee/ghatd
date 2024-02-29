@@ -6,7 +6,7 @@ import (
 
 	_ "embed"
 
-	"github.com/ooaklee/courses/golang/template-golang-htmx-alpine-tailwind/cmd/server"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/cmd/server"
 	"github.com/spf13/cobra"
 )
 
