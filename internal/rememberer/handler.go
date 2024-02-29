@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ooaklee/reply"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
@@ -108,6 +109,10 @@ func (h *Handler) GetWords(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(r.Header.Get("Hx-Request"), "true") {
+
+		// Added so that I can test the loader when using
+		// hx-indicator
+		time.Sleep(time.Second * 3)
 
 		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 

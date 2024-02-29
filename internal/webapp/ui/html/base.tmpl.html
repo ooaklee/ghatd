@@ -1,11 +1,14 @@
 {{define "base"}}
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"
+        integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5xLSi8nO7UC"
+        crossorigin="anonymous"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- To be migrated to tailwind & alpine -->
@@ -13,22 +16,27 @@
     <link rel='shortcut icon' href='/static/img/favicon.ico' type='image/x-icon'>
     <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700'>
     <!---->
-    
+
     <title>{{template "title" .}} - GHAT</title>
-  </head>
-  <body>
+</head>
+
+<body>
     <header class="text-center">
-        <h1 class="text-2xl font-bold my-5"><a href='/'>Welcome to GHAT</a></h1>  
+        <h1 class="text-2xl font-bold my-5"><a href='/'>Welcome to GHAT</a></h1>
     </header>
-      <!-- Invoke the navigation template -->
-      {{template "nav" .}}
+    <!-- Invoke the navigation template -->
+    {{template "nav" .}}
+
     <main class="text-center">
         {{template "main" .}}
+
+        {{template "spinner" .}}
     </main>
     <footer></footer>
     <!-- To be migrated to tailwind & alpine -->
     <script src="/static/js/main.js" type="text/javascript"></script>
     <!---->
-  </body>
+</body>
+
 </html>
 {{end}}

@@ -33,6 +33,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/partials/nav.tmpl.html",
+		"internal/webapp/ui/html/partials/spinner.tmpl.html",
 		"internal/webapp/ui/html/pages/home.tmpl.html",
 	}
 

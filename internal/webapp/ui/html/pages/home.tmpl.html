@@ -1,10 +1,10 @@
 {{define "title"}}Home{{end}}
 
 {{define "main"}}
-    <button 
-    hx-get="/v1/rememberer/words"
-    hx-swap="outerHTML"
+<button hx-get="/v1/rememberer/words" hx-target="#words" hx-indicator="#spinner"
     class="bg-blue-500 text-white py-2 px-3 my-5 rounded-lg">
-        Fetch Words
-    </button>
+    Fetch Words
+</button>
+
+<div id="words"></div>
 {{end}}
