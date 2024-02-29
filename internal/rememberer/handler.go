@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/ooaklee/reply"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
@@ -103,6 +104,28 @@ func (h *Handler) GetWords(w http.ResponseWriter, r *http.Request) {
 		logger.Error("failed-to-retrieve-all-words-on-platform")
 		//nolint will set up default fallback later
 		getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if strings.Contains(r.Header.Get("Hx-Request"), "true") {
+
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+
+		// TODO: Update this to use partial template
+		w.Write([]byte(fmt.Sprintf(`
+		<h1 class="text-2xl font-bold my-4">Words</h1>
+		<ul>
+			%s
+		</ul>
+		`, func() string {
+			var wordList string
+
+			for _, word := range words.Words {
+				wordList += fmt.Sprintf("<li>%s</li>", word.Name)
+			}
+			return wordList
+		}(),
+		)))
 		return
 	}
 
