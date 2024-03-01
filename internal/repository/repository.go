@@ -27,7 +27,7 @@ func NewInMememoryRepository() *InMememoryRepository {
 			},
 			{
 				Id:        "1b2abdfa-1eaa-38c6-a7b7-c1011c195a10",
-				Name:      "police car",
+				Name:      "ambulance",
 				CreatedAt: "2024-02-14T00:35:13.612482",
 			},
 		},
