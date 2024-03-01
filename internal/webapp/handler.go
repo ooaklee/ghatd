@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"log"
 	"net/http"
 	"strconv"
+
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
+	"go.uber.org/zap"
 )
 
 // NewWebAppHandler creates a new instance of a web app handler
@@ -22,6 +24,8 @@ type Handler struct {
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
 
 	// If the path is not exactly "/"
 	if r.URL.Path != "/" {
@@ -40,7 +44,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	// Parse template
 	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
 	if err != nil {
-		log.Default().Println("Unable to parse referenced template", err)
+		logger.Error("Unable to parse referenced template", zap.Error(err))
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -48,7 +52,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	// Write template to response
 	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
 	if err != nil {
-		log.Default().Println("Unable to execute parsed template", err)
+		logger.Error("Unable to execute parsed template", zap.Error(err))
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}

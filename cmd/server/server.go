@@ -132,7 +132,7 @@ func runServer(embeddedContent fs.FS) error {
 	remembererService := rememberer.NewService(coreRepository)
 
 	// TODO: Create Handler(s)
-	remembererHandler := rememberer.NewHandler(remembererService, appValidator)
+	remembererHandler := rememberer.NewHandler(remembererService, appValidator, embeddedContent)
 
 	// TODO: Attach package routes to router
 	rememberer.AttachRoutes(&rememberer.AttachRoutesRequest{

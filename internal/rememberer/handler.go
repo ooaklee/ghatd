@@ -3,12 +3,16 @@ package rememberer
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/ooaklee/reply"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
+	"go.uber.org/zap"
 )
 
 // remembererService manages business logic around rememberer request
@@ -26,15 +30,17 @@ type remembererValidator interface {
 
 // Handler manages rememberer requests
 type Handler struct {
-	service   remembererService
-	validator remembererValidator
+	service         remembererService
+	validator       remembererValidator
+	embeddedContent fs.FS
 }
 
 // NewHandler returns rememberer handler
-func NewHandler(service remembererService, validator remembererValidator) *Handler {
+func NewHandler(service remembererService, validator remembererValidator, embeddedContent fs.FS) *Handler {
 	return &Handler{
-		service:   service,
-		validator: validator,
+		service:         service,
+		validator:       validator,
+		embeddedContent: embeddedContent,
 	}
 }
 
@@ -108,33 +114,33 @@ func (h *Handler) GetWords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.Contains(r.Header.Get("Hx-Request"), "true") {
+	logger.Info("successfully-retrieve-all-words-on-platform")
+
+	if strings.Contains(r.Header.Get(common.HtmxHttpRequestHeader), "true") {
+
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedContent, "internal/webapp/ui/html/responses/get-words.tmpl.html")
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 
 		// Added so that I can test the loader when using
 		// hx-indicator
 		time.Sleep(time.Second * 3)
 
-		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		// Write template to response
+		err = parsedTemplates.Execute(w, words)
+		if err != nil {
+			logger.Error("Unable to execute parsed template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 
-		// TODO: Update this to use partial template
-		w.Write([]byte(fmt.Sprintf(`
-		<h1 class="text-2xl font-bold my-4">Words</h1>
-		<ul>
-			%s
-		</ul>
-		`, func() string {
-			var wordList string
-
-			for _, word := range words.Words {
-				wordList += fmt.Sprintf("<li>%s</li>", word.Name)
-			}
-			return wordList
-		}(),
-		)))
 		return
 	}
 
-	logger.Info("successfully-retrieve-all-words-on-platform")
 	getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, words.Words)
 
 }

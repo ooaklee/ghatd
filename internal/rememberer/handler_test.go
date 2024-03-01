@@ -126,7 +126,8 @@ func TestHandler_GetWordById(t *testing.T) {
 
 			router := mux.NewRouter()
 
-			router.HandleFunc("/rememberer/words/{wordId}", rememberer.NewHandler(test.remembererService, v).GetWordById)
+			// TODO: Investigate best way to test htmx integration
+			router.HandleFunc("/rememberer/words/{wordId}", rememberer.NewHandler(test.remembererService, v, nil).GetWordById)
 			router.ServeHTTP(w, test.request)
 
 			test.assertResponse(w, t)

@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
 
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -24,7 +24,7 @@ func NewLogger(logger *zap.Logger) *Middleware {
 func getOrCreateCorrelationId(req *http.Request) string {
 	correlationId := req.Header.Get("X-Correlation-Id")
 	if correlationId == "" {
-		return uuid.New().String()
+		return toolbox.GenerateUuidV4()
 	}
 	return correlationId
 }
@@ -34,7 +34,10 @@ func getOrCreateCorrelationId(req *http.Request) string {
 func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
-		reqLogger := m.logger.With(zap.String("correlation-id", getOrCreateCorrelationId(req)))
+		fetchedCorrelationId := getOrCreateCorrelationId(req)
+		w.Header().Add("X-Correlation-Id", fetchedCorrelationId)
+
+		reqLogger := m.logger.With(zap.String("correlation-id", fetchedCorrelationId))
 		//nolint Sync the request logger
 		defer reqLogger.Sync()
 
