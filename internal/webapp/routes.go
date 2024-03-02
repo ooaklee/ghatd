@@ -13,6 +13,7 @@ type webAppHandler interface {
 	SnippetView(w http.ResponseWriter, r *http.Request)
 	SnippetCreate(w http.ResponseWriter, r *http.Request)
 	Home(w http.ResponseWriter, r *http.Request)
+	Dash(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -21,6 +22,9 @@ const (
 
 	// WebAppStaticRoute base URI prefix for the web app static route for assets
 	WebAppStaticRoute = WebAppBase + "static/"
+
+	// WebAppDashRoute base URI prefix for the web app dashboard routes
+	WebAppDashRoute = WebAppBase + "dash"
 
 	// WebAppSnippetRoute base URI prefix for the web app snippet routes
 	WebAppSnippetRoute = WebAppBase + "snippet/"
@@ -63,6 +67,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.PathPrefix(WebAppStaticRoute).Handler(http.StripPrefix(WebAppStaticRoute, http.FileServer(http.FS(staticSubFS))))
 
 	httpRouter.HandleFunc(WebAppBase, request.Handler.Home)
+	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
 

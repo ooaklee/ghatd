@@ -1,9 +1,10 @@
-# Template Golang HTMX Alpine Tailwind
+# Template Golang HTMX Alpine Tailwind DaisyUI
 
 - **template of:** golang + htmx + alpine + tailwind
 - **htmx:** [v1.9.10](https://htmx.org/)
 - **alpine.js:** [v3.x](https://alpinejs.dev/essentials/installation#from-a-script-tag)
 - **tailwindcss:** [v3.x](https://github.com/asdf-community/asdf-golang)
+- **daisy ui:** [v3.x](https://daisyui.com/docs/install/)
 - **version manager:** [asdf]([text](https://github.com/asdf-community/asdf-golang))
 
 
@@ -15,7 +16,7 @@ To start the server you can use the code:
 go run main.go start-server
 ```
 
-> This template application will be referred to as `ghat` (Go HTMX Alpine Tailwind) throughout the template, use this to replace the name
+> This template application will be referred to as `ghatd` (Go HTMX Alpine Tailwind DaisyUi) throughout the template, use this to replace the name
 
 ## Good to know
 

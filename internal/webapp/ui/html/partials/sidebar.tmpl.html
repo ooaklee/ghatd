@@ -4,7 +4,7 @@
     @click.outside="sidebarToggle = false">
     <!-- SIDEBAR HEADER -->
     <div class="flex items-center justify-between gap-2 px-6 py-5.5 lg:py-6.5">
-        <a href="index.html">
+        <a href="/">
             <img src="/static/img/logo-176_32.svg" alt="Logo" />
         </a>
 
@@ -252,6 +252,23 @@
                         </a>
                     </li>
                     <!-- Menu Item Chart -->
+
+                    <!-- Menu Item Blank page -->
+                    <li>
+                        <a class="group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4"
+                            href="chart.html" @click="selected = (selected === 'Blank' ? '':'Blank')"
+                            :class="{ 'bg-graydark dark:bg-meta-4': (selected === 'Blank') && (page === 'Blank') }">
+
+                            <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" width="19" height="19"
+                                viewBox="0 0 24 24">
+                                <path fill=""
+                                    d="M5 21q-.825 0-1.412-.587T3 19V5q0-.825.588-1.412T5 3h14q.825 0 1.413.588T21 5v14q0 .825-.587 1.413T19 21zm0-2h14V5H5z" />
+                            </svg>
+
+                            Blank page
+                        </a>
+                    </li>
+                    <!-- Menu Item Blank page -->
 
                     <!-- Menu Item Ui Elements -->
                     <li>

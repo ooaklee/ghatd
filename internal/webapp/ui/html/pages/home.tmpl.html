@@ -1,10 +1,45 @@
 {{define "title"}}Home{{end}}
 
-{{define "main"}}
-<button hx-get="/v1/rememberer/words" hx-target="#words" hx-indicator="#spinner"
-    class="bg-blue-500 text-white py-2 px-3 my-5 rounded-lg">
-    Fetch Words
-</button>
 
-<div id="words"></div>
+{{define "head"}}
+
+{{template "tailwind-conf-script" .}}
+<link rel='stylesheet' href='/static/css/dash-styles.css'>
+
+{{end}}
+
+
+{{define "main"}}
+<!-- ===== Page Wrapper Start ===== -->
+<div class="flex h-screen overflow-hidden">
+    <!-- ===== Content Area Start ===== -->
+    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+        <!-- ===== Header Start ===== -->
+        {{template "header" .}}
+        <!-- ===== Header End ===== -->
+
+        <!-- ===== Main Content Start ===== -->
+        <main>
+            <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+                <div class="pt-24">
+                    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                        <h1 class="font-bold text-3xl flex text-center">Discover the GHAT template</h1>
+                        <div class="mt-6 max-w-[352px]">
+                            <p class="mb4">Build your full-stack web app using Go, HMTX, Alpine.js, and Tailwind CSS
+                                with this template.</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap justify-center mt-8" style="gap: 20px;">
+                        <a class="btn btn-primary" href="/dash">Go to
+                            dashboard</a>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+        <!-- ===== Main Content End ===== -->
+    </div>
+    <!-- ===== Content Area End ===== -->
+</div>
+<!-- ===== Page Wrapper End ===== -->
 {{end}}
