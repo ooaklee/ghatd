@@ -40,6 +40,10 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/preloader.tmpl.html",
 		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
 		"internal/webapp/ui/html/partials/header.tmpl.html",
+		"internal/webapp/ui/html/partials/chart-area.tmpl.html",
+		"internal/webapp/ui/html/partials/chart-bar.tmpl.html",
+		"internal/webapp/ui/html/partials/chart-donut.tmpl.html",
+		"internal/webapp/ui/html/partials/map-01.tmpl.html",
 		"internal/webapp/ui/html/partials/spinner.tmpl.html",
 		"internal/webapp/ui/html/pages/home.tmpl.html",
 	}
