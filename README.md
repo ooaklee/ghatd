@@ -44,3 +44,17 @@ and listing page.
 ```sh
 touch internal/webapp/ui/static/index.html
 ```
+
+### Hot reloading
+
+Install reflex
+
+`go install github.com/cespare/reflex@latest`
+
+> You can find more information in the repo https://github.com/cespare/reflex
+
+Once installed, run the server
+
+```
+reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main.go start-server
+```

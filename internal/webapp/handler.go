@@ -36,7 +36,10 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	// list of template files to parse, must be in order of inheritence
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
-		"internal/webapp/ui/html/partials/nav.tmpl.html",
+		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/header.tmpl.html",
 		"internal/webapp/ui/html/partials/spinner.tmpl.html",
 		"internal/webapp/ui/html/pages/home.tmpl.html",
 	}
