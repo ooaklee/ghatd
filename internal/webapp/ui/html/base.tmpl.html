@@ -225,16 +225,16 @@
                         <!-- ====== Chart Two End -->
 
                         <!-- ====== Chart Three Start -->
-                        {{template "chart-donut"}}
+                        {{template "chart-donut" .}}
                         <!-- ====== Chart Three End -->
 
                         <!-- ====== Map One Start -->
-                        {{template "map-01"}}
+                        {{template "map-01" .}}
                         <!-- ====== Map One End -->
 
                         <!-- ====== Table One Start -->
                         <div class="col-span-12 xl:col-span-8">
-                            <include src="./partials/table-01.html" />
+                            {{template "table-01" .}}
                         </div>
                         <!-- ====== Table One End -->
 

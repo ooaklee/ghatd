@@ -44,6 +44,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/chart-bar.tmpl.html",
 		"internal/webapp/ui/html/partials/chart-donut.tmpl.html",
 		"internal/webapp/ui/html/partials/map-01.tmpl.html",
+		"internal/webapp/ui/html/partials/table-01.tmpl.html",
 		"internal/webapp/ui/html/partials/spinner.tmpl.html",
 		"internal/webapp/ui/html/pages/home.tmpl.html",
 	}
