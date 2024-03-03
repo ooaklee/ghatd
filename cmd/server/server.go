@@ -28,6 +28,7 @@ import (
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/validator"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
 )
 
 // NewCommand returns a command for starting
@@ -103,8 +104,19 @@ func runServer(embeddedContent fs.FS) error {
 	//     \  \::/      \  \::/      \  \::/               \  \:\       \  \:\   \  \:\
 	//  	\__\/        \__\/        \__\/                 \__\/        \__\/    \__\/
 
+	// Generate policies for web app
+	termsOfServicePolicy := policy.NewGeneratedTermsPolicy(&policy.NewGeneratedTermsPolicyRequest{
+		ServiceName:       appSettings.ExternalServiceName,
+		ServiceWebsite:    appSettings.ExternalServiceWebsite,
+		ServiceEmail:      appSettings.ExternalServiceEmail,
+		LegalBusinessName: appSettings.LegalBusinessName,
+	})
+
 	// Initialise handler for web app
-	webAppHandler := webapp.NewWebAppHandler(embeddedContent)
+	webAppHandler := webapp.NewWebAppHandler(&webapp.NewWebAppHandlerRequest{
+		EmbeddedContent:      embeddedContent,
+		TermsOfServicePolicy: termsOfServicePolicy,
+	})
 
 	// Attach routes
 	webapp.AttachRoutes(&webapp.AttachRoutesRequest{

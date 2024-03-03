@@ -1,0 +1,35 @@
+{{define "title"}}{{ .Name}}{{end}}
+
+
+{{define "head"}}
+
+{{template "tailwind-conf-script" .}}
+<link rel='stylesheet' href='/static/css/dash-styles.css'>
+
+{{end}}
+
+
+{{define "main"}}
+<!-- ===== Page Wrapper Start ===== -->
+<div class="flex h-screen overflow-hidden">
+    <!-- ===== Sidebar Start ===== -->
+    {{template "sidebar" .}}
+    <!-- ===== Sidebar End ===== -->
+
+    <!-- ===== Content Area Start ===== -->
+    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden h-screen justify-between">
+        <span>
+            <!-- ===== Header Start ===== -->
+            {{template "header" .}}
+            <!-- ===== Header End ===== -->
+
+            <!-- ===== Policy Content Start ===== -->
+            {{template "policy-holder" .}}
+            <!-- ===== Policy Content End ===== -->
+        </span>
+        {{block "footer" .}}{{end}}
+    </div>
+    <!-- ===== Content Area End ===== -->
+</div>
+<!-- ===== Page Wrapper End ===== -->
+{{end}}
