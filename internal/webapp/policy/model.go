@@ -52,8 +52,10 @@ func (w *WebAppPolicy) GetTableOfContentsItems() []TableOfContentsItem {
 // href attribute
 func (w *WebAppPolicy) generateHeaderHref(sectionName string) string {
 
-	return fmt.Sprintf("#%s", strings.ReplaceAll(
-		toolbox.StringStandardisedToLower(sectionName),
-		" ",
-		"-"))
+	return fmt.Sprintf("#%s",
+		toolbox.StripNonAlphanumericCharactersRegex(
+			[]byte(strings.ReplaceAll(
+				toolbox.StringStandardisedToLower(sectionName),
+				" ",
+				"-")), []byte("-")))
 }

@@ -75,3 +75,10 @@ func StringStandardisedToLower(s string) string {
 func DecodeRequestBody(request *http.Request, parsedRequestObject interface{}) error {
 	return json.NewDecoder(request.Body).Decode(parsedRequestObject)
 }
+
+// StripNonAlphanumericCharactersRegex handles remove all non-alpanumeric charactes
+// from passed string
+func StripNonAlphanumericCharactersRegex(in []byte, with []byte) string {
+	reg, _ := regexp.Compile("[^a-zA-Z0-9 ]+")
+	return reg.ReplaceAllString(string(in), string(with))
+}

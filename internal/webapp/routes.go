@@ -14,6 +14,8 @@ type webAppHandler interface {
 	SnippetCreate(w http.ResponseWriter, r *http.Request)
 	Home(w http.ResponseWriter, r *http.Request)
 	Terms(w http.ResponseWriter, r *http.Request)
+	Privacy(w http.ResponseWriter, r *http.Request)
+
 	Dash(w http.ResponseWriter, r *http.Request)
 }
 
@@ -24,8 +26,11 @@ const (
 	// WebAppDashRoute base URI prefix for the web app dashboard routes
 	WebAppDashRoute = WebAppBase + "dash"
 
-	// WebAppTermsRoute base URI prefix for the web app terms page
-	WebAppTermsRoute = WebAppBase + "terms"
+	// WebAppPolicyTermsRoute base URI prefix for the web app terms policy page
+	WebAppPolicyTermsRoute = WebAppBase + "terms"
+
+	// WebAppPolicyPrivacyRoute base URI prefix for the web app privacy policy page
+	WebAppPolicyPrivacyRoute = WebAppBase + "privacy-policy"
 
 	// WebAppStaticRoute base URI prefix for the web app static route for assets
 	WebAppStaticRoute = WebAppBase + "static/"
@@ -71,7 +76,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.PathPrefix(WebAppStaticRoute).Handler(http.StripPrefix(WebAppStaticRoute, http.FileServer(http.FS(staticSubFS))))
 
 	httpRouter.HandleFunc(WebAppBase, request.Handler.Home)
-	httpRouter.HandleFunc(WebAppTermsRoute, request.Handler.Terms)
+	httpRouter.HandleFunc(WebAppPolicyTermsRoute, request.Handler.Terms)
+	httpRouter.HandleFunc(WebAppPolicyPrivacyRoute, request.Handler.Privacy)
 	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
