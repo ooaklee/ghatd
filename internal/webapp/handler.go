@@ -39,6 +39,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/pages/home.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/header.tmpl.html",
+		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
 	}
 
 	// Parse template
@@ -69,7 +70,7 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
 		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
 		"internal/webapp/ui/html/partials/chart-area.tmpl.html",
 		"internal/webapp/ui/html/partials/chart-bar.tmpl.html",

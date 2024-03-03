@@ -49,32 +49,10 @@
 
                 <span class="w-full justify-between flex">
                     <div class="hidden sm:block align-center min-w-[500px] h-[48px]">
-                        <span class>
-                            <div class="dropdown dropdown-bottom dropdown-end">
-                                <div tabindex="0" role="button" class="m-1 mt-3 ">
-
-                                    <a
-                                        class="relative flex h-8.5 w-8.5 items-center justify-center rounded-full border-[0.5px] border-stroke bg-gray hover:text-primary dark:border-strokedark dark:bg-meta-4 dark:text-white">
-
-                                        <svg class="fill-current duration-300 ease-in-out"
-                                            xmlns="http://www.w3.org/2000/svg" width="26" height="26"
-                                            viewBox="0 0 24 24">
-                                            <path fill=""
-                                                d="M12.003 21q-1.866 0-3.51-.708q-1.643-.709-2.859-1.924q-1.216-1.214-1.925-2.856Q3 13.87 3 12.003q0-1.866.708-3.51q.709-1.643 1.924-2.859q1.214-1.216 2.856-1.925Q10.13 3 11.997 3q1.866 0 3.51.708q1.643.709 2.859 1.924q1.216 1.214 1.925 2.856Q21 10.13 21 11.997q0 1.866-.708 3.51q-.709 1.643-1.924 2.859q-1.214 1.216-2.856 1.925Q13.87 21 12.003 21M12 20q3.35 0 5.675-2.325T20 12q0-.175-.003-.353t-.022-.341q-.067.667-.53 1.104q-.464.436-1.137.436h-2.539q-.698 0-1.195-.496q-.497-.497-.497-1.194v-.844h-3.385v-1.69q0-.697.497-1.198q.498-.5 1.196-.5h.846v-.77q0-.729.476-1.147q.476-.419 1.137-.482q-.673-.26-1.38-.392Q12.759 4 12 4Q8.65 4 6.325 6.325T4 12v.288q0 .135.02.289H8.5q1.42 0 2.402.983q.983.982.983 2.393v.855H9.346v2.73q.616.222 1.286.342q.67.12 1.368.12" />
-                                        </svg>
-                                    </a>
-
-
-
-
-
-                                </div>
-                                <ul tabindex="0"
-                                    class="dropdown-content z-[1] menu p-2 shadow bg-base-100 w-52 mt-[14px]">
-                                    <li><a>English</a></li>
-                                    <li><a>Polski</a></li>
-                                </ul>
-                            </div>
+                        <span class="flex items-center h-full">
+                            <a class="text-sm hover:text-black font-medium invisible md:visible" href="/auth/signup">
+                                Get support
+                            </a>
                         </span>
                     </div>
                     <div class="flex items-center gap-3 2xsm:gap-7">
@@ -82,10 +60,12 @@
 
                         <!-- User Area -->
                         <div class="relative">
-                            <a class="text-black font-medium" href="/auth/signup">
+                            <a class="text-sm text-center text-black font-medium invisible md:visible px-4 py-3"
+                                href="/auth/signup">
                                 Sign up
                             </a>
-                            <a class="btn btn-outline btn-primary ml-4" href="/auth/login">Log in</a>
+                            <a class="ml-2 text-sm rounded border border-primary px-4 py-3 font-medium text-center text-black hover:bg-primary/[.10]"
+                                href="/auth/login">Log in</a>
                         </div>
                         <!-- User Area -->
                     </div>
