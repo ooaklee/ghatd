@@ -39,6 +39,7 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/pages/home.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/header.tmpl.html",
+		"internal/webapp/ui/html/partials/footer.tmpl.html",
 		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
 	}
 

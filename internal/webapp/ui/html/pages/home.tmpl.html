@@ -17,33 +17,37 @@
     <!-- ===== Sidebar End ===== -->
 
     <!-- ===== Content Area Start ===== -->
-    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
-        <!-- ===== Header Start ===== -->
-        {{template "header" .}}
-        <!-- ===== Header End ===== -->
+    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden h-screen justify-between">
+        <span>
+            <!-- ===== Header Start ===== -->
+            {{template "header" .}}
+            <!-- ===== Header End ===== -->
 
-        <!-- ===== Main Content Start ===== -->
-        <main>
-            <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-                <div class="pt-24">
-                    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
-                        <h1 class="font-bold text-3xl flex text-center">Discover the GHATD template</h1>
-                        <div class="mt-6 max-w-[352px]">
-                            <p class="mb4 flex text-center">Build your full-stack web app using Go, HMTX, Alpine.js,
-                                Tailwind CSS and
-                                Daisy UI with this template.</p>
+            <!-- ===== Main Content Start ===== -->
+            <main>
+                <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+                    <div class="pt-24">
+                        <div
+                            style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                            <h1 class="font-bold text-3xl flex text-center">Discover the GHATD template</h1>
+                            <div class="mt-6 max-w-[352px]">
+                                <p class="mb4 flex text-center">Build your full-stack web app using Go, HMTX, Alpine.js,
+                                    Tailwind CSS and
+                                    Daisy UI with this template.</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap justify-center mt-8" style="gap: 20px;">
+                            <a class="ml-2 w-full md:w-fit text-center text-sm rounded border bg-primary border-primary px-4 py-3 font-medium text-white hover:bg-primary/[.90]"
+                                href="/dash">Go to
+                                dashboard</a>
+
                         </div>
                     </div>
-                    <div class="flex flex-wrap justify-center mt-8" style="gap: 20px;">
-                        <a class="ml-2 w-full md:w-fit text-center text-sm rounded border bg-primary border-primary px-4 py-3 font-medium text-white hover:bg-primary/[.90]"
-                            href="/dash">Go to
-                            dashboard</a>
-
-                    </div>
                 </div>
-            </div>
-        </main>
-        <!-- ===== Main Content End ===== -->
+            </main>
+            <!-- ===== Main Content End ===== -->
+        </span>
+        {{block "footer" .}}{{end}}
     </div>
     <!-- ===== Content Area End ===== -->
 </div>

@@ -40,7 +40,7 @@
 
         <!--desktop-->
         <span class="w-full flex place-content-end md:justify-center">
-            <div class="max-w-[1440px] m-0 sm:px-12 flex-col justify-center ">
+            <div class="mx-auto max-w-[1440px] m-0 sm:px-12 flex-col justify-center ">
                 <div class="hidden sm:block mb-2">
                     <a href="/">
                         <img src="/static/img/logo-176_32.svg" alt="Logo" />
@@ -60,11 +60,13 @@
 
                         <!-- User Area -->
                         <div class="relative">
-                            <a class="text-sm text-center text-black font-medium invisible md:visible px-4 py-3"
+                            <a :class="darkMode ? '' : 'text-black'"
+                                class="text-sm text-center font-medium invisible md:visible px-4 py-3"
                                 href="/auth/signup">
                                 Sign up
                             </a>
-                            <a class="ml-2 text-sm rounded border border-primary px-4 py-3 font-medium text-center text-black hover:bg-primary/[.10]"
+                            <a :class="darkMode ? 'hover:bg-primary/[.20]' : 'text-black'"
+                                class="ml-2 text-sm rounded border border-primary px-4 py-3 font-medium text-center  hover:bg-primary/[.10]"
                                 href="/auth/login">Log in</a>
                         </div>
                         <!-- User Area -->
