@@ -10,13 +10,16 @@ type Settings struct {
 	LogLevel              string `envconfig:"log_level" default:"info"`
 	Host                  string `default:"0.0.0.0"`
 	Port                  string `default:"4000"`
+	// Cache
+	CacheTtl                 int    `envconfig:"cache_ttl" default:"15" required:"true"`
+	CacheRefreshParameterKey string `envconfig:"cache_refresh_key" default:"frais" required:"true"`
 	// Cors
 	AllowOrigins string `envconfig:"allow_origins" default:"http://localhost:3000" required:"true"`
 	// Web App
-	ExternalServiceName    string `default:"GHATD Template" required:"true"`
-	ExternalServiceWebsite string `default:"https://ghatd.boasi.io" required:"true"`
-	ExternalServiceEmail   string `default:"ghatd@boasi.io" required:"true"`
-	LegalBusinessName      string `default:"Boasi Ltd" required:"true"`
+	ExternalServiceName    string `envconfig:"external_service_name" default:"GHATD Template" required:"true"`
+	ExternalServiceWebsite string `envconfig:"external_service_website"  default:"https://ghatd.boasi.io" required:"true"`
+	ExternalServiceEmail   string `envconfig:"external_service_email"  default:"ghatd@boasi.io" required:"true"`
+	LegalBusinessName      string `envconfig:"external_legal_business_name"  default:"Boasi Ltd" required:"true"`
 }
 
 // NewSettings returns app settings

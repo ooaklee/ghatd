@@ -1,0 +1,73 @@
+{{define "title"}}Home{{end}}
+
+
+{{define "head"}}
+
+{{template "tailwind-conf-script" .}}
+<link rel='stylesheet' href='/static/css/dash-styles.css'>
+
+{{end}}
+
+
+{{define "main"}}
+<!-- ===== Page Wrapper Start ===== -->
+<div class="flex h-screen overflow-hidden">
+
+    <!-- ===== Content Area Start ===== -->
+    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden h-screen justify-center ">
+
+
+        <!-- ===== Main Content Start ===== -->
+        <main>
+            <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+                <div>
+                    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                        <h1 class="font-bold text-3xl flex text-center max-w-[512px]">Start building your full-stack
+                            web
+                            application using GHATD</h1>
+                        <div class="mt-6 max-w-[352px]">
+                            <p class="mb-4 text-center">If you are a fan of Go programming language and looking to
+                                bring your next web app project to life, this Go-based web app skeleton is a great
+                                starting point.
+                                <br><br> With its robust combination of <b>Go</b>, <b>HMTX</b>, <b>Alpine.js</b>,
+                                <b>Tailwind CSS</b>,
+                                and <b>Daisy UI</b>, you'll have
+                                everything you need to bring your idea to life, streamline your development and
+                                deployment process,
+                                and create a truly impactful product.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap justify-center mt-8" style="gap: 20px;">
+                        <a class="ml-2 w-full md:w-fit text-center text-m rounded border bg-primary border-primary px-4 py-3 font-medium text-white hover:bg-primary/[.90]"
+                            href="/dash">Go to
+                            dashboard</a>
+
+                    </div>
+                    <!-- ===== Template Benefit Start ===== -->
+                    <div class="flex flex-wrap justify-between max-w-[1164px] lg:mx-auto  mb-4">
+                        <div class="max-w-80 md:max-w-64 pt-10 md:pt-3">
+                            <h4 class="text-xl pb-1 flex items-center black font-medium"><span class="">🧳
+                                    Portability</span></h4>
+                            <p class="my-0">Leverage Go's portability with full-stack web apps by compiling your
+                                entire app(s) into a single binary file, which can be shipped with most servers,
+                                containers, or serverless solutions.</p>
+                        </div>
+                        <div class="max-w-80 md:max-w-64 pt-10 md:pt-3">
+                            <h4 class="text-xl pb-1 flex items-center black font-medium"><span class="">🔒
+                                    Security</span></h4>
+                            <p class="my-0">When shipping full-stack web apps, reduce attack surface by minimising
+                                system dependencies with <b>GHATD</b>.</p>
+                        </div>
+                    </div>
+                    <!-- ===== Template Benefit End ===== -->
+                </div>
+            </div>
+        </main>
+        <!-- ===== Main Content End ===== -->
+
+    </div>
+    <!-- ===== Content Area End ===== -->
+</div>
+<!-- ===== Page Wrapper End ===== -->
+{{end}}

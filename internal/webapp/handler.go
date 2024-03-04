@@ -83,7 +83,7 @@ func (h *Handler) Terms(w http.ResponseWriter, r *http.Request) {
 	// list of template files to parse, must be in order of inheritence
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
-		"internal/webapp/ui/html/pages/policy.tmpl.html",
+		"internal/webapp/ui/html/pages/base-policy.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/header.tmpl.html",
 		"internal/webapp/ui/html/partials/footer.tmpl.html",
@@ -115,7 +115,7 @@ func (h *Handler) Privacy(w http.ResponseWriter, r *http.Request) {
 	// list of template files to parse, must be in order of inheritence
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
-		"internal/webapp/ui/html/pages/policy.tmpl.html",
+		"internal/webapp/ui/html/pages/base-policy.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/header.tmpl.html",
 		"internal/webapp/ui/html/partials/footer.tmpl.html",
@@ -148,7 +148,7 @@ func (h *Handler) Cookie(w http.ResponseWriter, r *http.Request) {
 	// list of template files to parse, must be in order of inheritence
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
-		"internal/webapp/ui/html/pages/policy.tmpl.html",
+		"internal/webapp/ui/html/pages/base-policy.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/header.tmpl.html",
 		"internal/webapp/ui/html/partials/footer.tmpl.html",

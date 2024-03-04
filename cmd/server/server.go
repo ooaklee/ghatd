@@ -16,6 +16,10 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
+	"github.com/NYTimes/gziphandler"
+	cache "github.com/victorspringer/http-cache"
+	"github.com/victorspringer/http-cache/adapter/memory"
+
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/cmd/server/settings"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
 	loggerMiddleware "github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger/middleware"
@@ -86,7 +90,10 @@ func runServer(embeddedContent fs.FS) error {
 	}
 
 	// TODO: Initialise additional middlewares to pass into attached routes if desired
-	routerMiddlewares := initialiseRouterMiddlewares(appSettings, appLogger)
+	routerMiddlewares, err := initialiseRouterMiddlewares(appSettings, appLogger)
+	if err != nil {
+		log.Panicf("server/failed-middleware-initialisation: %v", err)
+	}
 
 	// Initialise router
 	httpRouter := router.NewRouter(response.GetResourceNotFoundError, response.GetDefault200Response, routerMiddlewares...)
@@ -257,7 +264,7 @@ func initialiseThirdPartyClients(appSettings *settings.Settings) error {
 }
 
 // initialiseRouterMiddlewares handles added to core middleswares that will be used by the server
-func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.Logger) []mux.MiddlewareFunc {
+func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.Logger) ([]mux.MiddlewareFunc, error) {
 	var routerMiddlewares []mux.MiddlewareFunc
 
 	// Set origins
@@ -270,8 +277,31 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 		allowOrigins = append(allowOrigins, appSettings.AllowOrigins)
 	}
 
-	routerMiddlewares = append(routerMiddlewares, contenttype.NewContentType, cors.NewCorsMiddleware(allowOrigins), loggerMiddleware.NewLogger(appLogger).HTTPLogger)
+	// Set cache management
 
-	return routerMiddlewares
+	// set cache adpter (todo: migrate to redis for production)
+	// More information can be found here: https://github.com/victorspringer/http-cache?tab=readme-ov-file#getting-started
+	memcachedCacheAdapter, err := memory.NewAdapter(
+		memory.AdapterWithAlgorithm(memory.LRU),
+		memory.AdapterWithCapacity(10000000),
+	)
+	if err != nil {
+		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-adapter: %v", err)
+	}
+
+	cacheClient, err := cache.NewClient(
+		cache.ClientWithAdapter(memcachedCacheAdapter),
+		cache.ClientWithTTL(time.Duration(appSettings.CacheTtl)*time.Minute),
+		cache.ClientWithRefreshKey(appSettings.CacheRefreshParameterKey),
+	)
+	if err != nil {
+		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-middleware: %v", err)
+	}
+
+	// gzip responses - gziphandler
+	// manage caching -
+	routerMiddlewares = append(routerMiddlewares, contenttype.NewContentType, cors.NewCorsMiddleware(allowOrigins), loggerMiddleware.NewLogger(appLogger).HTTPLogger, gziphandler.GzipHandler, cacheClient.Middleware)
+
+	return routerMiddlewares, nil
 
 }
