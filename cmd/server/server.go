@@ -8,12 +8,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
+	"github.com/tdewolff/minify"
+	"github.com/tdewolff/minify/html"
+	"github.com/tdewolff/minify/js"
+	"github.com/tdewolff/minify/json"
+	"github.com/tdewolff/minify/svg"
 	"go.uber.org/zap"
 
 	"github.com/NYTimes/gziphandler"
@@ -84,13 +90,13 @@ func runServer(embeddedContent fs.FS) error {
 	appValidator := validator.NewValidator()
 
 	// TODO: Initialise clients, if applicable
-	err = initialiseThirdPartyClients(appSettings)
+	minifierClient, err := initialiseThirdPartyClients(appSettings)
 	if err != nil {
 		log.Panicf("server/failed-3rd-party-clients-initialisation: %v", err)
 	}
 
 	// TODO: Initialise additional middlewares to pass into attached routes if desired
-	routerMiddlewares, err := initialiseRouterMiddlewares(appSettings, appLogger)
+	routerMiddlewares, err := initialiseRouterMiddlewares(appSettings, appLogger, minifierClient)
 	if err != nil {
 		log.Panicf("server/failed-middleware-initialisation: %v", err)
 	}
@@ -238,7 +244,7 @@ func initialiseLogger(appSettings *settings.Settings) (*zap.Logger, error) {
 
 // initialiseThirdPartyClients returns initialised third-party clients if successfully initialised,
 // otherwise error will be returned if some fail initialisation.
-func initialiseThirdPartyClients(appSettings *settings.Settings) error {
+func initialiseThirdPartyClients(appSettings *settings.Settings) (*minify.M, error) {
 	var (
 		err error
 	)
@@ -254,17 +260,25 @@ func initialiseThirdPartyClients(appSettings *settings.Settings) error {
 	// 	}
 	// }
 
+	// (todo: refine configuarion)
+	minifierClient := minify.New()
+	// minifierClient.AddFunc("text/css", css.Minify)
+	minifierClient.AddFunc("text/html", html.Minify)
+	minifierClient.AddFunc("image/svg+xml", svg.Minify)
+	minifierClient.AddFuncRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), js.Minify)
+	minifierClient.AddFuncRegexp(regexp.MustCompile("[/+]json$"), json.Minify)
+
 	// placeholder
 	if appSettings.Environment != "local" {
-		return fmt.Errorf("third-party-client-initialisation-placeholder-is-erroring: non-local environment in app settings (detected: %s)", appSettings.Environment)
+		return nil, fmt.Errorf("third-party-client-initialisation-placeholder-is-erroring: non-local environment in app settings (detected: %s)", appSettings.Environment)
 	}
 
-	return err
+	return minifierClient, err
 
 }
 
 // initialiseRouterMiddlewares handles added to core middleswares that will be used by the server
-func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.Logger) ([]mux.MiddlewareFunc, error) {
+func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.Logger, minifierClient *minify.M) ([]mux.MiddlewareFunc, error) {
 	var routerMiddlewares []mux.MiddlewareFunc
 
 	// Set origins
@@ -300,7 +314,7 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 
 	// gzip responses - gziphandler
 	// manage caching -
-	routerMiddlewares = append(routerMiddlewares, contenttype.NewContentType, cors.NewCorsMiddleware(allowOrigins), loggerMiddleware.NewLogger(appLogger).HTTPLogger, gziphandler.GzipHandler, cacheClient.Middleware)
+	routerMiddlewares = append(routerMiddlewares, contenttype.NewContentType, cors.NewCorsMiddleware(allowOrigins), loggerMiddleware.NewLogger(appLogger).HTTPLogger, gziphandler.GzipHandler, minifierClient.Middleware, cacheClient.Middleware)
 
 	return routerMiddlewares, nil
 
