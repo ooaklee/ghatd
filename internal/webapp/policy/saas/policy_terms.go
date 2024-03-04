@@ -1,4 +1,4 @@
-package policy
+package saas
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
 )
 
 // NewGeneratedTermsPolicyRequest holds the items needed to generate a new
@@ -18,12 +19,12 @@ type NewGeneratedTermsPolicyRequest struct {
 }
 
 // NewGeneratedTermsPolicy creates a new web app policy for terms and conditions
-func NewGeneratedTermsPolicy(r *NewGeneratedTermsPolicyRequest) *WebAppPolicy {
+func NewGeneratedTermsPolicy(r *NewGeneratedTermsPolicyRequest) *policy.WebAppPolicy {
 
-	termsOfServicePolicy := WebAppPolicy{
+	termsOfServicePolicy := policy.WebAppPolicy{
 		Name:        "Terms and Conditions",
 		LastUpdated: "03 January, 2024",
-		Sections: []PolicySection{
+		Sections: []policy.PolicySection{
 			{
 				Paragraphs: []template.HTML{
 

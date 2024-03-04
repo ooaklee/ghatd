@@ -1,4 +1,4 @@
-package policy
+package saas
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
 )
 
 // NewGeneratedCookiePolicyRequest holds the items needed to generate a new
@@ -18,12 +19,12 @@ type NewGeneratedCookiePolicyRequest struct {
 }
 
 // NewGeneratedCookiePolicy creates a new web app policy for the cookies
-func NewGeneratedCookiePolicy(r *NewGeneratedCookiePolicyRequest) *WebAppPolicy {
+func NewGeneratedCookiePolicy(r *NewGeneratedCookiePolicyRequest) *policy.WebAppPolicy {
 
-	cookiePolicy := WebAppPolicy{
+	cookiePolicy := policy.WebAppPolicy{
 		Name:        "Cookie Policy",
 		LastUpdated: "03 January, 2024",
-		Sections: []PolicySection{
+		Sections: []policy.PolicySection{
 			{
 				Paragraphs: []template.HTML{
 

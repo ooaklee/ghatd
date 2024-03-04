@@ -174,6 +174,62 @@ func (h *Handler) Cookie(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
+		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced template", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed template", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) AuthSignup(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
+		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced template", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed template", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
 func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 
 	logger := logger.AcquireFrom(r.Context())

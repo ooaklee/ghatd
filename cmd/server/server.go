@@ -38,7 +38,7 @@ import (
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/validator"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
+	saasPolicy "github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy/saas"
 )
 
 // NewCommand returns a command for starting
@@ -118,21 +118,21 @@ func runServer(embeddedContent fs.FS) error {
 	//  	\__\/        \__\/        \__\/                 \__\/        \__\/    \__\/
 
 	// Generate policies for web app
-	termsOfServicePolicy := policy.NewGeneratedTermsPolicy(&policy.NewGeneratedTermsPolicyRequest{
+	termsOfServicePolicy := saasPolicy.NewGeneratedTermsPolicy(&saasPolicy.NewGeneratedTermsPolicyRequest{
 		ServiceName:       appSettings.ExternalServiceName,
 		ServiceWebsite:    appSettings.ExternalServiceWebsite,
 		ServiceEmail:      appSettings.ExternalServiceEmail,
 		LegalBusinessName: appSettings.LegalBusinessName,
 	})
 
-	privacyPolicy := policy.NewGeneratedPrivacyPolicy(&policy.NewGeneratedPrivacyPolicyRequest{
+	privacyPolicy := saasPolicy.NewGeneratedPrivacyPolicy(&saasPolicy.NewGeneratedPrivacyPolicyRequest{
 		ServiceName:       appSettings.ExternalServiceName,
 		ServiceWebsite:    appSettings.ExternalServiceWebsite,
 		ServiceEmail:      appSettings.ExternalServiceEmail,
 		LegalBusinessName: appSettings.LegalBusinessName,
 	})
 
-	cookiePolicy := policy.NewGeneratedCookiePolicy(&policy.NewGeneratedCookiePolicyRequest{
+	cookiePolicy := saasPolicy.NewGeneratedCookiePolicy(&saasPolicy.NewGeneratedCookiePolicyRequest{
 		ServiceName:       appSettings.ExternalServiceName,
 		ServiceWebsite:    appSettings.ExternalServiceWebsite,
 		ServiceEmail:      appSettings.ExternalServiceEmail,

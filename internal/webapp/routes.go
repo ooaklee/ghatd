@@ -16,6 +16,8 @@ type webAppHandler interface {
 	Terms(w http.ResponseWriter, r *http.Request)
 	Privacy(w http.ResponseWriter, r *http.Request)
 	Cookie(w http.ResponseWriter, r *http.Request)
+	AuthLogin(w http.ResponseWriter, r *http.Request)
+	AuthSignup(w http.ResponseWriter, r *http.Request)
 
 	Dash(w http.ResponseWriter, r *http.Request)
 }
@@ -35,6 +37,15 @@ const (
 
 	// WebAppPolicyCookieRoute base URI prefix for the web app cookie policy page
 	WebAppPolicyCookieRoute = WebAppBase + "cookie-policy"
+
+	// WebAppAuthRoute base URI prefix for the web app auth route for user authentication
+	WebAppAuthRoute = WebAppBase + "auth/"
+
+	// WebAppAuthLoginRoute the URI for the web app login page
+	WebAppAuthLoginRoute = WebAppAuthRoute + "login"
+
+	// WebAppAuthSignupRoute the URI for the web app signup page
+	WebAppAuthSignupRoute = WebAppAuthRoute + "signup"
 
 	// WebAppStaticRoute base URI prefix for the web app static route for assets
 	WebAppStaticRoute = WebAppBase + "static/"
@@ -83,6 +94,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppPolicyTermsRoute, request.Handler.Terms)
 	httpRouter.HandleFunc(WebAppPolicyPrivacyRoute, request.Handler.Privacy)
 	httpRouter.HandleFunc(WebAppPolicyCookieRoute, request.Handler.Cookie)
+	httpRouter.HandleFunc(WebAppAuthLoginRoute, request.Handler.AuthLogin)
+	httpRouter.HandleFunc(WebAppAuthSignupRoute, request.Handler.AuthSignup)
 	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
