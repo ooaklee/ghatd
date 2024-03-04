@@ -15,6 +15,7 @@ type webAppHandler interface {
 	Home(w http.ResponseWriter, r *http.Request)
 	Terms(w http.ResponseWriter, r *http.Request)
 	Privacy(w http.ResponseWriter, r *http.Request)
+	Cookie(w http.ResponseWriter, r *http.Request)
 
 	Dash(w http.ResponseWriter, r *http.Request)
 }
@@ -31,6 +32,9 @@ const (
 
 	// WebAppPolicyPrivacyRoute base URI prefix for the web app privacy policy page
 	WebAppPolicyPrivacyRoute = WebAppBase + "privacy-policy"
+
+	// WebAppPolicyCookieRoute base URI prefix for the web app cookie policy page
+	WebAppPolicyCookieRoute = WebAppBase + "cookie-policy"
 
 	// WebAppStaticRoute base URI prefix for the web app static route for assets
 	WebAppStaticRoute = WebAppBase + "static/"
@@ -78,6 +82,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppBase, request.Handler.Home)
 	httpRouter.HandleFunc(WebAppPolicyTermsRoute, request.Handler.Terms)
 	httpRouter.HandleFunc(WebAppPolicyPrivacyRoute, request.Handler.Privacy)
+	httpRouter.HandleFunc(WebAppPolicyCookieRoute, request.Handler.Cookie)
 	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)

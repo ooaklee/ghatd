@@ -119,11 +119,19 @@ func runServer(embeddedContent fs.FS) error {
 		LegalBusinessName: appSettings.LegalBusinessName,
 	})
 
+	cookiePolicy := policy.NewGeneratedCookiePolicy(&policy.NewGeneratedCookiePolicyRequest{
+		ServiceName:       appSettings.ExternalServiceName,
+		ServiceWebsite:    appSettings.ExternalServiceWebsite,
+		ServiceEmail:      appSettings.ExternalServiceEmail,
+		LegalBusinessName: appSettings.LegalBusinessName,
+	})
+
 	// Initialise handler for web app
 	webAppHandler := webapp.NewWebAppHandler(&webapp.NewWebAppHandlerRequest{
 		EmbeddedContent:      embeddedContent,
 		TermsOfServicePolicy: termsOfServicePolicy,
 		PrivacyPolicy:        privacyPolicy,
+		CookiePolicy:         cookiePolicy,
 	})
 
 	// Attach routes
