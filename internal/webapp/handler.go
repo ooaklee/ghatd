@@ -182,6 +182,7 @@ func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
+		"internal/webapp/ui/html/partials/auth-login.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 	}
 
@@ -210,6 +211,7 @@ func (h *Handler) AuthSignup(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
+		"internal/webapp/ui/html/partials/auth-signup.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 	}
 
