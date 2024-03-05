@@ -16,6 +16,7 @@ type webAppHandler interface {
 	Terms(w http.ResponseWriter, r *http.Request)
 	Privacy(w http.ResponseWriter, r *http.Request)
 	Cookie(w http.ResponseWriter, r *http.Request)
+	ComingSoon(w http.ResponseWriter, r *http.Request)
 	AuthLogin(w http.ResponseWriter, r *http.Request)
 	AuthSignup(w http.ResponseWriter, r *http.Request)
 	AuthResetPassword(w http.ResponseWriter, r *http.Request)
@@ -30,14 +31,17 @@ const (
 	// WebAppDashRoute base URI prefix for the web app dashboard routes
 	WebAppDashRoute = WebAppBase + "dash"
 
-	// WebAppPolicyTermsRoute base URI prefix for the web app terms policy page
+	// WebAppPolicyTermsRoute the URI for the web app terms policy page
 	WebAppPolicyTermsRoute = WebAppBase + "terms"
 
-	// WebAppPolicyPrivacyRoute base URI prefix for the web app privacy policy page
+	// WebAppPolicyPrivacyRoute the URI for the web app privacy policy page
 	WebAppPolicyPrivacyRoute = WebAppBase + "privacy-policy"
 
-	// WebAppPolicyCookieRoute base URI prefix for the web app cookie policy page
+	// WebAppPolicyCookieRoute the URI for the web app cookie policy page
 	WebAppPolicyCookieRoute = WebAppBase + "cookie-policy"
+
+	// WebAppComingSoonRoute the URI for the web app coming soon page
+	WebAppComingSoonRoute = WebAppBase + "coming-soon"
 
 	// WebAppAuthRoute base URI prefix for the web app auth route for user authentication
 	WebAppAuthRoute = WebAppBase + "auth/"
@@ -98,6 +102,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppPolicyTermsRoute, request.Handler.Terms)
 	httpRouter.HandleFunc(WebAppPolicyPrivacyRoute, request.Handler.Privacy)
 	httpRouter.HandleFunc(WebAppPolicyCookieRoute, request.Handler.Cookie)
+	httpRouter.HandleFunc(WebAppComingSoonRoute, request.Handler.ComingSoon)
 	httpRouter.HandleFunc(WebAppAuthLoginRoute, request.Handler.AuthLogin)
 	httpRouter.HandleFunc(WebAppAuthSignupRoute, request.Handler.AuthSignup)
 	httpRouter.HandleFunc(WebAppAuthResetPasswordRoute, request.Handler.AuthResetPassword)

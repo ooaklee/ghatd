@@ -25,6 +25,8 @@
     <title>{{template "title" .}} | GHAT</title>
 </head>
 
+{{block "body" . }}
+
 <body
     x-data="{ page: 'ecommerce', 'loaded': true, 'darkMode': false, 'stickyMenu': false, 'sidebarToggle': false, 'scrollTop': false }"
     x-init="
@@ -34,6 +36,7 @@
 
     {{template "main" .}}
 </body>
+{{end}}
 
 </html>
 {{end}}

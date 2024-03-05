@@ -20,6 +20,14 @@
 }
 
 @layer components {
+
+  .social-bg-base-hover-primary {
+    @apply [&>a]:flex [&>a]:size-10  [&>a]:items-center  [&>a]:justify-center  [&>a]:rounded-full  [&>a]:border  [&>a]:border-[#DFE4EA]  [&>a:hover]:border-primary  [&>a:hover]:bg-primary  [&>a:hover]:text-white  [&>a:dark]:border-strokedark  [&>a:dark:hover]:border-primary;
+  }
+
+  .social-bg-gray-hover-none {
+    @apply  [&>a]:relative [&>a]:flex  [&>a]:h-8.5  [&>a]:w-8.5  [&>a]:items-center  [&>a]:justify-center  [&>a]:rounded-full  [&>a]:border-[0.5px]  [&>a]:border-stroke  [&>a]:bg-gray  [&>a]:text-black-2  [&>a:dark]:border-strokedark  [&>a:dark]:bg-meta-4  [&>a:dark]:text-white
+  }
 }
 
 @layer utilities {
