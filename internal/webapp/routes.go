@@ -18,6 +18,7 @@ type webAppHandler interface {
 	Cookie(w http.ResponseWriter, r *http.Request)
 	AuthLogin(w http.ResponseWriter, r *http.Request)
 	AuthSignup(w http.ResponseWriter, r *http.Request)
+	AuthResetPassword(w http.ResponseWriter, r *http.Request)
 
 	Dash(w http.ResponseWriter, r *http.Request)
 }
@@ -46,6 +47,9 @@ const (
 
 	// WebAppAuthSignupRoute the URI for the web app signup page
 	WebAppAuthSignupRoute = WebAppAuthRoute + "signup"
+
+	// WebAppAuthResetPasswordRoute the URI for the web app reset password page
+	WebAppAuthResetPasswordRoute = WebAppAuthRoute + "reset-password"
 
 	// WebAppStaticRoute base URI prefix for the web app static route for assets
 	WebAppStaticRoute = WebAppBase + "static/"
@@ -96,6 +100,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppPolicyCookieRoute, request.Handler.Cookie)
 	httpRouter.HandleFunc(WebAppAuthLoginRoute, request.Handler.AuthLogin)
 	httpRouter.HandleFunc(WebAppAuthSignupRoute, request.Handler.AuthSignup)
+	httpRouter.HandleFunc(WebAppAuthResetPasswordRoute, request.Handler.AuthResetPassword)
 	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
