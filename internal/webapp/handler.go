@@ -304,6 +304,7 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-ecommerce.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/preloader.tmpl.html",
 		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
@@ -330,7 +331,37 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+}
 
+func (h *Handler) DashCalendar(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-calendar.tmpl.html",
+		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // Add a SnippetView handler function.

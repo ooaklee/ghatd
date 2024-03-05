@@ -22,14 +22,18 @@ type webAppHandler interface {
 	AuthResetPassword(w http.ResponseWriter, r *http.Request)
 
 	Dash(w http.ResponseWriter, r *http.Request)
+	DashCalendar(w http.ResponseWriter, r *http.Request)
 }
 
 const (
 	// WebAppBase the start of the web apps URI
 	WebAppBase = "/"
 
-	// WebAppDashRoute base URI prefix for the web app dashboard routes
+	// WebAppDashRoute the root URI for the web app dashboard
 	WebAppDashRoute = WebAppBase + "dash"
+
+	// WebAppDashCalendarRoute the URI for the web app's dash calendar page
+	WebAppDashCalendarRoute = WebAppDashRoute + "/" + "calendar"
 
 	// WebAppPolicyTermsRoute the URI for the web app terms policy page
 	WebAppPolicyTermsRoute = WebAppBase + "terms"
@@ -107,6 +111,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppAuthSignupRoute, request.Handler.AuthSignup)
 	httpRouter.HandleFunc(WebAppAuthResetPasswordRoute, request.Handler.AuthResetPassword)
 	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
+	httpRouter.HandleFunc(WebAppDashCalendarRoute, request.Handler.DashCalendar)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
 
