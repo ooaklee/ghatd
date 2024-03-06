@@ -1,0 +1,156 @@
+{{define "title"}}Profile{{end}}
+
+
+{{define "dash-main"}}
+<main x-init="page = 'profile'">
+    <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div class="mx-auto max-w-242.5">
+            <!-- Breadcrumb Start -->
+            <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 class="text-title-md2 font-bold text-black dark:text-white">
+                    Profile
+                </h2>
+
+                <nav>
+                    <ol class="flex items-center gap-2">
+                        <li>
+                            <a class="font-medium" href="/dash">Dashboard /</a>
+                        </li>
+                        <li class="text-primary">Profile</li>
+                    </ol>
+                </nav>
+            </div>
+            <!-- Breadcrumb End -->
+
+            <!-- ====== Profile Section Start -->
+            <div
+                class="overflow-hidden rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+
+                <div class="mt-26 px-4 pb-6 text-center lg:pb-8 xl:pb-11.5">
+                    <div
+                        class="relative z-30 mx-auto -mt-22 h-30 w-full max-w-30 rounded-full bg-white/20 p-1 backdrop-blur sm:h-44 sm:max-w-44 sm:p-3">
+                        <div class="relative drop-shadow-2 w-full h-full"><span
+                                class="rounded-full flex justify-center h-full w-full" alt="profile">
+                                <div class="absolute h-full z-20 text-5xl md:text-5xl font-medium text-white top-[50%] left-[50%]"
+                                    id="initial-placeholder">
+                                </div><canvas id="profile-initial" alt="User"
+                                    class="bg-primary text-whitten h-28 w-28 md:h-40 md:w-40 rounded-full"></canvas>
+                            </span></div>
+                    </div>
+                    <div class="mt-4">
+                        <h3 class="mb-1.5 text-2xl font-medium text-black dark:text-white">
+                            Danish Heilium
+                        </h3>
+                        <p class="font-medium">Frontend Engineer</p>
+                        <div
+                            class="mx-auto mb-5.5 mt-4.5 grid max-w-94 grid-cols-3 rounded-md border border-stroke py-2.5 shadow-1 dark:border-strokedark dark:bg-[#37404F]">
+                            <div
+                                class="flex flex-col items-center justify-center gap-1 border-r border-stroke px-4 dark:border-strokedark xsm:flex-row">
+                                <span class="font-semibold text-black dark:text-white">259</span>
+                                <span class="text-sm">PRs</span>
+                            </div>
+                            <div
+                                class="flex flex-col items-center justify-center gap-1 border-r border-stroke px-4 dark:border-strokedark xsm:flex-row">
+                                <span class="font-semibold text-black dark:text-white">129K</span>
+                                <span class="text-sm">Commits</span>
+                            </div>
+                            <div class="flex flex-col items-center justify-center gap-1 px-4 xsm:flex-row">
+                                <span class="font-semibold text-black dark:text-white">2K</span>
+                                <span class="text-sm">Deployments</span>
+                            </div>
+                        </div>
+
+                        <div class="mx-auto max-w-180">
+                            <h4 class="font-medium text-black dark:text-white">Highlights</h4>
+                            <div class="flex justify-center flex-wrap items-center gap-2 sm:gap-4.5 mt-4.5 mb-5.5">
+                                <button
+                                    class="inline-flex rounded-full bg-[#637381] px-3 py-1 text-sm font-medium text-white hover:bg-opacity-90">
+                                    Team Enablers
+                                </button>
+                                <button
+                                    class="inline-flex rounded-full bg-[#212B36] px-3 py-1 text-sm font-medium text-white hover:bg-opacity-90">
+                                    <svg class="mr-1 fill-current" viewBox="0 0 16 16" version="1.1" width="16"
+                                        height="16" aria-hidden="true" fill="">
+                                        <path
+                                            d="m12.596 11.596-3.535 3.536a1.5 1.5 0 0 1-2.122 0l-3.535-3.536a6.5 6.5 0 1 1 9.192-9.193 6.5 6.5 0 0 1 0 9.193Zm-1.06-8.132v-.001a5 5 0 1 0-7.072 7.072L8 14.07l3.536-3.534a5 5 0 0 0 0-7.072ZM8 9a2 2 0 1 1-.001-3.999A2 2 0 0 1 8 9Z">
+                                        </path>
+                                    </svg>
+                                    <span>Warsaw, PL</span>
+                                </button>
+
+                                <button
+                                    class="inline-flex rounded-full bg-[#13C296] px-3 py-1 text-sm font-medium text-white hover:bg-opacity-90">
+                                    <svg class="mr-1 fill-current" viewBox="0 0 16 16" version="1.1" width="16"
+                                        height="16" aria-hidden="true" fill="">
+                                        <path
+                                            d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z">
+                                        </path>
+                                    </svg>
+                                    <span class="p-label">
+                                        <span>10:36 <span class="font-thin">- 1h ahead</span></span>
+                                </button>
+
+                            </div>
+                        </div>
+                        <div class="mx-auto max-w-180">
+                            <h4 class="font-medium text-black dark:text-white">
+                                About Me
+                            </h4>
+                            <p class="mt-4.5 text-sm font-normal">
+                                Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                                Pellentesque posuere fermentum urna, eu condimentum
+                                mauris tempus ut. Donec fermentum blandit aliquet. Etiam
+                                dictum dapibus ultricies. Sed vel aliquet libero. Nunc a
+                                augue fermentum, pharetra ligula sed, aliquam lacus.
+                            </p>
+                        </div>
+
+                        <div class="mt-6.5">
+                            <h4 class="mb-3.5 font-medium text-black dark:text-white">
+                                Find me on
+                            </h4>
+                            <div class="flex items-center justify-center gap-3.5">
+                                <a href="#" class="hover:text-primary" name="social-icon" aria-label="social-icon">
+                                    <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                        viewBox="0 0 16 16">
+                                        <path fill=""
+                                            d="M3.362 10.11c0 .926-.756 1.681-1.681 1.681S0 11.036 0 10.111S.756 8.43 1.68 8.43h1.682zm.846 0c0-.924.756-1.68 1.681-1.68s1.681.756 1.681 1.68v4.21c0 .924-.756 1.68-1.68 1.68a1.685 1.685 0 0 1-1.682-1.68zM5.89 3.362c-.926 0-1.682-.756-1.682-1.681S4.964 0 5.89 0s1.68.756 1.68 1.68v1.682zm0 .846c.924 0 1.68.756 1.68 1.681S6.814 7.57 5.89 7.57H1.68C.757 7.57 0 6.814 0 5.89c0-.926.756-1.682 1.68-1.682zm6.749 1.682c0-.926.755-1.682 1.68-1.682S16 4.964 16 5.889s-.756 1.681-1.68 1.681h-1.681zm-.848 0c0 .924-.755 1.68-1.68 1.68A1.685 1.685 0 0 1 8.43 5.89V1.68C8.43.757 9.186 0 10.11 0c.926 0 1.681.756 1.681 1.68zm-1.681 6.748c.926 0 1.682.756 1.682 1.681S11.036 16 10.11 16s-1.681-.756-1.681-1.68v-1.682h1.68zm0-.847c-.924 0-1.68-.755-1.68-1.68s.756-1.681 1.68-1.681h4.21c.924 0 1.68.756 1.68 1.68c0 .926-.756 1.681-1.68 1.681z" />
+                                    </svg>
+                                </a>
+                                <a href="#" class="hover:text-primary" name="social-icon" aria-label="social-icon">
+                                    <svg class="fill-current" width="23" height="22" viewBox="0 0 23 22" fill="none"
+                                        xmlns="http://www.w3.org/2000/svg">
+                                        <g clip-path="url(#clip0_30_982)">
+                                            <path
+                                                d="M11.6662 1.83337C6.6016 1.83337 2.49951 5.93546 2.49951 11C2.49847 12.9244 3.10343 14.8002 4.22854 16.3613C5.35366 17.9225 6.94181 19.0897 8.76768 19.6974C9.22602 19.7771 9.39743 19.5021 9.39743 19.261C9.39743 19.0438 9.38552 18.3224 9.38552 17.5542C7.08285 17.9786 6.48701 16.9932 6.30368 16.4771C6.2001 16.2131 5.75368 15.4 5.3641 15.1819C5.04326 15.0105 4.58493 14.586 5.35218 14.575C6.07451 14.5631 6.58968 15.2396 6.76201 15.5146C7.58701 16.9006 8.90518 16.511 9.43135 16.2709C9.51202 15.675 9.75218 15.2745 10.0162 15.0453C7.9766 14.8161 5.84535 14.025 5.84535 10.5188C5.84535 9.52146 6.2001 8.69737 6.78493 8.05479C6.69326 7.82562 6.37243 6.88604 6.8766 5.62562C6.8766 5.62562 7.64385 5.38546 9.39743 6.56612C10.1437 6.35901 10.9147 6.25477 11.6891 6.25629C12.4683 6.25629 13.2474 6.35896 13.9808 6.56521C15.7334 5.37354 16.5016 5.62654 16.5016 5.62654C17.0058 6.88696 16.6849 7.82654 16.5933 8.05571C17.1772 8.69737 17.5329 9.51046 17.5329 10.5188C17.5329 14.037 15.3906 14.8161 13.351 15.0453C13.6829 15.3313 13.9698 15.8813 13.9698 16.7411C13.9698 17.9667 13.9579 18.9521 13.9579 19.262C13.9579 19.5021 14.1302 19.7881 14.5885 19.6965C16.4081 19.0821 17.9893 17.9126 19.1094 16.3526C20.2296 14.7926 20.8323 12.9206 20.8329 11C20.8329 5.93546 16.7308 1.83337 11.6662 1.83337Z"
+                                                fill="" />
+                                        </g>
+                                        <defs>
+                                            <clipPath id="clip0_30_982">
+                                                <rect width="22" height="22" fill="white"
+                                                    transform="translate(0.666138)" />
+                                            </clipPath>
+                                        </defs>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="mt-6.5">
+                            <a class="mb-3.5 font-medium text-secondary dark:text-secondary  hover:underline hover:underline-offset-2 text-base flex items-center justify-center"
+                                href="#">
+                                <span class="flex flex-inline items-center"><svg class="mr-1.5 fill-current"
+                                        viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                        <path fill=""
+                                            d="M22 1h-7a2.44 2.44 0 0 0-2.41 2l-.92 5.05a2.44 2.44 0 0 0 .53 2a2.47 2.47 0 0 0 1.88.88H17l-.25.66a3.26 3.26 0 0 0 3 4.41a1 1 0 0 0 .92-.59l2.24-5.06A1 1 0 0 0 23 10V2a1 1 0 0 0-1-1m-1 8.73l-1.83 4.13a1.33 1.33 0 0 1-.45-.4a1.23 1.23 0 0 1-.14-1.16l.38-1a1.68 1.68 0 0 0-.2-1.58A1.7 1.7 0 0 0 17.35 9h-3.29a.46.46 0 0 1-.35-.16a.5.5 0 0 1-.09-.37l.92-5A.44.44 0 0 1 15 3h6ZM9.94 13.05H7.05l.25-.66A3.26 3.26 0 0 0 4.25 8a1 1 0 0 0-.92.59l-2.24 5.06a1 1 0 0 0-.09.4v8a1 1 0 0 0 1 1h7a2.44 2.44 0 0 0 2.41-2l.92-5a2.44 2.44 0 0 0-.53-2a2.47 2.47 0 0 0-1.86-1m-.48 7.58A.44.44 0 0 1 9 21H3v-6.73l1.83-4.13a1.33 1.33 0 0 1 .45.4a1.23 1.23 0 0 1 .14 1.16l-.38 1a1.68 1.68 0 0 0 .2 1.58a1.7 1.7 0 0 0 1.41.74h3.29a.46.46 0 0 1 .35.16a.5.5 0 0 1 .09.37Z" />
+                                    </svg>Send feedback</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- ====== Profile Section End -->
+        </div>
+    </div>
+</main>
+{{end}}

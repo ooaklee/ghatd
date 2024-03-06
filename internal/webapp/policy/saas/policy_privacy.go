@@ -137,10 +137,10 @@ func NewGeneratedPrivacyPolicy(r *NewGeneratedPrivacyPolicyRequest) *policy.WebA
 					template.HTML(`We may use third-party Service Providers to monitor and analyse the use of our Service. These service providers include:`),
 					template.HTML(`<h3 id="new-relic" class="text-2xl font-semibold">New Relic</h3>
 					<p class="font-medium">As of the writing of this policy, New Relic does not offer a solution for you to opt-out.</p><br>
-					<p class="font-medium">For more information on their policy, visit their policy page: <a class="text-primary font-bold" href="https://docs.newrelic.com/docs/security/security-privacy/data-privacy/data-privacy-new-relic/">https://docs.newrelic.com/docs/security/security-privacy/data-privacy/data-privacy-new-relic/</a></p>`),
+					<p class="font-medium">For more information on their policy, <a class="text-primary font-bold" href="https://docs.newrelic.com/docs/security/security-privacy/data-privacy/data-privacy-new-relic/">visit their policy page</a></p>`),
 					template.HTML(`<h3 id="google-analytics-by-google" class="text-2xl font-semibold">Google Analytics By Google</h3>
-					<p class="font-medium">You can prevent Google from using your information for analytics purposes by opting-out. To opt-out of Google Analytics service, please visit this page: <a class="text-primary font-bold" href="https://tools.google.com/dlpage/gaoptout">https://tools.google.com/dlpage/gaoptout</a></p><br>
-					<p class="font-medium">For more information on what type of information Google Analytics collects, please visit their Terms page: <a class="text-primary font-bold" href="https://marketingplatform.google.com/about/analytics/terms/us/">https://marketingplatform.google.com/about/analytics/terms/us/</a></p>`),
+					<p class="font-medium">You can prevent Google from using your information for analytics purposes by opting-out. To opt-out of Google Analytics service, <a class="text-primary font-bold" href="https://tools.google.com/dlpage/gaoptout">please visit this page</a></p><br>
+					<p class="font-medium">For more information on what type of information Google Analytics collects, <a class="text-primary font-bold" href="https://marketingplatform.google.com/about/analytics/terms/us/">please visit their Terms page</a></p>`),
 				},
 			},
 			{

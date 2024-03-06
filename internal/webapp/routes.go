@@ -23,6 +23,7 @@ type webAppHandler interface {
 
 	Dash(w http.ResponseWriter, r *http.Request)
 	DashCalendar(w http.ResponseWriter, r *http.Request)
+	DashProfile(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -34,6 +35,9 @@ const (
 
 	// WebAppDashCalendarRoute the URI for the web app's dash calendar page
 	WebAppDashCalendarRoute = WebAppDashRoute + "/" + "calendar"
+
+	// WebAppDashProfileRoute the URI for the web app's dash profile page
+	WebAppDashProfileRoute = WebAppDashRoute + "/" + "profile"
 
 	// WebAppPolicyTermsRoute the URI for the web app terms policy page
 	WebAppPolicyTermsRoute = WebAppBase + "terms"
@@ -112,6 +116,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppAuthResetPasswordRoute, request.Handler.AuthResetPassword)
 	httpRouter.HandleFunc(WebAppDashRoute, request.Handler.Dash)
 	httpRouter.HandleFunc(WebAppDashCalendarRoute, request.Handler.DashCalendar)
+	httpRouter.HandleFunc(WebAppDashProfileRoute, request.Handler.DashProfile)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
 

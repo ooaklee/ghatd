@@ -422,6 +422,61 @@ func (h *Handler) DashCalendar(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) DashProfile(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash-profile.tmpl.html")
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", nil)
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-profile.tmpl.html",
+		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
 // Add a SnippetView handler function.
 func (h *Handler) SnippetView(w http.ResponseWriter, r *http.Request) {
 
