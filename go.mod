@@ -4,8 +4,8 @@ go 1.22.0
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
+	github.com/ooaklee/http-cache v0.0.0-20240306055428-b532746603df
 	github.com/spf13/cobra v1.8.0
-	github.com/victorspringer/http-cache v0.0.0-20240130140836-2c4f8454e6e2
 )
 
 require (
@@ -13,9 +13,8 @@ require (
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/tdewolff/minify/v2 v2.20.18 // indirect
 	github.com/tdewolff/parse v2.3.4+incompatible // indirect
-	github.com/tdewolff/parse/v2 v2.7.12 // indirect
+	github.com/tdewolff/test v1.0.11-0.20240106005702-7de5f7df4739 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	google.golang.org/genproto v0.0.0-20200423170343-7949de9c1215 // indirect
 	google.golang.org/grpc v1.29.1 // indirect

@@ -23,8 +23,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/NYTimes/gziphandler"
-	cache "github.com/victorspringer/http-cache"
-	"github.com/victorspringer/http-cache/adapter/memory"
+	cache "github.com/ooaklee/http-cache"
+	"github.com/ooaklee/http-cache/adapter/memory"
 
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/cmd/server/settings"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
@@ -307,6 +307,8 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 		cache.ClientWithAdapter(memcachedCacheAdapter),
 		cache.ClientWithTTL(time.Duration(appSettings.CacheTtl)*time.Minute),
 		cache.ClientWithRefreshKey(appSettings.CacheRefreshParameterKey),
+		cache.ClientWithExpiresHeader(),
+		cache.ClientWithSkipCacheResponseHeader(appSettings.CacheSkipHttpHeader),
 	)
 	if err != nil {
 		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-middleware: %v", err)

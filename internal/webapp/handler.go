@@ -9,6 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
 )
@@ -300,6 +301,39 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 
 	logger := logger.AcquireFrom(r.Context())
 
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// list of template files to parse, must be in order of inheritence
+		templateFilesToParse := []string{
+			"internal/webapp/ui/html/partials/dash-ecommerce.tmpl.html",
+			"internal/webapp/ui/html/partials/chart-area.tmpl.html",
+			"internal/webapp/ui/html/partials/chart-bar.tmpl.html",
+			"internal/webapp/ui/html/partials/chart-donut.tmpl.html",
+			"internal/webapp/ui/html/partials/map-01.tmpl.html",
+			"internal/webapp/ui/html/partials/table-01.tmpl.html",
+		}
+
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", nil)
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
 	// list of template files to parse, must be in order of inheritence
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
@@ -337,6 +371,29 @@ func (h *Handler) DashCalendar(w http.ResponseWriter, r *http.Request) {
 
 	logger := logger.AcquireFrom(r.Context())
 
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash-calendar.tmpl.html")
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", nil)
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
 	// list of template files to parse, must be in order of inheritence
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
@@ -344,6 +401,7 @@ func (h *Handler) DashCalendar(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
 		"internal/webapp/ui/html/partials/dash-calendar.tmpl.html",
 		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/preloader.tmpl.html",
 		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
 	}
 

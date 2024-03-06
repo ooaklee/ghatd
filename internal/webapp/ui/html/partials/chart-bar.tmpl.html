@@ -38,83 +38,94 @@
 
 <script type="text/javascript">
 
-    const chartTwoOptions = {
-        series: [
-            {
-                name: "Sales",
-                data: [44, 55, 41, 67, 22, 43, 65],
+    try {
+        let chartTwoOptions
+        let chartSelectorBar
+        let chartTwo
+    } finally {
+        chartTwoOptions = {
+            series: [
+                {
+                    name: "Sales",
+                    data: [44, 55, 41, 67, 22, 43, 65],
+                },
+                {
+                    name: "Revenue",
+                    data: [13, 23, 20, 8, 13, 27, 15],
+                },
+            ],
+            colors: ["#3056D3", "#80CAEE"],
+            chart: {
+                type: "bar",
+                height: 335,
+                stacked: true,
+                toolbar: {
+                    show: false,
+                },
+                zoom: {
+                    enabled: false,
+                },
             },
-            {
-                name: "Revenue",
-                data: [13, 23, 20, 8, 13, 27, 15],
-            },
-        ],
-        colors: ["#3056D3", "#80CAEE"],
-        chart: {
-            type: "bar",
-            height: 335,
-            stacked: true,
-            toolbar: {
-                show: false,
-            },
-            zoom: {
-                enabled: false,
-            },
-        },
 
-        responsive: [
-            {
-                breakpoint: 1536,
-                options: {
-                    plotOptions: {
-                        bar: {
-                            borderRadius: 0,
-                            columnWidth: "25%",
+            responsive: [
+                {
+                    breakpoint: 1536,
+                    options: {
+                        plotOptions: {
+                            bar: {
+                                borderRadius: 0,
+                                columnWidth: "25%",
+                            },
                         },
                     },
                 },
+            ],
+            plotOptions: {
+                bar: {
+                    horizontal: false,
+                    borderRadius: 0,
+                    columnWidth: "25%",
+                    borderRadiusApplication: "end",
+                    borderRadiusWhenStacked: "last",
+                },
             },
-        ],
-        plotOptions: {
-            bar: {
-                horizontal: false,
-                borderRadius: 0,
-                columnWidth: "25%",
-                borderRadiusApplication: "end",
-                borderRadiusWhenStacked: "last",
+            dataLabels: {
+                enabled: false,
             },
-        },
-        dataLabels: {
-            enabled: false,
-        },
 
-        xaxis: {
-            categories: ["M", "T", "W", "T", "F", "S", "S"],
-        },
-        legend: {
-            position: "top",
-            horizontalAlign: "left",
-            fontFamily: "Satoshi, sans-serif",
-            fontWeight: 500,
-            fontSize: "14px",
-
-            markers: {
-                radius: 99,
+            xaxis: {
+                categories: ["M", "T", "W", "T", "F", "S", "S"],
             },
-        },
-        fill: {
-            opacity: 1,
-        },
-    };
+            legend: {
+                position: "top",
+                horizontalAlign: "left",
+                fontFamily: "Satoshi, sans-serif",
+                fontWeight: 500,
+                fontSize: "14px",
 
-    const chartSelectorBar = document.querySelectorAll("#chartTwo");
+                markers: {
+                    radius: 99,
+                },
+            },
+            fill: {
+                opacity: 1,
+            },
+        };
 
-    if (chartSelectorBar.length) {
-        const chartTwo = new ApexCharts(
-            document.querySelector("#chartTwo"),
-            chartTwoOptions
-        );
-        chartTwo.render();
+        chartSelectorBar = document.querySelectorAll("#chartTwo");
+
+        if (chartSelectorBar.length) {
+
+            if (ApexCharts) {
+                chartTwo = new ApexCharts(
+                    document.querySelector("#chartTwo"),
+                    chartTwoOptions
+                );
+                chartTwo.render();
+            }
+
+        }
     }
+
 </script>
 {{end}}

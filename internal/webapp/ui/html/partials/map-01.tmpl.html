@@ -15,43 +15,53 @@
 
 <script type="text/javascript">
 
-    const mapSelector = document.querySelectorAll("#mapOne");
+    try {
+        let mapSelector
+        let mapOne
+    } finally {
+        mapSelector = document.querySelectorAll("#mapOne");
 
-    if (mapSelector.length) {
-        const mapOne = new jsVectorMap({
-            selector: "#mapOne",
-            map: "us_aea_en",
-            zoomButtons: true,
+        if (mapSelector.length) {
+            if (jsVectorMap) {
+                mapOne = new jsVectorMap({
+                    selector: "#mapOne",
+                    map: "us_aea_en",
+                    zoomButtons: true,
 
-            regionStyle: {
-                initial: {
-                    fill: "#C8D0D8",
-                },
-                hover: {
-                    fillOpacity: 1,
-                    fill: "#3056D3",
-                },
-            },
-            regionLabelStyle: {
-                initial: {
-                    fontFamily: "Satoshi",
-                    fontWeight: "semibold",
-                    fill: "#fff",
-                },
-                hover: {
-                    cursor: "pointer",
-                },
-            },
-
-            labels: {
-                regions: {
-                    render(code) {
-                        return code.split("-")[1];
+                    regionStyle: {
+                        initial: {
+                            fill: "#C8D0D8",
+                        },
+                        hover: {
+                            fillOpacity: 1,
+                            fill: "#3056D3",
+                        },
                     },
-                },
-            },
-        });
+                    regionLabelStyle: {
+                        initial: {
+                            fontFamily: "Satoshi",
+                            fontWeight: "semibold",
+                            fill: "#fff",
+                        },
+                        hover: {
+                            cursor: "pointer",
+                        },
+                    },
+
+                    labels: {
+                        regions: {
+                            render(code) {
+                                return code.split("-")[1];
+                            },
+                        },
+                    },
+                });
+
+            }
+        }
+
     }
+
 
 </script>
 {{end}}

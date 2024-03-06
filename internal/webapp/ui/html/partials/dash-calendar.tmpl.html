@@ -2,7 +2,7 @@
 
 
 {{define "dash-main"}}
-<main x-init="{selected: $persist('Calendar')}">
+<main x-init="page='calendar'">
     <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
         <div class="mx-auto max-w-7xl">
             <!-- Breadcrumb Start -->
@@ -14,7 +14,7 @@
                 <nav>
                     <ol class="flex items-center gap-2">
                         <li>
-                            <a class="font-medium" href="/">Dashboard /</a>
+                            <a class="font-medium" href="/dash">Dashboard /</a>
                         </li>
                         <li class="text-primary">Calendar</li>
                     </ol>
