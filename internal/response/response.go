@@ -23,6 +23,7 @@ func GetResourceNotFoundError(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		//nolint will set up default fallback later
 		replier.NewHTTPErrorResponse(w, errors.New(ErrKeyResourceNotFound))
+		return
 	}
 
 	http.Error(w, "Not Found", http.StatusNotFound)
@@ -39,6 +40,7 @@ func GetDefault200Response(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		//nolint will set up default fallback later
 		replier.NewHTTPBlankResponse(w, 200)
+		return
 	}
 
 	w.WriteHeader(200)

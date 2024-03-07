@@ -21,4 +21,7 @@ const (
 	// CacheSkipHttpResponseHeader is the response header used to tell server not to cache the
 	// response from the endpoint
 	CacheSkipHttpResponseHeader string = "X-Cache-Skip"
+
+	// ApiV1UriPrefix the prefix that will be added to all of the Api's V1 URI routes
+	ApiV1UriPrefix = "/api/v1"
 )

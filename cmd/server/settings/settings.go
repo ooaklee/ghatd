@@ -14,6 +14,7 @@ type Settings struct {
 	CacheTtl                 int    `envconfig:"cache_ttl" default:"15" required:"true"`
 	CacheRefreshParameterKey string `envconfig:"cache_refresh_key" default:"frais" required:"true"`
 	CacheSkipHttpHeader      string `envconfig:"cache_skip_http_header" default:"x-cache-skip"`
+	CacheSkipUriPathRegex    string `envconfig:"cache_skip_uri_path_regex" default:"^/api/v1/.*"`
 	// Cors
 	AllowOrigins string `envconfig:"allow_origins" default:"http://localhost:3000" required:"true"`
 	// Web App

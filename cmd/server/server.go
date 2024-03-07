@@ -303,12 +303,15 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-adapter: %v", err)
 	}
 
+	apiPathRegex := regexp.MustCompile(appSettings.CacheSkipUriPathRegex)
+
 	cacheClient, err := cache.NewClient(
 		cache.ClientWithAdapter(memcachedCacheAdapter),
 		cache.ClientWithTTL(time.Duration(appSettings.CacheTtl)*time.Minute),
 		cache.ClientWithRefreshKey(appSettings.CacheRefreshParameterKey),
 		cache.ClientWithExpiresHeader(),
 		cache.ClientWithSkipCacheResponseHeader(appSettings.CacheSkipHttpHeader),
+		cache.ClientWithSkipCacheUriPathRegex(apiPathRegex),
 	)
 	if err != nil {
 		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-middleware: %v", err)

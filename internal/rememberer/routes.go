@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/router"
 )
 
@@ -16,11 +17,8 @@ type remembererHandler interface {
 }
 
 const (
-	// ApiV1Base the start of the V1 Api's URI
-	ApiV1Base = "/v1"
-
 	// ApiRemembererPrefix base URI prefix for all rememberer routes
-	ApiRemembererPrefix = ApiV1Base + "/rememberer"
+	ApiRemembererPrefix = common.ApiV1UriPrefix + "/rememberer"
 
 	// ApiWordsVariable URI variable used to get actions words
 	ApiWordsVariable = "/words"

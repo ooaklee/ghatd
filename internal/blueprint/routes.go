@@ -3,6 +3,7 @@ package blueprint
 import (
 	"fmt"
 
+	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
 	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/router"
 )
 
@@ -10,11 +11,8 @@ import (
 type blueprintHandler interface{}
 
 const (
-	// ApiV1Base the start of the V1 Api's URI
-	ApiV1Base = "/v1"
-
 	// ApiBlueprintPrefix base URI prefix for all blueprint routes
-	ApiBlueprintPrefix = ApiV1Base + "/blueprint"
+	ApiBlueprintPrefix = common.ApiV1UriPrefix + "/blueprint"
 )
 
 var (

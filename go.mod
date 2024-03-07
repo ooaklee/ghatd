@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
-	github.com/ooaklee/http-cache v0.0.0-20240306055428-b532746603df
+	github.com/ooaklee/http-cache v0.0.0-20240307014850-88f7161c2e08
 	github.com/spf13/cobra v1.8.0
 )
 
