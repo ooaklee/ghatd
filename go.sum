@@ -71,6 +71,10 @@ github.com/matoous/go-nanoid/v2 v2.0.0 h1:d19kur2QuLeHmJBkvYkFdhFBzLoo1XVm2GgTpL
 github.com/matoous/go-nanoid/v2 v2.0.0/go.mod h1:FtS4aGPVfEkxKxhdWPAspZpZSh1cOjtM7Ej/So3hR0g=
 github.com/ooaklee/http-cache v0.0.0-20240307014850-88f7161c2e08 h1:MDI7YA+Z0dB9M7AeYkYkj+tphMYERaC12vFfmSOwE6s=
 github.com/ooaklee/http-cache v0.0.0-20240307014850-88f7161c2e08/go.mod h1:UYlF1u5v8Wa/r71LbdnL1SVtBtlTs2fAGRuhrDwdvjY=
+github.com/ooaklee/http-cache v0.0.0-20240307024225-b36341eb9508 h1:/87QHoHnado7XrRJm5zgPI9RQ+pW9s7/Ltw4BdpeGDY=
+github.com/ooaklee/http-cache v0.0.0-20240307024225-b36341eb9508/go.mod h1:UYlF1u5v8Wa/r71LbdnL1SVtBtlTs2fAGRuhrDwdvjY=
+github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3 h1:FPRKlK8DDxRPz7BKoxF3rTR3GLQnC79hjdai0zrXd2Q=
+github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3/go.mod h1:UYlF1u5v8Wa/r71LbdnL1SVtBtlTs2fAGRuhrDwdvjY=
 github.com/ooaklee/reply v1.0.0 h1:h304hBaFJar1zcIUdgzu309IYtQQI9iPsq1Pi0eZ6P4=
 github.com/ooaklee/reply v1.0.0/go.mod h1:2lSHSGqzEfdNwkl146GId0x+338e6gCXrwSUO/4Kf2c=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
