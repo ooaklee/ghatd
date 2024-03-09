@@ -26,6 +26,7 @@ type webAppHandler interface {
 	DashProfile(w http.ResponseWriter, r *http.Request)
 	DashBlank(w http.ResponseWriter, r *http.Request)
 	DashFormElements(w http.ResponseWriter, r *http.Request)
+	DashFormLayout(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -46,6 +47,9 @@ const (
 
 	// WebAppDasFormElementsRoute the URI for the web app's form elements page
 	WebAppDasFormElementsRoute = WebAppDashRoute + "/" + "form-elements"
+
+	// WebAppDasFormLayoutRoute the URI for the web app's form layout page
+	WebAppDasFormLayoutRoute = WebAppDashRoute + "/" + "form-layout"
 
 	// WebAppPolicyTermsRoute the URI for the web app terms policy page
 	WebAppPolicyTermsRoute = WebAppBase + "terms"
@@ -127,6 +131,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppDashProfileRoute, request.Handler.DashProfile)
 	httpRouter.HandleFunc(WebAppDashBlankRoute, request.Handler.DashBlank)
 	httpRouter.HandleFunc(WebAppDasFormElementsRoute, request.Handler.DashFormElements)
+	httpRouter.HandleFunc(WebAppDasFormLayoutRoute, request.Handler.DashFormLayout)
 	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
 	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
 

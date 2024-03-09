@@ -168,8 +168,11 @@
                                 </li>
                                 <li>
                                     <a class=" group relative flex items-center gap-2.5 rounded-md px-4 font-medium
-                                        text-bodydark2 duration-300 ease-in-out hover:text-white"
-                                        href="form-layout.html" :class="page === 'formLayout' && '!text-white'">Form
+                                        text-bodydark2 duration-300 ease-in-out hover:text-white" hx-trigger="click"
+                                        hx-get="/dash/form-layout?frais=1" hx-headers='{"X-Web-Partial": "true"}'
+                                        hx-target="#dash-main-wrapper" hx-push-url="/dash/form-layout"
+                                        hx-swap="innerHTML" href="/dash/form-layout"
+                                        :class="page === 'form-layout' && '!text-white'">Form
                                         Layout</a>
                                 </li>
                             </ul>

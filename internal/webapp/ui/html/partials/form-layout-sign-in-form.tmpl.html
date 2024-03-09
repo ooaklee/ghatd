@@ -1,0 +1,54 @@
+{{define "form-layout-sign-in-form"}}
+<div class="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
+    <div class="border-b border-stroke px-6.5 py-4 dark:border-strokedark">
+        <h3 class="font-medium text-black dark:text-white">
+            Sign In Form
+        </h3>
+    </div>
+    <form action="#">
+        <div class="p-6.5">
+            <div class="mb-4.5">
+                <label class="mb-3 block text-sm font-medium text-black dark:text-white">
+                    Email
+                </label>
+                <input type="email" placeholder="Enter your email address"
+                    class="w-full rounded border-[1.5px] border-stroke bg-transparent px-5 py-3 font-normal text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary" />
+            </div>
+
+            <div>
+                <label class="mb-3 block text-sm font-medium text-black dark:text-white">
+                    Password
+                </label>
+                <input type="password" placeholder="Enter password" autocomplete="new-password"
+                    class="w-full rounded border-[1.5px] border-stroke bg-transparent px-5 py-3 font-normal text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary" />
+            </div>
+
+            <div class="mb-5.5 mt-5 flex items-center justify-between" x-data="{ checkboxToggle: false }">
+                <span>
+                    <div x-data="{ checkboxToggle: false }">
+                        <label for="checkboxLabelOne"
+                            class="flex cursor-pointer select-none items-center text-sm font-medium">
+                            <div class="relative">
+                                <input type="checkbox" id="checkboxLabelOne" class="sr-only"
+                                    @change="checkboxToggle = !checkboxToggle" />
+                                <div :class="checkboxToggle && 'border-primary bg-gray dark:bg-transparent'"
+                                    class="mr-4 flex h-5 w-5 items-center justify-center rounded border">
+                                    <span :class="checkboxToggle && 'bg-primary'" class="h-2.5 w-2.5 rounded-sm"></span>
+                                </div>
+                            </div>
+                            <p class="font-normal">Remember me</p>
+                        </label>
+                    </div>
+                </span>
+
+                <a href="#" class="text-sm text-primary hover:underline">Forget password?</a>
+            </div>
+
+            <button class="flex w-full justify-center rounded bg-primary p-3 font-medium text-gray hover:bg-opacity-90">
+                Sign In
+            </button>
+        </div>
+    </form>
+</div>
+
+{{end}}
