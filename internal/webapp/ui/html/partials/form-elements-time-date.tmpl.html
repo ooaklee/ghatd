@@ -1,5 +1,8 @@
 {{define "form-elements-time-date"}}
 
+<link rel="stylesheet" href="/static/libs/flatpickr.min.css">
+<script src="/static/libs/flatpickr.js"></script>
+
 <div class="rounded-sm border border-stroke bg-white shadow-default dark:border-strokedark dark:bg-boxdark">
     <div class="border-b border-stroke px-6.5 py-4 dark:border-strokedark">
         <h3 class="font-medium text-black dark:text-white">
@@ -47,6 +50,40 @@
     </div>
 </div>
 
-<script src="/static/js/dash.js"></script>
+<script>
+    // Init flatpickr
+    flatpickr(".datepicker", {
+        mode: "range",
+        static: true,
+        monthSelectorType: "static",
+        dateFormat: "M j, Y",
+        defaultDate: [new Date().setDate(new Date().getDate() - 6), new Date()],
+        prevArrow:
+            '<svg class="fill-current" width="7" height="11" viewBox="0 0 7 11"><path d="M5.4 10.8l1.4-1.4-4-4 4-4L5.4 0 0 5.4z" /></svg>',
+        nextArrow:
+            '<svg class="fill-current" width="7" height="11" viewBox="0 0 7 11"><path d="M1.4 10.8L0 9.4l4-4-4-4L1.4 0l5.4 5.4z" /></svg>',
+        onReady: (selectedDates, dateStr, instance) => {
+            // eslint-disable-next-line no-param-reassign
+            instance.element.value = dateStr.replace("to", "-");
+            const customClass = instance.element.getAttribute("data-class");
+            instance.calendarContainer.classList.add(customClass);
+        },
+        onChange: (selectedDates, dateStr, instance) => {
+            // eslint-disable-next-line no-param-reassign
+            instance.element.value = dateStr.replace("to", "-");
+        },
+    });
 
+    flatpickr(".form-datepicker", {
+        mode: "single",
+        static: true,
+        monthSelectorType: "static",
+        dateFormat: "M j, Y",
+        prevArrow:
+            '<svg class="fill-current" width="7" height="11" viewBox="0 0 7 11"><path d="M5.4 10.8l1.4-1.4-4-4 4-4L5.4 0 0 5.4z" /></svg>',
+        nextArrow:
+            '<svg class="fill-current" width="7" height="11" viewBox="0 0 7 11"><path d="M1.4 10.8L0 9.4l4-4-4-4L1.4 0l5.4 5.4z" /></svg>',
+    });
+
+</script>
 {{end}}
