@@ -1,6 +1,10 @@
-# GHATD - An opinionated, Go-based, full-stack web application template
+# GHAT(D)
 
-GHATD stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. It is a top-quality, opinionated, open-source, and free full-stack web application template written in Go programming language. GHATD is perfect for creating highly portable, scalable, and performant backend, landing pages, web applications, and full projects.
+<div align="center" style="padding-bottom: 8px;">
+  <img alt="ghat" height="180px" src="./docs/assets/ghat_card.png">
+</div>
+
+GHAT(D) is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. It is an open-source, opinionated, free, full-stack web application template based on the Go programming language. The aim is to make GHAT(D) great for creating highly portable, scalable, and performant full-stack projects. Don't worry, you can use it  backends, landing pages, web applications, and more.
 
 See below for more information on the core components used for this stack.
 
@@ -16,26 +20,19 @@ See below for more information on the core components used for this stack.
 > The dashboard's base template was taken from the `TailAdmin team`. Please support them by [**purchasing their templates**](https://tailwindadmin.netlify.app/) or giving their [**GitHub repository**](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) a star.
 >
 > 
-> This template application will be referred to as `ghatd` (**Go**, **HTMX**, **Alpine JS**, **Tailwind CSS** &  **Daisy UI**) throughout the template, for information on the list of variables you should replace after cloning this repo, [vist this section](#remember-to-replace)
+> The demo application will be referred to as `ghatd` throughout the template, for information on the list of variables you should replace after cloning this repo, [vist this section](#remember-to-replace)
 
 ## Motivation
 
-GHATD is a hobby project I am working on in my spare time. The project aims to give those like me who like Go and want to work on projects that sometimes require a frontend a good "getting started" template that we can leverage to build out other projects and initiatives.
+GHAT(D) is a hobby project I work on in my free time. This project is designed to provide a good "getting started" template for people like me who are interested in Go, APIs, and Web Applications and want a consistent base on which to build projects. I hope that this template can be used as a foundation for building out many awesome projects and initiatives.
 
-I also aim to use this project to improve my understanding of and share my knowledge of lightweight frontend libraries, highly portable full-stack alternatives, and cost-effective infrastructure solutions for full-scale products. 
+I also aim to use this project as a learning opportunity, to improve my understanding of and share my knowledge of lightweight frontend libraries, highly portable full-stack alternatives, and cost-effective infrastructure solutions for full-scale products. 
 
 As I develop this project, I will create tutorials/guides for those who want to integrate it with other technologies, such as `rpc`,  `graphql`,  `websocket`, and others.
 
-I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I want to create a standardised template that helps those curious (about Go, APIs, hubby projects, and web app development) turn their ideas/ hobbies into tangible product(s) that they can demo to friends, family or colleagues and even ship.
+I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I am aspiring to create a standardised template that helps those curious (about Go, APIs, hubby projects, and web app development) to turn their ideas/ hobbies into tangible product(s) that they can demo and even ship.
 
-This will be an exciting experience, and I look forward to developing this project and sharing my progress and knowledge as it matures.
-
-### A little more about me
-
-Engineering, tech, learning and helping others grow are some of my passions; I often find myself reading, listening or watching something related to the engineering world, micro saas, or latest advancements and every so often, I like to dive deeper into a topic and create a project/integrate into an existing project to see what takeaways I can take back to my work or future hobby projects, which in the past led to me toying with a plethora of stacks and deployment methods, including but not limited to serverless infrastructure, containerised service, bundled static HTML including immutable web apps, Go backend, Python applications (Flask & Django), vue-based frameworks (Vue.js, Nuxt, etc.), react-based frameworks (React, Next.js), Flutter frontends, Chrome extension (using Vue.js & React), pure HTML, Wordpress based frontend implementation (PHP), building micro frontends and more.
-
-Ultimately, I've grown to accept that I want to work with Go first and foremost for my hobby projects. I don't particularly appreciate repeating feature implementations across multiple codebases, nor am I a fan of the constant context-switching between the frontend code base, backend, etc. Instead, I want one base template to rule them all. I know this has the potential to be disastrous. Still, it will reduce fatigue by consolidating many of the repetitious areas/ pain points I dreaded when working on some of my past solo projects and help me continue my journey of discovering Go.
-
+This will be an exciting experience, and I look forward to building out this project with you all and sharing my progress and knowledge as it matures.
 
 ## Starting the server
 

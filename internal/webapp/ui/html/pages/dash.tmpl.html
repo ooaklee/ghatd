@@ -1,9 +1,11 @@
 {{define "head"}}
 <link href="/static/libs/daisyui-full.min.css" rel="stylesheet" type="text/css" />
-
+<link rel="stylesheet" href="/static/libs/flatpickr.min.css">
+<script src="/static/libs/flatpickr.js"></script>
 {{template "tailwind-conf-script" .}}
 <link rel='stylesheet' href='/static/css/dash-styles.css'>
 {{end}}
+
 
 {{define "main"}}
 <!-- ===== Preloader Start ===== -->
@@ -31,4 +33,8 @@
     <!-- ===== Content Area End ===== -->
 </div>
 <!-- ===== Page Wrapper End ===== -->
+{{end}}
+
+{{define "after-main"}}
+<script src="/static/js/dash.js"></script>
 {{end}}
