@@ -4,7 +4,7 @@
   <img alt="ghat" height="180px" src="./docs/assets/ghat_card.png">
 </div>
 
-GHAT(D) is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. It is an open-source, opinionated, free, full-stack web application template based on the Go programming language. The aim is to make GHAT(D) great for creating highly portable, scalable, and performant full-stack projects. Don't worry, you can use it  backends, landing pages, web applications, and more.
+GHAT(D) is an open-source, opinionated, free, full-stack web application template based on the Go programming language. It is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use GHAT(D).
 
 See below for more information on the core components used for this stack.
 
