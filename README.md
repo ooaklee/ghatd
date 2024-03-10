@@ -20,11 +20,11 @@ See below for more information on the core components used for this stack.
 > The dashboard's base template was taken from the `TailAdmin team`. Please support them by [**purchasing their templates**](https://tailwindadmin.netlify.app/) or giving their [**GitHub repository**](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) a star.
 >
 > 
-> The demo application will be referred to as `ghatd` throughout the template, for information on the list of variables you should replace after cloning this repo, [vist this section](#remember-to-replace)
+> The demo application will be referred to as `ghat`, `ghatd` or `GHAT(D)` throughout the template, for information on the list of variables you should replace after cloning this repo, [vist this section](#remember-to-replace)
 
 ## Motivation
 
-GHAT(D) is a hobby project I work on in my free time. This project is designed to provide a good "getting started" template for people like me who are interested in Go, APIs, and Web Applications and want a consistent base on which to build projects. I hope that this template can be used as a foundation for building out many awesome projects and initiatives.
+GHAT(D) is a hobby project I work on in my spare time. This project is designed to provide a good "getting started" template for people like me who are interested in Go, APIs, and Web Applications and want a consistent base on which to build projects. I hope that this template can be used as a foundation for building out many awesome projects and initiatives.
 
 I also aim to use this project as a learning opportunity, to improve my understanding of and share my knowledge of lightweight frontend libraries, highly portable full-stack alternatives, and cost-effective infrastructure solutions for full-scale products. 
 

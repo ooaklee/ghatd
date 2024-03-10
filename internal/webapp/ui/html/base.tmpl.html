@@ -3,45 +3,52 @@
 <html lang="en">
 
 <head>
+    <title>{{template "title" .}} | GHAT(D)</title>
+    <meta name="description" content="Get started with this Go-based, open-source, full-stack web app template.">
 
-    <title>{{template "title" .}} | GHAT</title>
     <meta charset="utf-8">
-    <meta name="description" content="Get started with this Go-based, open-source,
-        full-stack web app template - for free.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <meta property="og:image" content="/static/img/ghat-logo-square.png">
-    <meta property="og:image:type" content="image/png">
-    <meta property="og:image:width" content="1200">
+
+    <!-- Google / Search Engine Tags -->
+    <meta itemprop="name" content='{{template "title" .}} | GHAT(D)'>
+    <meta itemprop="description" content="Get started with this Go-based, open-source, full-stack web app template.">
+    <meta itemprop="image" content="https://ghatd.com/static/img/ghat-logo-square.png">
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://ghatd.com">
     <meta property="og:type" content="website">
-    <meta property="twitter:card" content="summary">
-    <meta property="twitter:site" content="ghatd">
-    <meta property="twitter:image:src" content="/static/img/android-chrome-icon-192x192.png">
-    <meta property="twitter:image:width" content="1200">
-    <meta property="twitter:image:height" content="628">
+    <meta property="og:title" content='{{template "title" .}} | GHAT(D)'>
+    <meta property="og:description" content="Get started with this Go-based, open-source, full-stack web app template.">
+    <meta property="og:image" content="https://ghatd.com/static/img/ghat-logo-square.png">
+    <meta property="og:image:height" content="512">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content='{{template "title" .}} | GHAT(D)'>
+    <meta name="twitter:description"
+        content="Get started with this Go-based, open-source, full-stack web app template.">
+    <meta name="twitter:image" content="https://ghatd.com/static/img/ghat-logo-square.png">
+    <meta property="twitter:image:height" content="512">
+
+    <!-- Additional Meta Tags -->
     <link rel="icon" type="image/png" sizes="16x16" href="/static/img/icon-16x16.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/img/icon-32x32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/img/android-chrome-icon-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/static/img/android-chrome-icon-512x512.png">
-    <meta property="og:title" content="ghatd">
-    <meta property="og:description" content="Get started with this Go-based,
-        open-source, full-stack web app template - for free.">
-    <meta property="og:url" content="https://ghatd.com">
-    <meta property="twitter:title" content="ghatd">
-    <meta property="twitter:description" content="Get started with this Go-based,
-        open-source, full-stack web app template - for free.">
 
-
+    <!-- HTMX -->
     <script src="/static/libs/htmx.js"></script>
+
+    <!-- Tailwind CSS -->
     <script src="/static/libs/tailwindcss.js"></script>
-    <!--alpinejs-->
-    <!-- Alpine Plugins -->
+
+    <!-- Alpine JS Plugins -->
     <script defer src="/static/libs/alpine-persist.js"></script>
 
-    <!-- Alpine Core -->
+    <!-- Alpine JS Core -->
     <script defer src="/static/libs/alpine.js"></script>
-    <!---->
 
     {{block "head" .}} {{end}}
 

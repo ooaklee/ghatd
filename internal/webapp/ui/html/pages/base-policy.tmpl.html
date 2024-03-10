@@ -13,6 +13,14 @@
 </style>
 {{end}}
 
+{{block "body" . }}
+
+<body>
+    {{template "main" .}}
+    {{block "after-main" .}}{{end}}
+</body>
+{{end}}
+
 
 {{define "main"}}
 <!-- ===== Page Wrapper Start ===== -->
