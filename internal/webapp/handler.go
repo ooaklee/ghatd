@@ -55,11 +55,11 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/home.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/header.tmpl.html",
-		"internal/webapp/ui/html/partials/footer.tmpl.html",
-		"internal/webapp/ui/html/partials/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
 	}
 
 	// Parse template
@@ -87,12 +87,12 @@ func (h *Handler) Terms(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-policy.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/header.tmpl.html",
-		"internal/webapp/ui/html/partials/footer.tmpl.html",
-		"internal/webapp/ui/html/partials/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/policy-holder.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/policy/policy-holder.tmpl.html",
 	}
 
 	// Parse template
@@ -120,12 +120,12 @@ func (h *Handler) Privacy(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-policy.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/header.tmpl.html",
-		"internal/webapp/ui/html/partials/footer.tmpl.html",
-		"internal/webapp/ui/html/partials/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/policy-holder.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/policy/policy-holder.tmpl.html",
 	}
 
 	// Parse template
@@ -154,12 +154,12 @@ func (h *Handler) Cookie(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-policy.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/header.tmpl.html",
-		"internal/webapp/ui/html/partials/footer.tmpl.html",
-		"internal/webapp/ui/html/partials/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/policy-holder.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/policy/policy-holder.tmpl.html",
 	}
 
 	// Parse template
@@ -188,8 +188,8 @@ func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
-		"internal/webapp/ui/html/partials/auth-login.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/auth/auth-login.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
 	}
 
 	// Parse template
@@ -217,8 +217,8 @@ func (h *Handler) AuthSignup(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
-		"internal/webapp/ui/html/partials/auth-signup.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/auth/auth-signup.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
 	}
 
 	// Parse template
@@ -246,8 +246,8 @@ func (h *Handler) AuthResetPassword(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/base-auth.tmpl.html",
-		"internal/webapp/ui/html/partials/auth-reset-password.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/auth/auth-reset-password.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
 	}
 
 	// Parse template
@@ -275,10 +275,10 @@ func (h *Handler) ComingSoon(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/coming-soon.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/countdown-timer.tmpl.html",
-		"internal/webapp/ui/html/partials/social-links.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/coming-soon/countdown-timer.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
 	}
 
 	// Parse template
@@ -308,12 +308,12 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 
 		// list of template files to parse, must be in order of inheritence
 		templateFilesToParse := []string{
-			"internal/webapp/ui/html/partials/dash-ecommerce.tmpl.html",
-			"internal/webapp/ui/html/partials/chart-area.tmpl.html",
-			"internal/webapp/ui/html/partials/chart-bar.tmpl.html",
-			"internal/webapp/ui/html/partials/chart-donut.tmpl.html",
-			"internal/webapp/ui/html/partials/map-01.tmpl.html",
-			"internal/webapp/ui/html/partials/table-01.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/dash-ecommerce.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/chart-area.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/chart-bar.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/chart-donut.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/map-01.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/table-01.tmpl.html",
 		}
 
 		// Parse template
@@ -342,16 +342,16 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-ecommerce.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
-		"internal/webapp/ui/html/partials/chart-area.tmpl.html",
-		"internal/webapp/ui/html/partials/chart-bar.tmpl.html",
-		"internal/webapp/ui/html/partials/chart-donut.tmpl.html",
-		"internal/webapp/ui/html/partials/map-01.tmpl.html",
-		"internal/webapp/ui/html/partials/table-01.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-ecommerce.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/chart-area.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/chart-bar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/chart-donut.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/map-01.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/table-01.tmpl.html",
 	}
 
 	// Parse template
@@ -380,7 +380,7 @@ func (h *Handler) DashCalendar(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
 
 		// Parse template
-		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash-calendar.tmpl.html")
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash/dash-calendar.tmpl.html")
 		if err != nil {
 			logger.Error("Unable to parse referenced template", zap.Error(err))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -405,11 +405,11 @@ func (h *Handler) DashCalendar(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-calendar.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-calendar.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
 	}
 
 	// Parse template
@@ -438,7 +438,7 @@ func (h *Handler) DashProfile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
 
 		// Parse template
-		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash-profile.tmpl.html")
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash/dash-profile.tmpl.html")
 		if err != nil {
 			logger.Error("Unable to parse referenced template", zap.Error(err))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -463,11 +463,11 @@ func (h *Handler) DashProfile(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-profile.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-profile.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
 	}
 
 	// Parse template
@@ -496,7 +496,7 @@ func (h *Handler) DashBlank(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
 
 		// Parse template
-		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash-blank.tmpl.html")
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, "internal/webapp/ui/html/partials/dash/dash-blank.tmpl.html")
 		if err != nil {
 			logger.Error("Unable to parse referenced template", zap.Error(err))
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -521,11 +521,11 @@ func (h *Handler) DashBlank(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-blank.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-blank.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
 	}
 
 	// Parse template
@@ -555,14 +555,14 @@ func (h *Handler) DashFormElements(w http.ResponseWriter, r *http.Request) {
 
 		// list of template files to parse, must be in order of inheritence
 		templateFilesToParse := []string{
-			"internal/webapp/ui/html/partials/dash-form-elements.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-checkbox-radio.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-file-upload.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-input-fields.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-select-input.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-switch-input.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-textarea-fields.tmpl.html",
-			"internal/webapp/ui/html/partials/form-elements-time-date.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/dash-form-elements.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-checkbox-radio.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-file-upload.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-input-fields.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-select-input.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-switch-input.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-textarea-fields.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-elements-time-date.tmpl.html",
 		}
 		// Parse template
 		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
@@ -590,18 +590,18 @@ func (h *Handler) DashFormElements(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-form-elements.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-checkbox-radio.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-file-upload.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-input-fields.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-select-input.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-switch-input.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-textarea-fields.tmpl.html",
-		"internal/webapp/ui/html/partials/form-elements-time-date.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-form-elements.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-checkbox-radio.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-file-upload.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-input-fields.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-select-input.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-switch-input.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-textarea-fields.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-elements-time-date.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
 	}
 
 	// Parse template
@@ -631,10 +631,10 @@ func (h *Handler) DashFormLayout(w http.ResponseWriter, r *http.Request) {
 
 		// list of template files to parse, must be in order of inheritence
 		templateFilesToParse := []string{
-			"internal/webapp/ui/html/partials/dash-form-layout.tmpl.html",
-			"internal/webapp/ui/html/partials/form-layout-contact-form.tmpl.html",
-			"internal/webapp/ui/html/partials/form-layout-sign-up-form.tmpl.html",
-			"internal/webapp/ui/html/partials/form-layout-sign-in-form.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/dash-form-layout.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-layout-contact-form.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-layout-sign-up-form.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/form-layout-sign-in-form.tmpl.html",
 		}
 		// Parse template
 		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
@@ -662,14 +662,14 @@ func (h *Handler) DashFormLayout(w http.ResponseWriter, r *http.Request) {
 	templateFilesToParse := []string{
 		"internal/webapp/ui/html/base.tmpl.html",
 		"internal/webapp/ui/html/pages/dash.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-sidebar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-form-layout.tmpl.html",
-		"internal/webapp/ui/html/partials/form-layout-contact-form.tmpl.html",
-		"internal/webapp/ui/html/partials/form-layout-sign-up-form.tmpl.html",
-		"internal/webapp/ui/html/partials/form-layout-sign-in-form.tmpl.html",
-		"internal/webapp/ui/html/partials/tailwind-dash-script.tmpl.html",
-		"internal/webapp/ui/html/partials/preloader.tmpl.html",
-		"internal/webapp/ui/html/partials/dash-header.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-form-layout.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-layout-contact-form.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-layout-sign-up-form.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/form-layout-sign-in-form.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
 	}
 
 	// Parse template

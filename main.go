@@ -12,7 +12,7 @@ import (
 
 // content holds our static web server content.
 //
-//go:embed internal/webapp/ui/html/*.tmpl.html internal/webapp/ui/static/* internal/webapp/ui/html/pages/*.tmpl.html internal/webapp/ui/html/partials/*.tmpl.html internal/webapp/ui/html/responses/*.tmpl.html
+//go:embed internal/webapp/ui/html/*.tmpl.html internal/webapp/ui/static/* internal/webapp/ui/html/pages/*.tmpl.html internal/webapp/ui/html/partials/**/*.tmpl.html internal/webapp/ui/html/partials/*.tmpl.html internal/webapp/ui/html/responses/*.tmpl.html
 var content embed.FS
 
 func main() {
