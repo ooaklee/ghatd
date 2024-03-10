@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/rememberer"
+	"github.com/ooaklee/ghatd/internal/rememberer"
 )
 
 // InMememoryRepository holds the methods for managing words

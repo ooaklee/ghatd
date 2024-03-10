@@ -9,9 +9,9 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/ooaklee/ghatd/internal/common"
+	"github.com/ooaklee/ghatd/internal/logger"
 	"github.com/ooaklee/reply"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
 	"go.uber.org/zap"
 )
 

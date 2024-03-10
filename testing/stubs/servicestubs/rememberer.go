@@ -3,7 +3,7 @@ package servicestubs
 import (
 	"context"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/rememberer"
+	"github.com/ooaklee/ghatd/internal/rememberer"
 )
 
 type Rememberer struct {

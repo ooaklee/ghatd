@@ -1,18 +1,16 @@
 package webapp
 
 import (
-	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
-	"strconv"
 
 	"go.uber.org/zap"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
-	webapphelpers "github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/helpers"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
+	"github.com/ooaklee/ghatd/internal/common"
+	"github.com/ooaklee/ghatd/internal/logger"
+	webapphelpers "github.com/ooaklee/ghatd/internal/webapp/helpers"
+	"github.com/ooaklee/ghatd/internal/webapp/policy"
 )
 
 // NewWebAppHandlerRequest is the request needed to create a web app handler
@@ -686,34 +684,4 @@ func (h *Handler) DashFormLayout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-}
-
-// Add a SnippetView handler function.
-func (h *Handler) SnippetView(w http.ResponseWriter, r *http.Request) {
-
-	queryParamId := r.URL.Query().Get("id")
-
-	parsedId, err := strconv.Atoi(queryParamId)
-	if err != nil || parsedId < 1 {
-		http.Error(w, "View Not Found", http.StatusNotFound)
-		return
-	}
-
-	fmt.Fprintf(w, "Displaying snippet: %d", parsedId)
-}
-
-// Add a SnippetCreate handler function.
-func (h *Handler) SnippetCreate(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != http.MethodPost {
-		w.Header().Add("Allow", http.MethodPost)
-
-		// To suppress a head I can used the following
-		w.Header()["Date"] = nil
-
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	w.Write([]byte("Create a new snippet..."))
 }

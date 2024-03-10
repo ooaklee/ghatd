@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/ghatd/internal/logger"
+	"github.com/ooaklee/ghatd/internal/toolbox"
 )
 
 // remembererRespository expected methods of a valid rememberer repository

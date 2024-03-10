@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/rememberer"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/testing/stubs/repositorystubs"
+	"github.com/ooaklee/ghatd/internal/rememberer"
+	"github.com/ooaklee/ghatd/testing/stubs/repositorystubs"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -1,6 +1,6 @@
 package rememberer
 
-import "github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+import "github.com/ooaklee/ghatd/internal/toolbox"
 
 type Word struct {
 	// Id the unique identifier of the word

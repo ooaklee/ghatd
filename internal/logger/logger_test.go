@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
+	"github.com/ooaklee/ghatd/internal/logger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 )

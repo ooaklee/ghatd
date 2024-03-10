@@ -5,13 +5,11 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/router"
+	"github.com/ooaklee/ghatd/internal/router"
 )
 
 // webAppHandler expected methods for valid web app handler
 type webAppHandler interface {
-	SnippetView(w http.ResponseWriter, r *http.Request)
-	SnippetCreate(w http.ResponseWriter, r *http.Request)
 	Home(w http.ResponseWriter, r *http.Request)
 	Terms(w http.ResponseWriter, r *http.Request)
 	Privacy(w http.ResponseWriter, r *http.Request)
@@ -77,15 +75,6 @@ const (
 
 	// WebAppStaticRoute base URI prefix for the web app static route for assets
 	WebAppStaticRoute = WebAppBase + "static/"
-
-	// WebAppSnippetRoute base URI prefix for the web app snippet routes
-	WebAppSnippetRoute = WebAppBase + "snippet/"
-
-	// WebAppSnippetViewRoute the URI for the web app snippet routes responsible for viewing snippet(s)
-	WebAppSnippetViewRoute = WebAppSnippetRoute + "view"
-
-	// WebAppSnippetCreateRoute the URI for the web app snippet routes responsible for creating a snippet
-	WebAppSnippetCreateRoute = WebAppSnippetRoute + "create"
 )
 
 // AttachRoutesRequest holds everything needed to attach web app
@@ -132,7 +121,4 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppDashBlankRoute, request.Handler.DashBlank)
 	httpRouter.HandleFunc(WebAppDasFormElementsRoute, request.Handler.DashFormElements)
 	httpRouter.HandleFunc(WebAppDasFormLayoutRoute, request.Handler.DashFormLayout)
-	httpRouter.HandleFunc(WebAppSnippetViewRoute, request.Handler.SnippetView)
-	httpRouter.HandleFunc(WebAppSnippetCreateRoute, request.Handler.SnippetCreate)
-
 }

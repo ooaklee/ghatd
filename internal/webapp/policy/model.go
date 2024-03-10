@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/ghatd/internal/toolbox"
 )
 
 // PolicySection respresents the components needed to create

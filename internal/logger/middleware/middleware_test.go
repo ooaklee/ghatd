@@ -12,8 +12,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger/middleware"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/ghatd/internal/logger/middleware"
+	"github.com/ooaklee/ghatd/internal/toolbox"
 )
 
 func TestMiddleware_HTTPLogger(t *testing.T) {

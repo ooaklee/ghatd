@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/logger"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/ghatd/internal/logger"
+	"github.com/ooaklee/ghatd/internal/toolbox"
 )
 
 // mapRequestToGetWordByIdRequest maps incoming request for getting word by id to correct

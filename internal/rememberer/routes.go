@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/router"
+	"github.com/ooaklee/ghatd/internal/common"
+	"github.com/ooaklee/ghatd/internal/router"
 )
 
 // remembererHandler expected methods for valid rememberer handler

@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/ooaklee/ghatd/internal/rememberer"
+	"github.com/ooaklee/ghatd/internal/validator"
+	responsehelpers "github.com/ooaklee/ghatd/testing/helpers"
+	"github.com/ooaklee/ghatd/testing/stubs/servicestubs"
 	"github.com/ooaklee/reply"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/rememberer"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/validator"
-	responsehelpers "github.com/ooaklee/template-golang-htmx-alpine-tailwind/testing/helpers"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/testing/stubs/servicestubs"
 	"github.com/stretchr/testify/assert"
 )
 

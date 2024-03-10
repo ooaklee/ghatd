@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/handlers"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
+	"github.com/ooaklee/ghatd/internal/common"
 )
 
 // NewCorsMiddleware creates a middleware that handles Cross-Origin Resource Sharing.

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/middleware/contenttype"
+	"github.com/ooaklee/ghatd/internal/middleware/contenttype"
 	"github.com/stretchr/testify/assert"
 )
 

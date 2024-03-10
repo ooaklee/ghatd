@@ -6,7 +6,7 @@ import (
 
 	_ "embed"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/cmd/server"
+	"github.com/ooaklee/ghatd/cmd/server"
 	"github.com/spf13/cobra"
 )
 
@@ -19,15 +19,15 @@ func main() {
 
 	// Highest Level Command
 	rootCmd := cobra.Command{
-		Use:   "ghat",
-		Short: "The entry point of the ghat application",
-		Long:  "The entry point of the ghat application",
+		Use:   "ghatd",
+		Short: "The entry point of the ghatd application",
+		Long:  "The entry point of the ghatd application",
 	}
 
 	rootCmd.AddCommand(server.NewCommand(&content))
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal("ghat/error-executing-command-tree")
+		log.Fatal("ghatd/error-executing-command-tree")
 	}
 
 }

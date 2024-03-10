@@ -5,8 +5,8 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/webapp/policy"
+	"github.com/ooaklee/ghatd/internal/toolbox"
+	"github.com/ooaklee/ghatd/internal/webapp/policy"
 )
 
 // NewGeneratedPrivacyPolicyRequest holds the items needed to generate a new

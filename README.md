@@ -4,7 +4,7 @@
   <img alt="ghat" height="280px" src="./docs/assets/ghat-final-logo-with-background-shadow.png">
 </div>
 
-GHAT(D) is an open-source, opinionated, free, full-stack web application template based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use GHAT(D).
+GHAT(D) is an open-source, opinionated, free, full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use GHAT(D).
 
 See below for more information on the core components used for this stack.
 
@@ -18,19 +18,17 @@ See below for more information on the core components used for this stack.
 - **version manager:** [asdf](https://github.com/asdf-vm/asdf)
 
 > The dashboard's base template was taken from the `TailAdmin team`. Please support them by [**purchasing their templates**](https://tailwindadmin.netlify.app/) or giving their [**GitHub repository**](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) a star.
->
-> 
-> The demo application will be referred to as `ghat`, `ghatd` or `GHAT(D)` throughout the template, for information on the list of variables you should replace after cloning this repo, [vist this section](#remember-to-replace)
+
 
 ## Motivation
 
-GHAT(D) is a hobby project I work on in my spare time. This project is designed to provide a good "getting started" template for people like me who are interested in Go, APIs, and Web Applications and want a consistent base on which to build projects. I hope that this template can be used as a foundation for building out many awesome projects and initiatives.
+GHAT(D) is a hobby project I work on in my spare time. This project is designed to provide a good "getting started" framework for people like me who are interested in Go, APIs, and Web Applications and want a consistent base & standards on which to build projects. I hope that this framework can be used as a foundation for building out many awesome projects and initiatives.
 
 I also aim to use this project as a learning opportunity, to improve my understanding of and share my knowledge of lightweight frontend libraries, highly portable full-stack alternatives, and cost-effective infrastructure solutions for full-scale products. 
 
 As I develop this project, I will create tutorials/guides for those who want to integrate it with other technologies, such as `rpc`,  `graphql`,  `websocket`, and others.
 
-I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I am aspiring to create a standardised template that helps those curious (about Go, APIs, hubby projects, and web app development) to turn their ideas/ hobbies into tangible product(s) that they can demo and even ship.
+I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I am aspiring to create a standardised framework that helps those curious (about Go, APIs, hubby projects, and web app development) to turn their ideas/ hobbies into tangible product(s) that they can demo and even ship.
 
 This will be an exciting experience, and I look forward to building out this project with you all and sharing my progress and knowledge as it matures.
 
@@ -67,6 +65,7 @@ reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main
 
 After you have cloned this repository, please make sure to replace or update the following:
 
+- `github.com/ooaklee/ghatd`
 - `tbc`
 
 ### ASCI Art
@@ -84,7 +83,7 @@ Some core internal packages are used across the codebase without injection; they
 
 ### Curl Examples
 
-- Making `GET` resquest with query param: `curl -i -X GET "http://localhost:4000/snippet/view?id=2"`
+- Making `GET` resquest: `curl -i -X GET "http://localhost:4000/api/v1/rememberer/words"`
 
 ### How to stop file server showing directory listing?
 

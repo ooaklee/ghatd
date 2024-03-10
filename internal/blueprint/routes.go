@@ -3,8 +3,8 @@ package blueprint
 import (
 	"fmt"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/router"
+	"github.com/ooaklee/ghatd/internal/common"
+	"github.com/ooaklee/ghatd/internal/router"
 )
 
 // blueprintHandler expected methods for valid blueprint handler

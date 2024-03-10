@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/common"
+	"github.com/ooaklee/ghatd/internal/common"
 )
 
 // NewContentType creates a middleware that sets the content-type header to application/json

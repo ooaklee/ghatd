@@ -18,10 +18,10 @@ type Settings struct {
 	// Cors
 	AllowOrigins string `envconfig:"allow_origins" default:"http://localhost:3000" required:"true"`
 	// Web App
-	ExternalServiceName    string `envconfig:"external_service_name" default:"GHATD Template" required:"true"`
-	ExternalServiceWebsite string `envconfig:"external_service_website"  default:"https://ghatd.boasi.io" required:"true"`
-	ExternalServiceEmail   string `envconfig:"external_service_email"  default:"ghatd@boasi.io" required:"true"`
-	LegalBusinessName      string `envconfig:"external_legal_business_name"  default:"Boasi Ltd" required:"true"`
+	ExternalServiceName    string `envconfig:"external_service_name" default:"GHAT(D)" required:"true"`
+	ExternalServiceWebsite string `envconfig:"external_service_website"  default:"https://ghatd.com" required:"true"`
+	ExternalServiceEmail   string `envconfig:"external_service_email"  default:"leon+ghatd@boasi.io" required:"true"`
+	LegalBusinessName      string `envconfig:"external_legal_business_name"  default:"GHAT(D)" required:"true"`
 }
 
 // NewSettings returns app settings

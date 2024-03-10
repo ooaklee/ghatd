@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/rememberer"
-	"github.com/ooaklee/template-golang-htmx-alpine-tailwind/internal/toolbox"
+	"github.com/ooaklee/ghatd/internal/rememberer"
+	"github.com/ooaklee/ghatd/internal/toolbox"
 )
 
 // GetWords returns all the words in the repository

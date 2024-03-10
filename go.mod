@@ -1,4 +1,4 @@
-module github.com/ooaklee/template-golang-htmx-alpine-tailwind
+module github.com/ooaklee/ghatd
 
 go 1.22.0
 
