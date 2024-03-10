@@ -4,7 +4,7 @@
   <img alt="ghat" height="280px" src="./docs/assets/ghat-final-logo-with-background-shadow.png">
 </div>
 
-GHAT(D) is an open-source, opinionated, free, full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI. The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use GHAT(D).
+GHAT(D) is an open-source, opinionated, free, full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI (which is optional, see notable alternatives below). The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use the GHAT(D) framework.
 
 See below for more information on the core components used for this stack.
 
@@ -27,7 +27,7 @@ GHAT(D) is a hobby project I work on in my spare time. This project is designed 
 
 I also aim to use this project as a learning opportunity, to improve my understanding of and share my knowledge of lightweight frontend libraries, highly portable full-stack alternatives, and cost-effective infrastructure solutions for full-scale products. 
 
-As I develop this project, I will create tutorials/guides for those who want to integrate it with other technologies, such as `rpc`,  `graphql`,  `websocket`, and others.
+As we develop this project, I want to also create tutorials/guides for those who want to integrate it with other technologies, such as `rpc`,  `graphql`,  `websocket`, and others.
 
 I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I am aspiring to create a standardised framework that helps those curious (about Go, APIs, hubby projects, and web app development) to turn their ideas/ hobbies into tangible product(s) that they can demo and even ship.
 
