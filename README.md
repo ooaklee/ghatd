@@ -1,8 +1,8 @@
-# GHAT(D)
-
 <div align="center" style="padding-bottom: 8px;">
   <img alt="ghat" height="280px" src="./docs/assets/ghat-final-logo-with-background-shadow.png">
 </div>
+
+# GHAT(D)
 
 GHAT(D) is an open-source, opinionated, free, full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI (which is optional, see notable alternatives below). The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use the GHAT(D) framework.
 
