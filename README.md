@@ -13,8 +13,9 @@ See below for more information on the core components used for this stack.
 - **alpine.js:** [v3.x](https://alpinejs.dev/essentials/installation#from-a-script-tag)
 - **tailwindcss:** [v3.x](https://github.com/asdf-community/asdf-golang)
 - **daisy ui:** [v3.x](https://daisyui.com/docs/install/)
-  -  Notable alternatives include:
+  - Notable alternatives include:
     - **flowbite:** [v2.3.x](https://flowbite.com/docs/getting-started/introduction/#include-via-cdn)
+    - **wind-ui:** [v.3.4.x](https://wind-ui.com/)
 - **version manager:** [asdf](https://github.com/asdf-vm/asdf)
 
 > The dashboard's base template was taken from the `TailAdmin team`. Please support them by [**purchasing their templates**](https://tailwindadmin.netlify.app/) or giving their [**GitHub repository**](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) a star.
