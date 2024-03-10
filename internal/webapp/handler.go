@@ -59,7 +59,6 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
 	}
 
 	// Parse template
@@ -91,7 +90,7 @@ func (h *Handler) Terms(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
+
 		"internal/webapp/ui/html/partials/policy/policy-holder.tmpl.html",
 	}
 
@@ -124,7 +123,7 @@ func (h *Handler) Privacy(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
+
 		"internal/webapp/ui/html/partials/policy/policy-holder.tmpl.html",
 	}
 
@@ -158,7 +157,7 @@ func (h *Handler) Cookie(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/shared/header.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/footer.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/social-links.tmpl.html",
-		"internal/webapp/ui/html/partials/shared/sidebar.tmpl.html",
+
 		"internal/webapp/ui/html/partials/policy/policy-holder.tmpl.html",
 	}
 

@@ -2,9 +2,20 @@
 
 {{template "tailwind-conf-script" .}}
 <link rel='stylesheet' href='/static/css/dash-styles.css'>
-
+<style>
+    body {
+        background-color: white;
+    }
+</style>
 {{end}}
 
+{{block "body" . }}
+
+<body>
+    {{template "main" .}}
+    {{block "after-main" .}}{{end}}
+</body>
+{{end}}
 
 {{define "main"}}
 <!-- ===== Page Wrapper Start ===== -->
