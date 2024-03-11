@@ -1,0 +1,28 @@
+{{define "footer"}}
+<!-- ===== Footer Content Start ===== -->
+<footer class="bg-black-2/[0.9]">
+    <div class="mx-auto max-w-screen-2xl py-2 px-4 md:px-6 2xl:px-10">
+        <div class="h-full max-w-[1164px] flex-col lg:mx-auto ">
+            <!-- Footer nav section start -->
+            <div></div>
+            <!-- Footer nav section end -->
+
+            <!-- Footer social section start -->
+            <div class="flex py-10 flex-wrap flex-start lg:justify-between">
+                <div
+                    class="flex gap-2 mb-10 md:mb-0  align-middle [&>a]:relative [&>a]:flex  [&>a]:h-8.5  [&>a]:w-8.5  [&>a]:items-center  [&>a]:justify-center  [&>a]:rounded-full  [&>a]:border-[0.5px]  [&>a]:border-stroke  [&>a]:bg-gray  [&>a]:text-black-2  [&>a:dark]:border-strokedark  [&>a:dark]:bg-meta-4  [&>a:dark]:text-white">
+                    {{block "social-links" .}}{{end}}
+                </div>
+                <!-- Footer social section end -->
+
+                <!-- Footer nav links section start -->
+                {{template "footer-nav-links" .}}
+                <!-- Footer nav links section end -->
+
+            </div>
+        </div>
+
+    </div>
+</footer>
+<!-- ===== Footer Content End ===== -->
+{{end}}

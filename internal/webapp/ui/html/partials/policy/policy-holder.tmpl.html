@@ -1,0 +1,48 @@
+{{define "policy-holder"}}
+<main class="flex justify-center">
+    <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div class="pt-8 h-full max-w-[1164px]">
+
+            <div class="flex flex-col justify-center items-center text-center sm:text-left mb-6 lg:mb-20">
+                <h1 class="font-bold text-4xl mb-3">{{.Name}}</h1>
+                <p class="font-medium text-xl">Last Updated: {{.LastUpdated}}</p>
+
+            </div>
+
+            <div class="flex">
+                <div class="w-fit order-2 hidden md:block md:order-1">
+                    <div class="sticky top-34">
+                        <div class="table-content text-black-100 pb-16 md:pb-3 mb-33">
+
+                            <div class="relative mb-4 font-bold">Table of contents</div>
+                            <div class="h-screen toc relative js-toc">
+                                <ol class="pl-2 m-0 relative">
+                                    {{range .TableOfContentsItems}}
+                                    <li class="mb-2 font-medium hover:bg-primary/[.1] max-w-[226px]"><a
+                                            href="{{.HeaderHref}}" class="toc-link node-name--H2 ">{{.HeaderTitle}}</a>
+                                    </li>
+                                    {{end}}
+                                </ol>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full max-w-[630px] px-4 lg:px-6 order-2 blog-post js-toc-content mb-25">
+                    {{range .Sections}}
+                    {{if .Header}}
+                    <h2 class="-mt-16 pt-30 mb-5 text-4xl font-bold" id="{{.HeaderId}}" {{if
+                        .HeaderWithIndex}}tabindex="-1" {{end}}>
+                        {{.Header}}</h2>
+                    {{end}}
+
+                    {{ range .Paragraphs}}
+                    <p class="mb-5 font-medium [&>a]:text-primary [&>a:hover]:font-bold">{{ . }}</p>
+                    {{end}}
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{{end}}

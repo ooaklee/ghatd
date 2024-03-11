@@ -1,0 +1,92 @@
+{{define "title"}}Coming Soon{{end}}
+
+{{define "head"}}
+
+{{template "tailwind-conf-script" .}}
+<link rel='stylesheet' href='/static/css/dash-styles.css'>
+{{end}}
+
+{{define "body"}}
+
+<body
+    x-data="{ page: 'comingSoon', 'loaded': true, 'darkMode': true, 'stickyMenu': false, 'sidebarToggle': false, 'scrollTop': false }"
+    x-init="
+            darkMode = JSON.parse(localStorage.getItem('darkMode'));
+            $watch('darkMode', value => localStorage.setItem('darkMode', JSON.stringify(value)))"
+    :class="{'dark text-bodydark bg-boxdark-2': darkMode === true}">
+
+    {{template "main" .}}
+
+</body>
+
+{{end}}
+
+
+{{define "main"}}
+
+<!-- ===== Preloader Start ===== -->
+
+<!-- ===== Preloader End ===== -->
+
+<!-- ===== Countdown Section Start ===== -->
+<section class="bg-white px-4 dark:bg-boxdark-2 sm:px-8 overflow-hidden relative z-10">
+    <div class="flex h-screen flex-col items-center justify-center overflow-hidden">
+        <div class="no-scrollbar overflow-y-auto py-20">
+            <div class="mx-auto w-full max-w-[600px]">
+                <div class="text-center">
+                    <a href="/" class="mx-auto mb-10 inline-flex">
+                        <img src="/static/img/logo-1921_317.svg" alt="logo" class="dark:hidden">
+                        <img src="/static/img/logo-1921_317.svg" alt="logo" class="hidden dark:block">
+                    </a>
+
+                    <h1
+                        class="mb-2.5 text-3xl font-black text-black dark:text-white lg:text-4xl xl:text-[50px] xl:leading-[60px]">
+                        Coming Soon
+                    </h1>
+
+                    <p class="font-medium">
+                        Stay tuned for our upcoming launch. Something awesome is on its way. Be the first to know!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Countdown timer -->
+            {{template "countdown-timer" .}}
+            <!-- Countdown timer ends -->
+
+            <!-- form start -->
+            <div class="mx-auto mt-12.5 w-full max-w-[580px]">
+                <form>
+                    <div class="flex">
+                        <input type="email" name="email" id="email" placeholder="Enter your email"
+                            class="placeholder:text-dark-4 w-full rounded-l-md border-[1.5px] border-r-0 border-stroke px-5.5 py-3 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary">
+                        <button type="submit"
+                            class="inline-flex justify-center rounded-r-md bg-primary px-4 py-3 font-medium text-white duration-200 ease-out hover:bg-opacity-90 sm:px-7.5">
+                            Subscribe
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <!-- form end -->
+
+            <!-- social link start -->
+            <div class="mt-10 text-center">
+                <p class="mb-5 font-medium text-black dark:text-white">
+                    Follow Us On
+                </p>
+
+                <div
+                    class="flex items-center justify-center gap-4 [&>a]:flex [&>a]:size-10  [&>a]:items-center  [&>a]:justify-center  [&>a]:rounded-full  [&>a]:border  [&>a]:border-[#DFE4EA]  [&>a:hover]:border-primary  [&>a:hover]:bg-primary  [&>a:hover]:text-white  [&>a:dark]:border-strokedark  [&>a:dark:hover]:border-primary">
+
+                    {{ block "social-links" .}}{{end}}
+
+                </div>
+            </div>
+            <!-- social link end -->
+        </div>
+    </div>
+
+</section>
+<!-- ===== Countdown Section End ===== -->
+
+{{end}}

@@ -1,0 +1,59 @@
+{{define "title"}}Form Elements{{end}}
+
+
+{{define "dash-main"}}
+
+{{ if .EnableTitleUpdate}}
+<script>
+    document.title = `{{ .NewTitle }} | ${document.title?.split('|')[1]}`
+</script>
+{{end}}
+
+<main x-init="page = 'form-elements'">
+    <!-- ===== Main Content Start ===== -->
+    <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <!-- Breadcrumb Start -->
+        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 class="text-title-md2 font-bold text-black dark:text-white">
+                Form Elements
+            </h2>
+
+            <nav>
+                <ol class="flex items-center gap-2">
+                    <li>
+                        <a class="font-medium" href="/dash">Dashboard /</a>
+                    </li>
+                    <li class="font-medium text-primary">Form Elements</li>
+                </ol>
+            </nav>
+        </div>
+        <!-- Breadcrumb End -->
+
+        <!-- ====== Form Elements Section Start -->
+        <div class="grid grid-cols-1 gap-9 sm:grid-cols-2">
+            <div class="flex flex-col gap-9">
+
+                <!-- Input Fields -->
+                {{ template "form-elements-input-fields" .}}
+                <!-- Toggle switch input -->
+                {{ template "form-elements-switch-input" .}}
+                <!-- Time and date -->
+                {{ template "form-elements-time-date" .}}
+                <!-- File upload -->
+                {{ template "form-elements-file-upload" .}}
+            </div>
+
+            <div class="flex flex-col gap-9">
+                <!-- Textarea Fields -->
+                {{ template "form-elements-textarea-fields" .}}
+                <!-- Checkbox and radio -->
+                {{ template "form-elements-checkbox-radio" .}}
+                <!-- Select input -->
+                {{ template "form-elements-select-input" .}}
+            </div>
+        </div>
+        <!-- ====== Form Elements Section End -->
+    </div>
+</main>
+<!-- ===== Main Content End ===== -->
+{{end}}

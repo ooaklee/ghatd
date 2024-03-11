@@ -1,0 +1,48 @@
+{{define "head"}}
+
+{{template "tailwind-conf-script" .}}
+<link rel='stylesheet' href='/static/css/dash-styles.css'>
+<style>
+    body {
+        background-color: white;
+    }
+</style>
+{{end}}
+
+{{block "body" . }}
+
+<body>
+    {{template "main" .}}
+    {{block "after-main" .}}{{end}}
+</body>
+{{end}}
+
+{{define "main"}}
+<!-- ===== Page Wrapper Start ===== -->
+<div class="flex h-screen overflow-hidden">
+
+    <!-- ===== Content Area Start ===== -->
+    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden h-screen justify-center ">
+
+
+        <!-- ===== Main Content Start ===== -->
+        <main>
+            <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 flex justify-center">
+
+                <!-- Login/Signup Partial starts here -->
+                {{block "landing-auth" .}}
+
+                {{template "spinner" .}}
+
+                {{end}}
+                <!-- Login/Signup Partial goes to here -->
+
+            </div>
+        </main>
+        <!-- ===== Main Content End ===== -->
+
+    </div>
+    <!-- ===== Content Area End ===== -->
+</div>
+<!-- ===== Page Wrapper End ===== -->
+{{end}}

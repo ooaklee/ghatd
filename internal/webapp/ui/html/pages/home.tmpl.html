@@ -1,0 +1,141 @@
+{{define "title"}}Home{{end}}
+
+
+{{define "head"}}
+
+{{template "tailwind-conf-script" .}}
+<link rel='stylesheet' href='/static/css/dash-styles.css'>
+<style>
+    body {
+        background-color: white;
+        color: #1C2434;
+    }
+</style>
+
+{{end}}
+
+{{block "body" . }}
+
+<body>
+    {{template "main" .}}
+    {{block "after-main" .}}{{end}}
+</body>
+{{end}}
+
+{{define "main"}}
+<!-- ===== Page Wrapper Start ===== -->
+<div class="flex h-screen overflow-hidden">
+
+    <!-- ===== Content Area Start ===== -->
+    <div class="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden h-screen justify-between">
+        <span>
+            <!-- ===== Header Start ===== -->
+            {{template "header" .}}
+            <!-- ===== Header End ===== -->
+
+            <!-- ===== Main Content Start ===== -->
+            <main>
+
+                <div class="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+                    <section class="mx-auto flex flex-col items-center space-y-8">
+                        <img src="/static/img/ghat-logo-square.png" class="w-60" alt="ghatd logo">
+                        <div>
+                            <div class="flex flex-col space-y-4 text-center">
+                                <h2
+                                    class="mx-auto my-2 max-w-md text-2xl font-medium tracking-tight md:text-3xl text-black md:font-semibold">
+                                    Use our all-in-one framework to quickly build full-stack Go applications with all
+                                    dependencies included in a single binary.
+                                </h2>
+                                <h3 class="mx-auto max-w-sm text-neutral-500 md:text-lg text-black">
+                                    Revolutionise your full-stack application development and deployment process with
+                                    our comprehensive, open-source framework <b>GHAT(D)</b> — It leverages <a
+                                        href="https://go.dev/doc/install" target="_blank"
+                                        class="text-primary hover:underline hover:underline-offset-4"><span>the Go
+                                            programming language</span class="font-semibold"></a>,
+                                    <a href="https://htmx.org/" target="_blank"
+                                        class="text-primary hover:underline hover:underline-offset-4"><span>HMTX</span
+                                            class="font-semibold"></a>,
+                                    <a href="https://alpinejs.dev/" target="_blank"
+                                        class="text-primary hover:underline hover:underline-offset-4"><span>Alpine.js</span
+                                            class="font-semibold"></a>,
+                                    <a href="https://tailwindcss.com/docs/installation" target="_blank"
+                                        class="text-primary hover:underline hover:underline-offset-4"><span>Tailwind
+                                            CSS</span class="font-semibold"></a>, and <a
+                                        href="https://daisyui.com/docs/install/" target="_blank"
+                                        class="text-primary hover:underline hover:underline-offset-4"><span>Daisy
+                                            UI</span class="font-semibold"></a>.
+                                </h3>
+                            </div>
+                            <div class="mx-auto mt-12 flex max-w-xs flex-col items-center space-y-4 text-center">
+                                <a href="/dash"
+                                    class="flex cursor-pointer items-center rounded-lg bg-primary px-8 py-2 text-xl text-white hover:bg-black focus:outline-none font-medium">
+                                    Preview Dashboard
+                                </a>
+
+                            </div>
+                        </div>
+                    </section>
+                    <div class="pt-15 pb-20">
+                        <!-- ===== Template Benefit Start ===== -->
+                        <div class="flex flex-wrap justify-between max-w-[1164px] lg:mx-auto  mb-4">
+                            <div class="max-w-80 md:max-w-64 pt-10 md:pt-3">
+
+
+                                <h2
+                                    class="mx-auto my-2 max-w-md text-2xl font-medium tracking-tight md:text-3xl text-black md:font-semibold">
+                                    <span class="">🧳
+                                        Portability</span>
+                                </h2>
+                                <h3 class="mx-auto max-w-sm text-neutral-500 md:text-lg text-black">
+                                    Leverage Go's portability with full-stack web apps by compiling your
+                                    entire app(s) into a single binary file, which can be shipped with most server,
+                                    container, or serverless solutions.
+                                </h3>
+
+
+
+
+
+
+                            </div>
+                            <div class="max-w-80 md:max-w-64 pt-10 md:pt-3">
+
+                                <h2
+                                    class="mx-auto my-2 max-w-md text-2xl font-medium tracking-tight md:text-3xl text-black md:font-semibold">
+                                    <span class="">🔒
+                                        Security</span>
+                                </h2>
+                                <h3 class="mx-auto max-w-sm text-neutral-500 md:text-lg text-black">
+                                    When shipping full-stack web apps, reduce attack surface by minimising
+                                    system dependencies with <b>GHAT(D)</b>.
+                                </h3>
+                            </div>
+                        </div>
+                        <!-- ===== Template Benefit End ===== -->
+                        <section class="mx-auto flex flex-col items-center space-y-8 mt-8 sm:mt-0">
+
+
+                            <h2
+                                class="mx-auto my-2 max-w-md text-2xl font-medium tracking-tight md:text-3xl text-black md:font-semibold">
+                                <span class="">⏲️
+                                    Save time</span>
+                            </h2>
+                            <h3 class="mx-auto max-w-sm text-neutral-500 md:text-lg text-black text-center">
+                                Our focus is to streamline your workflows, optimise performance and maximise deployment
+                                options, saving you valuable time and maximising costs usually associated with deploying
+                                and leveraging full-stack solutions. Get started today and experience the power of
+                                <b>GHAT(D)</b> at your fingertips.
+                            </h3>
+                        </section>
+
+                    </div>
+                </div>
+            </main>
+            <!-- ===== Main Content End ===== -->
+        </span>
+        {{block "footer" .}}{{end}}
+    </div>
+    <!-- ===== Content Area End ===== -->
+</div>
+<!-- ===== Page Wrapper End ===== -->
+{{end}}
