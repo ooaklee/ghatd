@@ -184,7 +184,9 @@
                     <!-- Menu Item Tables -->
                     <li>
                         <a class="group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4"
-                            href="tables.html" @click="selected = (selected === 'Tables' ? '':'Tables')"
+                            hx-trigger="click" hx-get="/dash/tables?frais=1" hx-headers='{"X-Web-Partial": "true"}'
+                            hx-target="#dash-main-wrapper" hx-push-url="/dash/tables" hx-swap="innerHTML"
+                            href="/dash/tables" @click="(selected = (selected === 'Tables' ? '':'Tables')) "
                             :class="{ 'bg-graydark dark:bg-meta-4': (selected === 'Tables') && (page === 'tables') }">
                             <svg class="fill-current" width="18" height="19" viewBox="0 0 18 19" fill="none"
                                 xmlns="http://www.w3.org/2000/svg">
@@ -208,9 +210,10 @@
                     <!-- Menu Item Settings -->
                     <li>
                         <a class="group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4"
-                            href="settings.html" @click="selected = (selected === 'Settings' ? '':'Settings')"
-                            :class="{ 'bg-graydark dark:bg-meta-4': (selected === 'Settings') && (page === 'settings') }"
-                            :class="page === 'settings' && 'bg-graydark'">
+                            hx-trigger="click" hx-get="/dash/settings?frais=1" hx-headers='{"X-Web-Partial": "true"}'
+                            hx-target="#dash-main-wrapper" hx-push-url="/dash/settings" hx-swap="innerHTML"
+                            href="/dash/settings" @click="(selected = (selected === 'Settings' ? '':'Settings')) "
+                            :class="{ 'bg-graydark dark:bg-meta-4': (selected === 'Settings') && (page === 'settings') }">
                             <svg class="fill-current" width="18" height="19" viewBox="0 0 18 19" fill="none"
                                 xmlns="http://www.w3.org/2000/svg">
                                 <g clip-path="url(#clip0_130_9763)">
@@ -308,8 +311,10 @@
                     <!-- Menu Item Chart -->
                     <li>
                         <a class="group relative flex items-center gap-2.5 rounded-sm py-2 px-4 font-medium text-bodydark1 duration-300 ease-in-out hover:bg-graydark dark:hover:bg-meta-4"
-                            href="chart.html" @click="selected = (selected === 'Chart' ? '':'Chart')"
-                            :class="{ 'bg-graydark dark:bg-meta-4': (selected === 'Chart') && (page === 'Chart') }">
+                            hx-trigger="click" hx-get="/dash/charts?frais=1" hx-headers='{"X-Web-Partial": "true"}'
+                            hx-target="#dash-main-wrapper" hx-push-url="/dash/charts" hx-swap="innerHTML"
+                            href="/dash/charts" @click="(selected = (selected === 'Charts' ? '':'Charts')) "
+                            :class="{ 'bg-graydark dark:bg-meta-4': (selected === 'Charts') && (page === 'charts') }">
                             <svg class="fill-current" width="18" height="19" viewBox="0 0 18 19" fill="none"
                                 xmlns="http://www.w3.org/2000/svg">
                                 <g clip-path="url(#clip0_130_9801)">
@@ -453,12 +458,18 @@
                             <ul class="mb-3 mt-4 flex flex-col gap-2 pl-6">
                                 <li>
                                     <a class="group relative flex items-center gap-2.5 rounded-md px-4 font-medium text-bodydark2 duration-300 ease-in-out hover:text-white"
-                                        href="alerts.html" :class="page === 'alerts' && '!text-white'">Alerts</a>
+                                        hx-trigger="click" hx-get="/dash/alerts?frais=1"
+                                        hx-headers='{"X-Web-Partial": "true"}' hx-target="#dash-main-wrapper"
+                                        hx-push-url="/dash/alerts" hx-swap="innerHTML" href="/dash/alerts"
+                                        :class="page === 'alerts' && '!text-white'">Alerts</a>
                                 </li>
 
                                 <li>
                                     <a class="group relative flex items-center gap-2.5 rounded-md px-4 font-medium text-bodydark2 duration-300 ease-in-out hover:text-white"
-                                        href="buttons.html" :class="page === 'buttons' && '!text-white'">Buttons</a>
+                                        hx-trigger="click" hx-get="/dash/buttons?frais=1"
+                                        hx-headers='{"X-Web-Partial": "true"}' hx-target="#dash-main-wrapper"
+                                        hx-push-url="/dash/buttons" hx-swap="innerHTML" href="/dash/buttons"
+                                        :class="page === 'buttons' && '!text-white'">Buttons</a>
                                 </li>
                             </ul>
                         </div>

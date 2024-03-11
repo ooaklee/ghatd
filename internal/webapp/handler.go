@@ -307,9 +307,9 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 		// list of template files to parse, must be in order of inheritence
 		templateFilesToParse := []string{
 			"internal/webapp/ui/html/partials/dash/dash-ecommerce.tmpl.html",
-			"internal/webapp/ui/html/partials/dash/chart-area.tmpl.html",
-			"internal/webapp/ui/html/partials/dash/chart-bar.tmpl.html",
-			"internal/webapp/ui/html/partials/dash/chart-donut.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-area.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-bar.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-donut.tmpl.html",
 			"internal/webapp/ui/html/partials/dash/map-01.tmpl.html",
 			"internal/webapp/ui/html/partials/dash/table-01.tmpl.html",
 		}
@@ -345,9 +345,9 @@ func (h *Handler) Dash(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
-		"internal/webapp/ui/html/partials/dash/chart-area.tmpl.html",
-		"internal/webapp/ui/html/partials/dash/chart-bar.tmpl.html",
-		"internal/webapp/ui/html/partials/dash/chart-donut.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-area.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-bar.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-donut.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/map-01.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/table-01.tmpl.html",
 	}
@@ -665,6 +665,344 @@ func (h *Handler) DashFormLayout(w http.ResponseWriter, r *http.Request) {
 		"internal/webapp/ui/html/partials/dash/form-layout-contact-form.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/form-layout-sign-up-form.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/form-layout-sign-in-form.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) DashTables(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// list of template files to parse, must be in order of inheritence
+		templateFilesToParse := []string{
+			"internal/webapp/ui/html/partials/dash/dash-tables.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/table-01.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/table-02.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/table-03.tmpl.html",
+		}
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", webapphelpers.UpdateSiteTitleHelper{
+			EnableTitleUpdate: true,
+			NewTitle:          "Tables",
+		})
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-tables.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/table-01.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/table-02.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/table-03.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) DashSettings(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// list of template files to parse, must be in order of inheritence
+		templateFilesToParse := []string{
+			"internal/webapp/ui/html/partials/dash/dash-settings.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/settings-profile.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/settings-photo.tmpl.html",
+		}
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", webapphelpers.UpdateSiteTitleHelper{
+			EnableTitleUpdate: true,
+			NewTitle:          "Settings",
+		})
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-settings.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/settings-profile.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/settings-photo.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) DashCharts(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// list of template files to parse, must be in order of inheritence
+		templateFilesToParse := []string{
+			"internal/webapp/ui/html/partials/dash/dash-charts.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-area.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-bar.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-donut.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/chart-bar-2.tmpl.html",
+		}
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", webapphelpers.UpdateSiteTitleHelper{
+			EnableTitleUpdate: true,
+			NewTitle:          "Charts",
+		})
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-charts.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-area.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-bar.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-donut.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/chart-bar-2.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) DashAlerts(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// list of template files to parse, must be in order of inheritence
+		templateFilesToParse := []string{
+			"internal/webapp/ui/html/partials/dash/dash-alerts.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/alert-error.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/alert-success.tmpl.html",
+			"internal/webapp/ui/html/partials/shared/alert-warning.tmpl.html",
+		}
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", webapphelpers.UpdateSiteTitleHelper{
+			EnableTitleUpdate: true,
+			NewTitle:          "Alerts",
+		})
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-alerts.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/alert-error.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/alert-success.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/alert-warning.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
+		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",
+	}
+
+	// Parse template
+	parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+	if err != nil {
+		logger.Error("Unable to parse referenced templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Write template to response
+	err = parsedTemplates.ExecuteTemplate(w, "base", nil)
+	if err != nil {
+		logger.Error("Unable to execute parsed templates", zap.Error(err))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) DashButtons(w http.ResponseWriter, r *http.Request) {
+
+	logger := logger.AcquireFrom(r.Context())
+
+	if r.Header.Get(common.WebPartialHttpRequestHeader) == "true" {
+
+		w.Header().Add(common.CacheSkipHttpResponseHeader, "true")
+
+		// list of template files to parse, must be in order of inheritence
+		templateFilesToParse := []string{
+			"internal/webapp/ui/html/partials/dash/dash-buttons.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/dash-buttons.tmpl.html",
+			"internal/webapp/ui/html/partials/dash/dash-calendar.tmpl.html",
+		}
+		// Parse template
+		parsedTemplates, err := template.ParseFS(h.embeddedFileSystem, templateFilesToParse...)
+		if err != nil {
+			logger.Error("Unable to parse referenced template", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Write template to response
+		err = parsedTemplates.ExecuteTemplate(w, "dash-main", webapphelpers.UpdateSiteTitleHelper{
+			EnableTitleUpdate: true,
+			NewTitle:          "Buttons",
+		})
+		if err != nil {
+			logger.Error("Unable to execute parsed templates", zap.Error(err))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		return
+	}
+
+	// list of template files to parse, must be in order of inheritence
+	templateFilesToParse := []string{
+		"internal/webapp/ui/html/base.tmpl.html",
+		"internal/webapp/ui/html/pages/dash.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-sidebar.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-buttons.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-buttons.tmpl.html",
+		"internal/webapp/ui/html/partials/dash/dash-calendar.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/tailwind-dash-script.tmpl.html",
 		"internal/webapp/ui/html/partials/shared/preloader.tmpl.html",
 		"internal/webapp/ui/html/partials/dash/dash-header.tmpl.html",

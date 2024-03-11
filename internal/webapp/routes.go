@@ -25,6 +25,11 @@ type webAppHandler interface {
 	DashBlank(w http.ResponseWriter, r *http.Request)
 	DashFormElements(w http.ResponseWriter, r *http.Request)
 	DashFormLayout(w http.ResponseWriter, r *http.Request)
+	DashTables(w http.ResponseWriter, r *http.Request)
+	DashSettings(w http.ResponseWriter, r *http.Request)
+	DashCharts(w http.ResponseWriter, r *http.Request)
+	DashAlerts(w http.ResponseWriter, r *http.Request)
+	DashButtons(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -43,11 +48,26 @@ const (
 	// WebAppDashBlankRoute the URI for the web app's dash blank page
 	WebAppDashBlankRoute = WebAppDashRoute + "/" + "blank"
 
-	// WebAppDasFormElementsRoute the URI for the web app's form elements page
-	WebAppDasFormElementsRoute = WebAppDashRoute + "/" + "form-elements"
+	// WebAppDashFormElementsRoute the URI for the web app's form elements page
+	WebAppDashFormElementsRoute = WebAppDashRoute + "/" + "form-elements"
 
-	// WebAppDasFormLayoutRoute the URI for the web app's form layout page
-	WebAppDasFormLayoutRoute = WebAppDashRoute + "/" + "form-layout"
+	// WebAppDashFormLayoutRoute the URI for the web app's form layout page
+	WebAppDashFormLayoutRoute = WebAppDashRoute + "/" + "form-layout"
+
+	// WebAppDashTablesRoute the URI for the web app's tables page
+	WebAppDashTablesRoute = WebAppDashRoute + "/" + "tables"
+
+	// WebAppDashSettingsRoute the URI for the web app's settings page
+	WebAppDashSettingsRoute = WebAppDashRoute + "/" + "settings"
+
+	// WebAppDashChartsRoute the URI for the web app's charts page
+	WebAppDashChartsRoute = WebAppDashRoute + "/" + "charts"
+
+	// WebAppDashAlertsRoute the URI for the web app's alerts page
+	WebAppDashAlertsRoute = WebAppDashRoute + "/" + "alerts"
+
+	// WebAppDashButtonsRoute the URI for the web app's buttons page
+	WebAppDashButtonsRoute = WebAppDashRoute + "/" + "buttons"
 
 	// WebAppPolicyTermsRoute the URI for the web app terms policy page
 	WebAppPolicyTermsRoute = WebAppBase + "terms"
@@ -119,6 +139,11 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter.HandleFunc(WebAppDashCalendarRoute, request.Handler.DashCalendar)
 	httpRouter.HandleFunc(WebAppDashProfileRoute, request.Handler.DashProfile)
 	httpRouter.HandleFunc(WebAppDashBlankRoute, request.Handler.DashBlank)
-	httpRouter.HandleFunc(WebAppDasFormElementsRoute, request.Handler.DashFormElements)
-	httpRouter.HandleFunc(WebAppDasFormLayoutRoute, request.Handler.DashFormLayout)
+	httpRouter.HandleFunc(WebAppDashFormElementsRoute, request.Handler.DashFormElements)
+	httpRouter.HandleFunc(WebAppDashFormLayoutRoute, request.Handler.DashFormLayout)
+	httpRouter.HandleFunc(WebAppDashTablesRoute, request.Handler.DashTables)
+	httpRouter.HandleFunc(WebAppDashSettingsRoute, request.Handler.DashSettings)
+	httpRouter.HandleFunc(WebAppDashChartsRoute, request.Handler.DashCharts)
+	httpRouter.HandleFunc(WebAppDashAlertsRoute, request.Handler.DashAlerts)
+	httpRouter.HandleFunc(WebAppDashButtonsRoute, request.Handler.DashButtons)
 }
