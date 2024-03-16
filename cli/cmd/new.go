@@ -131,6 +131,10 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 	//
 	// Utilise packages: https://github.com/go-git/go-git  https://github.com/otiai10/copy
 	//
+	// Example of command (pre-compiled):
+	// go run cli/cli.go new -n "awesome-service" -m "github.com/some-user/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+	//
+	//
 	// from ghatd:
 	// - cmd
 	// - internal
