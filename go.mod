@@ -19,11 +19,13 @@ require (
 	google.golang.org/genproto v0.0.0-20200423170343-7949de9c1215 // indirect
 	google.golang.org/grpc v1.29.1 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
+	github.com/ghodss/yaml v1.0.0
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.18.0
