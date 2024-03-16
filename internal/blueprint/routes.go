@@ -3,8 +3,8 @@ package blueprint
 import (
 	"fmt"
 
-	"github.com/ooaklee/ghatd/internal/common"
-	"github.com/ooaklee/ghatd/internal/router"
+	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/router"
 )
 
 // blueprintHandler expected methods for valid blueprint handler

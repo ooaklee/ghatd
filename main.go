@@ -12,7 +12,10 @@ import (
 
 // content holds our static web server content.
 //
-//go:embed internal/webapp/ui/html/*.tmpl.html internal/webapp/ui/static/* internal/webapp/ui/html/pages/*.tmpl.html internal/webapp/ui/html/partials/**/*.tmpl.html internal/webapp/ui/html/partials/*.tmpl.html internal/webapp/ui/html/responses/*.tmpl.html
+//>ghatd {{ define "WebDetailEmbeds" }}{{ end }}
+//>ghatd {{ define "ApiDetailEmbeds" }}{{ end }}
+
+// //go:embed internal/web/ui/html/*.tmpl.html internal/web/ui/static/* internal/web/ui/html/pages/*.tmpl.html internal/web/ui/html/partials/**/*.tmpl.html internal/web/ui/html/partials/*.tmpl.html internal/web/ui/html/responses/*.tmpl.html
 var content embed.FS
 
 func main() {

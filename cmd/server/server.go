@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
 	"github.com/tdewolff/minify"
@@ -22,23 +23,22 @@ import (
 	"github.com/tdewolff/minify/svg"
 	"go.uber.org/zap"
 
-	"github.com/NYTimes/gziphandler"
 	cache "github.com/ooaklee/http-cache"
 	"github.com/ooaklee/http-cache/adapter/memory"
 
 	"github.com/ooaklee/ghatd/cmd/server/settings"
-	"github.com/ooaklee/ghatd/internal/logger"
-	loggerMiddleware "github.com/ooaklee/ghatd/internal/logger/middleware"
-	"github.com/ooaklee/ghatd/internal/middleware/contenttype"
-	cors "github.com/ooaklee/ghatd/internal/middleware/cors"
-	"github.com/ooaklee/ghatd/internal/rememberer"
-	"github.com/ooaklee/ghatd/internal/repository"
-	"github.com/ooaklee/ghatd/internal/response"
-	"github.com/ooaklee/ghatd/internal/router"
-	"github.com/ooaklee/ghatd/internal/toolbox"
-	"github.com/ooaklee/ghatd/internal/validator"
-	"github.com/ooaklee/ghatd/internal/webapp"
-	saasPolicy "github.com/ooaklee/ghatd/internal/webapp/policy/saas"
+	"github.com/ooaklee/ghatd/external/logger"
+	loggerMiddleware "github.com/ooaklee/ghatd/external/logger/middleware"
+	"github.com/ooaklee/ghatd/external/middleware/contenttype"
+	cors "github.com/ooaklee/ghatd/external/middleware/cors"
+	"github.com/ooaklee/ghatd/external/response"
+	"github.com/ooaklee/ghatd/external/router"
+	"github.com/ooaklee/ghatd/external/toolbox"
+	"github.com/ooaklee/ghatd/external/validator"
+	//>ghatd {{ block "WebDetailImports" . }}
+	//>ghatd {{ end }}
+	//>ghatd {{ block "ApiDetailImports" . }}
+	//>ghatd {{ end }}
 )
 
 // NewCommand returns a command for starting
@@ -88,6 +88,11 @@ func runServer(embeddedContent fs.FS) error {
 
 	// Initialise validator
 	appValidator := validator.NewValidator()
+	// carry out random validation to stop unused error
+	err = appValidator.Validate(appLogger)
+	if err != nil {
+		return fmt.Errorf("server/application-logger-validation-failed: %v", err)
+	}
 
 	// TODO: Initialise clients, if applicable
 	minifierClient, err := initialiseThirdPartyClients(appSettings)
@@ -117,42 +122,8 @@ func runServer(embeddedContent fs.FS) error {
 	//     \  \::/      \  \::/      \  \::/               \  \:\       \  \:\   \  \:\
 	//  	\__\/        \__\/        \__\/                 \__\/        \__\/    \__\/
 
-	// Generate policies for web app
-	termsOfServicePolicy := saasPolicy.NewGeneratedTermsPolicy(&saasPolicy.NewGeneratedTermsPolicyRequest{
-		ServiceName:       appSettings.ExternalServiceName,
-		ServiceWebsite:    appSettings.ExternalServiceWebsite,
-		ServiceEmail:      appSettings.ExternalServiceEmail,
-		LegalBusinessName: appSettings.LegalBusinessName,
-	})
-
-	privacyPolicy := saasPolicy.NewGeneratedPrivacyPolicy(&saasPolicy.NewGeneratedPrivacyPolicyRequest{
-		ServiceName:       appSettings.ExternalServiceName,
-		ServiceWebsite:    appSettings.ExternalServiceWebsite,
-		ServiceEmail:      appSettings.ExternalServiceEmail,
-		LegalBusinessName: appSettings.LegalBusinessName,
-	})
-
-	cookiePolicy := saasPolicy.NewGeneratedCookiePolicy(&saasPolicy.NewGeneratedCookiePolicyRequest{
-		ServiceName:       appSettings.ExternalServiceName,
-		ServiceWebsite:    appSettings.ExternalServiceWebsite,
-		ServiceEmail:      appSettings.ExternalServiceEmail,
-		LegalBusinessName: appSettings.LegalBusinessName,
-	})
-
-	// Initialise handler for web app
-	webAppHandler := webapp.NewWebAppHandler(&webapp.NewWebAppHandlerRequest{
-		EmbeddedContent:      embeddedContent,
-		TermsOfServicePolicy: termsOfServicePolicy,
-		PrivacyPolicy:        privacyPolicy,
-		CookiePolicy:         cookiePolicy,
-	})
-
-	// Attach routes
-	webapp.AttachRoutes(&webapp.AttachRoutesRequest{
-		Router:           httpRouter,
-		Handler:          webAppHandler,
-		WebAppFileSystem: embeddedContent,
-	})
+	//>ghatd {{ block "WebDetailInit" . }}
+	//>ghatd {{ end }}
 
 	//      	 ___           ___
 	//      	/  /\         /  /\      ___
@@ -166,20 +137,8 @@ func runServer(embeddedContent fs.FS) error {
 	//         \  \:\        \  \:\       \__\/
 	//      	\__\/         \__\/
 
-	// TODO: Initialise repository, if applicable
-	coreRepository := repository.NewInMememoryRepository()
-
-	// TODO: Create Service(s)
-	remembererService := rememberer.NewService(coreRepository)
-
-	// TODO: Create Handler(s)
-	remembererHandler := rememberer.NewHandler(remembererService, appValidator, embeddedContent)
-
-	// TODO: Attach package routes to router
-	rememberer.AttachRoutes(&rememberer.AttachRoutesRequest{
-		Router:  httpRouter,
-		Handler: remembererHandler,
-	})
+	//>ghatd {{ block "ApiDetailInit" }}
+	//>ghatd {{ end }}
 
 	//        	 ___          ___          ___                     ___          ___
 	//      	/  /\        /  /\        /  /\        ___        /  /\        /  /\
