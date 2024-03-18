@@ -9,4 +9,7 @@ const (
 
 	// ErrKeyAppModuleNameInvalidError error key occurs when there's an invalid module name provided [C-003]
 	ErrKeyAppModuleNameInvalidError string = "AppModuleNameInvalidError"
+
+	// ErrKeyDetailTypeInvalidError error key occurs when an invalid detail type has been provided [C-004]
+	ErrKeyDetailTypeInvalidError string = "DetailTypeInvalidError"
 )
