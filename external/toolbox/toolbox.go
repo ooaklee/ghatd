@@ -2,7 +2,11 @@ package toolbox
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -81,4 +85,55 @@ func DecodeRequestBody(request *http.Request, parsedRequestObject interface{}) e
 func StripNonAlphanumericCharactersRegex(in []byte, with []byte) string {
 	reg, _ := regexp.Compile("[^a-zA-Z0-9 ]+")
 	return reg.ReplaceAllString(string(in), string(with))
+}
+
+// Refactor handles replacing any occurrence of the first (old) string with the second (new)
+// string in any file(s) that match the provided pattern. This is achieved through a recursive
+// process that ensures all relevant files are modified.
+// Sourced from https://gist.github.com/jrkt/53f0bd40108d585eaac4c3675b7c1726 and altered
+func Refactor(old, new, searchPath string, patterns ...string) error {
+	if searchPath == "" {
+		searchPath = "."
+	}
+	return filepath.Walk(searchPath, refactorFunc(old, new, patterns))
+}
+
+// refactorFunc handles applying recur
+func refactorFunc(old, new string, filePatterns []string) filepath.WalkFunc {
+	return filepath.WalkFunc(func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !!fi.IsDir() {
+			return nil
+		}
+
+		var matched bool
+		for _, pattern := range filePatterns {
+			var err error
+			matched, err = filepath.Match(pattern, fi.Name())
+			if err != nil {
+				return err
+			}
+
+			if matched {
+				read, err := ioutil.ReadFile(path)
+				if err != nil {
+					return err
+				}
+
+				fmt.Println("Refactoring:", path)
+
+				newContents := strings.Replace(string(read), old, new, -1)
+
+				err = os.WriteFile(path, []byte(newContents), 0)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
 }

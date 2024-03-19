@@ -143,9 +143,7 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 		return errors.New(common.ErrKeyDetailUrlInvalidError)
 	}
 
-	// DO THINGS
-	fmt.Println("\nThis will handle creating new full stack application based on params passed")
-	fmt.Println("\nDOES SOMETHINGS WITH:", "\n  - APP NAME:", appName, "\n  - APP MODULE:", appModuleName, "\n  - APP DETAILS:", validDetailUrls)
+	log.Default().Println(fmt.Sprintf("\ncreating ghat(d) application...\n  - name: %s\n  - app module: %s\n  - including detail(s):", appName, appModuleName), validDetailUrls)
 
 	// Steps to creating a base directory for new app
 	//
@@ -165,7 +163,7 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 	//
 	newAppRepoPath := filepath.Join(os.TempDir(), appName)
 
-	fmt.Println("\npath to new service temp dir\n", newAppRepoPath)
+	fmt.Printf("\npath to new service temp dir: %s\n\n", newAppRepoPath)
 
 	err := os.MkdirAll(newAppRepoPath, os.ModePerm)
 	if err != nil {
@@ -204,6 +202,13 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 	err = cp.Copy(fmt.Sprintf("%s/main.go", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/main.go", newAppRepoPath), opt)
 	if err != nil {
 		log.Default().Println("unable to copy directory to new destination")
+		return err
+	}
+
+	// Update to use new app server
+	err = toolbox.Refactor(fmt.Sprintf("%s/cmd/server", defaultGhatdModule), fmt.Sprintf("%s/cmd/server", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
+	if err != nil {
+		log.Default().Println("unable to replace server found")
 		return err
 	}
 
@@ -271,37 +276,52 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 		//   - the detail's ghatd-conf.yaml
 
 		switch detailConfig.Type {
-		case "web":
-			// from ghatd WEB detail:
-			// - [verify]
-			//   - the version go in go.mod (base) matches the version in detail
-			// - [merge]
-			//   - merge require in go.mod (base) with require from detail's go.mod
-			// - external -> internal/web
-			//   - (update module references accordingly throughout to use)
-			// - [reference injection]
-			//   - copy packages reference in details' web.go `//>ghatd {{ define "WebDetailImports"..` to base's `ghatd/cmd/server/server.go`  in `//>ghatd {{ block "WebDetailImports" . }}...`
-			//   - copy code reference within details' web.go `//>ghatd {{ define "WebDetailInit" }}...` to base's `ghatd/cmd/server/server.go`  in `//>ghatd {{ block "WebDetailInit" . }}...`
-			//   - get the embed reference(s) from the details' web.go, defined within `//>ghatd {{ define "WebDetailEmbeds" }}...`, update path accordingly, i.e. external/ui/html/*.tmpl.html -> internal/web/ui/html/*.tmpl.html, and add to base's main.go `//go:embed tag` (which can be found by looking for the nearest embed.FS to the `//>ghatd {{ define "WebDetailEmbeds" }}...`)
-			//
-			log.Default().Println("action web detail")
-			_ = cleanUpDetail(detailOutput)
-			continue
-
-		case "api":
+		case "api", "web":
 			// from ghatd API detail:
 			// - [verify]
 			//   - the version go in go.mod (base) matches the version in detail
-			// - [merge]
-			//   - merge require in go.mod (base) with require from detail's go.mod
-			// - external -> internal
-			//   - (update module references accordingly throughout to use)
-			// - [reference injection]
-			//   - copy packages reference in details' api.go `//>ghatd {{ define "ApiDetailImports"..` to base's `ghatd/cmd/server/server.go`  in `//>ghatd {{ block "ApiDetailImports" . }}...`
-			//   - copy code reference within details' api.go `//>ghatd {{ define "ApiDetailInit" }}...` to base's `ghatd/cmd/server/server.go`  in `//>ghatd {{ block "ApiDetailInit" . }}...`
-			//   - get the embed reference(s) from the details' api.go, defined within `//>ghatd {{ define "ApiDetailEmbeds" }}...`, update path accordingly, i.e. external/web/ui/html/responses/*.tmpl.html -> internal/web/ui/html/responses/*.tmpl.html, and add to base's main.go `//go:embed tag` (which can be found by looking for the nearest embed.FS to the `//>ghatd {{ define "ApiDetailEmbeds" }}...`)
-			//
-			log.Default().Println("action api detail")
+
+			fmt.Printf("\nstarting integration of %s detail - %s\n\n", detailConfig.Type, detailsRepo)
+
+			// TODO: use detailGoVersion for verification
+			detailModuleName, _, detailGoModRequirePackages, err := getDetailModInfo(detailOutput, detailConfig.Type)
+			if err != nil {
+				return err
+			}
+
+			detailImports, detailEmbeds, detailInitSteps, err := getDetailEntryGoInfo(detailOutput, detailConfig.Type)
+			if err != nil {
+				return err
+			}
+
+			detailImports, detailEmbeds = convertExtractedDetailInfoToNewAppStructure(detailImports, detailEmbeds, detailConfig.Type, detailModuleName, appModuleName)
+
+			err = addDetailEmbedsToMainGo(detailEmbeds, newAppRepoPath)
+			if err != nil {
+				return err
+			}
+
+			err = addDetailImportsAndInitBlockToServerGo(detailImports, detailInitSteps, detailConfig.Type, newAppRepoPath)
+			if err != nil {
+				return err
+			}
+
+			err = updateDetailPackageReferenceForNewAppStructure(detailConfig.Type, detailOutput, detailModuleName, appModuleName)
+			if err != nil {
+				return err
+			}
+
+			err = addDetailGoModRequireBlockToGoMod(detailGoModRequirePackages, detailConfig.Type, newAppRepoPath)
+			if err != nil {
+				return err
+			}
+
+			err = copyDetailStructureToNewAppStructure(detailConfig.Type, detailOutput, newAppRepoPath, &opt)
+			if err != nil {
+				return err
+			}
+
+			log.Default().Printf("completed integration of %s detail - %s\n\n", detailConfig.Type, detailsRepo)
 			_ = cleanUpDetail(detailOutput)
 			continue
 
@@ -310,16 +330,336 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 			_ = cleanUpDetail(detailOutput)
 			return errors.New(common.ErrKeyDetailTypeInvalidError)
 		}
-
-		// edit go.mod - Replace lines
-		// baseGoModinput, err := os.ReadFile(fmt.Sprintf("%s/go.mod", newAppRepoPath))
-		// if err != nil {
-		// 	log.Fatalln(err)
-		// }
-
 	}
 
 	return nil
+}
+
+func copyDetailStructureToNewAppStructure(detailType, detailOutput, newAppRepoPath string, opt *cp.Options) error {
+
+	var detailExternalDir string
+	var newAppStructureTargetDir string
+	var detailTestingDir string
+	var newAppStructureTestingDir string
+
+	if detailType == "web" {
+		detailExternalDir = fmt.Sprintf("%s/external", detailOutput)
+		newAppStructureTargetDir = fmt.Sprintf("%s/internal/web", newAppRepoPath)
+	}
+
+	if detailType == "api" {
+		detailExternalDir = fmt.Sprintf("%s/external", detailOutput)
+		newAppStructureTargetDir = fmt.Sprintf("%s/internal", newAppRepoPath)
+		detailTestingDir = fmt.Sprintf("%s/testing", detailOutput)
+		newAppStructureTestingDir = fmt.Sprintf("%s/testing", newAppRepoPath)
+
+	}
+
+	err := cp.Copy(detailExternalDir, newAppStructureTargetDir, *opt)
+	if err != nil {
+		log.Default().Printf("unable to copy %s detail external dir to new destination", detailType)
+		return err
+	}
+
+	if detailType == "api" {
+		err = cp.Copy(detailTestingDir, newAppStructureTestingDir, *opt)
+		if err != nil {
+			log.Default().Printf("unable to copy %s detail testing dir to new destination", detailType)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func updateDetailPackageReferenceForNewAppStructure(detailType, detailOutput, detailModuleName, appModuleName string) error {
+
+	var detailExternalDir string
+	var newAppStructureTargetDir string
+
+	if detailType == "web" {
+		detailExternalDir = fmt.Sprintf("%s/external", detailModuleName)
+		newAppStructureTargetDir = fmt.Sprintf("%s/internal/web", appModuleName)
+	}
+
+	if detailType == "api" {
+		detailExternalDir = fmt.Sprintf("%s/external", detailModuleName)
+		newAppStructureTargetDir = fmt.Sprintf("%s/internal", appModuleName)
+	}
+
+	err := toolbox.Refactor(detailExternalDir, newAppStructureTargetDir, fmt.Sprintf("%s/.", detailOutput), "*.go")
+	if err != nil {
+		log.Default().Println("unable to replace strings found")
+		return err
+	}
+
+	if detailType == "api" {
+		err = toolbox.Refactor(fmt.Sprintf("%s/testing", detailModuleName), fmt.Sprintf("%s/testing", appModuleName), fmt.Sprintf("%s/.", detailOutput), "*.go")
+		if err != nil {
+			log.Default().Println("unable to replace strings found")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func addDetailGoModRequireBlockToGoMod(detailGoModRequirePackages []string, detailType, newAppRepoPath string) error {
+
+	var ghatdGoModRequirePackagesTag string
+
+	if detailType == "web" {
+		ghatdGoModRequirePackagesTag = "WebDetailGoModRequirePackages"
+	}
+
+	if detailType == "api" {
+		ghatdGoModRequirePackagesTag = "ApiDetailGoModRequirePackages"
+	}
+
+	newAppGoModPath := fmt.Sprintf("%s/go.mod", newAppRepoPath)
+
+	newAppGoModInput, err := os.ReadFile(newAppGoModPath)
+	if err != nil {
+		log.Default().Printf("unable to read new app go.mod file - %s\n", newAppGoModPath)
+		return err
+	}
+
+	newAppGoModLines := strings.Split(string(newAppGoModInput), "\n")
+
+	for i, line := range newAppGoModLines {
+		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ block .%s }}{{ end }}", ghatdGoModRequirePackagesTag)) {
+			newAppGoModLines[i] = line + "\n" + strings.Join(detailGoModRequirePackages, "\n")
+		}
+
+	}
+	newAppGoModOutput := strings.Join(newAppGoModLines, "\n")
+	err = os.WriteFile(newAppGoModPath, []byte(newAppGoModOutput), 0644)
+	if err != nil {
+		log.Default().Printf("unable to update new app go.mod file - %s\n", newAppGoModPath)
+		return err
+	}
+
+	return nil
+
+}
+
+func addDetailImportsAndInitBlockToServerGo(detailImports, detailInitSteps []string, detailType, newAppRepoPath string) error {
+
+	var ghatdImportsTag string
+	var ghatdInitTag string
+
+	if detailType == "web" {
+		ghatdImportsTag = "WebDetailImports"
+		ghatdInitTag = "WebDetailInit"
+	}
+
+	if detailType == "api" {
+		ghatdImportsTag = "ApiDetailImports"
+		ghatdInitTag = "ApiDetailInit"
+	}
+
+	newAppServerGoPath := fmt.Sprintf("%s/cmd/server/server.go", newAppRepoPath)
+
+	newAppCmdServerInput, err := os.ReadFile(newAppServerGoPath)
+	if err != nil {
+		log.Default().Printf("unable to read new app server.go file - %s\n", newAppServerGoPath)
+		return err
+	}
+
+	newAppCmdServerLines := strings.Split(string(newAppCmdServerInput), "\n")
+
+	for i, line := range newAppCmdServerLines {
+		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ block \"%s\" . }}", ghatdImportsTag)) {
+			newAppCmdServerLines[i] = line + "\n" + strings.Join(detailImports, "\n")
+		}
+
+		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ block \"%s\" . }}", ghatdInitTag)) {
+			newAppCmdServerLines[i] = line + "\n" + strings.Join(detailInitSteps, "\n")
+		}
+	}
+
+	newAppCmdServerOutput := strings.Join(newAppCmdServerLines, "\n")
+	err = os.WriteFile(newAppServerGoPath, []byte(newAppCmdServerOutput), 0644)
+	if err != nil {
+		log.Default().Printf("unable to update new app server.go file - %s\n", newAppServerGoPath)
+		return err
+	}
+
+	return nil
+
+}
+
+func addDetailEmbedsToMainGo(detailEmbeds, newAppRepoPath string) error {
+
+	// edit main.go - add embeds
+	newAppMainGoPath := fmt.Sprintf("%s/main.go", newAppRepoPath)
+
+	newAppMainGoInput, err := os.ReadFile(newAppMainGoPath)
+	if err != nil {
+		log.Default().Printf("unable to read new app main.go file - %s\n", newAppMainGoPath)
+		return err
+	}
+
+	newAppMainGoLines := strings.Split(string(newAppMainGoInput), "\n")
+
+	for i, line := range newAppMainGoLines {
+		if strings.Contains(line, "//go:embed ") {
+
+			// TODO: Add logic that only adds detailEmbeds if they are not already referenced
+			newAppMainGoLines[i] = line + " " + detailEmbeds
+		}
+	}
+	newAppMainGoOutput := strings.Join(newAppMainGoLines, "\n")
+	err = os.WriteFile(newAppMainGoPath, []byte(newAppMainGoOutput), 0644)
+	if err != nil {
+		log.Default().Printf("unable to update new app main.go file - %s\n", newAppMainGoPath)
+		return err
+	}
+	return nil
+}
+
+func convertExtractedDetailInfoToNewAppStructure(detailImports []string, detailEmbeds, detailType, detailModuleName, appModuleName string) ([]string, string) {
+
+	var targetModulePath string
+	var migratedEmbedPath string
+
+	if detailType == "web" {
+		targetModulePath = fmt.Sprintf("%s/internal/web", appModuleName)
+		migratedEmbedPath = "internal/web/"
+
+	}
+
+	if detailType == "api" {
+		targetModulePath = fmt.Sprintf("%s/internal", appModuleName)
+		migratedEmbedPath = "internal/"
+	}
+
+	for i, path := range detailImports {
+		detailImports[i] = strings.ReplaceAll(path, fmt.Sprintf("%s/external", detailModuleName), targetModulePath)
+	}
+
+	embeds := strings.Split(detailEmbeds, " ")
+	for i, path := range embeds {
+		embeds[i] = strings.ReplaceAll(path, "external/", migratedEmbedPath)
+	}
+	detailEmbeds = strings.Join(embeds, " ")
+
+	return detailImports, detailEmbeds
+
+}
+
+func getDetailEntryGoInfo(detailPath, detailType string) ([]string, string, []string, error) {
+
+	var ghatdImportTag string
+	var startOfDetailImports int
+	var endOfDetailImports int
+	var ghatdInitTag string
+	var startOfDetailInit int
+	var endOfDetailInit int
+	var detailEmbeds string
+	var detailEntryPoint string
+
+	var usedGhatdEndTagPoints []int
+
+	if detailType == "web" {
+		ghatdImportTag = "WebDetailImports"
+		ghatdInitTag = "WebDetailInit"
+		detailEntryPoint = "web.go"
+	}
+
+	if detailType == "api" {
+		ghatdImportTag = "ApiDetailImports"
+		ghatdInitTag = "ApiDetailInit"
+		detailEntryPoint = "api.go"
+	}
+
+	detailEntryPointPath := fmt.Sprintf("%s/%s", detailPath, detailEntryPoint)
+
+	detailGoEntryPoint, err := os.ReadFile(detailEntryPointPath)
+	if err != nil {
+		log.Default().Printf("unable to get detail entry point information - %s", detailEntryPointPath)
+		return []string{}, "", []string{}, err
+	}
+	detailGoEntryPointLines := strings.Split(string(detailGoEntryPoint), "\n")
+
+	for i, line := range detailGoEntryPointLines {
+
+		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ define \"%s\" }}", ghatdImportTag)) {
+			startOfDetailImports = i
+		}
+
+		if strings.Contains(line, "//>ghatd {{ end }}") && len(usedGhatdEndTagPoints) == 0 {
+			endOfDetailImports = i
+
+		}
+		if strings.Contains(line, "//>ghatd {{ end }}") {
+			usedGhatdEndTagPoints = append(usedGhatdEndTagPoints, i)
+		}
+
+		if strings.HasPrefix(line, "//go:embed ") {
+			detailEmbeds = strings.ReplaceAll(line, "//go:embed ", "")
+		}
+
+		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ define \"%s\" }}", ghatdInitTag)) {
+			startOfDetailInit = i
+		}
+
+		if strings.Contains(line, "//>ghatd {{ end }}") && len(usedGhatdEndTagPoints) == 3 {
+			endOfDetailInit = i
+		}
+
+	}
+
+	return detailGoEntryPointLines[(startOfDetailImports + 1):endOfDetailImports], detailEmbeds, detailGoEntryPointLines[(startOfDetailInit + 1):endOfDetailInit], nil
+}
+
+func getDetailModInfo(detailPath, detailType string) (string, string, []string, error) {
+
+	var ghatdRequireTag string
+	var detailModuleName string
+	var detailGoVersion string
+	var startOfDetailModRequirePackages int
+	var endOfDetailModRequirePackages int
+
+	if detailType == "web" {
+		ghatdRequireTag = "WebDetailGoModRequirePackages"
+
+	}
+	if detailType == "api" {
+		ghatdRequireTag = "ApiDetailGoModRequirePackages"
+
+	}
+
+	detailGoModPath := fmt.Sprintf("%s/go.mod", detailPath)
+	detailGoMod, err := os.ReadFile(detailGoModPath)
+
+	if err != nil {
+		log.Default().Printf("unable to get detail go.mod information - %s", detailGoModPath)
+		return "", "", []string{}, err
+	}
+	detailGoModLines := strings.Split(string(detailGoMod), "\n")
+
+	for i, line := range detailGoModLines {
+		if strings.HasPrefix(line, "module ") {
+			detailModuleName = strings.ReplaceAll(line, "module ", "")
+		}
+
+		if strings.HasPrefix(line, "go ") {
+			detailGoVersion = strings.ReplaceAll(line, "go ", "")
+		}
+
+		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ define \"%s\" }}", ghatdRequireTag)) {
+			startOfDetailModRequirePackages = i
+		}
+
+		if strings.Contains(line, "//>ghatd {{ end }}") {
+			endOfDetailModRequirePackages = i
+		}
+
+	}
+
+	return detailModuleName, detailGoVersion, detailGoModLines[(startOfDetailModRequirePackages + 1):endOfDetailModRequirePackages], err
+
 }
 
 // cleanUpDetail handles removing detail directory

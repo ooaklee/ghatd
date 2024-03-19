@@ -43,21 +43,21 @@ import (
 
 // NewCommand returns a command for starting
 // the webapp aspect of this service
-func NewCommand(embeddedContent fs.FS) *cobra.Command {
+func NewCommand(embeddedContent fs.FS, embeddedContentFilePathPrefix string) *cobra.Command {
 	webAppCmd := &cobra.Command{
 		Use:   "start-server",
 		Short: "Start the server",
 		Long:  "Start the server",
 	}
 
-	webAppCmd.Run = run(embeddedContent)
+	webAppCmd.Run = run(embeddedContent, embeddedContentFilePathPrefix)
 	return webAppCmd
 }
 
 // run the function that is called when the command is ran
-func run(embeddedContent fs.FS) func(cmd *cobra.Command, args []string) {
+func run(embeddedContent fs.FS, embeddedContentFilePathPrefix string) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		if err := runServer(embeddedContent); err != nil {
+		if err := runServer(embeddedContent, embeddedContentFilePathPrefix); err != nil {
 			log.SetFlags(0)
 			log.Fatal(err.Error())
 		}
@@ -65,7 +65,7 @@ func run(embeddedContent fs.FS) func(cmd *cobra.Command, args []string) {
 }
 
 // runServer handles initialising and running the server
-func runServer(embeddedContent fs.FS) error {
+func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) error {
 
 	// Initialise appplication settings
 	appSettings, err := settings.NewSettings()
@@ -109,6 +109,14 @@ func runServer(embeddedContent fs.FS) error {
 	// Initialise router
 	httpRouter := router.NewRouter(response.GetResourceNotFoundError, response.GetDefault200Response, routerMiddlewares...)
 
+	// Service information
+	serviceExternalName := appSettings.ExternalServiceName
+	serviceExternalWebsite := appSettings.ExternalServiceWebsite
+	serviceExternalEmail := appSettings.ExternalServiceEmail
+	serviceLegalBusinessName := appSettings.LegalBusinessName
+
+	fmt.Println(toolbox.OutputBasicLogString("info", fmt.Sprintf("initiating service referencing the external name (%s), website (%s), email (%s) and with legal business name (%s)", serviceExternalName, serviceExternalWebsite, serviceExternalEmail, serviceLegalBusinessName)))
+
 	//
 	//  	 ___          ___                                ___          ___      ___
 	//  	/__/\        /  /\        _____                 /  /\        /  /\    /  /\
@@ -137,7 +145,7 @@ func runServer(embeddedContent fs.FS) error {
 	//         \  \:\        \  \:\       \__\/
 	//      	\__\/         \__\/
 
-	//>ghatd {{ block "ApiDetailInit" }}
+	//>ghatd {{ block "ApiDetailInit" . }}
 	//>ghatd {{ end }}
 
 	//        	 ___          ___          ___                     ___          ___
