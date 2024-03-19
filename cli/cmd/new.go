@@ -604,7 +604,7 @@ func getDetailEntryGoInfo(detailPath, detailType string) ([]string, string, []st
 			startOfDetailInit = i
 		}
 
-		if strings.Contains(line, "//>ghatd {{ end }}") && len(usedGhatdEndTagPoints) == 3 {
+		if strings.Contains(line, "//>ghatd {{ end }}") && len(usedGhatdEndTagPoints) == 2 {
 			endOfDetailInit = i
 		}
 
