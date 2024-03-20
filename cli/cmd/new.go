@@ -24,12 +24,15 @@ type CommandNewFlags struct {
 	AppName       string
 	AppModuleName string
 	DetailUrls    string
+	// Output where the created app dir should be created
+	Output string
 }
 
 // NewCommandNew returns a command for
 // creating ghat(d) applications
 func NewCommandNew() *cobra.Command {
 
+	var workingDir string
 	cmdFlags := &CommandNewFlags{}
 
 	webAppCmd := &cobra.Command{
@@ -47,10 +50,16 @@ ghatdcli new --name "awesome-service"  --module "github.com/ooaklee/awesome-serv
 
 	webAppCmd.Run = runCmdNew(cmdFlags)
 
+	workingDir, _ = os.Getwd()
+	if workingDir == "" {
+		workingDir = "."
+	}
+
 	// Flags
 	webAppCmd.Flags().StringVarP(&cmdFlags.AppName, "name", "n", "", "the name of the app being created")
 	webAppCmd.Flags().StringVarP(&cmdFlags.AppModuleName, "module", "m", "", "(optional) the name that should be given to the generated app. must start with 'github.com/'")
 	webAppCmd.Flags().StringVarP(&cmdFlags.DetailUrls, "with-details", "w", "", "a comma separated list of github urls pointing to valid ghatd details")
+	webAppCmd.Flags().StringVarP(&cmdFlags.Output, "output", "o", workingDir, "the storage location for the rendered app")
 
 	return webAppCmd
 }
@@ -69,177 +78,38 @@ func runCmdNew(flags *CommandNewFlags) func(cmd *cobra.Command, args []string) {
 func runCmdNewHolder(flags *CommandNewFlags) error {
 
 	// TARGET: ghatdcli new -n "awesome-service" -m "github.com/ooaklee/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+	//
+	// Example of command (pre-compiled):
+	// go run cli/cli.go new -n "awesome-service" -m "github.com/some-user/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
 	const defaultGhatdModule string = "github.com/ooaklee/ghatd"
 	const defaultModuleTemplate string = "github.com/ooaklee/%s"
 	const deafultGithubDomain string = "github.com"
 	var defaultGithubDomainWithHttps string = "https://" + deafultGithubDomain
-
 	// TODO: will need to update to correct version for release
 	const defaultGhatdGoModVersion string = "github.com/ooaklee/ghatd v0.1.1-0.20240316161116-dc3d856805a7"
-
 	// TODO: Update cli to use packr so the required files can be passed with binary
 	// or update to clone ghatd repo at specific reference
 	var pathToDirectoryOfBaseFiles string = "."
-
 	var appName string = flags.AppName
 	var appModuleName string = flags.AppModuleName
 	var detailUrls []string = strings.Split(flags.DetailUrls, ",")
-	var validDetailUrls []string
-	var invalidDetailUrls []string
+	var outputDirectory string = flags.Output
 
-	// Validate
-	if appName == "" {
-		log.Default().Println("app name not provided")
-		return errors.New(common.ErrKeyAppNameInvalidError)
-	}
-
-	appName = strings.ReplaceAll(toolbox.StringStandardisedToLower(appName), " ", "-")
-
-	if appModuleName == "" {
-		appModuleName = fmt.Sprintf(defaultModuleTemplate, appName)
-	}
-
-	if appModuleName != "" {
-
-		// Make sure everything is lowercase
-		appModuleName = toolbox.StringStandardisedToLower(appModuleName)
-
-		// Check if module has a valid github name
-		if !strings.HasPrefix(appModuleName, deafultGithubDomain) {
-			log.Default().Println("app module name not in expected format")
-			return errors.New(common.ErrKeyAppModuleNameInvalidError)
-		}
-
-		// Check to make sure module isn't the same name as the ghatd
-		// repo
-		if appModuleName == defaultGhatdModule {
-			log.Default().Println("generated app module name will clash with base ghatd module name")
-			return errors.New(common.ErrKeyAppModuleNameInvalidError)
-		}
-
-	}
-
-	// standardise
-	if len(detailUrls) > 0 {
-
-		for _, detailUrl := range detailUrls {
-			detailUrl = toolbox.StringStandardisedToLower(detailUrl)
-
-			// todo: add better validation
-			// on mvp should:
-			// - start with github.com or https://github.com
-			if strings.HasPrefix(detailUrl, deafultGithubDomain) || strings.HasPrefix(detailUrl, defaultGithubDomainWithHttps) {
-				validDetailUrls = append(validDetailUrls, detailUrl)
-				continue
-			}
-
-			invalidDetailUrls = append(invalidDetailUrls, detailUrl)
-			continue
-		}
-	}
-
-	if len(invalidDetailUrls) > 0 {
-		log.Default().Println("invalid detail url(s) provided")
-		return errors.New(common.ErrKeyDetailUrlInvalidError)
+	appName, appModuleName, validDetailUrls, err := inspectNewCmdFlags(appName, appModuleName, detailUrls, outputDirectory, defaultGhatdModule, defaultModuleTemplate, deafultGithubDomain, defaultGithubDomainWithHttps)
+	if err != nil {
+		return err
 	}
 
 	log.Default().Println(fmt.Sprintf("\ncreating ghat(d) application...\n  - name: %s\n  - app module: %s\n  - including detail(s):", appName, appModuleName), validDetailUrls)
 
-	// Steps to creating a base directory for new app
-	//
-	// Utilise packages: https://github.com/go-git/go-git  https://github.com/otiai10/copy
-	//
-	// Example of command (pre-compiled):
-	// go run cli/cli.go new -n "awesome-service" -m "github.com/some-user/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
-	//
-	//
-	// from ghatd:
-	// - cmd
-	// - internal
-	//   - exclude internal/cli
-	// - testing
-	// - main.go
-	// - go.mod (will have to replace module name with one generated from user, only take the first 'require' block)
-	//
-	newAppRepoPath := filepath.Join(os.TempDir(), appName)
-
-	fmt.Printf("\npath to new service temp dir: %s\n\n", newAppRepoPath)
-
-	err := os.MkdirAll(newAppRepoPath, os.ModePerm)
+	newAppRepoPath, opt, err := initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultGhatdModule)
 	if err != nil {
-		log.Default().Printf("unable to create new app's dir at %s\n", newAppRepoPath)
 		return err
 	}
 
-	opt := cp.Options{
-		Skip: func(info os.FileInfo, src, dest string) (bool, error) {
-
-			// Skip copy if cli
-			if strings.HasPrefix(dest, fmt.Sprintf("%s/internal/cli", newAppRepoPath)) {
-				return true, nil
-			}
-			return false, nil
-		},
-	}
-	err = cp.Copy(fmt.Sprintf("%s/cmd", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/cmd", newAppRepoPath), opt)
+	err = updateNewAppStructureGoMod(defaultGhatdGoModVersion, defaultGhatdModule, appModuleName, newAppRepoPath)
 	if err != nil {
-		log.Default().Println("unable to copy directory to new destination")
 		return err
-	}
-
-	err = cp.Copy(fmt.Sprintf("%s/internal", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/internal", newAppRepoPath), opt)
-	if err != nil {
-		log.Default().Println("unable to copy directory to new destination")
-		return err
-	}
-
-	err = cp.Copy(fmt.Sprintf("%s/testing", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/testing", newAppRepoPath), opt)
-	if err != nil {
-		log.Default().Println("unable to copy directory to new destination")
-		return err
-	}
-
-	err = cp.Copy(fmt.Sprintf("%s/main.go", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/main.go", newAppRepoPath), opt)
-	if err != nil {
-		log.Default().Println("unable to copy directory to new destination")
-		return err
-	}
-
-	// Update to use new app server
-	err = toolbox.Refactor(fmt.Sprintf("%s/cmd/server", defaultGhatdModule), fmt.Sprintf("%s/cmd/server", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
-	if err != nil {
-		log.Default().Println("unable to replace server found")
-		return err
-	}
-
-	err = cp.Copy(fmt.Sprintf("%s/go.mod", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/go.mod", newAppRepoPath), opt)
-	if err != nil {
-		log.Default().Println("unable to copy directory to new destination")
-		return err
-	}
-
-	// edit go.mod - Replace lines
-	input, err := os.ReadFile(fmt.Sprintf("%s/go.mod", newAppRepoPath))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	lines := strings.Split(string(input), "\n")
-
-	for i, line := range lines {
-		if strings.HasPrefix(line, "module github.com/ooaklee/ghatd") {
-			lines[i] = fmt.Sprintf("module %s", appModuleName)
-		}
-
-		if strings.Contains(line, "//>ghatd {{ block .DetailModGhatdPackage }}{{ end }}") {
-			lines[i] = fmt.Sprintf("	%s", defaultGhatdGoModVersion)
-		}
-
-	}
-	output := strings.Join(lines, "\n")
-	err = os.WriteFile(fmt.Sprintf("%s/go.mod", newAppRepoPath), []byte(output), 0644)
-	if err != nil {
-		log.Fatalln(err)
 	}
 
 	// Note: At this point, if you go to path of the new service and run `go mod tidy` inside,
@@ -247,33 +117,10 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 
 	for _, detailsRepo := range validDetailUrls {
 
-		detailOutput := fmt.Sprintf("%s/%s", os.TempDir(), toolbox.GenerateNanoId())
-
-		if !strings.HasPrefix(detailsRepo, "https://") {
-			detailsRepo = fmt.Sprintf("https://%s", detailsRepo)
-		}
-
-		// Clone the given repository to the given directory
-		_, err := git.PlainClone(detailOutput, false, &git.CloneOptions{
-			URL:               detailsRepo,
-			RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
-		})
-
+		detailOutput, detailConfig, err := getDetailRepo(detailsRepo)
 		if err != nil {
-			log.Default().Printf("unable to clone provided detail repo - %s\n", detailsRepo)
 			return err
 		}
-
-		detailConfig := config.DetailConfig{}
-		err = reader.UnmarshalLocalFile(fmt.Sprintf("%s/ghatd-conf.yaml", detailOutput), &detailConfig)
-		if err != nil {
-			log.Default().Println("unable to read the config file in the detail repo ")
-			return err
-		}
-
-		// TODO: Verification steps
-		// - [verify]
-		//   - the detail's ghatd-conf.yaml
 
 		switch detailConfig.Type {
 		case "api", "web":
@@ -316,7 +163,7 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 				return err
 			}
 
-			err = copyDetailStructureToNewAppStructure(detailConfig.Type, detailOutput, newAppRepoPath, &opt)
+			err = copyDetailStructureToNewAppStructure(detailConfig.Type, detailOutput, newAppRepoPath, opt)
 			if err != nil {
 				return err
 			}
@@ -326,12 +173,240 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 			continue
 
 		default:
-			log.Default().Printf("unsupported type provided in the detail repo: %s", detailConfig.Type)
+			log.Default().Printf("\nunsupported type provided in the detail repo (%s): %s\n", detailsRepo, detailConfig.Type)
 			_ = cleanUpDetail(detailOutput)
 			return errors.New(common.ErrKeyDetailTypeInvalidError)
 		}
 	}
 
+	return moveNewAppToOutputDirectory(newAppRepoPath, outputDirectory, appName)
+}
+
+// moveNewAppToOutputDirectory manages the task of moving an app from its
+// temporary directory to a specified location.
+func moveNewAppToOutputDirectory(newAppRepoPath, outputDirectory, appName string) error {
+	var oldLocation string = newAppRepoPath
+	var newLocation string = outputDirectory + "/" + appName
+	err := os.Rename(oldLocation, newLocation)
+	if err != nil {
+		log.Default().Printf("unable to move app from %s to %s", oldLocation, newLocation)
+
+		return err
+	}
+
+	return nil
+}
+
+// inspectNewCmdFlags is responsible for validating and standardising the flags that are passed while
+// calling the "new" command. Its purpose is to ensure that the command has all the necessary components
+// required to create a valid Ghat(d) compatible application. At this stage, most of the checks and
+// validations are only of a surface level.
+func inspectNewCmdFlags(appName, appModuleName string, detailUrls []string, outputDirectory, defaultGhatdModule, defaultModuleTemplate, deafultGithubDomain, defaultGithubDomainWithHttps string) (string, string, []string, error) {
+	var validDetailUrls []string
+	var invalidDetailUrls []string
+
+	// Validate
+	if appName == "" {
+		log.Default().Println("app name not provided")
+		return "", "", []string{}, errors.New(common.ErrKeyAppNameInvalidError)
+	}
+
+	appName = strings.ReplaceAll(toolbox.StringStandardisedToLower(appName), " ", "-")
+
+	if appModuleName == "" {
+		appModuleName = fmt.Sprintf(defaultModuleTemplate, appName)
+	}
+
+	if appModuleName != "" {
+
+		// Make sure everything is lowercase
+		appModuleName = toolbox.StringStandardisedToLower(appModuleName)
+
+		// Check if module has a valid github name
+		if !strings.HasPrefix(appModuleName, deafultGithubDomain) {
+			log.Default().Println("app module name not in expected format")
+			return "", "", []string{}, errors.New(common.ErrKeyAppModuleNameInvalidError)
+		}
+
+		// Check to make sure module isn't the same name as the ghatd
+		// repo
+		if appModuleName == defaultGhatdModule {
+			log.Default().Println("generated app module name will clash with base ghatd module name")
+			return "", "", []string{}, errors.New(common.ErrKeyAppModuleNameInvalidError)
+		}
+
+	}
+
+	// TODO: Implement logic to get absolute path
+	// for passed output directory
+	filepath.Abs(outputDirectory)
+
+	// standardise
+	if len(detailUrls) > 0 {
+
+		for _, detailUrl := range detailUrls {
+			detailUrl = toolbox.StringStandardisedToLower(detailUrl)
+
+			// todo: add better validation
+			// on mvp should:
+			// - start with github.com or https://github.com
+			if strings.HasPrefix(detailUrl, deafultGithubDomain) || strings.HasPrefix(detailUrl, defaultGithubDomainWithHttps) {
+				validDetailUrls = append(validDetailUrls, detailUrl)
+				continue
+			}
+
+			invalidDetailUrls = append(invalidDetailUrls, detailUrl)
+			continue
+		}
+	}
+
+	if len(invalidDetailUrls) > 0 {
+		log.Default().Println("invalid detail url(s) provided")
+		return "", "", []string{}, errors.New(common.ErrKeyDetailUrlInvalidError)
+	}
+
+	return appName, appModuleName, validDetailUrls, nil
+}
+
+// getDetailRepo clones the provided detail to a local temporary directory, extracts the ghatd
+// conf file and verifies if it's safe to proceed with the given detail.
+func getDetailRepo(detailsRepoUrl string) (string, *config.DetailConfig, error) {
+
+	detailOutput := fmt.Sprintf("%s/%s", os.TempDir(), toolbox.GenerateNanoId())
+
+	if !strings.HasPrefix(detailsRepoUrl, "https://") {
+		detailsRepoUrl = fmt.Sprintf("https://%s", detailsRepoUrl)
+	}
+
+	// Clone the given repository to the given directory
+	_, err := git.PlainClone(detailOutput, false, &git.CloneOptions{
+		URL:               detailsRepoUrl,
+		RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
+	})
+
+	if err != nil {
+		log.Default().Printf("unable to clone provided detail repo - %s\n", detailsRepoUrl)
+		return "", nil, err
+	}
+
+	detailConfig := config.DetailConfig{}
+	err = reader.UnmarshalLocalFile(fmt.Sprintf("%s/ghatd-conf.yaml", detailOutput), &detailConfig)
+	if err != nil {
+		log.Default().Println("unable to read the config file in the detail repo ")
+		return "", nil, err
+	}
+
+	// TODO: Verification steps
+	// - [verify]
+	//   - the detail's ghatd-conf.yaml
+
+	return detailOutput, &detailConfig, nil
+}
+
+// initNewAppRepo creates a new app directory/repo based on the ghatd repository's default.
+// It overwrites existing directories or base files.
+//
+// Example of command (pre-compiled):
+//
+// go run cli/cli.go new -n "awesome-service" -m "github.com/some-user/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+//
+// from ghatd:
+//   - cmd
+//   - internal (exclude internal/cli)
+//   - testing (exclude anything to do with cli)
+//   - main.go
+//   - go.mod (will have to replace module name with one generated from user, only take the first 'require' block)
+func initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultGhatdModule string) (string, *cp.Options, error) {
+
+	newAppRepoPath := filepath.Join(os.TempDir(), appName)
+
+	opt := cp.Options{
+		Skip: func(info os.FileInfo, src, dest string) (bool, error) {
+
+			// Skip copy if cli
+			if strings.HasPrefix(dest, fmt.Sprintf("%s/internal/cli", newAppRepoPath)) {
+				return true, nil
+			}
+			return false, nil
+		},
+	}
+
+	fmt.Printf("\npath to new service temp dir: %s\n\n", newAppRepoPath)
+
+	err := os.MkdirAll(newAppRepoPath, os.ModePerm)
+	if err != nil {
+		log.Default().Printf("unable to create new app's dir at %s\n", newAppRepoPath)
+		return "", nil, err
+	}
+
+	err = cp.Copy(fmt.Sprintf("%s/cmd", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/cmd", newAppRepoPath), opt)
+	if err != nil {
+		log.Default().Println("unable to copy directory to new destination")
+		return "", nil, err
+	}
+
+	err = cp.Copy(fmt.Sprintf("%s/internal", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/internal", newAppRepoPath), opt)
+	if err != nil {
+		log.Default().Println("unable to copy directory to new destination")
+		return "", nil, err
+	}
+
+	err = cp.Copy(fmt.Sprintf("%s/testing", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/testing", newAppRepoPath), opt)
+	if err != nil {
+		log.Default().Println("unable to copy directory to new destination")
+		return "", nil, err
+	}
+
+	err = cp.Copy(fmt.Sprintf("%s/main.go", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/main.go", newAppRepoPath), opt)
+	if err != nil {
+		log.Default().Println("unable to copy directory to new destination")
+		return "", nil, err
+	}
+
+	// Update to use new app server
+	err = toolbox.Refactor(fmt.Sprintf("%s/cmd/server", defaultGhatdModule), fmt.Sprintf("%s/cmd/server", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
+	if err != nil {
+		log.Default().Println("unable to replace server found")
+		return "", nil, err
+	}
+
+	err = cp.Copy(fmt.Sprintf("%s/go.mod", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/go.mod", newAppRepoPath), opt)
+	if err != nil {
+		log.Default().Println("unable to copy directory to new destination")
+		return "", nil, err
+	}
+
+	return newAppRepoPath, &opt, nil
+}
+
+func updateNewAppStructureGoMod(defaultGhatdGoModVersion, defaultGhatdModule, appModuleName, newAppRepoPath string) error {
+	// edit go.mod - Replace lines
+	newAppGoModPath := fmt.Sprintf("%s/go.mod", newAppRepoPath)
+	newAppGoMod, err := os.ReadFile(newAppGoModPath)
+	if err != nil {
+		log.Default().Printf("unable to get new app's go.mod - %s", newAppGoModPath)
+		return err
+
+	}
+
+	newAppGoModLines := strings.Split(string(newAppGoMod), "\n")
+
+	for i, line := range newAppGoModLines {
+		if strings.HasPrefix(line, fmt.Sprintf("module %s", defaultGhatdModule)) {
+			newAppGoModLines[i] = fmt.Sprintf("module %s", appModuleName)
+		}
+
+		if strings.Contains(line, "//>ghatd {{ block .DetailModGhatdPackage }}{{ end }}") {
+			newAppGoModLines[i] = fmt.Sprintf("	%s", defaultGhatdGoModVersion)
+		}
+
+	}
+	newAppGoModOutput := strings.Join(newAppGoModLines, "\n")
+	err = os.WriteFile(newAppGoModPath, []byte(newAppGoModOutput), 0644)
+	if err != nil {
+		log.Default().Printf("unable to updadte new app's go.mod - %s", newAppGoModPath)
+		return err
+	}
 	return nil
 }
 
@@ -602,6 +677,12 @@ func getDetailEntryGoInfo(detailPath, detailType string) ([]string, string, []st
 
 		if strings.Contains(line, fmt.Sprintf("//>ghatd {{ define \"%s\" }}", ghatdInitTag)) {
 			startOfDetailInit = i
+		}
+
+		if detailType == "web" {
+			if strings.Contains(line, "embeddedContentFilePathPrefix,") {
+				detailGoEntryPointLines[i] = strings.ReplaceAll(line, "embeddedContentFilePathPrefix,", "embeddedContentFilePathPrefix + \"web/\",")
+			}
 		}
 
 		if strings.Contains(line, "//>ghatd {{ end }}") && len(usedGhatdEndTagPoints) == 2 {
