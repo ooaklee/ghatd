@@ -91,15 +91,15 @@ func StripNonAlphanumericCharactersRegex(in []byte, with []byte) string {
 // string in any file(s) that match the provided pattern. This is achieved through a recursive
 // process that ensures all relevant files are modified.
 // Sourced from https://gist.github.com/jrkt/53f0bd40108d585eaac4c3675b7c1726 and altered
-func Refactor(old, new, searchPath string, patterns ...string) error {
+func Refactor(silent bool, old, new, searchPath string, patterns ...string) error {
 	if searchPath == "" {
 		searchPath = "."
 	}
-	return filepath.Walk(searchPath, refactorFunc(old, new, patterns))
+	return filepath.Walk(searchPath, refactorFunc(silent, old, new, patterns))
 }
 
 // refactorFunc handles applying recur
-func refactorFunc(old, new string, filePatterns []string) filepath.WalkFunc {
+func refactorFunc(silent bool, old, new string, filePatterns []string) filepath.WalkFunc {
 	return filepath.WalkFunc(func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -123,7 +123,9 @@ func refactorFunc(old, new string, filePatterns []string) filepath.WalkFunc {
 					return err
 				}
 
-				fmt.Println("Refactoring:", path)
+				if !silent {
+					fmt.Println("Refactoring:", path)
+				}
 
 				newContents := strings.Replace(string(read), old, new, -1)
 

@@ -15,6 +15,7 @@ import (
 	"github.com/ooaklee/ghatd/internal/cli/reader"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	cp "github.com/otiai10/copy"
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,7 @@ type CommandNewFlags struct {
 	AppName       string
 	AppModuleName string
 	DetailUrls    string
+	BaseBranch    string
 	// Output where the created app dir should be created
 	Output string
 }
@@ -40,11 +42,14 @@ func NewCommandNew() *cobra.Command {
 		Short: "Creates a GHAT(D) compatible Detail",
 		Long:  "Creates a GHAT(D) app with the given module while utilising the associated details (building segments)",
 		Example: `
+# Example command: 
+ghatdcli new -n "awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints" -o /tmp
+
 # Example command (short-args): 
-ghatdcli new -n "awesome-service" -m "github.com/ooaklee/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+ghatdcli new -n "awesome-service" -m "github.com/some-user-org/awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
 
 # Example command (long-args):
-ghatdcli new --name "awesome-service"  --module "github.com/ooaklee/awesome-service" --with-details "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+ghatdcli new --name "awesome-service"  --module "github.com/some-user-org/awesome-service" --with-details "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
 `,
 	}
 
@@ -60,6 +65,9 @@ ghatdcli new --name "awesome-service"  --module "github.com/ooaklee/awesome-serv
 	webAppCmd.Flags().StringVarP(&cmdFlags.AppModuleName, "module", "m", "", "(optional) the name that should be given to the generated app. must start with 'github.com/'")
 	webAppCmd.Flags().StringVarP(&cmdFlags.DetailUrls, "with-details", "w", "", "a comma separated list of github urls pointing to valid ghatd details")
 	webAppCmd.Flags().StringVarP(&cmdFlags.Output, "output", "o", workingDir, "the storage location for the rendered app")
+	////////// TODO: update these references before merged into main
+	// will need to point to main
+	webAppCmd.Flags().StringVarP(&cmdFlags.BaseBranch, "base-branch", "b", "ghatd-x-implement-cli-new-command", "the ghat(d) branch that the new app's core will be based on")
 
 	return webAppCmd
 }
@@ -85,15 +93,17 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 	const defaultModuleTemplate string = "github.com/ooaklee/%s"
 	const deafultGithubDomain string = "github.com"
 	var defaultGithubDomainWithHttps string = "https://" + deafultGithubDomain
-	// TODO: will need to update to correct version for release
-	const defaultGhatdGoModVersion string = "github.com/ooaklee/ghatd v0.1.1-0.20240316161116-dc3d856805a7"
-	// TODO: Update cli to use packr so the required files can be passed with binary
-	// or update to clone ghatd repo at specific reference
+	// NICE_TO_HAVE: Inclue the required files with the binary
 	var pathToDirectoryOfBaseFiles string = "."
+	////////// TODO: update these references before merged into main
+	// will need to update to correct version for release
+	const defaultGhatdGoModVersion string = "github.com/ooaklee/ghatd v0.1.1-0.20240316161116-dc3d856805a7"
+	/////////
 	var appName string = flags.AppName
 	var appModuleName string = flags.AppModuleName
 	var detailUrls []string = strings.Split(flags.DetailUrls, ",")
 	var outputDirectory string = flags.Output
+	var defaultGhatdBranch string = flags.BaseBranch
 
 	appName, appModuleName, validDetailUrls, err := inspectNewCmdFlags(appName, appModuleName, detailUrls, outputDirectory, defaultGhatdModule, defaultModuleTemplate, deafultGithubDomain, defaultGithubDomainWithHttps)
 	if err != nil {
@@ -101,6 +111,13 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 	}
 
 	log.Default().Println(fmt.Sprintf("\ncreating ghat(d) application...\n  - name: %s\n  - app module: %s\n  - including detail(s):", appName, appModuleName), validDetailUrls)
+
+	// NICE_TO_HAVE: Verify user has internet connection
+
+	pathToDirectoryOfBaseFiles, err = getBaseGhatdFiles("https://"+defaultGhatdModule, defaultGhatdBranch)
+	if err != nil {
+		return err
+	}
 
 	newAppRepoPath, opt, err := initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultGhatdModule)
 	if err != nil {
@@ -128,16 +145,18 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 			// - [verify]
 			//   - the version go in go.mod (base) matches the version in detail
 
-			fmt.Printf("\nstarting integration of %s detail - %s\n\n", detailConfig.Type, detailsRepo)
+			fmt.Printf("\nstarting integration of %s detail - %s\n", detailConfig.Type, detailsRepo)
 
 			// TODO: use detailGoVersion for verification
 			detailModuleName, _, detailGoModRequirePackages, err := getDetailModInfo(detailOutput, detailConfig.Type)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
 			detailImports, detailEmbeds, detailInitSteps, err := getDetailEntryGoInfo(detailOutput, detailConfig.Type)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
@@ -145,41 +164,70 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 
 			err = addDetailEmbedsToMainGo(detailEmbeds, newAppRepoPath)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
 			err = addDetailImportsAndInitBlockToServerGo(detailImports, detailInitSteps, detailConfig.Type, newAppRepoPath)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
 			err = updateDetailPackageReferenceForNewAppStructure(detailConfig.Type, detailOutput, detailModuleName, appModuleName)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
 			err = addDetailGoModRequireBlockToGoMod(detailGoModRequirePackages, detailConfig.Type, newAppRepoPath)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
 			err = copyDetailStructureToNewAppStructure(detailConfig.Type, detailOutput, newAppRepoPath, opt)
 			if err != nil {
+				_ = cleanUpDirectory(detailOutput)
 				return err
 			}
 
 			log.Default().Printf("completed integration of %s detail - %s\n\n", detailConfig.Type, detailsRepo)
-			_ = cleanUpDetail(detailOutput)
+			_ = cleanUpDirectory(detailOutput)
 			continue
 
 		default:
 			log.Default().Printf("\nunsupported type provided in the detail repo (%s): %s\n", detailsRepo, detailConfig.Type)
-			_ = cleanUpDetail(detailOutput)
+			_ = cleanUpDirectories([]string{detailOutput, pathToDirectoryOfBaseFiles})
 			return errors.New(common.ErrKeyDetailTypeInvalidError)
 		}
 	}
 
+	_ = cleanUpDirectory(pathToDirectoryOfBaseFiles)
+
 	return moveNewAppToOutputDirectory(newAppRepoPath, outputDirectory, appName)
+}
+
+// getBaseGhatdFiles handles pulling the base repo for ghat(d) to use on base
+func getBaseGhatdFiles(ghatdRepoUrl, branch string) (string, error) {
+	baseGhatdOutput := fmt.Sprintf("%s/%s", os.TempDir(), toolbox.GenerateNanoId())
+
+	fmt.Printf("\nfetching ghat(d) base repo - %s @ %s\n", ghatdRepoUrl, branch)
+
+	// Clone the given repository to the given directory
+	_, err := git.PlainClone(baseGhatdOutput, false, &git.CloneOptions{
+		URL:               ghatdRepoUrl,
+		RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
+		ReferenceName:     plumbing.ReferenceName(branch),
+	})
+
+	if err != nil {
+		log.Default().Printf("unable to clone provided ghat(d) base repo - %s @ %s\n", ghatdRepoUrl, branch)
+		return "", err
+	}
+
+	return baseGhatdOutput, nil
+
 }
 
 // moveNewAppToOutputDirectory manages the task of moving an app from its
@@ -193,6 +241,11 @@ func moveNewAppToOutputDirectory(newAppRepoPath, outputDirectory, appName string
 
 		return err
 	}
+
+	log.Default().Printf(`great news! the ghat(d) application '%s' has been created! be sure to check out its folder at %s
+	
+get ready for an awesome experience with ghat(d)!
+`, appName, newLocation)
 
 	return nil
 }
@@ -331,7 +384,7 @@ func initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultG
 		},
 	}
 
-	fmt.Printf("\npath to new service temp dir: %s\n\n", newAppRepoPath)
+	fmt.Printf("\npath to new service temp dir: %s\n", newAppRepoPath)
 
 	err := os.MkdirAll(newAppRepoPath, os.ModePerm)
 	if err != nil {
@@ -364,7 +417,7 @@ func initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultG
 	}
 
 	// Update to use new app server
-	err = toolbox.Refactor(fmt.Sprintf("%s/cmd/server", defaultGhatdModule), fmt.Sprintf("%s/cmd/server", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
+	err = toolbox.Refactor(true, fmt.Sprintf("%s/cmd/server", defaultGhatdModule), fmt.Sprintf("%s/cmd/server", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
 	if err != nil {
 		log.Default().Println("unable to replace server found")
 		return "", nil, err
@@ -462,14 +515,14 @@ func updateDetailPackageReferenceForNewAppStructure(detailType, detailOutput, de
 		newAppStructureTargetDir = fmt.Sprintf("%s/internal", appModuleName)
 	}
 
-	err := toolbox.Refactor(detailExternalDir, newAppStructureTargetDir, fmt.Sprintf("%s/.", detailOutput), "*.go")
+	err := toolbox.Refactor(false, detailExternalDir, newAppStructureTargetDir, fmt.Sprintf("%s/.", detailOutput), "*.go")
 	if err != nil {
 		log.Default().Println("unable to replace strings found")
 		return err
 	}
 
 	if detailType == "api" {
-		err = toolbox.Refactor(fmt.Sprintf("%s/testing", detailModuleName), fmt.Sprintf("%s/testing", appModuleName), fmt.Sprintf("%s/.", detailOutput), "*.go")
+		err = toolbox.Refactor(false, fmt.Sprintf("%s/testing", detailModuleName), fmt.Sprintf("%s/testing", appModuleName), fmt.Sprintf("%s/.", detailOutput), "*.go")
 		if err != nil {
 			log.Default().Println("unable to replace strings found")
 			return err
@@ -580,16 +633,22 @@ func addDetailEmbedsToMainGo(detailEmbeds, newAppRepoPath string) error {
 	for i, line := range newAppMainGoLines {
 		if strings.Contains(line, "//go:embed ") {
 
-			// TODO: Add logic that only adds detailEmbeds if they are not already referenced
-			newAppMainGoLines[i] = line + " " + detailEmbeds
+			// if go:embed is commented, uncomment
+			if strings.HasPrefix(line, "// //go:embed ") {
+				line = strings.Replace(line, "// //go:embed ", "//go:embed ", -1)
+			}
+
+			newAppMainGoLines[i] = addStringIfItDoesExist(line, detailEmbeds)
 		}
 	}
+
 	newAppMainGoOutput := strings.Join(newAppMainGoLines, "\n")
 	err = os.WriteFile(newAppMainGoPath, []byte(newAppMainGoOutput), 0644)
 	if err != nil {
 		log.Default().Printf("unable to update new app main.go file - %s\n", newAppMainGoPath)
 		return err
 	}
+
 	return nil
 }
 
@@ -623,6 +682,7 @@ func convertExtractedDetailInfoToNewAppStructure(detailImports []string, detailE
 
 }
 
+// getDetailEntryGoInfo handles pulling out information from the
 func getDetailEntryGoInfo(detailPath, detailType string) ([]string, string, []string, error) {
 
 	var ghatdImportTag string
@@ -694,6 +754,7 @@ func getDetailEntryGoInfo(detailPath, detailType string) ([]string, string, []st
 	return detailGoEntryPointLines[(startOfDetailImports + 1):endOfDetailImports], detailEmbeds, detailGoEntryPointLines[(startOfDetailInit + 1):endOfDetailInit], nil
 }
 
+// getDetailModInfo handles pulling information out of the detail's go.mod file and returning it
 func getDetailModInfo(detailPath, detailType string) (string, string, []string, error) {
 
 	var ghatdRequireTag string
@@ -743,8 +804,17 @@ func getDetailModInfo(detailPath, detailType string) (string, string, []string, 
 
 }
 
-// cleanUpDetail handles removing detail directory
-func cleanUpDetail(dir string) error {
+// cleanUpDirectories handles removing passed directories.
+// Note: we should only run on ghatdbase files if pulling
+func cleanUpDirectories(dirs []string) error {
+	for _, dir := range dirs {
+		_ = cleanUpDirectory(dir)
+	}
+	return nil
+}
+
+// cleanUpDirectory handles removing passed directory
+func cleanUpDirectory(dir string) error {
 	err := os.RemoveAll(dir)
 	if err != nil {
 		log.Default().Printf("unable to remove temp detail target dir - %s\n", dir)
@@ -752,4 +822,18 @@ func cleanUpDetail(dir string) error {
 	}
 
 	return err
+}
+
+// addStringIfItDoesExist handles trying to merge to passed strings into one
+func addStringIfItDoesExist(baseString, additionalString string) string {
+	var additionalValidStrings string
+	var splitExtraString []string = strings.Split(additionalString, " ")
+
+	for _, str := range splitExtraString {
+		if !strings.Contains(baseString, str) {
+			additionalValidStrings += (" " + str)
+		}
+	}
+
+	return baseString + additionalValidStrings
 }
