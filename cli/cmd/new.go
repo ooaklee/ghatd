@@ -638,7 +638,7 @@ func addDetailEmbedsToMainGo(detailEmbeds, newAppRepoPath string) error {
 				line = strings.Replace(line, "// //go:embed ", "//go:embed ", -1)
 			}
 
-			newAppMainGoLines[i] = addStringIfItDoesExist(line, detailEmbeds)
+			newAppMainGoLines[i] = toolbox.AddStringIfItDoesExistInBaseString(line, detailEmbeds)
 		}
 	}
 
@@ -822,18 +822,4 @@ func cleanUpDirectory(dir string) error {
 	}
 
 	return err
-}
-
-// addStringIfItDoesExist handles trying to merge to passed strings into one
-func addStringIfItDoesExist(baseString, additionalString string) string {
-	var additionalValidStrings string
-	var splitExtraString []string = strings.Split(additionalString, " ")
-
-	for _, str := range splitExtraString {
-		if !strings.Contains(baseString, str) {
-			additionalValidStrings += (" " + str)
-		}
-	}
-
-	return baseString + additionalValidStrings
 }

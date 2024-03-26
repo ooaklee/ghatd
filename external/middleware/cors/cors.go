@@ -13,7 +13,10 @@ func NewCorsMiddleware(allowedOrigins []string) func(handler http.Handler) http.
 	return func(handler http.Handler) http.Handler {
 		return handlers.CORS(
 			handlers.AllowCredentials(),
-			handlers.AllowedHeaders([]string{common.CorrelationIdHttpHeader, "Content-Type", "Authorization", "platform", common.SystemWideXApiToken, common.WebPartialHttpRequestHeader, common.CacheSkipHttpResponseHeader}),
+			handlers.AllowedHeaders([]string{common.CorrelationIdHttpHeader, "Content-Type", "Authorization", "platform", common.SystemWideXApiToken, common.WebPartialHttpRequestHeader, common.CacheSkipHttpResponseHeader, common.HtmxHttpCurrentUrlHeader,
+				common.HtmxHttpRequestHeader,
+				common.HtmxHttpTargetHeader,
+				common.HtmxHttpTriggerHeader}),
 			handlers.AllowedMethods([]string{"HEAD", "OPTIONS", "GET", "PATCH", "POST", "PUT", "DELETE"}),
 			handlers.AllowedOrigins(allowedOrigins),
 		)(handler)

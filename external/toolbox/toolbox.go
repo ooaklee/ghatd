@@ -8,11 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/ooaklee/ghatd/external/common"
 )
 
 const ()
@@ -67,12 +69,64 @@ func StringRemoveMultiSpace(s string) string {
 	return multipleSpaceRegex.ReplaceAllString(s, " ")
 }
 
+// StringInSlice checks to see if string is within slice
+func StringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+// StringStandardisedToUpper returns a string with no explicit spacing strategy
+// that is all uppercase and standardised.
+func StringStandardisedToUpper(s string) string {
+	s = strings.ToUpper(s)
+
+	return StringRemoveMultiSpace(strings.TrimSpace(strings.ReplaceAll(s, "’", "'")))
+}
+
 // StringStandardisedToLower returns a string with no explicit spacing strategy
 // that is all lowercase and standardised.
 func StringStandardisedToLower(s string) string {
 	s = strings.ToLower(s)
 
 	return StringRemoveMultiSpace(strings.TrimSpace(strings.ReplaceAll(s, "’", "'")))
+}
+
+// StringConvertToSnakeCase subsitutes all instances of a space with an underscore
+func StringConvertToSnakeCase(s string) string {
+
+	s = StringRemoveMultiSpace(s)
+
+	return strings.Replace(s, " ", "_", -1)
+}
+
+// StringConvertToKebabCase returns a string in kebab case format
+func StringConvertToKebabCase(text string) (string, error) {
+
+	// Trim string
+	text = strings.TrimSpace(text)
+
+	// Remove all the special characters
+	reg, err := regexp.Compile(`[^a-zA-Z0-9\\s]+`)
+	if err != nil {
+		return "", err
+	}
+	cleanedText := reg.ReplaceAllString(text, " ")
+
+	// Make sure it's lower case and remove double space
+	cleanedText = strings.ToLower(
+		StringRemoveMultiSpace(
+			cleanedText,
+		),
+	)
+
+	// Remove Spaces for hyphen
+	cleanedText = strings.ReplaceAll(cleanedText, " ", "-")
+
+	return cleanedText, nil
 }
 
 // DecodeRequestBody attempts to decode request to object. returns error on failure
@@ -138,4 +192,264 @@ func refactorFunc(silent bool, old, new string, filePatterns []string) filepath.
 
 		return nil
 	})
+}
+
+// AddStringIfItDoesExistInBaseString merges an additional passed string into
+// the provided base string only if the additional string doesn't already exist
+// in the base string. The additional string must be a space-separated string.
+func AddStringIfItDoesExistInBaseString(baseString, additionalString string) string {
+	var additionalValidStrings string
+	var splitExtraString []string = strings.Split(additionalString, " ")
+
+	for _, str := range splitExtraString {
+		if !strings.Contains(baseString, str) {
+			additionalValidStrings += (" " + str)
+		}
+	}
+
+	return baseString + additionalValidStrings
+}
+
+// GetIfEnvOrDefault handles checking if an environment
+// variable is set, or default to other passed string
+func GetIfEnvOrDefault(envName, defaultValue string) string {
+
+	if foundValue := os.Getenv(strings.ToUpper(envName)); foundValue != "" {
+		return foundValue
+	}
+
+	return defaultValue
+}
+
+// ConvertToBoolean if the string is 1 or true, convert to true.
+// Otherwise, set to false.
+func ConvertToBoolean(s string) bool {
+	for _, v := range []string{"1", "true"} {
+		if strings.EqualFold(s, v) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// RemoveStringFromSlice checks to see if string is within slice and removes it, returning new slice
+func RemoveStringFromSlice(a string, list []string) []string {
+	var removeIndex int
+
+	for i, text := range list {
+		if text == a {
+			removeIndex = i
+		}
+	}
+
+	return removeElement(list, removeIndex)
+}
+
+// removeElement delete element at passed index from passed list
+func removeElement(col []string, removeIndex int) []string {
+	col[removeIndex] = col[len(col)-1]
+	return col[:len(col)-1]
+}
+
+// ConvertStringToIntOrDefault attempts to turn passed number (as string) to int, on
+// failure the default value will be used
+func ConvertStringToIntOrDefault(s string, defaultValue int) int {
+	if s == "" {
+		return defaultValue
+	}
+
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return defaultValue
+	}
+
+	return int(f)
+}
+
+// GetStaticUserUuid returns the UUID used for unauthed user access into service
+func GetStaticUserUuid() string {
+	return "38adc27a-a666-401d-8309-613273c2cb60"
+}
+
+// AddRedirectHeaderTo handles the logic of adding the redirect header to the response and
+// forwarding user to the target url.
+func AddRedirectHeaderTo(w http.ResponseWriter, r *http.Request, targetUrl string) {
+	if contentTypeHeader := r.Header["Content-Type"]; len(contentTypeHeader) == 0 || contentTypeHeader[0] != "application/json" {
+
+		w.Header().Add("Location", targetUrl)
+		w.WriteHeader(http.StatusTemporaryRedirect)
+		return
+	}
+}
+
+// AddNonSecureAuthInfoCookie is handling adding the cookies to the response that hold information
+// about the security token cookies
+func AddNonSecureAuthInfoCookie(w http.ResponseWriter, cookieDomain, environment string, accessTokenExpiresAt int64, refressTokenExpiresAt int64) {
+
+	accessTokenAuthInfoCookie := http.Cookie{
+		Name:    common.AccessTokenAuthInfoCookieName,
+		Value:   "true",
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: time.Unix(accessTokenExpiresAt, 0),
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	refreshTokenAuthInfoCookie := http.Cookie{
+		Name:    common.RefreshTokenAuthInfoCookieName,
+		Value:   "true",
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: time.Unix(refressTokenExpiresAt, 0),
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	http.SetCookie(w, &accessTokenAuthInfoCookie)
+	http.SetCookie(w, &refreshTokenAuthInfoCookie)
+}
+
+// RemoveCookiesWithName is handling removing the passed cookie from the client
+func RemoveCookiesWithName(w http.ResponseWriter, environment, cookieName, cookieDomain string) {
+
+	expirationNow := time.Now()
+
+	removeReferencedCookie := http.Cookie{
+		Name:    cookieName,
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: expirationNow,
+		MaxAge:  -1,
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		HttpOnly: true,
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	http.SetCookie(w, &removeReferencedCookie)
+}
+
+// AddAuthCookies is handling adding the auth token cookies (access & refresh) to the response
+func AddAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessTokenCookiePrefix, accessToken string, accessTokenExpiresAt int64, refreshTokenCookiePrefix, refressToken string, refressTokenExpiresAt int64) {
+	accessAuthcookie := http.Cookie{
+		Name:    accessTokenCookiePrefix,
+		Value:   accessToken,
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: time.Unix(accessTokenExpiresAt, 0),
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		HttpOnly: true,
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	// based on https://tkacz.pro/how-to-securely-store-jwt-tokens/
+	refreshAuthcookie := http.Cookie{
+		Name:    refreshTokenCookiePrefix,
+		Value:   refressToken,
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: time.Unix(refressTokenExpiresAt, 0),
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		HttpOnly: true,
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	http.SetCookie(w, &accessAuthcookie)
+	http.SetCookie(w, &refreshAuthcookie)
+}
+
+// RemoveAuthCookies is handling removing the auth token cookies (access & refresh) from the client
+func RemoveAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessTokenCookiePrefix, refressTokenExpiresAt string) {
+
+	expirationNow := time.Now()
+
+	removeAccessAuthcookie := http.Cookie{
+		Name:    accessTokenCookiePrefix,
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: expirationNow,
+		MaxAge:  -1,
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		HttpOnly: true,
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	// based on https://tkacz.pro/how-to-securely-store-jwt-tokens/
+	removeRefreshAuthcookie := http.Cookie{
+		Name:    refressTokenExpiresAt,
+		Domain:  cookieDomain,
+		Path:    "/",
+		Expires: expirationNow,
+		MaxAge:  -1,
+		Secure: func(env string) bool {
+			return env != "local"
+		}(environment),
+		HttpOnly: true,
+		SameSite: func(env string) http.SameSite {
+
+			if env != "local" {
+				return http.SameSiteStrictMode
+			}
+			return http.SameSiteLaxMode
+
+		}(environment),
+	}
+
+	http.SetCookie(w, &removeAccessAuthcookie)
+	http.SetCookie(w, &removeRefreshAuthcookie)
 }

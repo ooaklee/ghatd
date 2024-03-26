@@ -1,0 +1,1312 @@
+package accessmanager
+
+import (
+	"context"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/ooaklee/ghatd/external/apitoken"
+	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/auth"
+	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/emailer"
+	"github.com/ooaklee/ghatd/external/ephemeral"
+	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/oauth"
+	"github.com/ooaklee/ghatd/external/toolbox"
+	"github.com/ooaklee/ghatd/external/user"
+	"go.uber.org/zap"
+
+	sp "github.com/SparkPost/gosparkpost"
+)
+
+// AuditService expected methods of a valid audit service
+type AuditService interface {
+	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
+}
+
+// OauthService expected methods of a valid oauth service
+type OauthService interface {
+	ProviderGetName() string
+	ProviderGenerateProtectionToken() string
+	ProviderGetCookieKey() string
+	ProviderGetUserData(ctx context.Context, requestUriEntries url.Values) (oauth.OauthUserInfo, error)
+	ProviderGenerateAuthCodeUrl(protectionToken string) string
+	ProviderVerifyRequestIsAuthentic(requestUriEntries url.Values, protectionCookien *http.Cookie) (string, bool)
+}
+
+// EphemeralStore expected methods of a valid ephemeral storage client
+type EphemeralStore interface {
+	CreateAuth(ctx context.Context, userID string, tokenDetails ephemeral.TokenDetailsAuth) error
+	StoreToken(ctx context.Context, accessTokenUUID string, userID string, ttl time.Duration) error
+	FetchAuth(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error)
+	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
+	AddRequestCountEntry(ctx context.Context, clientIp string) error
+}
+
+// EmailerClient expected methods of a valid emailer client
+type EmailerClient interface {
+	GenerateVerificationEmail(r *emailer.SendVerificationEmailRequest) (*sp.Transmission, *emailer.EmailInfo, error)
+	SendEmail(ctx context.Context, emailInfo *emailer.EmailInfo, emailTransmission *sp.Transmission) error
+	GenerateLoginEmail(r *emailer.SendLoginEmailRequest) (*sp.Transmission, *emailer.EmailInfo, error)
+}
+
+// AuthService expected methods of a valid auth service
+type AuthService interface {
+	CreateInitalToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	CreateToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	ExtractTokenMetadata(ctx context.Context, r *http.Request) (*auth.TokenAccessDetails, error)
+	CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.Token, error)
+	GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*auth.TokenRefreshDetails, error)
+	CheckAccessTokenValidityGetDetails(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error)
+	ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error)
+	CreateEmailVerificationToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+}
+
+// UserService expected methods of a valid user service
+type UserService interface {
+	GetUserByNanoId(ctx context.Context, id string) (*user.GetUserByIDResponse, error)
+	GetUserByID(ctx context.Context, r *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error)
+	GetUserByEmail(ctx context.Context, r *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
+	UpdateUser(ctx context.Context, user *user.UpdateUserRequest) (*user.UpdateUserResponse, error)
+	CreateUser(ctx context.Context, r *user.CreateUserRequest) (*user.CreateUserResponse, error)
+}
+
+// ApitokenService expected methods of a valid apitoken service
+type ApitokenService interface {
+	ExtractValidateUserAPITokenMetadata(ctx context.Context, r *http.Request) (*apitoken.APITokenRequester, error)
+	UpdateAPITokenLastUsedAt(ctx context.Context, r *apitoken.UpdateAPITokenLastUsedAtRequest) error
+	CreateAPIToken(ctx context.Context, r *apitoken.CreateAPITokenRequest) (*apitoken.CreateAPITokenResponse, error)
+	DeleteAPIToken(ctx context.Context, r *apitoken.DeleteAPITokenRequest) error
+	RevokeAPIToken(ctx context.Context, r *apitoken.RevokeAPITokenRequest) error
+	ActivateAPIToken(ctx context.Context, r *apitoken.ActivateAPITokenRequest) error
+	GetAPITokensFor(ctx context.Context, r *apitoken.GetAPITokensForRequest) (*apitoken.GetAPITokensForResponse, error)
+}
+
+// Service holds and manages accessmanager service business logic
+type Service struct {
+	EphemeralStore        EphemeralStore
+	AuditService          AuditService
+	EmailerClient         EmailerClient
+	AuthService           AuthService
+	UserService           UserService
+	ApitokenService       ApitokenService
+	OauthServices         []OauthService
+	staticPlaceholderUuid string
+}
+
+// NewServiceRequest holds all expected dependencies for an accessmanager service
+type NewServiceRequest struct {
+	// EphemeralStore handles storing tokens in cache
+	EphemeralStore EphemeralStore
+
+	// EmailerClient handles sending out emails to users for logging in & verification
+	EmailerClient EmailerClient
+
+	// AuthService handles creating authentication tokens
+	AuthService AuthService
+
+	// UserService handles creating and updating user login, verification etc. information
+	UserService UserService
+
+	// ApiTokenService handles creating and updating api tokens
+	ApiTokenService ApitokenService
+
+	// OauthService handles managing oauth integration with providers
+	OauthServices []OauthService
+
+	// AuditService handles logging platform events
+	AuditService AuditService
+
+	// StaticPlaceholderUuid hold a static uuid that will be used for
+	StaticPlaceholderUuid string
+}
+
+// NewService creates accessmanager service
+func NewService(r *NewServiceRequest) *Service {
+
+	return &Service{
+		EphemeralStore:        r.EphemeralStore,
+		EmailerClient:         r.EmailerClient,
+		AuthService:           r.AuthService,
+		UserService:           r.UserService,
+		ApitokenService:       r.ApiTokenService,
+		OauthServices:         r.OauthServices,
+		AuditService:          r.AuditService,
+		staticPlaceholderUuid: r.StaticPlaceholderUuid,
+	}
+}
+
+// OauthCallback handles logic of managing the callback of a provider
+func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error) {
+
+	log := logger.AcquireFrom(ctx)
+
+	if len(s.OauthServices) == 0 {
+		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-callback-requested", zap.String("requested-provider", r.Provider))
+		return nil, errors.New("ErrKeyNoOauthProvidersDetected")
+	}
+
+	for _, provider := range s.OauthServices {
+
+		if r.Provider != provider.ProviderGetName() {
+			log.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
+			continue
+		}
+
+		// get protection token (state) from cookie
+		var fetchedProtectionStateTokenCookie *http.Cookie
+
+		// create variable to hold unencoded redirect url
+		var detectedUnencodedRedirectUrl string
+
+		for _, requestCookie := range r.RequestCookies {
+			if requestCookie.Name != provider.ProviderGetCookieKey() {
+				continue
+			}
+
+			fetchedProtectionStateTokenCookie = requestCookie
+			break
+		}
+
+		if fetchedProtectionStateTokenCookie == nil {
+			return nil, errors.New("ErrKeyProviderCookieNotFound")
+		}
+
+		// Compare the protection token (state) from cookie with the one passed in
+		// the request
+		providerCookieKey, providerRequestAuthenticated := provider.ProviderVerifyRequestIsAuthentic(r.UrlUri, fetchedProtectionStateTokenCookie)
+
+		if !providerRequestAuthenticated {
+			return &OauthCallbackResponse{
+				ProviderStateCookieKey: providerCookieKey,
+			}, errors.New("ErrKeyProviderInvalidProtectionStateToken")
+		}
+
+		// check if redirect url passed
+		splitProtectionStateTokenCookieValue := strings.Split(fetchedProtectionStateTokenCookie.Value, ".")
+		if len(splitProtectionStateTokenCookieValue) > 1 {
+
+			decoded64RequestUrl, err := base64.StdEncoding.DecodeString(splitProtectionStateTokenCookieValue[1])
+			if err != nil {
+				log.Warn("failed-to-decode-detected-request-url-uri-for-sso-callback", zap.String("encoded-request-url", splitProtectionStateTokenCookieValue[1]))
+			}
+
+			if err == nil && string(decoded64RequestUrl) != "" {
+				detectedUnencodedRedirectUrl = string(decoded64RequestUrl)
+			}
+		}
+
+		// get user data
+		providerUserInfo, err := provider.ProviderGetUserData(ctx, r.UrlUri)
+		if err != nil {
+			return &OauthCallbackResponse{
+				ProviderStateCookieKey: providerCookieKey,
+			}, err
+		}
+
+		// Manage flow with user information
+		persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
+		// Check if there is an error outside of user not being found
+		if persistentUserResponse == nil && err.Error() != user.ErrKeyResourceNotFound {
+			return &OauthCallbackResponse{
+				ProviderStateCookieKey: providerCookieKey,
+			}, err
+		}
+
+		// Handle if user exists, generate auth tokens
+		if err == nil {
+			persistentUser := persistentUserResponse.User
+
+			tokenDetails, err := s.AuthService.CreateToken(ctx, &persistentUser)
+			if err != nil {
+				return &OauthCallbackResponse{
+					ProviderStateCookieKey: providerCookieKey,
+				}, err
+			}
+
+			// update users logged in time
+			persistentUser.SetLastLoginAtTimeToNow().SetLastFreshLoginAtTimeToNow()
+
+			// If user is verified by provider but not our platform, we should trust provider
+			if !persistentUser.Verified.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
+
+				log.Info("provider-login-user-email-verified-based-on-provider-records", zap.String("user-id", persistentUser.ID))
+				persistentUser.Verified.EmailVerified = providerUserInfo.IsUserEmailVerifiedByProvider()
+				persistentUser.Verified.EmailVerifiedAt = toolbox.TimeNowUTC()
+			}
+
+			UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: &persistentUser})
+			if err != nil {
+				log.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+				return &OauthCallbackResponse{
+					ProviderStateCookieKey: providerCookieKey,
+				}, err
+			}
+
+			err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
+			if err != nil {
+				log.Error("provider-login-ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+				return &OauthCallbackResponse{
+					ProviderStateCookieKey: providerCookieKey,
+				}, err
+			}
+
+			// audit log sso login
+			auditEvent := audit.UserLoginSso
+			auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+				ActorId:    audit.AuditActorIdSystem,
+				Action:     auditEvent,
+				TargetId:   persistentUser.ID,
+				TargetType: audit.User,
+				Domain:     "accessmanager",
+				Details: audit.UserSsoEventDetails{
+					SsoProvider: r.Provider,
+				},
+			})
+
+			if auditErr != nil {
+				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", persistentUser.ID), zap.String("event-type", string(auditEvent)))
+			}
+
+			return &OauthCallbackResponse{
+				RequestUrl:             detectedUnencodedRedirectUrl,
+				ProviderStateCookieKey: providerCookieKey,
+				AccessToken:            tokenDetails.AccessToken,
+				RefreshToken:           tokenDetails.RefreshToken,
+				AccessTokenExpiresAt:   tokenDetails.AtExpires,
+				RefreshTokenExpiresAt:  tokenDetails.RtExpires,
+			}, nil
+		} else { // if not, create user, generate token
+
+			newUser, err := s.UserService.CreateUser(ctx, &user.CreateUserRequest{
+				FirstName: providerUserInfo.GetUserFirstName(),
+				LastName:  providerUserInfo.GetUserLastName(),
+				Email:     providerUserInfo.GetUserEmail(),
+			})
+			if err != nil {
+				return &OauthCallbackResponse{
+					ProviderStateCookieKey: providerCookieKey,
+				}, err
+			}
+
+			// If user is verified by provider but not our platform, we should trust provider
+			if !newUser.User.Verified.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
+
+				log.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUser.User.ID))
+				newUser.User.Verified.EmailVerified = providerUserInfo.IsUserEmailVerifiedByProvider()
+				newUser.User.Verified.EmailVerifiedAt = toolbox.TimeNowUTC()
+
+				// Update user with verification information
+				updatedUser, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{
+					User: &newUser.User,
+				})
+				if err != nil {
+					log.Error(fmt.Sprintf("ams/error-failed-to-save-new-user-verficaiton-by-provider: %s", newUser.User.ID))
+				}
+
+				log.Info(fmt.Sprintf("ams/successfully-saved-new-user-verficaiton-by-provider: %s", updatedUser.User.ID))
+
+			}
+
+			// audit log new sso user
+			auditEvent := audit.UserAccountNewSso
+			auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+				ActorId:    audit.AuditActorIdSystem,
+				Action:     auditEvent,
+				TargetId:   newUser.User.ID,
+				TargetType: audit.User,
+				Domain:     "accessmanager",
+				Details: audit.UserSsoEventDetails{
+					SsoProvider: r.Provider,
+				},
+			})
+
+			if auditErr != nil {
+				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUser.User.ID), zap.String("event-type", string(auditEvent)))
+			}
+
+			log.Info(fmt.Sprintf("ams/initiate-new-user-tokens: %s", newUser.User.ID))
+
+			accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, err := s.UserEmailVerificationRevisions(ctx, &UserEmailVerificationRevisionsRequest{
+				UserID: newUser.User.ID})
+			if err != nil {
+				return nil, err
+			}
+
+			// audit log sso login
+			auditEvent = audit.UserLoginSso
+			auditErr = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+				ActorId:    audit.AuditActorIdSystem,
+				Action:     auditEvent,
+				TargetId:   newUser.User.ID,
+				TargetType: audit.User,
+				Domain:     "accessmanager",
+				Details: audit.UserSsoEventDetails{
+					SsoProvider: r.Provider,
+				},
+			})
+
+			if auditErr != nil {
+				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUser.User.ID), zap.String("event-type", string(auditEvent)))
+			}
+
+			return &OauthCallbackResponse{
+				RequestUrl:             detectedUnencodedRedirectUrl,
+				ProviderStateCookieKey: providerCookieKey,
+				AccessToken:            accessToken,
+				RefreshToken:           refreshToken,
+				AccessTokenExpiresAt:   accessTokenExpiresAt,
+				RefreshTokenExpiresAt:  refreshTokenExpiresAt,
+			}, nil
+
+		}
+	}
+
+	return nil, errors.New("ErrKeyProvidersPassedNotFound")
+}
+
+// OauthLogin handles logic of managing the initialisation of provider url
+func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error) {
+
+	log := logger.AcquireFrom(ctx)
+
+	if len(s.OauthServices) == 0 {
+		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-login-requested", zap.String("requested-provider", r.Provider))
+		return nil, errors.New("ErrKeyNoOauthProvidersDetected")
+	}
+
+	for _, provider := range s.OauthServices {
+
+		if r.Provider != provider.ProviderGetName() {
+			log.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
+			continue
+		}
+
+		// generate protection token (state) query
+		protectionStateToken := provider.ProviderGenerateProtectionToken()
+
+		// append base64 redirect url
+		if r.RequestUrl != "" {
+
+			encoded64RequestUrl := base64.StdEncoding.EncodeToString([]byte(r.RequestUrl))
+
+			protectionStateToken += fmt.Sprintf(`.%s`, encoded64RequestUrl)
+		}
+
+		// Create cookie for holding oauth state
+		oauthCookie := http.Cookie{
+			// 20 minutes expiry
+			Expires: time.Now().Add(20 * time.Minute),
+			Name:    provider.ProviderGetCookieKey(),
+			Value:   protectionStateToken,
+		}
+
+		return &OauthLoginResponse{
+			CookieCore:          &oauthCookie,
+			ProviderAuthCodeUrl: provider.ProviderGenerateAuthCodeUrl(protectionStateToken),
+		}, nil
+
+	}
+
+	return nil, errors.New("ErrKeyProvidersPassedNotFound")
+}
+
+// GetSpecificUserAPITokens retrieves API token for a specific user
+// TODO: Create tests
+func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error) {
+
+	userApiTokenResponse, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
+		ID: r.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// make sure we're only returning perm tokens
+	// TODO: revisit to update request to be adjustable
+	userPermanentTokens, _ := s.getUserApiTokensByType(userApiTokenResponse.APITokens)
+
+	return &GetSpecificUserAPITokensResponse{
+		UserAPITokens: userPermanentTokens,
+	}, nil
+}
+
+// GetSpecificEphemeralUserAPITokens retrieves ephemeral API tokens for a specific user
+// TODO: Create tests
+func (s *Service) GetSpecificEphemeralUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error) {
+
+	userApiTokenResponse, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
+		ID: r.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// make sure we're only returning perm tokens
+	// TODO: revisit to update request to be adjustable
+	_, userEphemeralTokens := s.getUserApiTokensByType(userApiTokenResponse.APITokens)
+
+	return &GetSpecificUserAPITokensResponse{
+		UserAPITokens: userEphemeralTokens,
+	}, nil
+
+}
+
+// GetUserAPITokenThreshold retrieves the thresholds applied to the user r. API tokens
+func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error) {
+
+	// Check if user exist
+	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
+		ID: r.UserId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	persistentUser := userResponse.User
+
+	// Pull user role so we can get their limits
+	userHighestRankingRole := common.GetUsersHighestRankedRole(persistentUser.Roles)
+	getUserRoleThresholdAllocation := common.UserRolesThresholds.RolesDetails[common.UserRole(userHighestRankingRole)]
+
+	return &GetUserAPITokenThresholdResponse{
+		PermanentUserTokenLimit:     getUserRoleThresholdAllocation.LongLivedUserTokenLimit,
+		EphemeralUserTokenLimit:     getUserRoleThresholdAllocation.ShortLivedUserTokenLimit,
+		EphemeralMinimumAllowedTime: getUserRoleThresholdAllocation.ShortLivedMinimumAllowedTime,
+		EphemeralMaximumAllowedTime: getUserRoleThresholdAllocation.ShortLivedMaximumAllowedTime,
+		EphemeralMinimumIncrements:  getUserRoleThresholdAllocation.ShortLivedMinimumIncrements,
+	}, nil
+
+}
+
+// UpdateUserAPITokenStatus updates status on specified API token
+// TODO: Create tests
+func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error {
+	switch r.Status {
+	case apitoken.UserTokenStatusKeyActive:
+		return s.ApitokenService.ActivateAPIToken(ctx, &apitoken.ActivateAPITokenRequest{
+			ID: r.APITokenID})
+	default:
+		return s.ApitokenService.RevokeAPIToken(ctx, &apitoken.RevokeAPITokenRequest{
+			ID: r.APITokenID,
+		})
+	}
+}
+
+// DeleteUserAPIToken delete specified API token for user
+// TODO: Create tests
+func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
+	// Check if user exist
+	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
+		ID: r.UserID,
+	})
+	if err != nil {
+		return err
+	}
+
+	persistentUser := userResponse.User
+
+	if len(persistentUser.APITokens) > 0 {
+
+		for _, token := range persistentUser.APITokens {
+			if token == r.APITokenID {
+				return s.ApitokenService.DeleteAPIToken(ctx,
+					&apitoken.DeleteAPITokenRequest{
+						UserID:     persistentUser.ID,
+						APITokenID: r.APITokenID,
+					})
+			}
+		}
+
+	}
+
+	return errors.New(ErrKeyAPITokenNotAssociatedWithUser)
+}
+
+// CreateUserAPIToken generates API token for user
+// TODO: Create tests
+func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error) {
+	log := logger.AcquireFrom(ctx)
+
+	// Check if user exist
+	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
+		ID: r.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	persistentUser := userResponse.User
+
+	// Pull user role so we can get their limits
+	userHighestRankingRole := common.GetUsersHighestRankedRole(persistentUser.Roles)
+	getUserRoleThresholdAllocation := common.UserRolesThresholds.RolesDetails[common.UserRole(userHighestRankingRole)]
+	if !toolbox.StringInSlice(userHighestRankingRole, persistentUser.Roles) {
+		log.Error("highest-role-pulled-is-not-found-in-user-allocated-role", zap.String("user-id", persistentUser.ID), zap.String("role-pulled", userHighestRankingRole), zap.String("user-roles", strings.Join(persistentUser.Roles, ", ")))
+	}
+
+	// get user's apitokens count
+	userPermanentTokenCount, userEphemeralTokenCount, err := s.getUserApiTokensCountByType(ctx, persistentUser.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Make sure user doesn't have more than allowed tokens already
+	if r.Ttl == 0 && (int64(userPermanentTokenCount) >= getUserRoleThresholdAllocation.LongLivedUserTokenLimit) {
+		return nil, errors.New(ErrKeyPermanentAPITokenLimitReached)
+	}
+
+	if r.Ttl > 0 && (int64(userEphemeralTokenCount) >= getUserRoleThresholdAllocation.ShortLivedUserTokenLimit) {
+		return nil, errors.New(ErrKeyEphemeralAPITokenLimitReached)
+	}
+
+	// TODO: Make sure request honor role's increments etc.
+	err = s.verifyRequestIsWithinUserRoleTokenConstraints(ctx, persistentUser.ID, r.Ttl, &getUserRoleThresholdAllocation)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate token
+	apiTokenResponse, err := s.ApitokenService.CreateAPIToken(ctx, &apitoken.CreateAPITokenRequest{
+		UserID:     persistentUser.ID,
+		UserNanoId: persistentUser.NanoId,
+		TokenTtl:   r.Ttl,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	apiToken := apiTokenResponse.APIToken
+
+	// Apppend to user's existing tokens
+	persistentUser.APITokens = append(persistentUser.APITokens, apiToken.ID)
+
+	// save updated user
+	_, err = s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: &persistentUser})
+	if err != nil {
+		log.Error("system-update-failed-after-successful-apitoken-creation", zap.String("user-id:", persistentUser.ID), zap.String("token-id:", apiToken.ID))
+		return nil, err
+	}
+
+	return &CreateUserAPITokenResponse{
+		UserAPIToken: apiToken,
+	}, nil
+}
+
+// verifyRequestIsWithinUserRoleTokenConstraints is taking the token time and making sure it's within the user's
+// allocated thresholds
+func (s *Service) verifyRequestIsWithinUserRoleTokenConstraints(ctx context.Context, userId string, tokenTtl int64, userRoleThresholds *common.UserRoleThresholds) error {
+
+	log := logger.AcquireFrom(ctx)
+
+	if tokenTtl == 0 {
+		return nil
+	}
+
+	if tokenTtl < userRoleThresholds.ShortLivedMinimumAllowedTime {
+		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-short"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
+		return errors.New(ErrKeyCreateUserAPITokenRequestTtlTooShort)
+	}
+
+	if tokenTtl > userRoleThresholds.ShortLivedMaximumAllowedTime {
+		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-long"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
+		return errors.New(ErrKeyCreateUserAPITokenRequestTtlTooLong)
+	}
+
+	if tokenTtl%userRoleThresholds.ShortLivedMinimumIncrements != 0 {
+		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-outside-allowed-increment"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
+		return errors.New(ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement)
+	}
+
+	return nil
+}
+
+// getUserApiTokensCountByType is handling getting user's token and returning
+// how many are Permanent or Ephemeral
+func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string) (int, int, error) {
+
+	var (
+		userPermanentToken int
+		userEphemeralToken int
+	)
+
+	log := logger.AcquireFrom(ctx)
+
+	// get user api tokens
+	userApiTokens, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
+		ID: userId,
+	})
+
+	if err != nil {
+		log.Error("error-fetching-user-auth-tokens", zap.Error(err))
+		return 0, 0, err
+	}
+
+	// get token types
+	for _, apiToken := range userApiTokens.APITokens {
+
+		if apiToken.IsShortLivedToken() {
+			userEphemeralToken++
+			continue
+		}
+
+		userPermanentToken++
+		continue
+	}
+
+	return userPermanentToken, userEphemeralToken, nil
+}
+
+// getUserApiTokensByType is handling getting user's token and returning
+// how man
+func (s *Service) getUserApiTokensByType(userTokens []apitoken.UserAPIToken) ([]apitoken.UserAPIToken, []apitoken.UserAPIToken) {
+
+	var (
+		userPermanentTokens []apitoken.UserAPIToken = []apitoken.UserAPIToken{}
+		userEphemeralTokens []apitoken.UserAPIToken = []apitoken.UserAPIToken{}
+	)
+
+	// get token types
+	for _, apiToken := range userTokens {
+
+		if apiToken.IsShortLivedToken() {
+			userEphemeralTokens = append(userEphemeralTokens, apiToken)
+			continue
+		}
+
+		userPermanentTokens = append(userPermanentTokens, apiToken)
+		continue
+	}
+
+	return userPermanentTokens, userEphemeralTokens
+}
+
+// MiddlewareValidAPITokenRequired handles the business/ cross logic of ensuring
+// that the request is passed with a valid client ID and secret
+// TODO: Create tests
+func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (string, error) {
+
+	log := logger.AcquireFrom(r.Context())
+
+	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
+	if err != nil {
+		return "", err
+	}
+
+	// If we made it here, it means we've found a matching token
+	// get user for matching token
+	// could probably also check liveness here one time
+	persistentUserResponse, err := s.UserService.GetUserByNanoId(r.Context(), tokenRequester.NanoId)
+	if err != nil {
+		return "", err
+	}
+
+	// Set token requester user Id to make backwards compatible
+	tokenRequester.UserID = persistentUserResponse.User.ID
+
+	// Check if user it active
+	if persistentUserResponse.User.Status != user.AccountStatusKeyActive {
+		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
+		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+	}
+
+	// Update last used time on token
+	err = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
+		APITokenEncoded: tokenRequester.UserAPITokenEncoded,
+		ClientID:        tokenRequester.UserID,
+	})
+	if err != nil {
+		log.Warn("failed-updating-token-last-used-at", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
+	}
+
+	log.Info("validated-token-request", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
+
+	return tokenRequester.UserID, nil
+}
+
+// MiddlewareJWTRequired handles the business/ cross logic of ensuring
+// that the request is passed with a valid, non-expired token
+// TODO: Create tests
+func (s *Service) MiddlewareJWTRequired(r *http.Request) (string, error) {
+	log := logger.AcquireFrom(r.Context())
+
+	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	if err != nil {
+		return "", err
+	}
+
+	_, err = s.EphemeralStore.FetchAuth(r.Context(), tokenAuth)
+	if err != nil {
+		log.Warn("unauthorized-token-not-found", zap.String("user-id", tokenAuth.UserID))
+		return "", errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+	}
+
+	return tokenAuth.UserID, nil
+}
+
+// MiddlewareActiveJWTRequired handles the business/ cross logic of ensuring that the request is passed with a
+// valid token, and the user is in an `ACTIVE` state (status)
+// TODO: Create tests
+func (s *Service) MiddlewareActiveJWTRequired(r *http.Request) (string, error) {
+	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	if err != nil {
+		return "", err
+	}
+
+	return s.checkActivenessOfUser(r.Context(), tokenAuth)
+}
+
+// MiddlewareAdminJWTRequired handles the business/ cross logic of making sure the token passed is
+// that of a platform admin, for middleware
+// TODO: Create tests
+func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (string, error) {
+	log := logger.AcquireFrom(r.Context())
+
+	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	if err != nil {
+		return "", err
+	}
+
+	if !tokenAuth.IsAdmin {
+		log.Warn("unauthorized-admin-access-attempted", zap.String("user-id", tokenAuth.UserID))
+		return "", errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
+	}
+
+	// Check when user was `ACTIVE` when access token was generated
+	if !tokenAuth.IsAuthorized {
+		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenAuth.UserID))
+		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+	}
+
+	_, err = s.EphemeralStore.FetchAuth(r.Context(), tokenAuth)
+	if err != nil {
+		log.Warn("unauthorized-token-not-found", zap.String("user-id", tokenAuth.UserID))
+		return "", errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+	}
+
+	return tokenAuth.UserID, nil
+}
+
+// MiddlewareRateLimitOrActiveJWTRequired handles the business/ cross logic of ensuring
+// that the request has not exceeded its rate limit, and any unathed request is given the
+// default annoymous user ID.
+// Otherwise, if a bearer token is detected, typical check is carried out to ensure that the
+// passed token is valid, non-expired token
+// TODO: Create tests
+func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (string, error) {
+
+	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	if err != nil && err.Error() == auth.ErrKeyNoBearerHeaderFound {
+		// Register request count for unauth user (note IP used)
+		if ephErr := s.EphemeralStore.AddRequestCountEntry(r.Context(), getValidRequestorIP(r)); ephErr != nil {
+			return "", ephErr
+		}
+
+		return s.staticPlaceholderUuid, nil
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return s.checkActivenessOfUser(r.Context(), tokenAuth)
+}
+
+// checkActivenessOfUser validates whether the user's account was in an active state at time of
+// token creation
+func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (string, error) {
+	log := logger.AcquireFrom(ctx)
+
+	// Check when user was `ACTIVE` when access token was generated
+	if !s.isUserLiveStatusActive(ctx, tokenAuth.UserID) {
+		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenAuth.UserID))
+		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+	}
+
+	return tokenAuth.UserID, nil
+}
+
+// LogoutUser handles the logic of signing user off of platform. Delete token(s) from ephemeral store
+// TODO: Investigate best way to also delete corresponding refresh token
+// TODO: Create tests
+func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
+	log := logger.AcquireFrom(ctx)
+
+	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	deleted, err := s.DeleteAuth(ctx, fmt.Sprintf("%v:%v", accessTokenDetails.UserID, accessTokenDetails.AccessUUID))
+	if err != nil {
+		log.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID), zap.Error(err))
+		return err
+	}
+
+	if deleted == 0 {
+		log.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID))
+		return errors.New(ErrKeyUnauthorizedAccessTokenCacheDeletionFailure)
+	}
+
+	auditEvent := audit.UserLogout
+	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+		ActorId:    audit.AuditActorIdSystem,
+		Action:     auditEvent,
+		TargetId:   accessTokenDetails.UserID,
+		TargetType: audit.User,
+		Domain:     "accessmanager",
+		// TODO: Investifate details on what can we add to make the audit
+		// more informative, maybe IP address
+	})
+
+	if auditErr != nil {
+		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", accessTokenDetails.UserID), zap.String("event-type", string(auditEvent)))
+	}
+
+	return nil
+}
+
+// RefreshToken handles the logic of creating a new pair of tokens as well as the relevent sanity
+// checks
+// TODO: Create tests
+func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error) {
+	log := logger.AcquireFrom(ctx)
+
+	// Check validity
+	token, err := s.AuthService.CheckRefreshTokenIsValid(ctx, r.RefreshToken)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get token details
+	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: refreshTokenDetails.UserID})
+	if err != nil {
+		return nil, err
+	}
+
+	persistentUser := persistentUserResponse.User
+
+	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
+	deleted, err := s.EphemeralStore.DeleteAuth(ctx, combineUUIDs(refreshTokenDetails.UserID, refreshTokenDetails.RefreshUUID))
+	if err != nil || deleted == 0 {
+		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", persistentUser.ID), zap.Error(err))
+		return nil, errors.New(ErrKeyUnauthorizedRefreshTokenCacheDeletionFailure)
+	}
+
+	// Create new pair of refresh and access tokens
+	newTokensDetails, err := s.AuthService.CreateToken(ctx, &persistentUser)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save the tokens to ephemeralstore
+	err = s.EphemeralStore.CreateAuth(ctx, refreshTokenDetails.UserID, newTokensDetails)
+	if err != nil {
+		log.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", persistentUser.ID), zap.Error(err))
+		return nil, err
+	}
+
+	return &RefreshTokenResponse{
+		AccessToken:           newTokensDetails.AccessToken,
+		RefreshToken:          newTokensDetails.RefreshToken,
+		AccessTokenExpiresAt:  newTokensDetails.AtExpires,
+		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
+	}, nil
+}
+
+// LoginUser handies verifying initial login token token, and  actioning all surrounding steps in
+// login flow
+// TODO: Create tests
+func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUserResponse, error) {
+
+	log := logger.AcquireFrom(ctx)
+
+	initiateLoginTokenDetails, err := s.TokenAsStringValidator(ctx, &TokenAsStringValidatorRequest{
+		Token: r.Token})
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if ID returns valid user
+	gIDResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
+		ID: initiateLoginTokenDetails.UserID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	persistentUser := gIDResponse.User
+
+	tokenDetails, err := s.AuthService.CreateToken(ctx, &persistentUser)
+	if err != nil {
+		return nil, err
+	}
+
+	// update users logged in time
+	persistentUser.SetLastLoginAtTimeToNow().SetLastFreshLoginAtTimeToNow()
+
+	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: &persistentUser})
+	if err != nil {
+		log.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+		return nil, err
+	}
+
+	err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
+	if err != nil {
+		log.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+		return nil, err
+	}
+
+	// Invalidate initiate login token
+	_, _ = s.DeleteAuth(ctx, initiateLoginTokenDetails.TokenID)
+
+	auditEvent := audit.UserLogin
+	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+		ActorId:    audit.AuditActorIdSystem,
+		Action:     auditEvent,
+		TargetId:   UpdateUserResponse.User.ID,
+		TargetType: audit.User,
+		Domain:     "accessmanager",
+	})
+
+	if auditErr != nil {
+		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", UpdateUserResponse.User.ID), zap.String("event-type", string(auditEvent)))
+	}
+
+	return &LoginUserResponse{
+		AccessToken:           tokenDetails.AccessToken,
+		RefreshToken:          tokenDetails.RefreshToken,
+		AccessTokenExpiresAt:  tokenDetails.AtExpires,
+		RefreshTokenExpiresAt: tokenDetails.RtExpires,
+	}, nil
+}
+
+// DeleteAuth removes token with matching ID metadata from emphemeral storage
+// TODO: Create tests
+func (s *Service) DeleteAuth(ctx context.Context, tokenID string) (int64, error) {
+	return s.EphemeralStore.DeleteAuth(ctx, tokenID)
+}
+
+// CreateInitalLoginOrVerificationTokenEmail handles sending user specific emails (intial login / verification) dependent on user's
+// account status
+// TODO: Create tests
+// TODO: Add logic to send email when dashboard access is attempted by non
+// admin user
+func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context, r *CreateInitalLoginOrVerificationTokenEmailRequest) error {
+
+	log := logger.AcquireFrom(ctx)
+
+	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: r.Email})
+	if err != nil {
+		return err
+	}
+
+	switch persistentUserResponse.User.Status {
+	case user.AccountStatusKeyActive:
+		_, err = s.CreateInitalLoginToken(ctx, &persistentUserResponse.User, r.Dashboard, r.RequestUrl)
+		if err != nil {
+			return err
+		}
+	case user.AccountStatusKeyProvisioned:
+		_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
+			User:               persistentUserResponse.User,
+			IsDashboardRequest: r.Dashboard,
+			RequestUrl:         r.RequestUrl,
+		})
+		if err != nil {
+			return err
+		}
+	default:
+		// TODO: Send custom email with actions
+		log.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID))
+		return errors.New(ErrKeyUserStatusUncaught)
+	}
+
+	return nil
+}
+
+// ValidateEmailVerificationCode handles updating the system to illustrate a successful email verification
+// TODO: Create tests
+func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *ValidateEmailVerificationCodeRequest) (*ValidateEmailVerificationCodeResponse, error) {
+
+	verifiedTokenDetails, err := s.TokenAsStringValidator(ctx, &TokenAsStringValidatorRequest{
+		Token: r.Token})
+	if err != nil {
+		return nil, err
+	}
+
+	accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, err := s.UserEmailVerificationRevisions(ctx, &UserEmailVerificationRevisionsRequest{
+		UserID: verifiedTokenDetails.UserID})
+	if err != nil {
+		return nil, err
+	}
+
+	// Invalidate ephemeral token (one time click)
+	_, _ = s.DeleteAuth(ctx, verifiedTokenDetails.TokenID)
+
+	return &ValidateEmailVerificationCodeResponse{
+		AccessToken:           accessToken,
+		AccessTokenExpiresAt:  accessTokenExpiresAt,
+		RefreshToken:          refreshToken,
+		RefreshTokenExpiresAt: refreshTokenExpiresAt,
+	}, nil
+
+}
+
+// UserEmailVerificationRevisions handles updating the system to illustrate a successful email verification
+// TODO: Create tests
+func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEmailVerificationRevisionsRequest) (accessToken string, accessTokenExpiresAt int64, refreshToken string, refreshTokenExpiresAt int64, err error) {
+
+	log := logger.AcquireFrom(ctx)
+
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: r.UserID})
+	if err != nil {
+		return "", 0, "", 0, err
+	}
+
+	persistentUser := persistentUserResponse.User
+
+	// Update user's verificaiton data, metadata and state
+	revisionedUser, err := persistentUser.SetLastLoginAtTimeToNow().VerifyEmailNow().UpdateStatus(user.AccountStatusKeyActive)
+	if err != nil {
+		log.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		return "", 0, "", 0, err
+	}
+
+	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: revisionedUser})
+	if err != nil {
+		log.Error("system-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		return "", 0, "", 0, err
+	}
+
+	newTokenDetails, err := s.AuthService.CreateToken(ctx, &UpdateUserResponse.User)
+	if err != nil {
+		log.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		return "", 0, "", 0, err
+	}
+
+	err = s.EphemeralStore.CreateAuth(ctx, r.UserID, newTokenDetails)
+	if err != nil {
+		log.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		return "", 0, "", 0, err
+	}
+
+	return newTokenDetails.AccessToken, newTokenDetails.AtExpires, newTokenDetails.RefreshToken, newTokenDetails.RtExpires, nil
+
+}
+
+// TokenAsStringValidator actions the validation process on tokens that aren't passed through the
+// conventional method (headers)
+// TODO: Create tests
+func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringValidatorRequest) (*TokenAsStringValidatorResponse, error) {
+	log := logger.AcquireFrom(ctx)
+
+	token, err := s.AuthService.ParseAccessTokenFromString(ctx, r.Token)
+	if err != nil {
+		return nil, err
+	}
+
+	td, err := s.AuthService.CheckAccessTokenValidityGetDetails(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check to make sure ephemeral token in persistent storage
+	_, err = s.EphemeralStore.FetchAuth(ctx, td)
+	if err != nil {
+		log.Warn("unauthorized-token-not-found", zap.String("user-id", td.UserID))
+		return nil, errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+	}
+
+	return &TokenAsStringValidatorResponse{
+		UserID:  td.UserID,
+		TokenID: td.AccessUUID,
+	}, nil
+
+}
+
+// CreateUser creates a new user based on the passed request if possible, and sends verification
+// email otherwise errors.
+// TODO: Create tests
+func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error) {
+
+	loggr := logger.AcquireFrom(ctx)
+
+	response := &CreateUserResponse{}
+
+	newUser, err := s.UserService.CreateUser(ctx, &user.CreateUserRequest{
+		FirstName: r.FirstName,
+		LastName:  r.LastName,
+		Email:     r.Email,
+	})
+	if err != nil {
+		return response, err
+	}
+
+	response.User = newUser.User
+
+	loggr.Info(fmt.Sprintf("ams/initiate-new-user-verification-email: %s", newUser.User.ID))
+	_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
+		User:       response.User,
+		RequestUrl: r.RequestUrl,
+	})
+	if err != nil {
+		loggr.Error(fmt.Sprintf("ams/error-failed-to-initiate-new-user-verification-email: %s", newUser.User.ID))
+		return response, err
+	}
+
+	auditEvent := audit.UserAccountNew
+	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+		ActorId:    audit.AuditActorIdSystem,
+		Action:     auditEvent,
+		TargetId:   response.User.ID,
+		TargetType: audit.User,
+		Domain:     "accessmanager",
+	})
+
+	if auditErr != nil {
+		loggr.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
+	}
+
+	loggr.Info(fmt.Sprintf("ams/successfully-initiated-new-user-verification-email: %s", newUser.User.ID))
+
+	return response, nil
+}
+
+// CreateInitalLoginToken creates token used to initiate login flow for user passed
+// TODO: Create tests
+func (s *Service) CreateInitalLoginToken(ctx context.Context, user *user.User, isDashboardRequest bool, requestUrl string) (string, error) {
+
+	log := logger.AcquireFrom(ctx)
+
+	tokenDetails, err := s.AuthService.CreateInitalToken(ctx, user)
+	if err != nil {
+		log.Error("unable-to-generate-initiate-login-email-token:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	err = s.EphemeralStore.StoreToken(ctx, tokenDetails.EphemeralUUID, user.ID, tokenDetails.EtTTL)
+	if err != nil {
+		log.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	// Beging email sending process
+	emailTransmission, emailInfo, err := s.EmailerClient.GenerateLoginEmail(&emailer.SendLoginEmailRequest{
+		Email:              user.Email,
+		Token:              tokenDetails.EphemeralToken,
+		IsDashboardRequest: isDashboardRequest,
+		RequestUrl:         requestUrl,
+	})
+	if err != nil {
+		log.Error("unable-to-generate-user-initiate-login-email:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	// Add user id to email info
+	emailInfo.UserId = user.ID
+
+	err = s.EmailerClient.SendEmail(ctx, emailInfo, emailTransmission)
+	if err != nil {
+		log.Error("unable-to-send-initiate-login-email:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	return tokenDetails.EphemeralToken, nil
+}
+
+// CreateEmailVerificationToken create token used to validate email associated to user's account
+// TODO: Create tests
+func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEmailVerificationTokenRequest) (string, error) {
+
+	user := &r.User
+
+	log := logger.AcquireFrom(ctx)
+
+	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, user)
+	if err != nil {
+		log.Error("unable-to-generate-verification-email-token:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	err = s.EphemeralStore.StoreToken(ctx, tokenDetails.EmailVerificationUUID, user.ID, tokenDetails.EvTTL)
+	if err != nil {
+		log.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	// Beging email sending process
+	emailTransmission, emailInfo, err := s.EmailerClient.GenerateVerificationEmail(&emailer.SendVerificationEmailRequest{
+		FirstName:          user.FirstName,
+		LastName:           user.LastName,
+		Email:              user.Email,
+		Token:              tokenDetails.EmailVerificationToken,
+		IsDashboardRequest: r.IsDashboardRequest,
+		RequestUrl:         r.RequestUrl,
+	})
+	if err != nil {
+		log.Error("unable-to-generate-user-verification-email:", zap.String("user-id", user.ID), zap.Error(err))
+		return "", err
+	}
+
+	// Add user id to email info
+	emailInfo.UserId = user.ID
+
+	err = s.EmailerClient.SendEmail(ctx, emailInfo, emailTransmission)
+	if err != nil {
+		log.Error("unable-to-send-verification-email:", zap.String("user-id", user.ID))
+		return "", err
+	}
+
+	return tokenDetails.EmailVerificationToken, nil
+}
+
+// getValidRequestorIP returns the best IP to refernce an requestor by.
+// An assumption is made that the request will always be proxied through Cloudflare
+func getValidRequestorIP(r *http.Request) string {
+
+	headers := r.Header
+
+	_, ok := headers[common.ClouflareForwardingIPAddressHttpHeader]
+
+	if ok {
+		return r.Header.Get(common.ClouflareForwardingIPAddressHttpHeader)
+	}
+
+	return r.RemoteAddr
+}
+
+// isUserLiveStatusActive returns whether user matching passed user ID
+// has an `ACTIVE` user status
+func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) bool {
+	log := logger.AcquireFrom(ctx)
+
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
+	if err != nil {
+		log.Warn("live-status-check-failure", zap.String("user-id", userID), zap.Error(err))
+		return false
+	}
+
+	if persistentUserResponse.User.Status == user.AccountStatusKeyActive {
+		return true
+	}
+
+	return false
+}
+
+// combineUUIDs returns a string containing a combination of <userID>:<tokenUUID>
+func combineUUIDs(userID, tokenUUID string) string {
+	return fmt.Sprintf("%v:%v", userID, tokenUUID)
+}
