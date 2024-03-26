@@ -12,10 +12,7 @@ import (
 
 // content holds our static web server content.
 //
-//>ghatd {{ define "WebDetailEmbeds" }}{{ end }}
-//>ghatd {{ define "ApiDetailEmbeds" }}{{ end }}
-
-// //go:embed internal/web/ui/html/*.tmpl.html internal/web/ui/static/* internal/web/ui/html/pages/*.tmpl.html internal/web/ui/html/partials/**/*.tmpl.html internal/web/ui/html/partials/*.tmpl.html internal/web/ui/html/responses/*.tmpl.html
+// //go:embed internal/web/ui/static/* internal/web/ui/html/*
 var content embed.FS
 
 func main() {
@@ -27,7 +24,7 @@ func main() {
 		Long:  "The entry point of the ghatd application",
 	}
 
-	rootCmd.AddCommand(server.NewCommand(&content))
+	rootCmd.AddCommand(server.NewCommand(&content, "internal/"))
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal("ghatd/error-executing-command-tree")

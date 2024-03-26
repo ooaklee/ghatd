@@ -11,6 +11,9 @@ type DetailConfig struct {
 	// Version is the version of the detail configuration file
 	Version string `json:"version" yaml:"version"`
 
+	// Type is the kind of the detail
+	Type string `json:"type" yaml:"type"`
+
 	// Name is the name of the detail
 	Name string `json:"name" yaml:"name"`
 
