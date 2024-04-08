@@ -14,7 +14,7 @@ import (
 
 // InitialiseClient returns initialised mongo client, or error if unsuccessful
 func (r MongoDbRepository) InitialiseClient(ctx context.Context) (*mongo.Client, error) {
-	client, err := r.clientHandler.GetClient(ctx)
+	client, err := r.ClientHandler.GetClient(ctx)
 	if err != nil {
 		RepositoryLogEntry(ctx, logError, "Error initialising DB client", err)
 		return nil, errors.New(ErrKeyUnableToInitialiseDBClient)

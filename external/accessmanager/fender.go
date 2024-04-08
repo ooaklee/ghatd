@@ -21,7 +21,7 @@ const (
 )
 
 // MapRequestToOauthCallbackRequest maps incoming OauthCallback request to correct struct
-func MapRequestToOauthCallbackRequest(request *http.Request, validator accessmanagerValidator) (*OauthCallbackRequest, error) {
+func MapRequestToOauthCallbackRequest(request *http.Request, validator AccessmanagerValidator) (*OauthCallbackRequest, error) {
 	parsedRequest := &OauthCallbackRequest{}
 
 	providerName, err := getProviderNameFromURI(request)
@@ -42,7 +42,7 @@ func MapRequestToOauthCallbackRequest(request *http.Request, validator accessman
 }
 
 // MapRequestToOauthLoginRequest maps incoming OauthLogin request to correct struct
-func MapRequestToOauthLoginRequest(request *http.Request, validator accessmanagerValidator) (*OauthLoginRequest, error) {
+func MapRequestToOauthLoginRequest(request *http.Request, validator AccessmanagerValidator) (*OauthLoginRequest, error) {
 	parsedRequest := &OauthLoginRequest{}
 	log := logger.AcquireFrom(request.Context())
 
@@ -78,7 +78,7 @@ func MapRequestToOauthLoginRequest(request *http.Request, validator accessmanage
 // MapRequestToGetUserAPITokenThresholdRequest maps incoming GetUserAPITokenThreshold request to correct
 // struct.
 // TODO: Refactor
-func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validator accessmanagerValidator) (*GetUserAPITokenThresholdRequest, error) {
+func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validator AccessmanagerValidator) (*GetUserAPITokenThresholdRequest, error) {
 	parsedRequest := &GetUserAPITokenThresholdRequest{}
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
@@ -107,7 +107,7 @@ func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validato
 // MapRequestToGetSpecificUserAPITokensRequest maps incoming GetSpecificUserAPITokens request to correct
 // struct.
 // TODO: Refactor
-func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validator accessmanagerValidator) (*GetSpecificUserAPITokensRequest, error) {
+func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validator AccessmanagerValidator) (*GetSpecificUserAPITokensRequest, error) {
 	parsedRequest := &GetSpecificUserAPITokensRequest{}
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
@@ -136,7 +136,7 @@ func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validato
 // MapRequestToRevokeUserAPITokenRequest maps incoming ActivateUserAPIToken request to correct
 // struct.
 // TODO: Refactor
-func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator accessmanagerValidator) (*UserAPITokenStatusRequest, error) {
+func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*UserAPITokenStatusRequest, error) {
 	parsedRequest := &UserAPITokenStatusRequest{}
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
@@ -172,7 +172,7 @@ func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator acce
 // MapRequestToActivateUserAPITokenRequest maps incoming ActivateUserAPIToken request to correct
 // struct.
 // TODO: Refactor
-func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator accessmanagerValidator) (*UserAPITokenStatusRequest, error) {
+func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*UserAPITokenStatusRequest, error) {
 	parsedRequest := &UserAPITokenStatusRequest{}
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
@@ -207,7 +207,7 @@ func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator ac
 
 // MapRequestToDeleteUserAPITokenRequest maps incoming DeleteUserAPIToken request to correct
 // struct.
-func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator accessmanagerValidator) (*DeleteUserAPITokenRequest, error) {
+func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*DeleteUserAPITokenRequest, error) {
 	parsedRequest := &DeleteUserAPITokenRequest{}
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
@@ -242,7 +242,7 @@ func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator acce
 
 // MapRequestToCreateUserAPITokenRequest maps incoming CreateUserAPIToken request to correct
 // struct.
-func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator accessmanagerValidator) (*CreateUserAPITokenRequest, error) {
+func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*CreateUserAPITokenRequest, error) {
 	parsedRequest := &CreateUserAPITokenRequest{}
 	log := logger.AcquireFrom(request.Context())
 
@@ -287,7 +287,7 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator acce
 
 // MapRequestToRefreshTokenRequest maps incoming RefreshToken request to correct
 // struct.
-func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName string, validator accessmanagerValidator) (*RefreshTokenRequest, error) {
+func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName string, validator AccessmanagerValidator) (*RefreshTokenRequest, error) {
 	parsedRequest := &RefreshTokenRequest{}
 
 	// TODO: Create a NoAuth Middleware where this can be done
@@ -317,7 +317,7 @@ func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName st
 
 // MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest maps incoming CreateInitalLoginOrVerificationTokenEmail request
 // to correct struct
-func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.Request, validator accessmanagerValidator) (*CreateInitalLoginOrVerificationTokenEmailRequest, error) {
+func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.Request, validator AccessmanagerValidator) (*CreateInitalLoginOrVerificationTokenEmailRequest, error) {
 	parsedRequest := &CreateInitalLoginOrVerificationTokenEmailRequest{}
 	log := logger.AcquireFrom(request.Context())
 
@@ -338,7 +338,7 @@ func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.
 
 // MapRequestToCreateUserRequest maps incoming CreateUser request to correct
 // struct.
-func MapRequestToCreateUserRequest(request *http.Request, validator accessmanagerValidator) (*CreateUserRequest, error) {
+func MapRequestToCreateUserRequest(request *http.Request, validator AccessmanagerValidator) (*CreateUserRequest, error) {
 	parsedRequest := &CreateUserRequest{}
 
 	err := toolbox.DecodeRequestBody(request, parsedRequest)
@@ -355,7 +355,7 @@ func MapRequestToCreateUserRequest(request *http.Request, validator accessmanage
 
 // MapRequestToValidateEmailVerificationCodeRequest maps incoming ValidateEmailVerificationCode request to correct
 // struct.
-func MapRequestToValidateEmailVerificationCodeRequest(request *http.Request, validator accessmanagerValidator) (*ValidateEmailVerificationCodeRequest, error) {
+func MapRequestToValidateEmailVerificationCodeRequest(request *http.Request, validator AccessmanagerValidator) (*ValidateEmailVerificationCodeRequest, error) {
 	parsedRequest := &ValidateEmailVerificationCodeRequest{}
 
 	if token, ok := request.URL.Query()[AccessManagerRequestParameterKeyDefaultToken]; ok {
@@ -373,7 +373,7 @@ func MapRequestToValidateEmailVerificationCodeRequest(request *http.Request, val
 
 // MapRequestToLoginUserRequest maps incoming LoginUser request to correct
 // struct.
-func MapRequestToLoginUserRequest(request *http.Request, validator accessmanagerValidator) (*LoginUserRequest, error) {
+func MapRequestToLoginUserRequest(request *http.Request, validator AccessmanagerValidator) (*LoginUserRequest, error) {
 	parsedRequest := &LoginUserRequest{}
 
 	if token, ok := request.URL.Query()[AccessManagerRequestParameterKeyDefaultToken]; ok {
@@ -390,7 +390,7 @@ func MapRequestToLoginUserRequest(request *http.Request, validator accessmanager
 }
 
 // validateParsedRequest validates based on tags. On failure an error is returned
-func validateParsedRequest(request interface{}, validator accessmanagerValidator) error {
+func validateParsedRequest(request interface{}, validator AccessmanagerValidator) error {
 	return validator.Validate(request)
 }
 

@@ -42,6 +42,9 @@ const (
 	// ApiV1UriPrefix the prefix that will be added to all of the Api's V1 URI routes
 	ApiV1UriPrefix = "/api/v1"
 
+	// WebNextStepsHttpQueryParam is the query parameter used to tell the api where to redirect the user to
+	WebNextStepsHttpQueryParam = "next_step"
+
 	AccessTokenAuthInfoCookieName  string = "access_token"
 	RefreshTokenAuthInfoCookieName string = "refresh_token"
 )

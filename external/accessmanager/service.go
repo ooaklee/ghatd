@@ -48,6 +48,7 @@ type EphemeralStore interface {
 	FetchAuth(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error)
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 	AddRequestCountEntry(ctx context.Context, clientIp string) error
+	DeleteAllTokenExceptedSpecified(ctx context.Context, userId string, exemptionTokenIds []string) error
 }
 
 // EmailerClient expected methods of a valid emailer client
@@ -67,6 +68,8 @@ type AuthService interface {
 	CheckAccessTokenValidityGetDetails(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error)
 	ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error)
 	CreateEmailVerificationToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	ExtractRefreshTokenMetadataByString(ctx context.Context, tokenAsString string) (*auth.TokenRefreshDetails, error)
+	ExtractAccessTokenMetadataByString(ctx context.Context, tokenAsString string) (*auth.TokenAccessDetails, error)
 }
 
 // UserService expected methods of a valid user service
@@ -98,7 +101,7 @@ type Service struct {
 	UserService           UserService
 	ApitokenService       ApitokenService
 	OauthServices         []OauthService
-	staticPlaceholderUuid string
+	StaticPlaceholderUuid string
 }
 
 // NewServiceRequest holds all expected dependencies for an accessmanager service
@@ -139,7 +142,7 @@ func NewService(r *NewServiceRequest) *Service {
 		ApitokenService:       r.ApiTokenService,
 		OauthServices:         r.OauthServices,
 		AuditService:          r.AuditService,
-		staticPlaceholderUuid: r.StaticPlaceholderUuid,
+		StaticPlaceholderUuid: r.StaticPlaceholderUuid,
 	}
 }
 
@@ -809,7 +812,7 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (strin
 			return "", ephErr
 		}
 
-		return s.staticPlaceholderUuid, nil
+		return s.StaticPlaceholderUuid, nil
 	}
 
 	if err != nil {

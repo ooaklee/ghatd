@@ -10,6 +10,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
 )
 
@@ -49,7 +50,7 @@ func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*Token
 	var err error
 
 	td := &TokenDetails{}
-	td.EtExpires = generateTimeOfExpiryAsSeconds(initialTokenDefaultTTL)
+	td.EtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(initialTokenDefaultTTL)
 	td.EtTTL = getTokenTimeToLive(td.EtExpires)
 	td.GenerateEphemeralUUID()
 
@@ -75,7 +76,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 	var err error
 
 	td := &TokenDetails{}
-	td.EvExpires = generateTimeOfExpiryAsSeconds(emailVerificationTokenDefaultTTL)
+	td.EvExpires = toolbox.GenerateTimeOfExpiryAsSeconds(emailVerificationTokenDefaultTTL)
 	td.EvTTL = getTokenTimeToLive(td.EvExpires)
 	td.GenerateEmailVerificationUUID()
 
@@ -103,9 +104,9 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 	var err error
 
 	td := &TokenDetails{}
-	td.AtExpires = generateTimeOfExpiryAsSeconds(accesstokenDefaultTTL)
+	td.AtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(accesstokenDefaultTTL)
 	td.AtTTL = getTokenTimeToLive(td.AtExpires)
-	td.RtExpires = generateTimeOfExpiryAsSeconds(refreshtokenDefaultTTL)
+	td.RtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(refreshtokenDefaultTTL)
 	td.RtTTL = getTokenTimeToLive(td.RtExpires)
 	td.GenerateRefreshUUID().GenerateAccessUUID()
 
@@ -192,6 +193,33 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 	return token, nil
 }
 
+// ParseRefreshTokenFromString parse string into token if valid, sure that the token is correctly signed.
+// Makes sure that the token method conform to "SigningMethodHMAC"
+// TODO: Create tests
+func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
+	log := logger.AcquireFrom(ctx)
+
+	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			log.Error("unexpected-signing-method:", zap.Any("method-used", token.Header[tokenHeaderKeyAlg]))
+			return nil, errors.New(ErrKeyUnauthorizedTokenUnexpectedSigningMethod)
+		}
+		return []byte(s.refreshTokenSecret), nil
+	})
+	if err != nil {
+		switch err.Error() {
+		case "Token is expired":
+			return nil, errors.New(ErrKeyUnauthorizedParsedStringTokenExpired)
+		case "token contains an invalid number of segments":
+			return nil, errors.New(ErrKeyUnauthorizedMalformattedToken)
+		default:
+			log.Error("unknown-parsing-error:", zap.Error(err))
+			return nil, errors.New(ErrKeyUnauthorizedParsedStringUnknown)
+		}
+	}
+	return token, nil
+}
+
 // CheckTokenIsValid confirms if the token has expired/ is still
 // used
 // TODO: Create tests
@@ -217,6 +245,28 @@ func (s *Service) ExtractTokenMetadata(ctx context.Context, r *http.Request) (*T
 
 	return s.CheckAccessTokenValidityGetDetails(ctx, token)
 
+}
+
+// ExtractRefreshTokenMetadataByString retrieves refresh tokens
+// TODO: Create tests
+func (s *Service) ExtractRefreshTokenMetadataByString(ctx context.Context, tokenAsString string) (*TokenRefreshDetails, error) {
+	token, err := s.ParseRefreshTokenFromString(ctx, tokenAsString)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetRefreshTokenUUID(ctx, token)
+}
+
+// ExtractAccessTokenMetadataByString retrieves Access tokens
+// TODO: Create tests
+func (s *Service) ExtractAccessTokenMetadataByString(ctx context.Context, tokenAsString string) (*TokenAccessDetails, error) {
+	token, err := s.ParseAccessTokenFromString(ctx, tokenAsString)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.CheckAccessTokenValidityGetDetails(ctx, token)
 }
 
 // CheckAccessTokenValidityGetDetails return details of a valid acess token
@@ -320,12 +370,6 @@ func generateHS256Tokens(claims map[string]interface{}) *jwt.Token {
 	}
 
 	return generateTokenWithSigningMethodHS256(tokenClaims)
-}
-
-// generateTimeOfExpiryAsSeconds returns the ToE (Time of expiry) duration as seconds. It is
-// calculated by adding the expected duration to now
-func generateTimeOfExpiryAsSeconds(ttlDuration time.Duration) int64 {
-	return time.Now().Add(ttlDuration).Unix()
 }
 
 // getTokenTimeToLive returns the remaining amount of time of before the

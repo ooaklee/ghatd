@@ -10,8 +10,8 @@ import (
 	"github.com/ooaklee/reply"
 )
 
-// accessmanagerService manages business logic around accessmanager request
-type accessmanagerService interface {
+// AccessmanagerService manages business logic around accessmanager request
+type AccessmanagerService interface {
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 	TokenAsStringValidator(ctx context.Context, r *TokenAsStringValidatorRequest) (*TokenAsStringValidatorResponse, error)
 	CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error)
@@ -30,26 +30,26 @@ type accessmanagerService interface {
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
 }
 
-// accessmanagerValidator expected methods of a valid
-type accessmanagerValidator interface {
+// AccessmanagerValidator expected methods of a valid
+type AccessmanagerValidator interface {
 	Validate(s interface{}) error
 }
 
 // Handler manages accessmanager requests
 type Handler struct {
-	Service                  accessmanagerService
-	Validator                accessmanagerValidator
+	Service                  AccessmanagerService
+	Validator                AccessmanagerValidator
 	errorMaps                []reply.ErrorManifest
 	CookiePrefixAuthToken    string
-	cookiePrefixRefreshToken string
+	CookiePrefixRefreshToken string
 	Environment              string
 	CookieDomain             string
 }
 
 // NewHandlerRequest holds things needed for creating a handler
 type NewHandlerRequest struct {
-	Service                  accessmanagerService
-	Validator                accessmanagerValidator
+	Service                  AccessmanagerService
+	Validator                AccessmanagerValidator
 	ErrorMaps                []reply.ErrorManifest
 	Environment              string
 	CookiePrefixAuthToken    string
@@ -67,7 +67,7 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 		Validator:                r.Validator,
 		errorMaps:                r.ErrorMaps,
 		CookiePrefixAuthToken:    r.CookiePrefixAuthToken,
-		cookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
+		CookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
 		Environment:              r.Environment,
 		CookieDomain:             r.CookieDomain,
 	}
@@ -361,7 +361,7 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 // TODO: Create tests
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
-	request, err := MapRequestToRefreshTokenRequest(r, h.cookiePrefixRefreshToken, h.Validator)
+	request, err := MapRequestToRefreshTokenRequest(r, h.CookiePrefixRefreshToken, h.Validator)
 	if err != nil {
 		h.RemoveAuthCookies(w)
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
@@ -412,6 +412,12 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	h.AddAuthCookies(w, response.AccessToken, response.AccessTokenExpiresAt, response.RefreshToken, response.RefreshTokenExpiresAt)
 	toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, response.AccessTokenExpiresAt, response.RefreshTokenExpiresAt)
+
+	// get next step query param from request if available
+	if nextStepQueryParam := r.URL.Query()[common.WebNextStepsHttpQueryParam]; nextStepQueryParam[0] != "" {
+		http.Redirect(w, r, nextStepQueryParam[0], http.StatusTemporaryRedirect)
+		return
+	}
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
@@ -489,6 +495,12 @@ func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.R
 	h.AddAuthCookies(w, revisions.AccessToken, revisions.AccessTokenExpiresAt, revisions.RefreshToken, revisions.RefreshTokenExpiresAt)
 	toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, revisions.AccessTokenExpiresAt, revisions.RefreshTokenExpiresAt)
 
+	// get next step query param from request if available
+	if nextStepQueryParam := r.URL.Query()[common.WebNextStepsHttpQueryParam]; nextStepQueryParam[0] != "" {
+		http.Redirect(w, r, nextStepQueryParam[0], http.StatusTemporaryRedirect)
+		return
+	}
+
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(revisions.AccessTokenExpiresAt), fmt.Sprint(revisions.RefreshTokenExpiresAt))
 }
@@ -502,13 +514,13 @@ func (h *Handler) GetBaseResponseHandler() *reply.Replier {
 // cookie store regardless of what happens on the platform
 func (h *Handler) RemoveAuthCookies(w http.ResponseWriter) {
 
-	toolbox.RemoveAuthCookies(w, h.Environment, h.CookieDomain, h.CookiePrefixAuthToken, h.cookiePrefixRefreshToken)
+	toolbox.RemoveAuthCookies(w, h.Environment, h.CookieDomain, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken)
 }
 
 // AddAuthCookies is handling adding the cookies to the response
 func (h *Handler) AddAuthCookies(w http.ResponseWriter, accessToken string, accessTokenExpiresAt int64, refressToken string, refressTokenExpiresAt int64) {
 
-	toolbox.AddAuthCookies(w, h.Environment, h.CookieDomain, h.CookiePrefixAuthToken, accessToken, accessTokenExpiresAt, h.cookiePrefixRefreshToken, refressToken, refressTokenExpiresAt)
+	toolbox.AddAuthCookies(w, h.Environment, h.CookieDomain, h.CookiePrefixAuthToken, accessToken, accessTokenExpiresAt, h.CookiePrefixRefreshToken, refressToken, refressTokenExpiresAt)
 }
 
 // RemoveCookiesWithName is handling removing the cookies from the client

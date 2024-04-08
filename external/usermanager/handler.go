@@ -26,11 +26,11 @@ type UsermanagerValidator interface {
 type Handler struct {
 	Service                  UsermanagerService
 	Validator                UsermanagerValidator
-	errorMaps                []reply.ErrorManifest
-	cookiePrefixAuthToken    string
-	cookiePrefixRefreshToken string
-	environment              string
-	cookieDomain             string
+	ErrorMaps                []reply.ErrorManifest
+	CookiePrefixAuthToken    string
+	CookiePrefixRefreshToken string
+	Environment              string
+	CookieDomain             string
 }
 
 // NewHandlerRequest holds things needed for creating a handler
@@ -52,11 +52,11 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 	return &Handler{
 		Service:                  r.Service,
 		Validator:                r.Validator,
-		errorMaps:                r.ErrorMaps,
-		cookiePrefixAuthToken:    r.CookiePrefixAuthToken,
-		cookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
-		environment:              r.Environment,
-		cookieDomain:             r.CookieDomain,
+		ErrorMaps:                r.ErrorMaps,
+		CookiePrefixAuthToken:    r.CookiePrefixAuthToken,
+		CookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
+		Environment:              r.Environment,
+		CookieDomain:             r.CookieDomain,
 	}
 }
 
@@ -158,19 +158,19 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 // GetBaseResponseHandler returns response handler configured with auth error map
 func (h *Handler) GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(h.errorMaps)
+	return reply.NewReplier(h.ErrorMaps)
 }
 
 // RemoveAuthCookies is handling removing the cookies from the client
 // cookie store regardless of what happens on the platform
 func (h *Handler) RemoveAuthCookies(w http.ResponseWriter) {
 
-	toolbox.RemoveAuthCookies(w, h.environment, h.cookieDomain, h.cookiePrefixAuthToken, h.cookiePrefixRefreshToken)
+	toolbox.RemoveAuthCookies(w, h.Environment, h.CookieDomain, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken)
 }
 
 // RemoveCookiesWithName is handling removing the cookies from the client
 // cookie store regardless of what happens on the platform
 func (h *Handler) RemoveCookiesWithName(w http.ResponseWriter, cookieName string) {
 
-	toolbox.RemoveCookiesWithName(w, h.environment, cookieName, h.cookieDomain)
+	toolbox.RemoveCookiesWithName(w, h.Environment, cookieName, h.CookieDomain)
 }

@@ -26,6 +26,22 @@ func ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection,
 	return nil
 }
 
+// ExecuteUpdateManyCommand attempts to match and update document in collection, error on failure
+func ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error {
+
+	var repoCtx = context.Background()
+
+	// NICE_TO_HAVE: Wrap context with observability platform transaction
+
+	_, err := collection.UpdateMany(repoCtx, filter, updateFilter)
+	if err != nil {
+		RepositoryLogEntry(ctx, logError, fmt.Sprintf("match-and-update-many-failure-%s:", resultObjectName), err)
+		return err
+	}
+
+	return nil
+}
+
 // ExecuteUpdateOneCommand attempts to match and update document in collection, error on failure
 func ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error {
 

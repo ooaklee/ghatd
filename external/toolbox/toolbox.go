@@ -19,6 +19,18 @@ import (
 
 const ()
 
+type (
+	// BaseValidator is a base validator
+	BaseValidator interface {
+		Validate(request interface{}) error
+	}
+)
+
+// ValidateParsedRequest validates based on tags. On failure an error is returned
+func ValidateParsedRequest(request interface{}, validator BaseValidator) error {
+	return validator.Validate(request)
+}
+
 // TimeNowUTC returns time as string in RFC3339 format w/o timezone
 func TimeNowUTC() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05.999999999")
@@ -287,12 +299,24 @@ func AddRedirectHeaderTo(w http.ResponseWriter, r *http.Request, targetUrl strin
 // about the security token cookies
 func AddNonSecureAuthInfoCookie(w http.ResponseWriter, cookieDomain, environment string, accessTokenExpiresAt int64, refressTokenExpiresAt int64) {
 
-	accessTokenAuthInfoCookie := http.Cookie{
-		Name:    common.AccessTokenAuthInfoCookieName,
-		Value:   "true",
+	//accesstoken cookie
+	AddNonSecureCookie(w, environment, common.AccessTokenAuthInfoCookieName, "true", cookieDomain, accessTokenExpiresAt)
+
+	//refreshtoken cookie
+	AddNonSecureCookie(w, environment, common.RefreshTokenAuthInfoCookieName, "true", cookieDomain, refressTokenExpiresAt)
+}
+
+// AddNonSecureCookie adds a non-secure cookie to the response.
+// It sets the cookie name, value, domain and expiration time. The environment
+// parameter is used to determine if the cookie should be secure or not.
+func AddNonSecureCookie(w http.ResponseWriter, environment, cookieName, cookieValue, cookieDomain string, cookieExpiresAt int64) {
+
+	nonSecureCookie := http.Cookie{
+		Name:    cookieName,
+		Value:   cookieValue,
 		Domain:  cookieDomain,
 		Path:    "/",
-		Expires: time.Unix(accessTokenExpiresAt, 0),
+		Expires: time.Unix(cookieExpiresAt, 0),
 		Secure: func(env string) bool {
 			return env != "local"
 		}(environment),
@@ -306,27 +330,7 @@ func AddNonSecureAuthInfoCookie(w http.ResponseWriter, cookieDomain, environment
 		}(environment),
 	}
 
-	refreshTokenAuthInfoCookie := http.Cookie{
-		Name:    common.RefreshTokenAuthInfoCookieName,
-		Value:   "true",
-		Domain:  cookieDomain,
-		Path:    "/",
-		Expires: time.Unix(refressTokenExpiresAt, 0),
-		Secure: func(env string) bool {
-			return env != "local"
-		}(environment),
-		SameSite: func(env string) http.SameSite {
-
-			if env != "local" {
-				return http.SameSiteStrictMode
-			}
-			return http.SameSiteLaxMode
-
-		}(environment),
-	}
-
-	http.SetCookie(w, &accessTokenAuthInfoCookie)
-	http.SetCookie(w, &refreshTokenAuthInfoCookie)
+	http.SetCookie(w, &nonSecureCookie)
 }
 
 // RemoveCookiesWithName is handling removing the passed cookie from the client
@@ -452,4 +456,10 @@ func RemoveAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessT
 
 	http.SetCookie(w, &removeAccessAuthcookie)
 	http.SetCookie(w, &removeRefreshAuthcookie)
+}
+
+// GenerateTimeOfExpiryAsSeconds calculates the duration to the Time of
+// Expiry (ToE) in seconds by adding the provided duration to the current time.
+func GenerateTimeOfExpiryAsSeconds(ttlDuration time.Duration) int64 {
+	return time.Now().Add(ttlDuration).Unix()
 }

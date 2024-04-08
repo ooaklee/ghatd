@@ -9,8 +9,8 @@ import (
 	"github.com/ooaklee/ghatd/external/router"
 )
 
-// accessmanagerHandler expected methods for valid accessmanager handler
-type accessmanagerHandler interface {
+// AccessmanagerHandler expected methods for valid accessmanager handler
+type AccessmanagerHandler interface {
 	CreateUser(w http.ResponseWriter, r *http.Request)
 	ValidateEmailVerificationCode(w http.ResponseWriter, r *http.Request)
 	CreateInitalLoginOrVerificationTokenEmail(w http.ResponseWriter, r *http.Request)
@@ -123,7 +123,7 @@ type AttachRoutesRequest struct {
 	Router *router.Router
 
 	// Handler valid accessmanager handler
-	Handler accessmanagerHandler
+	Handler AccessmanagerHandler
 
 	// ActiveOnlyMiddleware middleware used to lock endpoints down to active users only
 	ActiveOnlyMiddleware mux.MiddlewareFunc

@@ -61,9 +61,9 @@ type Config struct {
 	// to long instead of being sent using API
 	ClientSendOutputEnvironment string
 
-	// FrontEndUserVerificationURIPath the path on the front end that will catch and handle token
+	// EmailVerificationFullEndpoint the full endpointthat will catch and handle token
 	// verify actions
-	FrontEndUserVerificationURIPath string
+	EmailVerificationFullEndpoint string
 
 	// DashboardVerificationURIPath the path on the front end that will catch and handle token
 	// verify actions for admins/ dashboard access
@@ -254,7 +254,7 @@ func (c *Client) generateEmailVerificationURL(token string, isDashboardRequest b
 	const requestUrlPrefix string = "&request_url="
 
 	if isDashboardRequest {
-		verificationUrl = fmt.Sprintf(c.generateActionPath(2, isDashboardRequest), c.config.DashboardDomainName, token)
+		verificationUrl = fmt.Sprintf(c.generateActionPath(2, isDashboardRequest), token)
 
 		if requestUrl != "" && strings.Contains(requestUrl, c.config.DashboardDomainName) {
 			verificationUrl += (requestUrlPrefix + requestUrl)
@@ -263,7 +263,7 @@ func (c *Client) generateEmailVerificationURL(token string, isDashboardRequest b
 		return verificationUrl
 	}
 
-	verificationUrl = fmt.Sprintf(c.generateActionPath(2, isDashboardRequest), c.config.FrontEndDomainName, token)
+	verificationUrl = fmt.Sprintf(c.generateActionPath(2, isDashboardRequest), token)
 
 	if requestUrl != "" && strings.Contains(requestUrl, c.config.FrontEndDomainName) {
 		verificationUrl += (requestUrlPrefix + requestUrl)
@@ -281,7 +281,7 @@ func (c *Client) generateLoginURL(token string, isDashboardRequest bool, request
 
 	if isDashboardRequest {
 
-		loginUrl = fmt.Sprintf(c.generateActionPath(1, isDashboardRequest), c.config.DashboardDomainName, token)
+		loginUrl = fmt.Sprintf(c.generateActionPath(1, isDashboardRequest), token)
 
 		if requestUrl != "" && strings.Contains(requestUrl, c.config.DashboardDomainName) {
 			loginUrl += (requestUrlPrefix + requestUrl)
@@ -290,7 +290,7 @@ func (c *Client) generateLoginURL(token string, isDashboardRequest bool, request
 		return loginUrl
 	}
 
-	loginUrl = fmt.Sprintf(c.generateActionPath(1, isDashboardRequest), c.config.FrontEndDomainName, token)
+	loginUrl = fmt.Sprintf(c.generateActionPath(1, isDashboardRequest), token)
 
 	if requestUrl != "" && strings.Contains(requestUrl, c.config.FrontEndDomainName) {
 		loginUrl += (requestUrlPrefix + requestUrl)
@@ -306,10 +306,10 @@ func (c *Client) generateLoginURL(token string, isDashboardRequest bool, request
 // [Type 2]: handles verification actions
 func (c *Client) generateActionPath(verificationType int, isDashboardRequest bool) string {
 	if isDashboardRequest {
-		return "%v" + c.config.DashboardVerificationURIPath + "?type=" + fmt.Sprintf("%d", verificationType) + "&__t=%v"
+		return c.config.EmailVerificationFullEndpoint + "?type=" + fmt.Sprintf("%d", verificationType) + "&__t=%v"
 	}
 
-	return "%v" + c.config.FrontEndUserVerificationURIPath + "?type=" + fmt.Sprintf("%d", verificationType) + "&__t=%v"
+	return c.config.EmailVerificationFullEndpoint + "?type=" + fmt.Sprintf("%d", verificationType) + "&__t=%v"
 }
 
 // send decides whether the email should be logged to standard out or sent via service
