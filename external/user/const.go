@@ -68,10 +68,10 @@ const (
 const (
 	// ResponseMetaKeyUsersPerPage key used to outline the number of users in response requested
 	// per page
-	ResponseMetaKeyUsersPerPage = "users_per_page"
+	ResponseMetaKeyUsersPerPage = "resources_per_page"
 
 	// ResponseMetaKeyTotalUsers key used to outline the number of total user matching filter
-	ResponseMetaKeyTotalUsers = "total_users"
+	ResponseMetaKeyTotalUsers = "total_resources"
 
 	// ResponseMetaKeyTotalPages key used to outline the number pages user can query through
 	ResponseMetaKeyTotalPages = "total_pages"

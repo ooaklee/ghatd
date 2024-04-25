@@ -440,11 +440,12 @@ func (s *Service) GetAPITokensPagination(ctx context.Context, resource []UserAPI
 		resourceToInterfaceSlice = append(resourceToInterfaceSlice, element)
 	}
 
+	// TODO: [URGENT] Update to handle pagination
 	// Call pagination logic
 	paginatedResource, err := toolbox.GetResourcePagination(ctx, &toolbox.GetResourcePaginationRequest{
 		PerPage: perPage,
 		Page:    page,
-	}, resourceToInterfaceSlice)
+	}, resourceToInterfaceSlice, 0)
 
 	if err != nil {
 		return nil, err

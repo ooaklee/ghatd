@@ -29,8 +29,8 @@ type GetUsersRequest struct {
 	// Page specifies the page results should be taken from. Default 1.
 	Page int
 
-	// Random whether random user should be returned
-	Random bool
+	// TotalCount specifies the total count of all users
+	TotalCount int
 
 	// Meta whether response should contain meta information
 	Meta bool

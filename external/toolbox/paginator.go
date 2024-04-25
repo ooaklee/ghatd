@@ -51,20 +51,17 @@ type GetResourcePaginationRequest struct {
 
 // GetResourcePagination returns appropiate pagination response based on request and
 // passed resource slice
-func GetResourcePagination(ctx context.Context, r *GetResourcePaginationRequest, resources []interface{}) (*GetResourcePaginationResponse, error) {
-	var responseSlice []interface{}
+func GetResourcePagination(ctx context.Context, r *GetResourcePaginationRequest, passedResources []interface{}, totalResources int) (*GetResourcePaginationResponse, error) {
 	var err error
 
-	numberOfResources := len(resources)
-
-	totalPage := int(math.Ceil(float64(numberOfResources) / float64(r.PerPage)))
+	totalPage := int(math.Ceil(float64(totalResources) / float64(r.PerPage)))
 
 	// If no resources in collection return empty list
-	if numberOfResources == 0 && r.Page == 1 {
+	if totalResources == 0 && r.Page == 1 {
 		return &GetResourcePaginationResponse{
-			Total:           numberOfResources,
+			Total:           totalResources,
 			TotalPages:      1,
-			Resources:       responseSlice,
+			Resources:       passedResources,
 			Page:            r.Page,
 			ResourcePerPage: r.PerPage,
 		}, nil
@@ -72,50 +69,11 @@ func GetResourcePagination(ctx context.Context, r *GetResourcePaginationRequest,
 		return nil, errors.New(ErrKeyPageOutOfRange)
 	}
 
-	lowerLimit := getLowerLimit(r)
-	upperLimit := getUpperLimit(r, numberOfResources)
-
-	if upperLimit == lowerLimit {
-		responseSlice = resources[lowerLimit:]
-	} else {
-		responseSlice = resources[lowerLimit:upperLimit]
-	}
-
 	return &GetResourcePaginationResponse{
-		Total:           numberOfResources,
+		Total:           totalResources,
 		TotalPages:      totalPage,
-		Resources:       responseSlice,
+		Resources:       passedResources,
 		Page:            r.Page,
 		ResourcePerPage: r.PerPage,
 	}, err
-}
-
-// getLowerLimit returns the point to start of resource array
-func getLowerLimit(r *GetResourcePaginationRequest) int {
-	if r.Page == 1 {
-		return 0
-	}
-
-	return ((r.PerPage * r.Page) - r.PerPage)
-}
-
-// getUpperLimit returns the point to end array from for resource
-func getUpperLimit(r *GetResourcePaginationRequest, lengthOfArray int) int {
-	l := getLowerLimit(r)
-
-	if l == 0 {
-		// Limit to length of array if there are not
-		// enough elements
-		if r.PerPage > lengthOfArray {
-			return (lengthOfArray)
-		}
-		return r.PerPage
-	}
-
-	if (l + r.PerPage) <= (lengthOfArray - 1) {
-		return (l + r.PerPage)
-	}
-
-	return (lengthOfArray)
-
 }

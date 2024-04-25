@@ -40,64 +40,69 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 	}
 
 	tests := []struct {
-		name               string
-		sourceSlice        []int
-		paginationRequest  toolbox.GetResourcePaginationRequest
-		expectedError      error
-		expectedCollection []int
-		expectedTotal      int
-		expectedTotalPages int
+		name                   string
+		sourceSlice            []int
+		paginationRequest      toolbox.GetResourcePaginationRequest
+		totalNumberOfResources int
+		expectedError          error
+		expectedCollection     []int
+		expectedTotal          int
+		expectedTotalPages     int
 
 		expectedResourcePerPage int
 		expectedPage            int
 	}{
 		{
 			name:        "Success - Reported bug",
-			sourceSlice: testSliceSeven,
+			sourceSlice: []int{6, 7},
 			paginationRequest: toolbox.GetResourcePaginationRequest{
 				PerPage: 5,
 				Page:    2,
 			},
-			expectedError:      nil,
-			expectedCollection: []int{6, 7},
-			expectedTotal:      7,
-			expectedTotalPages: 2,
+			totalNumberOfResources: len(testSliceSeven),
+			expectedError:          nil,
+			expectedCollection:     []int{6, 7},
+			expectedTotal:          7,
+			expectedTotalPages:     2,
 		},
 		{
 			name:        "Success - One",
-			sourceSlice: testSlice,
+			sourceSlice: []int{1},
 			paginationRequest: toolbox.GetResourcePaginationRequest{
 				PerPage: 1,
 				Page:    1,
 			},
-			expectedError:      nil,
-			expectedCollection: []int{1},
-			expectedTotal:      10,
-			expectedTotalPages: 10,
+			totalNumberOfResources: len(testSlice),
+			expectedError:          nil,
+			expectedCollection:     []int{1},
+			expectedTotal:          10,
+			expectedTotalPages:     10,
 		},
 		{
 			name:        "Success - One",
-			sourceSlice: testSliceOne,
+			sourceSlice: []int{1},
 			paginationRequest: toolbox.GetResourcePaginationRequest{
 				PerPage: 10,
 				Page:    1,
 			},
-			expectedError:      nil,
-			expectedCollection: []int{1},
-			expectedTotal:      1,
-			expectedTotalPages: 1,
+			totalNumberOfResources: len(testSliceOne),
+			expectedError:          nil,
+			expectedCollection:     []int{1},
+			expectedTotal:          1,
+			expectedTotalPages:     1,
 		},
 		{
 			name:        "Success - 7",
-			sourceSlice: testSlice,
+			sourceSlice: []int{8, 9, 10},
 			paginationRequest: toolbox.GetResourcePaginationRequest{
 				PerPage: 7,
 				Page:    2,
 			},
-			expectedError:      nil,
-			expectedCollection: []int{8, 9, 10},
-			expectedTotal:      10,
-			expectedTotalPages: 2,
+			totalNumberOfResources: len(testSlice),
+			expectedError:          nil,
+			expectedCollection:     []int{8, 9, 10},
+			expectedTotal:          10,
+			expectedTotalPages:     2,
 		},
 		{
 			name:        "Success - 10",
@@ -106,22 +111,24 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 				PerPage: 10,
 				Page:    1,
 			},
-			expectedError:      nil,
-			expectedCollection: testSlice,
-			expectedTotal:      10,
-			expectedTotalPages: 1,
+			totalNumberOfResources: len(testSlice),
+			expectedError:          nil,
+			expectedCollection:     testSlice,
+			expectedTotal:          10,
+			expectedTotalPages:     1,
 		},
 		{
 			name:        "Success - 3",
-			sourceSlice: testSlice,
+			sourceSlice: []int{4, 5, 6},
 			paginationRequest: toolbox.GetResourcePaginationRequest{
 				PerPage: 3,
 				Page:    2,
 			},
-			expectedError:      nil,
-			expectedCollection: []int{4, 5, 6},
-			expectedTotal:      10,
-			expectedTotalPages: 4,
+			totalNumberOfResources: len(testSlice),
+			expectedError:          nil,
+			expectedCollection:     []int{4, 5, 6},
+			expectedTotal:          10,
+			expectedTotalPages:     4,
 		},
 		{
 			name:        "Failure - Out of range",
@@ -143,7 +150,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 				sourceToInterfaceSlice = append(sourceToInterfaceSlice, element)
 			}
 
-			result, err := toolbox.GetResourcePagination(context.Background(), &test.paginationRequest, sourceToInterfaceSlice)
+			result, err := toolbox.GetResourcePagination(context.Background(), &test.paginationRequest, sourceToInterfaceSlice, test.totalNumberOfResources)
 
 			assert.Equal(t, test.expectedError, err)
 

@@ -10,7 +10,6 @@ import (
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/zap"
 )
 
@@ -23,12 +22,13 @@ type AuditService interface {
 type UserRespository interface {
 	CreateUser(ctx context.Context, user *User) (*User, error)
 	GetSampleUser(ctx context.Context) ([]User, error)
-	GetUsers(ctx context.Context, queryFilter bson.D, requestFilter *bson.D) ([]User, error)
+	GetUsers(ctx context.Context, req *GetUsersRequest) ([]User, error)
 	GetUserByID(ctx context.Context, id string) (*User, error)
 	GetUserByNanoId(ctx context.Context, nanoId string) (*User, error)
 	UpdateUser(ctx context.Context, user *User) (*User, error)
 	DeleteUserByID(ctx context.Context, id string) error
 	GetUserByEmail(ctx context.Context, email string, logError bool) (*User, error)
+	GetTotalUsers(ctx context.Context, firstNameFilter, lastNameFilter, emailFilter, status string, onlyAdmin bool) (int64, error)
 }
 
 // Service holds and manages user business logic
@@ -264,7 +264,7 @@ func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetU
 	return response, nil
 }
 
-// GetUsers attempts to create user in repository. Return error if any failures occurs
+// CreateUser attempts to create user in repository. Return error if any failures occurs
 func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error) {
 
 	var isAutoAdminEmail bool
@@ -307,15 +307,19 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 // GetUsers returns the users matching request in repository
 func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error) {
 
-	if r.Random {
-		return s.generateRandomUserResponse(ctx)
+	log := logger.AcquireFrom(ctx)
+
+	// get count of all users
+	totalUsers, err := s.UserRespository.GetTotalUsers(ctx, r.FirstName, r.LastName, r.Email, r.Status, r.IsAdmin)
+	if err != nil {
+		return &GetUsersResponse{}, err
 	}
 
-	sortFilter := s.generateGetUsersOrderSortFilter(r.Order)
+	r.TotalCount = int(totalUsers)
 
-	findQuery := s.generateGetUsersOrderQueryFilter(r)
+	log.Info("total-users-found", zap.Int64("total", totalUsers))
 
-	users, err := s.UserRespository.GetUsers(ctx, findQuery, sortFilter)
+	users, err := s.UserRespository.GetUsers(ctx, r)
 	if err != nil {
 		return &GetUsersResponse{}, err
 	}
@@ -326,7 +330,7 @@ func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersRe
 
 // GetUsersPagination is handling making the call to centralised pagination
 // logic to paginate on passed API Tokens resources
-func (s *Service) GetUsersPagination(ctx context.Context, resource []User, perPage, page int) (*GetUsersPaginationResponse, error) {
+func (s *Service) GetUsersPagination(ctx context.Context, resource []User, perPage, page, totalUsers int) (*GetUsersPaginationResponse, error) {
 
 	var resourceToInterfaceSlice []interface{}
 	castedResources := []User{}
@@ -341,7 +345,7 @@ func (s *Service) GetUsersPagination(ctx context.Context, resource []User, perPa
 	paginatedResource, err := toolbox.GetResourcePagination(ctx, &toolbox.GetResourcePaginationRequest{
 		PerPage: perPage,
 		Page:    page,
-	}, resourceToInterfaceSlice)
+	}, resourceToInterfaceSlice, totalUsers)
 
 	if err != nil {
 		return nil, err
@@ -371,7 +375,7 @@ func (s *Service) GetUsersPagination(ctx context.Context, resource []User, perPa
 // from repository
 func (s *Service) generateGetUsersResponse(ctx context.Context, r *GetUsersRequest, users []User) (*GetUsersResponse, error) {
 
-	paginatedUsers, err := s.GetUsersPagination(ctx, users, r.PerPage, r.Page)
+	paginatedUsers, err := s.GetUsersPagination(ctx, users, r.PerPage, r.Page, r.TotalCount)
 	if err != nil {
 		return &GetUsersResponse{}, err
 	}
@@ -384,79 +388,6 @@ func (s *Service) generateGetUsersResponse(ctx context.Context, r *GetUsersReque
 		UsersPerPage: paginatedUsers.ResourcePerPage,
 	}, nil
 
-}
-
-// generateGetUsersOrderQueryFilter returns filter that describes how users should be
-// filtered
-func (s *Service) generateGetUsersOrderQueryFilter(r *GetUsersRequest) bson.D {
-
-	findQuery := bson.D{}
-
-	if r.FirstName != "" {
-		findQuery = append(findQuery, bson.E{Key: UserRespositoryFieldPathFirstName, Value: bson.M{"$in": []string{normaliseUserNames(r.FirstName)}}})
-	}
-
-	if r.LastName != "" {
-		findQuery = append(findQuery, bson.E{Key: UserRespositoryFieldPathLastName, Value: normaliseUserNames(r.LastName)})
-	}
-
-	if r.Status != "" {
-		findQuery = append(findQuery, bson.E{Key: UserRespositoryFieldPathStatus, Value: bson.M{"$in": []string{toolbox.StringStandardisedToUpper(r.Status)}}})
-	}
-
-	if r.IsAdmin {
-		findQuery = append(findQuery, bson.E{Key: UserRespositoryFieldPathRoles, Value: bson.M{"$in": []string{UserRoleAdmin}}})
-	}
-
-	if r.Email != "" {
-		findQuery = append(findQuery, bson.E{Key: UserRespositoryFieldPathEmail, Value: normaliseUserEmail(r.Email)})
-	}
-
-	return findQuery
-
-}
-
-// generateGetUsersOrderSortFilter returns filter that describes how users should be sorted
-// when returned from repository
-func (s *Service) generateGetUsersOrderSortFilter(orderBy string) *bson.D {
-	sortFilter := bson.D{}
-
-	switch orderBy {
-	case GetUserOrderCreatedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathCreatedAt, Value: 1})
-	case GetUserOrderCreatedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathCreatedAt, Value: -1})
-
-	case GetUserOrderLastLoginAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathLastLoginAt, Value: 1})
-	case GetUserOrderLastLoginAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathLastLoginAt, Value: -1})
-
-	case GetUserOrderActivatedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathActivatedAt, Value: 1})
-	case GetUserOrderActivatedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathActivatedAt, Value: -1})
-
-	case GetUserOrderStatusChangedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathStatusChangedAt, Value: 1})
-	case GetUserOrderStatusChangedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathStatusChangedAt, Value: -1})
-
-	case GetUserOrderLastFreshLoginAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathLastFreshLoginAt, Value: 1})
-	case GetUserOrderLastFreshLoginAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathLastFreshLoginAt, Value: -1})
-
-	case GetUserOrderEmailVerifiedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathVerifiedAt, Value: 1})
-	case GetUserOrderEmailVerifiedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathVerifiedAt, Value: -1})
-
-	default:
-		sortFilter = append(sortFilter, bson.E{Key: UserRespositoryFieldPathCreatedAt, Value: -1})
-	}
-
-	return &sortFilter
 }
 
 // generateRandomUserResponse returns a random user from repository

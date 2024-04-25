@@ -414,7 +414,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, response.AccessTokenExpiresAt, response.RefreshTokenExpiresAt)
 
 	// get next step query param from request if available
-	if nextStepQueryParam := r.URL.Query()[common.WebNextStepsHttpQueryParam]; nextStepQueryParam[0] != "" {
+	if nextStepQueryParam := r.URL.Query()[common.WebNextStepsHttpQueryParam]; len(nextStepQueryParam) > 0 && nextStepQueryParam[0] != "" {
 		http.Redirect(w, r, nextStepQueryParam[0], http.StatusTemporaryRedirect)
 		return
 	}

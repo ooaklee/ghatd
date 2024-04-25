@@ -18,9 +18,6 @@ const (
 	GetUsersRequestParameterKeyDefaultPage   = "page"
 	GetUsersRequestParameterValueDefaultPage = 1
 
-	GetUsersRequestParameterKeyDefaultRandom   = "rand"
-	GetUsersRequestParameterValueDefaultRandom = false
-
 	GetUsersRequestParameterKeyDefaultMeta   = "meta"
 	GetUsersRequestParameterValueDefaultMeta = false
 
@@ -99,12 +96,6 @@ func MapRequestToGetUsersRequest(request *http.Request, validator UserValidator)
 		parsedRequest.Page = toolbox.ConvertStringToIntOrDefault(numberOfPages[0], GetUsersRequestParameterValueDefaultPage)
 	} else {
 		parsedRequest.Page = GetUsersRequestParameterValueDefaultPage
-	}
-
-	if randomUser, ok := request.URL.Query()[GetUsersRequestParameterKeyDefaultRandom]; ok {
-		parsedRequest.Random = toolbox.ConvertToBoolean(randomUser[0])
-	} else {
-		parsedRequest.Random = GetUsersRequestParameterValueDefaultRandom
 	}
 
 	if responseMeta, ok := request.URL.Query()[GetUsersRequestParameterKeyDefaultMeta]; ok {

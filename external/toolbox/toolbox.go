@@ -15,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ooaklee/ghatd/external/common"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const ()
@@ -139,6 +141,16 @@ func StringConvertToKebabCase(text string) (string, error) {
 	cleanedText = strings.ReplaceAll(cleanedText, " ", "-")
 
 	return cleanedText, nil
+}
+
+// StringConvertToTitleCase returns a string in title case format
+func StringConvertToTitleCase(text string) string {
+	s := StringRemoveMultiSpace(strings.TrimSpace(text))
+
+	caser := cases.Title(language.English)
+	stringAsTitle := caser.String(s)
+
+	return stringAsTitle
 }
 
 // DecodeRequestBody attempts to decode request to object. returns error on failure
