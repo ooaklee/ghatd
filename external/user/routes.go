@@ -8,8 +8,8 @@ import (
 	"github.com/ooaklee/ghatd/external/router"
 )
 
-// userHandler expected methods for valid user handler
-type userHandler interface {
+// UserHandler expected methods for valid user handler
+type UserHandler interface {
 	CreateUser(w http.ResponseWriter, r *http.Request)
 	GetUsers(w http.ResponseWriter, r *http.Request)
 	GetUserByID(w http.ResponseWriter, r *http.Request)
@@ -43,7 +43,7 @@ type AttachRoutesRequest struct {
 	Router *router.Router
 
 	// Handler valid user handler
-	Handler userHandler
+	Handler UserHandler
 
 	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
 	AdminOnlyMiddleware mux.MiddlewareFunc
