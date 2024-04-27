@@ -13,4 +13,5 @@ var ApitokenErrorMap = map[string]reply.ErrorManifestItem{
 	ErrKeyUnableToFindRequiredHeaders:  {Title: "Unauthorized", Code: "202", StatusCode: 401},
 	ErrKeyRequiredUserIDMissing:        {Title: "Bad Request", Detail: "Requirements unsatisfied", StatusCode: 400},
 	ErrKeyInvalidAPIFormatDetected:     {Title: "Bad Request", Code: "203", Detail: "Malformed API token provided", StatusCode: 400},
+	ErrKeyResourceNotFound:             {Title: "Not Found", Code: "204", StatusCode: 404},
 }

@@ -77,6 +77,29 @@ type RefreshTokenResponse struct {
 type GetSpecificUserAPITokensResponse struct {
 	// UserAPITokens represents the apitokens owned by user
 	UserAPITokens []apitoken.UserAPIToken
+
+	// Total - number of users found
+	Total int
+
+	// TotalPages pages available
+	TotalPages int
+
+	// ResourcesPerPage the number of resources returned per page
+	ResourcesPerPage int
+
+	// Page specifies the page results should be taken from. Default 1.
+	Page int
+}
+
+func (g *GetSpecificUserAPITokensResponse) GetMetaData() map[string]interface{} {
+	var responseMap = make(map[string]interface{})
+
+	responseMap["resources_per_page"] = g.ResourcesPerPage
+	responseMap["total_resources"] = g.Total
+	responseMap["total_pages"] = g.TotalPages
+	responseMap["page"] = g.Page
+
+	return responseMap
 }
 
 // GetUserAPITokenThresholdResponse holds the data returned to

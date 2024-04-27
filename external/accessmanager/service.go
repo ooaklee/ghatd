@@ -426,40 +426,27 @@ func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthL
 func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error) {
 
 	userApiTokenResponse, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
-		ID: r.UserID,
+		ID:            r.UserID,
+		Order:         r.Order,
+		PerPage:       r.PerPage,
+		Page:          r.Page,
+		Description:   r.Description,
+		Status:        r.Status,
+		Meta:          r.Meta,
+		OnlyEphemeral: r.OnlyEphemeral,
+		OnlyPermanent: r.OnlyPermanent,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// make sure we're only returning perm tokens
-	// TODO: revisit to update request to be adjustable
-	userPermanentTokens, _ := s.getUserApiTokensByType(userApiTokenResponse.APITokens)
-
 	return &GetSpecificUserAPITokensResponse{
-		UserAPITokens: userPermanentTokens,
+		UserAPITokens:    userApiTokenResponse.APITokens,
+		Total:            userApiTokenResponse.Total,
+		TotalPages:       userApiTokenResponse.TotalPages,
+		Page:             userApiTokenResponse.Page,
+		ResourcesPerPage: userApiTokenResponse.APITokensPerPage,
 	}, nil
-}
-
-// GetSpecificEphemeralUserAPITokens retrieves ephemeral API tokens for a specific user
-// TODO: Create tests
-func (s *Service) GetSpecificEphemeralUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error) {
-
-	userApiTokenResponse, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
-		ID: r.UserID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// make sure we're only returning perm tokens
-	// TODO: revisit to update request to be adjustable
-	_, userEphemeralTokens := s.getUserApiTokensByType(userApiTokenResponse.APITokens)
-
-	return &GetSpecificUserAPITokensResponse{
-		UserAPITokens: userEphemeralTokens,
-	}, nil
-
 }
 
 // GetUserAPITokenThreshold retrieves the thresholds applied to the user r. API tokens
@@ -665,30 +652,6 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	}
 
 	return userPermanentToken, userEphemeralToken, nil
-}
-
-// getUserApiTokensByType is handling getting user's token and returning
-// how man
-func (s *Service) getUserApiTokensByType(userTokens []apitoken.UserAPIToken) ([]apitoken.UserAPIToken, []apitoken.UserAPIToken) {
-
-	var (
-		userPermanentTokens []apitoken.UserAPIToken = []apitoken.UserAPIToken{}
-		userEphemeralTokens []apitoken.UserAPIToken = []apitoken.UserAPIToken{}
-	)
-
-	// get token types
-	for _, apiToken := range userTokens {
-
-		if apiToken.IsShortLivedToken() {
-			userEphemeralTokens = append(userEphemeralTokens, apiToken)
-			continue
-		}
-
-		userPermanentTokens = append(userPermanentTokens, apiToken)
-		continue
-	}
-
-	return userPermanentTokens, userEphemeralTokens
 }
 
 // MiddlewareValidAPITokenRequired handles the business/ cross logic of ensuring

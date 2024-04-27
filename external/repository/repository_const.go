@@ -1,6 +1,12 @@
 package repository
 
 const (
+	// MongoRegexStringFormat holds format string for case insensitive regex mapping
+	// in mongo queries
+	MongoRegexStringFormat = ".*%s.*"
+)
+
+const (
 	logWarn  = "WARN"
 	logError = "ERROR"
 )

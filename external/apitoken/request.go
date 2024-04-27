@@ -14,11 +14,17 @@ type GetAPITokensRequest struct {
 	// Page specifies the page results should be taken from. Default 1.
 	Page int
 
+	// TotalCount specifies the total count of all apitokens
+	TotalCount int
+
 	// Meta whether response should contain meta information
 	Meta bool
 
 	// CreatedByID specifies the user ID results should be linked / matched to
 	CreatedByID string
+
+	// CreatedByNanoId specifies the user's nano ID results should be linked / matched to
+	CreatedByNanoId string
 
 	// Description specifies the description results should be like / match
 	Description string
@@ -26,6 +32,12 @@ type GetAPITokensRequest struct {
 	// Status specified the statuses apitokens in response must be
 	// Valid options: active, revoked
 	Status string
+
+	// OnlyEphemeral specifies if only ephemeral tokens should be returned
+	OnlyEphemeral bool
+
+	// OnlyPermanent specifies if only permanent tokens should be returned
+	OnlyPermanent bool
 }
 
 // GetAPITokenRequest holds everything needed for GetAPIToken request
@@ -46,6 +58,32 @@ type GetAPITokensForRequest struct {
 
 	// NanoId is the User's nanoId
 	NanoId string
+
+	// Total number of apitokens to return per page, if available. Default 25.
+	// Accepts anything between 1 and 100
+	PerPage int
+
+	// Page specifies the page results should be taken from. Default 1.
+	Page int
+
+	// TotalCount specifies the total count of all apitokens
+	TotalCount int
+
+	// Meta whether response should contain meta information
+	Meta bool
+
+	// Description specifies the description results should be like / match
+	Description string
+
+	// Status specified the statuses apitokens in response must be
+	// Valid options: active, revoked
+	Status string
+
+	// OnlyEphemeral specifies if only ephemeral tokens should be returned
+	OnlyEphemeral bool
+
+	// OnlyPermanent specifies if only permanent tokens should be returned
+	OnlyPermanent bool
 }
 
 // DeleteAPITokenRequest holds everything needed for DeleteAPIToken request
@@ -116,4 +154,8 @@ type GetTotalApiTokensRequest struct {
 	OnlyEphemeral bool
 
 	OnlyPermanent bool
+
+	Description string
+
+	Status string
 }

@@ -12,21 +12,18 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.uber.org/zap"
 )
 
 // ApitokenRespository expected methods of a valid apitoken repository
 type ApitokenRespository interface {
-	GetAPITokens(ctx context.Context, queryFilter bson.D, requestFilter *bson.D) ([]UserAPIToken, error)
+	GetAPITokens(ctx context.Context, req *GetAPITokensRequest) ([]UserAPIToken, error)
 	GetAPITokenByID(ctx context.Context, apiTokenID string) (*UserAPIToken, error)
 	// DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error
 	UpdateAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
 	CreateUserAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
-	GetAPITokensFor(ctx context.Context, userID string, requestFilter *bson.D) ([]UserAPIToken, error)
-	GetAPITokensForNanoId(ctx context.Context, userNanoId string, requestFilter *bson.D) ([]UserAPIToken, error)
 	DeleteResourcesByOwnerId(ctx context.Context, resourceType interface{}, ownerId string) error
-	GetTotalApiTokens(ctx context.Context, userId string, to string, from string, onlyEphemeral bool, onlyPermanent bool) (int64, error)
+	GetTotalApiTokens(ctx context.Context, userId, userNanoId, descriptionFilter, statusFilter, to, from string, onlyEphemeral bool, onlyPermanent bool) (int64, error)
 }
 
 // Service holds and manages apitoken business logic
@@ -44,7 +41,7 @@ func NewService(ApitokenRespository ApitokenRespository) *Service {
 // GetTotalApiTokens gets the total on api tokens based on passed values
 func (s *Service) GetTotalApiTokens(ctx context.Context, r *GetTotalApiTokensRequest) (int64, error) {
 
-	return s.ApitokenRespository.GetTotalApiTokens(ctx, r.UserId, r.To, r.From, r.OnlyEphemeral, r.OnlyPermanent)
+	return s.ApitokenRespository.GetTotalApiTokens(ctx, r.UserId, "", r.Description, r.Status, r.To, r.From, r.OnlyEphemeral, r.OnlyPermanent)
 }
 
 // DeleteApiTokensByOwnerId deletes the histories that belong to matching user id
@@ -181,7 +178,9 @@ func (s *Service) UpdateAPITokenLastUsedAt(ctx context.Context, r *UpdateAPIToke
 
 	var targetTokenID string
 
-	tokens, err := s.ApitokenRespository.GetAPITokensFor(ctx, r.ClientID, &bson.D{})
+	tokens, err := s.ApitokenRespository.GetAPITokens(ctx, &GetAPITokensRequest{
+		CreatedByID: r.ClientID,
+	})
 	if err != nil {
 		return err
 	}
@@ -248,39 +247,48 @@ func (s *Service) DeleteAPIToken(ctx context.Context, r *DeleteAPITokenRequest) 
 // TODO: Create tests
 func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest) (*GetAPITokensForResponse, error) {
 
-	var apitokens []UserAPIToken
 	var err error
 
-	sortFilter := s.generateGetAPITokensOrderSortFilter(r.Order)
+	log := logger.AcquireFrom(ctx)
 
-	// If a full User Id is passed, use that to do check
-	if r.ID != "" {
-		apitokens, err = s.ApitokenRespository.GetAPITokensFor(ctx, r.ID, sortFilter)
-		if err != nil {
-			return &GetAPITokensForResponse{
-				APITokens: []UserAPIToken{},
-			}, err
-		}
+	// get count of all of the user's api tokens
+	totalApiTokens, err := s.ApitokenRespository.GetTotalApiTokens(ctx, r.ID, r.NanoId, r.Description, r.Status, "", "", r.OnlyEphemeral, r.OnlyPermanent)
+	if err != nil {
+		return &GetAPITokensForResponse{}, err
 	}
 
-	// If a user's Id is passed, use that to do check
-	if r.NanoId != "" {
-		apitokens, err = s.ApitokenRespository.GetAPITokensForNanoId(ctx, r.NanoId, sortFilter)
-		if err != nil {
-			return &GetAPITokensForResponse{
-				APITokens: []UserAPIToken{},
-			}, err
-		}
+	r.TotalCount = int(totalApiTokens)
+
+	log.Info("total-api-tokens-for-user-found", zap.Int64("total", totalApiTokens))
+
+	apitokens, err := s.ApitokenRespository.GetAPITokens(ctx, &GetAPITokensRequest{
+		Order:           r.Order,
+		PerPage:         r.PerPage,
+		Page:            r.Page,
+		Description:     r.Description,
+		Status:          toolbox.StringStandardisedToUpper(r.Status),
+		CreatedByID:     r.ID,
+		CreatedByNanoId: r.NanoId,
+		OnlyEphemeral:   r.OnlyEphemeral,
+		OnlyPermanent:   r.OnlyPermanent,
+	})
+	if err != nil {
+		return &GetAPITokensForResponse{
+			APITokens: []UserAPIToken{},
+		}, err
 	}
 
 	// Analyse token ttl information
-	apitokens = s.analyseTokenTTLData(ctx, &AnalyseTokenTTLDataRequest{
+	analysedApitokens := s.analyseTokenTTLData(ctx, &AnalyseTokenTTLDataRequest{
 		ApiTokens: apitokens,
 	})
 
-	return &GetAPITokensForResponse{
-		APITokens: apitokens,
-	}, nil
+	// if the anaylsed tokens differs from the original fetched amount, remove difference from total
+	if len(analysedApitokens) < len(apitokens) {
+		r.TotalCount = (r.TotalCount - (len(apitokens) - len(analysedApitokens)))
+	}
+
+	return s.generateGetAPITokensForResponse(ctx, r, analysedApitokens)
 }
 
 // GetAPIToken returns the API Token matching the ID stored in repository
@@ -310,21 +318,34 @@ func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetA
 // TODO: Create tests
 func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*GetAPITokensResponse, error) {
 
-	sortFilter := s.generateGetAPITokensOrderSortFilter(r.Order)
+	log := logger.AcquireFrom(ctx)
 
-	findQuery := s.generateGetAPITokensOrderQueryFilter(r)
+	// get count of all of the user's api tokens
+	totalApiTokens, err := s.ApitokenRespository.GetTotalApiTokens(ctx, r.CreatedByID, r.CreatedByNanoId, r.Description, r.Status, "", "", false, false)
+	if err != nil {
+		return &GetAPITokensResponse{}, err
+	}
 
-	apitokens, err := s.ApitokenRespository.GetAPITokens(ctx, findQuery, sortFilter)
+	r.TotalCount = int(totalApiTokens)
+
+	log.Info("total-api-tokens-found", zap.Int64("total", totalApiTokens))
+
+	apitokens, err := s.ApitokenRespository.GetAPITokens(ctx, r)
 	if err != nil {
 		return &GetAPITokensResponse{}, err
 	}
 
 	// Analyse token ttl information
-	apitokens = s.analyseTokenTTLData(ctx, &AnalyseTokenTTLDataRequest{
+	analysedApitokens := s.analyseTokenTTLData(ctx, &AnalyseTokenTTLDataRequest{
 		ApiTokens: apitokens,
 	})
 
-	return s.generateGetAPITokensResponse(ctx, r, apitokens)
+	// if the anaylsed tokens differs from the original fetched amount, remove difference from total
+	if len(analysedApitokens) < len(apitokens) {
+		r.TotalCount = (r.TotalCount - (len(apitokens) - len(analysedApitokens)))
+	}
+
+	return s.generateGetAPITokensResponse(ctx, r, analysedApitokens)
 }
 
 // analyseTokenTTLData is checking the passed tokens to ensure they haven't
@@ -427,9 +448,46 @@ func (s *Service) updateAPIToken(ctx context.Context, r *updateAPITokenRequest) 
 	}, nil
 }
 
+// generateGetAPITokensResponse returns appropiate response based on client request & apitokens pulled
+// from repository
+func (s *Service) generateGetAPITokensResponse(ctx context.Context, r *GetAPITokensRequest, apitokens []UserAPIToken) (*GetAPITokensResponse, error) {
+
+	paginatedApiTokens, err := s.GetAPITokensPagination(ctx, apitokens, r.PerPage, r.Page, r.TotalCount)
+	if err != nil {
+		return &GetAPITokensResponse{}, err
+	}
+
+	return &GetAPITokensResponse{
+		Total:            paginatedApiTokens.Total,
+		TotalPages:       paginatedApiTokens.TotalPages,
+		APITokens:        paginatedApiTokens.Resources,
+		Page:             paginatedApiTokens.Page,
+		APITokensPerPage: paginatedApiTokens.ResourcePerPage,
+	}, nil
+}
+
+// generateGetAPITokensForResponse returns appropiate response based on client request & users pulled
+// from repository
+func (s *Service) generateGetAPITokensForResponse(ctx context.Context, r *GetAPITokensForRequest, apitokens []UserAPIToken) (*GetAPITokensForResponse, error) {
+
+	paginatedApiTokens, err := s.GetAPITokensPagination(ctx, apitokens, r.PerPage, r.Page, r.TotalCount)
+	if err != nil {
+		return &GetAPITokensForResponse{}, err
+	}
+
+	return &GetAPITokensForResponse{
+		Total:            paginatedApiTokens.Total,
+		TotalPages:       paginatedApiTokens.TotalPages,
+		APITokens:        paginatedApiTokens.Resources,
+		Page:             paginatedApiTokens.Page,
+		APITokensPerPage: paginatedApiTokens.ResourcePerPage,
+	}, nil
+
+}
+
 // GetAPITokensPagination is handling making the call to centralised pagination
 // logic to paginate on passed API Tokens resources
-func (s *Service) GetAPITokensPagination(ctx context.Context, resource []UserAPIToken, perPage, page int) (*GetAPITokensPaginationResponse, error) {
+func (s *Service) GetAPITokensPagination(ctx context.Context, resource []UserAPIToken, perPage, page, totalApiTokens int) (*GetAPITokensPaginationResponse, error) {
 
 	var resourceToInterfaceSlice []interface{}
 	castedResources := []UserAPIToken{}
@@ -440,12 +498,11 @@ func (s *Service) GetAPITokensPagination(ctx context.Context, resource []UserAPI
 		resourceToInterfaceSlice = append(resourceToInterfaceSlice, element)
 	}
 
-	// TODO: [URGENT] Update to handle pagination
 	// Call pagination logic
 	paginatedResource, err := toolbox.GetResourcePagination(ctx, &toolbox.GetResourcePaginationRequest{
 		PerPage: perPage,
 		Page:    page,
-	}, resourceToInterfaceSlice, 0)
+	}, resourceToInterfaceSlice, totalApiTokens)
 
 	if err != nil {
 		return nil, err
@@ -469,72 +526,4 @@ func (s *Service) GetAPITokensPagination(ctx context.Context, resource []UserAPI
 		Page:            paginatedResource.Page,
 	}, nil
 
-}
-
-// generateGetAPITokensResponse returns appropiate response based on client request & apitokens pulled
-// from repository
-func (s *Service) generateGetAPITokensResponse(ctx context.Context, r *GetAPITokensRequest, apitokens []UserAPIToken) (*GetAPITokensResponse, error) {
-
-	paginatedAPITokens, err := s.GetAPITokensPagination(ctx, apitokens, r.PerPage, r.Page)
-	if err != nil {
-		return &GetAPITokensResponse{}, err
-	}
-
-	return &GetAPITokensResponse{
-		Total:            paginatedAPITokens.Total,
-		TotalPages:       paginatedAPITokens.TotalPages,
-		APITokens:        paginatedAPITokens.Resources,
-		Page:             paginatedAPITokens.Page,
-		APITokensPerPage: paginatedAPITokens.ResourcePerPage,
-	}, nil
-}
-
-// generateGetAPITokensOrderSortFilter returns filter that describes how apitokens should be sorted
-// when returned from repository
-func (s *Service) generateGetAPITokensOrderSortFilter(orderBy string) *bson.D {
-
-	sortFilter := bson.D{}
-
-	switch orderBy {
-	case GetAPITokenOrderCreatedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathCreatedAt, Value: 1})
-	case GetAPITokenOrderCreatedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathCreatedAt, Value: -1})
-
-	case GetAPITokenOrderLastUsedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathLastUsedAt, Value: 1})
-	case GetAPITokenOrderLastUsedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathLastUsedAt, Value: -1})
-
-	case GetAPITokenOrderUpdatedAtAsc:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathUpdatedAt, Value: 1})
-	case GetAPITokenOrderUpdatedAtDesc:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathUpdatedAt, Value: -1})
-
-	default:
-		sortFilter = append(sortFilter, bson.E{Key: APITokenRespositoryFieldPathCreatedAt, Value: -1})
-	}
-
-	return &sortFilter
-}
-
-// generateGetAPITokensOrderQueryFilter returns filter that describes how apitokens should be
-// filtered
-func (s *Service) generateGetAPITokensOrderQueryFilter(r *GetAPITokensRequest) bson.D {
-
-	findQuery := bson.D{}
-
-	if r.Description != "" {
-		findQuery = append(findQuery, bson.E{Key: APITokenRespositoryFieldPathDescription, Value: bson.M{"$in": []string{r.Description}}})
-	}
-
-	if r.Status != "" {
-		findQuery = append(findQuery, bson.E{Key: APITokenRespositoryFieldPathStatus, Value: bson.M{"$in": []string{toolbox.StringStandardisedToUpper(r.Status)}}})
-	}
-
-	if r.CreatedByID != "" {
-		findQuery = append(findQuery, bson.E{Key: APITokenRespositoryFieldPathCreatedByID, Value: r.CreatedByID})
-	}
-
-	return findQuery
 }

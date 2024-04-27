@@ -41,6 +41,9 @@ const (
 	// ErrKeyInvalidAPIFormatDetected [code: 203] is returned when expected header for api token is
 	// not in the expected none empty format (2 sections)
 	ErrKeyInvalidAPIFormatDetected string = "InvalidAPIFormatDetected"
+
+	// ErrKeyResourceNotFound is returned when requested ApiToken resource is not found in repository
+	ErrKeyResourceNotFound string = "ResourceNotFound"
 )
 
 const (

@@ -131,6 +131,37 @@ type UserAPITokenStatusRequest struct {
 type GetSpecificUserAPITokensRequest struct {
 	// UserID the user ID the tokens belongs to
 	UserID string
+
+	// Order defines how should response be sorted. Default: newest -> oldest (created_at_desc)
+	// Valid options: created_at_asc, created_at_desc, last_used_at_asc, last_used_at_desc
+	// updated_at_asc, updated_at_desc
+	Order string
+
+	// Total number of apitokens to return per page, if available. Default 25.
+	// Accepts anything between 1 and 100
+	PerPage int
+
+	// Page specifies the page results should be taken from. Default 1.
+	Page int
+
+	// TotalCount specifies the total count of all apitokens
+	TotalCount int
+
+	// Meta whether response should contain meta information
+	Meta bool
+
+	// Description specifies the description results should be like / match
+	Description string
+
+	// Status specified the statuses apitokens in response must be
+	// Valid options: active, revoked
+	Status string
+
+	// OnlyEphemeral specifies if only ephemeral tokens should be returned
+	OnlyEphemeral bool
+
+	// OnlyPermanent specifies if only permanent tokens should be returned
+	OnlyPermanent bool
 }
 
 // GetUserAPITokenThresholdRequest holds the data required for getting

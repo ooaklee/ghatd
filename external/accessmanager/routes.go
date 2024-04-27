@@ -23,7 +23,6 @@ type AccessmanagerHandler interface {
 	RevokeUserAPIToken(w http.ResponseWriter, r *http.Request)
 	GetSpecificUserAPITokens(w http.ResponseWriter, r *http.Request)
 	GetUserAPITokenThreshold(w http.ResponseWriter, r *http.Request)
-	GetSpecificEphemeralUserAPITokens(w http.ResponseWriter, r *http.Request)
 	OauthLogin(w http.ResponseWriter, r *http.Request)
 	OauthCallback(w http.ResponseWriter, r *http.Request)
 }
@@ -68,9 +67,6 @@ const (
 	// APIAccessManagerUserAPITokenRevoke URI section used for calls to revoke user api token
 	APIAccessManagerUserAPITokenRevoke = "/revoke"
 
-	// APIAccessManagerUserAPITokenSlat URI section used for calls to Short lived user api token
-	APIAccessManagerUserAPITokenSlat = "/slat"
-
 	// APIAccessManagerUserAPITokenThresholds URI section used for calls to manage user's api token thresholds
 	APIAccessManagerUserAPITokenThresholds = "/thresholds"
 
@@ -108,9 +104,6 @@ var (
 
 	// APIAccessManagerUserIDAPITokenSpecificRevoke URI used for revoking user API token
 	APIAccessManagerUserIDAPITokenSpecificRevoke = APIAccessManagerUser + APIAccessManagerUserIDVariable + APIAccessManagerUserToken + APIAccessManagerAPITokenIDVariable + APIAccessManagerUserAPITokenRevoke
-
-	// APIAccessManagerUserIDAPIShortLivedToken URI used for managing user Ephemeral API token calls
-	APIAccessManagerUserIDAPIShortLivedToken = APIAccessManagerUser + APIAccessManagerUserIDVariable + APIAccessManagerUserToken + APIAccessManagerUserAPITokenSlat
 
 	// APIAccessManagerUserIDAPITokenThreshold URI used for managing user API token threshold calls
 	APIAccessManagerUserIDAPITokenThreshold = APIAccessManagerUser + APIAccessManagerUserIDVariable + APIAccessManagerUserToken + APIAccessManagerUserAPITokenThresholds
@@ -154,7 +147,6 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecific, request.Handler.DeleteUserAPIToken).Methods(http.MethodDelete, http.MethodOptions)
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificActivate, request.Handler.ActivateUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificRevoke, request.Handler.RevokeUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIShortLivedToken, request.Handler.GetSpecificEphemeralUserAPITokens).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenThreshold, request.Handler.GetUserAPITokenThreshold).Methods(http.MethodGet, http.MethodOptions)
 
 	accessmanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)

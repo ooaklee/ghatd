@@ -126,6 +126,54 @@ func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validato
 
 	parsedRequest.UserID = userID
 
+	if order, ok := request.URL.Query()["order"]; ok {
+		parsedRequest.Order = toolbox.StringStandardisedToLower(order[0])
+	} else {
+		parsedRequest.Order = "created_at_desc"
+	}
+
+	if numberOfUsersPerPage, ok := request.URL.Query()["per_page"]; ok {
+		parsedRequest.PerPage = toolbox.ConvertStringToIntOrDefault(numberOfUsersPerPage[0], 25)
+	} else {
+		parsedRequest.PerPage = 25
+	}
+
+	if numberOfPages, ok := request.URL.Query()["page"]; ok {
+		parsedRequest.Page = toolbox.ConvertStringToIntOrDefault(numberOfPages[0], 1)
+	} else {
+		parsedRequest.Page = 1
+	}
+
+	if responseMeta, ok := request.URL.Query()["meta"]; ok {
+		parsedRequest.Meta = toolbox.ConvertToBoolean(responseMeta[0])
+	} else {
+		parsedRequest.Meta = false
+	}
+
+	if responseDescription, ok := request.URL.Query()["description"]; ok {
+		parsedRequest.Description = toolbox.StringStandardisedToLower(responseDescription[0])
+	} else {
+		parsedRequest.Description = ""
+	}
+
+	if responseStatus, ok := request.URL.Query()["status"]; ok {
+		parsedRequest.Status = toolbox.StringStandardisedToLower(responseStatus[0])
+	} else {
+		parsedRequest.Status = ""
+	}
+
+	if responseOnlyEphemeral, ok := request.URL.Query()["only_ephemeral"]; ok {
+		parsedRequest.OnlyEphemeral = toolbox.ConvertToBoolean(responseOnlyEphemeral[0])
+	} else {
+		parsedRequest.OnlyEphemeral = false
+	}
+
+	if responseOnlyPermanent, ok := request.URL.Query()["only_permanent"]; ok {
+		parsedRequest.OnlyPermanent = toolbox.ConvertToBoolean(responseOnlyPermanent[0])
+	} else {
+		parsedRequest.OnlyPermanent = false
+	}
+
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyBadRequest)
 	}

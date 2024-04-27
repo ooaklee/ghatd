@@ -24,7 +24,6 @@ type AccessmanagerService interface {
 	DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error
 	UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error
 	GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error)
-	GetSpecificEphemeralUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error)
 	GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error)
 	OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error)
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
@@ -153,29 +152,6 @@ func (h *Handler) OauthCallback(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
 }
 
-// GetSpecificEphemeralUserAPITokens returns user's ephermeral API tokens
-// User requesting must be active & be the same person as target
-// TODO: Create tests
-func (h *Handler) GetSpecificEphemeralUserAPITokens(w http.ResponseWriter, r *http.Request) {
-
-	request, err := MapRequestToGetSpecificUserAPITokensRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.GetSpecificEphemeralUserAPITokens(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens)
-}
-
 // GetUserAPITokenThreshold returns user's API tokens
 // User requesting must be active & be the same person as target
 // TODO: Create tests
@@ -219,7 +195,7 @@ func (h *Handler) GetSpecificUserAPITokens(w http.ResponseWriter, r *http.Reques
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens)
+	h.ReturnUserApiTokensSuccessResponse(w, http.StatusOK, response, request.Meta)
 }
 
 // RevokeUserAPIToken returns whether a request to revoke an API token was successful.
@@ -528,4 +504,18 @@ func (h *Handler) AddAuthCookies(w http.ResponseWriter, accessToken string, acce
 func (h *Handler) RemoveCookiesWithName(w http.ResponseWriter, cookieName string) {
 
 	toolbox.RemoveCookiesWithName(w, h.Environment, cookieName, h.CookieDomain)
+}
+
+// ReturnUserApiTokensSuccessResponse returns the appropiate response dependent on if
+// client requested with/without meta
+func (h *Handler) ReturnUserApiTokensSuccessResponse(w http.ResponseWriter, statusCode int, response *GetSpecificUserAPITokensResponse, withMeta bool) {
+
+	if withMeta {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.UserAPITokens, reply.WithMeta(response.GetMetaData()))
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.UserAPITokens)
 }

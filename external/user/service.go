@@ -390,23 +390,6 @@ func (s *Service) generateGetUsersResponse(ctx context.Context, r *GetUsersReque
 
 }
 
-// generateRandomUserResponse returns a random user from repository
-func (s *Service) generateRandomUserResponse(ctx context.Context) (*GetUsersResponse, error) {
-	users, err := s.UserRespository.GetSampleUser(ctx)
-	if err != nil {
-		return &GetUsersResponse{}, err
-	}
-
-	return &GetUsersResponse{
-		Total:        1,
-		Users:        users,
-		TotalPages:   1,
-		Page:         1,
-		UsersPerPage: 1,
-		Random:       true,
-	}, nil
-}
-
 // normaliseUserEmail returns normalised email string after ensuring
 // email is set to lower case
 func normaliseUserEmail(email string) string {
