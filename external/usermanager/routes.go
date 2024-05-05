@@ -9,8 +9,8 @@ import (
 	"github.com/ooaklee/ghatd/external/router"
 )
 
-// usermanagerHandler expected methods for valid usermanager handler
-type usermanagerHandler interface {
+// UsermanagerHandler expected methods for valid usermanager handler
+type UsermanagerHandler interface {
 	UpdateUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserMicroProfile(w http.ResponseWriter, r *http.Request)
@@ -43,7 +43,7 @@ type AttachRoutesRequest struct {
 	Router *router.Router
 
 	// Handler valid usermanager handler
-	Handler usermanagerHandler
+	Handler UsermanagerHandler
 
 	// AuthenticatedMiddleware middleware used to lock endpoints down to users that have been authenticated
 	AuthenticatedMiddleware mux.MiddlewareFunc
