@@ -494,22 +494,30 @@ func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenS
 // TODO: Create tests
 func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
 	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
+	_, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
 		ID: r.UserID,
 	})
 	if err != nil {
 		return err
 	}
 
-	persistentUser := userResponse.User
+	// get all user api tokens
+	userApiTokens, err := s.GetSpecificUserAPITokens(ctx, &GetSpecificUserAPITokensRequest{
+		UserID:  r.UserID,
+		PerPage: 100, // Fetch all user tokens
+	})
+	if err != nil {
+		return err
+	}
 
-	if len(persistentUser.APITokens) > 0 {
+	// If the user has tokens, check if the requested token is associated with the user
+	if len(userApiTokens.UserAPITokens) > 0 {
 
-		for _, token := range persistentUser.APITokens {
-			if token == r.APITokenID {
+		for _, token := range userApiTokens.UserAPITokens {
+			if token.ID == r.APITokenID {
 				return s.ApitokenService.DeleteAPIToken(ctx,
 					&apitoken.DeleteAPITokenRequest{
-						UserID:     persistentUser.ID,
+						UserID:     r.UserID,
 						APITokenID: r.APITokenID,
 					})
 			}
@@ -573,20 +581,8 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 		return nil, err
 	}
 
-	apiToken := apiTokenResponse.APIToken
-
-	// Apppend to user's existing tokens
-	persistentUser.APITokens = append(persistentUser.APITokens, apiToken.ID)
-
-	// save updated user
-	_, err = s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: &persistentUser})
-	if err != nil {
-		log.Error("system-update-failed-after-successful-apitoken-creation", zap.String("user-id:", persistentUser.ID), zap.String("token-id:", apiToken.ID))
-		return nil, err
-	}
-
 	return &CreateUserAPITokenResponse{
-		UserAPIToken: apiToken,
+		UserAPIToken: apiTokenResponse.APIToken,
 	}, nil
 }
 

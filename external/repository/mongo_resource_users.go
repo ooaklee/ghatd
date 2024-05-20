@@ -54,30 +54,6 @@ func (r MongoDbRepository) GetTotalUsers(ctx context.Context, firstNameFilter, l
 	return ExecuteCountDocuments(ctx, collection, userFilter)
 }
 
-// userPurgeAPITokenByID attempts to pull api token from the passed user's embedded collection
-// logs errors if any to not disrupt deletion
-func (r MongoDbRepository) userPurgeAPITokenByID(ctx context.Context, userID string, apiTokenID string) {
-
-	matchFilter := bson.M{"_id": userID}
-
-	updateFilter := bson.M{"$pull": bson.M{"api_tokens": apiTokenID}, "$set": bson.M{"meta.updated_at": toolbox.TimeNowUTC()}}
-
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
-	if err != nil {
-		RepositoryLogEntry(ctx, logError, "failed-user-api-token-purge", err)
-	}
-
-	collection := r.GetUserCollection(client)
-
-	err = ExecuteUpdateOneCommand(ctx, collection, matchFilter, updateFilter, "ApiToken")
-	if err != nil {
-		RepositoryLogEntry(ctx, logError, "failed-user-api-token-purge", err)
-	}
-
-}
-
 // UpdateUser updates user passed in the DB
 func (r MongoDbRepository) UpdateUser(ctx context.Context, user *user.User) (*user.User, error) {
 

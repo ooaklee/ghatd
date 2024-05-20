@@ -54,7 +54,6 @@ type User struct {
 	Email     string   `json:"email" bson:"email,omitempty"`
 	Roles     []string `json:"roles" bson:"roles"`
 	Status    string   `json:"status" bson:"status,omitempty"`
-	APITokens []string `json:"api_tokens,omitempty" bson:"api_tokens,omitempty"`
 
 	Verified UserVerifcationStatus `json:"verified" bson:"verified,omitempty"`
 	Meta     UserMeta              `json:"meta" bson:"meta,omitempty"`

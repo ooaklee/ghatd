@@ -263,19 +263,16 @@ func (r MongoDbRepository) GetAPITokens(ctx context.Context, req *apitoken.GetAP
 	return result, nil
 }
 
-// // DeleteAPITokenFor removes apitoken with passed ID from apitoken collection.
-// // Also updates user collection to remove reference
-// func (r MongoDbRepository) DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error {
+// DeleteAPITokenFor removes apitoken with passed ID from apitoken collection.
+// Also updates user collection to remove reference
+func (r MongoDbRepository) DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error {
 
-// 	// NICE_TO_HAVE: Wrap context with observability platform transaction
+	// NICE_TO_HAVE: Wrap context with observability platform transaction
 
-// 	err := r.DeleteAPITokenByID(ctx, apiTokenID)
-// 	if err != nil {
-// 		return err
-// 	}
+	err := r.DeleteAPITokenByID(ctx, apiTokenID)
+	if err != nil {
+		return err
+	}
 
-// 	// Purge token reference from user (users collection)
-// 	r.userPurgeAPITokenByID(ctx, userID, apiTokenID)
-
-// 	return nil
-// }
+	return nil
+}

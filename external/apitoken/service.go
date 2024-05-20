@@ -19,7 +19,7 @@ import (
 type ApitokenRespository interface {
 	GetAPITokens(ctx context.Context, req *GetAPITokensRequest) ([]UserAPIToken, error)
 	GetAPITokenByID(ctx context.Context, apiTokenID string) (*UserAPIToken, error)
-	// DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error
+	DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error
 	UpdateAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
 	CreateUserAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
 	DeleteResourcesByOwnerId(ctx context.Context, resourceType interface{}, ownerId string) error
@@ -238,9 +238,7 @@ func (s *Service) RevokeAPIToken(ctx context.Context, r *RevokeAPITokenRequest) 
 // if any failures occur.
 func (s *Service) DeleteAPIToken(ctx context.Context, r *DeleteAPITokenRequest) error {
 
-	// TODO: Implement logic
-	// return s.ApitokenRespository.DeleteAPITokenFor(ctx, r.UserID, r.APITokenID)
-	return nil
+	return s.ApitokenRespository.DeleteAPITokenFor(ctx, r.UserID, r.APITokenID)
 }
 
 // GetAPITokensFor returns all api tokens stored in repository for user ID
