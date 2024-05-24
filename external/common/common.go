@@ -1,5 +1,12 @@
 package common
 
+const (
+
+	// RFC3339NanoUTC is the time format we use for all
+	// our date time. It will be used for parsing our UTC date time.
+	RFC3339NanoUTC string = "2006-01-02T15:04:05.999999999"
+)
+
 // System wide variables
 const (
 

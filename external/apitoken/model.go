@@ -6,6 +6,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/mergestat/timediff"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
@@ -47,6 +49,52 @@ type UserAPIToken struct {
 	CreatedByNanoId string `json:"-" bson:"created_by_nid,omitempty"`
 	UpdatedAt       string `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
 	TtlExpiresAt    string `json:"ttl_expires_at,omitempty" bson:"ttl_expires_at,omitempty"`
+
+	// HumanReadableLastUsedAt is the difference between now (UTC) and when the token was last used
+	HumanReadableLastUsedAt string `json:"human_readable_last_used_at,omitempty" bson:"-"`
+
+	// HumanReadableUpdatedAt is the difference between now (UTC) and when the token was last updated
+	HumanReadableUpdatedAt string `json:"human_readable_updated_at,omitempty" bson:"-"`
+
+	// HumanReadableTtlExpiresAt is the difference between now (UTC) and when the token will expire
+	HumanReadableTtlExpiresAt string `json:"human_readable_ttl_expires_at,omitempty" bson:"-"`
+}
+
+// GenerateHumanReadable generates human-readable representations of the last used, updated, and TTL expiration times for a UserAPIToken.
+// It updates the HumanReadableLastUsedAt field of the UserAPIToken with the formatted time differences.
+// The function returns the updated UserAPIToken.
+func (u *UserAPIToken) GenerateHumanReadable() *UserAPIToken {
+
+	nowTime := time.Now()
+
+	// last used at
+	if u.LastUsedAt != "" {
+		var lastUsedAt time.Time
+
+		lastUsedAt, _ = time.Parse(common.RFC3339NanoUTC, u.LastUsedAt)
+		lastUsedAtDif := time.Since(lastUsedAt)
+		u.HumanReadableLastUsedAt = timediff.TimeDiff(nowTime.Add(-lastUsedAtDif))
+	}
+
+	// updated At
+	if u.UpdatedAt != "" {
+		var updatedAt time.Time
+
+		updatedAt, _ = time.Parse(common.RFC3339NanoUTC, u.UpdatedAt)
+		updatedAtDif := time.Since(updatedAt)
+		u.HumanReadableLastUsedAt = timediff.TimeDiff(nowTime.Add(-updatedAtDif))
+	}
+
+	// expires At
+	if u.TtlExpiresAt != "" {
+		var ttlExpiresAt time.Time
+
+		ttlExpiresAt, _ = time.Parse(common.RFC3339NanoUTC, u.TtlExpiresAt)
+		ttlExpiresAtDif := time.Since(ttlExpiresAt)
+		u.HumanReadableLastUsedAt = timediff.TimeDiff(nowTime.Add(ttlExpiresAtDif))
+	}
+
+	return u
 }
 
 // IsShortLivedToken is checking whether the user token

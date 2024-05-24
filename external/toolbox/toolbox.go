@@ -33,9 +33,10 @@ func ValidateParsedRequest(request interface{}, validator BaseValidator) error {
 	return validator.Validate(request)
 }
 
-// TimeNowUTC returns time as string in RFC3339 format w/o timezone
+// TimeNowUTC returns time as string in RFC3339 format without
+// the timezone
 func TimeNowUTC() string {
-	return time.Now().UTC().Format("2006-01-02T15:04:05.999999999")
+	return time.Now().UTC().Format(common.RFC3339NanoUTC)
 }
 
 // GenerateNanoId is returning a nano id

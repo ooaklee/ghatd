@@ -75,7 +75,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 	// see if token short lived
 	if r.TokenTtl != 0 {
 		// Add duration
-		createdAt, err := time.Parse("2006-01-02T15:04:05.999999999", apiToken.CreatedAt)
+		createdAt, err := time.Parse(common.RFC3339NanoUTC, apiToken.CreatedAt)
 		if err != nil {
 			log.Error("unable-to-set-ttl-for-short-lived-user-api-token", zap.String("token-created-at", apiToken.CreatedAt), zap.String("user-id", r.UserID), zap.Error(err))
 
@@ -86,7 +86,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 		if err == nil {
 			expiryDate := createdAt.Add(time.Duration(r.TokenTtl) * time.Second)
 
-			apiToken.TtlExpiresAt = expiryDate.Format("2006-01-02T15:04:05.999999999")
+			apiToken.TtlExpiresAt = expiryDate.Format(common.RFC3339NanoUTC)
 		}
 	}
 
@@ -286,6 +286,11 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 		r.TotalCount = (r.TotalCount - (len(apitokens) - len(analysedApitokens)))
 	}
 
+	// generate human readable
+	for i, token := range analysedApitokens {
+		analysedApitokens[i] = *token.GenerateHumanReadable()
+	}
+
 	return s.generateGetAPITokensForResponse(ctx, r, analysedApitokens)
 }
 
@@ -305,6 +310,11 @@ func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetA
 
 	if len(apitokens) < 1 {
 		return nil, errors.New(ErrKeyNoMatchingUserAPITokenFound)
+	}
+
+	// generate human readable
+	for i, token := range apitokens {
+		apitokens[i] = *token.GenerateHumanReadable()
 	}
 
 	return &GetAPITokenResponse{
@@ -343,6 +353,11 @@ func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*Ge
 		r.TotalCount = (r.TotalCount - (len(apitokens) - len(analysedApitokens)))
 	}
 
+	// generate human readable
+	for i, token := range analysedApitokens {
+		analysedApitokens[i] = *token.GenerateHumanReadable()
+	}
+
 	return s.generateGetAPITokensResponse(ctx, r, analysedApitokens)
 }
 
@@ -371,7 +386,7 @@ func (s *Service) analyseTokenTTLData(ctx context.Context, r *AnalyseTokenTTLDat
 			userId = apiToken.CreatedByID
 		}
 
-		expiration, err := time.Parse("2006-01-02T15:04:05.999999999", apiToken.TtlExpiresAt)
+		expiration, err := time.Parse(common.RFC3339NanoUTC, apiToken.TtlExpiresAt)
 		if err != nil {
 			log.Warn("unable-to-parse-user-api-token-expiry-date", zap.String("token-id", apiToken.ID), zap.String("expiry-date", apiToken.TtlExpiresAt), zap.String("user-id", apiToken.CreatedByID))
 			continue

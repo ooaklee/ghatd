@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
@@ -86,11 +87,11 @@ func (u *User) SetBillingAssessmentDate(roleKey, yyyymmdd string) (*User, error)
 	}
 
 	if len(u.Meta.BillingAssessmentAt) < 1 {
-		u.Meta.BillingAssessmentAt = map[string]string{roleKey: parsedDate.Format("2006-01-02T15:04:05.999999999")}
+		u.Meta.BillingAssessmentAt = map[string]string{roleKey: parsedDate.Format(common.RFC3339NanoUTC)}
 		return u, nil
 	}
 
-	u.Meta.BillingAssessmentAt[roleKey] = parsedDate.Format("2006-01-02T15:04:05.999999999")
+	u.Meta.BillingAssessmentAt[roleKey] = parsedDate.Format(common.RFC3339NanoUTC)
 	return u, nil
 }
 
