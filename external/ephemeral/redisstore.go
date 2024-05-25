@@ -56,7 +56,7 @@ func NewRedisStore(client PersistentClient, maxUnauthedRequestAllowance int64, a
 // TODO: Create tests
 func (c *Client) StoreToken(ctx context.Context, tokenUUID string, userID string, ttl time.Duration) error {
 
-	combinedID := combineUUIDs(userID, tokenUUID)
+	combinedID := toolbox.CombinedUuidFormat(userID, tokenUUID)
 
 	completeKey := c.keyPrefix + combinedID
 
@@ -142,7 +142,7 @@ func (c *Client) DeleteAllTokenExceptedSpecified(ctx context.Context, userId str
 // TODO: Create tests
 func (c *Client) FetchAuth(ctx context.Context, accessDetails TokenDetailsAccess) (string, error) {
 
-	combinedID := combineUUIDs(accessDetails.GetUserId(), accessDetails.GetTokenAccessUuid())
+	combinedID := toolbox.CombinedUuidFormat(accessDetails.GetUserId(), accessDetails.GetTokenAccessUuid())
 
 	completeKey := c.keyPrefix + combinedID
 
@@ -225,11 +225,6 @@ func (c *Client) initiateRequestCountEntry(ctx context.Context, requestorID stri
 func (c *Client) fetchRequestCountEntry(ctx context.Context, requestorID string) (string, error) {
 
 	return c.client.Get(requestorID).Result()
-}
-
-// combineUUIDs returns a string containing a combination of <userID>:<tokenUUID>
-func combineUUIDs(userID, tokenUUID string) string {
-	return fmt.Sprintf("%v:%v", userID, tokenUUID)
 }
 
 // createRateLimitRequestorID returns a string containing a combination of r_<clientIP>

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply"
 )
@@ -27,6 +29,7 @@ type AccessmanagerService interface {
 	GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error)
 	OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error)
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
+	RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
 }
 
 // AccessmanagerValidator expected methods of a valid
@@ -294,19 +297,34 @@ func (h *Handler) CreateUserAPIToken(w http.ResponseWriter, r *http.Request) {
 // TODO: Create tests
 func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 
-	cookie, err := r.Cookie(h.CookiePrefixAuthToken)
+	log := logger.AcquireFrom(r.Context())
+
+	// Check if there is a refresh token cookie
+	// although it should be there, there is no guarantee that it will be
+	// there
+	refreshTokenCookie, _ := r.Cookie(h.CookiePrefixRefreshToken)
+	if refreshTokenCookie != nil {
+
+		log.Info("refresh-token-cookie-found-while-logging-out-will-be-removed")
+		_, _, _ = h.Service.RemoveRefreshTokenWithCookieValue(r.Context(), refreshTokenCookie.Value)
+	}
+
+	accessTokenCookie, err := r.Cookie(h.CookiePrefixAuthToken)
 
 	if err != nil && err != http.ErrNoCookie {
 		h.RemoveAuthCookies(w)
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
+		if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
+			return
+		}
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	if cookie != nil {
-		r.Header["Authorization"] = []string{"Bearer " + cookie.Value}
+	if accessTokenCookie != nil {
+		r.Header["Authorization"] = []string{"Bearer " + accessTokenCookie.Value}
 	}
 
 	if err == http.ErrNoCookie {
@@ -314,6 +332,9 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
+		if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
+			return
+		}
 		h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 		return
 	}
@@ -324,11 +345,18 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 
 	err = h.Service.LogoutUser(r.Context(), r)
 	if err != nil {
+		if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
+			return
+		}
+
 		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
+	if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
+		return
+	}
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
@@ -337,7 +365,7 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 // TODO: Create tests
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
-	request, err := MapRequestToRefreshTokenRequest(r, h.CookiePrefixRefreshToken, h.Validator)
+	request, err := MapRequestToRefreshTokenRequest(r, h.CookiePrefixRefreshToken, h.CookiePrefixAuthToken, h.Validator)
 	if err != nil {
 		h.RemoveAuthCookies(w)
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
@@ -518,4 +546,15 @@ func (h *Handler) ReturnUserApiTokensSuccessResponse(w http.ResponseWriter, stat
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.UserAPITokens)
+}
+
+// redirectToHomeIfPlatformHeaderDetected checks the request headers for the presence of the web platform or HTMX headers.
+// If either header is present, the function redirects the user to the home page (/) and returns true.
+// Otherwise, it returns false.
+func redirectToHomeIfPlatformHeaderDetected(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get(common.WebPlatformHttpRequestHeader) != "" || r.Header.Get(common.HtmxHttpRequestHeader) != "" {
+		http.Redirect(w, r, "/", http.StatusFound)
+		return true
+	}
+	return false
 }

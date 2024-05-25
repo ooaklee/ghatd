@@ -806,7 +806,7 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 		return err
 	}
 
-	deleted, err := s.DeleteAuth(ctx, fmt.Sprintf("%v:%v", accessTokenDetails.UserID, accessTokenDetails.AccessUUID))
+	deleted, err := s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(accessTokenDetails.UserID, accessTokenDetails.AccessUUID))
 	if err != nil {
 		log.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID), zap.Error(err))
 		return err
@@ -841,42 +841,35 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error) {
 	log := logger.AcquireFrom(ctx)
 
-	// Check validity
-	token, err := s.AuthService.CheckRefreshTokenIsValid(ctx, r.RefreshToken)
+	tokenUser, refreshTokenUuid, err := s.RemoveRefreshTokenWithCookieValue(ctx, r.RefreshToken)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get token details
-	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, token)
-	if err != nil {
-		return nil, err
-	}
+	// check if access token is present and clean up along with it
+	if r.AccessToken != "" {
 
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: refreshTokenDetails.UserID})
-	if err != nil {
-		return nil, err
-	}
+		log.Info("access-token-present-in-refresh-token-request", zap.String("user-id", tokenUser.GetUserId()), zap.String("refresh-token", refreshTokenUuid))
 
-	persistentUser := persistentUserResponse.User
+		err := s.RemoveAccessTokenWithCookieValue(ctx, tokenUser.GetUserId(), r.AccessToken)
+		if err != nil {
+			log.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", tokenUser.GetUserId()), zap.Error(err))
+		} else {
+			log.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", tokenUser.GetUserId()), zap.String("refresh-token", refreshTokenUuid))
+		}
 
-	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
-	deleted, err := s.EphemeralStore.DeleteAuth(ctx, combineUUIDs(refreshTokenDetails.UserID, refreshTokenDetails.RefreshUUID))
-	if err != nil || deleted == 0 {
-		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", persistentUser.ID), zap.Error(err))
-		return nil, errors.New(ErrKeyUnauthorizedRefreshTokenCacheDeletionFailure)
 	}
 
 	// Create new pair of refresh and access tokens
-	newTokensDetails, err := s.AuthService.CreateToken(ctx, &persistentUser)
+	newTokensDetails, err := s.AuthService.CreateToken(ctx, tokenUser)
 	if err != nil {
 		return nil, err
 	}
 
 	// Save the tokens to ephemeralstore
-	err = s.EphemeralStore.CreateAuth(ctx, refreshTokenDetails.UserID, newTokensDetails)
+	err = s.EphemeralStore.CreateAuth(ctx, tokenUser.GetUserId(), newTokensDetails)
 	if err != nil {
-		log.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", persistentUser.ID), zap.Error(err))
+		log.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", tokenUser.GetUserId()), zap.Error(err))
 		return nil, err
 	}
 
@@ -886,6 +879,82 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		AccessTokenExpiresAt:  newTokensDetails.AtExpires,
 		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
 	}, nil
+}
+
+// RemoveAccessTokenWithCookieValue removes access token with the given cookie value
+func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, accessTokenCookieValue string) error {
+	log := logger.AcquireFrom(ctx)
+
+	log.Info("processing-access-token-removal-by-cookie-value")
+
+	tempRequest := &http.Request{
+		Header: http.Header{},
+	}
+
+	tempRequest.Header["Authorization"] = []string{"Bearer " + accessTokenCookieValue}
+
+	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, tempRequest)
+	if err != nil {
+		log.Error("failed-to-extract-access-token-details-from-cookie-value", zap.Error(err))
+		return err
+	}
+
+	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, accessTokenDetails.AccessUUID))
+	if err != nil || deleted == 0 {
+		log.Warn("access-token-removal-failed", zap.String("user-id", userId), zap.String("access-token", accessTokenDetails.AccessUUID), zap.Error(err))
+		return err
+	}
+
+	log.Info("access-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", accessTokenDetails.AccessUUID))
+
+	return nil
+}
+
+// RemoveRefreshTokenWithCookieValue removes refresh token with the given cookie valu
+// returns the user id of the refresh token and an error if any
+func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error) {
+
+	var userId string
+	var refreshTokenUuid string
+
+	log := logger.AcquireFrom(ctx)
+
+	log.Info("processing-refresh-token-removal-by-cookie-value")
+
+	// Check validity
+	refreshToken, err := s.AuthService.CheckRefreshTokenIsValid(ctx, refreshTokenCookieValue)
+	if err != nil {
+		log.Error("failed-to-check-if-refresh-token-is-valid", zap.Error(err))
+		return nil, refreshTokenUuid, err
+	}
+
+	// Get token details
+	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, refreshToken)
+	if err != nil {
+		log.Error("failed-to-get-refresh-token-by-its-uuid", zap.Error(err))
+		return nil, refreshTokenUuid, err
+	}
+
+	refreshTokenUuid = refreshTokenDetails.RefreshUUID
+
+	// Get user details
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: refreshTokenDetails.UserID})
+	if err != nil {
+		log.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
+		return nil, refreshTokenUuid, err
+	}
+
+	userId = persistentUserResponse.User.ID
+
+	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
+	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, refreshTokenDetails.RefreshUUID))
+	if err != nil || deleted == 0 {
+		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userId), zap.Error(err))
+		return nil, refreshTokenUuid, errors.New(ErrKeyUnauthorizedRefreshTokenCacheDeletionFailure)
+	}
+
+	log.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
+	return &persistentUserResponse.User, refreshTokenUuid, nil
 }
 
 // LoginUser handies verifying initial login token token, and  actioning all surrounding steps in
@@ -932,7 +1001,7 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	}
 
 	// Invalidate initiate login token
-	_, _ = s.DeleteAuth(ctx, initiateLoginTokenDetails.TokenID)
+	_, _ = s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(UpdateUserResponse.User.ID, initiateLoginTokenDetails.TokenID))
 
 	auditEvent := audit.UserLogin
 	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
@@ -1266,9 +1335,4 @@ func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) boo
 	}
 
 	return false
-}
-
-// combineUUIDs returns a string containing a combination of <userID>:<tokenUUID>
-func combineUUIDs(userID, tokenUUID string) string {
-	return fmt.Sprintf("%v:%v", userID, tokenUUID)
 }

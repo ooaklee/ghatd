@@ -476,3 +476,9 @@ func RemoveAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessT
 func GenerateTimeOfExpiryAsSeconds(ttlDuration time.Duration) int64 {
 	return time.Now().Add(ttlDuration).Unix()
 }
+
+// CombinedUuidFormat returns a string containing a combination of <userID>:<tokenUUID>
+// a format that is used for referencing tokens in ephemeral storage.
+func CombinedUuidFormat(userID, tokenUUID string) string {
+	return fmt.Sprintf("%v:%v", userID, tokenUUID)
+}

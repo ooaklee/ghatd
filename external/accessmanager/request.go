@@ -12,6 +12,11 @@ import (
 type RefreshTokenRequest struct {
 	// RefreshToken token used for regenerating tokens
 	RefreshToken string `json:"refresh_token" validate:"min=128"`
+
+	// AccessToken this token is a by product and is not needed,
+	// However if detected when making a request to refresh the refresh
+	// token it should be removed so that it's not hanging
+	AccessToken string
 }
 
 // CreateUserRequest holds everything needed to create user on platform

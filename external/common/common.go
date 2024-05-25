@@ -38,6 +38,10 @@ const (
 	// should be redirect to
 	WebLocationHttpRequestHeader string = "X-Web-Location"
 
+	// WebPlatformHttpRequestHeader is the header used to inform the server what platform
+	// is being used by the client
+	WebPlatformHttpRequestHeader string = "X-Platform"
+
 	// CacheSkipHttpResponseHeader is the response header used to tell server not to cache the
 	// response from the endpoint
 	CacheSkipHttpResponseHeader string = "X-Cache-Skip"

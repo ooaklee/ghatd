@@ -335,18 +335,16 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator Acce
 
 // MapRequestToRefreshTokenRequest maps incoming RefreshToken request to correct
 // struct.
-func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName string, validator AccessmanagerValidator) (*RefreshTokenRequest, error) {
+func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName, accessCookieName string, validator AccessmanagerValidator) (*RefreshTokenRequest, error) {
 	parsedRequest := &RefreshTokenRequest{}
 
 	// TODO: Create a NoAuth Middleware where this can be done
-	cookie, err := request.Cookie(refreshCookieName)
-
+	refreshCookie, err := request.Cookie(refreshCookieName)
 	if err != nil && err != http.ErrNoCookie {
 		return nil, err
 	}
-
-	if cookie != nil {
-		parsedRequest.RefreshToken = cookie.Value
+	if refreshCookie != nil {
+		parsedRequest.RefreshToken = refreshCookie.Value
 	}
 
 	if err == http.ErrNoCookie {
@@ -359,6 +357,14 @@ func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName st
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidRefreshToken)
 	}
+
+	// Check to see if we have an access token with request
+	accessCookie, err := request.Cookie(accessCookieName)
+	if err != nil {
+		return parsedRequest, nil
+	}
+
+	parsedRequest.AccessToken = accessCookie.Value
 
 	return parsedRequest, nil
 }
