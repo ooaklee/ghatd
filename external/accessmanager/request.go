@@ -199,3 +199,17 @@ type OauthCallbackRequest struct {
 	// RequestCookies is the cookies passed with the callback request
 	RequestCookies []*http.Cookie
 }
+
+// LogoutUserOthersRequest handles logging out all other sessions for a user
+type LogoutUserOthersRequest struct {
+
+	// UserId the user ID the tokens will be deleted for
+	UserId string
+
+	// RefreshToken the current refresh token of the user that will be preserved
+	// after logging out all other sessions
+	RefreshToken string
+
+	// AuthToken the current auth token of the user that will be preserved
+	AuthToken string
+}

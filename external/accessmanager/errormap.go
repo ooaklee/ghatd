@@ -30,4 +30,6 @@ var AccessmanagerErrorMap = map[string]reply.ErrorManifestItem{
 	ErrKeyCreateUserAPITokenRequestTtlTooShort:                {Title: "Minimum allowed time to live permitted by your role breached", StatusCode: 400},
 	ErrKeyCreateUserAPITokenRequestTtlTooLong:                 {Title: "Maximimum allowed time to live permitted by your role exceeded", StatusCode: 400},
 	ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement: {Title: "Requested Time to live is not within the allowed increment permitted by your role", StatusCode: 400},
+	ErrKeyInvalidLogOutUserOthersRequest:                      {Title: "Bad request to log off other devices", StatusCode: 400},
+	ErrKeyInvalidAuthToken:                                    {Title: "Invalid authorization", StatusCode: 401},
 }

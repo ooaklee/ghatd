@@ -146,6 +146,42 @@ func NewService(r *NewServiceRequest) *Service {
 	}
 }
 
+// LogoutUserOthers handles logic of managing the user's other log in session
+func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error {
+
+	// log := logger.AcquireFrom(ctx)
+
+	var accessTokenId string
+	var refreshTokenId string
+
+	// Check if ID returns valid user
+	requestingUser, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
+		ID: r.UserId,
+	})
+	if err != nil {
+		return err
+	}
+
+	// parse auth token to get token id
+	accessToken, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, r.AuthToken)
+	if err != nil {
+		return err
+	}
+
+	accessTokenId = accessToken.AccessUUID
+
+	// parse refresh token to get token id
+	refreshToken, err := s.AuthService.ExtractRefreshTokenMetadataByString(ctx, r.RefreshToken)
+	if err != nil {
+		return err
+	}
+	refreshTokenId = refreshToken.RefreshUUID
+
+	// use user id to call ephemerals store's delete method to remove all tokens except current ones
+	return s.EphemeralStore.DeleteAllTokenExceptedSpecified(ctx, requestingUser.User.ID, []string{
+		toolbox.CombinedUuidFormat(requestingUser.User.ID, accessTokenId), toolbox.CombinedUuidFormat(requestingUser.User.ID, refreshTokenId)})
+}
+
 // OauthCallback handles logic of managing the callback of a provider
 func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error) {
 

@@ -72,6 +72,13 @@ const (
 	// ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement is returned when user is attempting to create a token
 	// that is beyond their allowed increment
 	ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement = "CreateUserAPITokenRequestTtlOutsideAllowedIncrement"
+
+	// ErrKeyInvalidLogOutUserOthersRequest error when a user makes an LogoutUserOthers request and it is invalid
+	// missing refresh token or auth token in headers
+	ErrKeyInvalidLogOutUserOthersRequest string = "InvalidLogOutUserOthersRequest"
+
+	// ErrKeyInvalidAuthToken error when a user makes a request with invalid auth token
+	ErrKeyInvalidAuthToken string = "InvalidAuthToken"
 )
 
 const (

@@ -30,6 +30,7 @@ type AccessmanagerService interface {
 	OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error)
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
 	RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
+	LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error
 }
 
 // AccessmanagerValidator expected methods of a valid
@@ -73,6 +74,27 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 		Environment:              r.Environment,
 		CookieDomain:             r.CookieDomain,
 	}
+}
+
+// LogoutUserOthers handles logging out all other sessions for a user
+func (h *Handler) LogoutUserOthers(w http.ResponseWriter, r *http.Request) {
+
+	request, err := MapRequestToLogoutUserOthersRequest(r, h.Validator, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	err = h.Service.LogoutUserOthers(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
 // OauthCallback returns a redirect to the respective providers login page

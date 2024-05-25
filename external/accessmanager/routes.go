@@ -25,6 +25,7 @@ type AccessmanagerHandler interface {
 	GetUserAPITokenThreshold(w http.ResponseWriter, r *http.Request)
 	OauthLogin(w http.ResponseWriter, r *http.Request)
 	OauthCallback(w http.ResponseWriter, r *http.Request)
+	LogoutUserOthers(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -107,6 +108,9 @@ var (
 
 	// APIAccessManagerUserIDAPITokenThreshold URI used for managing user API token threshold calls
 	APIAccessManagerUserIDAPITokenThreshold = APIAccessManagerUser + APIAccessManagerUserIDVariable + APIAccessManagerUserToken + APIAccessManagerUserAPITokenThresholds
+
+	// APIAccessManagerLogoutOtherSessions is the route to log out other sessions for a user
+	APIAccessManagerLogoutOtherSessions = APIAccessManagerUserLogout + "/other-sessions"
 )
 
 // AttachRoutesRequest holds everything needed to attach accessmanager
@@ -148,6 +152,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificActivate, request.Handler.ActivateUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificRevoke, request.Handler.RevokeUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
 	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenThreshold, request.Handler.GetUserAPITokenThreshold).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerLogoutOtherSessions, request.Handler.LogoutUserOthers).Methods(http.MethodGet, http.MethodOptions)
 
 	accessmanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
 

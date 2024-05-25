@@ -20,6 +20,40 @@ const (
 	AccessManagerRequestParameterKeyDefaultToken = "t"
 )
 
+// MapRequestToLogoutUserOthersRequest maps incoming LogOutUserOthers request to correct struct.
+func MapRequestToLogoutUserOthersRequest(request *http.Request, validator AccessmanagerValidator, authCookiePrefix, refreshCookiePrefix string) (*LogoutUserOthersRequest, error) {
+	parsedRequest := &LogoutUserOthersRequest{}
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
+	log := logger.AcquireFrom(request.Context())
+
+	authTokenCookie, err := request.Cookie(authCookiePrefix)
+	if err != nil {
+		log.Error("unable-to-get-auth-token-cookie", zap.String("user-id", parsedRequest.UserId))
+		return nil, errors.New(ErrKeyInvalidAuthToken)
+	}
+
+	refreshTokenCookie, err := request.Cookie(refreshCookiePrefix)
+	if err != nil {
+		log.Error("unable-to-get-refresh-token-cookie", zap.String("user-id", parsedRequest.UserId))
+		return nil, errors.New(ErrKeyInvalidRefreshToken)
+	}
+
+	parsedRequest.AuthToken = authTokenCookie.Value
+	parsedRequest.RefreshToken = refreshTokenCookie.Value
+
+	if err := toolbox.ValidateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyInvalidLogOutUserOthersRequest)
+	}
+
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyInvalidUserID)
+	}
+
+	return parsedRequest, nil
+
+}
+
 // MapRequestToOauthCallbackRequest maps incoming OauthCallback request to correct struct
 func MapRequestToOauthCallbackRequest(request *http.Request, validator AccessmanagerValidator) (*OauthCallbackRequest, error) {
 	parsedRequest := &OauthCallbackRequest{}
