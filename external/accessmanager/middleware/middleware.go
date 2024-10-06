@@ -208,22 +208,8 @@ func (m *Middleware) AdminJWTRequired(handler http.Handler) http.Handler {
 		if err != nil {
 			// handle the case where the access token is expired
 			if refreshTokenCookie.Value != "" {
-				// refresh the tokens
-				tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
-					RefreshToken: refreshTokenCookie.Value,
-				})
-				if refreshErr != nil {
-					toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-					//nolint will set up default fallback later
-					m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
-					return
-				}
 
-				// set the new tokens in the cookies
-				toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
-
-				// set the new access token in the header
-				req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+				m.refreshTokenAndUpdateRequest(w, req, refreshTokenCookie.Value)
 
 				// retry the request with the new access token
 				userId, err = m.service.MiddlewareAdminJWTRequired(req)
@@ -338,22 +324,8 @@ func (m *Middleware) handleJWTRequiredRequest(w http.ResponseWriter, req *http.R
 	if err != nil {
 		// handle the case where the access token is expired
 		if refreshTokenCookie.Value != "" {
-			// refresh the tokens
-			tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
-				RefreshToken: refreshTokenCookie.Value,
-			})
-			if refreshErr != nil {
-				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-				//nolint will set up default fallback later
-				m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
-				return
-			}
 
-			// set the new tokens in the cookies
-			toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
-
-			// set the new access token in the header
-			req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+			m.refreshTokenAndUpdateRequest(w, req, refreshTokenCookie.Value)
 
 			// retry the request with the new access token
 			userId, err = m.service.MiddlewareJWTRequired(req)
@@ -438,22 +410,8 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 			if err != nil {
 				// handle the case where the access token is expired
 				if refreshTokenCookie.Value != "" {
-					// refresh the tokens
-					tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
-						RefreshToken: refreshTokenCookie.Value,
-					})
-					if refreshErr != nil {
-						toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-						//nolint will set up default fallback later
-						m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
-						return
-					}
 
-					// set the new tokens in the cookies
-					toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
-
-					// set the new access token in the header
-					req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+					m.refreshTokenAndUpdateRequest(w, req, refreshTokenCookie.Value)
 
 					// retry the request with the new access token
 					userId, err = m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
@@ -519,22 +477,8 @@ func (m *Middleware) handleActiveJWTRequiredRequest(w http.ResponseWriter, req *
 	if err != nil {
 		// handle the case where the access token is expired
 		if refreshTokenCookie.Value != "" {
-			// refresh the tokens
-			tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
-				RefreshToken: refreshTokenCookie.Value,
-			})
-			if refreshErr != nil {
-				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-				//nolint will set up default fallback later
-				m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
-				return
-			}
 
-			// set the new tokens in the cookies
-			toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
-
-			// set the new access token in the header
-			req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+			m.refreshTokenAndUpdateRequest(w, req, refreshTokenCookie.Value)
 
 			// retry the request with the new access token
 			userId, err = m.service.MiddlewareActiveJWTRequired(req)
@@ -572,6 +516,28 @@ func (m *Middleware) handleValidAPITokenRequiredRequest(w http.ResponseWriter, r
 
 	responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
 	handler.ServeHTTP(responseWriter, request)
+}
+
+// refreshTokenAndUpdateRequest is a helper function to refresh the token and update the request
+// with the new tokens and headers
+func (m *Middleware) refreshTokenAndUpdateRequest(w http.ResponseWriter, req *http.Request, refreshToken string) {
+
+	// refresh the tokens
+	tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
+		RefreshToken: refreshToken,
+	})
+	if refreshErr != nil {
+		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+		//nolint will set up default fallback later
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
+		return
+	}
+
+	// set the new tokens in the cookies
+	toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
+
+	// set the new access token in the header
+	req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
 }
 
 type httpResponseWriter struct {
