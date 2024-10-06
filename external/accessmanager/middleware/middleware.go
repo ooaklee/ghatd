@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply"
 )
 
@@ -18,6 +21,7 @@ type accessManagerService interface {
 	MiddlewareJWTRequired(r *http.Request) (string, error)
 	MiddlewareValidAPITokenRequired(r *http.Request) (string, error)
 	MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (string, error)
+	RefreshToken(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error)
 }
 
 // Middleware manages accessmanager middleware logic
@@ -164,6 +168,11 @@ func (m *Middleware) ValidAPITokenRequired(handler http.Handler) http.Handler {
 func (m *Middleware) AdminJWTRequired(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
+		var (
+			userId string
+			err    error
+		)
+
 		// Add newrelic transaction
 		if m.newRelicApplication != nil {
 			newRelicTransaction := m.newRelicApplication.StartTransaction(fmt.Sprintf("%s %s", req.Method, req.URL.Path))
@@ -175,11 +184,19 @@ func (m *Middleware) AdminJWTRequired(handler http.Handler) http.Handler {
 		}
 
 		// check to see if request is coming with cookies
-		cookie, err := req.Cookie(m.cookiePrefixAuthToken)
-
-		if err != nil && err != http.ErrNoCookie {
+		cookie, aTokenErr := req.Cookie(m.cookiePrefixAuthToken)
+		refreshTokenCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
+		if aTokenErr != nil && aTokenErr != http.ErrNoCookie && refreshTokenCookie == nil {
 			//nolint will set up default fallback later
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, aTokenErr)
+			return
+		}
+
+		if refreshTokenCookie == nil {
+			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+
+			//nolint will set up default fallback later
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
 			return
 		}
 
@@ -187,14 +204,44 @@ func (m *Middleware) AdminJWTRequired(handler http.Handler) http.Handler {
 			req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
 		}
 
-		userID, err := m.service.MiddlewareAdminJWTRequired(req)
+		userId, err = m.service.MiddlewareAdminJWTRequired(req)
 		if err != nil {
-			//nolint will set up default fallback later
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-			return
+			// handle the case where the access token is expired
+			if refreshTokenCookie.Value != "" {
+				// refresh the tokens
+				tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
+					RefreshToken: refreshTokenCookie.Value,
+				})
+				if refreshErr != nil {
+					toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+					//nolint will set up default fallback later
+					m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
+					return
+				}
+
+				// set the new tokens in the cookies
+				toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
+
+				// set the new access token in the header
+				req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+
+				// retry the request with the new access token
+				userId, err = m.service.MiddlewareAdminJWTRequired(req)
+				if err != nil {
+					toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+					//nolint will set up default fallback later
+					m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+					return
+				}
+			} else {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				return
+			}
 		}
 
-		request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+		request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
 
 		responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
 		handler.ServeHTTP(responseWriter, request)
@@ -261,12 +308,25 @@ func (m *Middleware) JWTRequired(handler http.Handler) http.Handler {
 // coming in has a valid JWT
 func (m *Middleware) handleJWTRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
 
-	// check to see if request is coming with cookies
-	cookie, err := req.Cookie(m.cookiePrefixAuthToken)
+	var (
+		userId string
+		err    error
+	)
 
-	if err != nil && err != http.ErrNoCookie {
+	// check to see if request is coming with cookies
+	cookie, aTokenErr := req.Cookie(m.cookiePrefixAuthToken)
+	refreshTokenCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
+	if aTokenErr != nil && aTokenErr != http.ErrNoCookie && refreshTokenCookie == nil {
 		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, aTokenErr)
+		return
+	}
+
+	if refreshTokenCookie == nil {
+		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+
+		//nolint will set up default fallback later
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
 		return
 	}
 
@@ -274,14 +334,44 @@ func (m *Middleware) handleJWTRequiredRequest(w http.ResponseWriter, req *http.R
 		req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
 	}
 
-	userID, err := m.service.MiddlewareJWTRequired(req)
+	userId, err = m.service.MiddlewareJWTRequired(req)
 	if err != nil {
-		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
+		// handle the case where the access token is expired
+		if refreshTokenCookie.Value != "" {
+			// refresh the tokens
+			tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
+				RefreshToken: refreshTokenCookie.Value,
+			})
+			if refreshErr != nil {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
+				return
+			}
+
+			// set the new tokens in the cookies
+			toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
+
+			// set the new access token in the header
+			req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+
+			// retry the request with the new access token
+			userId, err = m.service.MiddlewareJWTRequired(req)
+			if err != nil {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				return
+			}
+		} else {
+			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+			//nolint will set up default fallback later
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
 	}
 
-	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
 
 	responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
 	handler.ServeHTTP(responseWriter, request)
@@ -294,6 +384,11 @@ func (m *Middleware) handleJWTRequiredRequest(w http.ResponseWriter, req *http.R
 func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
+		var (
+			userId string
+			err    error
+		)
+
 		// Add newrelic transaction
 		if m.newRelicApplication != nil {
 			newRelicTransaction := m.newRelicApplication.StartTransaction(fmt.Sprintf("%s %s", req.Method, req.URL.Path))
@@ -305,26 +400,80 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 		}
 
 		// check to see if request is coming with cookies
-		cookie, err := req.Cookie(m.cookiePrefixAuthToken)
-
-		if err != nil && err != http.ErrNoCookie {
+		cookie, aTokenErr := req.Cookie(m.cookiePrefixAuthToken)
+		refreshTokenCookie, rAuthErr := req.Cookie(m.cookiePrefixRefreshToken)
+		if (aTokenErr != nil && aTokenErr != http.ErrNoCookie) && (rAuthErr != nil && rAuthErr != http.ErrNoCookie) {
 			//nolint will set up default fallback later
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, aTokenErr)
 			return
 		}
 
-		if cookie != nil {
-			req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
+		// if both cookies are empty, then we need to
+		// carry on with rate limiting flow
+		if cookie == nil && refreshTokenCookie == nil {
+			userId, err = m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
+			if err != nil {
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				return
+			}
 		}
 
-		userID, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
-		if err != nil {
-			//nolint will set up default fallback later
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-			return
+		// if there is a cookie, the we need refresh logic
+		if cookie != nil || refreshTokenCookie != nil {
+
+			if refreshTokenCookie == nil {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+				return
+			}
+
+			if cookie != nil {
+				req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
+			}
+
+			userId, err = m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
+			if err != nil {
+				// handle the case where the access token is expired
+				if refreshTokenCookie.Value != "" {
+					// refresh the tokens
+					tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
+						RefreshToken: refreshTokenCookie.Value,
+					})
+					if refreshErr != nil {
+						toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+						//nolint will set up default fallback later
+						m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
+						return
+					}
+
+					// set the new tokens in the cookies
+					toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
+
+					// set the new access token in the header
+					req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+
+					// retry the request with the new access token
+					userId, err = m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
+					if err != nil {
+						toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+						//nolint will set up default fallback later
+						m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+						return
+					}
+				} else {
+					toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+					//nolint will set up default fallback later
+					m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+					return
+				}
+
+			}
 		}
 
-		request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+		request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
 
 		responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
 		handler.ServeHTTP(responseWriter, request)
@@ -333,7 +482,6 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 			newRelicTransaction := accessmanagerhelpers.AcquireTransactionFrom(req.Context())
 			newRelicTransaction.End()
 		}
-
 	})
 }
 
@@ -341,12 +489,25 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 // coming in has a valid JWT which is in active state associated to it
 func (m *Middleware) handleActiveJWTRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
 
-	// check to see if request is coming with cookies
-	cookie, err := req.Cookie(m.cookiePrefixAuthToken)
+	var (
+		userId string
+		err    error
+	)
 
-	if err != nil && err != http.ErrNoCookie {
+	// check to see if request is coming with cookies
+	cookie, aTokenErr := req.Cookie(m.cookiePrefixAuthToken)
+	refreshTokenCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
+	if aTokenErr != nil && aTokenErr != http.ErrNoCookie && refreshTokenCookie == nil {
 		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, aTokenErr)
+		return
+	}
+
+	if refreshTokenCookie == nil {
+		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+
+		//nolint will set up default fallback later
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
 		return
 	}
 
@@ -354,14 +515,44 @@ func (m *Middleware) handleActiveJWTRequiredRequest(w http.ResponseWriter, req *
 		req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
 	}
 
-	userID, err := m.service.MiddlewareActiveJWTRequired(req)
+	userId, err = m.service.MiddlewareActiveJWTRequired(req)
 	if err != nil {
-		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
+		// handle the case where the access token is expired
+		if refreshTokenCookie.Value != "" {
+			// refresh the tokens
+			tokenResp, refreshErr := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
+				RefreshToken: refreshTokenCookie.Value,
+			})
+			if refreshErr != nil {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, refreshErr)
+				return
+			}
+
+			// set the new tokens in the cookies
+			toolbox.AddAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, tokenResp.AccessToken, tokenResp.AccessTokenExpiresAt, m.cookiePrefixRefreshToken, tokenResp.RefreshToken, tokenResp.RefreshTokenExpiresAt)
+
+			// set the new access token in the header
+			req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+
+			// retry the request with the new access token
+			userId, err = m.service.MiddlewareActiveJWTRequired(req)
+			if err != nil {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				return
+			}
+		} else {
+			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+			//nolint will set up default fallback later
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
 	}
 
-	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
 
 	responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
 	handler.ServeHTTP(responseWriter, request)
