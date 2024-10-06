@@ -686,6 +686,53 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	return userPermanentToken, userEphemeralToken, nil
 }
 
+// MiddlewareAdminAPITokenRequired handles the business/ cross logic of ensuring
+// that the request is passed with a valid admin client ID and secret
+func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (string, error) {
+
+	log := logger.AcquireFrom(r.Context())
+
+	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
+	if err != nil {
+		return "", err
+	}
+
+	// If we made it here, it means we've found a matching token
+	// get user for matching token
+	// could probably also check liveness here one time
+	persistentUserResponse, err := s.UserService.GetUserByNanoId(r.Context(), tokenRequester.NanoId)
+	if err != nil {
+		return "", err
+	}
+
+	// Set token requester user Id to make backwards compatible
+	tokenRequester.UserID = persistentUserResponse.User.ID
+
+	if !persistentUserResponse.User.IsAdmin() {
+		log.Warn("unauthorized-admin-access-attempted", zap.String("user-id", persistentUserResponse.User.GetUserId()))
+		return "", errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
+	}
+
+	// Check if user it active
+	if persistentUserResponse.User.Status != user.AccountStatusKeyActive {
+		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
+		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+	}
+
+	// Update last used time on token
+	err = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
+		APITokenEncoded: tokenRequester.UserAPITokenEncoded,
+		ClientID:        tokenRequester.UserID,
+	})
+	if err != nil {
+		log.Warn("failed-updating-token-last-used-at", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
+	}
+
+	log.Info("validated-token-request", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
+
+	return tokenRequester.UserID, nil
+}
+
 // MiddlewareValidAPITokenRequired handles the business/ cross logic of ensuring
 // that the request is passed with a valid client ID and secret
 // TODO: Create tests

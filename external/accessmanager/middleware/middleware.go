@@ -17,6 +17,7 @@ import (
 // accessManagerService holds method of valid access manaer service
 type accessManagerService interface {
 	MiddlewareAdminJWTRequired(r *http.Request) (string, error)
+	MiddlewareAdminAPITokenRequired(r *http.Request) (string, error)
 	MiddlewareActiveJWTRequired(r *http.Request) (string, error)
 	MiddlewareJWTRequired(r *http.Request) (string, error)
 	MiddlewareValidAPITokenRequired(r *http.Request) (string, error)
@@ -78,7 +79,6 @@ func (m *Middleware) ActiveValidApiTokenOrAuthenticated(handler http.Handler) ht
 		}
 
 		// check for API header
-		// TODO: Will need to move to common package or something
 		userFullToken := req.Header.Get(common.SystemWideXApiToken)
 
 		// if present, run API middleware logic
@@ -114,7 +114,6 @@ func (m *Middleware) ActiveValidApiTokenOrJWTRequired(handler http.Handler) http
 		}
 
 		// check for API header
-		// TODO: Will need to move to common package or something
 		userFullToken := req.Header.Get(common.SystemWideXApiToken)
 
 		// if present, run API middleware logic
@@ -168,10 +167,31 @@ func (m *Middleware) ValidAPITokenRequired(handler http.Handler) http.Handler {
 func (m *Middleware) AdminJWTRequired(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
-		var (
-			userId string
-			err    error
-		)
+		// Add newrelic transaction
+		if m.newRelicApplication != nil {
+			newRelicTransaction := m.newRelicApplication.StartTransaction(fmt.Sprintf("%s %s", req.Method, req.URL.Path))
+			// req is a *http.Request, this marks the transaction as a web transaction
+			newRelicTransaction.SetWebRequestHTTP(req)
+
+			// Add to context
+			req = req.WithContext(accessmanagerhelpers.TransitTransactionWith(req.Context(), newRelicTransaction))
+		}
+
+		// Otherwise, Run active token check
+		m.handleAdminJWTRequiredRequest(w, req, handler)
+
+		if m.newRelicApplication != nil {
+			newRelicTransaction := accessmanagerhelpers.AcquireTransactionFrom(req.Context())
+			newRelicTransaction.End()
+		}
+
+	})
+}
+
+// AdminApiTokenOrJWTRequired creates a middleware ensure that the request is passed with a
+// valid token or an active JWT token, for an admin account API tokens will take precedence
+func (m *Middleware) AdminApiTokenOrJWTRequired(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
 		// Add newrelic transaction
 		if m.newRelicApplication != nil {
@@ -183,60 +203,22 @@ func (m *Middleware) AdminJWTRequired(handler http.Handler) http.Handler {
 			req = req.WithContext(accessmanagerhelpers.TransitTransactionWith(req.Context(), newRelicTransaction))
 		}
 
-		// check to see if request is coming with cookies
-		cookie, aTokenErr := req.Cookie(m.cookiePrefixAuthToken)
-		refreshTokenCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
-		if aTokenErr != nil && aTokenErr != http.ErrNoCookie && refreshTokenCookie == nil {
-			//nolint will set up default fallback later
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, aTokenErr)
+		// check for API header
+		userFullToken := req.Header.Get(common.SystemWideXApiToken)
+
+		// if present, run API middleware logic
+		if userFullToken != "" {
+			m.handleAdminAPITokenRequiredRequest(w, req, handler)
 			return
 		}
 
-		if refreshTokenCookie == nil {
-			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-
-			//nolint will set up default fallback later
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
-			return
-		}
-
-		if cookie != nil {
-			req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
-		}
-
-		userId, err = m.service.MiddlewareAdminJWTRequired(req)
-		if err != nil {
-			// handle the case where the access token is expired
-			if refreshTokenCookie.Value != "" {
-
-				m.refreshTokenAndUpdateRequest(w, req, refreshTokenCookie.Value)
-
-				// retry the request with the new access token
-				userId, err = m.service.MiddlewareAdminJWTRequired(req)
-				if err != nil {
-					toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-					//nolint will set up default fallback later
-					m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-					return
-				}
-			} else {
-				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-				//nolint will set up default fallback later
-				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-				return
-			}
-		}
-
-		request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
-
-		responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
-		handler.ServeHTTP(responseWriter, request)
+		// Otherwise, Run active token check
+		m.handleAdminJWTRequiredRequest(w, req, handler)
 
 		if m.newRelicApplication != nil {
 			newRelicTransaction := accessmanagerhelpers.AcquireTransactionFrom(req.Context())
 			newRelicTransaction.End()
 		}
-
 	})
 }
 
@@ -443,6 +425,66 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 	})
 }
 
+// handleAdminJWTRequiredRequest is checking to make sure the request
+// coming in has a valid admin JWT which is in active state associated to it
+func (m *Middleware) handleAdminJWTRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
+
+	var (
+		userId string
+		err    error
+	)
+
+	// check to see if request is coming with cookies
+	cookie, aTokenErr := req.Cookie(m.cookiePrefixAuthToken)
+	refreshTokenCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
+	if aTokenErr != nil && aTokenErr != http.ErrNoCookie && refreshTokenCookie == nil {
+		//nolint will set up default fallback later
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, aTokenErr)
+		return
+	}
+
+	if refreshTokenCookie == nil {
+		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+
+		//nolint will set up default fallback later
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+		return
+	}
+
+	if cookie != nil {
+		req.Header["Authorization"] = []string{"Bearer " + cookie.Value}
+	}
+
+	userId, err = m.service.MiddlewareAdminJWTRequired(req)
+	if err != nil {
+		// handle the case where the access token is expired
+		if refreshTokenCookie.Value != "" {
+
+			m.refreshTokenAndUpdateRequest(w, req, refreshTokenCookie.Value)
+
+			// retry the request with the new access token
+			userId, err = m.service.MiddlewareAdminJWTRequired(req)
+			if err != nil {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+				//nolint will set up default fallback later
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				return
+			}
+		} else {
+			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+			//nolint will set up default fallback later
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
+	}
+
+	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
+
+	responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
+	handler.ServeHTTP(responseWriter, request)
+
+}
+
 // handleActiveJWTRequiredRequest is checking to make sure the request
 // coming in has a valid JWT which is in active state associated to it
 func (m *Middleware) handleActiveJWTRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
@@ -497,6 +539,22 @@ func (m *Middleware) handleActiveJWTRequiredRequest(w http.ResponseWriter, req *
 	}
 
 	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userId))
+
+	responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
+	handler.ServeHTTP(responseWriter, request)
+}
+
+// handleAdminAPITokenRequiredRequest is checking to make sure the request
+// coming in has a valid admin Api token associated to it
+func (m *Middleware) handleAdminAPITokenRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
+	userID, err := m.service.MiddlewareAdminAPITokenRequired(req)
+	if err != nil {
+		//nolint will set up default fallback later
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	request := req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
 
 	responseWriter := middlewareResponseWriter(w, accessmanagerhelpers.AcquireTransactionFrom(req.Context()))
 	handler.ServeHTTP(responseWriter, request)
