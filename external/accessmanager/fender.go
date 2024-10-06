@@ -22,9 +22,15 @@ const (
 
 // MapRequestToLogoutUserOthersRequest maps incoming LogOutUserOthers request to correct struct.
 func MapRequestToLogoutUserOthersRequest(request *http.Request, validator AccessmanagerValidator, authCookiePrefix, refreshCookiePrefix string) (*LogoutUserOthersRequest, error) {
-	parsedRequest := &LogoutUserOthersRequest{}
+	var (
+		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+
+		parsedRequest *LogoutUserOthersRequest = &LogoutUserOthersRequest{}
+	)
+
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
-	log := logger.AcquireFrom(request.Context())
 
 	authTokenCookie, err := request.Cookie(authCookiePrefix)
 	if err != nil {
@@ -77,8 +83,13 @@ func MapRequestToOauthCallbackRequest(request *http.Request, validator Accessman
 
 // MapRequestToOauthLoginRequest maps incoming OauthLogin request to correct struct
 func MapRequestToOauthLoginRequest(request *http.Request, validator AccessmanagerValidator) (*OauthLoginRequest, error) {
-	parsedRequest := &OauthLoginRequest{}
-	log := logger.AcquireFrom(request.Context())
+	var (
+		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+
+		parsedRequest *OauthLoginRequest = &OauthLoginRequest{}
+	)
 
 	providerName, err := getProviderNameFromURI(request)
 	if err != nil {
@@ -325,8 +336,14 @@ func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator Acce
 // MapRequestToCreateUserAPITokenRequest maps incoming CreateUserAPIToken request to correct
 // struct.
 func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*CreateUserAPITokenRequest, error) {
-	parsedRequest := &CreateUserAPITokenRequest{}
-	log := logger.AcquireFrom(request.Context())
+
+	var (
+		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+
+		parsedRequest *CreateUserAPITokenRequest = &CreateUserAPITokenRequest{}
+	)
 
 	// Default to permanent
 	parsedRequest.Ttl = 0
@@ -406,8 +423,14 @@ func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName, a
 // MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest maps incoming CreateInitalLoginOrVerificationTokenEmail request
 // to correct struct
 func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.Request, validator AccessmanagerValidator) (*CreateInitalLoginOrVerificationTokenEmailRequest, error) {
-	parsedRequest := &CreateInitalLoginOrVerificationTokenEmailRequest{}
-	log := logger.AcquireFrom(request.Context())
+
+	var (
+		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+
+		parsedRequest *CreateInitalLoginOrVerificationTokenEmailRequest = &CreateInitalLoginOrVerificationTokenEmailRequest{}
+	)
 
 	err := toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {

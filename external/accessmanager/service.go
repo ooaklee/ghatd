@@ -149,8 +149,6 @@ func NewService(r *NewServiceRequest) *Service {
 // LogoutUserOthers handles logic of managing the user's other log in session
 func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error {
 
-	// log := logger.AcquireFrom(ctx)
-
 	var accessTokenId string
 	var refreshTokenId string
 
@@ -185,7 +183,9 @@ func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersReque
 // OauthCallback handles logic of managing the callback of a provider
 func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error) {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	if len(s.OauthServices) == 0 {
 		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-callback-requested", zap.String("requested-provider", r.Provider))
@@ -414,7 +414,9 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 // OauthLogin handles logic of managing the initialisation of provider url
 func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error) {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	if len(s.OauthServices) == 0 {
 		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-login-requested", zap.String("requested-provider", r.Provider))
@@ -567,7 +569,9 @@ func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenR
 // CreateUserAPIToken generates API token for user
 // TODO: Create tests
 func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error) {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	// Check if user exist
 	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
@@ -626,7 +630,9 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 // allocated thresholds
 func (s *Service) verifyRequestIsWithinUserRoleTokenConstraints(ctx context.Context, userId string, tokenTtl int64, userRoleThresholds *common.UserRoleThresholds) error {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	if tokenTtl == 0 {
 		return nil
@@ -657,9 +663,10 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	var (
 		userPermanentToken int
 		userEphemeralToken int
+		log                *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
 	)
-
-	log := logger.AcquireFrom(ctx)
 
 	// get user api tokens
 	userApiTokens, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
@@ -690,7 +697,9 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 // that the request is passed with a valid admin client ID and secret
 func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (string, error) {
 
-	log := logger.AcquireFrom(r.Context())
+	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
 	if err != nil {
@@ -738,7 +747,9 @@ func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (string, erro
 // TODO: Create tests
 func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (string, error) {
 
-	log := logger.AcquireFrom(r.Context())
+	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
 	if err != nil {
@@ -780,7 +791,9 @@ func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (string, erro
 // that the request is passed with a valid, non-expired token
 // TODO: Create tests
 func (s *Service) MiddlewareJWTRequired(r *http.Request) (string, error) {
-	log := logger.AcquireFrom(r.Context())
+	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
 	if err != nil {
@@ -812,7 +825,9 @@ func (s *Service) MiddlewareActiveJWTRequired(r *http.Request) (string, error) {
 // that of a platform admin, for middleware
 // TODO: Create tests
 func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (string, error) {
-	log := logger.AcquireFrom(r.Context())
+	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
 	if err != nil {
@@ -867,7 +882,9 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (strin
 // checkActivenessOfUser validates whether the user's account was in an active state at time of
 // token creation
 func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (string, error) {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	// Check when user was `ACTIVE` when access token was generated
 	if !s.isUserLiveStatusActive(ctx, tokenAuth.UserID) {
@@ -882,7 +899,9 @@ func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.Tok
 // TODO: Investigate best way to also delete corresponding refresh token
 // TODO: Create tests
 func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, r)
 	if err != nil {
@@ -922,7 +941,9 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 // checks
 // TODO: Create tests
 func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error) {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	tokenUser, refreshTokenUuid, err := s.RemoveRefreshTokenWithCookieValue(ctx, r.RefreshToken)
 	if err != nil {
@@ -966,7 +987,9 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 
 // RemoveAccessTokenWithCookieValue removes access token with the given cookie value
 func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, accessTokenCookieValue string) error {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	log.Info("processing-access-token-removal-by-cookie-value")
 
@@ -997,10 +1020,13 @@ func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, 
 // returns the user id of the refresh token and an error if any
 func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error) {
 
-	var userId string
-	var refreshTokenUuid string
-
-	log := logger.AcquireFrom(ctx)
+	var (
+		userId           string
+		refreshTokenUuid string
+		log              *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
 
 	log.Info("processing-refresh-token-removal-by-cookie-value")
 
@@ -1045,7 +1071,9 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 // TODO: Create tests
 func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUserResponse, error) {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	initiateLoginTokenDetails, err := s.TokenAsStringValidator(ctx, &TokenAsStringValidatorRequest{
 		Token: r.Token})
@@ -1120,7 +1148,9 @@ func (s *Service) DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 // admin user
 func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context, r *CreateInitalLoginOrVerificationTokenEmailRequest) error {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: r.Email})
 	if err != nil {
@@ -1183,7 +1213,9 @@ func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *Validate
 // TODO: Create tests
 func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEmailVerificationRevisionsRequest) (accessToken string, accessTokenExpiresAt int64, refreshToken string, refreshTokenExpiresAt int64, err error) {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: r.UserID})
 	if err != nil {
@@ -1225,7 +1257,9 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 // conventional method (headers)
 // TODO: Create tests
 func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringValidatorRequest) (*TokenAsStringValidatorResponse, error) {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	token, err := s.AuthService.ParseAccessTokenFromString(ctx, r.Token)
 	if err != nil {
@@ -1256,7 +1290,9 @@ func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringVa
 // TODO: Create tests
 func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error) {
 
-	loggr := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	response := &CreateUserResponse{}
 
@@ -1271,13 +1307,13 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 
 	response.User = newUser.User
 
-	loggr.Info(fmt.Sprintf("ams/initiate-new-user-verification-email: %s", newUser.User.ID))
+	log.Info(fmt.Sprintf("ams/initiate-new-user-verification-email: %s", newUser.User.ID))
 	_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
 		User:       response.User,
 		RequestUrl: r.RequestUrl,
 	})
 	if err != nil {
-		loggr.Error(fmt.Sprintf("ams/error-failed-to-initiate-new-user-verification-email: %s", newUser.User.ID))
+		log.Error(fmt.Sprintf("ams/error-failed-to-initiate-new-user-verification-email: %s", newUser.User.ID))
 		return response, err
 	}
 
@@ -1291,10 +1327,10 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 	})
 
 	if auditErr != nil {
-		loggr.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
+		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
 	}
 
-	loggr.Info(fmt.Sprintf("ams/successfully-initiated-new-user-verification-email: %s", newUser.User.ID))
+	log.Info(fmt.Sprintf("ams/successfully-initiated-new-user-verification-email: %s", newUser.User.ID))
 
 	return response, nil
 }
@@ -1303,7 +1339,9 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 // TODO: Create tests
 func (s *Service) CreateInitalLoginToken(ctx context.Context, user *user.User, isDashboardRequest bool, requestUrl string) (string, error) {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	tokenDetails, err := s.AuthService.CreateInitalToken(ctx, user)
 	if err != nil {
@@ -1345,9 +1383,10 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *user.User, i
 // TODO: Create tests
 func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEmailVerificationTokenRequest) (string, error) {
 
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 	user := &r.User
-
-	log := logger.AcquireFrom(ctx)
 
 	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, user)
 	if err != nil {
@@ -1405,7 +1444,9 @@ func getValidRequestorIP(r *http.Request) string {
 // isUserLiveStatusActive returns whether user matching passed user ID
 // has an `ACTIVE` user status
 func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) bool {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
 	if err != nil {
