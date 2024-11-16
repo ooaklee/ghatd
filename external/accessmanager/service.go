@@ -670,7 +670,9 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 
 	// get user api tokens
 	userApiTokens, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
-		ID: userId,
+		PerPage: 100,
+		Page:    1,
+		ID:      userId,
 	})
 
 	if err != nil {
