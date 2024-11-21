@@ -291,19 +291,27 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	// on failure/ success
 	signUserOutOfPlatform = true
 
-	// stop all old sessions (ignore errors)
-	go func() {
-		err := s.LogoutUserOthers(ctx, &LogoutUserOthersRequest{
-			UserId:       r.TargetUserId,
-			RefreshToken: r.RefreshToken,
-			AuthToken:    r.AuthToken,
-		})
-		if err != nil {
-			log.Error("ams/failed-to-logout-users-other-sessions", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
-			return
-		}
+	// stop all other sessions (ignore errors)
+	wipeOldSessionsErr := s.LogoutUserOthers(ctx, &LogoutUserOthersRequest{
+		UserId:       r.TargetUserId,
+		RefreshToken: r.RefreshToken,
+		AuthToken:    r.AuthToken,
+	})
+	if wipeOldSessionsErr != nil {
+		log.Error("ams/failed-to-logout-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(wipeOldSessionsErr))
+	}
+	if wipeOldSessionsErr == nil {
 		log.Info("ams/logged-out-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-	}()
+	}
+
+	// log out of the current session (ignore errors)
+	logOutCurrentSessionErr := s.LogoutUser(ctx, r.Request)
+	if logOutCurrentSessionErr != nil {
+		log.Error("ams/failed-to-logout-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(logOutCurrentSessionErr))
+	}
+	if logOutCurrentSessionErr == nil {
+		log.Info("ams/logged-out-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
+	}
 
 	// send a verification email to the new email address
 	log.Info(fmt.Sprintf("ams/initiate-verification-email-for-user-with-changed-email: %s", targetUser.GetUserId()))

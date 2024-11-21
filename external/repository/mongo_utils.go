@@ -47,26 +47,29 @@ func GenerateSampleFilter(queryFilter []bson.D, sampleSize int) []bson.D {
 
 // RepositoryLogEntry handles logging passed message, error from repository
 func RepositoryLogEntry(ctx context.Context, logLevel string, logMessage string, err error) {
-	logger := logger.AcquireFrom(ctx)
+	logger := logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	switch logLevel {
-	case logWarn:
-		logger.Warn(logMessage, zap.Error(err))
-		if err != nil {
-			logger.Warn(logMessage)
-		}
 	case logError:
 		if err != nil {
 			logger.Error(logMessage, zap.Error(err))
+		} else {
+			logger.Error(logMessage)
 		}
-		logger.Error(logMessage)
-
+	case logWarn:
+		if err != nil {
+			logger.Warn(logMessage, zap.Error(err))
+		} else {
+			logger.Warn(logMessage)
+		}
 	default:
 		if err != nil {
 			logger.Info(logMessage, zap.Error(err))
-			return
+		} else {
+			logger.Info(logMessage)
 		}
-		logger.Info(logMessage)
 	}
 
 }

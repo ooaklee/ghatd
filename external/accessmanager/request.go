@@ -231,4 +231,7 @@ type UpdateUserEmailRequest struct {
 
 	// AuthToken the current access token of the user
 	AuthToken string
+
+	// Request the request that triggered the update request
+	Request *http.Request
 }

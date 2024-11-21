@@ -69,6 +69,9 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 
 	parsedRequest.RefreshToken = refreshTokenCookie.Value
 
+	// Add request
+	parsedRequest.Request = request
+
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("unable-validate-request-for-updating-user-email")
 		return nil, errors.New(ErrKeyBadRequest)
