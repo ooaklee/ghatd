@@ -2,10 +2,12 @@ package apitoken
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"math/rand"
 	"time"
 	"unsafe"
 
+	"github.com/PaesslerAG/jsonpath"
 	"github.com/mergestat/timediff"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -58,6 +60,30 @@ type UserAPIToken struct {
 
 	// HumanReadableTtlExpiresAt is the difference between now (UTC) and when the token will expire
 	HumanReadableTtlExpiresAt string `json:"human_readable_ttl_expires_at,omitempty" bson:"-"`
+}
+
+// GetAttributeByJsonPath returns the value of the attribute at the given JSON path
+// It marshals the User struct to JSON, then uses the jsonpath package to extract the value at the given path.
+// If there is an error during the marshaling or jsonpath extraction, it returns the error.
+func (u *UserAPIToken) GetAttributeByJsonPath(jsonPath string) (any, error) {
+	jsonDataByteAsMap := make(map[string]interface{})
+
+	jsonDataByte, err := json.Marshal(u)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(jsonDataByte, &jsonDataByteAsMap)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := jsonpath.Get(jsonPath, jsonDataByteAsMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // GenerateHumanReadable generates human-readable representations of the last used, updated, and TTL expiration times for a UserAPIToken.

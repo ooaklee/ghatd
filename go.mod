@@ -3,7 +3,9 @@ module github.com/ooaklee/ghatd
 go 1.22.0
 
 require (
-	//>ghatd {{ block .DetailModGhatdPackage }}{{ end }}
+	//>ghatd {{ block .DetailModGhatdPackage }}
+	github.com/PaesslerAG/jsonpath v0.1.1
+	//>ghatd {{ end }}
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3
 	github.com/spf13/cobra v1.8.0
@@ -21,6 +23,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/PaesslerAG/gval v1.0.0 // indirect
 	github.com/ProtonMail/go-crypto v0.0.0-20230828082145-3c4c8a2d2371 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/alicebob/miniredis/v2 v2.30.4 // indirect

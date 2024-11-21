@@ -31,6 +31,7 @@ type AccessmanagerService interface {
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
 	RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
 	LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error
+	UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (bool, error)
 }
 
 // AccessmanagerValidator expected methods of a valid
@@ -74,6 +75,44 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 		Environment:              r.Environment,
 		CookieDomain:             r.CookieDomain,
 	}
+}
+
+// UpdateUserEmail handles updating a user's email address. If the update requires the user to sign out,
+// it will remove the user's auth cookies and redirect them to the home page. Otherwise, it will return
+// a blank response with a 200 status code.
+func (h *Handler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateUserEmailRequest(r, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	signOutRequired, err := h.Service.UpdateUserEmail(r.Context(), request)
+	if err != nil && !signOutRequired {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	if err != nil && signOutRequired {
+		h.RemoveAuthCookies(w)
+		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
+		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
+
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if signOutRequired {
+		// complete the cleanup process of removing the cookies
+		h.RemoveAuthCookies(w)
+		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
+		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
+
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
 // LogoutUserOthers handles logging out all other sessions for a user

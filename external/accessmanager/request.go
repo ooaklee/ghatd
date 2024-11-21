@@ -213,3 +213,22 @@ type LogoutUserOthersRequest struct {
 	// AuthToken the current auth token of the user that will be preserved
 	AuthToken string
 }
+
+// UpdateUserEmailRequest holds all the data needed to change a user's  email
+type UpdateUserEmailRequest struct {
+
+	// UserId the ID of the user making the request
+	UserId string `json:"-"`
+
+	// TargetUserId the ID of the user to update the email for
+	TargetUserId string `json:"-"`
+
+	// Email the new email to assign to the user
+	Email string `json:"email"`
+
+	// RefreshToken the current refresh token of the user
+	RefreshToken string
+
+	// AuthToken the current access token of the user
+	AuthToken string
+}

@@ -1,12 +1,15 @@
 package user
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
+
+	"github.com/PaesslerAG/jsonpath"
 )
 
 // statusChoices valid status for user account
@@ -69,6 +72,30 @@ type UserMeta struct {
 	StatusChangedAt     string            `json:"status_changed_at,omitempty" bson:"status_changed_at,omitempty"`
 	LastFreshLoginAt    string            `json:"last_fresh_login_at,omitempty" bson:"last_fresh_login_at,omitempty"`
 	BillingAssessmentAt map[string]string `json:"-" bson:"billing_assessment_at"`
+}
+
+// GetAttributeByJsonPath returns the value of the attribute at the given JSON path
+// It marshals the User struct to JSON, then uses the jsonpath package to extract the value at the given path.
+// If there is an error during the marshaling or jsonpath extraction, it returns the error.
+func (u *User) GetAttributeByJsonPath(jsonPath string) (any, error) {
+	jsonDataByteAsMap := make(map[string]interface{})
+
+	jsonDataByte, err := json.Marshal(u)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(jsonDataByte, &jsonDataByteAsMap)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := jsonpath.Get(jsonPath, jsonDataByteAsMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // ClearBillingAssessmentDate sets the BillingAssessmentAt date to blank

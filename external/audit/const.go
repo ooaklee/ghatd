@@ -26,6 +26,9 @@ const (
 	// UserAccountNew occurs when a new user account is created
 	UserAccountNew AuditAction = "USER_ACCOUNT_NEW"
 
+	// UserAccountChangeEmail occurs when a user account changes email
+	UserAccountChangeEmail AuditAction = "USER_ACCOUNT_CHANGE_EMAIL"
+
 	// UserAccountNewSso occurs when a new user account is created using SSO
 	UserAccountNewSso AuditAction = "USER_ACCOUNT_NEW_SSO"
 

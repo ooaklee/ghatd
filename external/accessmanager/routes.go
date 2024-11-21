@@ -26,6 +26,7 @@ type AccessmanagerHandler interface {
 	OauthLogin(w http.ResponseWriter, r *http.Request)
 	OauthCallback(w http.ResponseWriter, r *http.Request)
 	LogoutUserOthers(w http.ResponseWriter, r *http.Request)
+	UpdateUserEmail(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -145,15 +146,18 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleCallback, request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleLogin, request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
 
-	accessmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.CreateUserAPIToken).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.GetSpecificUserAPITokens).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecific, request.Handler.DeleteUserAPIToken).Methods(http.MethodDelete, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificActivate, request.Handler.ActivateUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificRevoke, request.Handler.RevokeUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenThreshold, request.Handler.GetUserAPITokenThreshold).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.HandleFunc(APIAccessManagerLogoutOtherSessions, request.Handler.LogoutUserOthers).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.CreateUserAPIToken).Methods(http.MethodPost, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.GetSpecificUserAPITokens).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecific, request.Handler.DeleteUserAPIToken).Methods(http.MethodDelete, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificActivate, request.Handler.ActivateUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificRevoke, request.Handler.RevokeUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenThreshold, request.Handler.GetUserAPITokenThreshold).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerLogoutOtherSessions, request.Handler.LogoutUserOthers).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
 
-	accessmanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	accessmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
+	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc("/users/{userID}/email", request.Handler.UpdateUserEmail).Methods(http.MethodPatch, http.MethodOptions)
+	accessmanagerActiveOnlyRoutes.Use(request.ActiveOnlyMiddleware)
 
 }

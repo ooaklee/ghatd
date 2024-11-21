@@ -1,6 +1,11 @@
 package accessmanager
 
 const (
+
+	// ErrKeyConflictingUserState returned when user state is in an conflicting state for the requested
+	// action (i.e. user is already active, email is already verified etc.)
+	ErrKeyConflictingUserState string = "ConflictingUserState"
+
 	// ErrKeyBadRequest return when bad request occurs (basic)
 	ErrKeyBadRequest = "BadRequest"
 
@@ -10,8 +15,8 @@ const (
 	// ErrKeyInvalidVerificationToken returned when verification token missing or incorrectly formatted
 	ErrKeyInvalidVerificationToken string = "InvalidVerificationToken"
 
-	// ErrKeyInvalidUserEmail returned when errors occurs while decoding email for initial token / verification
-	// request
+	// ErrKeyInvalidUserEmail returned when errors occurs while decoding email for  auth related requests
+	// i.e, initial token / verification, changing email etc.
 	ErrKeyInvalidUserEmail string = "KeyInvalidUserEmail"
 
 	// ErrKeyUserStatusUncaught returned when user status in an unexpected status, while the user attempts to initiate
@@ -108,4 +113,24 @@ const (
 
 	// UserRoleReader holds the identifier for user reader role
 	UserRoleReader = "READER"
+)
+
+const (
+	// UpdateUserEmailOldEmailNotificationBodyTmpl is the template for the email body sent to the old email address when a user changes their email address
+	UpdateUserEmailOldEmailNotificationBodyTmpl string = `<td style="font-family: sans-serif; font-size: 14px; vertical-align: top;">
+	<br>
+	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
+		<br> A request to change your account email from <b><code>%s</code></b> to <b><code>%s</code></b> is being processed. You can no longer use your this email to access your account (ID: <b><code>%s</code></b>).
+	</p>
+	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
+		<b>Important Note:</b>
+		<br>
+		<br>
+		All critical authentication and essential emails will now be sent to your new email address. Additionally, you have been signed out of all active sessions associated with the old email. Please check your new email address for instructions on verifying it as your primary email.
+		<br><br>
+		If you are unable to access the new email address or did not request this change, please contact us directly through our website for immediate assistance.
+	</p>
+	<br>
+</td>
+`
 )

@@ -18,7 +18,64 @@ import (
 
 const (
 	AccessManagerRequestParameterKeyDefaultToken = "t"
+
+	EmailUpdateUserEmailRequest
 )
+
+// MapRequestToUpdateUserEmailRequest maps incoming UpdateUserEmail request to correct struct.
+func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthToken, cookiePrefixRefreshToken string, validator AccessmanagerValidator) (*UpdateUserEmailRequest, error) {
+	var (
+		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+		parsedRequest *UpdateUserEmailRequest = &UpdateUserEmailRequest{}
+	)
+
+	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
+		log.Error("unable-decode-request-body-for-updating-user-email")
+		return nil, errors.New(ErrKeyInvalidUserEmail)
+	}
+
+	requestorId := accessmanagerhelpers.AcquireFrom(request.Context())
+	if requestorId == "" {
+		log.Error("unable-get-requestor-user-id")
+		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+	}
+
+	targetUserId, err := getUserIDFromURI(request)
+	if err != nil {
+		log.Error("unable-get-target-user-id")
+		return nil, err
+	}
+
+	parsedRequest.UserId = requestorId
+	parsedRequest.TargetUserId = targetUserId
+
+	// get the access token from the cookie
+	// check to see if request is coming with cookies
+	cookie, aTokenErr := request.Cookie(cookiePrefixAuthToken)
+	if aTokenErr != nil {
+		log.Error("unable-get-access-token-from-cookie", zap.String("user-id", requestorId), zap.String("target-user-id", targetUserId))
+		return nil, aTokenErr
+	}
+
+	parsedRequest.AuthToken = cookie.Value
+
+	refreshTokenCookie, rAuthErr := request.Cookie(cookiePrefixRefreshToken)
+	if aTokenErr != nil {
+		log.Error("unable-get-access-token-from-cookie", zap.String("user-id", requestorId), zap.String("target-user-id", targetUserId))
+		return nil, rAuthErr
+	}
+
+	parsedRequest.RefreshToken = refreshTokenCookie.Value
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("unable-validate-request-for-updating-user-email")
+		return nil, errors.New(ErrKeyBadRequest)
+	}
+
+	return parsedRequest, nil
+}
 
 // MapRequestToLogoutUserOthersRequest maps incoming LogOutUserOthers request to correct struct.
 func MapRequestToLogoutUserOthersRequest(request *http.Request, validator AccessmanagerValidator, authCookiePrefix, refreshCookiePrefix string) (*LogoutUserOthersRequest, error) {

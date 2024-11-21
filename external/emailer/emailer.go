@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mailgun/raymond/v2"
 	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/emailer/template"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
@@ -68,6 +70,12 @@ type Config struct {
 	// DashboardVerificationURIPath the path on the front end that will catch and handle token
 	// verify actions for admins/ dashboard access
 	DashboardVerificationURIPath string
+
+	// BusinessEntityName the name of the this entity, whether an appliication, a person, business etc.
+	BusinessEntityName string
+
+	// BusinessEntityWebsite the website to reach the entity outlined in BusinessEntityName
+	BusinessEntityWebsite string
 }
 
 // Client used to send out emails
@@ -86,6 +94,95 @@ func NewSparkPostClient(client emailClient, config *Config, auditService auditSe
 		auditService: auditService,
 		providerName: "SPARKPOST",
 	}
+}
+
+type GenerateEmailFromBaseTemplateRequest struct {
+	// EmailSubject the email subject
+	EmailSubject string
+	// EmailPreview the email preview
+	EmailPreview string
+	// EmailBody the email body which should be html wrapped in <td> tags
+	//
+	// example:
+	//
+	//
+	// <td style="font-family: sans-serif; font-size: 14px; vertical-align: top;">
+	// 	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
+	// 		<br> A request has been made to log in to your account
+	// 	</p>
+	// 	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
+	// 		Press the button below to verify the request and log in. The link will expire in <i><u>10 minutes</u></i>. Kindly refrain from sharing this email with anyone, even those who claim to be part of the team, as it grants access to your account.
+	// 		<br><br>
+	// 		Once you've logged in, feel free to delete this email.</>
+	// 		<table border="0" cellpadding="0" cellspacing="0" class="btn btn-primary" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: 100%; box-sizing: border-box;">
+	// 			<tbody>
+	// 				<tr>
+	// 					<td align="left" style="font-family: sans-serif; font-size: 14px; vertical-align: top; padding-bottom: 15px;">
+	// 						<table border="0" cellpadding="0" cellspacing="0" style="border-collapse: separate; mso-table-lspace: 0pt; mso-table-rspace: 0pt; width: auto;">
+	// 							<tbody>
+	// 								<tr>
+	// 									<td style="font-family: sans-serif; font-size: 14px; vertical-align: top; background-color: #000000; border-radius: 5px; text-align: center;">
+	// 										<a href="https://awesome-service.com/some/path/for/magic/login" title="Log in to Account" target="_blank" style="display: inline-block; color: #ffffff; background-color: #000000; border: solid 1px #000000; border-radius: 5px; box-sizing: border-box; cursor: pointer; text-decoration: none; font-size: 14px; font-weight: bold; margin: 0; padding: 12px 25px; text-transform: capitalize; border-color: #000000;">Log in to Account</a>
+	// 									</td>
+	// 								</tr>
+	// 							</tbody>
+	// 						</table>
+	// 					</td>
+	// 				</tr>
+	// 			</tbody>
+	// 		</table>
+	// 	</p>
+	// </td>
+	EmailBody string
+	// EmailTo the email address that should be in "To" field
+	EmailTo string
+
+	// OverrideEmailFrom the email address that should override the deafult
+	// value in "From" field
+	OverrideEmailFrom string
+	// OverrideEmailReplyTo the email address that should override the default
+	// value in reply to field
+	OverrideEmailReplyTo string
+	// WithFooter specifies whether the email should have a footer
+	WithFooter bool
+}
+
+// GenerateEmailFromBaseTemplate generates an email from a base template (with footer)
+func (c *Client) GenerateEmailFromBaseTemplate(r *GenerateEmailFromBaseTemplateRequest) (*sp.Transmission, *EmailInfo, error) {
+
+	var (
+		emailFrom    string = c.config.FromEmailAddress
+		emailReplyTo string = c.config.NoReplyEmailAddress
+		emailSubject string = r.EmailSubject
+	)
+
+	if r.OverrideEmailFrom != "" {
+		emailFrom = r.OverrideEmailFrom
+	}
+
+	if r.OverrideEmailReplyTo != "" {
+		emailReplyTo = r.OverrideEmailReplyTo
+	}
+
+	if c.config.Environment != "production" {
+		emailSubject = emailSubject + fmt.Sprintf(" [%s]", c.config.Environment)
+	}
+
+	fullRenderedEmail := template.NewBaseHtmlEmailTemplate(r.EmailPreview, r.EmailSubject, r.EmailBody, r.WithFooter, time.Now().Year(),
+		c.config.BusinessEntityName,
+		c.config.BusinessEntityWebsite,
+	)
+
+	emailTransmission := generateSparkPostTransmission(r.EmailTo, emailSubject, fullRenderedEmail, emailFrom, emailReplyTo)
+
+	return emailTransmission, &EmailInfo{
+		To:            r.EmailTo,
+		From:          emailFrom,
+		Subject:       emailSubject,
+		RecipientType: string(audit.User),
+		EmailProvider: c.getEmailProviderBasedOnConfig(),
+	}, nil
+
 }
 
 // GenerateVerificationEmail generates an email for the user to verify their email address
