@@ -84,6 +84,9 @@ const (
 
 	// ErrKeyInvalidAuthToken error when a user makes a request with invalid auth token
 	ErrKeyInvalidAuthToken string = "InvalidAuthToken"
+
+	// ErrKeyInvalidResultQueryParam error when a user makes a request with invalid query param
+	ErrKeyInvalidResultQueryParam string = "InvalidResultQueryParam"
 )
 
 const (

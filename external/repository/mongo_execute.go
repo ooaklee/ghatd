@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -51,14 +52,16 @@ func ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, 
 
 	_, err := collection.UpdateOne(repoCtx, filter, updateFilter)
 	if err != nil {
-		RepositoryLogEntry(ctx, logError, fmt.Sprintf("match-and-update-failure-%s:", resultObjectName), err)
+		RepositoryLogEntry(ctx, logError, fmt.Sprintf("match-and-update-failure-%s:",
+			toolbox.StringStandardisedToLower(resultObjectName),
+		), err)
 		return err
 	}
 
 	return nil
 }
 
-// ExecuteDeleteOneCommand attempts to remove affirmation matching ID from repository, if successful error is nil
+// ExecuteDeleteOneCommand attempts to remove resource matching ID from repository, if successful error is nil
 func ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
 
 	var repoCtx = context.Background()
@@ -67,7 +70,9 @@ func ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, 
 
 	_, err := collection.DeleteOne(repoCtx, filter)
 	if err != nil {
-		RepositoryLogEntry(ctx, logError, fmt.Sprintf("Unable to delete %s", targetObjectName), err)
+		RepositoryLogEntry(ctx, logError, fmt.Sprintf("unable-to-delete: %s",
+			toolbox.StringStandardisedToLower(targetObjectName),
+		), err)
 		return err
 	}
 
@@ -84,7 +89,10 @@ func ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Co
 	err := collection.FindOne(repoCtx, filter).Decode(result)
 	if err != nil {
 		if logError {
-			RepositoryLogEntry(ctx, logWarn, fmt.Sprintf("Unable to find %s matching: %v", resultObjectName, filter), err)
+			RepositoryLogEntry(ctx, logWarn, fmt.Sprintf("unable-to-find-%s-matching: %v",
+				toolbox.StringStandardisedToLower(resultObjectName),
+				filter,
+			), err)
 		}
 		return errors.New(errorType)
 	}

@@ -57,10 +57,6 @@ func (r MongoDbRepository) GetTotalUsers(ctx context.Context, firstNameFilter, l
 // UpdateUser updates user passed in the DB
 func (r MongoDbRepository) UpdateUser(ctx context.Context, user *user.User) (*user.User, error) {
 
-	updateFilter := bson.M{"_id": user.ID}
-
-	user.SetUpdatedAtTimeToNow()
-
 	// NICE_TO_HAVE: Wrap context with observability platform transaction
 
 	client, err := r.InitialiseClient(ctx)
@@ -70,7 +66,9 @@ func (r MongoDbRepository) UpdateUser(ctx context.Context, user *user.User) (*us
 
 	collection := r.GetUserCollection(client)
 
-	err = ExecuteReplaceOneCommand(ctx, collection, updateFilter, user, "User")
+	user.SetUpdatedAtTimeToNow()
+
+	err = ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": user.ID}, bson.M{"$set": user}, "user")
 	if err != nil {
 		return nil, err
 	}

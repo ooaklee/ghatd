@@ -4,6 +4,9 @@ const UserManagerURIVariableID = "blankpackagID"
 
 const (
 
+	// ErrKeyRequestFailedValidation is the error key for when the request fails validation
+	ErrKeyRequestFailedValidation = "RequestFailedValidation"
+
 	// ErrKeyUserManagerError error key placeholder
 	ErrKeyUserManagerError string = "UserManagerError"
 

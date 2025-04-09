@@ -15,6 +15,8 @@ type UsermanagerHandler interface {
 	GetUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserMicroProfile(w http.ResponseWriter, r *http.Request)
 	DeleteUserPermanently(w http.ResponseWriter, r *http.Request)
+	CreateComms(w http.ResponseWriter, r *http.Request)
+	GetComms(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -61,6 +63,9 @@ type AttachRoutesRequest struct {
 	// ValidApiTokenOrJWTMiddleware is middleware that is used to lock
 	// down endpoints to either tokens or JWT (authenticated)
 	ValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
+
+	// RateLimitOrActiveMiddleware middleware used to open endpoints up (with rate limite) or active users only
+	RateLimitOrActiveMiddleware mux.MiddlewareFunc
 }
 
 // AttachRoutes attaches usermanager handler to corresponding
@@ -68,14 +73,18 @@ type AttachRoutesRequest struct {
 func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter := request.Router.GetRouter()
 
+	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
+	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
+	userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
+
 	usermanagerAuthenticatedRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
 	usermanagerAuthenticatedRoutes.HandleFunc(APIUserManagerMe, request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc(APIUserManagerMe, request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc(APIUserManagerMeMicro, request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
-
 	usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)
 
 	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
+	usermanagerAdminRoutes.HandleFunc("/comms", request.Handler.GetComms).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
 
 	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()

@@ -76,7 +76,7 @@ type AuthService interface {
 // UserService expected methods of a valid user service
 type UserService interface {
 	GetUserByNanoId(ctx context.Context, id string) (*user.GetUserByIDResponse, error)
-	GetUserByID(ctx context.Context, r *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error)
+	GetUserByID(ctx context.Context, r *user.GetUserByIdRequest) (*user.GetUserByIDResponse, error)
 	GetUserByEmail(ctx context.Context, r *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
 	UpdateUser(ctx context.Context, user *user.UpdateUserRequest) (*user.UpdateUserResponse, error)
 	CreateUser(ctx context.Context, r *user.CreateUserRequest) (*user.CreateUserResponse, error)
@@ -181,8 +181,8 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	// check that the user id the same as the target user id or the user is an admin
 	if r.UserId != r.TargetUserId {
 		// check if the user is an admin
-		userByIdResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-			ID: r.UserId,
+		userByIdResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+			Id: r.UserId,
 		})
 		if err != nil {
 			log.Error("ams/failed-to-get-requesting-user-by-id", zap.Error(err))
@@ -198,8 +198,8 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	}
 
 	// check if the user's old email is the same as the new email (error with no neeed to signout)
-	userByIdResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-		ID: r.TargetUserId,
+	userByIdResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: r.TargetUserId,
 	})
 	if err != nil {
 		log.Error("ams/failed-to-get-target-user-by-id", zap.Error(err))
@@ -351,8 +351,8 @@ func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersReque
 	var refreshTokenId string
 
 	// Check if ID returns valid user
-	requestingUser, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-		ID: r.UserId,
+	requestingUser, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: r.UserId,
 	})
 	if err != nil {
 		return err
@@ -689,8 +689,8 @@ func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUs
 func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error) {
 
 	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-		ID: r.UserId,
+	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: r.UserId,
 	})
 	if err != nil {
 		return nil, err
@@ -730,8 +730,8 @@ func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenS
 // TODO: Create tests
 func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
 	// Check if user exist
-	_, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-		ID: r.UserID,
+	_, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: r.UserID,
 	})
 	if err != nil {
 		return err
@@ -739,8 +739,10 @@ func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenR
 
 	// get all user api tokens
 	userApiTokens, err := s.GetSpecificUserAPITokens(ctx, &GetSpecificUserAPITokensRequest{
-		UserID:  r.UserID,
-		PerPage: 100, // Fetch all user tokens
+		UserID: r.UserID,
+		GetAPITokensForRequest: &apitoken.GetAPITokensForRequest{
+			PerPage: 100, // Fetch all user tokens
+		},
 	})
 	if err != nil {
 		return err
@@ -772,8 +774,8 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 	)
 
 	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-		ID: r.UserID,
+	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: r.UserID,
 	})
 	if err != nil {
 		return nil, err
@@ -1247,7 +1249,8 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	refreshTokenUuid = refreshTokenDetails.RefreshUUID
 
 	// Get user details
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: refreshTokenDetails.UserID})
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: refreshTokenDetails.UserID})
 	if err != nil {
 		log.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
 		return nil, refreshTokenUuid, err
@@ -1282,8 +1285,8 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	}
 
 	// Check if ID returns valid user
-	gIDResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{
-		ID: initiateLoginTokenDetails.UserID,
+	gIDResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
+		Id: initiateLoginTokenDetails.UserID,
 	})
 	if err != nil {
 		return nil, err
@@ -1417,7 +1420,7 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: r.UserID})
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{Id: r.UserID})
 	if err != nil {
 		return "", 0, "", 0, err
 	}
@@ -1648,7 +1651,9 @@ func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) boo
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx,
+		&user.GetUserByIdRequest{Id: userID},
+	)
 	if err != nil {
 		log.Warn("live-status-check-failure", zap.String("user-id", userID), zap.Error(err))
 		return false

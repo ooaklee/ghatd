@@ -63,6 +63,28 @@ type User struct {
 	Meta     UserMeta              `json:"meta" bson:"meta,omitempty"`
 }
 
+// GetAsProfile returns user profile representation of the user
+func (u *User) GetAsProfile() *UserProfile {
+	return &UserProfile{
+		ID:            u.ID,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		Status:        u.Status,
+		Roles:         u.Roles,
+		Email:         u.Email,
+		EmailVerified: u.Verified.EmailVerified,
+	}
+}
+
+// GetAsMicroProfile returns user micro profile representation of the user
+func (u *User) GetAsMicroProfile() *UserMicroProfile {
+	return &UserMicroProfile{
+		ID:     u.ID,
+		Roles:  u.Roles,
+		Status: u.Status,
+	}
+}
+
 // UserMeta holds metadeta about user
 type UserMeta struct {
 	CreatedAt           string            `json:"created_at" bson:"created_at,omitempty"`

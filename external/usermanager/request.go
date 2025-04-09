@@ -1,32 +1,33 @@
 package usermanager
 
+import (
+	"github.com/ooaklee/ghatd/external/contacter"
+	"github.com/ooaklee/ghatd/external/user"
+)
+
 // GetUserMicroProfileRequest holds all the data needed to action request
 type GetUserMicroProfileRequest struct {
 
-	// UserID the ID of the user requesting their micro profile
-	UserID string
+	// UserId the ID of the user requesting their micro profile
+	UserId string
 }
 
 // GetUserProfileRequest holds all the data needed to action user
 // profile retrival request
 type GetUserProfileRequest struct {
 
-	// UserID the ID of the user requesting their profile
-	UserID string
+	// UserId the ID of the user requesting their profile
+	UserId string
 }
 
 // UpdateUserProfileRequest holds all the data needed to action user
 // profile update request
 type UpdateUserProfileRequest struct {
 
-	// UserID the ID of the user requesting their profile
-	UserID string
+	// UserId the ID of the user requesting their profile
+	UserId string
 
-	// FirstName the new name to assign to the first name attribute
-	FirstName string `json:"first_name"`
-
-	// LastNmae the new name to assign to the last name attribute
-	LastName string `json:"last_name"`
+	*user.UpdateUserRequest
 }
 
 // DeleteUserPermanentlyRequest holds all the data needed to delete user and resources
@@ -46,4 +47,20 @@ type GetUserInsightsUsageRequest struct {
 
 	// To the date up to when the queries should be run between
 	To string
+}
+
+// CreateCommsRequest holds everything needed to make
+// the request to create a comms
+type CreateCommsRequest struct {
+	*contacter.CreateCommsRequest
+}
+
+// GetCommsRequest holds everything needed to make
+// the request to get a comms
+type GetCommsRequest struct {
+
+	// UserId is the id of the user making the request
+	UserId string
+
+	*contacter.GetCommsRequest
 }

@@ -2,6 +2,7 @@ package toolbox
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,13 +14,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ooaklee/ghatd/external/common"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
 
-const ()
+const (
+	// ErrKeyMissingUriVariable is the error returned when a URI variable is missing
+	ErrKeyMissingUriVariable = "MissingUriVariable"
+)
 
 type (
 	// BaseValidator is a base validator
@@ -481,4 +486,29 @@ func GenerateTimeOfExpiryAsSeconds(ttlDuration time.Duration) int64 {
 // a format that is used for referencing tokens in ephemeral storage.
 func CombinedUuidFormat(userID, tokenUUID string) string {
 	return fmt.Sprintf("%v:%v", userID, tokenUUID)
+}
+
+// GetVariableValueFromUri pulls variable value from URI. If fails, returns error
+func GetVariableValueFromUri(request *http.Request, variableID string) (string, error) {
+	var variableValue string
+
+	if variableValue = mux.Vars(request)[variableID]; variableValue == "" {
+		return "", errors.New(ErrKeyMissingUriVariable)
+	}
+
+	return variableValue, nil
+}
+
+// SplitCommaSeparatedStringAndRemoveEmptyStrings handles creating array from
+// provided string and removing any empty strings
+func SplitCommaSeparatedStringAndRemoveEmptyStrings(str string) []string {
+	parts := strings.Split(str, ",")
+	var result []string
+	for _, part := range parts {
+		trimmedPart := strings.TrimSpace(part)
+		if trimmedPart != "" {
+			result = append(result, trimmedPart)
+		}
+	}
+	return result
 }
