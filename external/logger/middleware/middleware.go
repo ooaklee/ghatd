@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/logger"
@@ -52,7 +53,8 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 		handler.ServeHTTP(responseWriter, request)
 
 		// Log request data
-		reqLogger.Info("request",
+		reqLogger.Info(
+			fmt.Sprintf("concluded request for %s [correlation-id: %s]", req.URL.RequestURI(), fetchedCorrelationId),
 			zap.Int("status", responseWriter.statusCode),
 			zap.String("method", req.Method),
 			zap.String("clientip", req.RemoteAddr),
