@@ -29,8 +29,9 @@ func getOrCreateCorrelationId(req *http.Request) string {
 	return correlationId
 }
 
-// HTTPLogger creates a middleware that affixes the correlation Id to the logger, and as well logs
-// request specific data
+// HTTPLogger is a middleware that adds correlation ID tracking and logging to HTTP requests.
+// It generates or retrieves a correlation ID, attaches it to the request context and response headers,
+// creates a logger with the correlation ID, and logs request details after the handler completes.
 func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
