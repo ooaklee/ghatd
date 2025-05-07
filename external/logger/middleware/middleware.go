@@ -37,6 +37,10 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 		fetchedCorrelationId := getOrCreateCorrelationId(req)
 		w.Header().Add("X-Correlation-Id", fetchedCorrelationId)
 
+		// attach correlation id to request context
+		req = req.WithContext(toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId))
+
+		// attach correlation id to logger
 		reqLogger := m.logger.With(zap.String("correlation-id", fetchedCorrelationId))
 		//nolint Sync the request logger
 		defer reqLogger.Sync()
