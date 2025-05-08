@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -51,6 +52,50 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 
 		responseWriter := middlewareResponseWriter(w)
 		handler.ServeHTTP(responseWriter, request)
+
+		// Log request data
+		reqLogger.Info(
+			fmt.Sprintf("concluded request for %s [correlation-id: %s]", req.URL.RequestURI(), fetchedCorrelationId),
+			zap.Int("status", responseWriter.statusCode),
+			zap.String("method", req.Method),
+			zap.String("clientip", req.RemoteAddr),
+			zap.String("forwarded-for", req.Header.Get("X-Forwarded-For")),
+			zap.String("host", req.Host),
+			zap.String("uri", req.URL.RequestURI()),
+			zap.String("user-agent", req.UserAgent()),
+		)
+	})
+}
+
+// HTTPLoggerWithCustomUriIgnoreList is a middleware that adds correlation ID tracking and logging to HTTP requests,
+// with the ability to ignore specific URIs from being logged. It generates or retrieves a correlation ID,
+// attaches it to the request context and response headers, creates a logger with the correlation ID,
+// and logs request details after the handler completes, skipping logging for URIs in the provided ignore list.
+//
+// Returns an http.Handler that wraps the original handler with logging and correlation ID functionality
+func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler, uriIgnoreList []string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+
+		fetchedCorrelationId := getOrCreateCorrelationId(req)
+		w.Header().Add("X-Correlation-Id", fetchedCorrelationId)
+
+		// attach correlation id to request context
+		req = req.WithContext(toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId))
+
+		// attach correlation id to logger
+		reqLogger := m.logger.With(zap.String("correlation-id", fetchedCorrelationId))
+		//nolint Sync the request logger
+		defer reqLogger.Sync()
+
+		request := req.WithContext(logger.TransitWith(req.Context(), reqLogger))
+
+		responseWriter := middlewareResponseWriter(w)
+		handler.ServeHTTP(responseWriter, request)
+
+		// handle uri ignore list
+		if len(uriIgnoreList) > 0 && slices.Contains(uriIgnoreList, req.URL.RequestURI()) {
+			return
+		}
 
 		// Log request data
 		reqLogger.Info(
