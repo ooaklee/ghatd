@@ -14,11 +14,18 @@ import (
 // Middleware of logger
 type Middleware struct {
 	logger *zap.Logger
+
+	// uriIgnoreList the list of Uris that should not be logged on completion
+	// of request
+	uriIgnoreList []string
 }
 
 // NewLogger returns middleware
-func NewLogger(logger *zap.Logger) *Middleware {
-	return &Middleware{logger: logger}
+func NewLogger(logger *zap.Logger, uriIgnoreList []string) *Middleware {
+	return &Middleware{
+		logger:        logger,
+		uriIgnoreList: uriIgnoreList,
+	}
 }
 
 // getOrCreateCorrelationId attempts to pull correlation Id from request header, if exists.
@@ -67,13 +74,11 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 	})
 }
 
-// HTTPLoggerWithCustomUriIgnoreList is a middleware that adds correlation ID tracking and logging to HTTP requests,
-// with the ability to ignore specific URIs from being logged. It generates or retrieves a correlation ID,
+// HTTPLoggerWithCustomUriIgnoreList is a middleware that adds correlation ID tracking and logging to HTTP requests
+// with the ability to ignore specific URIs from logging. It generates or retrieves a correlation ID,
 // attaches it to the request context and response headers, creates a logger with the correlation ID,
-// and logs request details after the handler completes, skipping logging for URIs in the provided ignore list.
-//
-// Returns an http.Handler that wraps the original handler with logging and correlation ID functionality
-func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler, uriIgnoreList []string) http.Handler {
+// and logs request details after the handler completes, skipping logging for URIs in the ignore list.
+func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
 		fetchedCorrelationId := getOrCreateCorrelationId(req)
@@ -93,7 +98,7 @@ func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler, uri
 		handler.ServeHTTP(responseWriter, request)
 
 		// handle uri ignore list
-		if len(uriIgnoreList) > 0 && slices.Contains(uriIgnoreList, req.URL.RequestURI()) {
+		if len(m.uriIgnoreList) > 0 && slices.Contains(m.uriIgnoreList, req.URL.RequestURI()) {
 			return
 		}
 
