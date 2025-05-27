@@ -28,9 +28,9 @@ type AttachRoutesRequest struct {
 	// EmbeddedContentFilePathPrefix the prefix used to access the embedded files
 	EmbeddedContentFilePathPrefix string
 
-	// HandleUpdatePathToIndex is the function that handles updating
+	// HandleUpdatePathToIndexFunc is the function that handles updating
 	// request path that should be sent to the / path
-	HandleUpdatePathToIndex func(r *http.Request) *http.Request
+	HandleUpdatePathToIndexFunc func(r *http.Request) *http.Request
 }
 
 // AttachRoutes attaches spa handler to corresponding
@@ -60,7 +60,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 			// if the r.URL.Path does not have a suffix such as .js,
 			// .css, .png, .jpg, .jpeg, .gif, .svg, or .ico then we
 			// should update path to go to /
-			r = request.HandleUpdatePathToIndex(r)
+			r = request.HandleUpdatePathToIndexFunc(r)
 
 			fileServer.ServeHTTP(w, r)
 		}
