@@ -15,7 +15,7 @@ import (
 type Handler struct {
 	embeddedFileSystem            fs.FS
 	embeddedContentFilePathPrefix string
-	spaUpdatePathToIndexHandler   SpaUpdatePathToIndexHandler
+	spaUpdatePathToIndexFunc      func(r *http.Request) *http.Request
 }
 
 // NewSpaHandlerRequest is the request needed to create a spa handler
@@ -24,8 +24,10 @@ type NewSpaHandlerRequest struct {
 	EmbeddedContent fs.FS
 	// EmbeddedContentFilePathPrefix the prefix used to access the embedded files
 	EmbeddedContentFilePathPrefix string
-	// SpaUpdatePathToIndexHandler handles updating request path
-	SpaUpdatePathToIndexHandler SpaUpdatePathToIndexHandler
+
+	// HandleUpdatePathToIndexFunc is the function that handles updating
+	// request path that should be sent to the / path
+	HandleUpdatePathToIndexFunc func(r *http.Request) *http.Request
 }
 
 // NewSpaHandler creates and returns a new Handler for serving web application content
@@ -34,7 +36,7 @@ func NewSpaHandler(request *NewSpaHandlerRequest) *Handler {
 	return &Handler{
 		embeddedFileSystem:            request.EmbeddedContent,
 		embeddedContentFilePathPrefix: request.EmbeddedContentFilePathPrefix,
-		spaUpdatePathToIndexHandler:   request.SpaUpdatePathToIndexHandler,
+		spaUpdatePathToIndexFunc:      request.HandleUpdatePathToIndexFunc,
 	}
 }
 
@@ -59,7 +61,7 @@ func (h *Handler) GetResourceNotFoundError(w http.ResponseWriter, r *http.Reques
 
 	// Reset the request URL path to the root ("/") to
 	// serve the default index page for non-existent resources
-	r = h.spaUpdatePathToIndexHandler.HandleUpdatePathToIndex(r)
+	r = h.spaUpdatePathToIndexFunc(r)
 
 	http.FileServer(http.FS(distDirFS)).ServeHTTP(w, r)
 }

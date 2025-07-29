@@ -15,12 +15,6 @@ import (
 type SpaHandler interface {
 }
 
-// SpaUpdatePathToIndexHandler expected methods for handler
-// that specifies the request that fo to spa root path
-type SpaUpdatePathToIndexHandler interface {
-	HandleUpdatePathToIndex(r *http.Request) *http.Request
-}
-
 // AttachRoutesRequest holds everything needed to attach spa
 // routes to router
 type AttachRoutesRequest struct {
@@ -34,8 +28,9 @@ type AttachRoutesRequest struct {
 	// EmbeddedContentFilePathPrefix the prefix used to access the embedded files
 	EmbeddedContentFilePathPrefix string
 
-	// SpaUpdatePathToIndexHandler handles updating request path
-	SpaUpdatePathToIndexHandler SpaUpdatePathToIndexHandler
+	// HandleUpdatePathToIndexFunc is the function that handles updating
+	// request path that should be sent to the / path
+	HandleUpdatePathToIndexFunc func(r *http.Request) *http.Request
 }
 
 // AttachRoutes attaches spa handler to corresponding
@@ -65,7 +60,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 			// if the r.URL.Path does not have a suffix such as .js,
 			// .css, .png, .jpg, .jpeg, .gif, .svg, or .ico then we
 			// should update path to go to /
-			r = request.SpaUpdatePathToIndexHandler.HandleUpdatePathToIndex(r)
+			r = request.HandleUpdatePathToIndexFunc(r)
 
 			fileServer.ServeHTTP(w, r)
 		}
