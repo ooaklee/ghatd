@@ -1,5 +1,7 @@
 package user
 
+import "github.com/ooaklee/ghatd/external/toolbox"
+
 // CreateUserResponse holds response data for CreateUserResponse request
 type CreateUserResponse struct {
 	User User
@@ -15,7 +17,8 @@ type GetUsersResponse struct {
 	// TotalPages pages available
 	TotalPages int
 
-	UsersPerPage int
+	// PerPage number of users to be returned per page
+	PerPage int
 
 	// Page specifies the page results should be taken from. Default 1.
 	Page int
@@ -24,10 +27,10 @@ type GetUsersResponse struct {
 func (g *GetUsersResponse) GetMetaData() map[string]interface{} {
 	var responseMap = make(map[string]interface{})
 
-	responseMap[ResponseMetaKeyUsersPerPage] = g.UsersPerPage
-	responseMap[ResponseMetaKeyTotalUsers] = g.Total
-	responseMap[ResponseMetaKeyTotalPages] = g.TotalPages
-	responseMap[ResponseMetaKeyPage] = g.Page
+	responseMap[string(toolbox.ResponseMetaKeyResourcePerPage)] = g.PerPage
+	responseMap[string(toolbox.ResponseMetaKeyTotalResources)] = g.Total
+	responseMap[string(toolbox.ResponseMetaKeyTotalPages)] = g.TotalPages
+	responseMap[string(toolbox.ResponseMetaKeyPage)] = g.Page
 
 	return responseMap
 }
@@ -55,23 +58,4 @@ type GetMicroProfileResponse struct {
 // GetProfileResponse holds response data for GetProfile request
 type GetProfileResponse struct {
 	Profile UserProfile
-}
-
-// GetUsersPaginationResponse is the pagination response
-type GetUsersPaginationResponse struct {
-	// Resources is the collection of the resource to paginate
-	Resources []User
-
-	// Total - number of resources found
-	Total int
-
-	// TotalPages pages available
-	TotalPages int
-
-	// ResourcePerPage is how many many resources
-	// are in the page
-	ResourcePerPage int
-
-	// Page specifies the page results should be taken from. Default 1.
-	Page int
 }

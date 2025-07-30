@@ -110,10 +110,10 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
 	httpRouter := router.NewRouter(response.GetResourceNotFoundError, response.GetDefault200Response, routerMiddlewares...)
 
 	// Service information
-	serviceExternalName := appSettings.ExternalServiceName
-	serviceExternalWebsite := appSettings.ExternalServiceWebsite
-	serviceExternalEmail := appSettings.ExternalServiceEmail
-	serviceLegalBusinessName := appSettings.LegalBusinessName
+	serviceExternalName := appSettings.BusinessEntityName
+	serviceExternalWebsite := appSettings.BusinessEntityWebsite
+	serviceExternalEmail := appSettings.BusinessEntityEmail
+	serviceLegalBusinessName := appSettings.BusinessEntityNameLegal
 
 	fmt.Println(toolbox.OutputBasicLogString("info", fmt.Sprintf("initiating service referencing the external name (%s), website (%s), email (%s) and with legal business name (%s)", serviceExternalName, serviceExternalWebsite, serviceExternalEmail, serviceLegalBusinessName)))
 

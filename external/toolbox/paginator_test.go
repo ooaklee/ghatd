@@ -3,7 +3,6 @@ package toolbox_test
 import (
 	"context"
 	"errors"
-	"log"
 	"testing"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -42,7 +41,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 	tests := []struct {
 		name                   string
 		sourceSlice            []int
-		paginationRequest      toolbox.GetResourcePaginationRequest
+		paginationRequest      toolbox.PaginationRequest
 		totalNumberOfResources int
 		expectedError          error
 		expectedCollection     []int
@@ -55,7 +54,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Success - Reported bug",
 			sourceSlice: []int{6, 7},
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 5,
 				Page:    2,
 			},
@@ -68,7 +67,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Success - One",
 			sourceSlice: []int{1},
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 1,
 				Page:    1,
 			},
@@ -81,7 +80,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Success - One",
 			sourceSlice: []int{1},
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 10,
 				Page:    1,
 			},
@@ -94,7 +93,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Success - 7",
 			sourceSlice: []int{8, 9, 10},
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 7,
 				Page:    2,
 			},
@@ -107,7 +106,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Success - 10",
 			sourceSlice: testSlice,
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 10,
 				Page:    1,
 			},
@@ -120,7 +119,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Success - 3",
 			sourceSlice: []int{4, 5, 6},
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 3,
 				Page:    2,
 			},
@@ -133,7 +132,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 		{
 			name:        "Failure - Out of range",
 			sourceSlice: testSlice,
-			paginationRequest: toolbox.GetResourcePaginationRequest{
+			paginationRequest: toolbox.PaginationRequest{
 				PerPage: 7,
 				Page:    3,
 			},
@@ -144,29 +143,13 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 
-			var sourceToInterfaceSlice []interface{}
-
-			for _, element := range test.sourceSlice {
-				sourceToInterfaceSlice = append(sourceToInterfaceSlice, element)
-			}
-
-			result, err := toolbox.GetResourcePagination(context.Background(), &test.paginationRequest, sourceToInterfaceSlice, test.totalNumberOfResources)
+			result, err := toolbox.Paginate(context.Background(), &test.paginationRequest, test.sourceSlice, test.totalNumberOfResources)
 
 			assert.Equal(t, test.expectedError, err)
 
 			if test.expectedError == nil {
 
-				var castedResources []int
-
-				for _, resource := range result.Resources {
-					castedResource, ok := resource.(int)
-					if !ok {
-						log.Fatal("failed-to-cast-test-result")
-					}
-					castedResources = append(castedResources, castedResource)
-				}
-
-				assert.Equal(t, test.expectedCollection, castedResources)
+				assert.Equal(t, test.expectedCollection, result.Resources)
 				assert.Equal(t, test.expectedTotal, result.Total)
 				assert.Equal(t, test.expectedTotalPages, result.TotalPages)
 				assert.Equal(t, test.paginationRequest.PerPage, result.ResourcePerPage)

@@ -249,10 +249,23 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 
 	log := logger.AcquireFrom(ctx)
 
+	// default
+	if r.Order == "" {
+		r.Order = "created_at_desc"
+	}
+
+	if r.PerPage == 0 {
+		r.PerPage = 25
+	}
+
+	if r.Page == 0 {
+		r.Page = 1
+	}
+
 	// get count of all of the user's api tokens
 	totalApiTokens, err := s.ApitokenRespository.GetTotalApiTokens(ctx, r.ID, r.NanoId, r.Description, r.Status, "", "", r.OnlyEphemeral, r.OnlyPermanent)
 	if err != nil {
-		return &GetAPITokensForResponse{}, err
+		return nil, err
 	}
 
 	r.TotalCount = int(totalApiTokens)
@@ -271,9 +284,7 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 		OnlyPermanent:   r.OnlyPermanent,
 	})
 	if err != nil {
-		return &GetAPITokensForResponse{
-			APITokens: []UserAPIToken{},
-		}, err
+		return nil, err
 	}
 
 	// Analyse token ttl information
@@ -291,7 +302,21 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 		analysedApitokens[i] = *token.GenerateHumanReadable()
 	}
 
-	return s.generateGetAPITokensForResponse(ctx, r, analysedApitokens)
+	paginatedResource, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{
+		PerPage: r.PerPage,
+		Page:    r.Page,
+	}, analysedApitokens, r.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetAPITokensForResponse{
+		Total:            paginatedResource.Total,
+		TotalPages:       paginatedResource.TotalPages,
+		APITokens:        paginatedResource.Resources,
+		Page:             paginatedResource.Page,
+		APITokensPerPage: paginatedResource.ResourcePerPage,
+	}, nil
 }
 
 // GetAPIToken returns the API Token matching the ID stored in repository
@@ -328,10 +353,23 @@ func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*Ge
 
 	log := logger.AcquireFrom(ctx)
 
+	// default
+	if r.Order == "" {
+		r.Order = "created_at_desc"
+	}
+
+	if r.PerPage == 0 {
+		r.PerPage = 25
+	}
+
+	if r.Page == 0 {
+		r.Page = 1
+	}
+
 	// get count of all of the user's api tokens
 	totalApiTokens, err := s.ApitokenRespository.GetTotalApiTokens(ctx, r.CreatedByID, r.CreatedByNanoId, r.Description, r.Status, "", "", false, false)
 	if err != nil {
-		return &GetAPITokensResponse{}, err
+		return nil, err
 	}
 
 	r.TotalCount = int(totalApiTokens)
@@ -340,7 +378,7 @@ func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*Ge
 
 	apitokens, err := s.ApitokenRespository.GetAPITokens(ctx, r)
 	if err != nil {
-		return &GetAPITokensResponse{}, err
+		return nil, err
 	}
 
 	// Analyse token ttl information
@@ -358,7 +396,21 @@ func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*Ge
 		analysedApitokens[i] = *token.GenerateHumanReadable()
 	}
 
-	return s.generateGetAPITokensResponse(ctx, r, analysedApitokens)
+	paginatedResource, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{
+		PerPage: r.PerPage,
+		Page:    r.Page,
+	}, analysedApitokens, r.TotalCount)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetAPITokensResponse{
+		Total:            paginatedResource.Total,
+		TotalPages:       paginatedResource.TotalPages,
+		APITokens:        paginatedResource.Resources,
+		Page:             paginatedResource.Page,
+		APITokensPerPage: paginatedResource.ResourcePerPage,
+	}, nil
 }
 
 // analyseTokenTTLData is checking the passed tokens to ensure they haven't
@@ -459,84 +511,4 @@ func (s *Service) updateAPIToken(ctx context.Context, r *updateAPITokenRequest) 
 	return &updateAPITokenResponse{
 		APIToken: *apiToken,
 	}, nil
-}
-
-// generateGetAPITokensResponse returns appropiate response based on client request & apitokens pulled
-// from repository
-func (s *Service) generateGetAPITokensResponse(ctx context.Context, r *GetAPITokensRequest, apitokens []UserAPIToken) (*GetAPITokensResponse, error) {
-
-	paginatedApiTokens, err := s.GetAPITokensPagination(ctx, apitokens, r.PerPage, r.Page, r.TotalCount)
-	if err != nil {
-		return &GetAPITokensResponse{}, err
-	}
-
-	return &GetAPITokensResponse{
-		Total:            paginatedApiTokens.Total,
-		TotalPages:       paginatedApiTokens.TotalPages,
-		APITokens:        paginatedApiTokens.Resources,
-		Page:             paginatedApiTokens.Page,
-		APITokensPerPage: paginatedApiTokens.ResourcePerPage,
-	}, nil
-}
-
-// generateGetAPITokensForResponse returns appropiate response based on client request & users pulled
-// from repository
-func (s *Service) generateGetAPITokensForResponse(ctx context.Context, r *GetAPITokensForRequest, apitokens []UserAPIToken) (*GetAPITokensForResponse, error) {
-
-	paginatedApiTokens, err := s.GetAPITokensPagination(ctx, apitokens, r.PerPage, r.Page, r.TotalCount)
-	if err != nil {
-		return &GetAPITokensForResponse{}, err
-	}
-
-	return &GetAPITokensForResponse{
-		Total:            paginatedApiTokens.Total,
-		TotalPages:       paginatedApiTokens.TotalPages,
-		APITokens:        paginatedApiTokens.Resources,
-		Page:             paginatedApiTokens.Page,
-		APITokensPerPage: paginatedApiTokens.ResourcePerPage,
-	}, nil
-
-}
-
-// GetAPITokensPagination is handling making the call to centralised pagination
-// logic to paginate on passed API Tokens resources
-func (s *Service) GetAPITokensPagination(ctx context.Context, resource []UserAPIToken, perPage, page, totalApiTokens int) (*GetAPITokensPaginationResponse, error) {
-
-	var resourceToInterfaceSlice []interface{}
-	castedResources := []UserAPIToken{}
-	log := logger.AcquireFrom(ctx)
-
-	// convert resource slice to interface clice
-	for _, element := range resource {
-		resourceToInterfaceSlice = append(resourceToInterfaceSlice, element)
-	}
-
-	// Call pagination logic
-	paginatedResource, err := toolbox.GetResourcePagination(ctx, &toolbox.GetResourcePaginationRequest{
-		PerPage: perPage,
-		Page:    page,
-	}, resourceToInterfaceSlice, totalApiTokens)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// convert paginated resource slice to correct type
-	for _, resource := range paginatedResource.Resources {
-		castedResource, ok := resource.(UserAPIToken)
-		if !ok {
-			log.Error("error-unable-to-cast-paginated-user-api-token-resource")
-			continue
-		}
-		castedResources = append(castedResources, castedResource)
-	}
-
-	return &GetAPITokensPaginationResponse{
-		Resources:       castedResources,
-		Total:           paginatedResource.Total,
-		TotalPages:      paginatedResource.TotalPages,
-		ResourcePerPage: paginatedResource.ResourcePerPage,
-		Page:            paginatedResource.Page,
-	}, nil
-
 }

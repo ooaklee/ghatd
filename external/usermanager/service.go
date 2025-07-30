@@ -5,6 +5,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/user"
 	"go.uber.org/zap"
@@ -29,11 +30,18 @@ type AuditService interface {
 	GetTotalAuditLogEvents(ctx context.Context, r *audit.GetTotalAuditLogEventsRequest) (int64, error)
 }
 
+// ContacterService expected methods of a valid contacter service
+type ContacterService interface {
+	CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error)
+	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
+}
+
 // Service holds and manages usermanager business logic
 type Service struct {
-	UserService     UserService
-	ApiTokenService ApiTokenService
-	AuditService    AuditService
+	UserService      UserService
+	ApiTokenService  ApiTokenService
+	AuditService     AuditService
+	ContacterService ContacterService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -45,23 +53,27 @@ type NewServiceRequest struct {
 	// ApiTokenService handles api token actions
 	ApiTokenService ApiTokenService
 
-	// AuditService handles affiramtion actions
+	// AuditService handles audit actions
 	AuditService AuditService
+
+	// ContacterService handles comms actions
+	ContacterService ContacterService
 }
 
 // NewService creates usermanager service
 func NewService(r *NewServiceRequest) *Service {
 	return &Service{
-		UserService:     r.UserService,
-		ApiTokenService: r.ApiTokenService,
-		AuditService:    r.AuditService,
+		UserService:      r.UserService,
+		ApiTokenService:  r.ApiTokenService,
+		AuditService:     r.AuditService,
+		ContacterService: r.ContacterService,
 	}
 }
 
 // UpdateUserProfile handles the business logic of updating the requesting user's profile
 func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error) {
 	serviceResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{
-		ID:        r.UserID,
+		Id:        r.UserId,
 		FirstName: r.FirstName,
 		LastName:  r.LastName,
 	})
@@ -70,16 +82,7 @@ func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileReq
 	}
 
 	return &UpdateUserProfileResponse{
-		UserProfile: &user.UserProfile{
-			ID:            serviceResponse.User.ID,
-			FirstName:     serviceResponse.User.FirstName,
-			LastName:      serviceResponse.User.LastName,
-			Status:        serviceResponse.User.Status,
-			Roles:         serviceResponse.User.Roles,
-			Email:         serviceResponse.User.Email,
-			EmailVerified: serviceResponse.User.Verified.EmailVerified,
-			UpdatedAt:     serviceResponse.User.Meta.UpdatedAt,
-		},
+		UpdateUserResponse: serviceResponse,
 	}, nil
 }
 
@@ -87,18 +90,14 @@ func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileReq
 func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error) {
 
 	serviceResponse, err := s.UserService.GetMicroProfile(ctx, &user.GetMicroProfileRequest{
-		ID: r.UserID,
+		Id: r.UserId,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetUserMicroProfileResponse{
-		UserMicroProfile: &user.UserMicroProfile{
-			ID:     serviceResponse.MicroProfile.ID,
-			Roles:  serviceResponse.MicroProfile.Roles,
-			Status: serviceResponse.MicroProfile.Status,
-		},
+		GetMicroProfileResponse: serviceResponse,
 	}, nil
 }
 
@@ -106,14 +105,14 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfil
 func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error) {
 
 	serviceResponse, err := s.UserService.GetProfile(ctx, &user.GetProfileRequest{
-		ID: r.UserID,
+		Id: r.UserId,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetUserProfileResponse{
-		UserProfile: &serviceResponse.Profile,
+		GetProfileResponse: serviceResponse,
 	}, nil
 }
 
@@ -127,7 +126,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 	loggr.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", r.UserId))
 
 	loggr.Info("initiate-wiping-user-account", zap.String("user-id", r.UserId))
-	err = s.UserService.DeleteUser(ctx, &user.DeleteUserRequest{ID: r.UserId})
+	err = s.UserService.DeleteUser(ctx, &user.DeleteUserRequest{Id: r.UserId})
 	if err != nil {
 		return err
 	}
@@ -143,4 +142,53 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 	loggr.Info("wiping-user-and-resources-from-platform-completed", zap.String("user-id", r.UserId))
 
 	return nil
+}
+
+// CreateComms handles the logic of creating a comms
+func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error) {
+
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	logger.Info("initiating-create-comms-request", zap.Any("request", req))
+
+	createdCommsResponse, err := s.ContacterService.CreateComms(ctx, req.CreateCommsRequest)
+	if err != nil {
+		logger.Error("failed-to-create-comms-error-creating-comms", zap.Any("request", req), zap.Error(err))
+		return &CreateCommsResponse{}, err
+	}
+
+	return &CreateCommsResponse{
+		Comms: createdCommsResponse.Comms,
+	}, nil
+}
+
+// GetComms handles the logic of getting a comms
+func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error) {
+
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+
+		response = GetCommsResponse{
+			Comms: []contacter.Comms{},
+		}
+	)
+
+	logger.Info("initiating-get-comms-request", zap.Any("request", req))
+
+	commsResponse, err := s.ContacterService.GetComms(ctx, req.GetCommsRequest)
+	if err != nil {
+		logger.Error("failed-to-get-comms-error-getting-comms", zap.Any("request", req), zap.Error(err))
+		return &GetCommsResponse{}, err
+	}
+
+	response.Comms = commsResponse.Comms
+	response.Meta = commsResponse.GetMetaData()
+
+	return &response, nil
 }

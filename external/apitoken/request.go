@@ -5,39 +5,39 @@ type GetAPITokensRequest struct {
 	// Order defines how should response be sorted. Default: newest -> oldest (created_at_desc)
 	// Valid options: created_at_asc, created_at_desc, last_used_at_asc, last_used_at_desc
 	// updated_at_asc, updated_at_desc
-	Order string
+	Order string `query:"order"`
 
 	// Total number of apitokens to return per page, if available. Default 25.
 	// Accepts anything between 1 and 100
-	PerPage int
+	PerPage int `query:"per_page"`
 
 	// Page specifies the page results should be taken from. Default 1.
-	Page int
+	Page int `query:"page"`
 
 	// TotalCount specifies the total count of all apitokens
 	TotalCount int
 
 	// Meta whether response should contain meta information
-	Meta bool
+	Meta bool `query:"meta"`
 
 	// CreatedByID specifies the user ID results should be linked / matched to
-	CreatedByID string
+	CreatedByID string `query:"created_by_id"`
 
 	// CreatedByNanoId specifies the user's nano ID results should be linked / matched to
-	CreatedByNanoId string
+	CreatedByNanoId string `query:"created_by_nano_id"`
 
 	// Description specifies the description results should be like / match
-	Description string
+	Description string `query:"description"`
 
 	// Status specified the statuses apitokens in response must be
 	// Valid options: active, revoked
-	Status string
+	Status string `query:"status"`
 
 	// OnlyEphemeral specifies if only ephemeral tokens should be returned
-	OnlyEphemeral bool
+	OnlyEphemeral bool `query:"only_ephemeral"`
 
 	// OnlyPermanent specifies if only permanent tokens should be returned
-	OnlyPermanent bool
+	OnlyPermanent bool `query:"only_permanent"`
 }
 
 // GetAPITokenRequest holds everything needed for GetAPIToken request
@@ -51,7 +51,7 @@ type GetAPITokensForRequest struct {
 	// Order defines how should response be sorted. Default: newest -> oldest (created_at_desc)
 	// Valid options: created_at_asc, created_at_desc, last_used_at_asc, last_used_at_desc
 	// updated_at_asc, updated_at_desc
-	Order string
+	Order string `query:"order"`
 
 	// ID the user's UUID
 	ID string
@@ -61,29 +61,29 @@ type GetAPITokensForRequest struct {
 
 	// Total number of apitokens to return per page, if available. Default 25.
 	// Accepts anything between 1 and 100
-	PerPage int
+	PerPage int `query:"per_page"`
 
 	// Page specifies the page results should be taken from. Default 1.
-	Page int
+	Page int `query:"page"`
 
 	// TotalCount specifies the total count of all apitokens
 	TotalCount int
 
 	// Meta whether response should contain meta information
-	Meta bool
+	Meta bool `query:"meta"`
 
 	// Description specifies the description results should be like / match
-	Description string
+	Description string `query:"description"`
 
 	// Status specified the statuses apitokens in response must be
 	// Valid options: active, revoked
-	Status string
+	Status string `query:"status"`
 
 	// OnlyEphemeral specifies if only ephemeral tokens should be returned
-	OnlyEphemeral bool
+	OnlyEphemeral bool `query:"only_ephemeral"`
 
 	// OnlyPermanent specifies if only permanent tokens should be returned
-	OnlyPermanent bool
+	OnlyPermanent bool `query:"only_permanent"`
 }
 
 // DeleteAPITokenRequest holds everything needed for DeleteAPIToken request
@@ -147,15 +147,15 @@ type GetTotalApiTokensRequest struct {
 	// UserId the user's UUID
 	UserId string
 
-	To string
+	To string `query:"to"`
 
-	From string
+	From string `query:"from"`
 
-	OnlyEphemeral bool
+	OnlyEphemeral bool `query:"only_ephemeral"`
 
-	OnlyPermanent bool
+	OnlyPermanent bool `query:"only_permanent"`
 
-	Description string
+	Description string `query:"description"`
 
-	Status string
+	Status string `query:"status"`
 }

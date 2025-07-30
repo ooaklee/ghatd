@@ -110,10 +110,6 @@ func (r MongoDbRepository) CreateUserAPIToken(ctx context.Context, apiToken *api
 // UpdateAPIToken updates apitoken passed in the DB
 func (r MongoDbRepository) UpdateAPIToken(ctx context.Context, apiToken *apitoken.UserAPIToken) (*apitoken.UserAPIToken, error) {
 
-	updateFilter := bson.M{"_id": apiToken.ID}
-
-	apiToken.SetUpdatedAtTimeToNow()
-
 	// NICE_TO_HAVE: Wrap context with observability platform transaction
 
 	client, err := r.InitialiseClient(ctx)
@@ -123,7 +119,9 @@ func (r MongoDbRepository) UpdateAPIToken(ctx context.Context, apiToken *apitoke
 
 	collection := r.GetApiTokenCollection(client)
 
-	err = ExecuteReplaceOneCommand(ctx, collection, updateFilter, apiToken, "ApiToken")
+	apiToken.SetUpdatedAtTimeToNow()
+
+	err = ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": apiToken.ID}, bson.M{"$set": apiToken}, "api-token")
 	if err != nil {
 		return nil, err
 	}

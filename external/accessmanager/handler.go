@@ -258,8 +258,14 @@ func (h *Handler) GetSpecificUserAPITokens(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if request.Meta {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens, reply.WithMeta(response.GetMetaData()))
+		return
+	}
+
 	//nolint will set up default fallback later
-	h.ReturnUserApiTokensSuccessResponse(w, http.StatusOK, response, request.Meta)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens)
 }
 
 // RevokeUserAPIToken returns whether a request to revoke an API token was successful.
@@ -593,20 +599,6 @@ func (h *Handler) AddAuthCookies(w http.ResponseWriter, accessToken string, acce
 func (h *Handler) RemoveCookiesWithName(w http.ResponseWriter, cookieName string) {
 
 	toolbox.RemoveCookiesWithName(w, h.Environment, cookieName, h.CookieDomain)
-}
-
-// ReturnUserApiTokensSuccessResponse returns the appropiate response dependent on if
-// client requested with/without meta
-func (h *Handler) ReturnUserApiTokensSuccessResponse(w http.ResponseWriter, statusCode int, response *GetSpecificUserAPITokensResponse, withMeta bool) {
-
-	if withMeta {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.UserAPITokens, reply.WithMeta(response.GetMetaData()))
-		return
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.UserAPITokens)
 }
 
 // redirectToHomeIfPlatformHeaderDetected checks the request headers for the presence of the web platform or HTMX headers.

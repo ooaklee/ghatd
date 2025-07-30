@@ -10,7 +10,7 @@ import (
 type UserService interface {
 	CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error)
 	GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error)
-	GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error)
+	GetUserByID(ctx context.Context, r *GetUserByIdRequest) (*GetUserByIDResponse, error)
 	UpdateUser(ctx context.Context, r *UpdateUserRequest) (*UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, r *DeleteUserRequest) error
 	GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest) (*GetMicroProfileResponse, error)
@@ -118,13 +118,21 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	returnGetUsersSuccessResponse(w, http.StatusOK, users, request.Meta)
+	if request.Meta {
+		//nolint will set up default fallback later
+		GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, users.Users, reply.WithMeta(users.GetMetaData()))
+		return
+	}
+
+	//nolint will set up default fallback later
+	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, users.Users)
+
 }
 
 // GetUserByID returns an user if it matches id
 func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 
-	request, err := MapRequestToGetUserByIDRequest(r, h.Validator)
+	request, err := MapRequestToGetUserByIdRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
@@ -141,20 +149,6 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	//nolint will set up default fallback later
 	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 
-}
-
-// returnGetUsersSuccessResponse returns the appropiate response dependent on if
-// client requested with/without meta
-func returnGetUsersSuccessResponse(w http.ResponseWriter, statusCode int, response *GetUsersResponse, withMeta bool) {
-
-	if withMeta {
-		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.Users, reply.WithMeta(response.GetMetaData()))
-		return
-	}
-
-	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response.Users)
 }
 
 // UpdateUser returns reponse from user update request

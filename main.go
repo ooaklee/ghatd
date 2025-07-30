@@ -25,6 +25,7 @@ func main() {
 	}
 
 	rootCmd.AddCommand(server.NewCommand(&content, "internal/"))
+	// rootCmd.AddCommand(migrator.NewCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal("ghatd/error-executing-command-tree")

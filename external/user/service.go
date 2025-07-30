@@ -50,8 +50,8 @@ func NewService(userRespository UserRespository, auditService AuditService, auto
 // GetMicroProfile returns user with matching ID's micro profile
 func (s *Service) GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest) (*GetMicroProfileResponse, error) {
 
-	userResponse, err := s.GetUserByID(ctx, &GetUserByIDRequest{
-		ID: r.ID,
+	userResponse, err := s.GetUserByID(ctx, &GetUserByIdRequest{
+		Id: r.Id,
 	})
 	if err != nil {
 		return nil, err
@@ -61,19 +61,15 @@ func (s *Service) GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest
 	s.analyseUsersBillingAssessmentData(ctx, &userResponse.User)
 
 	return &GetMicroProfileResponse{
-		MicroProfile: UserMicroProfile{
-			ID:     userResponse.User.ID,
-			Roles:  userResponse.User.Roles,
-			Status: userResponse.User.Status,
-		},
+		MicroProfile: *userResponse.User.GetAsMicroProfile(),
 	}, nil
 }
 
 // GetProfile returns user with matching ID's profile
 func (s *Service) GetProfile(ctx context.Context, r *GetProfileRequest) (*GetProfileResponse, error) {
 
-	userResponse, err := s.GetUserByID(ctx, &GetUserByIDRequest{
-		ID: r.ID,
+	userResponse, err := s.GetUserByID(ctx, &GetUserByIdRequest{
+		Id: r.Id,
 	})
 	if err != nil {
 		return nil, err
@@ -83,15 +79,7 @@ func (s *Service) GetProfile(ctx context.Context, r *GetProfileRequest) (*GetPro
 	s.analyseUsersBillingAssessmentData(ctx, &userResponse.User)
 
 	return &GetProfileResponse{
-		Profile: UserProfile{
-			ID:            userResponse.User.ID,
-			FirstName:     userResponse.User.FirstName,
-			LastName:      userResponse.User.LastName,
-			Roles:         userResponse.User.Roles,
-			Status:        userResponse.User.Status,
-			Email:         userResponse.User.Email,
-			EmailVerified: userResponse.User.Verified.EmailVerified,
-		},
+		Profile: *userResponse.User.GetAsProfile(),
 	}, nil
 }
 
@@ -154,16 +142,15 @@ func (s *Service) analyseUsersBillingAssessmentData(ctx context.Context, user *U
 
 // GetUserByEmail returns an user if it matches email
 func (s *Service) GetUserByEmail(ctx context.Context, r *GetUserByEmailRequest) (*GetUserByEmailResponse, error) {
-	response := &GetUserByEmailResponse{}
 
 	user, err := s.UserRespository.GetUserByEmail(ctx, normaliseUserEmail(r.Email), true)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
-	response.User = *user
-
-	return response, nil
+	return &GetUserByEmailResponse{
+		User: *user,
+	}, nil
 }
 
 // DeleteUser attempts to delete the user with matching ID in repository
@@ -171,12 +158,12 @@ func (s *Service) DeleteUser(ctx context.Context, r *DeleteUserRequest) error {
 
 	log := logger.AcquireFrom(ctx)
 
-	userToDelete, err := s.UserRespository.GetUserByID(ctx, r.ID)
+	userToDelete, err := s.UserRespository.GetUserByID(ctx, r.Id)
 	if err != nil {
 		return err
 	}
 
-	err = s.UserRespository.DeleteUserByID(ctx, r.ID)
+	err = s.UserRespository.DeleteUserByID(ctx, r.Id)
 
 	// audit log user delete
 	if err == nil {
@@ -184,7 +171,7 @@ func (s *Service) DeleteUser(ctx context.Context, r *DeleteUserRequest) error {
 		auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 			ActorId:    audit.AuditActorIdSystem,
 			Action:     auditEvent,
-			TargetId:   r.ID,
+			TargetId:   r.Id,
 			TargetType: audit.User,
 			Domain:     "user",
 			Details: &audit.UserAccountDeleteEventDetails{
@@ -194,7 +181,7 @@ func (s *Service) DeleteUser(ctx context.Context, r *DeleteUserRequest) error {
 		})
 
 		if auditErr != nil {
-			log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.ID), zap.String("event-type", string(auditEvent)))
+			log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.Id), zap.String("event-type", string(auditEvent)))
 		}
 	}
 
@@ -209,9 +196,14 @@ func (s *Service) UpdateUser(ctx context.Context, r *UpdateUserRequest) (*Update
 		err            error
 	)
 
+	// check
+	if r.User == nil && r.FirstName == "" && r.LastName == "" || r.User == nil && r.FirstName != "" && len(r.FirstName) == 2 || r.User == nil && r.LastName != "" && len(r.LastName) == 2 {
+		return nil, errors.New(ErrKeyInvalidUserBody)
+	}
+
 	switch r.User {
 	case nil:
-		persistentUser, err = s.UserRespository.GetUserByID(ctx, r.ID)
+		persistentUser, err = s.UserRespository.GetUserByID(ctx, r.Id)
 		if err != nil {
 			return nil, err
 		}
@@ -238,30 +230,28 @@ func (s *Service) UpdateUser(ctx context.Context, r *UpdateUserRequest) (*Update
 
 // GetUserByNanoId is returning a user if they have matching nano id
 func (s *Service) GetUserByNanoId(ctx context.Context, id string) (*GetUserByIDResponse, error) {
-	response := &GetUserByIDResponse{}
 
 	user, err := s.UserRespository.GetUserByNanoId(ctx, id)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
-	response.User = *user
-
-	return response, nil
+	return &GetUserByIDResponse{
+		User: *user,
+	}, nil
 }
 
 // GetUserByID returns an user if it matches id
-func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error) {
-	response := &GetUserByIDResponse{}
+func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIdRequest) (*GetUserByIDResponse, error) {
 
-	user, err := s.UserRespository.GetUserByID(ctx, r.ID)
+	user, err := s.UserRespository.GetUserByID(ctx, r.Id)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
-	response.User = *user
-
-	return response, nil
+	return &GetUserByIDResponse{
+		User: *user,
+	}, nil
 }
 
 // CreateUser attempts to create user in repository. Return error if any failures occurs
@@ -307,85 +297,53 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 // GetUsers returns the users matching request in repository
 func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error) {
 
-	log := logger.AcquireFrom(ctx)
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	// default
+	if r.Order == "" {
+		r.Order = "created_at_desc"
+	}
+
+	if r.PerPage == 0 {
+		r.PerPage = 25
+	}
+
+	if r.Page == 0 {
+		r.Page = 1
+	}
 
 	// get count of all users
 	totalUsers, err := s.UserRespository.GetTotalUsers(ctx, r.FirstName, r.LastName, r.Email, r.Status, r.IsAdmin)
 	if err != nil {
-		return &GetUsersResponse{}, err
+		logger.Error("failed-get-users-request--error-getting-total-users", zap.Any("request", r), zap.Error(err))
+		return nil, err
 	}
 
 	r.TotalCount = int(totalUsers)
-
-	log.Info("total-users-found", zap.Int64("total", totalUsers))
+	logger.Debug("handling-get-users-request--total-users-found", zap.Int64("total", totalUsers), zap.Any("request", r))
 
 	users, err := s.UserRespository.GetUsers(ctx, r)
 	if err != nil {
-		return &GetUsersResponse{}, err
+		logger.Error("failed-get-users-request--error-getting-users", zap.Any("request", r), zap.Error(err))
+		return nil, err
 	}
 
-	return s.generateGetUsersResponse(ctx, r, users)
-
-}
-
-// GetUsersPagination is handling making the call to centralised pagination
-// logic to paginate on passed API Tokens resources
-func (s *Service) GetUsersPagination(ctx context.Context, resource []User, perPage, page, totalUsers int) (*GetUsersPaginationResponse, error) {
-
-	var resourceToInterfaceSlice []interface{}
-	castedResources := []User{}
-	log := logger.AcquireFrom(ctx)
-
-	// convert resource slice to interface clice
-	for _, element := range resource {
-		resourceToInterfaceSlice = append(resourceToInterfaceSlice, element)
-	}
-
-	// Call pagination logic
-	paginatedResource, err := toolbox.GetResourcePagination(ctx, &toolbox.GetResourcePaginationRequest{
-		PerPage: perPage,
-		Page:    page,
-	}, resourceToInterfaceSlice, totalUsers)
-
+	// handle page pagination
+	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: r.PerPage, Page: r.Page}, users, r.TotalCount)
 	if err != nil {
 		return nil, err
 	}
 
-	// convert paginated resource slice to correct type
-	for _, resource := range paginatedResource.Resources {
-		castedResource, ok := resource.(User)
-		if !ok {
-			log.Error("error-unable-to-cast-paginated-user-resource")
-			continue
-		}
-		castedResources = append(castedResources, castedResource)
-	}
-
-	return &GetUsersPaginationResponse{
-		Resources:       castedResources,
-		Total:           paginatedResource.Total,
-		TotalPages:      paginatedResource.TotalPages,
-		ResourcePerPage: paginatedResource.ResourcePerPage,
-		Page:            paginatedResource.Page,
-	}, nil
-
-}
-
-// generateGetUsersResponse returns appropiate response based on client request & users pulled
-// from repository
-func (s *Service) generateGetUsersResponse(ctx context.Context, r *GetUsersRequest, users []User) (*GetUsersResponse, error) {
-
-	paginatedUsers, err := s.GetUsersPagination(ctx, users, r.PerPage, r.Page, r.TotalCount)
-	if err != nil {
-		return &GetUsersResponse{}, err
-	}
-
 	return &GetUsersResponse{
-		Total:        paginatedUsers.Total,
-		TotalPages:   paginatedUsers.TotalPages,
-		Users:        paginatedUsers.Resources,
-		Page:         paginatedUsers.Page,
-		UsersPerPage: paginatedUsers.ResourcePerPage,
+		Total:      paginatedResponse.Total,
+		TotalPages: paginatedResponse.TotalPages,
+		Users:      paginatedResponse.Resources,
+		Page:       paginatedResponse.Page,
+		PerPage:    paginatedResponse.ResourcePerPage,
 	}, nil
 
 }
@@ -401,7 +359,7 @@ func normaliseUserEmail(email string) string {
 // it is trimmed and first name capitalised (title)
 func normaliseUserNames(email string) string {
 	s := toolbox.StringRemoveMultiSpace(strings.TrimSpace(email))
-	return strings.Title(s)
+	return toolbox.StringConvertToTitleCase(s)
 }
 
 // updateUserWithRequest updates passed user with valid, data if a difference is detected.
@@ -415,6 +373,7 @@ func updateUserWithRequest(user *User, request *UpdateUserRequest) (*User, error
 	if user.FirstName == newFirstName && user.LastName == newLastName || user.FirstName == newFirstName && newLastName == "" || user.LastName == newLastName && newFirstName == "" {
 		return user, errors.New(ErrKeyNoChangesDetected)
 	}
+
 	if newFirstName != "" {
 		user.FirstName = newFirstName
 	}

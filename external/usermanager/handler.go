@@ -15,6 +15,8 @@ type UsermanagerService interface {
 	GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error)
 	UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error)
 	DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error
+	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
+	GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
@@ -111,7 +113,7 @@ func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserProfile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetUserMicroProfile returns response for request to get user's
@@ -132,7 +134,7 @@ func (h *Handler) GetUserMicroProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserMicroProfile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetUserProfile returns response for request to get user's
@@ -153,7 +155,55 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserProfile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// CreateComms handles the request to create a comms
+func (h *Handler) CreateComms(w http.ResponseWriter, r *http.Request) {
+
+	request, err := MapRequestToCreateCommsRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	newCommsResponse, err := h.Service.CreateComms(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, newCommsResponse.Comms)
+}
+
+// GetComms handles the request to get a comms
+func (h *Handler) GetComms(w http.ResponseWriter, r *http.Request) {
+
+	request, err := mapGetCommsRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	getCommsResponse, err := h.Service.GetComms(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if request.Meta {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsResponse.Comms, reply.WithMeta(getCommsResponse.Meta))
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsResponse.Comms)
 }
 
 // GetBaseResponseHandler returns response handler configured with auth error map

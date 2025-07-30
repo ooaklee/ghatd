@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/user"
 )
 
@@ -29,7 +30,7 @@ type CreateUserRequest struct {
 
 	// Email user's email address that will be used for receiving
 	// correspondence & signing into platform
-	Email string `json:"email"`
+	Email string `json:"email" validate:"min=2"`
 
 	// Mobile whether the request originates from mobile portal
 	Mobile bool `json:"mobile"`
@@ -61,14 +62,14 @@ type CreateEmailVerificationTokenRequest struct {
 // email
 type ValidateEmailVerificationCodeRequest struct {
 	// Token the token sent embedded in the email to verify user's email
-	Token string `validate:"min=128"`
+	Token string `query:"t" validate:"min=128"`
 }
 
 // TokenAsStringValidatorRequest holds the data used to validate the token as
 // string passed is valid
 type TokenAsStringValidatorRequest struct {
 	// Token the token in string format
-	Token string `validate:"min=128"`
+	Token string `query:"t" validate:"min=128"`
 
 	// Type defines the token type so the correct parse can be carried out
 	// TODO: Implement
@@ -102,7 +103,7 @@ type CreateInitalLoginOrVerificationTokenEmailRequest struct {
 // LoginUserRequest holds the data required for login in a user
 type LoginUserRequest struct {
 	// Token the token sent embedded in the email to give user authorisation on to platform
-	Token string `validate:"min=128"`
+	Token string `query:"t" validate:"min=128"`
 }
 
 // CreateUserAPITokenRequest holds the data required for creating an api token
@@ -137,36 +138,7 @@ type GetSpecificUserAPITokensRequest struct {
 	// UserID the user ID the tokens belongs to
 	UserID string
 
-	// Order defines how should response be sorted. Default: newest -> oldest (created_at_desc)
-	// Valid options: created_at_asc, created_at_desc, last_used_at_asc, last_used_at_desc
-	// updated_at_asc, updated_at_desc
-	Order string
-
-	// Total number of apitokens to return per page, if available. Default 25.
-	// Accepts anything between 1 and 100
-	PerPage int
-
-	// Page specifies the page results should be taken from. Default 1.
-	Page int
-
-	// TotalCount specifies the total count of all apitokens
-	TotalCount int
-
-	// Meta whether response should contain meta information
-	Meta bool
-
-	// Description specifies the description results should be like / match
-	Description string
-
-	// Status specified the statuses apitokens in response must be
-	// Valid options: active, revoked
-	Status string
-
-	// OnlyEphemeral specifies if only ephemeral tokens should be returned
-	OnlyEphemeral bool
-
-	// OnlyPermanent specifies if only permanent tokens should be returned
-	OnlyPermanent bool
+	*apitoken.GetAPITokensForRequest
 }
 
 // GetUserAPITokenThresholdRequest holds the data required for getting
@@ -184,7 +156,7 @@ type OauthLoginRequest struct {
 
 	// RequestUrl where the user should be redirected to once
 	// signed in
-	RequestUrl string
+	RequestUrl string `query:"request_url"`
 }
 
 // OauthCallbackRequest hold the data required for handling a
