@@ -73,5 +73,5 @@ const (
 
 var defaultErrorMap = map[string]reply.ErrorManifestItem{
 	// DefaultResourceNotFound is the default resource not found error
-	ErrKeyResourceNotFound: {Title: "Resource not found.", StatusCode: 404},
+	ErrKeyResourceNotFound: {Title: "Not Found", StatusCode: 404, Detail: "The requested resource could not be found", Code: "SPA0-001"},
 }
