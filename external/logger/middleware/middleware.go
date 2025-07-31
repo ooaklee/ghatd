@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 
@@ -31,7 +32,7 @@ func NewLogger(logger *zap.Logger, uriIgnoreList []string) *Middleware {
 // getOrCreateCorrelationId attempts to pull correlation Id from request header, if exists.
 // If correlation Id is not present, a new Id will be generated
 func getOrCreateCorrelationId(req *http.Request) string {
-	correlationId := req.Header.Get("X-Correlation-Id")
+	correlationId := req.Header.Get(common.CorrelationIdHttpHeader)
 	if correlationId == "" {
 		return toolbox.GenerateUuidV4()
 	}
@@ -45,7 +46,7 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
 		fetchedCorrelationId := getOrCreateCorrelationId(req)
-		w.Header().Add("X-Correlation-Id", fetchedCorrelationId)
+		w.Header().Add(common.CorrelationIdHttpHeader, fetchedCorrelationId)
 
 		// attach correlation id to request context
 		req = req.WithContext(toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId))
@@ -82,7 +83,7 @@ func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler) htt
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 
 		fetchedCorrelationId := getOrCreateCorrelationId(req)
-		w.Header().Add("X-Correlation-Id", fetchedCorrelationId)
+		w.Header().Add(common.CorrelationIdHttpHeader, fetchedCorrelationId)
 
 		// attach correlation id to request context
 		req = req.WithContext(toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId))
