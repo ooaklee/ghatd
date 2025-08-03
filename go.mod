@@ -89,7 +89,7 @@ require (
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/newrelic/go-agent/v3 v3.30.0
-	github.com/ooaklee/reply v1.0.0
+	github.com/ooaklee/reply v1.1.1-0.20250731045104-bdcc18cb9ecd
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.10.0
 	github.com/tdewolff/minify v2.3.6+incompatible
