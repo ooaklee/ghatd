@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -58,10 +57,12 @@ func (s *Service) DeleteApiTokensByOwnerId(ctx context.Context, ownerId string) 
 // CreateAPIToken creates an API token adding,  any passed additional information
 // TODO: Create tests
 func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) (*CreateAPITokenResponse, error) {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	if r.UserID == "" {
-		return nil, errors.New(ErrKeyRequiredUserIDMissing)
+		return nil, ErrRequiredUserIDMissing
 	}
 
 	// Prep apiToken
@@ -77,17 +78,15 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 		// Add duration
 		createdAt, err := time.Parse(common.RFC3339NanoUTC, apiToken.CreatedAt)
 		if err != nil {
-			log.Error("unable-to-set-ttl-for-short-lived-user-api-token", zap.String("token-created-at", apiToken.CreatedAt), zap.String("user-id", r.UserID), zap.Error(err))
+			log.Error("unable-to-parse-short-lived-user-api-token-created-at", zap.String("token-created-at", apiToken.CreatedAt), zap.String("user-id", r.UserID), zap.Error(err))
 
-			// TODO: create proper error map entry
-			return nil, errors.New("ErrKeyErrorCreatingShortLivedAccessToken")
+			return nil, ErrErrorCreatingShortLivedAccessToken
 		}
 
-		if err == nil {
-			expiryDate := createdAt.Add(time.Duration(r.TokenTtl) * time.Second)
+		expiryDate := createdAt.Add(time.Duration(r.TokenTtl) * time.Second)
 
-			apiToken.TtlExpiresAt = expiryDate.Format(common.RFC3339NanoUTC)
-		}
+		apiToken.TtlExpiresAt = expiryDate.Format(common.RFC3339NanoUTC)
+
 	}
 
 	persistentApiToken, err := s.ApitokenRespository.CreateUserAPIToken(ctx, &apiToken)
@@ -113,7 +112,9 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 // ExtractValidateUserAPITokenMetadata retrieves data from passed user api token
 // TODO: Create tests
 func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *http.Request) (*APITokenRequester, error) {
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 	var requester APITokenRequester
 
 	// secret identifers from headers
@@ -123,7 +124,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 
 	if len(splittedToken) != 2 {
 		log.Error("user-api-token-passed-does-not-contain-expected-two-segments", zap.Int("number-of-segments", len(splittedToken)))
-		return nil, errors.New(ErrKeyInvalidAPIFormatDetected)
+		return nil, ErrInvalidAPIFormatDetected
 	}
 
 	if splittedToken[0] == "" || splittedToken[1] == "" {
@@ -138,7 +139,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 		}
 
 		log.Error("user-api-token-passed-does-not-contain-two-non-empty-segments", zap.String("non-empty-segments", nonEmptySegment))
-		return nil, errors.New(ErrKeyInvalidAPIFormatDetected)
+		return nil, ErrInvalidAPIFormatDetected
 	}
 
 	requester.UserAPIToken = splittedToken[1]
@@ -169,7 +170,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 		}
 	}
 
-	return nil, errors.New(ErrKeyUnableToValidateUserAPIToken)
+	return nil, ErrUnableToValidateUserAPIToken
 }
 
 // UpdateAPITokenLastUsedAt updates the API Token's last used at time to now if the token matches the ID passed
@@ -194,7 +195,7 @@ func (s *Service) UpdateAPITokenLastUsedAt(ctx context.Context, r *UpdateAPIToke
 	}
 
 	if targetTokenID == "" {
-		return errors.New(ErrKeyNoMatchingUserAPITokenFound)
+		return ErrNoMatchingUserAPITokenFound
 	}
 
 	token, err := s.ApitokenRespository.GetAPITokenByID(ctx, targetTokenID)
@@ -247,7 +248,9 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 
 	var err error
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	// default
 	if r.Order == "" {
@@ -334,7 +337,7 @@ func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetA
 	})
 
 	if len(apitokens) < 1 {
-		return nil, errors.New(ErrKeyNoMatchingUserAPITokenFound)
+		return nil, ErrNoMatchingUserAPITokenFound
 	}
 
 	// generate human readable
@@ -351,7 +354,9 @@ func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetA
 // TODO: Create tests
 func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*GetAPITokensResponse, error) {
 
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	// default
 	if r.Order == "" {
@@ -420,7 +425,9 @@ func (s *Service) analyseTokenTTLData(ctx context.Context, r *AnalyseTokenTTLDat
 	var userApiTokensToRemove []string
 	var userId string
 	var validUserApiTokens []UserAPIToken
-	log := logger.AcquireFrom(ctx)
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
 
 	if r == nil {
 		return []UserAPIToken{}
@@ -497,7 +504,7 @@ func (s *Service) updateAPIToken(ctx context.Context, r *updateAPITokenRequest) 
 		if toolbox.StringInSlice(r.Status, validTokenStatuses) {
 			apiToken.Status = r.Status
 		} else {
-			return nil, errors.New(ErrKeyTokenStatusInvalid)
+			return nil, ErrTokenStatusInvalid
 		}
 	}
 

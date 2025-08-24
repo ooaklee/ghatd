@@ -12,12 +12,7 @@ type blueprintHandler interface{}
 
 const (
 	// ApiBlueprintPrefix base URI prefix for all blueprint routes
-	ApiBlueprintPrefix = common.ApiV1UriPrefix + "/blueprint"
-)
-
-var (
-	// ApiBlueprintIdVariable URI variable used to get blueprint Id out of URI
-	ApiBlueprintIdVariable = fmt.Sprintf("/{%s}", BlueprintURIVariableId)
+	ApiBlueprintPrefix = common.ApiV1UriPrefix + "/blueprints"
 )
 
 // AttachRoutesRequest holds everything needed to attach blueprint

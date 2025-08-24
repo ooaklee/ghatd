@@ -1,7 +1,6 @@
 package accessmanager
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -30,13 +29,13 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
 		log.Error("unable-decode-request-body-for-updating-user-email")
-		return nil, errors.New(ErrKeyInvalidUserEmail)
+		return nil, ErrInvalidUserEmail
 	}
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-requestor-user-id")
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	parsedRequest.TargetUserId, err = getUserIDFromURI(request)
@@ -69,7 +68,7 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 	err = validator.Validate(parsedRequest)
 	if err != nil {
 		log.Error("unable-validate-request-for-updating-user-email")
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return parsedRequest, nil
@@ -90,25 +89,25 @@ func MapRequestToLogoutUserOthersRequest(request *http.Request, validator Access
 	authTokenCookie, err := request.Cookie(authCookiePrefix)
 	if err != nil {
 		log.Error("unable-to-get-auth-token-cookie", zap.String("user-id", parsedRequest.UserId))
-		return nil, errors.New(ErrKeyInvalidAuthToken)
+		return nil, ErrInvalidAuthToken
 	}
 
 	refreshTokenCookie, err := request.Cookie(refreshCookiePrefix)
 	if err != nil {
 		log.Error("unable-to-get-refresh-token-cookie", zap.String("user-id", parsedRequest.UserId))
-		return nil, errors.New(ErrKeyInvalidRefreshToken)
+		return nil, ErrInvalidRefreshToken
 	}
 
 	parsedRequest.AuthToken = authTokenCookie.Value
 	parsedRequest.RefreshToken = refreshTokenCookie.Value
 
 	if err := toolbox.ValidateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidLogOutUserOthersRequest)
+		return nil, ErrInvalidLogOutUserOthersRequest
 	}
 
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -128,7 +127,7 @@ func MapRequestToOauthCallbackRequest(request *http.Request, validator Accessman
 	parsedRequest.RequestCookies = request.Cookies()
 
 	if providerName == "" || len(parsedRequest.UrlUri) == 0 || len(parsedRequest.RequestCookies) == 0 {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	parsedRequest.Provider = providerName
@@ -169,7 +168,7 @@ func MapRequestToOauthLoginRequest(request *http.Request, validator Accessmanage
 	}
 
 	if providerName == "" {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	parsedRequest.Provider = providerName
@@ -185,7 +184,7 @@ func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validato
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
 	if requestorID == "" {
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	userId, err := getUserIDFromURI(request)
@@ -194,14 +193,14 @@ func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validato
 	}
 
 	if userId != requestorID {
-		return nil, errors.New(ErrKeyForbiddenUnableToAction)
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	parsedRequest.UserId = userId
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return parsedRequest, nil
@@ -217,7 +216,7 @@ func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validato
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
 	if requestorID == "" {
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	// Add used Id from uri
@@ -227,21 +226,21 @@ func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validato
 	}
 
 	if parsedRequest.UserID != requestorID {
-		return nil, errors.New(ErrKeyForbiddenUnableToAction)
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	// get query params from request
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidResultQueryParam)
+		return nil, ErrInvalidResultQueryParam
 	}
 
 	parsedRequest.GetAPITokensForRequest = &baseRequest
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return &parsedRequest, nil
@@ -258,7 +257,7 @@ func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator Acce
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
 	if requestorID == "" {
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	userID, err := getUserIDFromURI(request)
@@ -267,7 +266,7 @@ func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator Acce
 	}
 
 	if userID != requestorID {
-		return nil, errors.New(ErrKeyForbiddenUnableToAction)
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	parsedRequest.APITokenID, err = getTokenIDFromURI(request)
@@ -279,7 +278,7 @@ func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator Acce
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return parsedRequest, nil
@@ -297,7 +296,7 @@ func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator Ac
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
 	if requestorID == "" {
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	userID, err := getUserIDFromURI(request)
@@ -306,7 +305,7 @@ func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator Ac
 	}
 
 	if userID != requestorID {
-		return nil, errors.New(ErrKeyForbiddenUnableToAction)
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	parsedRequest.APITokenID, err = getTokenIDFromURI(request)
@@ -318,7 +317,7 @@ func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator Ac
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return parsedRequest, nil
@@ -334,7 +333,7 @@ func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator Acce
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
 	if requestorID == "" {
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	parsedRequest.UserID, err = getUserIDFromURI(request)
@@ -343,7 +342,7 @@ func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator Acce
 	}
 
 	if parsedRequest.UserID != requestorID {
-		return nil, errors.New(ErrKeyForbiddenUnableToAction)
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	parsedRequest.APITokenID, err = getTokenIDFromURI(request)
@@ -353,7 +352,7 @@ func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator Acce
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return parsedRequest, nil
@@ -377,7 +376,7 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator Acce
 
 	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
 	if requestorID == "" {
-		return nil, errors.New(ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
@@ -390,7 +389,7 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator Acce
 		if err == nil {
 			log.Error("unable-to-decode-create-user-api-token-request", zap.Any("request-body", bodyBytes))
 		}
-		return nil, errors.New(ErrKeyInvalidCreateUserAPITokenBody)
+		return nil, ErrInvalidCreateUserAPITokenBody
 	}
 
 	parsedRequest.UserID, err = getUserIDFromURI(request)
@@ -399,12 +398,12 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator Acce
 	}
 
 	if parsedRequest.UserID != requestorID {
-		return nil, errors.New(ErrKeyForbiddenUnableToAction)
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyBadRequest)
+		return nil, ErrBadRequest
 	}
 
 	return parsedRequest, nil
@@ -427,13 +426,13 @@ func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName, a
 	if err == http.ErrNoCookie {
 		err := toolbox.DecodeRequestBody(request, parsedRequest)
 		if err != nil {
-			return nil, errors.New(ErrKeyInvalidRefreshToken)
+			return nil, ErrInvalidRefreshToken
 		}
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidRefreshToken)
+		return nil, ErrInvalidRefreshToken
 	}
 
 	// Check to see if we have an access token with request
@@ -461,12 +460,12 @@ func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.
 
 	err := toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserEmail)
+		return nil, ErrInvalidUserEmail
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserEmail)
+		return nil, ErrInvalidUserEmail
 	}
 
 	log.Debug("login-request-submitted.", zap.String("email", parsedRequest.Email))
@@ -482,12 +481,12 @@ func MapRequestToCreateUserRequest(request *http.Request, validator Accessmanage
 
 	err := toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -503,12 +502,12 @@ func MapRequestToValidateEmailVerificationCodeRequest(request *http.Request, val
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidVerificationToken)
+		return nil, ErrInvalidVerificationToken
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidVerificationToken)
+		return nil, ErrInvalidVerificationToken
 	}
 
 	return &parsedRequest, nil
@@ -524,12 +523,12 @@ func MapRequestToLoginUserRequest(request *http.Request, validator Accessmanager
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidVerificationToken)
+		return nil, ErrInvalidVerificationToken
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidVerificationToken)
+		return nil, ErrInvalidVerificationToken
 	}
 
 	return &parsedRequest, nil
@@ -540,7 +539,7 @@ func getUserIDFromURI(request *http.Request) (string, error) {
 	var userID string
 
 	if userID = mux.Vars(request)[UserURIVariableID]; userID == "" {
-		return "", errors.New(ErrKeyInvalidUserID)
+		return "", ErrInvalidUserID
 	}
 
 	return userID, nil
@@ -551,7 +550,7 @@ func getTokenIDFromURI(request *http.Request) (string, error) {
 	var tokenID string
 
 	if tokenID = mux.Vars(request)[APITokenURIVariableID]; tokenID == "" {
-		return "", errors.New(ErrKeyInvalidAPITokenID)
+		return "", ErrInvalidAPITokenID
 	}
 
 	return tokenID, nil

@@ -1,6 +1,6 @@
 package blueprint
 
-const BlueprintURIVariableId = "blueprintId"
+const BlueprintURIVariableId = "{blueprintId}"
 
 const (
 

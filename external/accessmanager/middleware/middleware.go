@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -11,7 +10,7 @@ import (
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // accessManagerService holds method of valid access manaer service
@@ -281,7 +280,7 @@ func (m *Middleware) handleJWTRequiredRequest(w http.ResponseWriter, req *http.R
 		m.endNewrelicTransaction(req)
 
 		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
 		return
 	}
 
@@ -376,7 +375,7 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 				m.endNewrelicTransaction(req)
 
 				//nolint will set up default fallback later
-				m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+				m.getBaseResponseHandler().NewHTTPErrorResponse(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
 				return
 			}
 
@@ -447,7 +446,7 @@ func (m *Middleware) handleAdminJWTRequiredRequest(w http.ResponseWriter, req *h
 		m.endNewrelicTransaction(req)
 
 		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
 		return
 	}
 
@@ -514,7 +513,7 @@ func (m *Middleware) handleActiveJWTRequiredRequest(w http.ResponseWriter, req *
 		m.endNewrelicTransaction(req)
 
 		//nolint will set up default fallback later
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
 		return
 	}
 

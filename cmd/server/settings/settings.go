@@ -17,6 +17,9 @@ type Settings struct {
 	CacheSkipHttpHeader      string `envconfig:"cache_skip_http_header" default:"x-cache-skip"`
 	CacheSkipUriPathRegex    string `envconfig:"cache_skip_uri_path_regex" default:"^/api/v1/.*"`
 
+	//
+	UriLoggingIgnoreList string `envconfig:"uri_logging_ignore_list"`
+
 	// CORS
 	AllowOrigins string `envconfig:"allow_origins" default:"http://localhost:3000" required:"true"`
 

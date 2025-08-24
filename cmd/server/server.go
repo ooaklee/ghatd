@@ -285,8 +285,7 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 	}
 
 	// gzip responses - gziphandler
-	// manage caching -
-	routerMiddlewares = append(routerMiddlewares, contenttype.NewContentType, cors.NewCorsMiddleware(allowOrigins), loggerMiddleware.NewLogger(appLogger).HTTPLogger, gziphandler.GzipHandler, minifierClient.Middleware, cacheClient.Middleware)
+	routerMiddlewares = append(routerMiddlewares, contenttype.NewContentType, cors.NewCorsMiddleware(allowOrigins), loggerMiddleware.NewLogger(appLogger, strings.Split(appSettings.UriLoggingIgnoreList, "")).HTTPLogger, gziphandler.GzipHandler, minifierClient.Middleware, cacheClient.Middleware)
 
 	return routerMiddlewares, nil
 

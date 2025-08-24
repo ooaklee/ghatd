@@ -2,7 +2,6 @@ package toolbox_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -136,7 +135,7 @@ func TestToolbox_GetResourcePagination(t *testing.T) {
 				PerPage: 7,
 				Page:    3,
 			},
-			expectedError: errors.New(toolbox.ErrKeyPageOutOfRange),
+			expectedError: toolbox.ErrPageOutOfRange,
 		},
 	}
 

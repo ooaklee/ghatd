@@ -184,6 +184,10 @@ github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3 h1:FPRKlK8DDxRP
 github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3/go.mod h1:UYlF1u5v8Wa/r71LbdnL1SVtBtlTs2fAGRuhrDwdvjY=
 github.com/ooaklee/reply v1.0.0 h1:h304hBaFJar1zcIUdgzu309IYtQQI9iPsq1Pi0eZ6P4=
 github.com/ooaklee/reply v1.0.0/go.mod h1:2lSHSGqzEfdNwkl146GId0x+338e6gCXrwSUO/4Kf2c=
+github.com/ooaklee/reply v1.1.1-0.20250731045601-ab29e1233654 h1:Ka/poFRPyaZTSQH3GW6BMTtVpigahpsSI1xhOtQxxxc=
+github.com/ooaklee/reply v1.1.1-0.20250731045601-ab29e1233654/go.mod h1:NE98T1eUc/3BPpcRYyDtdrt9+Nu4N3plwMTobDy/Dpk=
+github.com/ooaklee/reply/v2 v2.0.0 h1:w3ngI5q1B9vscbKT8vBB7O3HiuMPRbIL7LjYYXtqsJI=
+github.com/ooaklee/reply/v2 v2.0.0/go.mod h1:ChVayTRDg8HXByDKUeEVvofxypDVDJMqGeAge0ldsN8=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/otiai10/copy v1.14.0 h1:dCI/t1iTdYGtkvCuBG2BgR6KZa83PTclw4U5n2wAllU=
 github.com/otiai10/copy v1.14.0/go.mod h1:ECfuL02W+/FkTWZWgQqXPWZgW9oeKCSQ5qVfSc4qc4w=

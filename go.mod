@@ -5,7 +5,6 @@ go 1.23.0
 toolchain go1.23.8
 
 require (
-	//>ghatd {{ end }}
 	//>ghatd {{ block .DetailModGhatdPackage }}
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/PaesslerAG/jsonpath v0.1.1
@@ -14,6 +13,8 @@ require (
 	github.com/ritwickdey/querydecoder v1.2.0
 	github.com/spf13/cobra v1.8.0
 	github.com/xakep666/mongo-migrate v0.2.1
+	github.com/ooaklee/reply/v2 v2.0.0 
+//>ghatd {{ end }}
 //>ghatd {{ block .WebDetailGoModRequirePackages }}{{ end }}
 //>ghatd {{ block .ApiDetailGoModRequirePackages }}{{ end }}
 )
@@ -89,7 +90,6 @@ require (
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/matoous/go-nanoid/v2 v2.0.0
 	github.com/newrelic/go-agent/v3 v3.30.0
-	github.com/ooaklee/reply v1.0.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.10.0
 	github.com/tdewolff/minify v2.3.6+incompatible
