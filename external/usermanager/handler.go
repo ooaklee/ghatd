@@ -113,7 +113,7 @@ func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // GetUserMicroProfile returns response for request to get user's
@@ -134,7 +134,7 @@ func (h *Handler) GetUserMicroProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
 }
 
 // GetUserProfile returns response for request to get user's
@@ -155,7 +155,7 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
 }
 
 // CreateComms handles the request to create a comms
