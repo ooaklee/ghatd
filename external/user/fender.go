@@ -57,7 +57,7 @@ func MapRequestToGetUsersRequest(request *http.Request, validator UserValidator)
 
 	// get request queries
 	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(&parsedRequest)
+	err = querydecoder.New(query).Decode(parsedRequest)
 	if err != nil {
 		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}
