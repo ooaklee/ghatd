@@ -5,7 +5,7 @@ import (
 )
 
 // ApitokenErrorMap holds Error keys, their corresponding human-friendly message, and response status code
-var ApitokenErrorMap = map[string]reply.ErrorManifestItem{
+var ApitokenErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 	ErrKeyPageOutOfRange:               {Title: "Bad Request", Detail: "Page out of range", StatusCode: 400},
 	ErrKeyTokenStatusInvalid:           {Title: "Bad Request", Detail: "Please verify token status", StatusCode: 400},
 	ErrKeyNoMatchingUserAPITokenFound:  {Title: "Unauthorized", Code: "200", StatusCode: 401},

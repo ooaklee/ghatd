@@ -49,8 +49,6 @@ type NewHandlerRequest struct {
 // NewHandler returns usermanager handler
 func NewHandler(r *NewHandlerRequest) *Handler {
 
-	r.ErrorMaps = append(r.ErrorMaps, usermanagerErrorMap)
-
 	return &Handler{
 		Service:                  r.Service,
 		Validator:                r.Validator,

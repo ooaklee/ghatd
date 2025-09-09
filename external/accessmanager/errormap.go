@@ -7,7 +7,7 @@ import (
 // AccessmanagerErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // TODO: remove nolint
 // nolint will be used later
-var AccessmanagerErrorMap = map[string]reply.ErrorManifestItem{
+var AccessmanagerErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 	ErrKeyBadRequest:                                          {Title: "Bad Request", StatusCode: 400, Code: "AM00-001"},
 	ErrKeyInvalidUserBody:                                     {Title: "Bad Request", Detail: "Check submitted user information", StatusCode: 400, Code: "AM00-002"},
 	ErrKeyInvalidVerificationToken:                            {Title: "Bad Request", Detail: "User token missing or malformatted", StatusCode: 400, Code: "AM00-003"},
