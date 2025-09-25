@@ -64,8 +64,6 @@ type NewHandlerRequest struct {
 // NewHandler returns accessmanager handler
 func NewHandler(r *NewHandlerRequest) *Handler {
 
-	r.ErrorMaps = append(r.ErrorMaps, AccessmanagerErrorMap)
-
 	return &Handler{
 		Service:                  r.Service,
 		Validator:                r.Validator,

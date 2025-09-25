@@ -68,7 +68,7 @@ func TestMiddleware_HTTPLogger(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost%s", tt.clientReqURI), nil)
 			request.Header.Set("X-Correlation-Id", tt.clientReqCorrelationId)
 			response := httptest.NewRecorder()
-			handler := middleware.NewLogger(logger).HTTPLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := middleware.NewLogger(logger, []string{}).HTTPLogger(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
 			}))
 

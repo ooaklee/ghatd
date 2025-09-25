@@ -12,7 +12,7 @@ const (
 	ErrKeyResourceNotFound = "DefaultResourceNotFound"
 )
 
-var defaultErrorMap = map[string]reply.ErrorManifestItem{
+var defaultErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 	ErrKeyResourceNotFound: {Title: "Resource not found.", StatusCode: 404},
 }
 

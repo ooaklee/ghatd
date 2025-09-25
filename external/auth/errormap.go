@@ -6,7 +6,7 @@ import (
 
 // AuthErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // Use https://docs.microsoft.com/en-us/troubleshoot/iis/http-status-code to expand messages i.e. AccessDenied1
-var AuthErrorMap = map[string]reply.ErrorManifestItem{
+var AuthErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 	ErrKeyUnauthorized:                             {Title: "Unauthorized", StatusCode: 401},
 	ErrKeyUnauthorizedNoTokenUUID:                  {Title: "Unauthorized", Code: "1", StatusCode: 401},
 	ErrKeyUnauthorizedNoUserIDFound:                {Title: "Unauthorized", Code: "2", StatusCode: 401},

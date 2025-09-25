@@ -50,12 +50,10 @@ type NewMiddlewareRequest struct {
 // NewMiddleware creates new accessmanager middleware
 func NewMiddleware(r *NewMiddlewareRequest) *Middleware {
 
-	errorMaps := append(r.ErrorMaps, accessmanager.AccessmanagerErrorMap)
-
 	return &Middleware{
 		newRelicApplication:      r.NewRelicConf,
 		service:                  r.Service,
-		errorMaps:                errorMaps,
+		errorMaps:                r.ErrorMaps,
 		cookiePrefixAuthToken:    r.CookiePrefixAuthToken,
 		cookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
 		environment:              r.Environment,
