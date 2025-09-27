@@ -1,10 +1,10 @@
-package repository
+package contacter
 
 import (
 	"context"
 	"strings"
 
-	"github.com/ooaklee/ghatd/external/contacter"
+	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,15 +12,59 @@ import (
 )
 
 // CommsCollection collection name for comms
-const CommsCollection RepositoryCollection = "comms"
+const CommsCollection string = "comms"
+
+// MongoDbStore represents the datastore to hold resource data
+type MongoDbStore interface {
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
+	// ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
+	// ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
+	// ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+
+	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+}
+
+// Repository represents the datastore to hold resource data
+type Repository struct {
+	Store MongoDbStore
+}
+
+// NewRepository initiates new instance of repository
+func NewRepository(store MongoDbStore) *Repository {
+	return &Repository{
+		Store: store,
+	}
+}
 
 // GetCommsCollection returns collection used for comms domain
-func (r MongoDbRepository) GetCommsCollection(client *mongo.Client) *mongo.Collection {
-	return client.Database(r.ClientHandler.DB).Collection(string(CommsCollection))
+func (r *Repository) GetCommsCollection(ctx context.Context) (*mongo.Collection, error) {
+
+	_, err := r.Store.InitialiseClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	db, err := r.Store.GetDatabase(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	collection := db.Collection(CommsCollection)
+
+	return collection, nil
 }
 
 // GetTotalComms handles fetching the total count of comms in repository
-func (r MongoDbRepository) GetTotalComms(ctx context.Context, req *contacter.GetTotalCommsRequest) (int64, error) {
+func (r *Repository) GetTotalComms(ctx context.Context, req *GetTotalCommsRequest) (int64, error) {
 
 	// Example mongo query
 	// /// get comms total
@@ -78,14 +122,12 @@ func (r MongoDbRepository) GetTotalComms(ctx context.Context, req *contacter.Get
 		queryFilter["user_logged_in"] = false
 	}
 
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	collection := r.GetCommsCollection(client)
-
-	total, err := ExecuteCountDocuments(ctx, collection, queryFilter)
+	total, err := r.Store.ExecuteCountDocuments(ctx, collection, queryFilter)
 	if err != nil {
 		return 0, err
 	}
@@ -94,29 +136,25 @@ func (r MongoDbRepository) GetTotalComms(ctx context.Context, req *contacter.Get
 }
 
 // GetCommsByIds handles fetching comms in repositry that match the provided Ids
-func (r MongoDbRepository) GetCommsByIds(ctx context.Context, commsIds []string) ([]contacter.Comms, error) {
+func (r *Repository) GetCommsByIds(ctx context.Context, commsIds []string) ([]Comms, error) {
 
 	var (
-		result      []contacter.Comms
+		result      []Comms
 		queryFilter = bson.M{"_id": bson.M{"$in": commsIds}}
 		findOptions = options.Find()
 	)
 
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	collection := r.GetCommsCollection(client)
-
-	c, err := ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
+	c, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = MapAllInCursorToResult(ctx, c, &result, "comms"); err != nil {
+	if err = r.Store.MapAllInCursorToResult(ctx, c, &result, "comms"); err != nil {
 		return nil, err
 	}
 
@@ -124,29 +162,25 @@ func (r MongoDbRepository) GetCommsByIds(ctx context.Context, commsIds []string)
 }
 
 // GetCommsByNanoIds handles fetching comms in repositry that match the provided nano Ids
-func (r MongoDbRepository) GetCommsByNanoIds(ctx context.Context, commsNanoIds []string) ([]contacter.Comms, error) {
+func (r *Repository) GetCommsByNanoIds(ctx context.Context, commsNanoIds []string) ([]Comms, error) {
 
 	var (
-		result      []contacter.Comms
+		result      []Comms
 		queryFilter = bson.M{"_nano_id": bson.M{"$in": commsNanoIds}}
 		findOptions = options.Find()
 	)
 
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	collection := r.GetCommsCollection(client)
-
-	c, err := ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
+	c, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = MapAllInCursorToResult(ctx, c, &result, "comms"); err != nil {
+	if err = r.Store.MapAllInCursorToResult(ctx, c, &result, "comms"); err != nil {
 		return nil, err
 	}
 
@@ -154,16 +188,12 @@ func (r MongoDbRepository) GetCommsByNanoIds(ctx context.Context, commsNanoIds [
 }
 
 // CreateComms handles creating a comms in repositry
-func (r MongoDbRepository) CreateComms(ctx context.Context, newComms *contacter.Comms) (*contacter.Comms, error) {
+func (r *Repository) CreateComms(ctx context.Context, newComms *Comms) (*Comms, error) {
 
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	collection := r.GetCommsCollection(client)
 
 	newComms.SetCreatedAtTimeToNow()
 
@@ -177,7 +207,7 @@ func (r MongoDbRepository) CreateComms(ctx context.Context, newComms *contacter.
 		newComms.GenerateId()
 	}
 
-	_, err = collection.InsertOne(ctx, newComms)
+	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, newComms, "comms")
 	if err != nil {
 		return nil, err
 	}
@@ -186,20 +216,16 @@ func (r MongoDbRepository) CreateComms(ctx context.Context, newComms *contacter.
 }
 
 // UpdateComms handles updating a comms in repositry
-func (r MongoDbRepository) UpdateComms(ctx context.Context, comms *contacter.Comms) (*contacter.Comms, error) {
+func (r *Repository) UpdateComms(ctx context.Context, comms *Comms) (*Comms, error) {
 
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	collection := r.GetCommsCollection(client)
-
 	comms.SetUpdatedAtTimeToNow()
 
-	err = ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": comms.Id}, bson.M{"$set": comms}, "comms")
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": comms.Id}, bson.M{"$set": comms}, "comms")
 	if err != nil {
 		return nil, err
 	}
@@ -208,18 +234,14 @@ func (r MongoDbRepository) UpdateComms(ctx context.Context, comms *contacter.Com
 }
 
 // DeleteComms handles deleting a comms in repositry
-func (r MongoDbRepository) DeleteComms(ctx context.Context, commsId string) error {
+func (r *Repository) DeleteComms(ctx context.Context, commsId string) error {
 
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return err
 	}
 
-	collection := r.GetCommsCollection(client)
-
-	_, err = collection.DeleteOne(ctx, bson.M{"_id": commsId})
+	err = r.Store.ExecuteDeleteOneCommand(ctx, collection, bson.M{"_id": commsId}, "comms")
 	if err != nil {
 		return err
 	}
@@ -228,19 +250,19 @@ func (r MongoDbRepository) DeleteComms(ctx context.Context, commsId string) erro
 }
 
 // GetComms handles fetching comms from repositry
-func (r MongoDbRepository) GetComms(ctx context.Context, req *contacter.GetCommsRequest) ([]contacter.Comms, error) {
+func (r *Repository) GetComms(ctx context.Context, req *GetCommsRequest) ([]Comms, error) {
 
 	var (
-		result          []contacter.Comms
+		result          []Comms
 		queryFilter     bson.D = bson.D{}
 		requestFilter   bson.D = bson.D{}
-		paginationLimit *int64 = GetPaginationLimit(int64(req.PerPage))
+		paginationLimit *int64 = repository.GetPaginationLimit(int64(req.PerPage))
 	)
 
 	findOptions := options.Find()
 
 	findOptions.Limit = paginationLimit
-	findOptions.Skip = GetPaginationSkip(int64(req.Page), paginationLimit)
+	findOptions.Skip = repository.GetPaginationSkip(int64(req.Page), paginationLimit)
 
 	// generate query filter from request
 	if req.FullName != "" {
@@ -304,21 +326,17 @@ func (r MongoDbRepository) GetComms(ctx context.Context, req *contacter.GetComms
 	// Sort by request field
 	findOptions.SetSort(requestFilter)
 
-	// NICE_TO_HAVE: Wrap context with observability platform transaction
-
-	client, err := r.InitialiseClient(ctx)
+	collection, err := r.GetCommsCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	collection := r.GetCommsCollection(client)
-
-	c, err := ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
+	c, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = MapAllInCursorToResult(ctx, c, &result, "comms"); err != nil {
+	if err = r.Store.MapAllInCursorToResult(ctx, c, &result, "comms"); err != nil {
 		return nil, err
 	}
 
@@ -341,9 +359,9 @@ func standardisedProvidedCommsTypesAsStrings(commsTypes []string) []string {
 	return standardisedCommsTypes
 }
 
-// standardisedProvidedCommsTypes takes a slice of contacter.CommsType and returns a slice of standardised string representations.
+// standardisedProvidedCommsTypes takes a slice of CommsType and returns a slice of standardised string representations.
 // Each comms type is converted to lowercase and any spaces are replaced with hyphens.
-func standardisedProvidedCommsTypes(commsTypes []contacter.CommsType) []string {
+func standardisedProvidedCommsTypes(commsTypes []CommsType) []string {
 	standardisedCommsTypes := []string{}
 	for _, commsType := range commsTypes {
 		standardisedCommsTypes = append(standardisedCommsTypes, strings.ReplaceAll(

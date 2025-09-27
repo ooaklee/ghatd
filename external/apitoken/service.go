@@ -22,7 +22,7 @@ type ApitokenRespository interface {
 	DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error
 	UpdateAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
 	CreateUserAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
-	DeleteResourcesByOwnerId(ctx context.Context, resourceType interface{}, ownerId string) error
+	DeleteResourcesByOwnerId(ctx context.Context, ownerId string) error
 	GetTotalApiTokens(ctx context.Context, userId, userNanoId, descriptionFilter, statusFilter, to, from string, onlyEphemeral bool, onlyPermanent bool) (int64, error)
 }
 
@@ -47,7 +47,7 @@ func (s *Service) GetTotalApiTokens(ctx context.Context, r *GetTotalApiTokensReq
 // DeleteApiTokensByOwnerId deletes the histories that belong to matching user id
 func (s *Service) DeleteApiTokensByOwnerId(ctx context.Context, ownerId string) error {
 
-	err := s.ApitokenRespository.DeleteResourcesByOwnerId(ctx, &UserAPIToken{}, ownerId)
+	err := s.ApitokenRespository.DeleteResourcesByOwnerId(ctx, ownerId)
 	if err != nil {
 		return err
 	}
