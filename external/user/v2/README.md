@@ -1,4 +1,4 @@
-# Migration Guide - User -> Universal User Model 
+# Migration Guide - User -> Universal User (BETA) Model 
 
 ## Overview
 
