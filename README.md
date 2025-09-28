@@ -4,7 +4,7 @@
 
 # GHAT(D)
 
-GHAT(D) is an open-source, opinionated, free, full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI (which is optional). The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use the GHAT(D) framework.
+GHAT(D) is an open-source, opinionated, and free full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI, which originally formed the foundational stack. Over time, for improved usability, it has also been extended to support most Vite-compatible frameworks (tested with Vue). The aim is to make GHAT(D) a solid foundation for creating highly portable, scalable, and performant full-stack projects. Whether you need just a backend, a landing page, or even a blog (coming soon), you can still utilise the GHAT(D) framework.
 
 We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "builder blocks" which we call `Details`. A `Detail` is an independent application that can function both within the GHAT(D) framework and on their own. At present, we only support `api` and `web` typed `Details`.
 
