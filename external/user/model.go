@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 
-	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -87,13 +85,12 @@ func (u *User) GetAsMicroProfile() *UserMicroProfile {
 
 // UserMeta holds metadeta about user
 type UserMeta struct {
-	CreatedAt           string            `json:"created_at" bson:"created_at,omitempty"`
-	UpdatedAt           string            `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
-	LastLoginAt         string            `json:"last_login_at,omitempty" bson:"last_login_at,omitempty"`
-	ActivatedAt         string            `json:"activated_at,omitempty" bson:"activated_at,omitempty"`
-	StatusChangedAt     string            `json:"status_changed_at,omitempty" bson:"status_changed_at,omitempty"`
-	LastFreshLoginAt    string            `json:"last_fresh_login_at,omitempty" bson:"last_fresh_login_at,omitempty"`
-	BillingAssessmentAt map[string]string `json:"-" bson:"billing_assessment_at"`
+	CreatedAt        string `json:"created_at" bson:"created_at,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
+	LastLoginAt      string `json:"last_login_at,omitempty" bson:"last_login_at,omitempty"`
+	ActivatedAt      string `json:"activated_at,omitempty" bson:"activated_at,omitempty"`
+	StatusChangedAt  string `json:"status_changed_at,omitempty" bson:"status_changed_at,omitempty"`
+	LastFreshLoginAt string `json:"last_fresh_login_at,omitempty" bson:"last_fresh_login_at,omitempty"`
 }
 
 // GetAttributeByJsonPath returns the value of the attribute at the given JSON path
@@ -118,37 +115,6 @@ func (u *User) GetAttributeByJsonPath(jsonPath string) (any, error) {
 	}
 
 	return result, nil
-}
-
-// ClearBillingAssessmentDate sets the BillingAssessmentAt date to blank
-func (u *User) ClearBillingAssessmentDate(roleKey string) *User {
-	delete(u.Meta.BillingAssessmentAt, roleKey)
-	return u
-}
-
-// SetBillingAssessmentDate sets the BillingAssessmentAt date to passed date
-// string need to match "2006-01-02"
-func (u *User) SetBillingAssessmentDate(roleKey, yyyymmdd string) (*User, error) {
-
-	parsedDate, err := time.Parse("2006-01-02", yyyymmdd)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(u.Meta.BillingAssessmentAt) < 1 {
-		u.Meta.BillingAssessmentAt = map[string]string{roleKey: parsedDate.Format(common.RFC3339NanoUTC)}
-		return u, nil
-	}
-
-	u.Meta.BillingAssessmentAt[roleKey] = parsedDate.Format(common.RFC3339NanoUTC)
-	return u, nil
-}
-
-// IsBillied returns whether user is being billed for
-// any particular roles
-func (u *User) IsBillied() bool {
-
-	return len(u.Meta.BillingAssessmentAt) > 0
 }
 
 // UserVerifcationStatus holds verification status for user's

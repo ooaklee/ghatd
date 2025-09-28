@@ -5,7 +5,6 @@ import (
 	"errors"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -57,9 +56,6 @@ func (s *Service) GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest
 		return nil, err
 	}
 
-	// Analyse user biling detaiils
-	s.analyseUsersBillingAssessmentData(ctx, &userResponse.User)
-
 	return &GetMicroProfileResponse{
 		MicroProfile: *userResponse.User.GetAsMicroProfile(),
 	}, nil
@@ -75,69 +71,9 @@ func (s *Service) GetProfile(ctx context.Context, r *GetProfileRequest) (*GetPro
 		return nil, err
 	}
 
-	// Analyse user biling detaiils
-	s.analyseUsersBillingAssessmentData(ctx, &userResponse.User)
-
 	return &GetProfileResponse{
 		Profile: *userResponse.User.GetAsProfile(),
 	}, nil
-}
-
-// analyseUsersBillingAssessmentData is checking to see user has billing assigned, if any
-// roles assigned are due removals, and action their profile accordingly and update on repository
-func (s *Service) analyseUsersBillingAssessmentData(ctx context.Context, user *User) *User {
-
-	var rolesToRemove []string
-	log := logger.AcquireFrom(ctx)
-
-	// check if user has billing details assigned
-	if !user.IsBillied() {
-		return user
-	}
-
-	// verify user's billing associations are not assigned, if so note for deletion
-	for role, expirationDateAsText := range user.Meta.BillingAssessmentAt {
-		expiration, err := time.Parse("2006-01-02T00:00:00", expirationDateAsText)
-		if err != nil {
-			log.Warn("unable-to-parse-billing-association-expiry-date", zap.String("role-id", role), zap.String("expiry-date", expirationDateAsText), zap.String("user-id", user.ID))
-			continue
-		}
-
-		timeNow := time.Now()
-
-		if timeNow.After(expiration) || timeNow.Equal(expiration) {
-			rolesToRemove = append(rolesToRemove, role)
-		}
-	}
-
-	// make sure there are roles to remove
-	if len(rolesToRemove) < 1 {
-		return user
-	}
-
-	// remove role from user roles
-	for _, role := range rolesToRemove {
-
-		// remove billing meta
-		user.ClearBillingAssessmentDate(role)
-
-		// check to see if role to remove exists
-		if !toolbox.StringInSlice(role, user.Roles) {
-			log.Warn("role-to-remove-not-assigned-to-user", zap.String("role-id", role), zap.String("user-id", user.ID))
-			continue
-		}
-
-		// remove from user if role is assigned
-		user.Roles = toolbox.RemoveStringFromSlice(role, user.Roles)
-	}
-
-	// Update user object in the repository, if it fails just log a message and carry on by passing newly structured user object
-	_, err := s.UpdateUser(ctx, &UpdateUserRequest{User: user})
-	if err != nil {
-		log.Error("failed-to-update-user-roles-during-billing-assessment", zap.String("roles-id", strings.Join(rolesToRemove, ", ")), zap.String("user-id", user.ID))
-	}
-
-	return user
 }
 
 // GetUserByEmail returns an user if it matches email
