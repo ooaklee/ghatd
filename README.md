@@ -4,22 +4,9 @@
 
 # GHAT(D)
 
-GHAT(D) is an open-source, opinionated, free, full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI (which is optional, see notable alternatives below). The aim is to make GHAT(D) a good foundation for creating highly portable, scalable, and performant full-stack projects. Only need a backend? landing page? (or blog (coming soon))? Don't worry, you can use still use the GHAT(D) framework.
+GHAT(D) is an open-source, opinionated, and free full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI, which originally formed the foundational stack. Over time, for improved usability, it has also been extended to support most Vite-compatible frameworks (tested with Vue). The aim is to make GHAT(D) a solid foundation for creating highly portable, scalable, and performant full-stack projects. Whether you need just a backend, a landing page, or even a blog (coming soon), you can still utilise the GHAT(D) framework.
 
-See below for more information on the core components used for this stack.
-
-- **go:** [v1.22.x](https://go.dev/doc/install)
-- **htmx:** [v1.9.10](https://htmx.org/)
-- **alpine.js:** [v3.x](https://alpinejs.dev/essentials/installation#from-a-script-tag)
-- **tailwindcss:** [v3.x](https://github.com/asdf-community/asdf-golang)
-- **daisy ui:** [v3.x](https://daisyui.com/docs/install/)
-  - Notable alternatives include:
-    - **flowbite:** [v2.3.x](https://flowbite.com/docs/getting-started/introduction/#include-via-cdn)
-    - **wind-ui:** [v.3.4.x](https://wind-ui.com/)
-- **version manager:** [asdf](https://github.com/asdf-vm/asdf)
-
-> The dashboard's base template was taken from the [**`TailAdmin` team**](https://tailadmin.com/). Please support them by [**purchasing their templates**](https://tailadmin.com/pricing) or giving their [**GitHub repository**](https://github.com/TailAdmin/tailadmin-free-tailwind-dashboard-template) a star.
-
+We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "builder blocks" which we call `Details`. A `Detail` is an independent application that can function both within the GHAT(D) framework and on their own. At present, we only support `api` and `web` typed `Details`.
 
 ## Motivation
 
@@ -33,9 +20,9 @@ I am a platform engineer by trade, so I do not promise perfect code by any stret
 
 This will be an exciting experience, and I look forward to building out this project with you all and sharing my progress and knowledge as it matures.
 
-## Starting the server
+## Starting locally
 
-Before getting started please mak sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [ASDF](https://github.com/asdf-vm/asdf) to install it with the following command
+Before getting started please make sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [ASDF](https://github.com/asdf-vm/asdf) to install it with the following command
 
 ```sh
 # Add the plugin for Go
@@ -44,6 +31,41 @@ asdf plugin-add golang
 # Install required version
 asdf install
 ```
+
+### Using the CLI (WIP)
+
+To start using the CLI you can use the code:
+
+```sh
+go run cli/cli.go
+```
+
+You can then pass your desired cli command with:
+
+```sh
+go run cli/cli.go <desired-command>
+```
+
+#### TODO: Implementing the `new` command
+
+We are currently implementing the `new` command, which will create a base folder for a new ghat(d) compatible file.
+
+`Example local command`
+
+```shell
+go run cli/cli.go new -n "awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+```
+
+`Prerequisites`
+- [ ] Detail repo for demo-endpoints
+- [ ] Detail repo for demo-dash
+
+`Success Criteria`
+- The implementation will be considered successful once the user can run the command below and get an output directory with a working app (after running `go mod tidy`)
+  - Once tidied, the user should be able to run `go run cmd/server.go start-server` in the output directory and access http://localhost:4000/.  
+ 
+
+### Starting the server
 
 To start the server you can use the code:
 
@@ -62,38 +84,22 @@ reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main
 
 ## Good to know
 
-### Remember to replcae
-
-After you have cloned this repository, please make sure to replace or update the following:
-
-- `github.com/ooaklee/ghatd`
-- `tbc`
-
 ### ASCI Art
 
 All ASCI related code in this template was created using [PatorJK](https://patorjk.com/software/taag/#p=display&h=2&f=Isometric3)
 
-### Core internal packages
-
-Some core internal packages are used across the codebase without injection; they include:
-
-- `internal/response`
-- `internal/router`
-- `internal/toolbox`
-- `internal/common`
-
 ### Curl Examples
 
-- Making `GET` resquest: `curl -i -X GET "http://localhost:4000/api/v1/rememberer/words"`
+- Making `GET` resquest: `curl -i -X GET "http://localhost:4000/v0/health/check"`
 
 ### How to stop file server showing directory listing?
 
 Add a blank index.html file to the specific directory that you want to disable listings for. For example, the
-code below will create an index file which will stop [the webapp](http://localhost:4000/static/) from showing 
+code below will create an index file which will stop [the web app](http://localhost:4000/static/) from showing 
 and listing page.
 
 ```sh
-touch internal/webapp/ui/static/index.html
+touch internal/web/ui/static/index.html
 ```
 
 ### Hot reloading
@@ -106,38 +112,78 @@ Install reflex
 
 Once installed, run the server
 
-```
+```sh
 reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main.go start-server
 ```
 
 ### How to build binaries
 
-One of the benefits of using the GHATD stack is that it compiles everything into a single binary. This makes it highly portable and provides numerous deployment options. To build a binary for your specific system, please follow the instructions below:
+One of the benefits of using the GHATD stack is that it compiles everything into a single binary. This makes it highly portable and provides numerous deployment options. 
+
+#### CLI 
+
+To build a binary for the GHATDCLI for your desired system architecture, please follow the instructions below:
+
 
 > All commands should be executed from the root directory.
 
-#### Mac OS (ARM64)
+##### Mac OS (ARM64)
+
+```sh
+export BINARY_NAME=ghatdcli
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+```
+
+##### Mac OS (AMD64)
+
+```sh
+export BINARY_NAME=ghatdcli
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+```
+
+##### Linux (ARM64)
+
+```sh
+export BINARY_NAME=ghatdcli
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+```
+
+##### Linux (AMD64)
+
+```sh
+export BINARY_NAME=ghatdcli
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+```
+
+
+#### Web App
+
+To build a binary for web app to your desired system architecture, please follow the instructions below:
+
+> All commands should be executed from the root directory.
+
+##### Mac OS (ARM64)
 
 ```sh
 export BINARY_NAME=ghatd
 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
-#### Mac OS (AMD64)
+##### Mac OS (AMD64)
 
 ```sh
 export BINARY_NAME=ghatd
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
-#### Linux (ARM64)
+##### Linux (ARM64)
 
 ```sh
 export BINARY_NAME=ghatd
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
-#### Linux (AMD64)
+##### Linux (AMD64)
 
 ```sh
 export BINARY_NAME=ghatd

@@ -12,7 +12,7 @@ import (
 
 // content holds our static web server content.
 //
-//go:embed internal/webapp/ui/html/*.tmpl.html internal/webapp/ui/static/* internal/webapp/ui/html/pages/*.tmpl.html internal/webapp/ui/html/partials/**/*.tmpl.html internal/webapp/ui/html/partials/*.tmpl.html internal/webapp/ui/html/responses/*.tmpl.html
+// //go:embed internal/web/ui/static/* internal/web/ui/html/*
 var content embed.FS
 
 func main() {
@@ -24,7 +24,8 @@ func main() {
 		Long:  "The entry point of the ghatd application",
 	}
 
-	rootCmd.AddCommand(server.NewCommand(&content))
+	rootCmd.AddCommand(server.NewCommand(&content, "internal/"))
+	// rootCmd.AddCommand(migrator.NewCommand())
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal("ghatd/error-executing-command-tree")

@@ -1,0 +1,139 @@
+package accessmanager
+
+const (
+
+	// ErrKeyConflictingUserState returned when user state is in an conflicting state for the requested
+	// action (i.e. user is already active, email is already verified etc.)
+	ErrKeyConflictingUserState string = "ConflictingUserState"
+
+	// ErrKeyBadRequest return when bad request occurs (basic)
+	ErrKeyBadRequest = "BadRequest"
+
+	// ErrKeyInvalidUserBody returned when error occurs while decoding user request body
+	ErrKeyInvalidUserBody string = "InvalidCreateUserBody"
+
+	// ErrKeyInvalidVerificationToken returned when verification token missing or incorrectly formatted
+	ErrKeyInvalidVerificationToken string = "InvalidVerificationToken"
+
+	// ErrKeyInvalidUserEmail returned when errors occurs while decoding email for  auth related requests
+	// i.e, initial token / verification, changing email etc.
+	ErrKeyInvalidUserEmail string = "KeyInvalidUserEmail"
+
+	// ErrKeyUserStatusUncaught returned when user status in an unexpected status, while the user attempts to initiate
+	// the log in flow.
+	ErrKeyUserStatusUncaught string = "UserStatusUncaught"
+
+	// ErrKeyInvalidRefreshToken returned when Refresh token missing or incorrectly formatted
+	ErrKeyInvalidRefreshToken string = "InvalidRefreshToken"
+
+	// ErrKeyUnauthorizedRefreshTokenCacheDeletionFailure [code: 100] returned when refresh token fails to delete from ephemeral store
+	ErrKeyUnauthorizedRefreshTokenCacheDeletionFailure = "UnauthorizedRefreshTokenCacheDeletionFailure"
+
+	// ErrKeyUnauthorizedAccessTokenCacheDeletionFailure [code: 101] returned when access token fails to delete from ephemeral store
+	ErrKeyUnauthorizedAccessTokenCacheDeletionFailure = "UnauthorizedAccessTokenCacheDeletionFailure"
+
+	// ErrKeyUnauthorizedAdminAccessAttempted [code: 102] returned when non admin user attempts to access an admin only endpoint
+	ErrKeyUnauthorizedAdminAccessAttempted = "UnauthorizedAdminAccessAttempted"
+
+	// ErrKeyUnauthorizedNonActiveStatus [code: 103] returned when a non `ACTIVE` status user attempts to access an endpoint only available
+	// to those that completely active their account
+	ErrKeyUnauthorizedNonActiveStatus = "UnauthorizedNonActiveStatus"
+
+	// ErrKeyUnauthorizedTokenNotFoundInStore [code: 104] returned when token cannot be found in ephemeral store
+	ErrKeyUnauthorizedTokenNotFoundInStore = "UnauthorizedTokenNotFoundInStore"
+
+	// ErrKeyUnauthorizedUnableToAttainRequestorID [code: 105] returned when expected ID for requester cannot be found
+	ErrKeyUnauthorizedUnableToAttainRequestorID = "UnauthorizedUnableToAttainRequestorID"
+
+	// ErrKeyForbiddenUnableToAction [code: 100] returned when requestor not authorised to carry out requested action
+	ErrKeyForbiddenUnableToAction = "ForbiddenUnableToAction"
+
+	// ErrKeyInvalidUserID returned when user ID missing or incorrectly formatted
+	ErrKeyInvalidUserID = "InvalidUserID"
+
+	// ErrKeyInvalidAPITokenID returned when api token ID missing or incorrectly formatted
+	ErrKeyInvalidAPITokenID = "InvalidAPITokenID"
+
+	// ErrKeyEphemeralAPITokenLimitReached returned when user attempts to create more ephemeral api tokens than their role allows
+	ErrKeyEphemeralAPITokenLimitReached = "EphemeralAPITokenLimitReached"
+
+	// ErrKeyInvalidCreateUserAPITokenBody is return when the body for creating an api token is incorrect
+	ErrKeyInvalidCreateUserAPITokenBody = "InvalidCreateUserAPITokenBody"
+
+	// ErrKeyPermanentAPITokenLimitReached returned when user attempts to create more permanent api tokens than their role allows
+	ErrKeyPermanentAPITokenLimitReached = "PermanentAPITokenLimitReached"
+
+	// ErrKeyAPITokenNotAssociatedWithUser returned when specified API token cannot not be found in user's collection
+	ErrKeyAPITokenNotAssociatedWithUser = "APITokenNotAssociatedWithUser"
+
+	// ErrKeyCreateUserAPITokenRequestTtlTooShort is returned when user is attempting to create a token
+	// that shorter than their role allows
+	ErrKeyCreateUserAPITokenRequestTtlTooShort = "CreateUserAPITokenRequestTtlTooShort"
+
+	// ErrKeyCreateUserAPITokenRequestTtlTooLong is returned when user is attempting to create a token
+	// that longer than their role allows
+	ErrKeyCreateUserAPITokenRequestTtlTooLong = "CreateUserAPITokenRequestTtlTooLong"
+
+	// ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement is returned when user is attempting to create a token
+	// that is beyond their allowed increment
+	ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement = "CreateUserAPITokenRequestTtlOutsideAllowedIncrement"
+
+	// ErrKeyInvalidLogOutUserOthersRequest error when a user makes an LogoutUserOthers request and it is invalid
+	// missing refresh token or auth token in headers
+	ErrKeyInvalidLogOutUserOthersRequest string = "InvalidLogOutUserOthersRequest"
+
+	// ErrKeyInvalidAuthToken error when a user makes a request with invalid auth token
+	ErrKeyInvalidAuthToken string = "InvalidAuthToken"
+
+	// ErrKeyInvalidResultQueryParam error when a user makes a request with invalid query param
+	ErrKeyInvalidResultQueryParam string = "InvalidResultQueryParam"
+)
+
+const (
+	// UserURIVariableID holds the identifier for the user ID in the URI
+	UserURIVariableID = "userID"
+
+	// APITokenURIVariableID holds the identifier for the apitoken ID in the URI
+	APITokenURIVariableID = "apiTokenID"
+
+	AccessManagerURIVariableID = "blankpackagID"
+)
+
+const (
+	// CreateUserAPITokenTokenLimit the MAX number of tokens a user can have at any one time (regardless of state)
+	CreateUserAPITokenTokenLimit = 3
+
+	// AccessManagerUserTokenStatusKeyRevoked holds api token Revoked state key
+	AccessManagerUserTokenStatusKeyRevoked = "REVOKED"
+
+	// AccessManagerUserTokenStatusKeyActive holds api token Active state key
+	AccessManagerUserTokenStatusKeyActive = "ACTIVE"
+)
+
+const (
+	// UserRoleAdmin holds the identifier for user admin role
+	UserRoleAdmin = "ADMIN"
+
+	// UserRoleReader holds the identifier for user reader role
+	UserRoleReader = "READER"
+)
+
+const (
+	// UpdateUserEmailOldEmailNotificationBodyTmpl is the template for the email body sent to the old email address when a user changes their email address
+	UpdateUserEmailOldEmailNotificationBodyTmpl string = `<td style="font-family: sans-serif; font-size: 14px; vertical-align: top;">
+	<br>
+	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
+		<br> A request to change your account email from <b><code>%s</code></b> to <b><code>%s</code></b> is being processed. You can no longer use your this email to access your account (ID: <b><code>%s</code></b>).
+	</p>
+	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
+		<b>Important Note:</b>
+		<br>
+		<br>
+		All critical authentication and essential emails will now be sent to your new email address. Additionally, you have been signed out of all active sessions associated with the old email. Please check your new email address for instructions on verifying it as your primary email.
+		<br><br>
+		If you are unable to access the new email address or did not request this change, please contact us directly through our website for immediate assistance.
+	</p>
+	<br>
+</td>
+`
+)
