@@ -165,6 +165,9 @@ func (c *Config) BuildClientOptions() *options.ClientOptions {
 		if opt.Registry != nil {
 			clientOpts.SetRegistry(opt.Registry)
 		}
+		if opt.Monitor != nil {
+			clientOpts.SetMonitor(opt.Monitor)
+		}
 		// Add other options as needed
 	}
 
