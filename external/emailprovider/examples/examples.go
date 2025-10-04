@@ -46,7 +46,7 @@ func ExampleSparkPostProvider() {
 
 // Example 2: Using Logging provider for development
 func ExampleLoggingProvider() {
-	provider := emailprovider.NewLoggingEmailProvider()
+	provider := emailprovider.NewLoggingEmailProvider(nil)
 
 	email := &emailprovider.Email{
 		To:       "dev@example.com",
@@ -94,7 +94,7 @@ func ExampleProviderSelection() {
 		fmt.Println("Using SparkPost provider")
 	} else {
 		// Use logging provider in development
-		provider = emailprovider.NewLoggingEmailProvider()
+		provider = emailprovider.NewLoggingEmailProvider(nil)
 		fmt.Println("Using Logging provider")
 	}
 
@@ -103,7 +103,7 @@ func ExampleProviderSelection() {
 
 // Example 5: Error handling
 func ExampleProviderErrorHandling() {
-	provider := emailprovider.NewLoggingEmailProvider()
+	provider := emailprovider.NewLoggingEmailProvider(nil)
 
 	// Invalid email (missing recipient)
 	invalidEmail := &emailprovider.Email{
@@ -205,7 +205,7 @@ func ExampleEnvironmentSpecificProvider() {
 		sparkpostClient := &sp.Client{ /* ... */ }
 		provider = emailprovider.NewSparkPostEmailProvider(sparkpostClient)
 	} else {
-		provider = emailprovider.NewLoggingEmailProvider()
+		provider = emailprovider.NewLoggingEmailProvider(nil)
 	}
 
 	fmt.Printf("Environment: %s\n", currentEnv)
@@ -215,7 +215,7 @@ func ExampleEnvironmentSpecificProvider() {
 
 // Example 8: Batch email sending
 func ExampleBatchEmailSending() {
-	provider := emailprovider.NewLoggingEmailProvider()
+	provider := emailprovider.NewLoggingEmailProvider(nil)
 	ctx := context.Background()
 
 	recipients := []string{

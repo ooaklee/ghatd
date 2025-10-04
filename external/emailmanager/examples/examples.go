@@ -147,7 +147,7 @@ func ExampleDevelopmentSetup() {
 	tmplr, _ := emailtemplater.NewEmailTemplater(templaterConfig)
 
 	// Use logging provider for development
-	provider := emailprovider.NewLoggingEmailProvider()
+	provider := emailprovider.NewLoggingEmailProvider(nil)
 
 	// Create audit service
 	auditService := &MockAuditService{}
@@ -179,7 +179,7 @@ func ExampleDevelopmentSetup() {
 func ExampleWithoutAuditLogging() {
 	templaterConfig := emailtemplater.ExampleConfig()
 	tmplr, _ := emailtemplater.NewEmailTemplater(templaterConfig)
-	provider := emailprovider.NewLoggingEmailProvider()
+	provider := emailprovider.NewLoggingEmailProvider(nil)
 
 	// Disable audit logging
 	managerConfig := &emailmanager.Config{
@@ -343,10 +343,10 @@ func ExampleEnvironmentBasedConfig() {
 		provider = emailprovider.NewSparkPostEmailProvider(sparkpostClient)
 		shouldSend = true
 	case "development":
-		provider = emailprovider.NewLoggingEmailProvider()
+		provider = emailprovider.NewLoggingEmailProvider(nil)
 		shouldSend = true // Will log instead of send
 	default:
-		provider = emailprovider.NewLoggingEmailProvider()
+		provider = emailprovider.NewLoggingEmailProvider(nil)
 		shouldSend = false
 	}
 
@@ -372,7 +372,9 @@ func createExampleManager() *emailmanager.EmailManager {
 	templaterConfig := emailtemplater.ExampleConfig()
 	tmplr, _ := emailtemplater.NewEmailTemplater(templaterConfig)
 
-	provider := emailprovider.NewLoggingEmailProvider()
+	provider := emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{
+		DisableFullHtmlBodyPreview: true,
+	})
 
 	auditService := &MockAuditService{}
 

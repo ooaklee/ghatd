@@ -8,16 +8,24 @@ import (
 	"go.uber.org/zap"
 )
 
+// LoggingEmailProviderConfig holds configuration for the logging email provider
+type LoggingEmailProviderConfig struct {
+	// DisableFullHtmlBodyPreview determines if the HTML body preview should be truncated
+	DisableFullHtmlBodyPreview bool
+}
+
 // LoggingEmailProvider is an email provider that logs emails instead of sending them
 // This is useful for development and testing environments
 type LoggingEmailProvider struct {
-	name string
+	name   string
+	config *LoggingEmailProviderConfig
 }
 
 // NewLoggingEmailProvider creates a new logging email provider
-func NewLoggingEmailProvider() *LoggingEmailProvider {
+func NewLoggingEmailProvider(config *LoggingEmailProviderConfig) *LoggingEmailProvider {
 	return &LoggingEmailProvider{
-		name: "LOCAL",
+		name:   "LOCAL",
+		config: config,
 	}
 }
 
@@ -36,12 +44,21 @@ func (p *LoggingEmailProvider) Send(ctx context.Context, email *Email) (*SendRes
 	log := logger.AcquireFrom(ctx)
 
 	// Log the email details
-	log.Info("email-outputted-locally--not-sent",
+	var logFields []zap.Field = []zap.Field{
 		zap.String("provider", p.Name()),
 		zap.String("to", email.To),
 		zap.String("from", email.From),
 		zap.String("subject", email.Subject),
-		zap.String("html_body_preview", truncateString(email.HTMLBody, 200)),
+	}
+
+	if p.config != nil && p.config.DisableFullHtmlBodyPreview {
+		logFields = append(logFields, zap.String("html_body_preview", truncateString(email.HTMLBody, 200)))
+	} else {
+		logFields = append(logFields, zap.String("html_body_preview", email.HTMLBody))
+	}
+
+	log.Info("email-outputted-locally--not-sent",
+		logFields...,
 	)
 
 	// Generate a fake message ID for consistency
