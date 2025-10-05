@@ -256,3 +256,36 @@ Application Code
                          │   Logs       │  │          │
                          └──────────────┘  └──────────┘
 ```
+
+## Potential Future Improvements
+
+Below is a list of areas for improvement in future iterations of `emailmanager`, `emailtemplater`, and `emailprovider`. Please note that these suggestions are not prioritised.
+
+### Additional Providers
+- [ ] SendGrid provider
+- [ ] AWS SES provider
+- [ ] Mailgun provider
+- [ ] Brevo provider
+- [ ] SMTP provider
+
+### Advanced Features
+- [ ] Email templating with layouts
+- [ ] Multi-language support
+- [ ] Email preview generation
+- [ ] Batch sending optimization
+- [ ] Rate limiting
+- [ ] Retry mechanisms
+- [ ] Email queueing
+
+### Testing
+- [ ] Unit tests for templater
+- [ ] Unit tests for emailprovider
+- [ ] Unit tests for emailmanager
+- [ ] Integration tests
+- [ ] Performance benchmarks
+
+### Monitoring
+- [ ] Metrics collection
+- [ ] Provider failover
+- [ ] Send rate tracking
+- [ ] Error rate monitoring
