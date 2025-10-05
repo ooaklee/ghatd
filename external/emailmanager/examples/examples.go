@@ -26,8 +26,9 @@ func ExampleBasicSetup() {
 	templaterConfig := &emailtemplater.Config{
 		FrontEndDomainName:            "https://app.example.com",
 		DashboardDomainName:           "https://dashboard.example.com",
+		EmailVerificationFullEndpoint: "https://app.example.com/v0/auth/verify",
+		DashboardVerificationURIPath:  "/v0/auth/verify",
 		Environment:                   "production",
-		EmailVerificationFullEndpoint: "https://app.example.com/auth/verify",
 		BusinessEntityName:            "MyApp",
 		BusinessEntityWebsite:         "https://example.com",
 		WelcomeEmailSubject:           "Welcome to MyApp!",

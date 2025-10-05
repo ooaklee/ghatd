@@ -57,14 +57,18 @@ type Config struct {
 // ExampleConfig returns a config with sensible example defaults
 func ExampleConfig() *Config {
 	return &Config{
-		Environment:           "development",
-		WelcomeEmailSubject:   "Welcome! Please verify your email",
-		LoginEmailSubject:     "Your login link",
-		FromEmailAddress:      "noreply@example.com",
-		NoReplyEmailAddress:   "noreply@example.com",
-		BusinessEntityName:    "Example Inc.",
-		BusinessEntityWebsite: "https://example.com",
-		TimeProvider:          time.Now,
+		Environment:                   "development",
+		WelcomeEmailSubject:           "Welcome! Please verify your email",
+		LoginEmailSubject:             "Your login link",
+		FromEmailAddress:              "noreply@example.com",
+		NoReplyEmailAddress:           "noreply@example.com",
+		BusinessEntityName:            "Example Inc.",
+		BusinessEntityWebsite:         "https://example.com",
+		FrontEndDomainName:            "https://app.example.com",
+		EmailVerificationFullEndpoint: "https://app.example.com/v0/auth/verify",
+		DashboardDomainName:           "https://app.example.com",
+		DashboardVerificationURIPath:  "/v0/auth/verify",
+		TimeProvider:                  time.Now,
 		Templates: map[EmailTemplateType]string{
 			EmailTemplateTypeLogin:        templates.NewLoginEmailTemplate(time.Now().Year(), "Example Inc.", "https://example.com"),
 			EmailTemplateTypeVerification: templates.NewVerificationEmailTemplate(time.Now().Year(), "Example Inc.", "https://example.com"),
