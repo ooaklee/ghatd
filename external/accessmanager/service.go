@@ -15,15 +15,13 @@ import (
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
-	"github.com/ooaklee/ghatd/external/emailer"
+	"github.com/ooaklee/ghatd/external/emailmanager"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/ghatd/external/user"
 	"go.uber.org/zap"
-
-	sp "github.com/SparkPost/gosparkpost"
 )
 
 // AuditService expected methods of a valid audit service
@@ -41,7 +39,7 @@ type OauthService interface {
 	ProviderVerifyRequestIsAuthentic(requestUriEntries url.Values, protectionCookien *http.Cookie) (string, bool)
 }
 
-// EphemeralStore expected methods of a valid ephemeral storage client
+// EphemeralStore expected methods of a valid ephemeral storage
 type EphemeralStore interface {
 	CreateAuth(ctx context.Context, userID string, tokenDetails ephemeral.TokenDetailsAuth) error
 	StoreToken(ctx context.Context, accessTokenUUID string, userID string, ttl time.Duration) error
@@ -51,12 +49,11 @@ type EphemeralStore interface {
 	DeleteAllTokenExceptedSpecified(ctx context.Context, userId string, exemptionTokenIds []string) error
 }
 
-// EmailerClient expected methods of a valid emailer client
-type EmailerClient interface {
-	GenerateVerificationEmail(r *emailer.SendVerificationEmailRequest) (*sp.Transmission, *emailer.EmailInfo, error)
-	SendEmail(ctx context.Context, emailInfo *emailer.EmailInfo, emailTransmission *sp.Transmission) error
-	GenerateLoginEmail(r *emailer.SendLoginEmailRequest) (*sp.Transmission, *emailer.EmailInfo, error)
-	GenerateEmailFromBaseTemplate(r *emailer.GenerateEmailFromBaseTemplateRequest) (*sp.Transmission, *emailer.EmailInfo, error)
+// EmailManager expected methods of a valid email manager
+type EmailManager interface {
+	SendCustomEmail(ctx context.Context, req *emailmanager.SendCustomEmailRequest) error
+	SendLoginEmail(ctx context.Context, req *emailmanager.SendLoginEmailRequest) error
+	SendVerificationEmail(ctx context.Context, req *emailmanager.SendVerificationEmailRequest) error
 }
 
 // AuthService expected methods of a valid auth service
@@ -97,7 +94,7 @@ type ApitokenService interface {
 type Service struct {
 	EphemeralStore        EphemeralStore
 	AuditService          AuditService
-	EmailerClient         EmailerClient
+	EmailManager          EmailManager
 	AuthService           AuthService
 	UserService           UserService
 	ApitokenService       ApitokenService
@@ -110,8 +107,8 @@ type NewServiceRequest struct {
 	// EphemeralStore handles storing tokens in cache
 	EphemeralStore EphemeralStore
 
-	// EmailerClient handles sending out emails to users for logging in & verification
-	EmailerClient EmailerClient
+	// EmailManager handles sending out emails to users
+	EmailManager EmailManager
 
 	// AuthService handles creating authentication tokens
 	AuthService AuthService
@@ -137,7 +134,7 @@ func NewService(r *NewServiceRequest) *Service {
 
 	return &Service{
 		EphemeralStore:        r.EphemeralStore,
-		EmailerClient:         r.EmailerClient,
+		EmailManager:          r.EmailManager,
 		AuthService:           r.AuthService,
 		UserService:           r.UserService,
 		ApitokenService:       r.ApiTokenService,
@@ -245,22 +242,16 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 
 	// send email to old email
 	emailBodyToNotifyExistingEmail := fmt.Sprintf(UpdateUserEmailOldEmailNotificationBodyTmpl, standardiseExistingEmail, standardiseNewEmail, targetUser.GetUserId())
-	oldEmailTransmission, oldEmailInfo, err := s.EmailerClient.GenerateEmailFromBaseTemplate(&emailer.GenerateEmailFromBaseTemplateRequest{
-		EmailBody:    emailBodyToNotifyExistingEmail,
-		EmailPreview: "A request to change your account email is being processed",
-		EmailSubject: "Email Change Request Received",
-		EmailTo:      standardiseExistingEmail,
-		WithFooter:   true,
+
+	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{
+		EmailSubject:  "Email Change Request Received",
+		EmailPreview:  "A request to change your account email is being processed",
+		EmailTo:       standardiseExistingEmail,
+		EmailBody:     emailBodyToNotifyExistingEmail,
+		WithFooter:    true,
+		UserId:        targetUser.GetUserId(),
+		RecipientType: string(audit.User),
 	})
-	if err != nil {
-		log.Error("ams/failed-to-generate-change-of-email-request-notification-email-to-old-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
-		return signUserOutOfPlatform, err
-	}
-
-	// Add user id to email info
-	oldEmailInfo.UserId = targetUser.GetUserId()
-
-	err = s.EmailerClient.SendEmail(ctx, oldEmailInfo, oldEmailTransmission)
 	if err != nil {
 		log.Error("ams/unable-to-send-change-of-email-request-notification-email-for-to-old-email:", zap.String("user-id", r.TargetUserId))
 		return signUserOutOfPlatform, err
@@ -1559,21 +1550,13 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *user.User, i
 	}
 
 	// Beging email sending process
-	emailTransmission, emailInfo, err := s.EmailerClient.GenerateLoginEmail(&emailer.SendLoginEmailRequest{
+	err = s.EmailManager.SendLoginEmail(ctx, &emailmanager.SendLoginEmailRequest{
 		Email:              user.Email,
 		Token:              tokenDetails.EphemeralToken,
 		IsDashboardRequest: isDashboardRequest,
 		RequestUrl:         requestUrl,
+		UserId:             user.ID,
 	})
-	if err != nil {
-		log.Error("unable-to-generate-user-initiate-login-email:", zap.String("user-id", user.ID))
-		return "", err
-	}
-
-	// Add user id to email info
-	emailInfo.UserId = user.ID
-
-	err = s.EmailerClient.SendEmail(ctx, emailInfo, emailTransmission)
 	if err != nil {
 		log.Error("unable-to-send-initiate-login-email:", zap.String("user-id", user.ID))
 		return "", err
@@ -1582,8 +1565,7 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *user.User, i
 	return tokenDetails.EphemeralToken, nil
 }
 
-// CreateEmailVerificationToken create token used to validate email associated to user's account
-// TODO: Create tests
+// CreateEmailVerificationToken create token used to validate email associated to user's accounts
 func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEmailVerificationTokenRequest) (string, error) {
 
 	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
@@ -1604,23 +1586,15 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 	}
 
 	// Beging email sending process
-	emailTransmission, emailInfo, err := s.EmailerClient.GenerateVerificationEmail(&emailer.SendVerificationEmailRequest{
+	err = s.EmailManager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailRequest{
 		FirstName:          user.FirstName,
 		LastName:           user.LastName,
 		Email:              user.Email,
 		Token:              tokenDetails.EmailVerificationToken,
 		IsDashboardRequest: r.IsDashboardRequest,
 		RequestUrl:         r.RequestUrl,
+		UserId:             user.ID,
 	})
-	if err != nil {
-		log.Error("unable-to-generate-user-verification-email:", zap.String("user-id", user.ID), zap.Error(err))
-		return "", err
-	}
-
-	// Add user id to email info
-	emailInfo.UserId = user.ID
-
-	err = s.EmailerClient.SendEmail(ctx, emailInfo, emailTransmission)
 	if err != nil {
 		log.Error("unable-to-send-verification-email:", zap.String("user-id", user.ID))
 		return "", err
