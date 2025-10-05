@@ -20,6 +20,29 @@ I am a platform engineer by trade, so I do not promise perfect code by any stret
 
 This will be an exciting experience, and I look forward to building out this project with you all and sharing my progress and knowledge as it matures.
 
+
+## Core Packages
+
+GHAT(D) offers modular packages that can be used both together and independently. Our goal is for each package to adhere to clean architecture principles, featuring comprehensive documentation and examples. We are committed to implementing these practices on both new and legacy package, especially those that are less extensible for other projects.
+
+### Email System
+A complete email solution split into three composable packages for maximum flexibility and testability.
+
+- **[Email Manager](./docs/getting-started/email-manager/)** - Complete email system with templating, sending, and audit logging
+  - `emailtemplater` - Generate HTML email templates with variable substitution
+  - `emailprovider` - Abstract email sending across providers (SparkPost, logging, custom)
+  - `emailmanager` - High-level orchestration with audit integration
+
+### Additional Packages
+- **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging
+- **[Logger](./external/logger/)** - Structured logging with middleware support
+- **[Repository](./external/repository/)** - MongoDB repository patterns and utilities
+- **`TBC`**
+
+
+**Note on Core Packages:** This Core Package and sub-sections will be updated as more core packages are added and the refactoring work is completed on legacy packages. The goal is to ensure that each package includes a getting-started guide accompanied by working examples to help you integrate them into your projects.
+
+
 ## Starting locally
 
 Before getting started please make sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [ASDF](https://github.com/asdf-vm/asdf) to install it with the following command
