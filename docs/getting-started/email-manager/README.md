@@ -208,7 +208,7 @@ Application Code
 ```
 
 
-### Deployment View
+### Environment Usage & Outputs Flow
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -234,7 +234,7 @@ Application Code
                        │     API      │  │          │
                        └──────────────┘  └──────────┘
 ┌──────────────────────────────────────────────────────────────┐
-│                      Development                             │
+│                      Local Development                       │
 │                                                              │
 │  ┌─────────────┐         ┌──────────────┐                    │
 │  │ Application │────────►│ emailmanager │                    │
@@ -244,15 +244,15 @@ Application Code
 │                   │             │              │             │
 │                   ▼             ▼              ▼             │
 │         ┌──────────────┐  ┌──────────┐  ┌──────────┐         │
-│         │    email     │  │ Logging  │  │  Mock    │         │
-│         |   templater  |  │ Provider │  │  Audit   │         │
+│         │    email     │  │ Logging  │  │  Audit   │         │
+│         |   templater  |  │ Provider │  │ Service  │         │
 │         └──────────────┘  └────┬─────┘  └────┬─────┘         │
 │                                │             │               │
 └────────────────────────────────┼─────────────┼───────────────┘
                                  │             │
                                  ▼             ▼
                          ┌──────────────┐  ┌──────────┐
-                         │   Console    │  │ Console  │
-                         │   Logs       │  │  Logs    │
+                         │   Console    │  │ MongoDB  │
+                         │   Logs       │  │          │
                          └──────────────┘  └──────────┘
 ```
