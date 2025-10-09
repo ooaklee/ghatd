@@ -163,76 +163,76 @@ dept, exists := user.GetExtension("department")
 ## API Endpoints
 
 ### Base Path
-All v2 endpoints are under: `/api/v1/v2/users`
+All v2 endpoints are under: `/api/v2/users`
 
 ### CRUD Operations
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| POST | `/api/v1/v2/users` | Create new user | ✓ |
-| GET | `/api/v1/v2/users` | List users with filters | ✓ |
-| GET | `/api/v1/v2/users/{userID}` | Get user by ID | ✓ |
-| PATCH | `/api/v1/v2/users/{userID}` | Update user | ✓ |
-| DELETE | `/api/v1/v2/users/{userID}` | Delete user | ✓ |
+| POST | `/api/v2/users` | Create new user | ✓ |
+| GET | `/api/v2/users` | List users with filters | ✓ |
+| GET | `/api/v2/users/{userID}` | Get user by ID | ✓ |
+| PATCH | `/api/v2/users/{userID}` | Update user | ✓ |
+| DELETE | `/api/v2/users/{userID}` | Delete user | ✓ |
 
 ### Alternative Lookups
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| GET | `/api/v1/v2/users/nano/{nanoID}` | Get user by nano ID | ✓ |
-| GET | `/api/v1/v2/users/by-email?email=` | Get user by email | ✓ |
+| GET | `/api/v2/users/nano/{nanoID}` | Get user by nano ID | ✓ |
+| GET | `/api/v2/users/email/{email}` | Get user by email | ✓ |
 
 ### Profile Management
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| GET | `/api/v1/v2/users/{userID}/profile` | Get full profile | ✓ |
-| GET | `/api/v1/v2/users/{userID}/micro` | Get micro profile | ✓ |
-| PATCH | `/api/v1/v2/users/{userID}/personal-info` | Update personal info | ✓ |
+| GET | `/api/v2/users/{userID}/profile` | Get full profile | ✓ |
+| GET | `/api/v2/users/{userID}/micro` | Get micro profile | ✓ |
+| PATCH | `/api/v2/users/{userID}/personal-info` | Update personal info | ✓ |
 
 ### Status & Role Management
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| PATCH | `/api/v1/v2/users/{userID}/status` | Update user status | ✓ |
-| POST | `/api/v1/v2/users/{userID}/roles` | Add role | ✓ |
-| DELETE | `/api/v1/v2/users/{userID}/roles` | Remove role | ✓ |
+| PATCH | `/api/v2/users/{userID}/status` | Update user status | ✓ |
+| POST | `/api/v2/users/{userID}/roles` | Add role | ✓ |
+| DELETE | `/api/v2/users/{userID}/roles` | Remove role | ✓ |
 
 ### Verification
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| POST | `/api/v1/v2/users/{userID}/verify/email` | Verify email | ✓ |
-| POST | `/api/v1/v2/users/{userID}/unverify/email` | Unverify email | ✓ |
-| POST | `/api/v1/v2/users/{userID}/verify/phone` | Verify phone | ✓ |
+| POST | `/api/v2/users/{userID}/verify/email` | Verify email | ✓ |
+| POST | `/api/v2/users/{userID}/unverify/email` | Unverify email | ✓ |
+| POST | `/api/v2/users/{userID}/verify/phone` | Verify phone | ✓ |
 
 ### Extensions
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| POST | `/api/v1/v2/users/{userID}/extensions` | Set extension field | ✓ |
-| GET | `/api/v1/v2/users/{userID}/extensions/{key}` | Get extension field | ✓ |
+| POST | `/api/v2/users/{userID}/extensions` | Set extension field | ✓ |
+| GET | `/api/v2/users/{userID}/extensions/{extensionKey}` | Get extension field | ✓ |
 
 ### Advanced Queries
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| GET | `/api/v1/v2/users/by-roles?roles=ADMIN,USER` | Get users by roles | ✓ |
-| GET | `/api/v1/v2/users/by-status?status=ACTIVE` | Get users by status | ✓ |
-| GET | `/api/v1/v2/users/search/extensions?key=x&value=y` | Search by extension | ✓ |
+| GET | `/api/v2/users/by-roles?roles=ADMIN,USER` | Get users by roles | ✓ |
+| GET | `/api/v2/users/by-status?status=ACTIVE` | Get users by status | ✓ |
+| GET | `/api/v2/users/search/extensions?key=x&value=y` | Search by extension | ✓ |
 
 ### Bulk Operations
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| POST | `/api/v1/v2/users/bulk/status` | Bulk update statuses | ✓ |
+| POST | `/api/v2/users/bulk/status` | Bulk update statuses | ✓ |
 
 ### Utilities
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| GET | `/api/v1/v2/users/{userID}/validate` | Validate user | ✓ |
-| POST | `/api/v1/v2/users/{userID}/login` | Record login | ✓ |
+| GET | `/api/v2/users/{userID}/validate` | Validate user | ✓ |
+| POST | `/api/v2/users/{userID}/recordings/login` | Record login | ✓ |
 
 ## Migration Guide
 

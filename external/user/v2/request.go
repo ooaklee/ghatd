@@ -30,63 +30,63 @@ type UpdateUserRequest struct {
 
 // GetUserByIDRequest holds data for retrieving a user by ID
 type GetUserByIDRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // GetUserByNanoIDRequest holds data for retrieving a user by nano ID
 type GetUserByNanoIDRequest struct {
-	NanoID string `json:"nano_id"`
+	NanoID string
 }
 
 // GetUserByEmailRequest holds data for retrieving a user by email
 type GetUserByEmailRequest struct {
-	Email string `json:"email"`
+	Email string
 }
 
 // DeleteUserRequest holds data for deleting a user
 type DeleteUserRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // GetUsersRequest holds filters and pagination for retrieving users
 type GetUsersRequest struct {
 	// Pagination
-	Page    int `json:"page"`
-	PerPage int `json:"per_page"`
+	Page    int `query:"page"`
+	PerPage int `query:"per_page"`
 
 	// Sorting
-	Order string `json:"order"`
+	Order string `query:"order"`
 
 	// Metadata flag
-	IncludeMeta bool `json:"meta,omitempty"`
+	IncludeMeta bool `query:"meta"`
 
 	// Filters
-	EmailFilter     string      `json:"email_filter,omitempty"`
-	FirstNameFilter string      `json:"first_name_filter,omitempty"`
-	LastNameFilter  string      `json:"last_name_filter,omitempty"`
-	StatusFilter    string      `json:"status_filter,omitempty"`
-	RoleFilter      string      `json:"role_filter,omitempty"`
-	RolesFilter     []string    `json:"roles_filter,omitempty"`
-	OnlyAdmin       bool        `json:"only_admin,omitempty"`
-	EmailVerified   *bool       `json:"email_verified,omitempty"`
-	PhoneVerified   *bool       `json:"phone_verified,omitempty"`
-	ExtensionKey    string      `json:"extension_key,omitempty"`
-	ExtensionValue  interface{} `json:"extension_value,omitempty"`
+	EmailFilter     string      `query:"email_filter"`
+	FirstNameFilter string      `query:"first_name_filter"`
+	LastNameFilter  string      `query:"last_name_filter"`
+	StatusFilter    string      `query:"status_filter"`
+	RoleFilter      string      `query:"role_filter"`
+	RolesFilter     []string    `query:"roles_filter"`
+	OnlyAdmin       bool        `query:"only_admin"`
+	EmailVerified   *bool       `query:"email_verified"`
+	PhoneVerified   *bool       `query:"phone_verified"`
+	ExtensionKey    string      `query:"extension_key"`
+	ExtensionValue  interface{} `query:"extension_value"`
 }
 
 // GetTotalUsersRequest holds filters for counting total users
 type GetTotalUsersRequest struct {
-	EmailFilter     string      `json:"email_filter,omitempty"`
-	FirstNameFilter string      `json:"first_name_filter,omitempty"`
-	LastNameFilter  string      `json:"last_name_filter,omitempty"`
-	StatusFilter    string      `json:"status_filter,omitempty"`
-	RoleFilter      string      `json:"role_filter,omitempty"`
-	RolesFilter     []string    `json:"roles_filter,omitempty"`
-	OnlyAdmin       bool        `json:"only_admin,omitempty"`
-	EmailVerified   *bool       `json:"email_verified,omitempty"`
-	PhoneVerified   *bool       `json:"phone_verified,omitempty"`
-	ExtensionKey    string      `json:"extension_key,omitempty"`
-	ExtensionValue  interface{} `json:"extension_value,omitempty"`
+	EmailFilter     string      `query:"email_filter"`
+	FirstNameFilter string      `query:"first_name_filter"`
+	LastNameFilter  string      `query:"last_name_filter"`
+	StatusFilter    string      `query:"status_filter"`
+	RoleFilter      string      `query:"role_filter"`
+	RolesFilter     []string    `query:"roles_filter"`
+	OnlyAdmin       bool        `query:"only_admin"`
+	EmailVerified   *bool       `query:"email_verified"`
+	PhoneVerified   *bool       `query:"phone_verified"`
+	ExtensionKey    string      `query:"extension_key"`
+	ExtensionValue  interface{} `query:"extension_value"`
 }
 
 // UpdateUserStatusRequest holds data for updating user status
@@ -103,41 +103,41 @@ type AddUserRoleRequest struct {
 
 // RemoveUserRoleRequest holds data for removing a role from a user
 type RemoveUserRoleRequest struct {
-	ID   string `json:"id"`
+	ID   string
 	Role string `json:"role"`
 }
 
 // VerifyUserEmailRequest holds data for verifying a user's email
 type VerifyUserEmailRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // UnverifyUserEmailRequest holds data for unverifying a user's email
 type UnverifyUserEmailRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // VerifyUserPhoneRequest holds data for verifying a user's phone
 type VerifyUserPhoneRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // SetUserExtensionRequest holds data for setting a user extension field
 type SetUserExtensionRequest struct {
-	ID    string      `json:"id"`
+	ID    string
 	Key   string      `json:"key"`
 	Value interface{} `json:"value"`
 }
 
 // GetUserExtensionRequest holds data for retrieving a user extension field
 type GetUserExtensionRequest struct {
-	ID  string `json:"id"`
-	Key string `json:"key"`
+	ID  string
+	Key string
 }
 
 // UpdateUserPersonalInfoRequest holds data for updating user personal information
 type UpdateUserPersonalInfoRequest struct {
-	ID        string `json:"id"`
+	ID        string
 	FirstName string `json:"first_name,omitempty"`
 	LastName  string `json:"last_name,omitempty"`
 	FullName  string `json:"full_name,omitempty"`
@@ -147,17 +147,17 @@ type UpdateUserPersonalInfoRequest struct {
 
 // RecordUserLoginRequest holds data for recording a user login
 type RecordUserLoginRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // GetUserProfileRequest holds data for retrieving a user profile
 type GetUserProfileRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // GetUserMicroProfileRequest holds data for retrieving a user micro profile
 type GetUserMicroProfileRequest struct {
-	ID string `json:"id"`
+	ID string
 }
 
 // ValidateUserRequest holds data for validating a user
@@ -168,9 +168,9 @@ type ValidateUserRequest struct {
 // SearchUsersByExtensionRequest holds data for searching users by extension field
 type SearchUsersByExtensionRequest struct {
 	Key     string      `json:"key"`
-	Value   interface{} `json:"value"`
-	Page    int         `json:"page"`
-	PerPage int         `json:"per_page"`
+	Value   interface{} `query:"value"`
+	Page    int         `query:"page"`
+	PerPage int         `query:"per_page"`
 }
 
 // BulkUpdateUsersStatusRequest holds data for bulk updating user statuses
@@ -181,16 +181,16 @@ type BulkUpdateUsersStatusRequest struct {
 
 // GetUsersByRolesRequest holds data for retrieving users by roles
 type GetUsersByRolesRequest struct {
-	Roles   []string `json:"roles"`
-	Page    int      `json:"page"`
-	PerPage int      `json:"per_page"`
-	Order   string   `json:"order,omitempty"`
+	Roles   []string `query:"roles"`
+	Page    int      `query:"page"`
+	PerPage int      `query:"per_page"`
+	Order   string   `query:"order"`
 }
 
 // GetUsersByStatusRequest holds data for retrieving users by status
 type GetUsersByStatusRequest struct {
-	Status  string `json:"status"`
-	Page    int    `json:"page"`
-	PerPage int    `json:"per_page"`
-	Order   string `json:"order,omitempty"`
+	Status  string `query:"status"`
+	Page    int    `query:"page"`
+	PerPage int    `query:"per_page"`
+	Order   string `query:"order"`
 }

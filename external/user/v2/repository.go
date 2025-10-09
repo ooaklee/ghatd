@@ -382,6 +382,8 @@ func (r *Repository) buildUserQueryFilter(emailFilter, firstNameFilter, lastName
 	if extensionKey != "" {
 		if extensionValue != nil {
 			queryFilter["extensions."+extensionKey] = extensionValue
+		} else {
+			queryFilter["extensions."+extensionKey] = bson.M{"$exists": true}
 		}
 	}
 
