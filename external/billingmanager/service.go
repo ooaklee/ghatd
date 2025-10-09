@@ -368,9 +368,28 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 
 	log.Warn("unable-to-find-user-id-falling-back-to-payload-email", zap.String("payload-email", payload.CustomerEmail), zap.Error(err))
 
+	// ## THOUGHTS
+	//
 	// For pre-registration purchases, we might not have a user yet
-	// In this case, we can store with the email and associate later
-	// For now, we'll return an error indicating user needs to be created
+	// In this case, we can store it with the email and associate it later
+	// For now, we'll return an error indicating the user needs to be created
+	//
+	// ## TODO
+	//
+	// Update this to create a pre-registration user if needed
+	// Would need to support PRE_REGISTERED status in user v2
+	// PRE_REGISTERED users must complete registration upon login.
+	// We should send back an error with metadata that gives the email
+	// The user will then make a call to "/api/ams/v2/complete-signup"
+	//  with email, first name, last name, password, etc., which is needed
+	//
+	// ## OR
+	//
+	// We are update our subscriptions and billing events to support either
+	// an email address or a user ID. This change allows us to create subscriptions
+	// and events without requiring a user ID initially, and we can associate them
+	// with a user ID later. Consequently, when searching for subscriptions or events,
+	// we will need to search by email if a user ID is not available.
 	return "", errors.New(ErrKeyBillingManagerUnableToResolveUserId)
 }
 
