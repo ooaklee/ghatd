@@ -65,6 +65,9 @@ type UniversalUser struct {
 	Email  string `json:"email" bson:"email" db:"email"`
 	Status string `json:"status" bson:"status" db:"status"`
 
+	// Version field for tracking model version (stored internally only)
+	Version int `json:"-" bson:"version" db:"version"`
+
 	// Optional identifier (for systems that need multiple ID types)
 	NanoID string `json:"nano_id,omitempty" bson:"_nano_id,omitempty" db:"nano_id"`
 
@@ -206,7 +209,22 @@ func (u *UniversalUser) GenerateNewNanoID() *UniversalUser {
 // SetInitialState sets up a new user with default values
 func (u *UniversalUser) SetInitialState() *UniversalUser {
 	u.Status = u.config.DefaultStatus
+	u.Version = 2 // Mark as v2 model
 	u.SetCreatedAtNow()
+	return u
+}
+
+// SetVersion sets the model version (used for migration tracking)
+func (u *UniversalUser) SetVersion(version int) *UniversalUser {
+	u.Version = version
+	return u
+}
+
+// EnsureVersion ensures the user has version 2 set
+func (u *UniversalUser) EnsureVersion() *UniversalUser {
+	if u.Version != 2 {
+		u.Version = 2
+	}
 	return u
 }
 
@@ -512,7 +530,10 @@ func (u *UniversalUser) GetAsMicroProfile() *user.UserMicroProfile {
 	}
 }
 
-// Profile structs are defined in the original model.go file
+// GetUserEmail returns the user's email
+func (u *UniversalUser) GetUserEmail() string {
+	return u.Email
+}
 
 // Legacy method aliases for backward compatibility
 func (u *UniversalUser) GetUserId() string     { return u.ID }
