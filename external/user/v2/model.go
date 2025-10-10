@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	"github.com/ooaklee/ghatd/external/user"
+	userX "github.com/ooaklee/ghatd/external/user/x"
 )
 
 // IDGenerator generates unique identifiers
@@ -497,8 +497,8 @@ func (u *UniversalUser) GetAttributeByJSONPath(jsonPath string) (interface{}, er
 // Profile Generation (backward compatibility)
 
 // GetAsProfile returns a profile representation
-func (u *UniversalUser) GetAsProfile() *user.UserProfile {
-	profile := &user.UserProfile{
+func (u *UniversalUser) GetAsProfile() *userX.UserProfile {
+	profile := &userX.UserProfile{
 		ID:     u.ID,
 		Status: u.Status,
 		Roles:  u.Roles,
@@ -522,8 +522,8 @@ func (u *UniversalUser) GetAsProfile() *user.UserProfile {
 }
 
 // GetAsMicroProfile returns a minimal profile representation
-func (u *UniversalUser) GetAsMicroProfile() *user.UserMicroProfile {
-	return &user.UserMicroProfile{
+func (u *UniversalUser) GetAsMicroProfile() *userX.UserMicroProfile {
+	return &userX.UserMicroProfile{
 		ID:     u.ID,
 		Roles:  u.Roles,
 		Status: u.Status,
@@ -533,6 +533,22 @@ func (u *UniversalUser) GetAsMicroProfile() *user.UserMicroProfile {
 // GetUserEmail returns the user's email
 func (u *UniversalUser) GetUserEmail() string {
 	return u.Email
+}
+
+// GetUserID implements UserModel interface (standardized method name)
+func (u *UniversalUser) GetUserID() string {
+	return u.ID
+}
+
+// GetUserRoles implements UserModel interface
+func (u *UniversalUser) GetUserRoles() []string {
+	return u.Roles
+}
+
+// GetModelVersion implements UserModel interface
+// Returns 2 for v2 UniversalUser model
+func (u *UniversalUser) GetModelVersion() int {
+	return 2
 }
 
 // Legacy method aliases for backward compatibility

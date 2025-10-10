@@ -6,7 +6,7 @@ import (
 
 // UserErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // Use https://docs.microsoft.com/en-us/troubleshoot/iis/http-status-code to expand messages i.e. AccessDenied1
-var UserErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
+var UserErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrKeyInvalidUserBody:         {Title: "Bad Request", Detail: "Check submitted user information.", StatusCode: 400},
 	ErrKeyInvalidUserID:           {Title: "Bad Request", Detail: "User ID missing or malformatted.", StatusCode: 400},
 	ErrKeyUserNeverActivated:      {Title: "Invalid User State", Detail: "User resource state conflicts with request.", StatusCode: 409},

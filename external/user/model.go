@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/ooaklee/ghatd/external/toolbox"
-
 	"github.com/PaesslerAG/jsonpath"
+	"github.com/ooaklee/ghatd/external/toolbox"
+	userX "github.com/ooaklee/ghatd/external/user/x"
 )
 
 // statusChoices valid status for user account
@@ -62,8 +62,8 @@ type User struct {
 }
 
 // GetAsProfile returns user profile representation of the user
-func (u *User) GetAsProfile() *UserProfile {
-	return &UserProfile{
+func (u *User) GetAsProfile() *userX.UserProfile {
+	return &userX.UserProfile{
 		ID:            u.ID,
 		FirstName:     u.FirstName,
 		LastName:      u.LastName,
@@ -75,8 +75,8 @@ func (u *User) GetAsProfile() *UserProfile {
 }
 
 // GetAsMicroProfile returns user micro profile representation of the user
-func (u *User) GetAsMicroProfile() *UserMicroProfile {
-	return &UserMicroProfile{
+func (u *User) GetAsMicroProfile() *userX.UserMicroProfile {
+	return &userX.UserMicroProfile{
 		ID:     u.ID,
 		Roles:  u.Roles,
 		Status: u.Status,
@@ -271,25 +271,6 @@ func (u *User) setStatus(s string) *User {
 	return u
 }
 
-// UserMicroProfile holds user's micro metadata
-type UserMicroProfile struct {
-	ID     string   `json:"id"`
-	Roles  []string `json:"roles"`
-	Status string   `json:"status"`
-}
-
-// UserProfile holds user's profile metadata
-type UserProfile struct {
-	ID            string   `json:"id"`
-	FirstName     string   `json:"first_name"`
-	LastName      string   `json:"last_name"`
-	Status        string   `json:"status"`
-	Roles         []string `json:"roles"`
-	Email         string   `json:"email"`
-	EmailVerified bool     `json:"email_verified" `
-	UpdatedAt     string   `json:"updated_at,omitempty"`
-}
-
 // GetUserId returns user's Uuidv4
 func (u *User) GetUserId() string {
 	return u.ID
@@ -298,4 +279,49 @@ func (u *User) GetUserId() string {
 // GetUserStatus returns user's account status
 func (u *User) GetUserStatus() string {
 	return u.Status
+}
+
+// GetUserID implements UserModel interface (alias for GetUserId)
+func (u *User) GetUserID() string {
+	return u.ID
+}
+
+// GetUserEmail implements UserModel interface
+func (u *User) GetUserEmail() string {
+	return u.Email
+}
+
+// GetUserRoles implements UserModel interface
+func (u *User) GetUserRoles() []string {
+	return u.Roles
+}
+
+// GetModelVersion implements UserModel interface
+// Returns 1 for v1 User model
+func (u *User) GetModelVersion() int {
+	return 1
+}
+
+// HasRole implements UserModel interface
+func (u *User) HasRole(role string) bool {
+	return toolbox.StringInSlice(role, u.Roles)
+}
+
+// Validate implements UserModel interface
+// Performs basic validation on v1 User model
+func (u *User) Validate() error {
+	if u.Email == "" {
+		return errors.New("email is required")
+	}
+	if u.Status == "" {
+		return errors.New("status is required")
+	}
+	if u.ID == "" {
+		return errors.New("id is required")
+	}
+	// Check if status is valid
+	if !toolbox.StringInSlice(u.Status, statusChoices) {
+		return errors.New("invalid status: " + u.Status)
+	}
+	return nil
 }

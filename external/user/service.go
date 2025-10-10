@@ -57,7 +57,7 @@ func (s *Service) GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest
 	}
 
 	return &GetMicroProfileResponse{
-		MicroProfile: *userResponse.User.GetAsMicroProfile(),
+		MicroProfile: userResponse.User.GetAsMicroProfile(),
 	}, nil
 }
 
@@ -72,7 +72,7 @@ func (s *Service) GetProfile(ctx context.Context, r *GetProfileRequest) (*GetPro
 	}
 
 	return &GetProfileResponse{
-		Profile: *userResponse.User.GetAsProfile(),
+		Profile: userResponse.User.GetAsProfile(),
 	}, nil
 }
 

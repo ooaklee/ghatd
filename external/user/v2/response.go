@@ -1,7 +1,7 @@
 package user
 
 import (
-	userv1 "github.com/ooaklee/ghatd/external/user"
+	userX "github.com/ooaklee/ghatd/external/user/x"
 	"github.com/ooaklee/reply"
 )
 
@@ -103,12 +103,12 @@ type RecordUserLoginResponse struct {
 
 // GetUserProfileResponse holds the response for retrieving a user profile
 type GetUserProfileResponse struct {
-	Profile *userv1.UserProfile `json:"profile"`
+	Profile *userX.UserProfile `json:"profile"`
 }
 
 // GetUserMicroProfileResponse holds the response for retrieving a user micro profile
 type GetUserMicroProfileResponse struct {
-	MicroProfile *userv1.UserMicroProfile `json:"micro_profile"`
+	MicroProfile *userX.UserMicroProfile `json:"micro_profile"`
 }
 
 // ValidateUserResponse holds the response for validating a user

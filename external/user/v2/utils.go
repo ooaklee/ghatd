@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/ooaklee/ghatd/external/user"
+	userX "github.com/ooaklee/ghatd/external/user/x"
 )
 
 // Default implementations of the interfaces for immediate use
@@ -286,4 +287,56 @@ func MicroserviceUserConfig() *UserConfig {
 		EmailVerificationRequired: false,
 		MultipleIdentifiers:       true,
 	}
+}
+
+// CastToV2User safely converts a UserModel interface  to v2 User struct
+// Returns error if the model is not v2 or conversion fails
+func CastToV2User(model userX.UserModel) (*UniversalUser, error) {
+	if model == nil {
+		return nil, userX.ErrInvalidUserModel
+	}
+
+	if model.GetModelVersion() != userX.UserModelVersionV2 {
+		return nil, fmt.Errorf("%w: expected v2 but got v%d", userX.ErrUnsupportedUserModelVersion, model.GetModelVersion())
+	}
+
+	user, ok := model.(*UniversalUser)
+	if !ok {
+		return nil, fmt.Errorf("%w: failed to cast to v2 User", userX.ErrInvalidUserModel)
+	}
+
+	return user, nil
+}
+
+// CastV2UserSliceToInterfaceSlice converts a slice of v2 User to a slice of UserModel interface
+func CastV2UserSliceToInterfaceSlice(users []UniversalUser) []userX.UserModel {
+	result := make([]userX.UserModel, len(users))
+	for i, u := range users {
+		result[i] = &u
+	}
+	return result
+}
+
+// ConvertToUserModel wraps v2 user into UserModel interface
+func ConvertToUserModel(user *UniversalUser) (userX.UserModel, error) {
+	if user == nil {
+		return nil, userX.ErrInvalidUserModel
+	}
+	return user, nil
+}
+
+// ConvertUsersToModels converts a slice of v2 users to UserModelSlice
+func ConvertUsersToModels(users []*UniversalUser) (userX.UserModelSlice, error) {
+	if users == nil {
+		return userX.UserModelSlice{}, nil
+	}
+
+	models := make(userX.UserModelSlice, len(users))
+	for i, u := range users {
+		if u == nil {
+			continue
+		}
+		models[i] = u
+	}
+	return models, nil
 }

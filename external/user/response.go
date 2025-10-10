@@ -1,6 +1,9 @@
 package user
 
-import "github.com/ooaklee/ghatd/external/toolbox"
+import (
+	"github.com/ooaklee/ghatd/external/toolbox"
+	userX "github.com/ooaklee/ghatd/external/user/x"
+)
 
 // CreateUserResponse holds response data for CreateUserResponse request
 type CreateUserResponse struct {
@@ -52,10 +55,10 @@ type GetUserByEmailResponse struct {
 
 // GetMicroProfileResponse holds response data for GetMicroProfile request
 type GetMicroProfileResponse struct {
-	MicroProfile UserMicroProfile
+	MicroProfile *userX.UserMicroProfile
 }
 
 // GetProfileResponse holds response data for GetProfile request
 type GetProfileResponse struct {
-	Profile UserProfile
+	Profile *userX.UserProfile
 }
