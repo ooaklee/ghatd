@@ -20,7 +20,7 @@ func Example1_CreateSubscription() {
 		Integrator:               "stripe",
 		IntegratorCustomerID:     "cus_123",
 		UserID:                   "user-123",
-		Email:                    "USER@EXAMPLE.COM", // Will be standardized to lowercase
+		Email:                    "USER@EXAMPLE.COM", // Will be standardised to lowercase
 		PlanName:                 "Pro Plan",
 		Status:                   billing.StatusActive,
 		BillingInterval:          "monthly",
@@ -40,7 +40,7 @@ func Example1_CreateSubscription() {
 	fmt.Printf("Created subscription ID: %s\n", resp.Subscription.ID)
 	fmt.Printf("Integrator Subscription ID: %s\n", resp.Subscription.IntegratorSubscriptionID)
 	fmt.Printf("Status: %s\n", resp.Subscription.Status)
-	fmt.Printf("Email (standardized): %s\n", resp.Subscription.Email)
+	fmt.Printf("Email (standardised): %s\n", resp.Subscription.Email)
 }
 
 // Example2_UpdateSubscription demonstrates updating an existing subscription
@@ -453,8 +453,8 @@ func Example11_FilterBillingEventsByType() {
 	}
 }
 
-// Example12_EmailStandardization demonstrates email normalization
-func Example12_EmailStandardization() {
+// Example12_EmailStandardisation demonstrates email normalisation
+func Example12_EmailStandardisation() {
 	service := setupService()
 
 	ctx := context.Background()
@@ -480,11 +480,11 @@ func Example12_EmailStandardization() {
 		}
 
 		resp, _ := service.CreateSubscription(ctx, req)
-		fmt.Printf("Input: %s -> Standardized: %s\n",
+		fmt.Printf("Input: %s -> Standardised: %s\n",
 			email, resp.Subscription.Email)
 	}
 
-	// Query by standardized email
+	// Query by standardised email
 	req := &billing.GetSubscriptionsRequest{
 		ForEmails: []string{"user@example.com"}, // lowercase
 		PerPage:   10,
@@ -492,7 +492,7 @@ func Example12_EmailStandardization() {
 	}
 
 	resp, _ := service.GetSubscriptions(ctx, req)
-	fmt.Printf("\nFound %d subscriptions with standardized email\n", resp.Total)
+	fmt.Printf("\nFound %d subscriptions with standardised email\n", resp.Total)
 }
 
 // Example13_SubscriptionUtilityMethods demonstrates using Subscription helper methods
@@ -620,4 +620,516 @@ func createSubscriptionWithDetails(service *billing.Service, ctx context.Context
 
 	resp, _ := service.CreateSubscription(ctx, req)
 	return resp.Subscription
+}
+
+// Example15_GetSubscriptionsByEmail demonstrates retrieving subscriptions by email
+func Example15_GetSubscriptionsByEmail() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	// Create multiple subscriptions for the same email
+	email := "multi@example.com"
+	createSubscription(service, ctx, "user-001", email, billing.StatusActive, "stripe")
+	createSubscription(service, ctx, "user-001", email, billing.StatusTrialing, "lemonsqueezy")
+	createSubscription(service, ctx, "", email, billing.StatusActive, "kofi") // Pre-registration purchase
+
+	// Query by email
+	req := &billing.GetSubscriptionsByEmailRequest{
+		Email: "MULTI@Example.COM", // Will be standardised to lowercase
+	}
+
+	resp, err := service.GetSubscriptionsByEmail(ctx, req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("Found %d subscriptions for %s:\n", resp.Total, email)
+	for _, sub := range resp.Subscriptions {
+		userDisplay := sub.UserID
+		if userDisplay == "" {
+			userDisplay = "[pending user association]"
+		}
+		fmt.Printf("  - Provider: %s, Status: %s, User: %s\n",
+			sub.Integrator, sub.Status, userDisplay)
+	}
+}
+
+// Example16_GetBillingEventsByEmail demonstrates retrieving billing events by email
+func Example16_GetBillingEventsByEmail() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	email := "events@example.com"
+
+	// Create a subscription
+	createReq := &billing.CreateSubscriptionRequest{
+		IntegratorSubscriptionID: "stripe_sub_events_test",
+		Integrator:               "stripe",
+		UserID:                   "user-events",
+		Email:                    email,
+		PlanName:                 "Pro Plan",
+		Status:                   billing.StatusActive,
+		BillingInterval:          "monthly",
+		Amount:                   2999,
+		Currency:                 "USD",
+	}
+	service.CreateSubscription(ctx, createReq)
+
+	// Create billing events for this subscription
+	eventTypes := []string{"payment.succeeded", "invoice.created", "payment.succeeded"}
+	for i, eventType := range eventTypes {
+		eventReq := &billing.CreateBillingEventRequest{
+			SubscriptionID:           "sub_events_test",
+			IntegratorEventID:        fmt.Sprintf("evt_email_%d", i),
+			IntegratorSubscriptionID: "stripe_sub_events_test",
+			Integrator:               "stripe",
+			UserID:                   "user-events",
+			EventType:                eventType,
+			EventTime:                time.Now(),
+			Amount:                   2999,
+			Currency:                 "USD",
+			PlanName:                 "Pro Plan",
+			Status:                   billing.StatusActive,
+			RawPayload:               "{}",
+		}
+		service.CreateBillingEvent(ctx, eventReq)
+	}
+
+	// Query events by email
+	req := &billing.GetBillingEventsByEmailRequest{
+		Email: email,
+	}
+
+	resp, err := service.GetBillingEventsByEmail(ctx, req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("Found %d billing events for %s:\n", resp.Total, email)
+	for _, event := range resp.BillingEvents {
+		fmt.Printf("  - [%s] %s - $%.2f\n",
+			event.EventType, event.PlanName, float64(event.Amount)/100)
+	}
+}
+
+// Example17_AssociateSubscriptionsWithUser demonstrates associating pre-registration subscriptions
+func Example17_AssociateSubscriptionsWithUser() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	email := "preregistration@example.com"
+
+	// Simulate pre-registration purchases (no user ID)
+	fmt.Println("Creating pre-registration subscriptions...")
+	for i := 0; i < 3; i++ {
+		req := &billing.CreateSubscriptionRequest{
+			IntegratorSubscriptionID: fmt.Sprintf("stripe_sub_prereg_%d", i),
+			Integrator:               "stripe",
+			UserID:                   "", // Empty - user doesn't exist yet
+			Email:                    email,
+			PlanName:                 fmt.Sprintf("Plan %d", i+1),
+			Status:                   billing.StatusActive,
+			BillingInterval:          "monthly",
+			Amount:                   int64(1999 + (i * 1000)),
+			Currency:                 "USD",
+		}
+		resp, _ := service.CreateSubscription(ctx, req)
+		fmt.Printf("  - Created subscription %s (no user ID)\n", resp.Subscription.IntegratorSubscriptionID)
+	}
+
+	// User signs up later
+	newUserID := "user-new-signup-123"
+	fmt.Printf("\nUser signed up with ID: %s\n", newUserID)
+
+	// Associate all pre-registration subscriptions with the new user
+	associateReq := &billing.AssociateSubscriptionsWithUserRequest{
+		UserID: newUserID,
+		Email:  email,
+	}
+
+	associateResp, err := service.AssociateSubscriptionsWithUser(ctx, associateReq)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("\nAssociated %d subscriptions with user %s\n",
+		associateResp.AssociatedCount, newUserID)
+
+	// Verify the association
+	getReq := &billing.GetSubscriptionsByEmailRequest{
+		Email: email,
+	}
+
+	getResp, _ := service.GetSubscriptionsByEmail(ctx, getReq)
+	fmt.Println("\nVerifying associations:")
+	for _, sub := range getResp.Subscriptions {
+		fmt.Printf("  - %s: User ID = %s ✓\n",
+			sub.IntegratorSubscriptionID, sub.UserID)
+	}
+}
+
+// Example18_PreRegistrationPurchaseFlow demonstrates the complete pre-registration flow
+func Example18_PreRegistrationPurchaseFlow() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	email := "earlybird@example.com"
+
+	fmt.Println("=== Pre-Registration Purchase Flow ===")
+	fmt.Println()
+
+	// Step 1: User purchases before signing up
+	fmt.Println("Step 1: User purchases subscription (no account yet)")
+	createReq := &billing.CreateSubscriptionRequest{
+		IntegratorSubscriptionID: "stripe_sub_earlybird",
+		Integrator:               "stripe",
+		IntegratorCustomerID:     "cus_earlybird",
+		UserID:                   "", // No user ID - not signed up yet
+		Email:                    email,
+		PlanName:                 "Early Bird Special",
+		Status:                   billing.StatusActive,
+		BillingInterval:          "yearly",
+		Amount:                   19999, // $199.99
+		Currency:                 "USD",
+	}
+
+	createResp, _ := service.CreateSubscription(ctx, createReq)
+	fmt.Printf("  ✓ Subscription created: %s\n", createResp.Subscription.ID)
+	fmt.Printf("  ✓ User ID: [empty - pending signup]\n")
+	fmt.Printf("  ✓ Email: %s\n\n", createResp.Subscription.Email)
+
+	// Step 2: Check subscriptions by email before signup
+	fmt.Println("Step 2: Check what subscriptions exist for this email")
+	getByEmailReq := &billing.GetSubscriptionsByEmailRequest{
+		Email: email,
+	}
+
+	beforeSignup, _ := service.GetSubscriptionsByEmail(ctx, getByEmailReq)
+	fmt.Printf("  ✓ Found %d subscription(s)\n", beforeSignup.Total)
+	for _, sub := range beforeSignup.Subscriptions {
+		hasUser := "NO"
+		if sub.UserID != "" {
+			hasUser = "YES"
+		}
+		fmt.Printf("    - %s: Has User ID? %s\n", sub.PlanName, hasUser)
+	}
+	fmt.Println()
+
+	// Step 3: User signs up weeks later
+	fmt.Println("Step 3: User creates account 2 weeks later")
+	newUserID := "user-earlybird-123"
+	fmt.Printf("  ✓ New user created: %s\n", newUserID)
+	fmt.Printf("  ✓ Email: %s\n\n", email)
+
+	// Step 4: Auto-associate subscriptions during signup
+	fmt.Println("Step 4: System auto-associates pre-purchase subscriptions")
+	associateReq := &billing.AssociateSubscriptionsWithUserRequest{
+		UserID: newUserID,
+		Email:  email,
+	}
+
+	associateResp, _ := service.AssociateSubscriptionsWithUser(ctx, associateReq)
+	fmt.Printf("  ✓ Associated %d subscription(s) with user\n\n", associateResp.AssociatedCount)
+
+	// Step 5: Verify user now has active subscription
+	fmt.Println("Step 5: Verify user has immediate access")
+	afterSignup, _ := service.GetSubscriptionsByEmail(ctx, getByEmailReq)
+	for _, sub := range afterSignup.Subscriptions {
+		fmt.Printf("  ✓ Subscription: %s\n", sub.PlanName)
+		fmt.Printf("    - User ID: %s ✓\n", sub.UserID)
+		fmt.Printf("    - Status: %s ✓\n", sub.Status)
+		fmt.Printf("    - Amount: $%.2f/%s\n", float64(sub.Amount)/100, sub.BillingInterval)
+	}
+
+	fmt.Println("\n=== Flow Complete: User has immediate access to purchased subscription ===")
+}
+
+// Example19_GetUnassociatedSubscriptions demonstrates finding orphaned subscriptions
+func Example19_GetUnassociatedSubscriptions() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	fmt.Println("=== Finding Unassociated Subscriptions ===")
+	fmt.Println()
+
+	// Create a mix of subscriptions with and without user IDs
+	fmt.Println("Step 1: Creating test subscriptions")
+	
+	// Pre-registration purchases (no user ID)
+	for i := 0; i < 3; i++ {
+		req := &billing.CreateSubscriptionRequest{
+			IntegratorSubscriptionID: fmt.Sprintf("stripe_sub_orphan_%d", i),
+			Integrator:               "stripe",
+			UserID:                   "", // Empty - no user
+			Email:                    fmt.Sprintf("orphan%d@example.com", i),
+			PlanName:                 "Orphaned Plan",
+			Status:                   billing.StatusActive,
+			BillingInterval:          "monthly",
+			Amount:                   2999,
+			Currency:                 "USD",
+		}
+		service.CreateSubscription(ctx, req)
+	}
+	fmt.Println("  ✓ Created 3 subscriptions without user IDs")
+
+	// Normal subscriptions (with user ID)
+	for i := 0; i < 2; i++ {
+		req := &billing.CreateSubscriptionRequest{
+			IntegratorSubscriptionID: fmt.Sprintf("stripe_sub_normal_%d", i),
+			Integrator:               "stripe",
+			UserID:                   fmt.Sprintf("user-%d", i),
+			Email:                    fmt.Sprintf("normal%d@example.com", i),
+			PlanName:                 "Normal Plan",
+			Status:                   billing.StatusActive,
+			BillingInterval:          "monthly",
+			Amount:                   2999,
+			Currency:                 "USD",
+		}
+		service.CreateSubscription(ctx, req)
+	}
+	fmt.Println("  ✓ Created 2 subscriptions with user IDs")
+	fmt.Println()
+
+	// Find unassociated subscriptions
+	fmt.Println("Step 2: Finding unassociated subscriptions")
+	req := &billing.GetUnassociatedSubscriptionsRequest{
+		Limit: 100,
+	}
+
+	resp, err := service.GetUnassociatedSubscriptions(ctx, req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("\nFound %d unassociated subscription(s):\n", resp.Total)
+	for i, sub := range resp.Subscriptions {
+		fmt.Printf("  %d. Email: %s, Provider: %s, Created: %s\n",
+			i+1, sub.Email, sub.Integrator, sub.CreatedAt[:10])
+	}
+
+	fmt.Println("\n=== These subscriptions need user association ===")
+}
+
+// Example20_UpdateSubscriptionUserID demonstrates manually associating a subscription
+func Example20_UpdateSubscriptionUserID() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	fmt.Println("=== Manual Subscription User ID Update ===")
+	fmt.Println()
+
+	// Create an unassociated subscription
+	fmt.Println("Step 1: Creating orphaned subscription")
+	createReq := &billing.CreateSubscriptionRequest{
+		IntegratorSubscriptionID: "stripe_sub_manual_fix",
+		Integrator:               "stripe",
+		UserID:                   "", // Empty - no user
+		Email:                    "manual@example.com",
+		PlanName:                 "Manual Fix Plan",
+		Status:                   billing.StatusActive,
+		BillingInterval:          "monthly",
+		Amount:                   3999,
+		Currency:                 "USD",
+	}
+
+	createResp, _ := service.CreateSubscription(ctx, createReq)
+	subscriptionID := createResp.Subscription.ID
+	fmt.Printf("  ✓ Created subscription: %s\n", subscriptionID)
+	fmt.Printf("  ✓ User ID: [empty]\n")
+	fmt.Printf("  ✓ Email: %s\n\n", createResp.Subscription.Email)
+
+	// Admin manually associates it with a user
+	fmt.Println("Step 2: Admin manually associates subscription with user")
+	newUserID := "user-manual-fix-123"
+	
+	updateReq := &billing.UpdateSubscriptionUserIDRequest{
+		SubscriptionID: subscriptionID,
+		UserID:         newUserID,
+	}
+
+	updateResp, err := service.UpdateSubscriptionUserID(ctx, updateReq)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("  ✓ Updated subscription: %s\n", subscriptionID)
+	fmt.Printf("  ✓ New User ID: %s\n", updateResp.Subscription.UserID)
+	fmt.Printf("  ✓ Success: %v\n\n", updateResp.Success)
+
+	// Verify the update
+	fmt.Println("Step 3: Verifying update")
+	getReq := &billing.GetSubscriptionByIDRequest{
+		ID: subscriptionID,
+	}
+
+	getResp, _ := service.GetSubscriptionByID(ctx, getReq)
+	fmt.Printf("  ✓ Subscription %s now has User ID: %s\n", 
+		getResp.Subscription.ID, getResp.Subscription.UserID)
+
+	fmt.Println("\n=== Manual association complete ===")
+}
+
+// Example21_OrphanedSubscriptionWorkflow demonstrates complete orphan detection and resolution
+func Example21_OrphanedSubscriptionWorkflow() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	fmt.Println("=== Orphaned Subscription Detection & Resolution Workflow ===")
+	fmt.Println()
+
+	// Simulate various subscription scenarios
+	fmt.Println("Step 1: Setting up test data (simulating 30 days of activity)")
+	
+	// Old orphaned subscriptions (potential issue)
+	oldOrphans := []string{"early1@example.com", "early2@example.com"}
+	for i, email := range oldOrphans {
+		req := &billing.CreateSubscriptionRequest{
+			IntegratorSubscriptionID: fmt.Sprintf("stripe_old_orphan_%d", i),
+			Integrator:               "stripe",
+			UserID:                   "",
+			Email:                    email,
+			PlanName:                 "Early Bird",
+			Status:                   billing.StatusActive,
+			BillingInterval:          "yearly",
+			Amount:                   19999,
+			Currency:                 "USD",
+		}
+		service.CreateSubscription(ctx, req)
+	}
+	fmt.Printf("  ✓ Created %d old orphaned subscriptions\n", len(oldOrphans))
+
+	// Recent orphaned subscriptions (likely okay - just purchased)
+	recentOrphans := []string{"new1@example.com", "new2@example.com", "new3@example.com"}
+	for i, email := range recentOrphans {
+		req := &billing.CreateSubscriptionRequest{
+			IntegratorSubscriptionID: fmt.Sprintf("stripe_recent_orphan_%d", i),
+			Integrator:               "lemonsqueezy",
+			UserID:                   "",
+			Email:                    email,
+			PlanName:                 "Recent Purchase",
+			Status:                   billing.StatusActive,
+			BillingInterval:          "monthly",
+			Amount:                   2999,
+			Currency:                 "USD",
+		}
+		service.CreateSubscription(ctx, req)
+	}
+	fmt.Printf("  ✓ Created %d recent orphaned subscriptions\n", len(recentOrphans))
+
+	// Normal subscriptions
+	for i := 0; i < 5; i++ {
+		req := &billing.CreateSubscriptionRequest{
+			IntegratorSubscriptionID: fmt.Sprintf("stripe_normal_%d", i),
+			Integrator:               "stripe",
+			UserID:                   fmt.Sprintf("user-normal-%d", i),
+			Email:                    fmt.Sprintf("normal%d@example.com", i),
+			PlanName:                 "Standard Plan",
+			Status:                   billing.StatusActive,
+			BillingInterval:          "monthly",
+			Amount:                   2999,
+			Currency:                 "USD",
+		}
+		service.CreateSubscription(ctx, req)
+	}
+	fmt.Println("  ✓ Created 5 normal subscriptions")
+	fmt.Println()
+
+	// Step 2: Run orphan detection
+	fmt.Println("Step 2: Running orphan detection")
+	orphanReq := &billing.GetUnassociatedSubscriptionsRequest{
+		Limit: 100,
+	}
+
+	orphanResp, _ := service.GetUnassociatedSubscriptions(ctx, orphanReq)
+	fmt.Printf("  ⚠️  Found %d unassociated subscriptions\n\n", orphanResp.Total)
+
+	// Step 3: Filter by provider
+	fmt.Println("Step 3: Filtering by provider (Stripe only)")
+	stripeOrphanReq := &billing.GetUnassociatedSubscriptionsRequest{
+		IntegratorName: "stripe",
+		Limit:          100,
+	}
+
+	stripeOrphanResp, _ := service.GetUnassociatedSubscriptions(ctx, stripeOrphanReq)
+	fmt.Printf("  ⚠️  Found %d Stripe unassociated subscriptions\n", stripeOrphanResp.Total)
+	for i, sub := range stripeOrphanResp.Subscriptions {
+		fmt.Printf("    %d. %s - %s\n", i+1, sub.Email, sub.PlanName)
+	}
+	fmt.Println()
+
+	// Step 4: Manual resolution for one orphan
+	fmt.Println("Step 4: Admin resolves one orphan manually")
+	if len(orphanResp.Subscriptions) > 0 {
+		firstOrphan := orphanResp.Subscriptions[0]
+		fmt.Printf("  → Associating %s with new user\n", firstOrphan.Email)
+		
+		updateReq := &billing.UpdateSubscriptionUserIDRequest{
+			SubscriptionID: firstOrphan.ID,
+			UserID:         "user-admin-resolved-123",
+		}
+
+		updateResp, _ := service.UpdateSubscriptionUserID(ctx, updateReq)
+		fmt.Printf("  ✓ Successfully associated subscription with user %s\n\n", 
+			updateResp.Subscription.UserID)
+	}
+
+	// Step 5: Recheck orphans
+	fmt.Println("Step 5: Rechecking orphan count")
+	recheckResp, _ := service.GetUnassociatedSubscriptions(ctx, orphanReq)
+	fmt.Printf("  ℹ️  Remaining unassociated: %d (was %d)\n", 
+		recheckResp.Total, orphanResp.Total)
+
+	fmt.Println("\n=== Workflow demonstrates monitoring and resolution process ===")
+}
+
+// Example22_FilterUnassociatedByDateRange demonstrates date-based filtering
+func Example22_FilterUnassociatedByDateRange() {
+	service := setupService()
+
+	ctx := context.Background()
+
+	fmt.Println("=== Filtering Unassociated Subscriptions by Date ===")
+	fmt.Println()
+
+	// This example shows how you would filter in production
+	// Note: In this in-memory example, all dates will be similar
+
+	fmt.Println("Typical production usage:")
+	fmt.Println()
+	
+	fmt.Println("1. Find all orphans:")
+	allReq := &billing.GetUnassociatedSubscriptionsRequest{
+		Limit: 100,
+	}
+	allResp, _ := service.GetUnassociatedSubscriptions(ctx, allReq)
+	fmt.Printf("   Total unassociated: %d\n\n", allResp.Total)
+
+	fmt.Println("2. Find orphans older than 30 days (needs attention):")
+	fmt.Println("   CreatedAtTo: \"2025-09-11T00:00:00Z\"")
+	fmt.Println("   → These might need manual follow-up")
+	fmt.Println()
+
+	fmt.Println("3. Find recent orphans (last 7 days):")
+	fmt.Println("   CreatedAtFrom: \"2025-10-04T00:00:00Z\"")
+	fmt.Println("   → These are likely normal pre-registration purchases")
+	fmt.Println()
+
+	fmt.Println("4. Find orphans from specific campaign period:")
+	fmt.Println("   CreatedAtFrom: \"2025-09-01T00:00:00Z\"")
+	fmt.Println("   CreatedAtTo: \"2025-09-30T00:00:00Z\"")
+	fmt.Println("   → Track conversion rates for marketing campaigns")
+
+	fmt.Println("\n=== Date filtering enables targeted orphan management ===")
 }
