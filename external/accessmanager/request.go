@@ -38,6 +38,10 @@ type CreateUserRequest struct {
 	// RequestUrl where the user should be redirected to once
 	// signed in
 	RequestUrl string `json:"request_url"`
+
+	// DisableVerificationEmail whether to disable sending
+	// verification email to user after account creation
+	DisableVerificationEmail bool `json:"disable_verification_email"`
 }
 
 // CreateEmailVerificationTokenRequest holds the data required for a user request

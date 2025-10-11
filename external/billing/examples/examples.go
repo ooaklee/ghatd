@@ -862,7 +862,7 @@ func Example19_GetUnassociatedSubscriptions() {
 
 	// Create a mix of subscriptions with and without user IDs
 	fmt.Println("Step 1: Creating test subscriptions")
-	
+
 	// Pre-registration purchases (no user ID)
 	for i := 0; i < 3; i++ {
 		req := &billing.CreateSubscriptionRequest{
@@ -951,7 +951,7 @@ func Example20_UpdateSubscriptionUserID() {
 	// Admin manually associates it with a user
 	fmt.Println("Step 2: Admin manually associates subscription with user")
 	newUserID := "user-manual-fix-123"
-	
+
 	updateReq := &billing.UpdateSubscriptionUserIDRequest{
 		SubscriptionID: subscriptionID,
 		UserID:         newUserID,
@@ -974,7 +974,7 @@ func Example20_UpdateSubscriptionUserID() {
 	}
 
 	getResp, _ := service.GetSubscriptionByID(ctx, getReq)
-	fmt.Printf("  ✓ Subscription %s now has User ID: %s\n", 
+	fmt.Printf("  ✓ Subscription %s now has User ID: %s\n",
 		getResp.Subscription.ID, getResp.Subscription.UserID)
 
 	fmt.Println("\n=== Manual association complete ===")
@@ -991,7 +991,7 @@ func Example21_OrphanedSubscriptionWorkflow() {
 
 	// Simulate various subscription scenarios
 	fmt.Println("Step 1: Setting up test data (simulating 30 days of activity)")
-	
+
 	// Old orphaned subscriptions (potential issue)
 	oldOrphans := []string{"early1@example.com", "early2@example.com"}
 	for i, email := range oldOrphans {
@@ -1074,21 +1074,21 @@ func Example21_OrphanedSubscriptionWorkflow() {
 	if len(orphanResp.Subscriptions) > 0 {
 		firstOrphan := orphanResp.Subscriptions[0]
 		fmt.Printf("  → Associating %s with new user\n", firstOrphan.Email)
-		
+
 		updateReq := &billing.UpdateSubscriptionUserIDRequest{
 			SubscriptionID: firstOrphan.ID,
 			UserID:         "user-admin-resolved-123",
 		}
 
 		updateResp, _ := service.UpdateSubscriptionUserID(ctx, updateReq)
-		fmt.Printf("  ✓ Successfully associated subscription with user %s\n\n", 
+		fmt.Printf("  ✓ Successfully associated subscription with user %s\n\n",
 			updateResp.Subscription.UserID)
 	}
 
 	// Step 5: Recheck orphans
 	fmt.Println("Step 5: Rechecking orphan count")
 	recheckResp, _ := service.GetUnassociatedSubscriptions(ctx, orphanReq)
-	fmt.Printf("  ℹ️  Remaining unassociated: %d (was %d)\n", 
+	fmt.Printf("  ℹ️  Remaining unassociated: %d (was %d)\n",
 		recheckResp.Total, orphanResp.Total)
 
 	fmt.Println("\n=== Workflow demonstrates monitoring and resolution process ===")
@@ -1108,7 +1108,7 @@ func Example22_FilterUnassociatedByDateRange() {
 
 	fmt.Println("Typical production usage:")
 	fmt.Println()
-	
+
 	fmt.Println("1. Find all orphans:")
 	allReq := &billing.GetUnassociatedSubscriptionsRequest{
 		Limit: 100,

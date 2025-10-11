@@ -330,6 +330,9 @@ type GetUnassociatedSubscriptionsRequest struct {
 	// IntegratorName optionally filters by payment provider
 	IntegratorName string
 
+	// Email optionally filters by email address
+	Email string
+
 	// CreatedAtFrom optionally filters subscriptions created from this date
 	CreatedAtFrom string
 

@@ -318,6 +318,10 @@ func (m *InMemoryRepository) GetUnassociatedSubscriptions(ctx context.Context, r
 				continue
 			}
 
+			if req.Email != "" && toolbox.StringStandardisedToLower(sub.Email) != toolbox.StringStandardisedToLower(req.Email) {
+				continue
+			}
+
 			if req.CreatedAtFrom != "" && sub.CreatedAt < req.CreatedAtFrom {
 				continue
 			}

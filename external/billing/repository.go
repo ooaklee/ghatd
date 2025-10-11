@@ -743,6 +743,10 @@ func (r *Repository) GetUnassociatedSubscriptions(ctx context.Context, req *GetU
 		queryFilter["integrator"] = req.IntegratorName
 	}
 
+	if req.Email != "" {
+		queryFilter["email"] = toolbox.StringStandardisedToLower(req.Email)
+	}
+
 	if req.CreatedAtFrom != "" {
 		queryFilter["created_at"] = bson.M{"$gte": req.CreatedAtFrom}
 	}

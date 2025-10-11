@@ -14,6 +14,7 @@ import (
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/auth"
+	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/emailmanager"
 	"github.com/ooaklee/ghatd/external/ephemeral"
@@ -23,6 +24,13 @@ import (
 	"github.com/ooaklee/ghatd/external/user"
 	"go.uber.org/zap"
 )
+
+// User expected methods of a valid user
+type User interface {
+	GetAttributeByJsonPath(jsonPath string) (any, error)
+	IsAdmin() bool
+	UpdateStatus(desiredStatus string) (*user.User, error)
+}
 
 // AuditService expected methods of a valid audit service
 type AuditService interface {
@@ -90,11 +98,18 @@ type ApitokenService interface {
 	GetAPITokensFor(ctx context.Context, r *apitoken.GetAPITokensForRequest) (*apitoken.GetAPITokensForResponse, error)
 }
 
+// BillingService expected methods of a valid billing service
+type BillingService interface {
+	GetUnassociatedSubscriptions(ctx context.Context, req *billing.GetUnassociatedSubscriptionsRequest) (*billing.GetUnassociatedSubscriptionsResponse, error)
+	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
+}
+
 // Service holds and manages accessmanager service business logic
 type Service struct {
 	EphemeralStore        EphemeralStore
 	AuditService          AuditService
 	EmailManager          EmailManager
+	BillingService        BillingService
 	AuthService           AuthService
 	UserService           UserService
 	ApitokenService       ApitokenService
@@ -144,10 +159,10 @@ func NewService(r *NewServiceRequest) *Service {
 	}
 }
 
-type User interface {
-	GetAttributeByJsonPath(jsonPath string) (any, error)
-	IsAdmin() bool
-	UpdateStatus(desiredStatus string) (*user.User, error)
+// WithBillingService sets the billing service dependency and returns the updated service
+func (s *Service) WithBillingService(billingService BillingService) *Service {
+	s.BillingService = billingService
+	return s
 }
 
 // UpdateUserEmail updates the email address of a user. It performs the following steps:
@@ -513,30 +528,32 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			}, nil
 		} else { // if not, create user, generate token
 
-			newUser, err := s.UserService.CreateUser(ctx, &user.CreateUserRequest{
-				FirstName: providerUserInfo.GetUserFirstName(),
-				LastName:  providerUserInfo.GetUserLastName(),
-				Email:     providerUserInfo.GetUserEmail(),
+			newUserResp, err := s.CreateUser(ctx, &CreateUserRequest{
+				DisableVerificationEmail: true,
+				FirstName:                providerUserInfo.GetUserFirstName(),
+				LastName:                 providerUserInfo.GetUserLastName(),
+				Email:                    providerUserInfo.GetUserEmail(),
 			})
 			if err != nil {
+				log.Error("provider-signup-user-creation-failed-after-successful-login-initiation", zap.String("user-email:", providerUserInfo.GetUserEmail()))
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
 			}
 
 			// If user is verified by provider but not our platform, we should trust provider
-			if !newUser.User.Verified.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
+			if !newUserResp.User.Verified.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
 
-				log.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUser.User.ID))
-				newUser.User.Verified.EmailVerified = providerUserInfo.IsUserEmailVerifiedByProvider()
-				newUser.User.Verified.EmailVerifiedAt = toolbox.TimeNowUTC()
+				log.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUserResp.User.ID))
+				newUserResp.User.Verified.EmailVerified = providerUserInfo.IsUserEmailVerifiedByProvider()
+				newUserResp.User.Verified.EmailVerifiedAt = toolbox.TimeNowUTC()
 
 				// Update user with verification information
 				updatedUser, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{
-					User: &newUser.User,
+					User: &newUserResp.User,
 				})
 				if err != nil {
-					log.Error(fmt.Sprintf("ams/error-failed-to-save-new-user-verficaiton-by-provider: %s", newUser.User.ID))
+					log.Error(fmt.Sprintf("ams/error-failed-to-save-new-user-verficaiton-by-provider: %s", newUserResp.User.ID))
 				}
 
 				log.Info(fmt.Sprintf("ams/successfully-saved-new-user-verficaiton-by-provider: %s", updatedUser.User.ID))
@@ -548,7 +565,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 				ActorId:    audit.AuditActorIdSystem,
 				Action:     auditEvent,
-				TargetId:   newUser.User.ID,
+				TargetId:   newUserResp.User.ID,
 				TargetType: audit.User,
 				Domain:     "accessmanager",
 				Details: audit.UserSsoEventDetails{
@@ -557,13 +574,13 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			})
 
 			if auditErr != nil {
-				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUser.User.ID), zap.String("event-type", string(auditEvent)))
+				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
 			}
 
-			log.Info(fmt.Sprintf("ams/initiate-new-user-tokens: %s", newUser.User.ID))
+			log.Info(fmt.Sprintf("ams/initiate-new-user-tokens: %s", newUserResp.User.ID))
 
 			accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, err := s.UserEmailVerificationRevisions(ctx, &UserEmailVerificationRevisionsRequest{
-				UserID: newUser.User.ID})
+				UserID: newUserResp.User.ID})
 			if err != nil {
 				return nil, err
 			}
@@ -573,7 +590,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			auditErr = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 				ActorId:    audit.AuditActorIdSystem,
 				Action:     auditEvent,
-				TargetId:   newUser.User.ID,
+				TargetId:   newUserResp.User.ID,
 				TargetType: audit.User,
 				Domain:     "accessmanager",
 				Details: audit.UserSsoEventDetails{
@@ -582,7 +599,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			})
 
 			if auditErr != nil {
-				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUser.User.ID), zap.String("event-type", string(auditEvent)))
+				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
 			}
 
 			return &OauthCallbackResponse{
@@ -1496,21 +1513,12 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		Email:     r.Email,
 	})
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
 	response.User = newUser.User
 
-	log.Info(fmt.Sprintf("ams/initiate-new-user-verification-email: %s", newUser.User.ID))
-	_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
-		User:       response.User,
-		RequestUrl: r.RequestUrl,
-	})
-	if err != nil {
-		log.Error(fmt.Sprintf("ams/error-failed-to-initiate-new-user-verification-email: %s", newUser.User.ID))
-		return response, err
-	}
-
+	// Audit log user creation
 	auditEvent := audit.UserAccountNew
 	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 		ActorId:    audit.AuditActorIdSystem,
@@ -1519,12 +1527,54 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		TargetType: audit.User,
 		Domain:     "accessmanager",
 	})
-
 	if auditErr != nil {
 		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
 	}
 
-	log.Info(fmt.Sprintf("ams/successfully-initiated-new-user-verification-email: %s", newUser.User.ID))
+	// handle associating pre-registered subscriptions if any
+	if s.BillingService != nil {
+		log.Info("checking-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		unassociatedSubResp, err := s.BillingService.GetUnassociatedSubscriptions(ctx, &billing.GetUnassociatedSubscriptionsRequest{
+			Email: newUser.User.Email,
+			Limit: 50,
+		})
+		if err != nil {
+			log.Error("failed-to-check-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(err))
+		} else {
+			if len(unassociatedSubResp.Subscriptions) > 0 {
+				log.Info("found-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
+				_, subscriptionAssociationErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
+					UserID: newUser.User.ID,
+					Email:  newUser.User.Email,
+				})
+				if subscriptionAssociationErr != nil {
+					log.Error("failed-to-associate-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(subscriptionAssociationErr))
+				} else {
+					log.Info("successfully-associated-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
+				}
+			} else {
+				log.Info("no-pre-registered-subscriptions-found", zap.String("user-id", newUser.User.ID))
+			}
+		}
+
+	}
+
+	// handle verification email if not disabled
+	if !r.DisableVerificationEmail {
+		log.Info(fmt.Sprintf("ams/initiate-new-user-verification-email: %s", newUser.User.ID))
+		_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
+			User:       response.User,
+			RequestUrl: r.RequestUrl,
+		})
+		if err != nil {
+			log.Error(fmt.Sprintf("ams/error-failed-to-initiate-new-user-verification-email: %s", newUser.User.ID))
+			return response, err
+		}
+
+		log.Info(fmt.Sprintf("ams/successfully-initiated-new-user-verification-email: %s", newUser.User.ID))
+	}
+
+	log.Info(fmt.Sprintf("ams/completed-new-user-creation: %s", newUser.User.ID))
 
 	return response, nil
 }
