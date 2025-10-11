@@ -1,4 +1,4 @@
-package user
+package examples
 
 import (
 	"fmt"
@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/external/user"
+	userV2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // Example 1: Basic usage with defaults
 func ExampleBasicUsage() {
 	// Create factory with default configuration
-	factory := NewUserFactory(nil) // Uses DefaultUserConfig()
+	factory := userV2.NewUserFactory(nil) // Uses DefaultUserConfig()
 
 	// Create a new user
 	user := factory.CreateUser("john.doe@example.com")
@@ -40,8 +41,8 @@ func ExampleBasicUsage() {
 // Example 2: Web application configuration
 func ExampleWebAppUsage() {
 	// Use web app specific configuration
-	config := WebAppUserConfig()
-	factory := NewUserFactory(config)
+	config := userV2.WebAppUserConfig()
+	factory := userV2.NewUserFactory(config)
 
 	// Create user with personal info
 	user := factory.CreateUserWithPersonalInfo(
@@ -71,8 +72,8 @@ func ExampleWebAppUsage() {
 
 // Example 3: API service configuration
 func ExampleAPIServiceUsage() {
-	config := APIServiceUserConfig()
-	factory := NewUserFactory(config)
+	config := userV2.APIServiceUserConfig()
+	factory := userV2.NewUserFactory(config)
 
 	// Create service user
 	user := factory.CreateUser("api-service@company.com")
@@ -93,8 +94,8 @@ func ExampleCustomDependencies() {
 	customTime := &CustomTimeProvider{}
 	customStrings := &CustomStringUtils{}
 
-	config := DefaultUserConfig()
-	factory := NewUserFactoryWithDependencies(
+	config := userV2.DefaultUserConfig()
+	factory := userV2.NewUserFactoryWithDependencies(
 		config,
 		customIDGen,
 		customTime,
@@ -115,7 +116,7 @@ func ExampleMigration() {
 		LastName:  "Doe",
 		Email:     "john@example.com",
 		Status:    "ACTIVE",
-		Roles:     []string{"USER", "ADMIN"},
+		Roles:     []string{"ADMIN"},
 		Verified: user.UserVerifcationStatus{
 			EmailVerified:   true,
 			EmailVerifiedAt: "2025-01-01T00:00:00Z",
@@ -128,8 +129,8 @@ func ExampleMigration() {
 	}
 
 	// Convert to universal user
-	factory := NewUserFactory(DefaultUserConfig())
-	universalUser := MigrateFromLegacyUser(existingUser, factory)
+	factory := userV2.NewUserFactory(userV2.DefaultUserConfig())
+	universalUser := userV2.MigrateFromLegacyUser(existingUser, factory)
 
 	// Now you can use new features
 	universalUser.SetExtension("migrated_from", "legacy_system")
@@ -138,13 +139,13 @@ func ExampleMigration() {
 	fmt.Printf("Migrated user: %s\n", universalUser.ID)
 
 	// Convert back to legacy format if needed (for gradual migration)
-	backToLegacy := MigrateToLegacyUser(universalUser)
+	backToLegacy := userV2.MigrateToLegacyUser(universalUser)
 	fmt.Printf("Back to legacy: %s\n", backToLegacy.ID)
 }
 
 // Example 6: Working with extensions
 func ExampleExtensions() {
-	factory := NewUserFactory(nil)
+	factory := userV2.NewUserFactory(nil)
 	user := factory.CreateUser("extensible@example.com")
 
 	// Add various extension data
@@ -177,8 +178,8 @@ func ExampleTesting() {
 	mockTime := &MockTimeProvider{fixedTime: "2025-01-01T00:00:00Z"}
 	mockStrings := &MockStringUtils{}
 
-	config := DefaultUserConfig()
-	factory := NewUserFactoryWithDependencies(
+	config := userV2.DefaultUserConfig()
+	factory := userV2.NewUserFactoryWithDependencies(
 		config,
 		mockIDGen,
 		mockTime,

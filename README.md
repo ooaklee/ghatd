@@ -29,9 +29,17 @@ GHAT(D) offers modular packages that can be used both together and independently
 A complete email solution split into three composable packages for maximum flexibility and testability.
 
 - **[Email Manager](./docs/getting-started/email-manager/)** - Complete email system with templating, sending, and audit logging
-  - `emailtemplater` - Generate HTML email templates with variable substitution
-  - `emailprovider` - Abstract email sending across providers (SparkPost, logging, custom)
-  - `emailmanager` - High-level orchestration with audit integration
+  - `emailtemplater` - Generate HTML email templates with variable substitution
+  - `emailprovider` - Abstract email sending across providers (SparkPost, logging, custom)
+  - `emailmanager` - High-level orchestration with audit integration
+
+### Billing System
+A complete billing solution split into three composable packages for maximum flexibility and testability.
+
+- **[Billing Manager](./docs/getting-started/billing-manager/)** - Complete billing system with webhook processing, subscription management, and audit logging
+  - `paymentprovider` - Abstract payment provider webhook verification and payload normalisation (Stripe, Lemon Squeezy, Ko-fi)
+  - `billing` - Manage subscription and billing event data persistence with repository pattern
+  - `billingmanager` - High-level orchestration with webhook processing and audit integration
 
 ### Additional Packages
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging

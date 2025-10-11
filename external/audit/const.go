@@ -43,6 +43,9 @@ const (
 
 	// User represents user or potential user resources
 	User TargetType = "USER"
+
+	// TargetTypeUser represents user or potential user resources
+	TargetTypeUser TargetType = "USER"
 )
 
 // EmailType is the type of email being actioned
