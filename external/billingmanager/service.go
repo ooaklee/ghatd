@@ -338,8 +338,9 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 	return nil
 }
 
-// resolveUserID attempts to find or create a user ID from the webhook payload
-// It attempts to find this from the email located in the payload or existing subscription
+// resolveUserID attempts to resolve the user ID associated with a payment provider webhook payload.
+// note that this may return an empty user ID if only an email is available in the payload but no user
+// is found with that email
 func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.WebhookPayload) (string, error) {
 
 	var (
@@ -366,31 +367,15 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 		}
 	}
 
-	log.Warn("unable-to-find-user-id-falling-back-to-payload-email", zap.String("payload-email", payload.CustomerEmail), zap.Error(err))
+	// if email is missing we need to error out as we have no way to identify the user
+	if payload.CustomerEmail == "" {
+		log.Warn("unable-to-identify-user-no-email-in-payload", zap.String("subscription-id", payload.SubscriptionID), zap.String("customer-id", payload.CustomerID))
+		return "", errors.New(ErrKeyBillingManagerNoUserIdentifyingInformationInPayload)
+	}
 
-	// ## THOUGHTS
-	//
-	// For pre-registration purchases, we might not have a user yet
-	// In this case, we can store it with the email and associate it later
-	// For now, we'll return an error indicating the user needs to be created
-	//
-	// ## TODO
-	//
-	// Update this to create a pre-registration user if needed
-	// Would need to support PRE_REGISTERED status in user v2
-	// PRE_REGISTERED users must complete registration upon login.
-	// We should send back an error with metadata that gives the email
-	// The user will then make a call to "/api/ams/v2/complete-signup"
-	//  with email, first name, last name, password, etc., which is needed
-	//
-	// ## OR
-	//
-	// We are update our subscriptions and billing events to support either
-	// an email address or a user ID. This change allows us to create subscriptions
-	// and events without requiring a user ID initially, and we can associate them
-	// with a user ID later. Consequently, when searching for subscriptions or events,
-	// we will need to search by email if a user ID is not available.
-	return "", errors.New(ErrKeyBillingManagerUnableToResolveUserId)
+	log.Info("no-user-found-will-store-subscription-with-email-only", zap.String("email", payload.CustomerEmail))
+
+	return "", nil
 }
 
 // findOrCreateSubscription finds an existing subscription or creates a new one
@@ -432,10 +417,16 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 	}
 
 	logFields := []zap.Field{
-		zap.String("user-id", userID),
 		zap.String("provider", providerName),
 		zap.String("subscription-id", payload.SubscriptionID),
 		zap.String("email", payload.CustomerEmail),
+	}
+
+	// Add user-id to logs if present, otherwise note it's email-only
+	if userID != "" {
+		logFields = append(logFields, zap.String("user-id", userID))
+	} else {
+		logFields = append(logFields, zap.String("user-id", "email-only-subscription"))
 	}
 
 	if nextBillingDate != nil {
