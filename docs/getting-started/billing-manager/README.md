@@ -8,7 +8,7 @@ See below an overview of the core packages mentioned above:
 
 | Package | Purpose | Use Case (Recommended) | Examples Location |
 |---------|---------|------------------------|-------------------|
-| **`paymentprovider`** | Abstracts payment provider webhook verification and payload normalization (e.g., Stripe, Lemon Squeezy, Ko-fi). | Building custom webhook handlers or testing provider integrations. | [external/holder/paymentprovider/examples](../../../external/holder/paymentprovider/examples/examples.go) |
+| **`paymentprovider`** | Abstracts payment provider webhook verification and payload normalisation (e.g., Stripe, Lemon Squeezy, Ko-fi). | Building custom webhook handlers or testing provider integrations. | [external/holder/paymentprovider/examples](../../../external/holder/paymentprovider/examples/examples.go) |
 | **`billing`** | Manages subscription and billing event data persistence with repository pattern. | Direct database operations or building custom billing workflows. | [external/holder/billing/examples](../../../external/holder/billing/examples/examples.go) |
 | **`billingmanager`** | Orchestrates paymentprovider and billing with high-level API methods for webhook processing. | Building application features (Standard)—provides the full workflow and audit logging. | [external/holder/billingmanager/examples](../../../external/holder/billingmanager/examples/examples.go) |
 
@@ -179,7 +179,7 @@ manager := billingmanager.NewService(
 
 ## Advanced Use Cases
 
-While `billingmanager` is recommended, the packages can be used independently for specialized needs.
+While `billingmanager` is recommended, the packages can be used independently for specialised needs.
 
 ### Direct Billing Service Usage
 
@@ -242,7 +242,7 @@ func (p *MyCustomProvider) VerifyWebhook(ctx context.Context, req *http.Request)
 }
 
 func (p *MyCustomProvider) ParsePayload(ctx context.Context, req *http.Request) (*paymentprovider.WebhookPayload, error) {
-    // Parse provider-specific payload into normalized format
+    // Parse provider-specific payload into normalised format
     return &paymentprovider.WebhookPayload{
         EventType:      paymentprovider.EventTypePaymentSucceeded,
         SubscriptionID: "sub_from_provider",
@@ -509,11 +509,11 @@ The billing system tracks various subscription states:
 - **`incomplete`** - Subscription setup incomplete
 - **`unpaid`** - Subscription unpaid
 
-## Authorization & Security
+## Authorisation & Security
 
-### User Authorization
+### User Authorisation
 
-The `billingmanager` includes built-in authorization checks:
+The `billingmanager` includes built-in authorisation checks:
 
 ```go
 // User querying their own subscription (allowed)
