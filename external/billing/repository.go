@@ -14,8 +14,8 @@ import (
 // BillingEventsCollection collection name for billing events
 const BillingEventsCollection string = "billing_events"
 
-// BillingSubscriptionCollection collection name for billing subscriptions
-const BillingSubscriptionCollection string = "billing_subscriptions"
+// BillingSubscriptionsCollection collection name for billing subscriptions
+const BillingSubscriptionsCollection string = "billing_subscriptions"
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
@@ -78,7 +78,7 @@ func (r *Repository) GetBillingSubscriptionsCollection(ctx context.Context) (*mo
 	if err != nil {
 		return nil, err
 	}
-	collection := db.Collection(BillingSubscriptionCollection)
+	collection := db.Collection(BillingSubscriptionsCollection)
 
 	return collection, nil
 }
