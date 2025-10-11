@@ -39,6 +39,8 @@ type BillingService interface {
 	CreateSubscription(ctx context.Context, req *billing.CreateSubscriptionRequest) (*billing.CreateSubscriptionResponse, error)
 	UpdateSubscription(ctx context.Context, req *billing.UpdateSubscriptionRequest) (*billing.UpdateSubscriptionResponse, error)
 	CreateBillingEvent(ctx context.Context, req *billing.CreateBillingEventRequest) (*billing.CreateBillingEventResponse, error)
+	GetSubscriptionsByEmail(ctx context.Context, req *billing.GetSubscriptionsByEmailRequest) (*billing.GetSubscriptionsByEmailResponse, error)
+	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
 }
 
 // Service orchestrates webhook processing and billing operations
@@ -166,6 +168,30 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	}
 
 	// Check if user has any subscriptions
+	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
+		log.Info("no-active-subscription-with-user-id-falling-back-to-user-email", logFields...)
+		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: req.UserID})
+		if err == nil {
+			emailSubsResp, _ := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: userResp.User.Email})
+			if len(emailSubsResp.Subscriptions) > 0 {
+				log.Info("found-email-based-subscription-associating-with-user", append(logFields, zap.String("email", userResp.User.Email), zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)))...)
+				// Associate found subscriptions with user
+				_, _ = s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
+					UserID: req.UserID,
+					Email:  userResp.User.Email,
+				})
+
+				// Re-query to get updated results
+				subscriptionsResp, err = s.BillingService.GetSubscriptions(ctx, &billing.GetSubscriptionsRequest{
+					ForUserIDs: []string{req.UserID},
+					PerPage:    1,
+					Page:       1,
+					Order:      "created_at_desc",
+				})
+			}
+		}
+	}
+
 	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
 		log.Info("no-active-subscription-found", logFields...)
 		return &GetUserSubscriptionStatusResponse{
