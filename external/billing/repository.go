@@ -779,20 +779,22 @@ func (r *Repository) GetUnassociatedSubscriptions(ctx context.Context, req *GetU
 }
 
 // UpdateSubscriptionUserID updates the user ID for a specific subscription
-func (r *Repository) UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, error) {
+func (r *Repository) UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error) {
 
+	var oldSubscription Subscription
 	collection, err := r.GetBillingSubscriptionsCollection(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// First, get the subscription to ensure it exists
 	subscription, err := r.GetSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Update the user_id and updated_at
+	oldSubscription = *subscription
 	subscription.UserID = userID
 	subscription.SetUpdatedAtTimeToNow()
 
@@ -807,10 +809,10 @@ func (r *Repository) UpdateSubscriptionUserID(ctx context.Context, subscriptionI
 
 	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, updateFilter, "subscription")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return subscription, nil
+	return subscription, &oldSubscription, nil
 }
 
 ///// Private helper functions

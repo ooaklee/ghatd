@@ -343,20 +343,21 @@ func (m *InMemoryRepository) GetUnassociatedSubscriptions(ctx context.Context, r
 }
 
 // UpdateSubscriptionUserID updates the user ID for a specific subscription
-func (m *InMemoryRepository) UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, error) {
+func (m *InMemoryRepository) UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	sub, ok := m.store.Subscriptions[subscriptionID]
 	if !ok {
-		return nil, errors.New(ErrKeyBillingSubscriptionNotFound)
+		return nil, nil, errors.New(ErrKeyBillingSubscriptionNotFound)
 	}
 
 	// Update the user_id and updated_at
+	originalSub := *sub
 	sub.UserID = userID
 	sub.SetUpdatedAtTimeToNow()
 
-	return sub, nil
+	return sub, &originalSub, nil
 }
 
 // Helper methods for filtering

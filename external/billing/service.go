@@ -3,10 +3,18 @@ package billing
 import (
 	"context"
 
+	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
+
+	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 )
+
+// AuditService expected methods of a valid audit service
+type AuditService interface {
+	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
+}
 
 // billingEventsRepository is the expected methods needed to
 // interact with the database
@@ -31,13 +39,14 @@ type subscriptionRepository interface {
 	GetSubscriptionsByEmail(ctx context.Context, email string) ([]Subscription, error)
 	AssociateSubscriptionsWithUser(ctx context.Context, userID, email string) (int, error)
 	GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) ([]Subscription, error)
-	UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, error)
+	UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error)
 }
 
 // Service represents the billing service
 type Service struct {
 	billingEventsRepository billingEventsRepository
 	subscriptionRepository  subscriptionRepository
+	AuditService            AuditService
 }
 
 // NewService returns a new instance of the billing service
@@ -46,6 +55,12 @@ func NewService(billingEventsRepository billingEventsRepository, subscriptionRep
 		billingEventsRepository: billingEventsRepository,
 		subscriptionRepository:  subscriptionRepository,
 	}
+}
+
+// WithAuditService adds audit logging capability
+func (s *Service) WithAuditService(audit AuditService) *Service {
+	s.AuditService = audit
+	return s
 }
 
 // CreateSubscription creates a new subscription
@@ -607,10 +622,31 @@ func (s *Service) UpdateSubscriptionUserID(ctx context.Context, req *UpdateSubsc
 
 	log.Debug("initiating-update-subscription-user-id-request", zap.Any("request", req))
 
-	updatedSubscription, err := s.subscriptionRepository.UpdateSubscriptionUserID(ctx, req.SubscriptionID, req.UserID)
+	updatedSubscription, oldSubscription, err := s.subscriptionRepository.UpdateSubscriptionUserID(ctx, req.SubscriptionID, req.UserID)
 	if err != nil {
 		log.Error("failed-to-update-subscription-user-id-error-updating-subscription", zap.Any("request", req), zap.Error(err))
 		return &UpdateSubscriptionUserIDResponse{}, err
+	}
+
+	if s.AuditService != nil {
+
+		requestingUserId := accessmanagerhelpers.AcquireFrom(ctx)
+
+		// Log audit even
+		err = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			ActorId:    requestingUserId,
+			Action:     AuditActionBillingSubscriptionUpdateUserID,
+			TargetId:   updatedSubscription.ID,
+			TargetType: AuditTypeBillingSubscription,
+			Domain:     "billing",
+			Details: map[string]interface{}{
+				"new_user_id":      req.UserID,
+				"previous_user_id": oldSubscription.UserID,
+			},
+		})
+		if err != nil {
+			log.Error("failed-to-log-audit-event-after-updating-subscription-user-id", zap.Any("request", req), zap.Error(err))
+		}
 	}
 
 	log.Info("update-subscription-user-id-request-successful",

@@ -1,5 +1,16 @@
 package billing
 
+import "github.com/ooaklee/ghatd/external/audit"
+
+const (
+	// AuditActionBillingSubscriptionUpdateUserID is used when a subscription's user ID is updated
+	AuditActionBillingSubscriptionUpdateUserID audit.AuditAction = "BILLING_SUBSCRIPTION_UPDATE_USER_ID"
+	// AuditTypeBillingEvent is used for billing event resources
+	AuditTypeBillingEvent audit.TargetType = "BILLING_EVENT"
+	// AuditTypeBillingSubscription is used for billing subscription resources
+	AuditTypeBillingSubscription audit.TargetType = "BILLING_SUBSCRIPTION"
+)
+
 // Error key definitions for billing operations
 const (
 
