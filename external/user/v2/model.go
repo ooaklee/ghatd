@@ -40,24 +40,6 @@ type UserConfig struct {
 	MultipleIdentifiers       bool // Support both UUID and NanoID
 }
 
-// DefaultUserConfig returns a sensible default configuration
-func DefaultUserConfig() *UserConfig {
-	return &UserConfig{
-		DefaultStatus: "PROVISIONED",
-		StatusTransitions: map[string][]string{
-			"ACTIVE":      {"PROVISIONED"},
-			"DEACTIVATED": {"PROVISIONED", "ACTIVE", "LOCKED_OUT", "RECOVERY", "SUSPENDED"},
-			"SUSPENDED":   {"ACTIVE"},
-			"LOCKED_OUT":  {"ACTIVE"},
-			"RECOVERY":    {"ACTIVE"},
-		},
-		RequiredFields:            []string{"email"},
-		ValidRoles:                []string{"ADMIN", "USER"},
-		EmailVerificationRequired: true,
-		MultipleIdentifiers:       true,
-	}
-}
-
 // UniversalUser represents a flexible user model
 type UniversalUser struct {
 	// Core required fields
