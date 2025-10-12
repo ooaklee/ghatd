@@ -26,31 +26,3 @@ type Provider interface {
 	// This is useful for syncing state or retrieving information not in webhooks
 	GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error)
 }
-
-// EventType constants for normalised event types across all providers
-const (
-	EventTypeSubscriptionCreated   = "subscription.created"
-	EventTypeSubscriptionUpdated   = "subscription.updated"
-	EventTypeSubscriptionCancelled = "subscription.cancelled"
-	EventTypeSubscriptionPaused    = "subscription.paused"
-	EventTypeSubscriptionResumed   = "subscription.resumed"
-	EventTypePaymentSucceeded      = "payment.succeeded"
-	EventTypePaymentFailed         = "payment.failed"
-	EventTypePaymentRefunded       = "payment.refunded"
-	EventTypePaymentActionRequired = "payment.action_required"
-	EventTypeCustomerUpdated       = "customer.updated"
-	EventTypeTrialWillEnd          = "trial.will_end"
-	EventTypeTrialEnded            = "trial.ended"
-)
-
-// SubscriptionStatus constants for normalised statuses across all providers
-const (
-	SubscriptionStatusActive     = "active"
-	SubscriptionStatusTrialing   = "trialing"
-	SubscriptionStatusPastDue    = "past_due"
-	SubscriptionStatusCancelled  = "cancelled"
-	SubscriptionStatusPaused     = "paused"
-	SubscriptionStatusExpired    = "expired"
-	SubscriptionStatusIncomplete = "incomplete"
-	SubscriptionStatusUnpaid     = "unpaid"
-)

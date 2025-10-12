@@ -77,6 +77,9 @@ func (s *Service) WithUserService(userSvc UserService) *Service {
 func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *ProcessBillingProviderWebhooksRequest) error {
 
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var (
+		subscriptionId string
+	)
 
 	payload, err := s.ProviderRegistry.VerifyAndParseWebhookPayload(ctx, req.ProviderName, req.Request)
 	if err != nil {
@@ -90,31 +93,44 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 		return err
 	}
 
-	subscription, err := s.findOrCreateSubscription(ctx, req.ProviderName, payload, userID)
-	if err != nil {
-		log.Error("failed-to-find-or-create-subscription", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.Any("payload", payload), zap.Error(err))
-		return err
-	}
+	if payload.IsSubscription() {
 
-	if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
-		log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
-		return err
+		subscription, err := s.findOrCreateSubscription(ctx, req.ProviderName, payload, userID)
+		if err != nil {
+			log.Error("failed-to-find-or-create-subscription", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.Any("payload", payload), zap.Error(err))
+			return err
+		}
+
+		if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
+			log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
+			return err
+		}
+
+		subscriptionId = subscription.ID
 	}
 
 	billingEventSuccessfullyCreated := true
-	if err := s.createBillingEvent(ctx, subscription.ID, userID, req.ProviderName, payload); err != nil {
+	if err := s.createBillingEvent(ctx, subscriptionId, userID, req.ProviderName, payload); err != nil {
 		billingEventSuccessfullyCreated = false
-		log.Warn("failed-to-create-billing-event", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
+		log.Warn("failed-to-create-billing-event", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscriptionId), zap.Any("payload", payload), zap.Error(err))
 	}
 
 	// Optional audit logging
 	if s.AuditService != nil {
+
+		eventMessageDetails := ""
+		if payload.IsSubscription() {
+			eventMessageDetails = fmt.Sprintf("Processed %s webhook for subscription %s", req.ProviderName, payload.SubscriptionID)
+		} else {
+			eventMessageDetails = fmt.Sprintf("Processed %s webhook for non-subscription event", req.ProviderName)
+		}
+
 		event := &AuditEvent{
 			EventType:                       payload.EventType,
 			UserID:                          userID,
-			Details:                         fmt.Sprintf("Processed %s webhook for subscription %s", req.ProviderName, payload.SubscriptionID),
+			Details:                         eventMessageDetails,
 			OccurredAt:                      time.Now(),
-			BillingSubscriptionId:           subscription.ID,
+			BillingSubscriptionId:           subscriptionId,
 			Provider:                        req.ProviderName,
 			BillingEventSuccessfullyCreated: billingEventSuccessfullyCreated,
 		}

@@ -56,3 +56,51 @@ const (
 	// ErrKeyPaymentProviderMissingPayloadCustomerEmail is returned when the customer's email cannot be attained from provider
 	ErrKeyPaymentProviderMissingPayloadCustomerEmail = "PaymentProviderMissingPayloadCustomerEmail"
 )
+
+// PaymentType constants for categorizing different types of payments
+const (
+	PaymentTypeSubscription = "subscription"
+	PaymentTypeDonation     = "donation"
+	PaymentTypeShopOrder    = "shop_order"
+	PaymentTypeCommission   = "commission"
+)
+
+// EventType constants for normalised event types across all providers
+const (
+	// Subscription events
+	EventTypeSubscriptionCreated   = "subscription.created"
+	EventTypeSubscriptionUpdated   = "subscription.updated"
+	EventTypeSubscriptionCancelled = "subscription.cancelled"
+	EventTypeSubscriptionPaused    = "subscription.paused"
+	EventTypeSubscriptionResumed   = "subscription.resumed"
+
+	// Donation-based subscription events (e.g., Ko-fi monthly donations)
+	EventTypeSubscriptionCreatedDonation   = "subscription.created.donation"
+	EventTypeSubscriptionUpdatedDonation   = "subscription.updated.donation"
+	EventTypeSubscriptionCancelledDonation = "subscription.cancelled.donation"
+	EventTypeSubscriptionPausedDonation    = "subscription.paused.donation"
+	EventTypeSubscriptionResumedDonation   = "subscription.resumed.donation"
+
+	// Payment events
+	EventTypePaymentSucceeded      = "payment.succeeded"
+	EventTypePaymentFailed         = "payment.failed"
+	EventTypePaymentRefunded       = "payment.refunded"
+	EventTypePaymentActionRequired = "payment.action_required"
+
+	// Customer and trial events
+	EventTypeCustomerUpdated = "customer.updated"
+	EventTypeTrialWillEnd    = "trial.will_end"
+	EventTypeTrialEnded      = "trial.ended"
+)
+
+// SubscriptionStatus constants for normalised statuses across all providers
+const (
+	SubscriptionStatusActive     = "active"
+	SubscriptionStatusTrialing   = "trialing"
+	SubscriptionStatusPastDue    = "past_due"
+	SubscriptionStatusCancelled  = "cancelled"
+	SubscriptionStatusPaused     = "paused"
+	SubscriptionStatusExpired    = "expired"
+	SubscriptionStatusIncomplete = "incomplete"
+	SubscriptionStatusUnpaid     = "unpaid"
+)

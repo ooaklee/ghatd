@@ -3,7 +3,7 @@ package paymentprovider
 // WebhookPayload represents normalized webhook data from any payment provider
 // This common structure allows the billing system to handle webhooks uniformly
 type WebhookPayload struct {
-	// EventType is the normalized event type (e.g., "subscription.created", "payment.succeeded")
+	// EventType is the normalized event type (e.g., "subscription.created", "payment.succeeded", "donation.received")
 	EventType string
 
 	// EventID is the unique identifier for this event from the provider
@@ -12,8 +12,17 @@ type WebhookPayload struct {
 	// EventTime is the timestamp when the event occurred (RFC3339 format)
 	EventTime string
 
-	// SubscriptionID is the provider's unique identifier for the subscription
+	// PaymentType indicates the type of payment: "subscription", "donation", "shop_order", "commission"
+	PaymentType string
+
+	// IsOneOff indicates if this is a one-time payment (true) vs recurring subscription (false)
+	IsOneOff bool
+
+	// SubscriptionID is the provider's unique identifier for the subscription (empty for one-off payments)
 	SubscriptionID string
+
+	// TransactionID is the unique identifier for one-off payments or individual transactions
+	TransactionID string
 
 	// CustomerID is the provider's unique identifier for the customer
 	CustomerID string
@@ -21,10 +30,14 @@ type WebhookPayload struct {
 	// CustomerEmail is the customer's email address
 	CustomerEmail string
 
+	// CustomerName is the customer's display name (e.g., for Ko-fi donations)
+	CustomerName string
+
 	// Status is the current status of the subscription (active, cancelled, past_due, trialing, etc.)
+	// Empty for one-off payments
 	Status string
 
-	// PlanName is the name/identifier of the subscription plan
+	// PlanName is the name/identifier of the subscription plan or tier
 	PlanName string
 
 	// Amount is the payment amount (in the smallest currency unit, e.g., cents)
@@ -32,6 +45,9 @@ type WebhookPayload struct {
 
 	// Currency is the ISO 4217 currency code (e.g., "USD", "GBP")
 	Currency string
+
+	// IsFirstSubscriptionPayment indicates if this is the first payment of a subscription
+	IsFirstSubscriptionPayment bool
 
 	// NextBillingDate is when the next payment will be attempted (ISO 8601 format)
 	NextBillingDate string
@@ -50,6 +66,11 @@ type WebhookPayload struct {
 
 	// RawPayload is the original JSON payload from the provider (for auditing)
 	RawPayload string
+}
+
+// IsSubscription returns true if the payment type is a subscription
+func (wp *WebhookPayload) IsSubscription() bool {
+	return wp.PaymentType == PaymentTypeSubscription
 }
 
 // SubscriptionInfo represents detailed subscription information from a provider's API

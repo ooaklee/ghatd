@@ -30,20 +30,6 @@ func InitBillingSubscriptionIndexesUp(db *mongo.Database) error { //Up
 		Options: options.Index().SetName("idx_subscriptions_email"),
 	}
 
-	// Partial index on email for orphaned subscriptions (email without user_id)
-	emailNoUserIndexModel := mongo.IndexModel{
-		Keys: bson.D{{Key: "email", Value: 1}},
-		Options: options.Index().
-			SetName("idx_subscriptions_email_no_user").
-			SetPartialFilterExpression(bson.M{
-				"$or": []bson.M{
-					{"user_id": ""},
-					{"user_id": bson.M{"$exists": false}},
-					{"user_id": nil},
-				},
-			}),
-	}
-
 	// Unique compound index on integrator and subscription ID
 	integratorUniqueIndexModel := mongo.IndexModel{
 		Keys: bson.D{
@@ -67,7 +53,6 @@ func InitBillingSubscriptionIndexesUp(db *mongo.Database) error { //Up
 		[]mongo.IndexModel{
 			userIdIndexModel,
 			emailIndexModel,
-			emailNoUserIndexModel,
 			integratorUniqueIndexModel,
 			createdAtIndexModel,
 		},
@@ -93,7 +78,6 @@ func InitBillingSubscriptionIndexesDown(db *mongo.Database) error { //Down
 	indexNames := []string{
 		"idx_subscriptions_user_id",
 		"idx_subscriptions_email",
-		"idx_subscriptions_email_no_user",
 		"idx_subscriptions_integrator",
 		"idx_subscriptions_created_at",
 	}
