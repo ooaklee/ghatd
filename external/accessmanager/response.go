@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // CreateUserAPITokenResponse  holds response data for CreateUserAPIToken request
@@ -16,7 +16,7 @@ type CreateUserAPITokenResponse struct {
 // CreateUserResponse holds response data for CreateUserResponse request
 type CreateUserResponse struct {
 	// User represents the user created on the platform
-	User user.User
+	User *userv2.UniversalUser
 }
 
 // TokenAsStringValidatorResponse holds the response for TokenAsStringValidator request

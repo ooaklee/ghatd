@@ -21,16 +21,9 @@ import (
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
-
-// User expected methods of a valid user
-type User interface {
-	GetAttributeByJsonPath(jsonPath string) (any, error)
-	IsAdmin() bool
-	UpdateStatus(desiredStatus string) (*user.User, error)
-}
 
 // AuditService expected methods of a valid audit service
 type AuditService interface {
@@ -80,11 +73,11 @@ type AuthService interface {
 
 // UserService expected methods of a valid user service
 type UserService interface {
-	GetUserByNanoId(ctx context.Context, id string) (*user.GetUserByIDResponse, error)
-	GetUserByID(ctx context.Context, r *user.GetUserByIdRequest) (*user.GetUserByIDResponse, error)
-	GetUserByEmail(ctx context.Context, r *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
-	UpdateUser(ctx context.Context, user *user.UpdateUserRequest) (*user.UpdateUserResponse, error)
-	CreateUser(ctx context.Context, r *user.CreateUserRequest) (*user.CreateUserResponse, error)
+	GetUserByNanoID(ctx context.Context, r *userv2.GetUserByNanoIDRequest) (*userv2.GetUserByNanoIDResponse, error)
+	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
+	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
+	CreateUser(ctx context.Context, r *userv2.CreateUserRequest) (*userv2.CreateUserResponse, error)
 }
 
 // ApitokenService expected methods of a valid apitoken service
@@ -189,21 +182,21 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		// signed off of the client they are currently using to make the request
 		signUserOutOfPlatform bool = false
 
-		requestingUser User
+		requestingUser *userv2.UniversalUser
 	)
 
 	// check that the user id the same as the target user id or the user is an admin
 	if r.UserId != r.TargetUserId {
 		// check if the user is an admin
-		userByIdResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-			Id: r.UserId,
+		userByIdResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+			ID: r.UserId,
 		})
 		if err != nil {
 			log.Error("ams/failed-to-get-requesting-user-by-id", zap.Error(err))
 			return signUserOutOfPlatform, err
 		}
 
-		requestingUser = &userByIdResponse.User
+		requestingUser = userByIdResponse.User
 
 		if !requestingUser.IsAdmin() {
 			log.Warn("ams/non-admin-user-attempted-to-update-another-user-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
@@ -212,30 +205,19 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	}
 
 	// check if the user's old email is the same as the new email (error with no neeed to signout)
-	userByIdResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: r.TargetUserId,
+	userByIdResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: r.TargetUserId,
 	})
 	if err != nil {
 		log.Error("ams/failed-to-get-target-user-by-id", zap.Error(err))
 		return signUserOutOfPlatform, err
 	}
 
-	targetUser := &userByIdResponse.User
+	targetUser := userByIdResponse.User
 
 	// if above ok, take copy the user's old email
-	emailPathValue, err := targetUser.GetAttributeByJsonPath("$.email")
-	if err != nil {
-		log.Error("ams/failed-to-get-target-user-email-using-json", zap.String("target-user-id", r.TargetUserId), zap.Error(err))
-		return signUserOutOfPlatform, err
-	}
 
-	emailPathValueString, ok := emailPathValue.(string)
-	if !ok || emailPathValueString == "" {
-		log.Error("ams/failed-to-get-target-user-email-as-string", zap.String("target-user-id", r.TargetUserId))
-		return signUserOutOfPlatform, errors.New(ErrKeyConflictingUserState)
-	}
-
-	standardiseExistingEmail := toolbox.StringStandardisedToLower(emailPathValueString)
+	standardiseExistingEmail := toolbox.StringStandardisedToLower(targetUser.GetUserEmail())
 	standardiseNewEmail := toolbox.StringStandardisedToLower(r.Email)
 	if standardiseExistingEmail == standardiseNewEmail {
 		log.Warn("ams/user-attempted-to-update-email-to-same-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
@@ -243,22 +225,22 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	}
 
 	// check if the new email is already in use
-	userByEmailResponse, newEmailInUseErr := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{
+	userByEmailResponse, newEmailInUseErr := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{
 		Email: r.Email,
 	})
-	if newEmailInUseErr != nil && newEmailInUseErr.Error() != user.ErrKeyResourceNotFound {
+	if newEmailInUseErr != nil && newEmailInUseErr.Error() != userv2.ErrKeyUserNotFound {
 		log.Error("ams/failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
 		return signUserOutOfPlatform, newEmailInUseErr
 	}
 	if newEmailInUseErr == nil {
-		log.Warn("ams/new-email-already-in-use", zap.String("existing-user-id", userByEmailResponse.User.GetUserId()), zap.String("target-user-id", r.TargetUserId), zap.String("user-id", r.UserId))
+		log.Warn("ams/new-email-already-in-use", zap.String("existing-user-id", userByEmailResponse.User.ID), zap.String("target-user-id", r.TargetUserId), zap.String("user-id", r.UserId))
 		return signUserOutOfPlatform, errors.New(ErrKeyConflictingUserState)
 	}
 
 	// if here, then the new email is not in use
 
 	// send email to old email
-	emailBodyToNotifyExistingEmail := fmt.Sprintf(UpdateUserEmailOldEmailNotificationBodyTmpl, standardiseExistingEmail, standardiseNewEmail, targetUser.GetUserId())
+	emailBodyToNotifyExistingEmail := fmt.Sprintf(UpdateUserEmailOldEmailNotificationBodyTmpl, standardiseExistingEmail, standardiseNewEmail, targetUser.ID)
 
 	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{
 		EmailSubject:  "Email Change Request Received",
@@ -266,7 +248,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		EmailTo:       standardiseExistingEmail,
 		EmailBody:     emailBodyToNotifyExistingEmail,
 		WithFooter:    true,
-		UserId:        targetUser.GetUserId(),
+		UserId:        targetUser.ID,
 		RecipientType: string(audit.User),
 	})
 	if err != nil {
@@ -276,7 +258,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 
 	// update the target users' account with the new email, make sure the email is unique
 	// and unverify the email on the account
-	_, err = targetUser.UpdateStatus(user.AccountStatusValidOriginKeyEmailChange)
+	_, err = targetUser.UpdateStatus(userv2.AccountStatusValidOriginKeyEmailChange)
 	if err != nil {
 		log.Warn("ams/unable-to-update-status-of-user-to-provisioned-after-email-change", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
 		return signUserOutOfPlatform, errors.New(ErrKeyConflictingUserState)
@@ -284,11 +266,12 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 
 	// set the new email
 	targetUser.Email = toolbox.StringStandardisedToLower(r.Email)
-	targetUser.SetUpdatedAtTimeToNow()
+	targetUser.SetUpdatedAtNow()
 
 	// update the user
-	_, err = s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{
-		User: targetUser,
+	_, err = s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+		ID:    targetUser.ID,
+		Email: targetUser.Email,
 	})
 	if err != nil {
 		log.Error("ams/failed-to-update-user-with-new-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
@@ -322,13 +305,13 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	}
 
 	// send a verification email to the new email address
-	log.Info(fmt.Sprintf("ams/initiate-verification-email-for-user-with-changed-email: %s", targetUser.GetUserId()))
+	log.Info(fmt.Sprintf("ams/initiate-verification-email-for-user-with-changed-email: %s", targetUser.ID))
 	_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
-		User:       *targetUser,
+		User:       targetUser,
 		RequestUrl: "",
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("ams/error-failed-to-initiate-verification-email-for-user-with-changed-emai: %s", targetUser.GetUserId()))
+		log.Error(fmt.Sprintf("ams/error-failed-to-initiate-verification-email-for-user-with-changed-emai: %s", targetUser.ID))
 		return signUserOutOfPlatform, err
 	}
 
@@ -336,7 +319,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 		ActorId:    audit.AuditActorIdSystem,
 		Action:     auditEvent,
-		TargetId:   targetUser.GetUserId(),
+		TargetId:   targetUser.ID,
 		TargetType: audit.User,
 		Domain:     "accessmanager",
 		Details: map[string]interface{}{
@@ -359,8 +342,8 @@ func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersReque
 	var refreshTokenId string
 
 	// Check if ID returns valid user
-	requestingUser, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: r.UserId,
+	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: r.UserId,
 	})
 	if err != nil {
 		return err
@@ -457,9 +440,9 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		}
 
 		// Manage flow with user information
-		persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
+		persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
 		// Check if there is an error outside of user not being found
-		if persistentUserResponse == nil && err.Error() != user.ErrKeyResourceNotFound {
+		if persistentUserResponse == nil && err.Error() != userv2.ErrKeyUserNotFound {
 			return &OauthCallbackResponse{
 				ProviderStateCookieKey: providerCookieKey,
 			}, err
@@ -469,7 +452,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		if err == nil {
 			persistentUser := persistentUserResponse.User
 
-			tokenDetails, err := s.AuthService.CreateToken(ctx, &persistentUser)
+			tokenDetails, err := s.AuthService.CreateToken(ctx, persistentUser)
 			if err != nil {
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
@@ -477,17 +460,20 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			}
 
 			// update users logged in time
-			persistentUser.SetLastLoginAtTimeToNow().SetLastFreshLoginAtTimeToNow()
+			persistentUser.SetLastLoginAtNow()
+			persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
 
 			// If user is verified by provider but not our platform, we should trust provider
-			if !persistentUser.Verified.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
+			if !persistentUser.Verification.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
 
 				log.Info("provider-login-user-email-verified-based-on-provider-records", zap.String("user-id", persistentUser.ID))
-				persistentUser.Verified.EmailVerified = providerUserInfo.IsUserEmailVerifiedByProvider()
-				persistentUser.Verified.EmailVerifiedAt = toolbox.TimeNowUTC()
+				persistentUser.VerifyEmail()
 			}
 
-			UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: &persistentUser})
+			UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+				ID:     persistentUser.ID,
+				Status: persistentUser.Status,
+			})
 			if err != nil {
 				log.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
 				return &OauthCallbackResponse{
@@ -544,15 +530,14 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			}
 
 			// If user is verified by provider but not our platform, we should trust provider
-			if !newUserResp.User.Verified.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
+			if !newUserResp.User.Verification.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
 
 				log.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUserResp.User.ID))
-				newUserResp.User.Verified.EmailVerified = providerUserInfo.IsUserEmailVerifiedByProvider()
-				newUserResp.User.Verified.EmailVerifiedAt = toolbox.TimeNowUTC()
+				newUserResp.User.VerifyEmail()
 
 				// Update user with verification information
-				updatedUser, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{
-					User: &newUserResp.User,
+				updatedUser, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+					ID: newUserResp.User.ID,
 				})
 				if err != nil {
 					log.Error(fmt.Sprintf("ams/error-failed-to-save-new-user-verficaiton-by-provider: %s", newUserResp.User.ID))
@@ -699,8 +684,8 @@ func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUs
 func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error) {
 
 	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: r.UserId,
+	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: r.UserId,
 	})
 	if err != nil {
 		return nil, err
@@ -740,8 +725,8 @@ func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenS
 // TODO: Create tests
 func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
 	// Check if user exist
-	_, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: r.UserID,
+	_, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: r.UserID,
 	})
 	if err != nil {
 		return err
@@ -784,8 +769,8 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 	)
 
 	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: r.UserID,
+	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: r.UserID,
 	})
 	if err != nil {
 		return nil, err
@@ -824,7 +809,7 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 	// Generate token
 	apiTokenResponse, err := s.ApitokenService.CreateAPIToken(ctx, &apitoken.CreateAPITokenRequest{
 		UserID:     persistentUser.ID,
-		UserNanoId: persistentUser.NanoId,
+		UserNanoId: persistentUser.NanoID,
 		TokenTtl:   r.Ttl,
 	})
 	if err != nil {
@@ -921,7 +906,9 @@ func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (string, erro
 	// If we made it here, it means we've found a matching token
 	// get user for matching token
 	// could probably also check liveness here one time
-	persistentUserResponse, err := s.UserService.GetUserByNanoId(r.Context(), tokenRequester.NanoId)
+	persistentUserResponse, err := s.UserService.GetUserByNanoID(r.Context(), &userv2.GetUserByNanoIDRequest{
+		NanoID: tokenRequester.NanoId,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -930,12 +917,12 @@ func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (string, erro
 	tokenRequester.UserID = persistentUserResponse.User.ID
 
 	if !persistentUserResponse.User.IsAdmin() {
-		log.Warn("unauthorized-admin-access-attempted", zap.String("user-id", persistentUserResponse.User.GetUserId()))
+		log.Warn("unauthorized-admin-access-attempted", zap.String("user-id", persistentUserResponse.User.ID))
 		return "", errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
 	}
 
 	// Check if user it active
-	if persistentUserResponse.User.Status != user.AccountStatusKeyActive {
+	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
 		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
 		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
 	}
@@ -971,7 +958,9 @@ func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (string, erro
 	// If we made it here, it means we've found a matching token
 	// get user for matching token
 	// could probably also check liveness here one time
-	persistentUserResponse, err := s.UserService.GetUserByNanoId(r.Context(), tokenRequester.NanoId)
+	persistentUserResponse, err := s.UserService.GetUserByNanoID(r.Context(), &userv2.GetUserByNanoIDRequest{
+		NanoID: tokenRequester.NanoId,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -980,7 +969,7 @@ func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (string, erro
 	tokenRequester.UserID = persistentUserResponse.User.ID
 
 	// Check if user it active
-	if persistentUserResponse.User.Status != user.AccountStatusKeyActive {
+	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
 		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
 		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
 	}
@@ -1259,8 +1248,8 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	refreshTokenUuid = refreshTokenDetails.RefreshUUID
 
 	// Get user details
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: refreshTokenDetails.UserID})
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: refreshTokenDetails.UserID})
 	if err != nil {
 		log.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
 		return nil, refreshTokenUuid, err
@@ -1276,7 +1265,7 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	}
 
 	log.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
-	return &persistentUserResponse.User, refreshTokenUuid, nil
+	return persistentUserResponse.User, refreshTokenUuid, nil
 }
 
 // LoginUser handies verifying initial login token token, and  actioning all surrounding steps in
@@ -1295,8 +1284,8 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	}
 
 	// Check if ID returns valid user
-	gIDResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{
-		Id: initiateLoginTokenDetails.UserID,
+	gIDResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: initiateLoginTokenDetails.UserID,
 	})
 	if err != nil {
 		return nil, err
@@ -1304,15 +1293,18 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 
 	persistentUser := gIDResponse.User
 
-	tokenDetails, err := s.AuthService.CreateToken(ctx, &persistentUser)
+	tokenDetails, err := s.AuthService.CreateToken(ctx, persistentUser)
 	if err != nil {
 		return nil, err
 	}
 
 	// update users logged in time
-	persistentUser.SetLastLoginAtTimeToNow().SetLastFreshLoginAtTimeToNow()
+	persistentUser.SetLastLoginAtNow()
+	persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
 
-	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: &persistentUser})
+	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+		ID: persistentUser.ID,
+	})
 	if err != nil {
 		log.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
 		return nil, err
@@ -1365,18 +1357,18 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
-	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: r.Email})
+	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: r.Email})
 	if err != nil {
 		return err
 	}
 
 	switch persistentUserResponse.User.Status {
-	case user.AccountStatusKeyActive:
-		_, err = s.CreateInitalLoginToken(ctx, &persistentUserResponse.User, r.Dashboard, r.RequestUrl)
+	case userv2.AccountStatusKeyActive:
+		_, err = s.CreateInitalLoginToken(ctx, persistentUserResponse.User, r.Dashboard, r.RequestUrl)
 		if err != nil {
 			return err
 		}
-	case user.AccountStatusKeyProvisioned:
+	case userv2.AccountStatusKeyProvisioned:
 		_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
 			User:               persistentUserResponse.User,
 			IsDashboardRequest: r.Dashboard,
@@ -1386,8 +1378,7 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 			return err
 		}
 	default:
-		// TODO: Send custom email with actions
-		log.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID))
+		log.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID), zap.String("user-status", persistentUserResponse.User.Status))
 		return errors.New(ErrKeyUserStatusUncaught)
 	}
 
@@ -1430,7 +1421,7 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIdRequest{Id: r.UserID})
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserID})
 	if err != nil {
 		return "", 0, "", 0, err
 	}
@@ -1438,19 +1429,24 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 	persistentUser := persistentUserResponse.User
 
 	// Update user's verificaiton data, metadata and state
-	revisionedUser, err := persistentUser.SetLastLoginAtTimeToNow().VerifyEmailNow().UpdateStatus(user.AccountStatusKeyActive)
+	persistentUser.SetLastLoginAtNow()
+	persistentUser.VerifyEmail()
+	revisionedUser, err := persistentUser.UpdateStatus(userv2.AccountStatusKeyActive)
 	if err != nil {
 		log.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
 	}
 
-	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{User: revisionedUser})
+	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+		ID:     revisionedUser.ID,
+		Status: revisionedUser.Status,
+	})
 	if err != nil {
 		log.Error("system-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
 	}
 
-	newTokenDetails, err := s.AuthService.CreateToken(ctx, &UpdateUserResponse.User)
+	newTokenDetails, err := s.AuthService.CreateToken(ctx, UpdateUserResponse.User)
 	if err != nil {
 		log.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
@@ -1509,7 +1505,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 
 	response := &CreateUserResponse{}
 
-	newUser, err := s.UserService.CreateUser(ctx, &user.CreateUserRequest{
+	newUser, err := s.UserService.CreateUser(ctx, &userv2.CreateUserRequest{
 		FirstName: r.FirstName,
 		LastName:  r.LastName,
 		Email:     r.Email,
@@ -1606,7 +1602,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 
 // CreateInitalLoginToken creates token used to initiate login flow for user passed
 // TODO: Create tests
-func (s *Service) CreateInitalLoginToken(ctx context.Context, user *user.User, isDashboardRequest bool, requestUrl string) (string, error) {
+func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.UniversalUser, isDashboardRequest bool, requestUrl string) (string, error) {
 
 	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
 		zap.AddStacktrace(zap.DPanicLevel),
@@ -1646,7 +1642,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
-	user := &r.User
+	user := r.User
 
 	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, user)
 	if err != nil {
@@ -1662,8 +1658,8 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 
 	// Beging email sending process
 	err = s.EmailManager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailRequest{
-		FirstName:          user.FirstName,
-		LastName:           user.LastName,
+		FirstName:          user.PersonalInfo.FirstName,
+		LastName:           user.PersonalInfo.LastName,
 		Email:              user.Email,
 		Token:              tokenDetails.EmailVerificationToken,
 		IsDashboardRequest: r.IsDashboardRequest,
@@ -1701,14 +1697,14 @@ func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) boo
 	)
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx,
-		&user.GetUserByIdRequest{Id: userID},
+		&userv2.GetUserByIDRequest{ID: userID},
 	)
 	if err != nil {
 		log.Warn("live-status-check-failure", zap.String("user-id", userID), zap.Error(err))
 		return false
 	}
 
-	if persistentUserResponse.User.Status == user.AccountStatusKeyActive {
+	if persistentUserResponse.User.Status == userv2.AccountStatusKeyActive {
 		return true
 	}
 
