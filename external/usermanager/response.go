@@ -2,22 +2,22 @@ package usermanager
 
 import (
 	"github.com/ooaklee/ghatd/external/contacter"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // GetUserMicroProfileResponse holds response data for GetUserMicroProfile request
 type GetUserMicroProfileResponse struct {
-	*user.GetMicroProfileResponse
+	*userv2.GetUserMicroProfileResponse
 }
 
 // GetUserProfileResponse holds response data for GetUserProfile request
 type GetUserProfileResponse struct {
-	*user.GetProfileResponse
+	*userv2.GetUserProfileResponse
 }
 
 // UpdateUserProfileResponse holds response data for UpdateUserProfile request
 type UpdateUserProfileResponse struct {
-	*user.UpdateUserResponse
+	*userv2.UpdateUserResponse
 }
 
 // CreateCommsResponse holds the response from creating a comms

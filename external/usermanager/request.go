@@ -2,7 +2,7 @@ package usermanager
 
 import (
 	"github.com/ooaklee/ghatd/external/contacter"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // GetUserMicroProfileRequest holds all the data needed to action request
@@ -27,7 +27,7 @@ type UpdateUserProfileRequest struct {
 	// UserId the ID of the user requesting their profile
 	UserId string
 
-	*user.UpdateUserRequest
+	*userv2.UpdateUserRequest
 }
 
 // DeleteUserPermanentlyRequest holds all the data needed to delete user and resources
