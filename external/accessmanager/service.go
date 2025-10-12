@@ -1533,7 +1533,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
 	}
 
-	// handle associating pre-registered subscriptions if any
+	// handle associating pre-registered subscriptions and billing events if any
 	if s.BillingService != nil {
 		log.Info("checking-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
 		unassociatedSubResp, err := s.BillingService.GetUnassociatedSubscriptions(ctx, &billing.GetUnassociatedSubscriptionsRequest{
