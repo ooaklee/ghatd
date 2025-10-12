@@ -39,6 +39,8 @@ type BillingService interface {
 	CreateSubscription(ctx context.Context, req *billing.CreateSubscriptionRequest) (*billing.CreateSubscriptionResponse, error)
 	UpdateSubscription(ctx context.Context, req *billing.UpdateSubscriptionRequest) (*billing.UpdateSubscriptionResponse, error)
 	CreateBillingEvent(ctx context.Context, req *billing.CreateBillingEventRequest) (*billing.CreateBillingEventResponse, error)
+	GetSubscriptionsByEmail(ctx context.Context, req *billing.GetSubscriptionsByEmailRequest) (*billing.GetSubscriptionsByEmailResponse, error)
+	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
 }
 
 // Service orchestrates webhook processing and billing operations
@@ -75,6 +77,9 @@ func (s *Service) WithUserService(userSvc UserService) *Service {
 func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *ProcessBillingProviderWebhooksRequest) error {
 
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var (
+		subscriptionId string
+	)
 
 	payload, err := s.ProviderRegistry.VerifyAndParseWebhookPayload(ctx, req.ProviderName, req.Request)
 	if err != nil {
@@ -88,31 +93,44 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 		return err
 	}
 
-	subscription, err := s.findOrCreateSubscription(ctx, req.ProviderName, payload, userID)
-	if err != nil {
-		log.Error("failed-to-find-or-create-subscription", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.Any("payload", payload), zap.Error(err))
-		return err
-	}
+	if payload.IsSubscription() {
 
-	if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
-		log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
-		return err
+		subscription, err := s.findOrCreateSubscription(ctx, req.ProviderName, payload, userID)
+		if err != nil {
+			log.Error("failed-to-find-or-create-subscription", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.Any("payload", payload), zap.Error(err))
+			return err
+		}
+
+		if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
+			log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
+			return err
+		}
+
+		subscriptionId = subscription.ID
 	}
 
 	billingEventSuccessfullyCreated := true
-	if err := s.createBillingEvent(ctx, subscription.ID, userID, req.ProviderName, payload); err != nil {
+	if err := s.createBillingEvent(ctx, subscriptionId, userID, req.ProviderName, payload); err != nil {
 		billingEventSuccessfullyCreated = false
-		log.Warn("failed-to-create-billing-event", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
+		log.Warn("failed-to-create-billing-event", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscriptionId), zap.Any("payload", payload), zap.Error(err))
 	}
 
 	// Optional audit logging
 	if s.AuditService != nil {
+
+		eventMessageDetails := ""
+		if payload.IsSubscription() {
+			eventMessageDetails = fmt.Sprintf("Processed %s webhook for subscription %s", req.ProviderName, payload.SubscriptionID)
+		} else {
+			eventMessageDetails = fmt.Sprintf("Processed %s webhook for non-subscription event", req.ProviderName)
+		}
+
 		event := &AuditEvent{
 			EventType:                       payload.EventType,
 			UserID:                          userID,
-			Details:                         fmt.Sprintf("Processed %s webhook for subscription %s", req.ProviderName, payload.SubscriptionID),
+			Details:                         eventMessageDetails,
 			OccurredAt:                      time.Now(),
-			BillingSubscriptionId:           subscription.ID,
+			BillingSubscriptionId:           subscriptionId,
 			Provider:                        req.ProviderName,
 			BillingEventSuccessfullyCreated: billingEventSuccessfullyCreated,
 		}
@@ -166,6 +184,30 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	}
 
 	// Check if user has any subscriptions
+	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
+		log.Info("no-active-subscription-with-user-id-falling-back-to-user-email", logFields...)
+		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: req.UserID})
+		if err == nil {
+			emailSubsResp, _ := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: userResp.User.Email})
+			if len(emailSubsResp.Subscriptions) > 0 {
+				log.Info("found-email-based-subscription-associating-with-user", append(logFields, zap.String("email", userResp.User.Email), zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)))...)
+				// Associate found subscriptions with user
+				_, _ = s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
+					UserID: req.UserID,
+					Email:  userResp.User.Email,
+				})
+
+				// Re-query to get updated results
+				subscriptionsResp, err = s.BillingService.GetSubscriptions(ctx, &billing.GetSubscriptionsRequest{
+					ForUserIDs: []string{req.UserID},
+					PerPage:    1,
+					Page:       1,
+					Order:      "created_at_desc",
+				})
+			}
+		}
+	}
+
 	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
 		log.Info("no-active-subscription-found", logFields...)
 		return &GetUserSubscriptionStatusResponse{
@@ -338,8 +380,9 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 	return nil
 }
 
-// resolveUserID attempts to find or create a user ID from the webhook payload
-// It attempts to find this from the email located in the payload or existing subscription
+// resolveUserID attempts to resolve the user ID associated with a payment provider webhook payload.
+// note that this may return an empty user ID if only an email is available in the payload but no user
+// is found with that email
 func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.WebhookPayload) (string, error) {
 
 	var (
@@ -366,31 +409,15 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 		}
 	}
 
-	log.Warn("unable-to-find-user-id-falling-back-to-payload-email", zap.String("payload-email", payload.CustomerEmail), zap.Error(err))
+	// if email is missing we need to error out as we have no way to identify the user
+	if payload.CustomerEmail == "" {
+		log.Warn("unable-to-identify-user-no-email-in-payload", zap.String("subscription-id", payload.SubscriptionID), zap.String("customer-id", payload.CustomerID))
+		return "", errors.New(ErrKeyBillingManagerNoUserIdentifyingInformationInPayload)
+	}
 
-	// ## THOUGHTS
-	//
-	// For pre-registration purchases, we might not have a user yet
-	// In this case, we can store it with the email and associate it later
-	// For now, we'll return an error indicating the user needs to be created
-	//
-	// ## TODO
-	//
-	// Update this to create a pre-registration user if needed
-	// Would need to support PRE_REGISTERED status in user v2
-	// PRE_REGISTERED users must complete registration upon login.
-	// We should send back an error with metadata that gives the email
-	// The user will then make a call to "/api/ams/v2/complete-signup"
-	//  with email, first name, last name, password, etc., which is needed
-	//
-	// ## OR
-	//
-	// We are update our subscriptions and billing events to support either
-	// an email address or a user ID. This change allows us to create subscriptions
-	// and events without requiring a user ID initially, and we can associate them
-	// with a user ID later. Consequently, when searching for subscriptions or events,
-	// we will need to search by email if a user ID is not available.
-	return "", errors.New(ErrKeyBillingManagerUnableToResolveUserId)
+	log.Info("no-user-found-will-store-subscription-with-email-only", zap.String("email", payload.CustomerEmail))
+
+	return "", nil
 }
 
 // findOrCreateSubscription finds an existing subscription or creates a new one
@@ -432,10 +459,16 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 	}
 
 	logFields := []zap.Field{
-		zap.String("user-id", userID),
 		zap.String("provider", providerName),
 		zap.String("subscription-id", payload.SubscriptionID),
 		zap.String("email", payload.CustomerEmail),
+	}
+
+	// Add user-id to logs if present, otherwise note it's email-only
+	if userID != "" {
+		logFields = append(logFields, zap.String("user-id", userID))
+	} else {
+		logFields = append(logFields, zap.String("user-id", "email-only-subscription"))
 	}
 
 	if nextBillingDate != nil {
@@ -539,6 +572,7 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 		Amount:                   payload.Amount,
 		Currency:                 payload.Currency,
 		PlanName:                 payload.PlanName,
+		Email:                    payload.CustomerEmail,
 		ReceiptURL:               payload.ReceiptURL,
 		RawPayload:               payload.RawPayload,
 		EventTime:                *eventTime,

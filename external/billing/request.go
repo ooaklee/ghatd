@@ -2,8 +2,6 @@ package billing
 
 import (
 	"time"
-
-	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
 // CreateSubscriptionRequest contains data for creating a subscription
@@ -27,13 +25,6 @@ type CreateSubscriptionRequest struct {
 	Metadata                 map[string]interface{}
 }
 
-// CreateSubscriptionResponse holds everything needed to return
-// the response to creating a subscription
-type CreateSubscriptionResponse struct {
-	// Subscription is the subscription that was created
-	Subscription *Subscription `json:"subscription"`
-}
-
 // UpdateSubscriptionRequest contains data for updating a subscription
 type UpdateSubscriptionRequest struct {
 	ID                 string
@@ -50,13 +41,6 @@ type UpdateSubscriptionRequest struct {
 	CancelURL          *string
 	UpdateURL          *string
 	Metadata           map[string]interface{}
-}
-
-// UpdateSubscriptionResponse holds everything needed to return
-// the response to updating a subscription
-type UpdateSubscriptionResponse struct {
-	// Subscription is the subscription that was updated
-	Subscription *Subscription `json:"subscription"`
 }
 
 // GetTotalSubscriptionsRequest holds everything needed to make
@@ -170,52 +154,11 @@ type GetSubscriptionsRequest struct {
 	CreatedAtTo string `query:"created_at_to"`
 }
 
-// GetSubscriptionsResponse holds everything needed to return
-// the response to get subscriptions
-type GetSubscriptionsResponse struct {
-	Subscriptions []Subscription `json:"subscriptions"`
-
-	// Total number of subscriptions found that matched provided
-	// filters
-	Total int
-
-	// TotalPages total pages available, based on the provided
-	// filters and resources per page
-	TotalPages int
-
-	// PerPage number of subscriptions set to be returned per page
-	PerPage int
-
-	// Page specifies the page results were taken from. Default 1.
-	Page int
-}
-
-// GetMetaData returns a map containing metadata about the GetSubscriptionsResponse,
-// including the number of resources per page, total resources, total pages,
-// and the current page.
-func (g *GetSubscriptionsResponse) GetMetaData() map[string]interface{} {
-	var responseMap = make(map[string]interface{})
-
-	responseMap[string(toolbox.ResponseMetaKeyResourcePerPage)] = g.PerPage
-	responseMap[string(toolbox.ResponseMetaKeyTotalResources)] = g.Total
-	responseMap[string(toolbox.ResponseMetaKeyTotalPages)] = g.TotalPages
-	responseMap[string(toolbox.ResponseMetaKeyPage)] = g.Page
-
-	return responseMap
-}
-
 // GetSubscriptionByIDRequest holds everything needed to make
 // the request to get a subscription by ID
 type GetSubscriptionByIDRequest struct {
 	// ID is the internal unique identifier
 	ID string
-}
-
-// GetSubscriptionByIDResponse holds everything needed to return
-// the response to getting a subscription by ID
-type GetSubscriptionByIDResponse struct {
-	// Subscription is the subscription that was found
-	Subscription *Subscription `json:"subscription"`
 }
 
 // GetSubscriptionByIntegratorIDRequest holds everything needed to make
@@ -226,13 +169,6 @@ type GetSubscriptionByIntegratorIDRequest struct {
 
 	// IntegratorSubscriptionID is the provider's subscription ID
 	IntegratorSubscriptionID string
-}
-
-// GetSubscriptionByIntegratorIDResponse holds everything needed to return
-// the response to getting a subscription by integrator subscription ID
-type GetSubscriptionByIntegratorIDResponse struct {
-	// Subscription is the subscription that was found
-	Subscription *Subscription `json:"subscription"`
 }
 
 // CancelSubscriptionRequest holds everything needed to make
@@ -248,28 +184,12 @@ type CancelSubscriptionRequest struct {
 	Status string
 }
 
-// CancelSubscriptionResponse holds everything needed to return
-// the response to cancelling a subscription
-type CancelSubscriptionResponse struct {
-	// Subscription is the subscription that was cancelled
-	Subscription *Subscription `json:"subscription"`
-}
-
 // DeleteSubscriptionRequest holds everything needed to make
 // the request to delete a subscription
 type DeleteSubscriptionRequest struct {
 	// ID is the internal unique identifier
 	ID string
 }
-
-// DeleteSubscriptionResponse holds everything needed to return
-// the response to deleting a subscription
-type DeleteSubscriptionResponse struct {
-	// Success indicates whether the deletion was successful
-	Success bool `json:"success"`
-}
-
-//
 
 // GetTotalBillingEventsRequest holds everything needed to make
 // the request to get the total count of billing event from repository
@@ -380,38 +300,89 @@ type GetBillingEventsRequest struct {
 	CreatedAtTo string `query:"created_at_to"`
 }
 
-// GetBillingEventsResponse holds everything needed to return
-// the response to get billing events
-type GetBillingEventsResponse struct {
-	BillingEvents []BillingEvent `json:"billing_events"`
-
-	// Total number of billing event found that matched provided
-	// filters
-	Total int
-
-	// TotalPages total pages available, based on the provided
-	// filters and resources per page
-	TotalPages int
-
-	// PerPage number of billing event set to be returned per page
-	PerPage int
-
-	// Page specifies the page results were taken from. Default 1.
-	Page int
+// GetSubscriptionsByEmailRequest holds everything needed to make
+// the request to get subscriptions by email
+type GetSubscriptionsByEmailRequest struct {
+	// Email is the email address to search for
+	Email string
 }
 
-// GetMetaData returns a map containing metadata about the GetBillingEventResponse,
-// including the number of resources per page, total resources, total pages,
-// and the current page.
-func (g *GetBillingEventsResponse) GetMetaData() map[string]interface{} {
-	var responseMap = make(map[string]interface{})
+// GetBillingEventsByEmailRequest holds everything needed to make
+// the request to get billing events by email
+type GetBillingEventsByEmailRequest struct {
+	// Email is the email address to search for
+	Email string
+}
 
-	responseMap[string(toolbox.ResponseMetaKeyResourcePerPage)] = g.PerPage
-	responseMap[string(toolbox.ResponseMetaKeyTotalResources)] = g.Total
-	responseMap[string(toolbox.ResponseMetaKeyTotalPages)] = g.TotalPages
-	responseMap[string(toolbox.ResponseMetaKeyPage)] = g.Page
+// AssociateSubscriptionsWithUserRequest holds everything needed to make
+// the request to associate subscriptions with a user
+type AssociateSubscriptionsWithUserRequest struct {
+	// UserID is the user ID to associate subscriptions with
+	UserID string
 
-	return responseMap
+	// Email is the email address to find subscriptions for
+	Email string
+}
+
+// GetUnassociatedSubscriptionsRequest holds everything needed to make
+// the request to get unassociated subscriptions
+type GetUnassociatedSubscriptionsRequest struct {
+	// IntegratorName optionally filters by payment provider
+	IntegratorName string
+
+	// Email optionally filters by email address
+	Email string
+
+	// CreatedAtFrom optionally filters subscriptions created from this date
+	CreatedAtFrom string
+
+	// CreatedAtTo optionally filters subscriptions created up to this date
+	CreatedAtTo string
+
+	// Limit optionally limits the number of results (default: 100)
+	Limit int
+}
+
+// UpdateSubscriptionUserIDRequest holds everything needed to make
+// the request to update a subscription's user ID
+type UpdateSubscriptionUserIDRequest struct {
+	// SubscriptionID is the internal subscription ID
+	SubscriptionID string
+
+	// UserID is the new user ID to associate with the subscription
+	UserID string
+}
+
+// AssociateBillingEventsWithUserRequest holds everything needed to make
+// the request to associate billing events with a user
+type AssociateBillingEventsWithUserRequest struct {
+	// UserID is the user ID to associate billing events with
+	UserID string
+
+	// Email is the email address to find billing events for
+	Email string
+}
+
+// GetUnassociatedBillingEventsRequest holds everything needed to make
+// the request to get unassociated billing events
+type GetUnassociatedBillingEventsRequest struct {
+	// IntegratorName optionally filters by payment provider
+	IntegratorName string
+
+	// Email optionally filters by email address
+	Email string
+
+	// EventTypes optionally filters by event types
+	EventTypes []string
+
+	// CreatedAtFrom optionally filters billing events created from this date
+	CreatedAtFrom string
+
+	// CreatedAtTo optionally filters billing events created up to this date
+	CreatedAtTo string
+
+	// Limit optionally limits the number of results (default: 100)
+	Limit int
 }
 
 // CreateBillingEventRequest holds everything needed to make
@@ -419,6 +390,7 @@ func (g *GetBillingEventsResponse) GetMetaData() map[string]interface{} {
 type CreateBillingEventRequest struct {
 	SubscriptionID           string
 	UserID                   string
+	Email                    string
 	EventType                string
 	Integrator               string
 	IntegratorEventID        string

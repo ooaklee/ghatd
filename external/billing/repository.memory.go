@@ -230,6 +230,189 @@ func (m *InMemoryRepository) GetFirstSuccessfulBillingEventWithPlanNameBySubscri
 	return firstEvent, nil
 }
 
+// GetSubscriptionsByEmail retrieves all subscriptions for a given email address
+func (m *InMemoryRepository) GetSubscriptionsByEmail(ctx context.Context, email string) ([]Subscription, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(email)
+
+	var subscriptions []Subscription
+	for _, sub := range m.store.Subscriptions {
+		if toolbox.StringStandardisedToLower(sub.Email) == standardisedEmail {
+			subscriptions = append(subscriptions, *sub)
+		}
+	}
+
+	return subscriptions, nil
+}
+
+// GetBillingEventsByEmail retrieves all billing events for a given email address
+func (m *InMemoryRepository) GetBillingEventsByEmail(ctx context.Context, email string) ([]BillingEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(email)
+
+	// Query billing events directly by email field
+	// This supports all payment types (subscriptions, donations, shop orders, etc.)
+	var events []BillingEvent
+	for _, event := range m.store.Events {
+		if toolbox.StringStandardisedToLower(event.Email) == standardisedEmail {
+			events = append(events, *event)
+		}
+	}
+
+	return events, nil
+}
+
+// AssociateSubscriptionsWithUser updates all subscriptions with the given email
+// to have the provided user ID. Returns the count of updated subscriptions.
+func (m *InMemoryRepository) AssociateSubscriptionsWithUser(ctx context.Context, userID, email string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(email)
+
+	count := 0
+	for _, sub := range m.store.Subscriptions {
+		// Match subscriptions with the email and empty/null user_id
+		if toolbox.StringStandardisedToLower(sub.Email) == standardisedEmail && sub.UserID == "" {
+			sub.UserID = userID
+			sub.SetUpdatedAtTimeToNow()
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+// GetUnassociatedSubscriptions retrieves subscriptions without a user ID
+func (m *InMemoryRepository) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) ([]Subscription, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var subscriptions []Subscription
+
+	for _, sub := range m.store.Subscriptions {
+		// Check if user_id is empty
+		if sub.UserID == "" {
+			// Apply optional filters
+			if req.IntegratorName != "" && sub.Integrator != req.IntegratorName {
+				continue
+			}
+
+			if req.Email != "" && toolbox.StringStandardisedToLower(sub.Email) != toolbox.StringStandardisedToLower(req.Email) {
+				continue
+			}
+
+			if req.CreatedAtFrom != "" && sub.CreatedAt < req.CreatedAtFrom {
+				continue
+			}
+
+			if req.CreatedAtTo != "" && sub.CreatedAt > req.CreatedAtTo {
+				continue
+			}
+
+			subscriptions = append(subscriptions, *sub)
+
+			// Check limit
+			if len(subscriptions) >= req.Limit {
+				break
+			}
+		}
+	}
+
+	return subscriptions, nil
+}
+
+// UpdateSubscriptionUserID updates the user ID for a specific subscription
+func (m *InMemoryRepository) UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	sub, ok := m.store.Subscriptions[subscriptionID]
+	if !ok {
+		return nil, nil, errors.New(ErrKeyBillingSubscriptionNotFound)
+	}
+
+	// Update the user_id and updated_at
+	originalSub := *sub
+	sub.UserID = userID
+	sub.SetUpdatedAtTimeToNow()
+
+	return sub, &originalSub, nil
+}
+
+// AssociateBillingEventsWithUser updates all billing events with the given email
+// to have the provided user ID. Returns the count of updated billing events.
+func (m *InMemoryRepository) AssociateBillingEventsWithUser(ctx context.Context, userID, email string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(email)
+
+	count := 0
+	for _, event := range m.store.Events {
+		// Match billing events with the email and empty/null user_id
+		if toolbox.StringStandardisedToLower(event.Email) == standardisedEmail && event.UserID == "" {
+			event.UserID = userID
+			event.SetUpdatedAtTimeToNow()
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+// GetUnassociatedBillingEvents retrieves billing events without a user ID
+func (m *InMemoryRepository) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) ([]BillingEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var events []BillingEvent
+
+	for _, event := range m.store.Events {
+		// Check if user_id is empty
+		if event.UserID == "" {
+			// Apply optional filters
+			if req.IntegratorName != "" && event.Integrator != req.IntegratorName {
+				continue
+			}
+
+			if len(req.EventTypes) > 0 && !contains(req.EventTypes, event.EventType) {
+				continue
+			}
+
+			// Filter by email directly on billing event
+			if req.Email != "" && toolbox.StringStandardisedToLower(event.Email) != toolbox.StringStandardisedToLower(req.Email) {
+				continue
+			}
+
+			if req.CreatedAtFrom != "" && event.CreatedAt < req.CreatedAtFrom {
+				continue
+			}
+
+			if req.CreatedAtTo != "" && event.CreatedAt > req.CreatedAtTo {
+				continue
+			}
+
+			events = append(events, *event)
+
+			// Check limit
+			if len(events) >= req.Limit {
+				break
+			}
+		}
+	}
+
+	return events, nil
+}
+
 // Helper methods for filtering
 
 func (m *InMemoryRepository) matchesSubscriptionFilter(sub *Subscription, req *GetTotalSubscriptionsRequest) bool {

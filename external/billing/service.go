@@ -3,10 +3,18 @@ package billing
 import (
 	"context"
 
+	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
+
+	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 )
+
+// AuditService expected methods of a valid audit service
+type AuditService interface {
+	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
+}
 
 // billingEventsRepository is the expected methods needed to
 // interact with the database
@@ -15,6 +23,9 @@ type billingEventsRepository interface {
 	GetBillingEvents(ctx context.Context, req *GetBillingEventsRequest) ([]BillingEvent, error)
 	CreateBillingEvent(ctx context.Context, newEvent *BillingEvent) (*BillingEvent, error)
 	GetBillingEventByID(ctx context.Context, eventID string) (*BillingEvent, error)
+	GetBillingEventsByEmail(ctx context.Context, email string) ([]BillingEvent, error)
+	AssociateBillingEventsWithUser(ctx context.Context, userID, email string) (int, error)
+	GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) ([]BillingEvent, error)
 }
 
 // subscriptionRepository is the expected methods needed to
@@ -27,12 +38,17 @@ type subscriptionRepository interface {
 	GetSubscriptionByIntegratorID(ctx context.Context, integratorName, integratorSubscriptionID string) (*Subscription, error)
 	UpdateSubscription(ctx context.Context, subscription *Subscription) (*Subscription, error)
 	DeleteSubscription(ctx context.Context, subscriptionID string) error
+	GetSubscriptionsByEmail(ctx context.Context, email string) ([]Subscription, error)
+	AssociateSubscriptionsWithUser(ctx context.Context, userID, email string) (int, error)
+	GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) ([]Subscription, error)
+	UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error)
 }
 
 // Service represents the billing service
 type Service struct {
 	billingEventsRepository billingEventsRepository
 	subscriptionRepository  subscriptionRepository
+	AuditService            AuditService
 }
 
 // NewService returns a new instance of the billing service
@@ -41,6 +57,12 @@ func NewService(billingEventsRepository billingEventsRepository, subscriptionRep
 		billingEventsRepository: billingEventsRepository,
 		subscriptionRepository:  subscriptionRepository,
 	}
+}
+
+// WithAuditService adds audit logging capability
+func (s *Service) WithAuditService(audit AuditService) *Service {
+	s.AuditService = audit
+	return s
 }
 
 // CreateSubscription creates a new subscription
@@ -349,6 +371,7 @@ func (s *Service) CreateBillingEvent(ctx context.Context, req *CreateBillingEven
 		newEvent = &BillingEvent{
 			SubscriptionID:           req.SubscriptionID,
 			UserID:                   req.UserID,
+			Email:                    toolbox.StringStandardisedToLower(req.Email),
 			EventType:                req.EventType,
 			Integrator:               req.Integrator,
 			IntegratorEventID:        req.IntegratorEventID,
@@ -448,5 +471,263 @@ func (s *Service) GetBillingEvents(ctx context.Context, req *GetBillingEventsReq
 		BillingEvents: paginatedResponse.Resources,
 		Page:          paginatedResponse.Page,
 		PerPage:       paginatedResponse.ResourcePerPage,
+	}, nil
+}
+
+// GetSubscriptionsByEmail retrieves all subscriptions for a given email address
+func (s *Service) GetSubscriptionsByEmail(ctx context.Context, req *GetSubscriptionsByEmailRequest) (*GetSubscriptionsByEmailResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-get-subscriptions-by-email-request", zap.Any("request", req))
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
+
+	subscriptions, err := s.subscriptionRepository.GetSubscriptionsByEmail(ctx, standardisedEmail)
+	if err != nil {
+		log.Error("failed-to-get-subscriptions-by-email-error-getting-subscriptions", zap.Any("request", req), zap.Error(err))
+		return &GetSubscriptionsByEmailResponse{}, err
+	}
+
+	if len(subscriptions) == 0 {
+		log.Debug("get-subscriptions-by-email-no-subscriptions-found", zap.Any("request", req))
+		return &GetSubscriptionsByEmailResponse{
+			Subscriptions: []Subscription{},
+			Total:         0,
+		}, nil
+	}
+
+	log.Debug("get-subscriptions-by-email-request-successful", zap.Any("request", req), zap.Int("count", len(subscriptions)))
+
+	return &GetSubscriptionsByEmailResponse{
+		Subscriptions: subscriptions,
+		Total:         len(subscriptions),
+	}, nil
+}
+
+// GetBillingEventsByEmail retrieves all billing events for a given email address
+func (s *Service) GetBillingEventsByEmail(ctx context.Context, req *GetBillingEventsByEmailRequest) (*GetBillingEventsByEmailResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-get-billing-events-by-email-request", zap.Any("request", req))
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
+
+	events, err := s.billingEventsRepository.GetBillingEventsByEmail(ctx, standardisedEmail)
+	if err != nil {
+		log.Error("failed-to-get-billing-events-by-email-error-getting-events", zap.Any("request", req), zap.Error(err))
+		return &GetBillingEventsByEmailResponse{}, err
+	}
+
+	if len(events) == 0 {
+		log.Debug("get-billing-events-by-email-no-events-found", zap.Any("request", req))
+		return &GetBillingEventsByEmailResponse{
+			BillingEvents: []BillingEvent{},
+			Total:         0,
+		}, nil
+	}
+
+	log.Debug("get-billing-events-by-email-request-successful", zap.Any("request", req), zap.Int("count", len(events)))
+
+	return &GetBillingEventsByEmailResponse{
+		BillingEvents: events,
+		Total:         len(events),
+	}, nil
+}
+
+// AssociateSubscriptionsWithUser associates all subscriptions with a given email to a user ID
+func (s *Service) AssociateSubscriptionsWithUser(ctx context.Context, req *AssociateSubscriptionsWithUserRequest) (*AssociateSubscriptionsWithUserResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-associate-subscriptions-with-user-request", zap.Any("request", req))
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
+
+	count, err := s.subscriptionRepository.AssociateSubscriptionsWithUser(ctx, req.UserID, standardisedEmail)
+	if err != nil {
+		log.Error("failed-to-associate-subscriptions-with-user-error-associating-subscriptions", zap.Any("request", req), zap.Error(err))
+		return &AssociateSubscriptionsWithUserResponse{}, err
+	}
+
+	log.Info("associate-subscriptions-with-user-request-successful",
+		zap.String("user-id", req.UserID),
+		zap.String("email", req.Email),
+		zap.Int("associated-count", count))
+
+	return &AssociateSubscriptionsWithUserResponse{
+		AssociatedCount: count,
+		Success:         true,
+	}, nil
+}
+
+// AssociateBillingEventsWithUser associates all billing events with a given email to a user ID
+func (s *Service) AssociateBillingEventsWithUser(ctx context.Context, req *AssociateBillingEventsWithUserRequest) (*AssociateBillingEventsWithUserResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-associate-billing-events-with-user-request", zap.Any("request", req))
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
+
+	count, err := s.billingEventsRepository.AssociateBillingEventsWithUser(ctx, req.UserID, standardisedEmail)
+	if err != nil {
+		log.Error("failed-to-associate-billing-events-with-user-error-associating-events", zap.Any("request", req), zap.Error(err))
+		return &AssociateBillingEventsWithUserResponse{}, err
+	}
+
+	log.Info("associate-billing-events-with-user-request-successful",
+		zap.String("user-id", req.UserID),
+		zap.String("email", req.Email),
+		zap.Int("associated-count", count))
+
+	return &AssociateBillingEventsWithUserResponse{
+		AssociatedCount: count,
+		Success:         true,
+	}, nil
+}
+
+// GetUnassociatedSubscriptions finds subscriptions without a UserID
+// Useful for monitoring and reporting orphaned subscriptions
+func (s *Service) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) (*GetUnassociatedSubscriptionsResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-get-unassociated-subscriptions-request", zap.Any("request", req))
+
+	// Set default limit if not provided
+	if req.Limit == 0 {
+		req.Limit = 100
+	}
+
+	subscriptions, err := s.subscriptionRepository.GetUnassociatedSubscriptions(ctx, req)
+	if err != nil {
+		log.Error("failed-to-get-unassociated-subscriptions-error-getting-subscriptions", zap.Any("request", req), zap.Error(err))
+		return &GetUnassociatedSubscriptionsResponse{}, err
+	}
+
+	if len(subscriptions) == 0 {
+		log.Debug("get-unassociated-subscriptions-no-subscriptions-found", zap.Any("request", req))
+		return &GetUnassociatedSubscriptionsResponse{
+			Subscriptions: []Subscription{},
+			Total:         0,
+		}, nil
+	}
+
+	log.Info("get-unassociated-subscriptions-request-successful",
+		zap.Any("request", req),
+		zap.Int("count", len(subscriptions)))
+
+	return &GetUnassociatedSubscriptionsResponse{
+		Subscriptions: subscriptions,
+		Total:         len(subscriptions),
+	}, nil
+}
+
+// GetUnassociatedBillingEvents finds billing events without a UserID
+// Useful for monitoring and reporting orphaned billing events
+func (s *Service) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) (*GetUnassociatedBillingEventsResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-get-unassociated-billing-events-request", zap.Any("request", req))
+
+	// Set default limit if not provided
+	if req.Limit == 0 {
+		req.Limit = 100
+	}
+
+	events, err := s.billingEventsRepository.GetUnassociatedBillingEvents(ctx, req)
+	if err != nil {
+		log.Error("failed-to-get-unassociated-billing-events-error-getting-events", zap.Any("request", req), zap.Error(err))
+		return &GetUnassociatedBillingEventsResponse{}, err
+	}
+
+	if len(events) == 0 {
+		log.Debug("get-unassociated-billing-events-no-events-found", zap.Any("request", req))
+		return &GetUnassociatedBillingEventsResponse{
+			BillingEvents: []BillingEvent{},
+			Total:         0,
+		}, nil
+	}
+
+	log.Info("get-unassociated-billing-events-request-successful",
+		zap.Any("request", req),
+		zap.Int("count", len(events)))
+
+	return &GetUnassociatedBillingEventsResponse{
+		BillingEvents: events,
+		Total:         len(events),
+	}, nil
+}
+
+// UpdateSubscriptionUserID updates the UserID for a specific subscription
+// Used for manual association by admins
+func (s *Service) UpdateSubscriptionUserID(ctx context.Context, req *UpdateSubscriptionUserIDRequest) (*UpdateSubscriptionUserIDResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-update-subscription-user-id-request", zap.Any("request", req))
+
+	updatedSubscription, oldSubscription, err := s.subscriptionRepository.UpdateSubscriptionUserID(ctx, req.SubscriptionID, req.UserID)
+	if err != nil {
+		log.Error("failed-to-update-subscription-user-id-error-updating-subscription", zap.Any("request", req), zap.Error(err))
+		return &UpdateSubscriptionUserIDResponse{}, err
+	}
+
+	if s.AuditService != nil {
+
+		requestingUserId := accessmanagerhelpers.AcquireFrom(ctx)
+
+		// Log audit even
+		err = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			ActorId:    requestingUserId,
+			Action:     AuditActionBillingSubscriptionUpdateUserID,
+			TargetId:   updatedSubscription.ID,
+			TargetType: AuditTypeBillingSubscription,
+			Domain:     "billing",
+			Details: map[string]interface{}{
+				"new_user_id":      req.UserID,
+				"previous_user_id": oldSubscription.UserID,
+			},
+		})
+		if err != nil {
+			log.Error("failed-to-log-audit-event-after-updating-subscription-user-id", zap.Any("request", req), zap.Error(err))
+		}
+	}
+
+	log.Info("update-subscription-user-id-request-successful",
+		zap.String("subscription-id", req.SubscriptionID),
+		zap.String("user-id", req.UserID))
+
+	return &UpdateSubscriptionUserIDResponse{
+		Subscription: updatedSubscription,
+		Success:      true,
 	}, nil
 }

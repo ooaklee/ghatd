@@ -45,4 +45,8 @@ const (
 
 	// ErrKeyBillingManagerUserUnauthorisedToCarryOutOperation is returned when a user is not authorised to perform an operation
 	ErrKeyBillingManagerUserUnauthorisedToCarryOutOperation = "BillingManagerUserUnauthorisedToCarryOutOperation"
+
+	// ErrKeyBillingManagerNoUserIdentifyingInformationInPayload is returned when unable to find a user from the provider's payload as no email is present
+	// so we have no way to identify the user
+	ErrKeyBillingManagerNoUserIdentifyingInformationInPayload = "BillingManagerNoUserIdentifyingInformationInPayload"
 )

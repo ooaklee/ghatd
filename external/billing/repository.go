@@ -14,8 +14,8 @@ import (
 // BillingEventsCollection collection name for billing events
 const BillingEventsCollection string = "billing_events"
 
-// BillingSubscriptionCollection collection name for billing subscriptions
-const BillingSubscriptionCollection string = "billing_subscriptions"
+// BillingSubscriptionsCollection collection name for billing subscriptions
+const BillingSubscriptionsCollection string = "billing_subscriptions"
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
@@ -78,7 +78,7 @@ func (r *Repository) GetBillingSubscriptionsCollection(ctx context.Context) (*mo
 	if err != nil {
 		return nil, err
 	}
-	collection := db.Collection(BillingSubscriptionCollection)
+	collection := db.Collection(BillingSubscriptionsCollection)
 
 	return collection, nil
 }
@@ -603,6 +603,297 @@ func (r *Repository) GetFirstSuccessfulBillingEventWithPlanNameBySubscriptionId(
 	}
 
 	return &result[0], nil
+}
+
+// GetSubscriptionsByEmail retrieves all subscriptions for a given email address
+func (r *Repository) GetSubscriptionsByEmail(ctx context.Context, email string) ([]Subscription, error) {
+
+	collection, err := r.GetBillingSubscriptionsCollection(ctx)
+	if err != nil {
+		return []Subscription{}, err
+	}
+
+	// Query for subscriptions with the given email
+	// Using standardised email (lowercase) for matching
+	queryFilter := bson.M{
+		"email": toolbox.StringStandardisedToLower(email),
+	}
+
+	// Sort by created_at descending (newest first)
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, opts)
+	if err != nil {
+		return []Subscription{}, err
+	}
+
+	var subscriptions []Subscription
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &subscriptions, "subscriptions")
+	if err != nil {
+		return []Subscription{}, err
+	}
+
+	return subscriptions, nil
+}
+
+// GetBillingEventsByEmail retrieves all billing events for a given email address
+func (r *Repository) GetBillingEventsByEmail(ctx context.Context, email string) ([]BillingEvent, error) {
+
+	collection, err := r.GetBillingEventsCollection(ctx)
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	// Query billing events directly by email field
+	// This supports all payment types (subscriptions, donations, shop orders, etc.)
+	queryFilter := bson.M{
+		"email": toolbox.StringStandardisedToLower(email),
+	}
+
+	// Sort by created_at descending (newest first)
+	opts := options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}})
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, opts)
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	var events []BillingEvent
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &events, "billing events")
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	return events, nil
+}
+
+// AssociateSubscriptionsWithUser updates all subscriptions with the given email
+// to have the provided user ID. Returns the count of updated subscriptions.
+func (r *Repository) AssociateSubscriptionsWithUser(ctx context.Context, userID, email string) (int, error) {
+
+	collection, err := r.GetBillingSubscriptionsCollection(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// Query for subscriptions with the given email and empty/null user_id
+	// Using standardised email (lowercase) for matching
+	queryFilter := bson.M{
+		"email": toolbox.StringStandardisedToLower(email),
+		"$or": []bson.M{
+			{"user_id": ""},
+			{"user_id": bson.M{"$exists": false}},
+			{"user_id": nil},
+		},
+	}
+
+	// Update to set the user_id and updated_at timestamp
+	updateFilter := bson.M{
+		"$set": bson.M{
+			"user_id":    userID,
+			"updated_at": toolbox.TimeNowUTC(),
+		},
+	}
+
+	result, err := collection.UpdateMany(ctx, queryFilter, updateFilter)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(result.ModifiedCount), nil
+}
+
+// GetUnassociatedSubscriptions retrieves subscriptions without a user ID
+func (r *Repository) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) ([]Subscription, error) {
+
+	collection, err := r.GetBillingSubscriptionsCollection(ctx)
+	if err != nil {
+		return []Subscription{}, err
+	}
+
+	// Query for subscriptions with empty/null user_id
+	queryFilter := bson.M{
+		"$or": []bson.M{
+			{"user_id": ""},
+			{"user_id": bson.M{"$exists": false}},
+			{"user_id": nil},
+		},
+	}
+
+	// Add optional filters
+	if req.IntegratorName != "" {
+		queryFilter["integrator"] = req.IntegratorName
+	}
+
+	if req.Email != "" {
+		queryFilter["email"] = toolbox.StringStandardisedToLower(req.Email)
+	}
+
+	if req.CreatedAtFrom != "" {
+		queryFilter["created_at"] = bson.M{"$gte": req.CreatedAtFrom}
+	}
+
+	if req.CreatedAtTo != "" {
+		if existingCreatedAt, ok := queryFilter["created_at"].(bson.M); ok {
+			existingCreatedAt["$lte"] = req.CreatedAtTo
+		} else {
+			queryFilter["created_at"] = bson.M{"$lte": req.CreatedAtTo}
+		}
+	}
+
+	// Sort by created_at descending (newest first) and limit results
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetLimit(int64(req.Limit))
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, opts)
+	if err != nil {
+		return []Subscription{}, err
+	}
+
+	var subscriptions []Subscription
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &subscriptions, "subscriptions")
+	if err != nil {
+		return []Subscription{}, err
+	}
+
+	return subscriptions, nil
+}
+
+// UpdateSubscriptionUserID updates the user ID for a specific subscription
+func (r *Repository) UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error) {
+
+	var oldSubscription Subscription
+	collection, err := r.GetBillingSubscriptionsCollection(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// First, get the subscription to ensure it exists
+	subscription, err := r.GetSubscriptionByID(ctx, subscriptionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Update the user_id and updated_at
+	oldSubscription = *subscription
+	subscription.UserID = userID
+	subscription.SetUpdatedAtTimeToNow()
+
+	// Update in database
+	queryFilter := bson.M{"_id": subscriptionID}
+	updateFilter := bson.M{
+		"$set": bson.M{
+			"user_id":    userID,
+			"updated_at": subscription.UpdatedAt,
+		},
+	}
+
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, updateFilter, "subscription")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return subscription, &oldSubscription, nil
+}
+
+// AssociateBillingEventsWithUser updates all billing events with the given email
+// to have the provided user ID. Returns the count of updated billing events.
+// Works directly with the email field on billing events to support one-off payments.
+func (r *Repository) AssociateBillingEventsWithUser(ctx context.Context, userID, email string) (int, error) {
+
+	collection, err := r.GetBillingEventsCollection(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// Query for billing events with the given email and empty/null user_id
+	// Using standardised email (lowercase) for matching
+	queryFilter := bson.M{
+		"email": toolbox.StringStandardisedToLower(email),
+		"$or": []bson.M{
+			{"user_id": ""},
+			{"user_id": bson.M{"$exists": false}},
+			{"user_id": nil},
+		},
+	}
+
+	// Update to set the user_id and updated_at timestamp
+	updateFilter := bson.M{
+		"$set": bson.M{
+			"user_id":    userID,
+			"updated_at": toolbox.TimeNowUTC(),
+		},
+	}
+
+	result, err := collection.UpdateMany(ctx, queryFilter, updateFilter)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(result.ModifiedCount), nil
+}
+
+// GetUnassociatedBillingEvents retrieves billing events without a user ID
+func (r *Repository) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) ([]BillingEvent, error) {
+
+	collection, err := r.GetBillingEventsCollection(ctx)
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	// Query for billing events with empty/null user_id
+	queryFilter := bson.M{
+		"$or": []bson.M{
+			{"user_id": ""},
+			{"user_id": bson.M{"$exists": false}},
+			{"user_id": nil},
+		},
+	}
+
+	// Add optional filters
+	if req.IntegratorName != "" {
+		queryFilter["integrator"] = req.IntegratorName
+	}
+
+	if len(req.EventTypes) > 0 {
+		queryFilter["event_type"] = bson.M{"$in": req.EventTypes}
+	}
+
+	// Handle email filter - work directly with billing event email field
+	if req.Email != "" {
+		queryFilter["email"] = toolbox.StringStandardisedToLower(req.Email)
+	}
+
+	if req.CreatedAtFrom != "" {
+		queryFilter["created_at"] = bson.M{"$gte": req.CreatedAtFrom}
+	}
+
+	if req.CreatedAtTo != "" {
+		if existingCreatedAt, ok := queryFilter["created_at"].(bson.M); ok {
+			existingCreatedAt["$lte"] = req.CreatedAtTo
+		} else {
+			queryFilter["created_at"] = bson.M{"$lte": req.CreatedAtTo}
+		}
+	}
+
+	// Sort by created_at descending (newest first) and limit results
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetLimit(int64(req.Limit))
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, opts)
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	var events []BillingEvent
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &events, "billing_events")
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	return events, nil
 }
 
 ///// Private helper functions

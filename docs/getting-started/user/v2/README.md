@@ -9,6 +9,7 @@ The Universal User Model (User v2) was designed to be more flexible and applicab
 
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [MongoDB Setup](#mongodb-setup)
 - [API Endpoints](#api-endpoints)
 - [Migration Guide](#migration-guide)
 - [Configuration Examples](#configuration-examples)
@@ -158,6 +159,199 @@ dept, exists := user.GetExtension("department")
 │  - Business logic methods                               │
 │  - Validation                                           │
 └─────────────────────────────────────────────────────────┘
+```
+
+## MongoDB Setup
+
+### Prerequisites
+
+- MongoDB 4.2 or higher
+- mongo-migrate library: `github.com/xakep666/mongo-migrate`
+- Go mongo driver: `go.mongodb.org/mongo-driver/mongo`
+
+### Installing Dependencies
+
+```bash
+go get github.com/xakep666/mongo-migrate
+go get go.mongodb.org/mongo-driver/mongo
+```
+
+### Running Migrations
+
+Create a migration runner to set up indexes for the users collection:
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "os"
+    
+    userMigration "github.com/ooaklee/ghatd/external/user/v2/migrations"
+    migrate "github.com/xakep666/mongo-migrate"
+    "go.mongodb.org/mongo-driver/mongo"
+    "go.mongodb.org/mongo-driver/mongo/options"
+)
+
+func main() {
+    // Connect to MongoDB
+    mongoURI := os.Getenv("MONGODB_URI")
+    if mongoURI == "" {
+        mongoURI = "mongodb://localhost:27017"
+    }
+    
+    client, err := mongo.Connect(context.Background(), 
+        options.Client().ApplyURI(mongoURI))
+    if err != nil {
+        log.Fatalf("Failed to connect to MongoDB: %v", err)
+    }
+    defer func() {
+        if err := client.Disconnect(context.Background()); err != nil {
+            log.Printf("Error disconnecting: %v", err)
+        }
+    }()
+    
+    // Select database
+    db := client.Database("your_database_name")
+    
+    // Initialize migration system
+    migrate.SetDatabase(db)
+    
+    // Register user v2 indexes migration
+    migrate.Register(
+        userMigration.InitUsersIndexesUp,
+        userMigration.InitUsersIndexesDown,
+    )
+    
+    // Run migrations
+    log.Println("Running user v2 indexes migrations...")
+    if err := migrate.Up(migrate.AllAvailable); err != nil {
+        log.Fatalf("Migration failed: %v", err)
+    }
+    
+    log.Println("✓ Migrations completed successfully")
+}
+```
+
+### User Indexes
+
+The following indexes are created for the `users` collection:
+
+| Index Name | Fields | Type | Purpose | Example Query |
+|------------|--------|------|---------|---------------|
+| `idx_users_email` | `email` | Unique | Fast email lookups and prevent duplicates | `db.users.find({email: "user@example.com"})` |
+| `idx_users_nano_id` | `_nano_id` | Unique, Sparse | Alternative identifier lookups | `db.users.find({_nano_id: "abc123"})` |
+| `idx_users_status` | `status` | Standard | Filter users by status | `db.users.find({status: "ACTIVE"})` |
+| `idx_users_roles` | `roles` | Standard | Role-based queries | `db.users.find({roles: "ADMIN"})` |
+| `idx_users_status_created_at` | `status`, `metadata.created_at` | Compound | Efficient filtered sorting | `db.users.find({status: "ACTIVE"}).sort({created_at: -1})` |
+| `idx_users_email_verified` | `verification.email_verified` | Standard | Filter unverified users | `db.users.find({"verification.email_verified": false})` |
+| `idx_users_created_at` | `metadata.created_at` | Standard (Descending) | Sort by registration date | `db.users.find().sort({"metadata.created_at": -1})` |
+| `idx_users_updated_at` | `metadata.updated_at` | Standard (Descending) | Sort by last update | `db.users.find().sort({"metadata.updated_at": -1})` |
+| `idx_users_last_login_at` | `metadata.last_login_at` | Standard (Descending) | Activity tracking | `db.users.find().sort({"metadata.last_login_at": -1})` |
+| `idx_users_activated_at` | `metadata.activated_at` | Standard (Descending) | Filter activated users | `db.users.find({"metadata.activated_at": {$exists: true}})` |
+| `idx_users_status_changed_at` | `metadata.status_changed_at` | Standard (Descending) | Status change tracking | `db.users.find().sort({"metadata.status_changed_at": -1})` |
+| `idx_users_email_verified_at` | `verification.email_verified_at` | Standard (Descending) | Verification tracking | `db.users.find().sort({"verification.email_verified_at": -1})` |
+
+### Index Details
+
+**Unique Indexes:**
+- `email` - Ensures no duplicate email addresses
+- `_nano_id` - Ensures no duplicate nano IDs (sparse index, only for users with nano IDs)
+
+**Compound Index:**
+- `status` + `created_at` - Optimizes queries that filter by status and sort by creation date
+
+**Timestamp Indexes:**
+All timestamp fields in the `metadata` object are indexed for efficient sorting and filtering:
+- `created_at` - Registration date
+- `updated_at` - Last modification
+- `last_login_at` - Activity tracking
+- `activated_at` - Activation tracking
+- `status_changed_at` - Status change history
+- `email_verified_at` - Verification history
+
+### Verifying Indexes
+
+After running migrations, verify the indexes were created:
+
+```javascript
+// Connect to MongoDB
+use your_database_name
+
+// Check user indexes
+db.users.getIndexes()
+
+// Check index usage stats
+db.users.aggregate([
+    { $indexStats: {} }
+])
+
+// Example: Find users needing migration (no version or version != 2)
+db.users.find({
+    $or: [
+        { version: { $exists: false } },
+        { version: { $ne: 2 } }
+    ]
+})
+```
+
+### Dropping Indexes (Rollback)
+
+The migration system includes a down function to remove indexes:
+
+```go
+// Rollback user indexes
+if err := userMigration.InitUsersIndexesDown(db); err != nil {
+    log.Printf("Failed to drop user indexes: %v", err)
+}
+```
+
+Or use the migration CLI:
+
+```bash
+# Rollback last migration set
+go run cmd/mongo-migrator/migrator.go down 1
+
+# Rollback all migrations
+go run cmd/mongo-migrator/migrator.go down all
+```
+
+### Performance Considerations
+
+**Index Memory Usage:**
+- Unique indexes on `email` and `_nano_id` are essential for data integrity
+- Timestamp indexes improve sorting performance significantly
+- Compound `status` + `created_at` index optimizes the most common query pattern
+
+**Query Optimization:**
+```javascript
+// Efficient: Uses idx_users_status_created_at compound index
+db.users.find({ status: "ACTIVE" }).sort({ "metadata.created_at": -1 })
+
+// Efficient: Uses idx_users_email unique index
+db.users.find({ email: "user@example.com" })
+
+// Efficient: Uses idx_users_roles index
+db.users.find({ roles: "ADMIN" })
+
+// Efficient: Uses idx_users_email_verified index
+db.users.find({ "verification.email_verified": false })
+```
+
+**Monitoring Index Usage:**
+```javascript
+// Check which indexes are being used most
+db.users.aggregate([
+    { $indexStats: {} },
+    { $sort: { "accesses.ops": -1 } }
+])
+
+// Identify unused indexes (consider removing if ops < 100)
+db.users.aggregate([
+    { $indexStats: {} },
+    { $match: { "accesses.ops": { $lt: 100 } } }
+])
 ```
 
 ## API Endpoints

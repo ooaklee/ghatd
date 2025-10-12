@@ -1,5 +1,16 @@
 package billing
 
+import "github.com/ooaklee/ghatd/external/audit"
+
+const (
+	// AuditActionBillingSubscriptionUpdateUserID is used when a subscription's user ID is updated
+	AuditActionBillingSubscriptionUpdateUserID audit.AuditAction = "BILLING_SUBSCRIPTION_UPDATE_USER_ID"
+	// AuditTypeBillingEvent is used for billing event resources
+	AuditTypeBillingEvent audit.TargetType = "BILLING_EVENT"
+	// AuditTypeBillingSubscription is used for billing subscription resources
+	AuditTypeBillingSubscription audit.TargetType = "BILLING_SUBSCRIPTION"
+)
+
 // Error key definitions for billing operations
 const (
 
@@ -60,11 +71,26 @@ const (
 	// ErrKeyBillingFailedToGetEvents is returned when retrieving billing events from the internal system fails
 	ErrKeyBillingFailedToGetEvents = "BillingFailedToGetEvents"
 
-	// ErrKeyBillingUnauthorizedAccess is returned when unauthorised access to billing information is attempted
-	ErrKeyBillingUnauthorizedAccess = "BillingUnauthorizedAccess"
+	// ErrKeyBillingUnauthorisedAccess is returned when unauthorised access to billing information is attempted
+	ErrKeyBillingUnauthorisedAccess = "BillingUnauthorisedAccess"
 
 	// ErrKeyBillingForbiddenOperation is returned when a forbidden billing operation is attempted
 	ErrKeyBillingForbiddenOperation = "BillingForbiddenOperation"
+
+	// ErrKeyBillingNoSubscriptionsFoundForEmail is returned when no subscriptions are found for an email
+	ErrKeyBillingNoSubscriptionsFoundForEmail = "BillingNoSubscriptionsFoundForEmail"
+
+	// ErrKeyBillingNoEventsFoundForEmail is returned when no billing events are found for an email
+	ErrKeyBillingNoEventsFoundForEmail = "BillingNoEventsFoundForEmail"
+
+	// ErrKeyBillingAssociationFailed is returned when subscription association fails
+	ErrKeyBillingAssociationFailed = "BillingAssociationFailed"
+
+	// ErrKeyBillingNoUnassociatedSubscriptionsFound is returned when no unassociated subscriptions are found
+	ErrKeyBillingNoUnassociatedSubscriptionsFound = "BillingNoUnassociatedSubscriptionsFound"
+
+	// ErrKeyBillingUpdateUserIDFailed is returned when updating user ID fails
+	ErrKeyBillingUpdateUserIDFailed = "BillingUpdateUserIDFailed"
 )
 
 // Subscription status constants
