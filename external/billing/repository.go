@@ -644,28 +644,10 @@ func (r *Repository) GetBillingEventsByEmail(ctx context.Context, email string) 
 		return []BillingEvent{}, err
 	}
 
-	// First, get all subscription IDs for this email
-	subscriptions, err := r.GetSubscriptionsByEmail(ctx, email)
-	if err != nil {
-		return []BillingEvent{}, err
-	}
-
-	// If no subscriptions found, return empty result
-	if len(subscriptions) == 0 {
-		return []BillingEvent{}, nil
-	}
-
-	// Build array of subscription IDs
-	subscriptionIDs := make([]string, len(subscriptions))
-	for i, sub := range subscriptions {
-		subscriptionIDs[i] = sub.IntegratorSubscriptionID
-	}
-
-	// Query for events matching any of the subscription IDs
+	// Query billing events directly by email field
+	// This supports all payment types (subscriptions, donations, shop orders, etc.)
 	queryFilter := bson.M{
-		"integrator_subscription_id": bson.M{
-			"$in": subscriptionIDs,
-		},
+		"email": toolbox.StringStandardisedToLower(email),
 	}
 
 	// Sort by created_at descending (newest first)
@@ -813,6 +795,105 @@ func (r *Repository) UpdateSubscriptionUserID(ctx context.Context, subscriptionI
 	}
 
 	return subscription, &oldSubscription, nil
+}
+
+// AssociateBillingEventsWithUser updates all billing events with the given email
+// to have the provided user ID. Returns the count of updated billing events.
+// Works directly with the email field on billing events to support one-off payments.
+func (r *Repository) AssociateBillingEventsWithUser(ctx context.Context, userID, email string) (int, error) {
+
+	collection, err := r.GetBillingEventsCollection(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// Query for billing events with the given email and empty/null user_id
+	// Using standardised email (lowercase) for matching
+	queryFilter := bson.M{
+		"email": toolbox.StringStandardisedToLower(email),
+		"$or": []bson.M{
+			{"user_id": ""},
+			{"user_id": bson.M{"$exists": false}},
+			{"user_id": nil},
+		},
+	}
+
+	// Update to set the user_id and updated_at timestamp
+	updateFilter := bson.M{
+		"$set": bson.M{
+			"user_id":    userID,
+			"updated_at": toolbox.TimeNowUTC(),
+		},
+	}
+
+	result, err := collection.UpdateMany(ctx, queryFilter, updateFilter)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(result.ModifiedCount), nil
+}
+
+// GetUnassociatedBillingEvents retrieves billing events without a user ID
+func (r *Repository) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) ([]BillingEvent, error) {
+
+	collection, err := r.GetBillingEventsCollection(ctx)
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	// Query for billing events with empty/null user_id
+	queryFilter := bson.M{
+		"$or": []bson.M{
+			{"user_id": ""},
+			{"user_id": bson.M{"$exists": false}},
+			{"user_id": nil},
+		},
+	}
+
+	// Add optional filters
+	if req.IntegratorName != "" {
+		queryFilter["integrator"] = req.IntegratorName
+	}
+
+	if len(req.EventTypes) > 0 {
+		queryFilter["event_type"] = bson.M{"$in": req.EventTypes}
+	}
+
+	// Handle email filter - work directly with billing event email field
+	if req.Email != "" {
+		queryFilter["email"] = toolbox.StringStandardisedToLower(req.Email)
+	}
+
+	if req.CreatedAtFrom != "" {
+		queryFilter["created_at"] = bson.M{"$gte": req.CreatedAtFrom}
+	}
+
+	if req.CreatedAtTo != "" {
+		if existingCreatedAt, ok := queryFilter["created_at"].(bson.M); ok {
+			existingCreatedAt["$lte"] = req.CreatedAtTo
+		} else {
+			queryFilter["created_at"] = bson.M{"$lte": req.CreatedAtTo}
+		}
+	}
+
+	// Sort by created_at descending (newest first) and limit results
+	opts := options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: -1}}).
+		SetLimit(int64(req.Limit))
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, opts)
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	var events []BillingEvent
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &events, "billing_events")
+	if err != nil {
+		return []BillingEvent{}, err
+	}
+
+	return events, nil
 }
 
 ///// Private helper functions

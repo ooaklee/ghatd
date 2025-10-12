@@ -24,6 +24,8 @@ type billingEventsRepository interface {
 	CreateBillingEvent(ctx context.Context, newEvent *BillingEvent) (*BillingEvent, error)
 	GetBillingEventByID(ctx context.Context, eventID string) (*BillingEvent, error)
 	GetBillingEventsByEmail(ctx context.Context, email string) ([]BillingEvent, error)
+	AssociateBillingEventsWithUser(ctx context.Context, userID, email string) (int, error)
+	GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) ([]BillingEvent, error)
 }
 
 // subscriptionRepository is the expected methods needed to
@@ -369,6 +371,7 @@ func (s *Service) CreateBillingEvent(ctx context.Context, req *CreateBillingEven
 		newEvent = &BillingEvent{
 			SubscriptionID:           req.SubscriptionID,
 			UserID:                   req.UserID,
+			Email:                    toolbox.StringStandardisedToLower(req.Email),
 			EventType:                req.EventType,
 			Integrator:               req.Integrator,
 			IntegratorEventID:        req.IntegratorEventID,
@@ -571,6 +574,36 @@ func (s *Service) AssociateSubscriptionsWithUser(ctx context.Context, req *Assoc
 	}, nil
 }
 
+// AssociateBillingEventsWithUser associates all billing events with a given email to a user ID
+func (s *Service) AssociateBillingEventsWithUser(ctx context.Context, req *AssociateBillingEventsWithUserRequest) (*AssociateBillingEventsWithUserResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-associate-billing-events-with-user-request", zap.Any("request", req))
+
+	// Standardise email to lowercase
+	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
+
+	count, err := s.billingEventsRepository.AssociateBillingEventsWithUser(ctx, req.UserID, standardisedEmail)
+	if err != nil {
+		log.Error("failed-to-associate-billing-events-with-user-error-associating-events", zap.Any("request", req), zap.Error(err))
+		return &AssociateBillingEventsWithUserResponse{}, err
+	}
+
+	log.Info("associate-billing-events-with-user-request-successful",
+		zap.String("user-id", req.UserID),
+		zap.String("email", req.Email),
+		zap.Int("associated-count", count))
+
+	return &AssociateBillingEventsWithUserResponse{
+		AssociatedCount: count,
+		Success:         true,
+	}, nil
+}
+
 // GetUnassociatedSubscriptions finds subscriptions without a UserID
 // Useful for monitoring and reporting orphaned subscriptions
 func (s *Service) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) (*GetUnassociatedSubscriptionsResponse, error) {
@@ -608,6 +641,46 @@ func (s *Service) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnas
 	return &GetUnassociatedSubscriptionsResponse{
 		Subscriptions: subscriptions,
 		Total:         len(subscriptions),
+	}, nil
+}
+
+// GetUnassociatedBillingEvents finds billing events without a UserID
+// Useful for monitoring and reporting orphaned billing events
+func (s *Service) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) (*GetUnassociatedBillingEventsResponse, error) {
+	var (
+		log = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	log.Debug("initiating-get-unassociated-billing-events-request", zap.Any("request", req))
+
+	// Set default limit if not provided
+	if req.Limit == 0 {
+		req.Limit = 100
+	}
+
+	events, err := s.billingEventsRepository.GetUnassociatedBillingEvents(ctx, req)
+	if err != nil {
+		log.Error("failed-to-get-unassociated-billing-events-error-getting-events", zap.Any("request", req), zap.Error(err))
+		return &GetUnassociatedBillingEventsResponse{}, err
+	}
+
+	if len(events) == 0 {
+		log.Debug("get-unassociated-billing-events-no-events-found", zap.Any("request", req))
+		return &GetUnassociatedBillingEventsResponse{
+			BillingEvents: []BillingEvent{},
+			Total:         0,
+		}, nil
+	}
+
+	log.Info("get-unassociated-billing-events-request-successful",
+		zap.Any("request", req),
+		zap.Int("count", len(events)))
+
+	return &GetUnassociatedBillingEventsResponse{
+		BillingEvents: events,
+		Total:         len(events),
 	}, nil
 }
 

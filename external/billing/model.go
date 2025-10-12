@@ -138,6 +138,9 @@ type BillingEvent struct {
 	// UserID references the user
 	UserID string `json:"user_id" bson:"user_id"`
 
+	// Email is the customer's email address associated with this billing event
+	Email string `json:"email" bson:"email"`
+
 	// EventType is the type of event (payment.succeeded, subscription.cancelled, etc.)
 	EventType string `json:"event_type" bson:"event_type"`
 

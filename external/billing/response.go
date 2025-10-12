@@ -161,3 +161,23 @@ type UpdateSubscriptionUserIDResponse struct {
 	// Success indicates whether the update was successful
 	Success bool `json:"success"`
 }
+
+// AssociateBillingEventsWithUserResponse holds everything needed to return
+// the response to associating billing events with a user
+type AssociateBillingEventsWithUserResponse struct {
+	// AssociatedCount is the number of billing events that were associated
+	AssociatedCount int `json:"associated_count"`
+
+	// Success indicates whether the association was successful
+	Success bool `json:"success"`
+}
+
+// GetUnassociatedBillingEventsResponse holds everything needed to return
+// the response to getting unassociated billing events
+type GetUnassociatedBillingEventsResponse struct {
+	// BillingEvents is the list of unassociated billing events found
+	BillingEvents []BillingEvent `json:"billing_events"`
+
+	// Total is the total number of unassociated billing events found
+	Total int `json:"total"`
+}

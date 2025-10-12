@@ -102,6 +102,8 @@ type ApitokenService interface {
 type BillingService interface {
 	GetUnassociatedSubscriptions(ctx context.Context, req *billing.GetUnassociatedSubscriptionsRequest) (*billing.GetUnassociatedSubscriptionsResponse, error)
 	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
+	AssociateBillingEventsWithUser(ctx context.Context, req *billing.AssociateBillingEventsWithUserRequest) (*billing.AssociateBillingEventsWithUserResponse, error)
+	GetUnassociatedBillingEvents(ctx context.Context, req *billing.GetUnassociatedBillingEventsRequest) (*billing.GetUnassociatedBillingEventsResponse, error)
 }
 
 // Service holds and manages accessmanager service business logic
@@ -1557,6 +1559,29 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 			}
 		}
 
+		log.Info("checking-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		unassociatedBillingEventsResp, err := s.BillingService.GetUnassociatedBillingEvents(ctx, &billing.GetUnassociatedBillingEventsRequest{
+			Email: newUser.User.Email,
+			Limit: 100,
+		})
+		if err != nil {
+			log.Error("failed-to-check-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(err))
+		} else {
+			if len(unassociatedBillingEventsResp.BillingEvents) > 0 {
+				log.Info("found-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
+				_, billingEventAssociationErr := s.BillingService.AssociateBillingEventsWithUser(ctx, &billing.AssociateBillingEventsWithUserRequest{
+					UserID: newUser.User.ID,
+					Email:  newUser.User.Email,
+				})
+				if billingEventAssociationErr != nil {
+					log.Error("failed-to-associate-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(billingEventAssociationErr))
+				} else {
+					log.Info("successfully-associated-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
+				}
+			} else {
+				log.Info("no-pre-registered-billing-events-found", zap.String("user-id", newUser.User.ID))
+			}
+		}
 	}
 
 	// handle verification email if not disabled

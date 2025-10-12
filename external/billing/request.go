@@ -353,11 +353,44 @@ type UpdateSubscriptionUserIDRequest struct {
 	UserID string
 }
 
+// AssociateBillingEventsWithUserRequest holds everything needed to make
+// the request to associate billing events with a user
+type AssociateBillingEventsWithUserRequest struct {
+	// UserID is the user ID to associate billing events with
+	UserID string
+
+	// Email is the email address to find billing events for
+	Email string
+}
+
+// GetUnassociatedBillingEventsRequest holds everything needed to make
+// the request to get unassociated billing events
+type GetUnassociatedBillingEventsRequest struct {
+	// IntegratorName optionally filters by payment provider
+	IntegratorName string
+
+	// Email optionally filters by email address
+	Email string
+
+	// EventTypes optionally filters by event types
+	EventTypes []string
+
+	// CreatedAtFrom optionally filters billing events created from this date
+	CreatedAtFrom string
+
+	// CreatedAtTo optionally filters billing events created up to this date
+	CreatedAtTo string
+
+	// Limit optionally limits the number of results (default: 100)
+	Limit int
+}
+
 // CreateBillingEventRequest holds everything needed to make
 // the request to create a billing event
 type CreateBillingEventRequest struct {
 	SubscriptionID           string
 	UserID                   string
+	Email                    string
 	EventType                string
 	Integrator               string
 	IntegratorEventID        string

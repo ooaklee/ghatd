@@ -572,6 +572,7 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 		Amount:                   payload.Amount,
 		Currency:                 payload.Currency,
 		PlanName:                 payload.PlanName,
+		Email:                    payload.CustomerEmail,
 		ReceiptURL:               payload.ReceiptURL,
 		RawPayload:               payload.RawPayload,
 		EventTime:                *eventTime,

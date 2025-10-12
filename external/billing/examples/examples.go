@@ -215,6 +215,7 @@ func Example6_CreateBillingEvent() {
 		Integrator:               "stripe",
 		UserID:                   "user-123",
 		EventType:                "payment.succeeded",
+		Email:                    "user1@example.com",
 		EventTime:                time.Now(),
 		Amount:                   2999,
 		Currency:                 "USD",
@@ -254,6 +255,7 @@ func Example7_GetBillingEvents() {
 			Amount:                   1999,
 			Currency:                 "USD",
 			PlanName:                 "Test Plan",
+			Email:                    fmt.Sprintf("user%d@example.com", i),
 			Status:                   billing.StatusActive,
 			RawPayload:               "{}",
 		}
@@ -427,6 +429,7 @@ func Example11_FilterBillingEventsByType() {
 			Amount:                   2999,
 			Currency:                 "USD",
 			PlanName:                 "Filter Test Plan",
+			Email:                    "user-event-filter@example.com",
 			Status:                   billing.StatusActive,
 			RawPayload:               "{}",
 		}
@@ -545,6 +548,7 @@ func Example14_BillingEventUtilityMethods() {
 		Amount:                   2999,
 		Currency:                 "USD",
 		PlanName:                 "Test Plan",
+		Email:                    "user-event-filter@example.com",
 		Status:                   billing.StatusActive,
 		RawPayload:               "{}",
 	}
@@ -692,6 +696,7 @@ func Example16_GetBillingEventsByEmail() {
 			Amount:                   2999,
 			Currency:                 "USD",
 			PlanName:                 "Pro Plan",
+			Email:                    email,
 			Status:                   billing.StatusActive,
 			RawPayload:               "{}",
 		}
