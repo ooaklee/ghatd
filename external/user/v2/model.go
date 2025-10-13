@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	"github.com/ooaklee/ghatd/external/user"
 )
 
 // IDGenerator generates unique identifiers
@@ -35,6 +34,7 @@ type UserConfig struct {
 	DefaultStatus             string
 	StatusTransitions         map[string][]string
 	RequiredFields            []string
+	DefaultRole               string
 	ValidRoles                []string
 	EmailVerificationRequired bool
 	MultipleIdentifiers       bool // Support both UUID and NanoID
@@ -172,6 +172,37 @@ func (u *UniversalUser) SetDependencies(
 
 // Core Methods
 
+// Standardise handles common user tasks like making sure email is lowercase
+func (u *UniversalUser) Standardise() *UniversalUser {
+	if u.stringUtils != nil {
+		u.Email = u.stringUtils.ToLowerCase(u.Email)
+	}
+
+	if u.PersonalInfo != nil && u.stringUtils != nil {
+		u.PersonalInfo.FirstName = u.stringUtils.ToTitleCase(u.PersonalInfo.FirstName)
+		u.PersonalInfo.LastName = u.stringUtils.ToTitleCase(u.PersonalInfo.LastName)
+		u.SetFullName()
+	}
+
+	if len(u.Roles) == 0 && u.config != nil {
+		for i, role := range u.Roles {
+			u.Roles[i] = u.stringUtils.ToUpperCase(role)
+		}
+	}
+
+	return u
+}
+
+// SetFullName sets the full name based on first and last names
+func (u *UniversalUser) SetFullName() *UniversalUser {
+	if u.PersonalInfo != nil && u.stringUtils != nil {
+		u.PersonalInfo.FullName = fmt.Sprintf("%s %s",
+			u.stringUtils.ToTitleCase(u.PersonalInfo.FirstName),
+			u.stringUtils.ToTitleCase(u.PersonalInfo.LastName))
+	}
+	return u
+}
+
 // GenerateNewUUID creates a new UUID for the user
 func (u *UniversalUser) GenerateNewUUID() *UniversalUser {
 	if u.idGenerator != nil {
@@ -280,6 +311,15 @@ func (u *UniversalUser) UpdateStatus(desiredStatus string) (*UniversalUser, erro
 	if u.stringUtils != nil && !u.stringUtils.InSlice(u.Status, validSources) {
 		fmt.Printf("cannot-transition-from-%s-to-%s\n", u.Status, desiredStatus)
 		return u, errors.New(ErrKeyUserInvalidStatusTransition)
+	}
+
+	// Handle email change special case
+	if desiredStatus == "EMAIL_CHANGE" {
+		desiredStatus = u.config.DefaultStatus
+
+		if u.config.EmailVerificationRequired {
+			u.UnverifyEmail()
+		}
 	}
 
 	// Update status
@@ -476,11 +516,28 @@ func (u *UniversalUser) GetAttributeByJSONPath(jsonPath string) (interface{}, er
 
 }
 
-// Profile Generation (backward compatibility)
+// UserProfile represents a simplified user profile
+type UserProfile struct {
+	ID            string   `json:"id"`
+	FirstName     string   `json:"first_name"`
+	LastName      string   `json:"last_name"`
+	Status        string   `json:"status"`
+	Roles         []string `json:"roles"`
+	Email         string   `json:"email"`
+	EmailVerified bool     `json:"email_verified" `
+	UpdatedAt     string   `json:"updated_at,omitempty"`
+}
+
+// UserMicroProfile represents a minimal user profile
+type UserMicroProfile struct {
+	ID     string   `json:"id"`
+	Roles  []string `json:"roles"`
+	Status string   `json:"status"`
+}
 
 // GetAsProfile returns a profile representation
-func (u *UniversalUser) GetAsProfile() *user.UserProfile {
-	profile := &user.UserProfile{
+func (u *UniversalUser) GetAsProfile() *UserProfile {
+	profile := &UserProfile{
 		ID:     u.ID,
 		Status: u.Status,
 		Roles:  u.Roles,
@@ -504,8 +561,8 @@ func (u *UniversalUser) GetAsProfile() *user.UserProfile {
 }
 
 // GetAsMicroProfile returns a minimal profile representation
-func (u *UniversalUser) GetAsMicroProfile() *user.UserMicroProfile {
-	return &user.UserMicroProfile{
+func (u *UniversalUser) GetAsMicroProfile() *UserMicroProfile {
+	return &UserMicroProfile{
 		ID:     u.ID,
 		Roles:  u.Roles,
 		Status: u.Status,
@@ -518,6 +575,31 @@ func (u *UniversalUser) GetUserEmail() string {
 }
 
 // Legacy method aliases for backward compatibility
-func (u *UniversalUser) GetUserId() string     { return u.ID }
+func (u *UniversalUser) GetUserId() string { return u.ID }
+
 func (u *UniversalUser) GetUserStatus() string { return u.Status }
-func (u *UniversalUser) IsAdmin() bool         { return u.HasRole("ADMIN") }
+
+func (u *UniversalUser) IsAdmin() bool { return u.HasRole("ADMIN") }
+
+func (u *UniversalUser) SetLastLoginAtTimeToNow() *UniversalUser {
+	return u.SetLastLoginAtNow()
+}
+
+func (u *UniversalUser) SetLastFreshLoginAtTimeToNow() *UniversalUser {
+	if u.timeProvider != nil {
+		u.Metadata.LastFreshLoginAt = u.timeProvider.NowUTC()
+	}
+	return u
+}
+
+func (u *UniversalUser) SetUpdatedAtTimeToNow() *UniversalUser {
+	return u.SetUpdatedAtNow()
+}
+
+func (u *UniversalUser) VerifyEmailNow() *UniversalUser {
+	return u.VerifyEmail()
+}
+
+func (u *UniversalUser) GetAttributeByJsonPath(jsonPath string) (interface{}, error) {
+	return u.GetAttributeByJSONPath(jsonPath)
+}

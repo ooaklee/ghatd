@@ -270,8 +270,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 
 	// update the user
 	_, err = s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		ID:    targetUser.ID,
-		Email: targetUser.Email,
+		User: targetUser,
 	})
 	if err != nil {
 		log.Error("ams/failed-to-update-user-with-new-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
@@ -471,8 +470,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			}
 
 			UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-				ID:     persistentUser.ID,
-				Status: persistentUser.Status,
+				User: persistentUser,
 			})
 			if err != nil {
 				log.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
@@ -537,7 +535,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 
 				// Update user with verification information
 				updatedUser, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-					ID: newUserResp.User.ID,
+					User: newUserResp.User,
 				})
 				if err != nil {
 					log.Error(fmt.Sprintf("ams/error-failed-to-save-new-user-verficaiton-by-provider: %s", newUserResp.User.ID))
@@ -1303,7 +1301,7 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
 
 	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		ID: persistentUser.ID,
+		User: persistentUser,
 	})
 	if err != nil {
 		log.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
@@ -1438,8 +1436,7 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 	}
 
 	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		ID:     revisionedUser.ID,
-		Status: revisionedUser.Status,
+		User: revisionedUser,
 	})
 	if err != nil {
 		log.Error("system-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
@@ -1506,9 +1503,11 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 	response := &CreateUserResponse{}
 
 	newUser, err := s.UserService.CreateUser(ctx, &userv2.CreateUserRequest{
-		FirstName: r.FirstName,
-		LastName:  r.LastName,
-		Email:     r.Email,
+		FirstName:      r.FirstName,
+		LastName:       r.LastName,
+		Email:          r.Email,
+		GenerateUUID:   true,
+		GenerateNanoID: true,
 	})
 	if err != nil {
 		return nil, err

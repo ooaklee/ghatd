@@ -13,8 +13,8 @@ import (
 
 // UserService expected methods of a valid user service
 type UserService interface {
-	GetMicroProfile(ctx context.Context, r *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error)
-	GetProfile(ctx context.Context, r *userv2.GetUserProfileRequest) (*userv2.GetUserProfileResponse, error)
+	GetUserMicroProfile(ctx context.Context, r *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error)
+	GetUserProfile(ctx context.Context, r *userv2.GetUserProfileRequest) (*userv2.GetUserProfileResponse, error)
 	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, r *userv2.DeleteUserRequest) error
 }
@@ -89,7 +89,7 @@ func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileReq
 // GetUserMicroProfile handles the business logic of fetching the requesting user's micro profile
 func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error) {
 
-	serviceResponse, err := s.UserService.GetMicroProfile(ctx, &userv2.GetUserMicroProfileRequest{
+	serviceResponse, err := s.UserService.GetUserMicroProfile(ctx, &userv2.GetUserMicroProfileRequest{
 		ID: r.UserId,
 	})
 	if err != nil {
@@ -104,7 +104,7 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfil
 // GetUserProfile handles the business logic of fetching the requesting user's profile
 func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error) {
 
-	serviceResponse, err := s.UserService.GetProfile(ctx, &userv2.GetUserProfileRequest{
+	serviceResponse, err := s.UserService.GetUserProfile(ctx, &userv2.GetUserProfileRequest{
 		ID: r.UserId,
 	})
 	if err != nil {

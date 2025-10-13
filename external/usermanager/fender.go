@@ -8,13 +8,16 @@ import (
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ritwickdey/querydecoder"
 )
 
 // MapRequestToUpdateUserProfileRequest maps incoming UpdateUserProfile request to correct
 // struct.
 func MapRequestToUpdateUserProfileRequest(request *http.Request, validator UsermanagerValidator) (*UpdateUserProfileRequest, error) {
-	var parsedRequest UpdateUserProfileRequest
+	var parsedRequest = UpdateUserProfileRequest{
+		UpdateUserRequest: &userv2.UpdateUserRequest{},
+	}
 	log := logger.AcquireFrom(request.Context())
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
@@ -23,7 +26,7 @@ func MapRequestToUpdateUserProfileRequest(request *http.Request, validator Userm
 		return nil, errors.New(ErrKeyUnableToIdentifyUser)
 	}
 
-	err := toolbox.DecodeRequestBody(request, parsedRequest)
+	err := toolbox.DecodeRequestBody(request, parsedRequest.UpdateUserRequest)
 	if err != nil {
 		return nil, errors.New(ErrKeyInvalidUserBody)
 	}

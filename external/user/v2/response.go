@@ -1,7 +1,6 @@
 package user
 
 import (
-	userv1 "github.com/ooaklee/ghatd/external/user"
 	"github.com/ooaklee/reply"
 )
 
@@ -39,7 +38,7 @@ type GetUsersResponse struct {
 // PaginationMetadata holds pagination information
 type PaginationMetadata struct {
 	Page           int   `json:"page"`
-	PerPage        int   `json:"per_page"`
+	PerPage        int   `json:"resources_per_page"`
 	TotalResources int64 `json:"total_resources"`
 	TotalPages     int   `json:"total_pages"`
 }
@@ -103,12 +102,12 @@ type RecordUserLoginResponse struct {
 
 // GetUserProfileResponse holds the response for retrieving a user profile
 type GetUserProfileResponse struct {
-	Profile *userv1.UserProfile `json:"profile"`
+	Profile *UserProfile `json:"profile"`
 }
 
 // GetUserMicroProfileResponse holds the response for retrieving a user micro profile
 type GetUserMicroProfileResponse struct {
-	MicroProfile *userv1.UserMicroProfile `json:"micro_profile"`
+	MicroProfile *UserMicroProfile `json:"micro_profile"`
 }
 
 // ValidateUserResponse holds the response for validating a user
@@ -150,10 +149,10 @@ type DeleteUserResponse struct {
 // GetMetaData converts PaginationMetadata to map for reply.WithMeta
 func (p *PaginationMetadata) GetMetaData() map[string]interface{} {
 	return map[string]interface{}{
-		"page":            p.Page,
-		"per_page":        p.PerPage,
-		"total_resources": p.TotalResources,
-		"total_pages":     p.TotalPages,
+		"page":               p.Page,
+		"resources_per_page": p.PerPage,
+		"total_resources":    p.TotalResources,
+		"total_pages":        p.TotalPages,
 	}
 }
 
