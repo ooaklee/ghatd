@@ -1,11 +1,9 @@
 package usermanager
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/router"
 )
 
@@ -21,21 +19,7 @@ type UsermanagerHandler interface {
 
 const (
 	// APIUserManagerPrefix base URI prefix for all usermanager routes
-	APIUserManagerPrefix = common.ApiV1UriPrefix + "/ums"
-
-	// APIUserManagerMe URI section used for actions related to requestor
-	APIUserManagerMe = "/me"
-
-	// APIUserManagerInsights URI section used for insights related calls
-	APIUserManagerInsights = "/insights"
-)
-
-var (
-	// APIUserManagerIDVariable URI variable used to get usermanager ID out of URI
-	APIUserManagerIDVariable = fmt.Sprintf("/{%s}", UserManagerURIVariableID)
-
-	// APIUserManagerMeMicro URI section used for getting requestor's micro account
-	APIUserManagerMeMicro = APIUserManagerMe + "/micro"
+	APIUserManagerV2Prefix = "/api/v1/ums"
 )
 
 // AttachRoutesRequest holds everything needed to attach usermanager
@@ -73,21 +57,21 @@ type AttachRoutesRequest struct {
 func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter := request.Router.GetRouter()
 
-	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
+	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerV2Prefix).Subrouter()
 	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
 	userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
 
-	usermanagerAuthenticatedRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
-	usermanagerAuthenticatedRoutes.HandleFunc(APIUserManagerMe, request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc(APIUserManagerMe, request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc(APIUserManagerMeMicro, request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes := httpRouter.PathPrefix(APIUserManagerV2Prefix).Subrouter()
+	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/micro", request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)
 
-	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
+	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerV2Prefix).Subrouter()
 	usermanagerAdminRoutes.HandleFunc("/comms", request.Handler.GetComms).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
 
-	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerPrefix).Subrouter()
-	usermanagerActiveOnlyRoutes.HandleFunc(APIUserManagerMe, request.Handler.UpdateUserProfile).Methods(http.MethodPatch, http.MethodOptions)
+	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerV2Prefix).Subrouter()
+	usermanagerActiveOnlyRoutes.HandleFunc("/me", request.Handler.UpdateUserProfile).Methods(http.MethodPatch, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
 }
