@@ -2,6 +2,7 @@ package contacter
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -46,6 +47,20 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 	logger.Debug("initiating-create-comms-request", zap.Any("request", req))
 
 	newComms = newComms.SetCommsType(string(req.Type)).SetStandardisedEmail(req.Email).SetStandardisedFullName(req.FullName)
+
+	// If UserId is not provided, FullName and Email are required
+	if req.UserId == "" {
+		var err error = nil
+		if req.FullName == "" {
+			err = errors.Join(err, errors.New(ErrKeyFullNameRequired))
+		}
+		if req.Email == "" {
+			err = errors.Join(err, errors.New(ErrKeyEmailRequired))
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if req.UserId != "" {
 		newComms.UserLoggedIn = true

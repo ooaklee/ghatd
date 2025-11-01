@@ -126,13 +126,15 @@ type CreateCommsRequest struct {
 	UserId string
 
 	// FullName is the full name of the person who made the comms
-	FullName string `json:"full_name" validate:"required"`
+	// Required if UserId is not provided
+	FullName string `json:"full_name"`
 
 	// Email is the email of the person who made the comms
-	Email string `json:"email" validate:"required,email"`
+	// Required if UserId is not provided
+	Email string `json:"email"`
 
 	// Type is the type of the comms
-	Type CommsType `json:"type" validate:"required"`
+	Type CommsType `json:"type"`
 
 	// Message is the body of the comms
 	Message string `json:"message"`
