@@ -61,7 +61,6 @@ const (
 	ErrKeyInsufficientPermissions   = "InsufficientPermissions"
 	ErrKeyCircularReferenceDetected = "CircularReferenceDetected"
 	ErrKeyMaxDepthExceeded          = "MaxDepthExceeded"
-	ErrKeyPageOutOfRange            = "PageOutOfRange"
 	ErrKeyInvalidNanoID             = "GroupInvalidNanoID"
 	ErrKeyNameAlreadyExists         = "GroupNameAlreadyExists"
 	ErrKeyUnableToFindGroupWithName = "UnableToFindGroupWithGivenName"

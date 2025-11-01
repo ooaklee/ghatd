@@ -2,140 +2,143 @@ package group
 
 import (
 	"net/http"
+
+	"github.com/ooaklee/reply"
 )
 
-// ResponseSchema defines the structure for error responses
-type ResponseSchema struct {
-	HttpStatusCode int    `json:"http_status_code"`
-	ErrCode        string `json:"err_code"`
-	Message        string `json:"message"`
-}
+// GroupErrorResponseMap holds Error keys, their corresponding human-friendly message, and response status code
+// nolint will be used later
+var GroupErrorResponseMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
+	ErrKeyGroupConfigNotSet: {
+		StatusCode: http.StatusInternalServerError,
+		Code:       "GRP0-001",
+		Detail:     "An error occurred while processing your request",
+	},
 
-// DefaultGroupErrorResponseMap returns the default error response mapping
-func DefaultGroupErrorResponseMap() map[string]ResponseSchema {
-	return map[string]ResponseSchema{
-		// Configuration errors
-		ErrKeyGroupConfigNotSet: {
-			HttpStatusCode: http.StatusInternalServerError,
-			ErrCode:        ErrKeyGroupConfigNotSet,
-			Message:        "Group configuration not set",
-		},
+	// Validation errors
+	ErrKeyInvalidGroupType: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-002",
+		Detail:     "The specified group type is not supported",
+	},
+	ErrKeyInvalidGroupStatus: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-003",
+		Detail:     "The specified group status is not valid",
+	},
+	ErrKeyInvalidStatusTransition: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-004",
+		Detail:     "The requested status change is not allowed",
+	},
+	ErrKeyRequiredFieldMissingName: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-005",
+		Detail:     "Please provide a name for the group",
+	},
+	ErrKeyRequiredFieldMissingType: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-006",
+		Detail:     "Please specify a type for the group",
+	},
+	ErrKeyValidationFailed: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-007",
+		Detail:     "The provided group data failed validation",
+	},
+	ErrKeyInvalidNanoID: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-008",
+		Detail:     "The provided ID format is invalid",
+	},
+	ErrKeyInvalidGroupID: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-009",
+		Detail:     "The provided group ID is invalid",
+	},
+	ErrKeyInvalidGroupBody: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-010",
+		Detail:     "The request body contains invalid data",
+	},
 
-		// Validation errors
-		ErrKeyInvalidGroupType: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyInvalidGroupType,
-			Message:        "Invalid group type provided",
-		},
-		ErrKeyInvalidGroupStatus: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyInvalidGroupStatus,
-			Message:        "Invalid group status provided",
-		},
-		ErrKeyInvalidStatusTransition: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyInvalidStatusTransition,
-			Message:        "Invalid status transition",
-		},
-		ErrKeyRequiredFieldMissingName: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyRequiredFieldMissingName,
-			Message:        "Group name is required",
-		},
-		ErrKeyRequiredFieldMissingType: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyRequiredFieldMissingType,
-			Message:        "Group type is required",
-		},
-		ErrKeyValidationFailed: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyValidationFailed,
-			Message:        "Group validation failed",
-		},
-		ErrKeyInvalidNanoID: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyInvalidNanoID,
-			Message:        "Invalid nano ID format",
-		},
+	// Resource errors
+	ErrKeyResourceNotFound: {
+		StatusCode: http.StatusNotFound,
+		Code:       "GRP0-011",
+		Detail:     "The requested group could not be found",
+	},
+	ErrKeyResourceConflict: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-012",
+		Detail:     "A group with this identifier already exists",
+	},
+	ErrKeyNameAlreadyExists: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-013",
+		Detail:     "A group with this name is already registered",
+	},
+	ErrKeyUnableToFindGroupWithName: {
+		StatusCode: http.StatusNotFound,
+		Code:       "GRP0-014",
+		Detail:     "No group found matching the provided name",
+	},
 
-		// Resource errors
-		ErrKeyResourceNotFound: {
-			HttpStatusCode: http.StatusNotFound,
-			ErrCode:        ErrKeyResourceNotFound,
-			Message:        "Group not found",
-		},
-		ErrKeyResourceConflict: {
-			HttpStatusCode: http.StatusConflict,
-			ErrCode:        ErrKeyResourceConflict,
-			Message:        "Group already exists",
-		},
-		ErrKeyNameAlreadyExists: {
-			HttpStatusCode: http.StatusConflict,
-			ErrCode:        ErrKeyNameAlreadyExists,
-			Message:        "Group with this name already exists",
-		},
-		ErrKeyUnableToFindGroupWithName: {
-			HttpStatusCode: http.StatusNotFound,
-			ErrCode:        ErrKeyUnableToFindGroupWithName,
-			Message:        "Unable to find group with given name",
-		},
+	// Member errors
+	ErrKeyInvalidMemberType: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-015",
+		Detail:     "The specified member type is not valid",
+	},
+	ErrKeyMemberNotFound: {
+		StatusCode: http.StatusNotFound,
+		Code:       "GRP0-016",
+		Detail:     "The specified member is not part of this group",
+	},
+	ErrKeyMemberAlreadyExists: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-017",
+		Detail:     "This member is already part of the group",
+	},
+	ErrKeyInsufficientPermissions: {
+		StatusCode: http.StatusForbidden,
+		Code:       "GRP0-018",
+		Detail:     "You do not have permission to perform this action",
+	},
+	ErrKeyInvalidMemberID: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-019",
+		Detail:     "The provided member ID is invalid",
+	},
 
-		// Member errors
-		ErrKeyInvalidMemberType: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyInvalidMemberType,
-			Message:        "Invalid member type provided",
-		},
-		ErrKeyMemberNotFound: {
-			HttpStatusCode: http.StatusNotFound,
-			ErrCode:        ErrKeyMemberNotFound,
-			Message:        "Member not found in group",
-		},
-		ErrKeyMemberAlreadyExists: {
-			HttpStatusCode: http.StatusConflict,
-			ErrCode:        ErrKeyMemberAlreadyExists,
-			Message:        "Member already exists in group",
-		},
-		ErrKeyInsufficientPermissions: {
-			HttpStatusCode: http.StatusForbidden,
-			ErrCode:        ErrKeyInsufficientPermissions,
-			Message:        "Insufficient permissions to perform this action",
-		},
+	// Hierarchy errors
+	ErrKeyCircularReferenceDetected: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-020",
+		Detail:     "The operation would create a circular reference in the group structure",
+	},
+	ErrKeyMaxDepthExceeded: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-021",
+		Detail:     "The maximum allowed nesting depth has been exceeded",
+	},
 
-		// Hierarchy errors
-		ErrKeyCircularReferenceDetected: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyCircularReferenceDetected,
-			Message:        "Circular reference detected in group hierarchy",
-		},
-		ErrKeyMaxDepthExceeded: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyMaxDepthExceeded,
-			Message:        "Maximum nesting depth exceeded",
-		},
+	// Database errors
+	ErrKeyDatabaseError: {
+		StatusCode: http.StatusInternalServerError,
+		Code:       "GRP0-022",
+		Detail:     "Unable to complete the operation at this time",
+	},
+	ErrKeyNoChangesDetected: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-023",
+		Detail:     "No modifications were detected in the request",
+	},
 
-		// Database errors
-		ErrKeyDatabaseError: {
-			HttpStatusCode: http.StatusInternalServerError,
-			ErrCode:        ErrKeyDatabaseError,
-			Message:        "Database error occurred",
-		},
-		ErrKeyNoChangesDetected: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyNoChangesDetected,
-			Message:        "No changes detected",
-		},
-
-		// Query errors
-		ErrKeyInvalidQueryParam: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyInvalidQueryParam,
-			Message:        "Invalid query parameter provided",
-		},
-		ErrKeyPageOutOfRange: {
-			HttpStatusCode: http.StatusBadRequest,
-			ErrCode:        ErrKeyPageOutOfRange,
-			Message:        "Page number out of range",
-		},
-	}
+	// Query errors
+	ErrKeyInvalidQueryParam: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-024",
+		Detail:     "One or more query parameters are invalid",
+	},
 }
