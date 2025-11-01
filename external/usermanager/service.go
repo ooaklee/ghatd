@@ -6,6 +6,7 @@ import (
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/contacter"
+	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
@@ -15,6 +16,8 @@ import (
 type UserService interface {
 	GetUserMicroProfile(ctx context.Context, r *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error)
 	GetUserProfile(ctx context.Context, r *userv2.GetUserProfileRequest) (*userv2.GetUserProfileResponse, error)
+	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
 	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, r *userv2.DeleteUserRequest) error
 }
@@ -36,12 +39,23 @@ type ContacterService interface {
 	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
 }
 
+// GroupService expected methods of a valid group service
+type GroupService interface {
+	GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error)
+	GetGroupByID(ctx context.Context, r *group.GetGroupByIDRequest) (*group.GetGroupByIDResponse, error)
+	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
+	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) error
+	UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) error
+	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
+}
+
 // Service holds and manages usermanager business logic
 type Service struct {
 	UserService      UserService
 	ApiTokenService  ApiTokenService
 	AuditService     AuditService
 	ContacterService ContacterService
+	GroupService     GroupService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -68,6 +82,12 @@ func NewService(r *NewServiceRequest) *Service {
 		AuditService:     r.AuditService,
 		ContacterService: r.ContacterService,
 	}
+}
+
+// WithGroupService adds group service integration
+func (s *Service) WithGroupService(groupSvc GroupService) *Service {
+	s.GroupService = groupSvc
+	return s
 }
 
 // UpdateUserProfile handles the business logic of updating the requesting user's profile

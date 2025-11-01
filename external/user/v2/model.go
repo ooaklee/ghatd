@@ -172,6 +172,11 @@ func (u *UniversalUser) SetDependencies(
 
 // Core Methods
 
+// GetType handles return the resource type
+func (u *UniversalUser) GetType() string {
+	return "USER"
+}
+
 // Standardise handles common user tasks like making sure email is lowercase
 func (u *UniversalUser) Standardise() *UniversalUser {
 	if u.stringUtils != nil {

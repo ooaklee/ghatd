@@ -1,36 +1,36 @@
-# Getting Started With Billing Manager
+# Billing Manager
 
-The recommended billing functionality comes in the form of three independent, composable packages: [**paymentprovider**](../../../external/holder/paymentprovider/), [**billing**](../../../external/holder/billing/), and [**billingmanager**](../../../external/holder/billingmanager/). For most application features, you should use the high-level `billingmanager` package, which handles webhook processing, subscription management, and billing event tracking with integrated audit logging.
+The recommended billing functionality comes in three independent, composable packages: `paymentprovider`, `billing`, and `billingmanager`. For most application features, you should use the high-level `billingmanager` package, which handles webhook processing, subscription management, and billing event tracking with integrated audit logging.
 
 ## Core Packages Overview
 
-See below an overview of the core packages mentioned above:
+Here's an overview of the core packages:
 
-| Package | Purpose | Use Case (Recommended) | Examples Location |
-|---------|---------|------------------------|-------------------|
-| **`paymentprovider`** | Abstracts payment provider webhook verification and payload normalisation (e.g., Stripe, Lemon Squeezy, Ko-fi). | Building custom webhook handlers or testing provider integrations. | [external/holder/paymentprovider/examples](../../../external/holder/paymentprovider/examples/examples.go) |
-| **`billing`** | Manages subscription and billing event data persistence with repository pattern. | Direct database operations or building custom billing workflows. | [external/holder/billing/examples](../../../external/holder/billing/examples/examples.go) |
-| **`billingmanager`** | Orchestrates paymentprovider and billing with high-level API methods for webhook processing. | Building application features (Standard)—provides the full workflow and audit logging. | [external/holder/billingmanager/examples](../../../external/holder/billingmanager/examples/examples.go) |
+| Package | Purpose | Recommended Use Case | Examples |
+|---|---|---|---|
+| `paymentprovider` | Abstracts payment provider webhook verification and payload normalisation (e.g., Stripe, Lemon Squeezy). | Building custom webhook handlers or testing provider integrations. | [`paymentprovider/examples`](../../../external/paymentprovider/examples/examples.go) |
+| `billing` | Manages subscription and billing event data persistence with a repository pattern. | Direct database operations or building custom billing workflows. | [`billing/examples`](../../../external/billing/examples/examples.go) |
+| `billingmanager` | Orchestrates `paymentprovider` and `billing` with high-level API methods for webhook processing. | Building application features (Standard)—provides the full workflow and audit logging. | [`billingmanager/examples`](../../../external/billingmanager/examples/examples.go) |
 
 ### Usage Overview
 
-For a high-level overview of how this might fit into your GHAT(D) project, please [**visit this section**](#high-level-overview).
+For a high-level overview of how this might fit into your project, please [**visit this section**](#high-level-overview).
 
 ## Quick Start: Setup and Processing Webhooks
 
-In the following section we'll demonstrate how to set up the `billingmanager` and process payment provider webhooks, which is the recommended way to use the system for standard application operations. For more examples [please check out the reference examples above](#core-packages-overview).
+This section shows how to set up the `billingmanager` and process payment provider webhooks. This is the recommended way to use the system for standard operations. For more examples, [check out the reference examples above](#core-packages-overview).
 
 ### 1. Import Packages and Configure
 
-You'll need configuration for the `paymentprovider`, a `billing` service instance, and an [`audit` service](../../../external/audit/).
+You'll need configuration for the `paymentprovider`, a `billing` service instance, and an `audit` service.
 
 ```go
 import (
     "context"
     "net/http"
-    "github.com/ooaklee/ghatd/external/holder/paymentprovider"
-    "github.com/ooaklee/ghatd/external/holder/billing"
-    "github.com/ooaklee/ghatd/external/holder/billingmanager"
+    "github.com/ooaklee/ghatd/external/paymentprovider"
+    "github.com/ooaklee/ghatd/external/billing"
+    "github.com/ooaklee/ghatd/external/billingmanager"
 )
 
 // Assume auditService and userService are initialised dependencies
@@ -76,7 +76,7 @@ manager.WithUserService(userService)    // Optional: Enables email->user ID reso
 
 ### 2. Process Webhook
 
-You'll be able to use the high-level methods on the `billingmanager` to process incoming webhooks.
+You can use the high-level methods on the `billingmanager` to process incoming webhooks.
 
 ```go
 // 6. Process a webhook from a payment provider
@@ -148,7 +148,7 @@ for _, event := range eventsResp.Events {
 
 ### 4. Development Environment Setup
 
-If you don't want to use your payment provider's webhook endpoints when running locally, you can leverage the `MockProvider` to simulate webhook payloads for testing.
+If you don't want to use your payment provider's webhook endpoints when running locally, you can use the `MockProvider` to simulate webhook payloads for testing.
 
 ```go
 // Use mock provider for local development
@@ -175,7 +175,7 @@ manager := billingmanager.NewService(
 )
 ```
 
-> **Note on Environments:** You can also use the `LoggingProvider` wrapper to log webhook payloads for debugging without actually processing them in your billing system.
+> **Note on Environments:** You can also use the `LoggingProvider` wrapper to log webhook payloads for debugging without processing them in your billing system.
 
 ## Advanced Use Cases
 
@@ -210,7 +210,7 @@ subsResp, err := billingService.GetSubscriptions(ctx, &billing.GetSubscriptionsR
     Order:       "created_at_desc",
 })
 
-// Create billing events for audit trail
+// Create billing events for an audit trail
 eventResp, err := billingService.CreateBillingEvent(ctx, &billing.CreateBillingEventRequest{
     SubscriptionID:           "sub_123",
     IntegratorEventID:        "evt_stripe_456",
@@ -242,7 +242,7 @@ func (p *MyCustomProvider) VerifyWebhook(ctx context.Context, req *http.Request)
 }
 
 func (p *MyCustomProvider) ParsePayload(ctx context.Context, req *http.Request) (*paymentprovider.WebhookPayload, error) {
-    // Parse provider-specific payload into normalised format
+    // Parse provider-specific payload into a normalised format
     return &paymentprovider.WebhookPayload{
         EventType:      paymentprovider.EventTypePaymentSucceeded,
         SubscriptionID: "sub_from_provider",
@@ -266,7 +266,7 @@ manager := billingmanager.NewService(registry, billingService)
 
 ### Custom Repository Implementation
 
-You can implement custom repositories for different databases while maintaining the same service layer.
+You can implement custom repositories for different databases while keeping the same service layer.
 
 ```go
 // Implement the repository interfaces for your database
@@ -295,7 +295,7 @@ billingService := billing.NewService(postgresRepo, postgresRepo)
 
 ## High-level Overview
 
-See below high-level overviews of this billing solution (and its component packages) and a few examples of how it can be used in your GHAT(D) application for different use-cases.
+Here are some high-level overviews of this billing solution and its packages, with examples of how it can be used in your application for different use-cases.
 
 ### Usage Patterns
 
@@ -422,11 +422,11 @@ func SetupBillingRoutes(r *mux.Router, manager *billingmanager.Service) {
 
 #### Using AttachRoutes
 
-For a more comprehensive setup that includes all billing manager endpoints with proper middleware, use the `AttachRoutes` function:
+For a more comprehensive setup that includes all billing manager endpoints with the correct middleware, use the `AttachRoutes` function:
 
 ```go
 import (
-    "github.com/ooaklee/ghatd/external/holder/billingmanager"
+    "github.com/ooaklee/ghatd/external/billingmanager"
     "github.com/ooaklee/ghatd/external/router"
     "github.com/gorilla/mux"
 )
@@ -452,14 +452,14 @@ This sets up the following routes automatically:
 - `POST /api/v1/bms/billings/{providerName}/webhooks` - Process payment provider webhooks
 
 **Authenticated User Routes:**
-- `GET /api/v1/bms/billings/users/{userId}/events` - Get user's billing events
-- `GET /api/v1/bms/users/{userId}/details/subscription` - Get user's subscription status
-- `GET /api/v1/bms/users/{userId}/details/billing` - Get user's billing details
+- `GET /api/v1/bms/billings/users/{userId}/events` - Get a user's billing events.
+- `GET /api/v1/bms/users/{userId}/details/subscription` - Get a user's subscription status.
+- `GET /api/v1/bms/users/{userId}/details/billing` - Get a user's billing details.
 
 **Admin Only Routes:**
-- `GET /api/v1/bms/admin/billings/users/{userId}/events` - Get any user's billing events
-- `GET /api/v1/bms/admin/users/{userId}/details/subscription` - Get any user's subscription status
-- `GET /api/v1/bms/admin/users/{userId}/details/billing` - Get any user's billing details
+- `GET /api/v1/bms/admin/billings/users/{userId}/events` - Get any user's billing events.
+- `GET /api/v1/bms/admin/users/{userId}/details/subscription` - Get any user's subscription status.
+- `GET /api/v1/bms/admin/users/{userId}/details/billing` - Get any user's billing details.
 
 ## Subscription Lifecycle
 
@@ -484,30 +484,30 @@ Understanding the subscription lifecycle helps you work effectively with the bil
    │
 4. Subscription Management
    │
-   ├──► Create new subscription (if first event)
-   ├──► Update existing subscription (status, dates, etc.)
+   ├──► Create a new subscription (if it's the first event)
+   ├──► Update an existing subscription (status, dates, etc.)
    │
 5. Event Recording
    │
-   ├──► Create billing event for audit trail
+   ├──► Create a billing event for the audit trail
    │
 6. Audit Logging (Optional)
    │
-   └──► Log to audit service
+   └──► Log to the audit service
 ```
 
 ### Subscription States
 
 The billing system tracks various subscription states:
 
-- **`active`** - Subscription is active and in good standing
-- **`trialing`** - Subscription is in trial period
-- **`past_due`** - Payment failed but subscription still active
-- **`cancelled`** - Subscription has been cancelled
-- **`paused`** - Subscription is temporarily paused
-- **`expired`** - Subscription has expired
-- **`incomplete`** - Subscription setup incomplete
-- **`unpaid`** - Subscription unpaid
+- **`active`** - The subscription is active and in good standing.
+- **`trialing`** - The subscription is in a trial period.
+- **`past_due`** - Payment has failed, but the subscription is still active.
+- **`cancelled`** - The subscription has been cancelled.
+- **`paused`** - The subscription is temporarily paused.
+- **`expired`** - The subscription has expired.
+- **`incomplete`** - The subscription setup is incomplete.
+- **`unpaid`** - The subscription is unpaid.
 
 ## Authorisation & Security
 
@@ -525,7 +525,7 @@ statusResp, err := manager.GetUserSubscriptionStatus(ctx, &billingmanager.GetUse
 // Admin querying another user's subscription (requires admin role via UserService)
 statusResp, err := manager.GetUserSubscriptionStatus(ctx, &billingmanager.GetUserSubscriptionStatusRequest{
     UserID:           "user-456",
-    RequestingUserID: "admin-user-123", // Must be admin
+    RequestingUserID: "admin-user-123", // Must be an admin
 })
 ```
 
@@ -533,9 +533,9 @@ statusResp, err := manager.GetUserSubscriptionStatus(ctx, &billingmanager.GetUse
 
 Each provider has its own webhook verification mechanism:
 
-- **Stripe**: HMAC-SHA256 signature verification
-- **Lemon Squeezy**: HMAC-SHA256 signature verification
-- **Ko-fi**: Verification token validation
+- **Stripe**: HMAC-SHA256 signature verification.
+- **Lemon Squeezy**: HMAC-SHA256 signature verification.
+- **Ko-fi**: Verification token validation.
 
 The `paymentprovider` package handles all verification automatically before processing webhooks.
 
@@ -546,8 +546,8 @@ The `paymentprovider` package handles all verification automatically before proc
 ```go
 import (
     "testing"
-    "github.com/ooaklee/ghatd/external/holder/paymentprovider"
-    "github.com/ooaklee/ghatd/external/holder/billing"
+    "github.com/ooaklee/ghatd/external/paymentprovider"
+    "github.com/ooaklee/ghatd/external/billing"
 )
 
 func TestWebhookProcessing(t *testing.T) {
@@ -597,18 +597,18 @@ func TestSubscriptionLifecycle(t *testing.T) {
     
     provider, _ := paymentprovider.NewStripeProvider(stripeConfig)
     
-    // Use MongoDB test database
+    // Use a MongoDB test database
     mongoRepo := billing.NewRepository(mongoStore)
     billingService := billing.NewService(mongoRepo, mongoRepo)
     
-    // Test full webhook flow
+    // Test the full webhook flow
     // ...
 }
 ```
 
 ## Potential Future Improvements
 
-Below is a list of areas for improvement in future iterations of `billingmanager`, `billing`, and `paymentprovider`. Please note that these suggestions are not prioritised.
+Here's a list of areas for improvement in future iterations of `billingmanager`, `billing`, and `paymentprovider`. Please note that these suggestions are not prioritised.
 
 ### Additional Providers
 - [ ] Paddle provider

@@ -1,33 +1,33 @@
-# Getting Started With Email Manager
+# Email Manager
 
-The recommended email functionality comes in the form of three independent, composable packages: [**emailtemplater**](../../../external/emailtemplater/), [**emailprovider**](../../../external/emailprovider/), and [**emailmanager](../../../external/emailmanager/). For most application features, you should use the high-level `emailmanager` package, which handles both templating and sending with integrated audit logging. 
+The recommended email functionality comes in three independent, composable packages: `emailtemplater`, `emailprovider`, and `emailmanager`. For most application features, you should use the high-level `emailmanager` package, which handles both templating and sending with integrated audit logging.
 
 ## Core Packages Overview
 
-See below an overview of the core packages mentioned above
+Here's an overview of the core packages:
 
-
-|Package |	Purpose	Use Case (Recommended) | Examples Location |
-|**`emailtemplater`** |	Generates HTML email templates (e.g., login, verification, and custom) with variable substitution.	Generating email previews or testing template rendering.	| [external/emailtemplater/examples](../../../external/emailtemplater/examples/examples.go) |
-|**`emailprovider`**	| Abstracts the logic for sending an email through a service (e.g., SparkPost).	Sending pre-rendered HTML or custom email workflows.	| [external/emailprovider/examples](../../../external/emailprovider/examples/examples.go) |
-|**`emailmanager`**	| Orchestrates the templater and emailprovider with high-level API methods.	Building application features (Standard)—provides the full workflow and audit logging.	| [external/emailmanager/examples](../../../external/emailmanager/examples/examples.go) |
+| Package | Purpose | Recommended Use Case | Examples |
+|---|---|---|---|
+| `emailtemplater` | Generates HTML email templates (e.g., login, verification) with variable substitution. | Generating email previews or testing template rendering. | [`emailtemplater/examples`](../../../external/emailtemplater/examples/examples.go) |
+| `emailprovider` | Abstracts the logic for sending an email through a service (e.g., SparkPost). | Sending pre-rendered HTML or custom email workflows. | [`emailprovider/examples`](../../../external/emailprovider/examples/examples.go) |
+| `emailmanager` | Orchestrates the templater and email provider with high-level API methods. | Building application features (Standard)—provides the full workflow and audit logging. | [`emailmanager/examples`](../../../external/emailmanager/examples/examples.go) |
 
 ### Usage Overview
 
-For a high-level overview of how this might fit into your GHAT(D) project, please [**visit this section**.](#high-level-overview).
+For a high-level overview of how this might fit into your project, please [**visit this section**](#high-level-overview).
 
 ## Quick Start: Setup and Sending
 
-In the following section we'll demonstrate how to set up the `emailmanager` and send a verification email, which is the recommended way to use the  system for standard application operations, for more examples [please check out the reference examples above](#core-packages-overview).
+This section shows how to set up the `emailmanager` and send a verification email. This is the recommended way to use the system for standard operations. For more examples, [check out the reference examples above](#core-packages-overview).
 
 ### 1. Import Packages and Configure
 
-You'll need configuration for the `emailtemplater`, an `emailprovider` instance, and an [`audit` service](../../../external/audit/).
+You'll need configuration for the `emailtemplater`, an `emailprovider` instance, and an [`audit` service](../../../external/audit).
 
 ```go
 import (
     "context"
-    "github.com/ooaklee/ghatd/external/templater"
+    "github.com/ooaklee/ghatd/external/emailtemplater"
     "github.com/ooaklee/ghatd/external/emailprovider"
     "github.com/ooaklee/ghatd/external/emailmanager"
 )
@@ -56,7 +56,7 @@ templaterConfig := &emailtemplater.Config{
 			emailtemplater.EmailTemplateTypeBase: templates.NewBaseHtmlEmailTemplate,
 		},
 	}
-tmpltr := templater.NewEmailTemplater(templaterConfig)
+tmpltr := emailtemplater.NewEmailTemplater(templaterConfig)
 
 // 2. Create email provider (using SparkPost for Production)
 provider := emailprovider.NewSparkPostEmailProvider(sparkpostClient)
@@ -70,7 +70,7 @@ manager := emailmanager.NewEmailManager(tmpltr, provider, auditService, &emailma
 
 ### 2. Send an Email
 
-You'll be able to use the high-level methods on the `emailmanager`.
+You can use the high-level methods on the `emailmanager`.
 
 ```go
 // 4. Send a verification email
@@ -92,17 +92,16 @@ if err != nil {
 
 ### 3. Development Environment Setup
 
-If you don't want to use your email providers allowance when running your code locally, you can also leverage the `LoggingEmailProvider` to log the email content instead of actually sending it via an external API like `SparkPost`.
-
+If you don't want to use your email provider's allowance when running your code locally, you can use the `LoggingEmailProvider` to log the email content instead of sending it.
 
 ```go
 // Use logging provider to see emails in logs instead of sending
 provider := emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{
-    DisableFullHtmlBodyPreview: false, // The login and verification token by default contain the token/ magic link url for you to sign in
+    DisableFullHtmlBodyPreview: false, // The login and verification token by default contain the token/magic link URL for you to sign in
 }) 
 
 manager := emailmanager.NewEmailManager(
-    templater.NewEmailTemplater(templaterConfig),
+    emailtemplater.NewEmailTemplater(templaterConfig),
     provider,
     auditService,
     &emailmanager.Config{
@@ -114,7 +113,6 @@ manager := emailmanager.NewEmailManager(
 
 > **Note on Environments:** The `emailtemplater` is also **environment-aware**; for example, setting the `Environment` config to `"staging"` will add `[staging]` to the email subject line.
 
-
 ## Advanced Use Cases
 
 While `emailmanager` is recommended, the packages can be used independently for specialised needs.
@@ -123,10 +121,9 @@ While `emailmanager` is recommended, the packages can be used independently for 
 
 You can generate the HTML body without sending an email.
 
-
 ```go
 // Use templater alone
-rendered, err := tmpltr.GenerateVerificationEmail(&templater.GenerateVerificationEmailRequest{
+rendered, err := tmpltr.GenerateVerificationEmail(&emailtemplater.GenerateVerificationEmailRequest{
     FirstName: "Test",
     // ...
 })
@@ -136,7 +133,6 @@ rendered, err := tmpltr.GenerateVerificationEmail(&templater.GenerateVerificatio
 ### Custom Provider
 
 Adding a new provider (e.g., SendGrid, AWS SES) only requires implementing the `emailprovider.EmailProvider` interface and integrating it with the `emailmanager`.
-
 
 ```go
 type MyCustomProvider struct{}
@@ -163,7 +159,7 @@ manager := emailmanager.NewEmailManager(tmpl, provider, audit, config)
 
 ## High-level Overview
 
-See below high-level overviews of this email solution (and its component packages) and a few examples of how it can be used in your GHATD application or different use-cases.
+Here are some high-level overviews of this email solution and its packages, with examples of how it can be used in your application for different use-cases.
 
 ### Usage Patterns
 
@@ -206,7 +202,6 @@ Application Code
        │         ▼
        └──► emailprovider ──► Send when ready
 ```
-
 
 ### Environment Usage & Outputs Flow
 
@@ -259,7 +254,7 @@ Application Code
 
 ## Potential Future Improvements
 
-Below is a list of areas for improvement in future iterations of `emailmanager`, `emailtemplater`, and `emailprovider`. Please note that these suggestions are not prioritised.
+Here's a list of areas for improvement in future iterations of `emailmanager`, `emailtemplater`, and `emailprovider`. Please note that these suggestions are not prioritised.
 
 ### Additional Providers
 - [ ] SendGrid provider
@@ -272,7 +267,7 @@ Below is a list of areas for improvement in future iterations of `emailmanager`,
 - [ ] Email templating with layouts
 - [ ] Multi-language support
 - [ ] Email preview generation
-- [ ] Batch sending optimization
+- [ ] Batch sending optimisation
 - [ ] Rate limiting
 - [ ] Retry mechanisms
 - [ ] Email queueing
