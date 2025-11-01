@@ -1,20 +1,20 @@
-# Router Package
+# Router
 
-The `router` package provides a standardised, project-specific wrapper around the `gorilla/mux` router. It is designed to simplify the setup of common application-level routing concerns, such as default handlers, middleware, and authentication endpoints.
+The `router` package provides a standardised, project-specific wrapper around `gorilla/mux`. It's designed to simplify setting up common application-level routing concerns, like default handlers, middleware, and authentication endpoints.
 
 ## Architecture
 
 -   **`router.go`**: Contains the `Router` struct and the `NewRouter` constructor. It initialises a `mux.Router` and applies any provided default handlers or global middleware.
--   **`handler.go`**: Provides handlers for common, cross-cutting concerns. A key example is the `NewAuthVerifyHandler`, which manages the redirection flow for email and login verification links.
+-   **`handler.go`**: Provides handlers for common, cross-cutting concerns. A key example is `NewAuthVerifyHandler`, which manages the redirection flow for email and login verification links.
 -   **`const.go`**: Defines constant URI paths for shared endpoints like health checks (`/v0/health/check`) and authentication verification (`/v0/auth/verify`).
 
 ## Getting Started
 
-The following example demonstrates how to initialise the `ghatdRouter`, configure it with default handlers and middleware, and attach a verification endpoint.
+The following example shows how to initialise the `ghatdRouter`, configure it with default handlers and middleware, and attach a verification endpoint.
 
 ### Example Initialisation
 
-This setup is typically performed once in your application's `main` function or wherever you configure your HTTP server.
+This setup is typically done once in your application's `main` function or wherever you configure your HTTP server.
 
 ```go
 package main
@@ -75,7 +75,7 @@ func main() {
 	// 4. Add Application-Specific Handlers
 	// The AuthVerifyEndpoint is a special handler for processing verification links from emails.
 	ghatdRouter.GetRouter().HandleFunc(
-		router.AuthVerfiyEndpoint,
+		router.AuthVerifyEndpoint,
 		router.NewAuthVerifyHandler(
 			backendBaseURL+"/api/v1/ams/verify/email?t=%s", // URL to verify an email
 			backendBaseURL+"/api/v1/ams/login?t=%s",      // URL to process a magic login link

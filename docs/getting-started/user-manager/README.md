@@ -1,26 +1,26 @@
-# User Manager Package Getting Started
+# User Manager
 
-The `usermanager` package is a high-level, full-stack service designed to simplify the management of users and their associated data. It acts as an orchestrator, integrating with various other packages such as `user`, `group`, and `contacter` to provide a unified API for common user-centric operations.
+The `usermanager` package is a high-level, full-stack service designed to simplify managing users and their associated data. It acts as an orchestrator, integrating with various other packages like `user`, `group`, and `contacter` to provide a unified API for common user-centric operations.
 
-This guide provides an overview of the `usermanager` architecture, its key features, and how to interact with its API.
+This guide gives an overview of the `usermanager` architecture, its key features, and how to interact with its API.
 
 ## Architecture
 
 The package follows a standard layered architecture, consistent with other services in this project. Its primary role is to orchestrate calls to other services rather than managing its own data directly.
 
-1.  **Routes (`routes.go`)**: Defines the HTTP API endpoints for user management, such as `/api/v1/ums/users/{userId}/profile`. It maps incoming requests to the appropriate handlers.
-2.  **Handler (`handler.go`)**: Acts as the intermediary between the HTTP transport layer and the business logic. It is responsible for parsing requests, calling the service layer, and formatting responses.
+1.  **Routes (`routes.go`)**: Defines the HTTP API endpoints for user management, like `/api/v1/ums/users/{userId}/profile`, mapping incoming requests to the appropriate handlers.
+2.  **Handler (`handler.go`)**: Acts as the intermediary between the HTTP transport layer and the business logic. It's responsible for parsing requests, calling the service layer, and formatting responses.
 3.  **Service (`service.go`, `service.group.go`)**: Contains the core business logic. The service layer makes calls to other downstream services (e.g., `UserService`, `GroupService`, `ContacterService`) to gather and assemble the data needed to fulfil a request.
-4.  **Request/Response (`request.go`, `response.go`)**: Defines the data structures used for API communication, ensuring a clear and consistent contract for clients.
-5.  **Fender (`fender.go`)**: An authorisation layer that can be used to secure endpoints, ensuring that the authenticated user has the correct permissions for the requested action.
+4.  **Request/Response (`request.go`, `response.go`)**: Defines the data structures for API communication, ensuring a clear and consistent contract for clients.
+5.  **Fender (`fender.go`)**: An authorisation layer that can be used to secure endpoints, ensuring the authenticated user has the correct permissions for the requested action.
 
-Unlike other packages, the `usermanager` does not have its own repository or database collection, as it exclusively deals with orchestrating data from other services.
+Unlike other packages, the `usermanager` doesn't have its own repository or database collection, as it exclusively deals with orchestrating data from other services.
 
 ## Key Features
 
 The `usermanager` is designed to streamline complex user-related workflows into single API calls.
 
--   **Enriched User Profiles**: Fetch a complete user profile, enriched with data from multiple sources. For example, a single request can return a user's core details along with a list of all the groups they are a member of.
+-   **Expanded User Profiles**: Fetch a complete user profile, expanded with data from multiple sources. For example, a single request can return a user's core details alongside a list of all the groups they are a member of.
 -   **Simplified Group Management**: Provides intuitive endpoints for managing a user's membership in groups. This includes adding a user to a group, removing them, and listing their current groups, without needing to interact directly with the `group` service.
 -   **Communication Management**: Integrates with the `contacter` service to manage a user's communication preferences and history.
 -   **Administrative Functions**: Offers secure, admin-only endpoints for performing privileged actions, such as creating a new group.
@@ -29,7 +29,7 @@ The `usermanager` is designed to streamline complex user-related workflows into 
 
 The following are the primary API endpoints provided by the `usermanager` service:
 
--   `GET /api/v1/ums/users/{userId}/profile`: Retrieves a user's enriched profile, including their group memberships.
+-   `GET /api/v1/ums/users/{userId}/profile`: Retrieves a user's expanded profile, including their group memberships.
 -   `GET /api/v1/ums/users/{userId}/groups`: Lists all groups that the specified user is a member of.
 -   `POST /api/v1/ums/users/{userId}/groups/{groupId}`: Adds a user to a specified group.
 -   `DELETE /api/v1/ums/users/{userId}/groups/{groupId}`: Removes a user from a specified group.
