@@ -1,4 +1,4 @@
-# Billing Package
+# Billing
 
 The `billing` package (`external/billing`) gives you the tools for core subscription and billing event management, with MongoDB persistence. It acts as the data layer for your billing system, handling how you store, retrieve, and manage subscriptions and billing events, using optimised indexes for better performance.
 

@@ -1,4 +1,4 @@
-# Group Package Getting Started
+# Group
 
 The `group` package provides a robust and flexible system for managing user groups, teams, organisations, and other collections. It is built with a "universal model" approach, allowing a single data structure to represent various types of groups with support for hierarchical nesting.
 
