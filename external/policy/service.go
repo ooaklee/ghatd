@@ -43,12 +43,12 @@ func (s *Service) GetPolicyByName(ctx context.Context, r *GetPolicyByNameRequest
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
+	// standardise requested policy name
+	r.PolicyName = standardisePolicyName(r.PolicyName)
+
 	for _, policy := range s.Store.GetPolicies() {
 
-		policyName := strings.ReplaceAll(
-			toolbox.StringStandardisedToLower(policy.Name),
-			" ",
-			"-")
+		policyName := standardisePolicyName(policy.Name)
 
 		logger.Info("policy-names-to-compare", zap.String("policy-name", policyName), zap.String("requested-policy-name", r.PolicyName))
 
@@ -58,4 +58,13 @@ func (s *Service) GetPolicyByName(ctx context.Context, r *GetPolicyByNameRequest
 	}
 
 	return nil, errors.New(ErrKeyPolicyNotFound)
+}
+
+// standardisePolicyName handles converting a policy name to lowercase
+// and replacing spaces with hyphens.
+func standardisePolicyName(name string) string {
+	return strings.ReplaceAll(
+		toolbox.StringStandardisedToLower(name),
+		" ",
+		"-")
 }
