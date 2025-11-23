@@ -148,3 +148,13 @@ type OauthCallbackResponse struct {
 	// signed in
 	RequestUrl string
 }
+
+// MiddlewareAuthedUserResponse holds the data returned for authenticated user
+type MiddlewareAuthedUserResponse struct {
+
+	// UserID is the authenticated user's ID
+	UserID string
+
+	// User is the authenticated user
+	User *userv2.UniversalUser
+}

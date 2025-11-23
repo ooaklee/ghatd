@@ -10,60 +10,61 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/reply"
 )
 
 // mockAccessManagerService is a mock implementation of accessManagerService for testing
 type mockAccessManagerService struct {
-	middlewareAdminJWTRequiredFunc             func(r *http.Request) (string, error)
-	middlewareAdminAPITokenRequiredFunc        func(r *http.Request) (string, error)
-	middlewareActiveJWTRequiredFunc            func(r *http.Request) (string, error)
-	middlewareJWTRequiredFunc                  func(r *http.Request) (string, error)
-	middlewareValidAPITokenRequiredFunc        func(r *http.Request) (string, error)
-	middlewareRateLimitOrActiveJWTRequiredFunc func(r *http.Request) (string, error)
+	middlewareAdminJWTRequiredFunc             func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	middlewareAdminAPITokenRequiredFunc        func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	middlewareActiveJWTRequiredFunc            func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	middlewareJWTRequiredFunc                  func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	middlewareValidAPITokenRequiredFunc        func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	middlewareRateLimitOrActiveJWTRequiredFunc func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
 	refreshTokenFunc                           func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error)
 }
 
-func (m *mockAccessManagerService) MiddlewareAdminJWTRequired(r *http.Request) (string, error) {
+func (m *mockAccessManagerService) MiddlewareAdminJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if m.middlewareAdminJWTRequiredFunc != nil {
 		return m.middlewareAdminJWTRequiredFunc(r)
 	}
-	return "", nil
+	return nil, nil
 }
 
-func (m *mockAccessManagerService) MiddlewareAdminAPITokenRequired(r *http.Request) (string, error) {
+func (m *mockAccessManagerService) MiddlewareAdminAPITokenRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if m.middlewareAdminAPITokenRequiredFunc != nil {
 		return m.middlewareAdminAPITokenRequiredFunc(r)
 	}
-	return "", nil
+	return nil, nil
 }
 
-func (m *mockAccessManagerService) MiddlewareActiveJWTRequired(r *http.Request) (string, error) {
+func (m *mockAccessManagerService) MiddlewareActiveJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if m.middlewareActiveJWTRequiredFunc != nil {
 		return m.middlewareActiveJWTRequiredFunc(r)
 	}
-	return "", nil
+	return nil, nil
 }
 
-func (m *mockAccessManagerService) MiddlewareJWTRequired(r *http.Request) (string, error) {
+func (m *mockAccessManagerService) MiddlewareJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if m.middlewareJWTRequiredFunc != nil {
 		return m.middlewareJWTRequiredFunc(r)
 	}
-	return "", nil
+	return nil, nil
 }
 
-func (m *mockAccessManagerService) MiddlewareValidAPITokenRequired(r *http.Request) (string, error) {
+func (m *mockAccessManagerService) MiddlewareValidAPITokenRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if m.middlewareValidAPITokenRequiredFunc != nil {
 		return m.middlewareValidAPITokenRequiredFunc(r)
 	}
-	return "", nil
+	return nil, nil
 }
 
-func (m *mockAccessManagerService) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (string, error) {
+func (m *mockAccessManagerService) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if m.middlewareRateLimitOrActiveJWTRequiredFunc != nil {
 		return m.middlewareRateLimitOrActiveJWTRequiredFunc(r)
 	}
-	return "", nil
+	return nil, nil
 }
 
 func (m *mockAccessManagerService) RefreshToken(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
@@ -71,6 +72,19 @@ func (m *mockAccessManagerService) RefreshToken(ctx context.Context, r *accessma
 		return m.refreshTokenFunc(ctx, r)
 	}
 	return nil, nil
+}
+
+// helper to build a mock authenticated user response with a minimal user object
+func mockAuthedResp(userID, status string, roles []string) *accessmanager.MiddlewareAuthedUserResponse {
+	return &accessmanager.MiddlewareAuthedUserResponse{
+		UserID: userID,
+		User: &userv2.UniversalUser{
+			ID:     userID,
+			Email:  userID + "@example.com",
+			Status: status,
+			Roles:  roles,
+		},
+	}
 }
 
 // createTestMiddleware creates a middleware instance for testing
@@ -135,8 +149,8 @@ func TestNewMiddleware(t *testing.T) {
 func TestValidAPITokenRequired_Success(t *testing.T) {
 	userID := "test-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -162,8 +176,8 @@ func TestValidAPITokenRequired_Success(t *testing.T) {
 
 func TestValidAPITokenRequired_Failure(t *testing.T) {
 	mockService := &mockAccessManagerService{
-		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (string, error) {
-			return "", errors.New("invalid token")
+		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return nil, errors.New("invalid token")
 		},
 	}
 
@@ -185,8 +199,8 @@ func TestValidAPITokenRequired_Failure(t *testing.T) {
 func TestAdminJWTRequired_Success(t *testing.T) {
 	userID := "admin-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareAdminJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareAdminJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleAdmin}), nil
 		},
 	}
 
@@ -208,8 +222,8 @@ func TestAdminJWTRequired_Success(t *testing.T) {
 
 func TestAdminJWTRequired_MissingRefreshToken(t *testing.T) {
 	mockService := &mockAccessManagerService{
-		middlewareAdminJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return "", errors.New("unauthorized")
+		middlewareAdminJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return nil, errors.New("unauthorized")
 		},
 	}
 
@@ -232,8 +246,8 @@ func TestAdminJWTRequired_MissingRefreshToken(t *testing.T) {
 func TestActiveJWTRequired_Success(t *testing.T) {
 	userID := "active-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareActiveJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -256,8 +270,8 @@ func TestActiveJWTRequired_Success(t *testing.T) {
 func TestJWTRequired_Success(t *testing.T) {
 	userID := "user-123"
 	mockService := &mockAccessManagerService{
-		middlewareJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -282,13 +296,13 @@ func TestJWTRequired_TokenRefresh(t *testing.T) {
 	callCount := 0
 
 	mockService := &mockAccessManagerService{
-		middlewareJWTRequiredFunc: func(r *http.Request) (string, error) {
+		middlewareJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 			callCount++
 			// First call fails (expired token), second call succeeds
 			if callCount == 1 {
-				return "", errors.New("token expired")
+				return nil, errors.New("token expired")
 			}
-			return userID, nil
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
 			return &accessmanager.RefreshTokenResponse{
@@ -322,8 +336,8 @@ func TestJWTRequired_TokenRefresh(t *testing.T) {
 
 func TestJWTRequired_RefreshTokenFailure(t *testing.T) {
 	mockService := &mockAccessManagerService{
-		middlewareJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return "", errors.New("token expired")
+		middlewareJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return nil, errors.New("token expired")
 		},
 		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
 			return nil, errors.New("refresh token invalid")
@@ -349,8 +363,8 @@ func TestJWTRequired_RefreshTokenFailure(t *testing.T) {
 func TestActiveValidApiTokenOrJWTRequired_APITokenPresent(t *testing.T) {
 	userID := "api-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -372,8 +386,8 @@ func TestActiveValidApiTokenOrJWTRequired_APITokenPresent(t *testing.T) {
 func TestActiveValidApiTokenOrJWTRequired_JWTPresent(t *testing.T) {
 	userID := "jwt-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareActiveJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -398,11 +412,11 @@ func TestActiveValidApiTokenOrAuthenticated_APITokenPrecedence(t *testing.T) {
 	jwtUserID := "jwt-user-123"
 
 	mockService := &mockAccessManagerService{
-		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (string, error) {
-			return apiTokenUserID, nil
+		middlewareValidAPITokenRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(apiTokenUserID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
-		middlewareJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return jwtUserID, nil
+		middlewareJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(jwtUserID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -432,8 +446,8 @@ func TestActiveValidApiTokenOrAuthenticated_APITokenPrecedence(t *testing.T) {
 func TestAdminApiTokenOrJWTRequired_APITokenPresent(t *testing.T) {
 	userID := "admin-api-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareAdminAPITokenRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareAdminAPITokenRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleAdmin}), nil
 		},
 	}
 
@@ -455,8 +469,8 @@ func TestAdminApiTokenOrJWTRequired_APITokenPresent(t *testing.T) {
 func TestAdminApiTokenOrJWTRequired_JWTPresent(t *testing.T) {
 	userID := "admin-jwt-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareAdminJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareAdminJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleAdmin}), nil
 		},
 	}
 
@@ -479,8 +493,8 @@ func TestAdminApiTokenOrJWTRequired_JWTPresent(t *testing.T) {
 func TestRateLimitOrActiveJWTRequired_NoCookies(t *testing.T) {
 	userID := "rate-limited-user"
 	mockService := &mockAccessManagerService{
-		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -501,8 +515,8 @@ func TestRateLimitOrActiveJWTRequired_NoCookies(t *testing.T) {
 func TestRateLimitOrActiveJWTRequired_WithValidJWT(t *testing.T) {
 	userID := "authenticated-user-123"
 	mockService := &mockAccessManagerService{
-		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (string, error) {
-			return userID, nil
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
 		},
 	}
 
@@ -527,12 +541,12 @@ func TestRateLimitOrActiveJWTRequired_TokenRefresh(t *testing.T) {
 	callCount := 0
 
 	mockService := &mockAccessManagerService{
-		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (string, error) {
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 			callCount++
 			if callCount == 1 {
-				return "", errors.New("token expired")
+				return nil, errors.New("token expired")
 			}
-			return userID, nil
+			return mockAuthedResp(userID, userv2.AccountStatusKeyProvisioned, []string{userv2.UserRoleUser}), nil
 		},
 		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
 			return &accessmanager.RefreshTokenResponse{

@@ -48,9 +48,6 @@ type AttachRoutesRequest struct {
 
 	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
 	AdminOnlyMiddleware mux.MiddlewareFunc
-
-	// AuthenticatedMiddleware middleware used for authenticated users
-	AuthenticatedMiddleware mux.MiddlewareFunc
 }
 
 // AttachRoutes attaches user handler to corresponding routes on router
@@ -84,11 +81,4 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc("/by-status", request.Handler.GetUsersByStatus).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
 	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
-
-	// Authenticated routes (if needed for self-service operations)
-	// Uncomment and customise as needed:
-	// usersAuthenticatedRoutes := httpRouter.PathPrefix(APIUsersV2Prefix).Subrouter()
-	// usersAuthenticatedRoutes.HandleFunc("/me", request.Handler.GetCurrentUser).Methods(http.MethodGet, http.MethodOptions)
-	// usersAuthenticatedRoutes.HandleFunc("/me", request.Handler.UpdateCurrentUser).Methods(http.MethodPatch, http.MethodOptions)
-	// usersAuthenticatedRoutes.Use(request.AuthenticatedMiddleware)
 }

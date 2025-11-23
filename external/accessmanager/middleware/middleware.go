@@ -28,12 +28,12 @@ const (
 
 // accessManagerService holds method of valid access manaer service
 type accessManagerService interface {
-	MiddlewareAdminJWTRequired(r *http.Request) (string, error)
-	MiddlewareAdminAPITokenRequired(r *http.Request) (string, error)
-	MiddlewareActiveJWTRequired(r *http.Request) (string, error)
-	MiddlewareJWTRequired(r *http.Request) (string, error)
-	MiddlewareValidAPITokenRequired(r *http.Request) (string, error)
-	MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (string, error)
+	MiddlewareAdminJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	MiddlewareAdminAPITokenRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	MiddlewareActiveJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	MiddlewareJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	MiddlewareValidAPITokenRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
 	RefreshToken(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error)
 }
 
@@ -151,7 +151,7 @@ func (m *Middleware) JWTRequired(handler http.Handler) http.Handler {
 }
 
 // validationFunc returns the appropriate service validation function based on validation type
-func (m *Middleware) validationFunc(validationType jwtValidationType) func(*http.Request) (string, error) {
+func (m *Middleware) validationFunc(validationType jwtValidationType) func(*http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	switch validationType {
 	case jwtValidationAdmin:
 		return m.service.MiddlewareAdminJWTRequired
@@ -183,10 +183,10 @@ func (m *Middleware) attemptTokenRefresh(
 	w http.ResponseWriter,
 	req *http.Request,
 	refreshCookie *http.Cookie,
-	validateFunc func(*http.Request) (string, error),
-) (string, error) {
+	validateFunc func(*http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error),
+) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if refreshCookie.Value == "" {
-		return "", errors.New("empty refresh token")
+		return nil, errors.New(accessmanager.ErrKeyEmptyRefreshToken)
 	}
 
 	// Refresh the tokens
@@ -194,7 +194,7 @@ func (m *Middleware) attemptTokenRefresh(
 		RefreshToken: refreshCookie.Value,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Set new tokens in cookies
@@ -241,23 +241,26 @@ func (m *Middleware) handleJWTRequest(
 	validateFunc := m.validationFunc(validationType)
 
 	// Attempt validation
-	userID, err := validateFunc(req)
+	authedUserResp, err := validateFunc(req)
 	if err != nil {
 		// Try token refresh
-		userID, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, validateFunc)
+		authedUserResp, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, validateFunc)
 		if refreshErr != nil {
 			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
 			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 			return
 		}
-		// Refresh succeeded, use the new userID
-		req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+
+		// Refresh succeeded, use the new authedUser
+		req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 		handler.ServeHTTP(w, req)
 		return
 	}
 
 	// Validation succeeded
-	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 	handler.ServeHTTP(w, req)
 }
 
@@ -272,12 +275,14 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 
 		// If both cookies are absent, use rate limiting flow
 		if authCookie == nil && refreshCookie == nil {
-			userID, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
+			authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
 			if err != nil {
 				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 				return
 			}
-			req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+
+			req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 			handler.ServeHTTP(w, req)
 			return
 		}
@@ -293,21 +298,24 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 			req.Header["Authorization"] = []string{"Bearer " + authCookie.Value}
 		}
 
-		userID, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
+		authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
 		if err != nil {
 			// Try token refresh
-			userID, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, m.service.MiddlewareRateLimitOrActiveJWTRequired)
+			authedUserResp, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, m.service.MiddlewareRateLimitOrActiveJWTRequired)
 			if refreshErr != nil {
 				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
 				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 				return
 			}
-			req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+
+			req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 			handler.ServeHTTP(w, req)
 			return
 		}
 
-		req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+		req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 		handler.ServeHTTP(w, req)
 	})
 }
@@ -315,27 +323,39 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 // handleAdminAPITokenRequiredRequest is checking to make sure the request
 // coming in has a valid admin Api token associated to it
 func (m *Middleware) handleAdminAPITokenRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
-	userID, err := m.service.MiddlewareAdminAPITokenRequired(req)
+	authedUserResp, err := m.service.MiddlewareAdminAPITokenRequired(req)
 	if err != nil {
 		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 	handler.ServeHTTP(w, req)
 }
 
 // handleValidAPITokenRequiredRequest is checking to make sure the request
 // coming in has a valid token associated to it
 func (m *Middleware) handleValidAPITokenRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
-	userID, err := m.service.MiddlewareValidAPITokenRequired(req)
+	authedUserResp, err := m.service.MiddlewareValidAPITokenRequired(req)
 	if err != nil {
 		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
 	handler.ServeHTTP(w, req)
+}
+
+// handleTransmittingAuthenticatedUserDetails extends the request context with
+// the authenticated user's details including user ID and/or the user object
+func handleTransmittingAuthenticatedUserDetails(req *http.Request, authedUserResp *accessmanager.MiddlewareAuthedUserResponse) *http.Request {
+
+	req = req.WithContext(accessmanagerhelpers.TransitUserWith(req.Context(), authedUserResp.User))
+	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), authedUserResp.User.GetUserId()))
+
+	return req
 }
 
 // getBaseResponseHandler returns response handler configured with auth error map

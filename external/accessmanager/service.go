@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"go.uber.org/zap"
+
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/auth"
@@ -22,7 +24,6 @@ import (
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
-	"go.uber.org/zap"
 )
 
 // AuditService expected methods of a valid audit service
@@ -888,210 +889,180 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	return userPermanentToken, userEphemeralToken, nil
 }
 
-// MiddlewareAdminAPITokenRequired handles the business/ cross logic of ensuring
-// that the request is passed with a valid admin client ID and secret
-func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (string, error) {
-
-	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
-
+// MiddlewareAdminAPITokenRequired validates that the request contains a valid API
+// token belonging to an active admin user. Returns the user ID if valid.
+func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
 	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// If we made it here, it means we've found a matching token
-	// get user for matching token
-	// could probably also check liveness here one time
 	persistentUserResponse, err := s.UserService.GetUserByNanoID(r.Context(), &userv2.GetUserByNanoIDRequest{
 		NanoID: tokenRequester.NanoId,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// Set token requester user Id to make backwards compatible
 	tokenRequester.UserID = persistentUserResponse.User.ID
 
 	if !persistentUserResponse.User.IsAdmin() {
-		log.Warn("unauthorized-admin-access-attempted", zap.String("user-id", persistentUserResponse.User.ID))
-		return "", errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
+		return nil, errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
 	}
 
-	// Check if user it active
 	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
-		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
-		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
 	}
 
-	// Update last used time on token
-	err = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
+	_ = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
 		APITokenEncoded: tokenRequester.UserAPITokenEncoded,
 		ClientID:        tokenRequester.UserID,
 	})
-	if err != nil {
-		log.Warn("failed-updating-token-last-used-at", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
-	}
 
-	log.Info("validated-token-request", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
-
-	return tokenRequester.UserID, nil
+	return &MiddlewareAuthedUserResponse{
+		UserID: persistentUserResponse.User.GetUserId(),
+		User:   persistentUserResponse.User,
+	}, nil
 }
 
-// MiddlewareValidAPITokenRequired handles the business/ cross logic of ensuring
-// that the request is passed with a valid client ID and secret
-// TODO: Create tests
-func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (string, error) {
+// MiddlewareValidAPITokenRequired validates that the request contains a valid API
+// token belonging to an active user. Returns the user ID if valid.
+func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	ctx := r.Context()
 
-	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
-
-	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
+	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(ctx, r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// If we made it here, it means we've found a matching token
-	// get user for matching token
-	// could probably also check liveness here one time
-	persistentUserResponse, err := s.UserService.GetUserByNanoID(r.Context(), &userv2.GetUserByNanoIDRequest{
+	persistentUserResponse, err := s.UserService.GetUserByNanoID(ctx, &userv2.GetUserByNanoIDRequest{
 		NanoID: tokenRequester.NanoId,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// Set token requester user Id to make backwards compatible
 	tokenRequester.UserID = persistentUserResponse.User.ID
 
-	// Check if user it active
 	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
-		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
-		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
 	}
 
-	// Update last used time on token
-	err = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
+	_ = s.ApitokenService.UpdateAPITokenLastUsedAt(ctx, &apitoken.UpdateAPITokenLastUsedAtRequest{
 		APITokenEncoded: tokenRequester.UserAPITokenEncoded,
 		ClientID:        tokenRequester.UserID,
 	})
-	if err != nil {
-		log.Warn("failed-updating-token-last-used-at", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
-	}
 
-	log.Info("validated-token-request", zap.String("user-id", tokenRequester.UserID), zap.String("token-id", tokenRequester.UserAPIToken))
-
-	return tokenRequester.UserID, nil
+	return &MiddlewareAuthedUserResponse{
+		UserID: persistentUserResponse.User.GetUserId(),
+		User:   persistentUserResponse.User,
+	}, nil
 }
 
-// MiddlewareJWTRequired handles the business/ cross logic of ensuring
-// that the request is passed with a valid, non-expired token
-// TODO: Create tests
-func (s *Service) MiddlewareJWTRequired(r *http.Request) (string, error) {
-	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+// MiddlewareJWTRequired validates that the request contains a valid, non-expired
+// JWT token. Returns the user ID if the token is valid and active in the store.
+func (s *Service) MiddlewareJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	ctx := r.Context()
 
-	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	tokenAuth, err := s.AuthService.ExtractTokenMetadata(ctx, r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	_, err = s.EphemeralStore.FetchAuth(r.Context(), tokenAuth)
-	if err != nil {
-		log.Warn("unauthorized-token-not-found", zap.String("user-id", tokenAuth.UserID))
-		return "", errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+	if _, err = s.EphemeralStore.FetchAuth(ctx, tokenAuth); err != nil {
+		return nil, errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
 	}
 
-	return tokenAuth.UserID, nil
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: tokenAuth.UserID})
+	if err != nil {
+		return nil, err
+	}
+
+	return &MiddlewareAuthedUserResponse{
+		UserID: persistentUserResponse.User.GetUserId(),
+		User:   persistentUserResponse.User,
+	}, nil
 }
 
-// MiddlewareActiveJWTRequired handles the business/ cross logic of ensuring that the request is passed with a
-// valid token, and the user is in an `ACTIVE` state (status)
-// TODO: Create tests
-func (s *Service) MiddlewareActiveJWTRequired(r *http.Request) (string, error) {
+// MiddlewareActiveJWTRequired validates that the request contains a valid JWT token
+// and the associated user account is in an ACTIVE status. Returns the user ID if valid.
+func (s *Service) MiddlewareActiveJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return s.checkActivenessOfUser(r.Context(), tokenAuth)
 }
 
-// MiddlewareAdminJWTRequired handles the business/ cross logic of making sure the token passed is
-// that of a platform admin, for middleware
-// TODO: Create tests
-func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (string, error) {
-	var log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+// MiddlewareAdminJWTRequired validates that the request contains a valid JWT token
+// belonging to an active admin user. Returns the user ID if valid.
+func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	ctx := r.Context()
 
-	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	tokenAuth, err := s.AuthService.ExtractTokenMetadata(ctx, r)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if !tokenAuth.IsAdmin {
-		log.Warn("unauthorized-admin-access-attempted", zap.String("user-id", tokenAuth.UserID))
-		return "", errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
+		return nil, errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
 	}
 
-	// Check when user was `ACTIVE` when access token was generated
 	if !tokenAuth.IsAuthorized {
-		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenAuth.UserID))
-		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
 	}
 
-	_, err = s.EphemeralStore.FetchAuth(r.Context(), tokenAuth)
+	if _, err = s.EphemeralStore.FetchAuth(ctx, tokenAuth); err != nil {
+		return nil, errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+	}
+
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: tokenAuth.UserID})
 	if err != nil {
-		log.Warn("unauthorized-token-not-found", zap.String("user-id", tokenAuth.UserID))
-		return "", errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+		return nil, err
 	}
 
-	return tokenAuth.UserID, nil
+	return &MiddlewareAuthedUserResponse{
+		UserID: persistentUserResponse.User.GetUserId(),
+		User:   persistentUserResponse.User,
+	}, nil
 }
 
-// MiddlewareRateLimitOrActiveJWTRequired handles the business/ cross logic of ensuring
-// that the request has not exceeded its rate limit, and any unathed request is given the
-// default annoymous user ID.
-// Otherwise, if a bearer token is detected, typical check is carried out to ensure that the
-// passed token is valid, non-expired token
-// TODO: Create tests
-func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (string, error) {
-
+// MiddlewareRateLimitOrActiveJWTRequired validates authenticated requests via JWT or
+// applies rate limiting to unauthenticated requests. Unauthenticated requests are assigned
+// a placeholder user ID and tracked by IP address. Returns the user ID or placeholder.
+func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
 	if err != nil && err.Error() == auth.ErrKeyNoBearerHeaderFound {
-		// Register request count for unauth user (note IP used)
 		if ephErr := s.EphemeralStore.AddRequestCountEntry(r.Context(), getValidRequestorIP(r)); ephErr != nil {
-			return "", ephErr
+			return nil, ephErr
 		}
 
-		return s.StaticPlaceholderUuid, nil
+		return &MiddlewareAuthedUserResponse{
+			UserID: s.StaticPlaceholderUuid,
+			User:   nil,
+		}, nil
 	}
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return s.checkActivenessOfUser(r.Context(), tokenAuth)
 }
 
-// checkActivenessOfUser validates whether the user's account was in an active state at time of
-// token creation
-func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (string, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
-
-	// Check when user was `ACTIVE` when access token was generated
-	if !s.isUserLiveStatusActive(ctx, tokenAuth.UserID) {
-		log.Warn("unauthorized-non-active-status", zap.String("user-id", tokenAuth.UserID))
-		return "", errors.New(ErrKeyUnauthorizedNonActiveStatus)
+// checkActivenessOfUser verifies that the user account is currently in an ACTIVE status.
+// Returns the user ID if active, otherwise returns an error.
+func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (*MiddlewareAuthedUserResponse, error) {
+	user, isActiveUser := s.isUserLiveStatusActive(ctx, tokenAuth.UserID)
+	if !isActiveUser {
+		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
 	}
 
-	return tokenAuth.UserID, nil
+	return &MiddlewareAuthedUserResponse{
+		UserID: user.GetUserId(),
+		User:   user,
+	}, nil
 }
 
 // LogoutUser handles the logic of signing user off of platform. Delete token(s) from ephemeral store
@@ -1688,24 +1659,19 @@ func getValidRequestorIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
-// isUserLiveStatusActive returns whether user matching passed user ID
-// has an `ACTIVE` user status
-func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) bool {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
-
+// isUserLiveStatusActive checks if the user account with the given ID has an ACTIVE status.
+// Returns the user object and true if active, otherwise nil and false.
+func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) (*userv2.UniversalUser, bool) {
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx,
 		&userv2.GetUserByIDRequest{ID: userID},
 	)
 	if err != nil {
-		log.Warn("live-status-check-failure", zap.String("user-id", userID), zap.Error(err))
-		return false
+		return nil, false
 	}
 
 	if persistentUserResponse.User.Status == userv2.AccountStatusKeyActive {
-		return true
+		return persistentUserResponse.User, true
 	}
 
-	return false
+	return nil, false
 }

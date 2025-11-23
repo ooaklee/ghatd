@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 
-	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ritwickdey/querydecoder"
 )
@@ -53,7 +52,6 @@ func MapRequestToGetUsersRequest(request *http.Request, validator UserValidator)
 
 	var err error
 	parsedRequest := &GetUsersRequest{}
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
 
 	// get request queries
 	query := request.URL.Query()
