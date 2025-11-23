@@ -1040,7 +1040,9 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*Midd
 
 		return &MiddlewareAuthedUserResponse{
 			UserID: s.StaticPlaceholderUuid,
-			User:   nil,
+			User: &userv2.UniversalUser{
+				ID: s.StaticPlaceholderUuid,
+			},
 		}, nil
 	}
 
