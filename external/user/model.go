@@ -1,3 +1,8 @@
+// Package user implements user account management including authentication,
+// status transitions, and profile management.
+//
+// The package provides a User model with support for role-based access control,
+// email verification, and account status lifecycle management.
 package user
 
 import (
@@ -47,7 +52,10 @@ var StatusValidOrigins = map[string][]string{
 	},
 }
 
-// User represents platform users
+// User represents a platform user with authentication and profile information.
+//
+// Users progress through various statuses (provisioned, active, deactivated, etc.)
+// and support role-based permissions and email verification workflows.
 type User struct {
 	ID        string   `json:"id" bson:"_id"`
 	NanoId    string   `json:"-" bson:"_nano_id"`
@@ -61,7 +69,9 @@ type User struct {
 	Meta     UserMeta              `json:"meta" bson:"meta,omitempty"`
 }
 
-// GetAsProfile returns user profile representation of the user
+// GetAsProfile returns a UserProfile containing public user information.
+//
+// This is useful for API responses where full user details should not be exposed.
 func (u *User) GetAsProfile() *UserProfile {
 	return &UserProfile{
 		ID:            u.ID,
@@ -74,7 +84,9 @@ func (u *User) GetAsProfile() *UserProfile {
 	}
 }
 
-// GetAsMicroProfile returns user micro profile representation of the user
+// GetAsMicroProfile returns minimal user information for internal services.
+//
+// This includes only ID, roles, and status - useful for authorization checks.
 func (u *User) GetAsMicroProfile() *UserMicroProfile {
 	return &UserMicroProfile{
 		ID:     u.ID,
@@ -83,7 +95,7 @@ func (u *User) GetAsMicroProfile() *UserMicroProfile {
 	}
 }
 
-// UserMeta holds metadeta about user
+// UserMeta holds timestamp metadata for tracking user account lifecycle events.
 type UserMeta struct {
 	CreatedAt        string `json:"created_at" bson:"created_at,omitempty"`
 	UpdatedAt        string `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
@@ -117,19 +129,19 @@ func (u *User) GetAttributeByJsonPath(jsonPath string) (any, error) {
 	return result, nil
 }
 
-// UserVerifcationStatus holds verification status for user's
-// email and household
+// UserVerifcationStatus tracks verification state for user email addresses.
 type UserVerifcationStatus struct {
 	EmailVerified   bool   `json:"email_verified" bson:"email_verified,omitempty"`
 	EmailVerifiedAt string `json:"email_verified_at,omitempty" bson:"emailed_verified_at,omitempty"`
 }
 
-// IsAdmin returns whether user is an Admin
+// IsAdmin returns true if the user has the admin role.
 func (u *User) IsAdmin() bool {
 	return toolbox.StringInSlice(UserRoleAdmin, u.Roles)
 }
 
-// GenerateNewUUID creates a new UUID for User
+// GenerateNewUUID creates and assigns a new UUID v4 to the user.
+// Returns the user for method chaining.
 func (u *User) GenerateNewUUID() *User {
 	u.ID = toolbox.GenerateUuidV4()
 	return u

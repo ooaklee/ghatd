@@ -17,6 +17,7 @@ type UsermanagerService interface {
 	DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error
 	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
 	GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error)
+	UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error)
 	// Group/Team management methods
 	GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error)
 	GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
@@ -212,6 +213,27 @@ func (h *Handler) GetComms(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsResponse.Comms)
+}
+
+// UpdateComms handles the request to update a comms
+func (h *Handler) UpdateComms(w http.ResponseWriter, r *http.Request) {
+
+	request, err := MapRequestToUpdateCommsRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	updateCommsResponse, err := h.Service.UpdateComms(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, updateCommsResponse.Comms)
 }
 
 // GetEnrichedUserProfile handles the request to get an enriched user profile with group memberships

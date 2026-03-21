@@ -43,3 +43,11 @@ func (g *GetCommsResponse) GetMetaData() map[string]interface{} {
 
 	return responseMap
 }
+
+// UpdateCommsResponse holds everything needed to return
+// the response to updating a comms
+type UpdateCommsResponse struct {
+
+	// Comms is the comms that was updated
+	Comms *Comms `json:"comms"`
+}

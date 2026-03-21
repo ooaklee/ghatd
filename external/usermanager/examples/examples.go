@@ -575,6 +575,27 @@ func (m *MockContacterService) GetComms(ctx context.Context, req *contacter.GetC
 	}, nil
 }
 
+func (m *MockContacterService) UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error) {
+	// Simulate fetching existing comms and updating admin fields
+	comms := &contacter.Comms{
+		Id:             req.CommsId,
+		AdminNotes:     req.AdminNotes,
+		AdminReply:     req.AdminReply,
+		LinkedCommsIds: req.LinkedCommsIds,
+		UserLoggedIn:   true,
+		UpdatedAt:      time.Now().Format(time.RFC3339),
+	}
+
+	// Set reached out timestamp if flag is true
+	if req.ReachedOut {
+		comms.ReachedOutAt = time.Now().Format(time.RFC3339)
+	}
+
+	return &contacter.UpdateCommsResponse{
+		Comms: comms,
+	}, nil
+}
+
 type MockGroupService struct{}
 
 func (m *MockGroupService) GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error) {

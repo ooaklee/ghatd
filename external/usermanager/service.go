@@ -37,6 +37,7 @@ type AuditService interface {
 type ContacterService interface {
 	CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error)
 	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
+	UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error)
 }
 
 // GroupService expected methods of a valid group service
@@ -211,4 +212,26 @@ func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetComms
 	response.Meta = commsResponse.GetMetaData()
 
 	return &response, nil
+}
+
+// UpdateComms handles the logic of updating a comms
+func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error) {
+
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	logger.Info("initiating-update-comms-request", zap.Any("request", req))
+
+	updateCommsResponse, err := s.ContacterService.UpdateComms(ctx, req.UpdateCommsRequest)
+	if err != nil {
+		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", req), zap.Error(err))
+		return &UpdateCommsResponse{}, err
+	}
+
+	return &UpdateCommsResponse{
+		Comms: updateCommsResponse.Comms,
+	}, nil
 }

@@ -11,4 +11,10 @@ const (
 
 	// ErrKeyEmailRequired is the error key for when email is required but not provided
 	ErrKeyEmailRequired = "ContacterEmailRequired"
+
+	// ErrKeyCommsIdRequired is the error key for when comms ID is required but not provided
+	ErrKeyCommsIdRequired = "ContacterCommsIdRequired"
+
+	// ErrKeyCommsNotFound is the error key for when comms is not found
+	ErrKeyCommsNotFound = "ContacterCommsNotFound"
 )

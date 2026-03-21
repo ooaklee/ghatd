@@ -1,3 +1,8 @@
+// Package validator provides input validation functionality for request
+// data validation across the application.
+//
+// It wraps the go-playground/validator package with convenience methods
+// and custom validation rules.
 package validator
 
 import (

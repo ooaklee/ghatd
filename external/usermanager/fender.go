@@ -144,6 +144,38 @@ func validateParsedRequest(request interface{}, validator UsermanagerValidator) 
 	return validator.Validate(request)
 }
 
+// MapRequestToUpdateCommsRequest maps the request to an UpdateCommsRequest
+func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValidator) (*UpdateCommsRequest, error) {
+
+	var parsedRequest UpdateCommsRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	// Extract comms ID from URL path
+	commsId, err := toolbox.GetVariableValueFromUri(r, "id")
+	if err != nil {
+		log.Error("unable-get-comms-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	baseRequest := contacter.UpdateCommsRequest{
+		CommsId: commsId,
+	}
+
+	err = toolbox.DecodeRequestBody(r, &baseRequest)
+	if err != nil {
+		return nil, errors.New(contacter.ErrKeyInvalidCommsPayload)
+	}
+
+	parsedRequest.UpdateCommsRequest = &baseRequest
+
+	if err := validateParsedRequest(&baseRequest, validator); err != nil {
+		log.Error("update-comms-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToGetEnrichedUserProfileRequest maps incoming GetEnrichedUserProfile request to correct struct
 func MapRequestToGetEnrichedUserProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetEnrichedUserProfileRequest, error) {
 	var parsedRequest GetEnrichedUserProfileRequest

@@ -31,6 +31,11 @@ type GetCommsResponse struct {
 	Meta  map[string]interface{} `json:"-"`
 }
 
+// UpdateCommsResponse holds the response from updating a comms
+type UpdateCommsResponse struct {
+	Comms *contacter.Comms `json:"comms"`
+}
+
 // GetEnrichedUserProfileResponse holds the response for an enriched user profile
 type GetEnrichedUserProfileResponse struct {
 	Profile *EnrichedUserProfile `json:"profile"`

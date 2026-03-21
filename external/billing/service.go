@@ -1,3 +1,7 @@
+// Package billing implements subscription and billing management functionality.
+//
+// The package provides services for creating, updating, and managing billing
+// records, subscriptions, and payment processing integrations.
 package billing
 
 import (

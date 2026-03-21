@@ -93,6 +93,26 @@ type GetCommsRequest struct {
 	CreatedAtTo string `query:"created_at_to"`
 }
 
+// UpdateCommsRequest holds everything needed to make
+// the request to update a comms
+type UpdateCommsRequest struct {
+
+	// CommsId is the ID of the comms to update
+	CommsId string
+
+	// AdminNotes are notes added by admins regarding this comms
+	AdminNotes string `json:"admin_notes,omitempty"`
+
+	// ReachedOutAt indicates if the admin has reached out to the user
+	ReachedOut bool `json:"reached_out,omitempty"`
+
+	// AdminReply is the reply message from the admin to the user
+	AdminReply string `json:"admin_reply,omitempty"`
+
+	// LinkedCommsIds are the IDs of other comms to link to this one
+	LinkedCommsIds []string `json:"linked_comms_ids,omitempty"`
+}
+
 // GetMetaData returns a map of metadata about the GetCommsRequest, including the
 // number of resources per page, the total number of resources, the total
 // number of pages, and the current page.

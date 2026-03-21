@@ -1,3 +1,10 @@
+// Package group implements a universal group management system supporting
+// teams, organizations, projects, and other hierarchical groupings.
+//
+// Groups can contain members (users or other groups), have leadership structures,
+// and support custom extensions for domain-specific requirements. The package
+// provides comprehensive CRUD operations, member management, and status lifecycle
+// management.
 package group
 
 import (
@@ -10,12 +17,15 @@ import (
 	"go.uber.org/zap"
 )
 
-// AuditService expected methods of a valid audit service
+// AuditService defines the interface for logging audit events.
+// Implementations should ensure audit logs are persisted reliably.
 type AuditService interface {
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 
-// GroupRepository expected methods of a valid group repository
+// GroupRepository defines the interface for group data persistence.
+// Implementations handle storage and retrieval of group data with support
+// for filtering, pagination, and complex queries.
 type GroupRepository interface {
 	CreateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error)
 	GetGroupByID(ctx context.Context, id string) (*UniversalGroup, error)
@@ -36,7 +46,10 @@ type GroupRepository interface {
 	BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string, status string) error
 }
 
-// Service holds and manages group business logic
+// Service manages group business logic and orchestrates group operations.
+//
+// The service handles validation, audit logging, and coordination between
+// the repository layer and application logic.
 type Service struct {
 	GroupRepository GroupRepository
 	AuditService    AuditService
