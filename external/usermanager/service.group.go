@@ -181,8 +181,6 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	log.Panic("test-ing-log-panic-in-group-stats")
-
 	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
 		log.Warn("failed-to-get-group-for-stats", zap.String("group-id", r.GroupID), zap.Error(err))
