@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"regexp"
-	"strings"
 
 	"github.com/ooaklee/ghatd/external/router"
 )
@@ -66,25 +65,4 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		}
 	})
 
-}
-
-// HandleUpdatePathToIndex updates the request's URL path to the root ("/") for non-asset routes.
-// It ensures that routes without specific file extensions are redirected to the index page,
-// preserving routing for static assets like JavaScript, CSS, images, and icons.
-func HandleUpdatePathToIndex(r *http.Request) *http.Request {
-	if !strings.HasSuffix(r.URL.Path, ".js") &&
-		!strings.HasSuffix(r.URL.Path, ".css") &&
-		!strings.HasSuffix(r.URL.Path, ".png") &&
-		!strings.HasSuffix(r.URL.Path, ".jpg") &&
-		!strings.HasSuffix(r.URL.Path, ".jpeg") &&
-		!strings.HasSuffix(r.URL.Path, ".gif") &&
-		!strings.HasSuffix(r.URL.Path, ".svg") &&
-		!strings.HasSuffix(r.URL.Path, ".ico") &&
-		!strings.HasSuffix(r.URL.Path, ".txt") &&
-		!strings.HasSuffix(r.URL.Path, ".woff") &&
-		!strings.HasSuffix(r.URL.Path, ".woff2") &&
-		!strings.HasSuffix(r.URL.Path, ".xml") {
-		r.URL.Path = "/"
-	}
-	return r
 }
