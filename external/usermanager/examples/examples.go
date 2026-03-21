@@ -705,22 +705,79 @@ func (m *MockGroupService) GetGroupByID(ctx context.Context, r *group.GetGroupBy
 	}, nil
 }
 
+func (m *MockGroupService) GetGroupByNanoID(ctx context.Context, r *group.GetGroupByNanoIDRequest) (*group.GetGroupByNanoIDResponse, error) {
+	// Reuse GetGroupByID behaviour and attach NanoID for testing
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.NanoID})
+	if err != nil {
+		return nil, err
+	}
+
+	groupResp.Group.NanoID = r.NanoID
+
+	return &group.GetGroupByNanoIDResponse{Group: groupResp.Group}, nil
+}
+
+func (m *MockGroupService) GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error) {
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]group.Member, 0, len(groupResp.Group.Members))
+	for _, member := range groupResp.Group.Members {
+		if r.MemberType != "" && member.Type != r.MemberType {
+			continue
+		}
+		if r.Role != "" && member.Role != r.Role {
+			continue
+		}
+		filtered = append(filtered, member)
+	}
+
+	return &group.GetGroupMembersResponse{
+		Members: filtered,
+		Count:   len(filtered),
+	}, nil
+}
+
 func (m *MockGroupService) AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error) {
 	// Return a properly populated group
 	mockGroup := createMockGroup(r.GroupID, "Updated Group", group.GroupTypeTeam, 5)
-	mockGroup.AddMember(r.MemberID, r.Type, r.Role)
+	if _, err := mockGroup.AddMember(r.MemberID, r.Type, r.Role); err != nil {
+		return nil, err
+	}
 
 	return &group.AddMemberResponse{
 		Group: mockGroup,
 	}, nil
 }
 
-func (m *MockGroupService) RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) error {
-	return nil
+func (m *MockGroupService) RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error) {
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	if err != nil {
+		return nil, err
+	}
+
+	updatedGroup, err := groupResp.Group.RemoveMember(r.MemberID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &group.RemoveMemberResponse{Group: updatedGroup}, nil
 }
 
-func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) error {
-	return nil
+func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) (*group.UpdateGroupResponse, error) {
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	if err != nil {
+		return nil, err
+	}
+
+	updatedGroup, err := groupResp.Group.UpdateMemberRole(r.MemberID, r.NewRole)
+	if err != nil {
+		return nil, err
+	}
+
+	return &group.UpdateGroupResponse{Group: updatedGroup}, nil
 }
 
 func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error) {

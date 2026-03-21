@@ -218,6 +218,59 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("get-user-groups-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetGroupDetailRequest maps incoming GetGroupDetail request to correct struct
+func MapRequestToGetGroupDetailRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupDetailRequest, error) {
+	var parsedRequest GetGroupDetailRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.GroupID = groupID
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetGroupStatsRequest maps incoming GetGroupStats request to correct struct
+func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupStatsRequest, error) {
+	var parsedRequest GetGroupStatsRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.GroupID = groupID
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyRequestFailedValidation)
 	}
 
@@ -365,20 +418,14 @@ func MapRequestToGetGroupsByTypeRequest(r *http.Request, validator UsermanagerVa
 		return nil, errors.New(ErrKeyUnableToIdentifyUser)
 	}
 
-	var err error
-	parsedRequest.GroupType, err = toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupType)
-	if err != nil {
-		log.Error("unable-get-group-type-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
-	}
-
 	query := r.URL.Query()
-	err = querydecoder.New(query).Decode(&parsedRequest)
+	err := querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
 		return nil, errors.New(ErrKeyRequestFailedValidation)
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("get-groups-by-type-request-validation-failed", zap.Error(err))
 		return nil, errors.New(ErrKeyRequestFailedValidation)
 	}
 

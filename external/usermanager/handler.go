@@ -27,6 +27,8 @@ type UsermanagerService interface {
 	FindUserInfo(ctx context.Context, r *FindUserInfoRequest) (*FindUserInfoResponse, error)
 	BulkUpdateUserGroupMemberships(ctx context.Context, r *BulkUpdateUserGroupMembershipsRequest) (*BulkUpdateUserGroupMembershipsResponse, error)
 	GetGroupsByType(ctx context.Context, r *GetGroupsByTypeRequest) (*GetGroupsByTypeResponse, error)
+	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
+	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
 }
 
@@ -300,6 +302,46 @@ func (h *Handler) GetUserTeamMemberships(w http.ResponseWriter, r *http.Request)
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Memberships)
+}
+
+// GetGroupDetail handles the request to fetch a group's details for the requester
+func (h *Handler) GetGroupDetail(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupDetailRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupDetail(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// GetGroupStats handles the request to fetch a group's stats for the requester
+func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupStatsRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupStats(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Stats)
 }
 
 // UpdateUserTeamMembership handles the request to update a user's team membership

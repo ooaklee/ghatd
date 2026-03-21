@@ -44,9 +44,11 @@ type ContacterService interface {
 type GroupService interface {
 	GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error)
 	GetGroupByID(ctx context.Context, r *group.GetGroupByIDRequest) (*group.GetGroupByIDResponse, error)
+	GetGroupByNanoID(ctx context.Context, r *group.GetGroupByNanoIDRequest) (*group.GetGroupByNanoIDResponse, error)
+	GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error)
 	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
-	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) error
-	UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) error
+	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error)
+	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateGroupResponse, error)
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
 }
 

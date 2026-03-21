@@ -506,6 +506,9 @@ func (r *Repository) buildGroupQueryFilter(req *GetGroupsRequest) bson.M {
 
 	// Type filters
 	if len(req.Types) > 0 {
+		for i, t := range req.Types {
+			req.Types[i] = strings.ToUpper(strings.TrimSpace(t))
+		}
 		queryFilter["type"] = bson.M{"$in": req.Types}
 	}
 

@@ -3,6 +3,7 @@ package usermanager
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/ooaklee/ghatd/external/group"
@@ -95,7 +96,16 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 	}
 
 	if r.GroupType != "" {
-		groupReq.Types = []string{r.GroupType}
+		parts := strings.Split(r.GroupType, ",")
+		types := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if t := strings.TrimSpace(p); t != "" {
+				types = append(types, t)
+			}
+		}
+		if len(types) > 0 {
+			groupReq.Types = types
+		}
 	}
 
 	if r.Status != "" {
@@ -137,6 +147,106 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 	}
 
 	return response, nil
+}
+
+// GetGroupDetail handles fetching a single group for a requester with membership/leadership checks
+func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	if err != nil || groupResp == nil || groupResp.Group == nil {
+		log.Warn("failed-to-get-group-detail", zap.String("group-id", r.GroupID), zap.Error(err))
+		return nil, errors.New(ErrKeyGroupNotFound)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	if !s.userHasGroupAccess(r.UserId, groupResp.Group, isAdmin) {
+		return nil, errors.New(ErrKeyGroupNotFound)
+	}
+
+	return &GetGroupDetailResponse{Group: groupResp.Group}, nil
+}
+
+// GetGroupStats handles fetching group stats for a requester with membership/leadership checks
+func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	log.Panic("test-ing-log-panic-in-group-stats")
+
+	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	if err != nil || groupResp == nil || groupResp.Group == nil {
+		log.Warn("failed-to-get-group-for-stats", zap.String("group-id", r.GroupID), zap.Error(err))
+		return nil, errors.New(ErrKeyGroupNotFound)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	if !s.userHasGroupAccess(r.UserId, groupResp.Group, isAdmin) {
+		return nil, errors.New(ErrKeyGroupNotFound)
+	}
+
+	totalUsers, roleBreakdown := s.calculateGroupSeatUsage(ctx, groupResp.Group, log)
+
+	capacity := 9999
+	if groupResp.Group.Settings != nil && groupResp.Group.Settings.MaxMembers > 0 {
+		capacity = groupResp.Group.Settings.MaxMembers
+	}
+
+	visibility := ""
+	if groupResp.Group.Settings != nil {
+		visibility = groupResp.Group.Settings.Visibility
+	}
+
+	email := ""
+	if groupResp.Group.DisplayInfo != nil {
+		email = groupResp.Group.DisplayInfo.Email
+	}
+
+	stats := GroupStats{
+		ID:         groupResp.Group.ID,
+		NanoID:     groupResp.Group.NanoID,
+		TotalUsers: totalUsers,
+		Seats: GroupSeatInfo{
+			Used:     totalUsers,
+			Capacity: capacity,
+		},
+		Visibility: visibility,
+		Email:      email,
+		Meta: GroupStatsMeta{
+			MemberCount:   groupResp.Group.GetMemberCount(),
+			RoleBreakdown: roleBreakdown,
+			Metadata:      groupResp.Group.Metadata,
+		},
+	}
+
+	return &GetGroupStatsResponse{Stats: stats}, nil
+}
+
+// GetGroupByNanoID fetches a group by its nano ID
+func (s *Service) GetGroupByNanoID(ctx context.Context, r *group.GetGroupByNanoIDRequest) (*group.GetGroupByNanoIDResponse, error) {
+	if s.GroupService == nil {
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	return s.GroupService.GetGroupByNanoID(ctx, r)
+}
+
+// GetGroupMembers fetches members for a group
+func (s *Service) GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error) {
+	if s.GroupService == nil {
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	return s.GroupService.GetGroupMembers(ctx, r)
 }
 
 // GetUserTeamMemberships handles fetching team memberships for a user
@@ -249,7 +359,7 @@ func (s *Service) UpdateUserTeamMembership(ctx context.Context, r *UpdateUserTea
 			for _, membership := range currentTeams {
 				if membership.IsMember && membership.Group.ID != r.GroupID {
 					// Remove from this group
-					err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
+					_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
 						GroupID:  membership.Group.ID,
 						MemberID: r.UserId,
 					})
@@ -326,7 +436,7 @@ func (s *Service) RemoveUserFromGroup(ctx context.Context, r *RemoveUserFromGrou
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
+	_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
 		GroupID:  r.GroupID,
 		MemberID: r.UserId,
 	})
@@ -449,7 +559,7 @@ func (s *Service) BulkUpdateUserGroupMemberships(ctx context.Context, r *BulkUpd
 			}
 
 		case "REMOVE":
-			err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
+			_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
 				GroupID:  action.GroupID,
 				MemberID: r.TargetUserId,
 			})
@@ -464,7 +574,7 @@ func (s *Service) BulkUpdateUserGroupMemberships(ctx context.Context, r *BulkUpd
 			}
 
 		case "UPDATE_ROLE":
-			err := s.GroupService.UpdateMemberRole(ctx, &group.UpdateMemberRoleRequest{
+			_, err := s.GroupService.UpdateMemberRole(ctx, &group.UpdateMemberRoleRequest{
 				GroupID:  action.GroupID,
 				MemberID: r.TargetUserId,
 				NewRole:  action.Role,
@@ -506,12 +616,24 @@ func (s *Service) GetGroupsByType(ctx context.Context, r *GetGroupsByTypeRequest
 	}
 
 	groupReq := &group.GetGroupsRequest{
-		Types:      []string{r.GroupType},
 		Page:       r.Page,
 		PerPage:    r.PerPage,
 		OrderBy:    r.Order,
 		Meta:       r.Meta,
 		NameSearch: r.Name,
+	}
+
+	if r.GroupType != "" {
+		parts := strings.Split(r.GroupType, ",")
+		types := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if t := strings.TrimSpace(p); t != "" {
+				types = append(types, t)
+			}
+		}
+		if len(types) > 0 {
+			groupReq.Types = types
+		}
 	}
 
 	if r.Status != "" {
@@ -659,4 +781,139 @@ func (s *Service) getUserAllGroups(ctx context.Context, userID string) ([]UserGr
 	}
 
 	return memberships, nil
+}
+
+// isRequesterAdmin safely checks if the requester has admin privileges
+func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.Logger) bool {
+	if s.UserService == nil {
+		return false
+	}
+
+	userResp, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: userID})
+	if err != nil || userResp == nil || userResp.User == nil {
+		log.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
+		return false
+	}
+
+	return userResp.User.IsAdmin()
+}
+
+// userHasGroupAccess verifies membership or leadership (or admin override)
+func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, isAdmin bool) bool {
+	if grp == nil {
+		return false
+	}
+
+	if isAdmin {
+		return true
+	}
+
+	if grp.HasMember(userID) {
+		return true
+	}
+
+	if grp.Leadership != nil {
+		if grp.Leadership.OwnerID == userID || grp.Leadership.HeadID == userID || grp.Leadership.LeadID == userID {
+			return true
+		}
+
+		for _, adminID := range grp.Leadership.AdminIDs {
+			if adminID == userID {
+				return true
+			}
+		}
+
+		for _, moderatorID := range grp.Leadership.ModeratorIDs {
+			if moderatorID == userID {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// calculateGroupSeatUsage computes total unique users including nested group members and leadership
+func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.UniversalGroup, log *zap.Logger) (int, map[string]int) {
+	seenGroups := make(map[string]struct{})
+	seenUsers := make(map[string]struct{})
+	roleBreakdown := make(map[string]int)
+
+	var walk func(*group.UniversalGroup)
+	walk = func(g *group.UniversalGroup) {
+		if g == nil {
+			return
+		}
+
+		if _, exists := seenGroups[g.ID]; exists {
+			return
+		}
+		seenGroups[g.ID] = struct{}{}
+
+		for _, member := range g.Members {
+			switch member.Type {
+			case group.MemberTypeUser:
+				if _, exists := seenUsers[member.ID]; !exists {
+					seenUsers[member.ID] = struct{}{}
+				}
+				if member.Role != "" {
+					roleKey := strings.ToUpper(member.Role)
+					roleBreakdown[roleKey]++
+				}
+			case group.MemberTypeGroup:
+				childResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: member.ID})
+				if err != nil || childResp == nil || childResp.Group == nil {
+					log.Warn("failed-to-get-nested-group", zap.String("child-group-id", member.ID), zap.Error(err))
+					continue
+				}
+				walk(childResp.Group)
+			}
+		}
+
+		if g.Leadership != nil {
+			leadRoles := []struct {
+				id   string
+				role string
+			}{
+				{id: g.Leadership.OwnerID, role: "OWNER"},
+				{id: g.Leadership.HeadID, role: "HEAD"},
+				{id: g.Leadership.LeadID, role: "LEAD"},
+			}
+
+			for _, lead := range leadRoles {
+				if lead.id == "" {
+					continue
+				}
+
+				if _, exists := seenUsers[lead.id]; !exists {
+					seenUsers[lead.id] = struct{}{}
+				}
+				roleBreakdown[lead.role]++
+			}
+
+			for _, adminID := range g.Leadership.AdminIDs {
+				if adminID == "" {
+					continue
+				}
+				if _, exists := seenUsers[adminID]; !exists {
+					seenUsers[adminID] = struct{}{}
+				}
+				roleBreakdown["ADMIN"]++
+			}
+
+			for _, moderatorID := range g.Leadership.ModeratorIDs {
+				if moderatorID == "" {
+					continue
+				}
+				if _, exists := seenUsers[moderatorID]; !exists {
+					seenUsers[moderatorID] = struct{}{}
+				}
+				roleBreakdown["MODERATOR"]++
+			}
+		}
+	}
+
+	walk(grp)
+
+	return len(seenUsers), roleBreakdown
 }

@@ -1,6 +1,10 @@
 package usermanager
 
-import "time"
+import (
+	"time"
+
+	"github.com/ooaklee/ghatd/external/group"
+)
 
 // UsageInfo represents usage statistics
 type UsageInfo struct {
@@ -56,6 +60,30 @@ type GroupSummary struct {
 
 	// CreatedAt is when the group was created
 	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// GroupSeatInfo describes current usage vs capacity for a group
+type GroupSeatInfo struct {
+	Used     int `json:"used"`
+	Capacity int `json:"capacity"`
+}
+
+// GroupStatsMeta holds auxiliary stats for a group
+type GroupStatsMeta struct {
+	MemberCount   int                  `json:"member_count"`
+	RoleBreakdown map[string]int       `json:"role_breakdown,omitempty"`
+	Metadata      *group.GroupMetadata `json:"metadata,omitempty"`
+}
+
+// GroupStats represents user-focused stats for a group
+type GroupStats struct {
+	ID         string         `json:"id"`
+	NanoID     string         `json:"nano_id,omitempty"`
+	TotalUsers int            `json:"total_users"`
+	Seats      GroupSeatInfo  `json:"seats"`
+	Visibility string         `json:"visibility,omitempty"`
+	Email      string         `json:"email,omitempty"`
+	Meta       GroupStatsMeta `json:"meta"`
 }
 
 // UserGroupMembership represents a user's membership in a specific group

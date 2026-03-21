@@ -2,6 +2,7 @@ package usermanager
 
 import (
 	"github.com/ooaklee/ghatd/external/contacter"
+	"github.com/ooaklee/ghatd/external/group"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -114,4 +115,14 @@ func (r *GetGroupsByTypeResponse) GetMetaData() map[string]interface{} {
 // CreateGroupResponse holds the response for creating a new group
 type CreateGroupResponse struct {
 	Group *GroupSummary `json:"group"`
+}
+
+// GetGroupDetailResponse holds the response for group detail
+type GetGroupDetailResponse struct {
+	Group *group.UniversalGroup `json:"group"`
+}
+
+// GetGroupStatsResponse holds the response for group stats
+type GetGroupStatsResponse struct {
+	Stats GroupStats `json:"stats"`
 }

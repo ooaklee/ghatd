@@ -43,10 +43,10 @@ type GetUserInsightsUsageRequest struct {
 	UserId string
 
 	// From the date from when the queries should be run between
-	From string
+	From string `query:"from"`
 
 	// To the date up to when the queries should be run between
-	To string
+	To string `query:"to"`
 }
 
 // CreateCommsRequest holds everything needed to make
@@ -82,13 +82,13 @@ type GetEnrichedUserProfileRequest struct {
 	UserId string
 
 	// IncludeTeams indicates whether to include team memberships
-	IncludeTeams bool
+	IncludeTeams bool `query:"include_teams"`
 
 	// IncludeDepartments indicates whether to include department memberships
-	IncludeDepartments bool
+	IncludeDepartments bool `query:"include_departments"`
 
 	// IncludeAllGroups indicates whether to include all group memberships
-	IncludeAllGroups bool
+	IncludeAllGroups bool `query:"include_all_groups"`
 }
 
 // GetUserGroupsRequest holds the data needed to get groups for a user
@@ -98,19 +98,19 @@ type GetUserGroupsRequest struct {
 	UserId string
 
 	// GroupType filters by group type (optional: TEAM, DEPARTMENT, etc.)
-	GroupType string
+	GroupType string `query:"types"`
 
 	// Status filters by group status (optional: ACTIVE, INACTIVE, etc.)
-	Status string
+	Status string `query:"status"`
 
 	// Page specifies the page results should be taken from. Default 1.
-	Page int
+	Page int `query:"page"`
 
 	// PerPage specifies the number of groups to return per page. Default 25. Max 100.
-	PerPage int `validate:"min=1,max=100"`
+	PerPage int `query:"per_page" validate:"max=100"`
 
 	// Meta indicates whether response should contain meta information
-	Meta bool
+	Meta bool `query:"meta"`
 }
 
 // GetUserTeamMembershipsRequest holds the data needed to get team memberships for a user
@@ -120,10 +120,10 @@ type GetUserTeamMembershipsRequest struct {
 	UserId string
 
 	// TargetUserId is the ID of the user to check memberships for (admin feature)
-	TargetUserId string
+	TargetUserId string `query:"target_user_id"`
 
 	// IncludeInactive indicates whether to include inactive teams
-	IncludeInactive bool
+	IncludeInactive bool `query:"include_inactive"`
 }
 
 // UpdateUserTeamMembershipRequest holds the data needed to update a user's team membership
@@ -136,13 +136,13 @@ type UpdateUserTeamMembershipRequest struct {
 	GroupID string
 
 	// Role is the role to assign (optional, uses default if not specified)
-	Role string
+	Role string `json:"role,omitempty"`
 
 	// RemoveFromOtherTeams indicates whether to leave other teams of the same type
-	RemoveFromOtherTeams bool
+	RemoveFromOtherTeams bool `json:"remove_from_other_teams,omitempty"`
 
 	// DisableNotification specifies whether to disable notifications for this action
-	DisableNotification bool
+	DisableNotification bool `json:"disable_notification,omitempty"`
 }
 
 // RemoveUserFromGroupRequest holds the data needed to remove a user from a group
@@ -155,23 +155,23 @@ type RemoveUserFromGroupRequest struct {
 	GroupID string
 
 	// DisableNotification specifies whether to disable notifications for this action
-	DisableNotification bool
+	DisableNotification bool `json:"disable_notification,omitempty" query:"disable_notification"`
 }
 
 // FindUserInfoRequest holds the data needed to find user information with flexible lookup
 type FindUserInfoRequest struct {
 
 	// UserId is the ID of the user to find (direct lookup)
-	UserId string
+	UserId string `query:"user_id"`
 
 	// Email is the email address to search by
-	Email string
+	Email string `query:"email"`
 
 	// IncludeTeamMemberships indicates whether to include team membership data
-	IncludeTeamMemberships bool
+	IncludeTeamMemberships bool `query:"include_team_memberships"`
 
 	// IncludeGroupMemberships indicates whether to include all group membership data
-	IncludeGroupMemberships bool
+	IncludeGroupMemberships bool `query:"include_group_memberships"`
 }
 
 // BulkUpdateUserGroupMembershipsRequest holds the data for bulk membership updates
@@ -184,10 +184,10 @@ type BulkUpdateUserGroupMembershipsRequest struct {
 	TargetUserId string
 
 	// Actions are the membership actions to perform
-	Actions []GroupMembershipAction
+	Actions []GroupMembershipAction `json:"actions"`
 
 	// DisableNotifications specifies whether to disable notifications for all actions
-	DisableNotifications bool
+	DisableNotifications bool `json:"disable_notifications,omitempty"`
 }
 
 // GetGroupsByTypeRequest holds the data needed to get groups filtered by type
@@ -197,28 +197,28 @@ type GetGroupsByTypeRequest struct {
 	UserId string
 
 	// GroupType is the type to filter by (TEAM, DEPARTMENT, ORGANIZATION, etc.)
-	GroupType string
+	GroupType string `query:"type"`
 
 	// Name filters groups by name (optional, partial match)
-	Name string
+	Name string `query:"name"`
 
 	// Status filters by status (optional: ACTIVE, INACTIVE, etc.)
-	Status string
+	Status string `query:"status"`
 
 	// OnlyUserMemberships returns only groups the user belongs to
-	OnlyUserMemberships bool
+	OnlyUserMemberships bool `query:"only_user_memberships"`
 
 	// Page specifies the page results should be taken from. Default 1.
-	Page int
+	Page int `query:"page"`
 
 	// PerPage specifies the number of groups to return per page. Default 25. Max 100.
-	PerPage int `validate:"min=1,max=100"`
+	PerPage int `query:"per_page" validate:"max=100"`
 
 	// Meta indicates whether response should contain meta information
-	Meta bool
+	Meta bool `query:"meta"`
 
 	// Order defines how results should be sorted (e.g., "name_asc", "created_at_desc")
-	Order string
+	Order string `query:"order"`
 }
 
 // CreateGroupRequest holds the data needed for an admin to create a new group
@@ -262,4 +262,24 @@ type CreateGroupRequest struct {
 
 	// LeadID is the ID of the group lead
 	LeadID string `json:"lead_id,omitempty"`
+}
+
+// GetGroupDetailRequest holds the data needed to fetch a specific group's detail
+type GetGroupDetailRequest struct {
+
+	// UserId is the ID of the requester
+	UserId string
+
+	// GroupID is the ID of the group to fetch
+	GroupID string
+}
+
+// GetGroupStatsRequest holds the data needed to fetch stats for a specific group
+type GetGroupStatsRequest struct {
+
+	// UserId is the ID of the requester
+	UserId string
+
+	// GroupID is the ID of the group to fetch
+	GroupID string
 }
