@@ -49,4 +49,8 @@ const (
 	// ErrKeyBillingManagerNoUserIdentifyingInformationInPayload is returned when unable to find a user from the provider's payload as no email is present
 	// so we have no way to identify the user
 	ErrKeyBillingManagerNoUserIdentifyingInformationInPayload = "BillingManagerNoUserIdentifyingInformationInPayload"
+
+	// ErrKeyBillingManagerProviderSyncFailed is returned when the provider's API sync fails
+	// during webhook processing (non-fatal: falls back to payload trust)
+	ErrKeyBillingManagerProviderSyncFailed = "BillingManagerProviderSyncFailed"
 )

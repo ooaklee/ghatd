@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -22,6 +23,31 @@ import (
 type StripeProvider struct {
 	config *Config
 	name   string
+}
+
+// StripeAllowedSyncEvents contains the normalised event types that should trigger
+// a re-sync of subscription state from Stripe's API. These are Stripe events where
+// the subscription state may have changed and we want authoritative data rather than
+// trusting the webhook payload. Based on Theo's recommended event list.
+var StripeAllowedSyncEvents = []string{
+	EventTypeCheckoutCompleted,
+	EventTypeSubscriptionCreated,
+	EventTypeSubscriptionUpdated,
+	EventTypeSubscriptionCancelled,
+	EventTypeSubscriptionPaused,
+	EventTypeSubscriptionResumed,
+	EventTypeSubscriptionPendingUpdateApplied,
+	EventTypeSubscriptionPendingUpdateExpired,
+	EventTypeTrialWillEnd,
+	EventTypeInvoicePaid,
+	EventTypePaymentFailed,
+	EventTypePaymentActionRequired,
+	EventTypeInvoiceUpcoming,
+	EventTypeInvoiceMarkedUncollectible,
+	EventTypePaymentSucceeded,
+	EventTypePaymentIntentSucceeded,
+	EventTypePaymentIntentFailed,
+	EventTypePaymentIntentCancelled,
 }
 
 // NewStripeProvider creates a new Stripe payment provider
@@ -397,8 +423,128 @@ func (s *StripeProvider) callStripeEndpoint(log *zap.Logger, method, endpoint st
 		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
 	}
 
-	log.Info("successfully-called-lemon-squeezy-endpoint")
+	log.Info("successfully-called-stripe-endpoint")
 	return responseBody, nil
+}
+
+// GetActiveSubscriptionByCustomerID fetches the latest subscription state directly
+// from Stripe's API using the customer ID. This implements Theo's "re-fetch from API"
+// pattern: instead of trusting webhook event data (which can be out of order, partial,
+// or stale), we use the event as a trigger and pull the authoritative subscription
+// state from Stripe.
+//
+// Calls: GET /v1/subscriptions?customer={id}&limit=1&status=all
+// Returns nil, nil if the customer has no subscriptions.
+func (s *StripeProvider) GetActiveSubscriptionByCustomerID(ctx context.Context, customerID string) (*SubscriptionInfo, error) {
+
+	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "get-active-subscription-by-customer-id")).With(zap.String("stripe-customer-id", customerID)).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	log.Info("handle-request-to-sync-subscription-by-customer-id")
+
+	baseURL := s.config.APIBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.stripe.com"
+	}
+
+	// List subscriptions for this customer, latest first, expand payment method
+	apiURL := fmt.Sprintf("%s/v1/subscriptions?customer=%s&limit=1&status=all", baseURL, customerID)
+	body, err := s.callStripeEndpoint(log, "GET", apiURL, nil, []int{http.StatusOK})
+	if err != nil {
+		return nil, err
+	}
+
+	var listResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &listResp); err != nil {
+		log.Error("failed-to-parse-subscriptions-list-response", zap.Error(err))
+		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+	}
+
+	// No subscriptions found for this customer
+	if len(listResp.Data) == 0 {
+		log.Info("no-subscriptions-found-for-customer")
+		return nil, nil
+	}
+
+	obj := listResp.Data[0]
+
+	info := &SubscriptionInfo{
+		SubscriptionID: getStringField(obj, "id"),
+		CustomerID:     getStringField(obj, "customer"),
+		Status:         stripeStatusToStandard(getStringField(obj, "status")),
+	}
+
+	// Period dates
+	if currentPeriodEnd, ok := obj["current_period_end"].(float64); ok {
+		info.NextBillingDate = time.Unix(int64(currentPeriodEnd), 0).Format(time.RFC3339)
+		info.CurrentPeriodEnd = info.NextBillingDate
+	}
+
+	if currentPeriodStart, ok := obj["current_period_start"].(float64); ok {
+		info.CurrentPeriodStart = time.Unix(int64(currentPeriodStart), 0).Format(time.RFC3339)
+	}
+
+	if currency, ok := obj["currency"].(string); ok {
+		info.Currency = strings.ToUpper(currency)
+	}
+
+	// CancelAtPeriodEnd — critical for knowing if user will lose access at period end
+	if cancelAtPeriodEnd, ok := obj["cancel_at_period_end"].(bool); ok {
+		info.CancelAtPeriodEnd = cancelAtPeriodEnd
+	}
+
+	// Extract price ID, plan name, amount, and billing interval from items
+	if items, ok := obj["items"].(map[string]interface{}); ok {
+		if data, ok := items["data"].([]interface{}); ok && len(data) > 0 {
+			if item, ok := data[0].(map[string]interface{}); ok {
+				if price, ok := item["price"].(map[string]interface{}); ok {
+					info.PriceID = getStringField(price, "id")
+					info.Amount = getFloatField(price, "unit_amount")
+					info.BillingInterval = getStringField(price, "recurring.interval")
+
+					// Try to get interval from nested recurring object
+					if info.BillingInterval == "" {
+						if recurring, ok := price["recurring"].(map[string]interface{}); ok {
+							info.BillingInterval = getStringField(recurring, "interval")
+						}
+					}
+				}
+
+				// Get plan product name
+				if plan, ok := item["plan"].(map[string]interface{}); ok {
+					if productId := getStringField(plan, "product"); productId != "" {
+						planName, err := s.getProductDetailsByProductID(ctx, productId)
+						if err != nil {
+							log.Warn("unable-to-get-product-name-during-sync", zap.Error(err))
+						} else {
+							info.PlanName = planName
+						}
+					}
+					info.PlanID = getStringField(plan, "id")
+				}
+			}
+		}
+	}
+
+	// Extract payment method if expanded
+	if pm, ok := obj["default_payment_method"].(map[string]interface{}); ok {
+		if card, ok := pm["card"].(map[string]interface{}); ok {
+			info.PaymentMethod = &PaymentMethodInfo{
+				Brand: getStringField(card, "brand"),
+				Last4: getStringField(card, "last4"),
+			}
+		}
+	}
+
+	// CancelledAt
+	if cancelledAt, ok := obj["canceled_at"].(float64); ok && cancelledAt > 0 {
+		info.CancelledAt = time.Unix(int64(cancelledAt), 0).Format(time.RFC3339)
+	}
+
+	log.Info("successfully-synced-subscription-by-customer-id", zap.String("subscription-id", info.SubscriptionID), zap.String("status", info.Status))
+
+	return info, nil
 }
 
 // Helper functions
@@ -415,14 +561,34 @@ func stripeEventToStandard(eventType string) string {
 		return EventTypeSubscriptionPaused
 	case "customer.subscription.resumed":
 		return EventTypeSubscriptionResumed
+	case "customer.subscription.pending_update_applied":
+		return EventTypeSubscriptionPendingUpdateApplied
+	case "customer.subscription.pending_update_expired":
+		return EventTypeSubscriptionPendingUpdateExpired
+	case "customer.subscription.trial_will_end":
+		return EventTypeTrialWillEnd
+	case "checkout.session.completed":
+		return EventTypeCheckoutCompleted
+	case "invoice.paid":
+		return EventTypeInvoicePaid
 	case "invoice.payment_succeeded":
 		return EventTypePaymentSucceeded
 	case "invoice.payment_failed":
 		return EventTypePaymentFailed
-	case "charge.refunded":
-		return EventTypePaymentRefunded
 	case "invoice.payment_action_required":
 		return EventTypePaymentActionRequired
+	case "invoice.upcoming":
+		return EventTypeInvoiceUpcoming
+	case "invoice.marked_uncollectible":
+		return EventTypeInvoiceMarkedUncollectible
+	case "charge.refunded":
+		return EventTypePaymentRefunded
+	case "payment_intent.succeeded":
+		return EventTypePaymentIntentSucceeded
+	case "payment_intent.payment_failed":
+		return EventTypePaymentIntentFailed
+	case "payment_intent.canceled":
+		return EventTypePaymentIntentCancelled
 	default:
 		return eventType
 	}

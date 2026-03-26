@@ -111,11 +111,30 @@ type SubscriptionInfo struct {
 	// CancelledAt is when the subscription was cancelled (if applicable)
 	CancelledAt string
 
+	// CancelAtPeriodEnd indicates whether the subscription will be cancelled at the end
+	// of the current billing period rather than immediately
+	CancelAtPeriodEnd bool
+
+	// PriceID is the provider's identifier for the price/plan tier (e.g., Stripe price_xxx)
+	PriceID string
+
+	// PaymentMethod contains the customer's payment method details (if available)
+	PaymentMethod *PaymentMethodInfo
+
 	// CancelURL is the provider's URL for cancellation
 	CancelURL string
 
 	// UpdateURL is the provider's URL for updating payment details
 	UpdateURL string
+}
+
+// PaymentMethodInfo contains details about the customer's payment method
+type PaymentMethodInfo struct {
+	// Brand is the card brand (e.g., "visa", "mastercard")
+	Brand string
+
+	// Last4 is the last four digits of the card number
+	Last4 string
 }
 
 // PriceInfo holds simplified price information

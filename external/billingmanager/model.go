@@ -20,6 +20,8 @@ type SubscriptionStatus struct {
 	UpdateURL          string     `json:"update_url,omitempty"`
 	IsActive           bool       `json:"is_active"`
 	IsInGoodStanding   bool       `json:"is_in_good_standing"`
+	CancelAtPeriodEnd  bool       `json:"cancel_at_period_end,omitempty"`
+	PriceID            string     `json:"price_id,omitempty"`
 }
 
 // BillingDetail represents detailed billing information

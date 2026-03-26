@@ -1,9 +1,11 @@
 package paymentprovider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 )
 
@@ -49,20 +51,62 @@ func (r *ProviderRegistry) List() []string {
 }
 
 // VerifyAndParseWebhookPayload is a convenience method that identifies the provider,
-// verifies the webhook, and parses the payload
+// verifies the webhook, and parses the payload.
+// It reads the request body once and resets it before each provider call to avoid
+// the body-consumption bug where VerifyWebhook drains req.Body leaving ParsePayload
+// with an empty reader.
 func (r *ProviderRegistry) VerifyAndParseWebhookPayload(ctx context.Context, providerName string, req *http.Request) (*WebhookPayload, error) {
 	provider, err := r.Get(providerName)
 	if err != nil {
 		return nil, err
 	}
 
+	// Read the body once so both VerifyWebhook and ParsePayload can consume it
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, errors.New(ErrKeyPaymentProviderInvalidPayload)
+	}
+
+	// Reset body for VerifyWebhook
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 	// Verify the webhook
 	if err := provider.VerifyWebhook(ctx, req); err != nil {
 		return nil, err
 	}
 
+	// Reset body for ParsePayload
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 	// Parse the payload
 	return provider.ParsePayload(ctx, req)
+}
+
+// SyncSubscriptionByCustomerID attempts to fetch the latest subscription state
+// directly from the provider's API using the customer ID. This implements Theo's
+// "re-fetch from API" pattern: treat webhooks as triggers, then pull authoritative
+// state from the provider rather than trusting the webhook payload data.
+//
+// Returns (info, true, nil) if the provider supports syncing and data was retrieved.
+// Returns (nil, true, nil) if the provider supports syncing but no subscription exists.
+// Returns (nil, false, nil) if the provider does not implement SubscriptionSyncer.
+func (r *ProviderRegistry) SyncSubscriptionByCustomerID(ctx context.Context, providerName string, customerID string) (*SubscriptionInfo, bool, error) {
+	provider, err := r.Get(providerName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	syncer, ok := provider.(SubscriptionSyncer)
+	if !ok {
+		return nil, false, nil
+	}
+
+	info, err := syncer.GetActiveSubscriptionByCustomerID(ctx, customerID)
+	if err != nil {
+		return nil, true, err
+	}
+
+	return info, true, nil
 }
 
 // CreateProviderFromConfig creates a provider instance from configuration

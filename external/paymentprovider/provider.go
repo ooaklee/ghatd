@@ -26,3 +26,16 @@ type Provider interface {
 	// This is useful for syncing state or retrieving information not in webhooks
 	GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error)
 }
+
+// SubscriptionSyncer is an optional interface that providers can implement to support
+// Theo's "re-fetch from API" pattern. Instead of trusting webhook payload data (which
+// can arrive out of order or contain partial updates), the billing system uses the
+// webhook as a trigger and then calls this method to get authoritative subscription
+// state directly from the provider's API.
+//
+// Providers that support this (e.g., Stripe) implement it alongside the base Provider
+// interface. Providers that don't (e.g., Ko-fi, which has no subscription API) are
+// unaffected — the billing system falls back to trusting the webhook payload.
+type SubscriptionSyncer interface {
+	GetActiveSubscriptionByCustomerID(ctx context.Context, customerID string) (*SubscriptionInfo, error)
+}

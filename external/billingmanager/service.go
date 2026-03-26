@@ -18,6 +18,7 @@ import (
 // ProviderRegistry defines the expected methods of a payment provider registry
 type ProviderRegistry interface {
 	VerifyAndParseWebhookPayload(ctx context.Context, providerName string, req *http.Request) (*paymentprovider.WebhookPayload, error)
+	SyncSubscriptionByCustomerID(ctx context.Context, providerName string, customerID string) (*paymentprovider.SubscriptionInfo, bool, error)
 }
 
 // AuditService interface for logging billing events (optional)
@@ -72,8 +73,12 @@ func (s *Service) WithUserService(userSvc UserService) *Service {
 	return s
 }
 
-// ProcessBillingProviderWebhooks handles incoming webhooks from payment providers
-// This is the main entry point for webhook processing
+// ProcessBillingProviderWebhooks handles incoming webhooks from payment providers.
+// This implements Theo's "re-fetch from API" pattern for providers that support it
+// (e.g., Stripe): the webhook is used only as a trigger to know something changed,
+// then authoritative subscription state is fetched directly from the provider's API.
+// For providers that don't support syncing (e.g., Ko-fi), it falls back to trusting
+// the webhook payload data.
 func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *ProcessBillingProviderWebhooksRequest) error {
 
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
@@ -101,9 +106,33 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 			return err
 		}
 
-		if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
-			log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
-			return err
+		// Theo's pattern: if the provider supports syncing (e.g., Stripe), use the
+		// webhook as a trigger and re-fetch authoritative state from the API rather
+		// than trusting the (potentially out-of-order/partial) webhook payload data.
+		syncedFromAPI := false
+		if payload.CustomerID != "" {
+			syncInfo, supported, syncErr := s.ProviderRegistry.SyncSubscriptionByCustomerID(ctx, req.ProviderName, payload.CustomerID)
+			if syncErr != nil {
+				log.Warn("provider-api-sync-failed-falling-back-to-payload", zap.String("provider", req.ProviderName), zap.String("customer-id", payload.CustomerID), zap.Error(syncErr))
+			} else if supported && syncInfo != nil {
+				log.Info("updating-subscription-from-provider-api-sync", zap.String("provider", req.ProviderName), zap.String("subscription-id", subscription.ID), zap.String("synced-status", syncInfo.Status))
+				if updateErr := s.updateSubscriptionFromSyncInfo(ctx, subscription, syncInfo); updateErr != nil {
+					log.Error("failed-to-update-subscription-from-sync-info", zap.String("provider", req.ProviderName), zap.String("subscription-id", subscription.ID), zap.Error(updateErr))
+					return updateErr
+				}
+				syncedFromAPI = true
+			}
+		}
+
+		// Fallback: if the provider doesn't support syncing, or if the sync returned
+		// nil (no subscription found via API), use the webhook payload data as-is.
+		// This keeps Ko-fi, LemonSqueezy, and other providers working unchanged.
+		if !syncedFromAPI {
+			log.Info("updating-subscription-from-webhook-payload", zap.String("provider", req.ProviderName), zap.String("subscription-id", subscription.ID))
+			if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
+				log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
+				return err
+			}
 		}
 
 		subscriptionId = subscription.ID
@@ -221,21 +250,33 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	subscription := subscriptionsResp.Subscriptions[0]
 	log.Info("subscription-status-retrieved", append(logFields, zap.String("subscription-id", subscription.ID))...)
 
+	subStatus := &SubscriptionStatus{
+		HasSubscription:    true,
+		Status:             subscription.Status,
+		PlanName:           subscription.PlanName,
+		Provider:           subscription.Integrator,
+		Amount:             subscription.Amount,
+		Currency:           subscription.Currency,
+		NextBillingDate:    subscription.NextBillingDate,
+		AvailableUntilDate: subscription.AvailableUntilDate,
+		CancelURL:          subscription.CancelURL,
+		UpdateURL:          subscription.UpdateURL,
+		IsActive:           subscription.IsActive(),
+		IsInGoodStanding:   subscription.IsInGoodStanding(),
+	}
+
+	// Surface provider-specific metadata if available
+	if subscription.Metadata != nil {
+		if priceID, ok := subscription.Metadata["price_id"].(string); ok {
+			subStatus.PriceID = priceID
+		}
+		if cancelAtPeriodEnd, ok := subscription.Metadata["cancel_at_period_end"].(bool); ok {
+			subStatus.CancelAtPeriodEnd = cancelAtPeriodEnd
+		}
+	}
+
 	return &GetUserSubscriptionStatusResponse{
-		SubscriptionStatus: &SubscriptionStatus{
-			HasSubscription:    true,
-			Status:             subscription.Status,
-			PlanName:           subscription.PlanName,
-			Provider:           subscription.Integrator,
-			Amount:             subscription.Amount,
-			Currency:           subscription.Currency,
-			NextBillingDate:    subscription.NextBillingDate,
-			AvailableUntilDate: subscription.AvailableUntilDate,
-			CancelURL:          subscription.CancelURL,
-			UpdateURL:          subscription.UpdateURL,
-			IsActive:           subscription.IsActive(),
-			IsInGoodStanding:   subscription.IsInGoodStanding(),
-		},
+		SubscriptionStatus: subStatus,
 	}, nil
 }
 
@@ -542,6 +583,84 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 		updateReq.CancelledAt = &now
 	}
 
+	_, err := s.BillingService.UpdateSubscription(ctx, updateReq)
+	return err
+}
+
+// updateSubscriptionFromSyncInfo updates a subscription using authoritative data
+// fetched directly from the provider's API (Theo's re-fetch pattern). This is preferred
+// over updateSubscriptionFromPayload for providers that support SubscriptionSyncer
+// because the API response is always current, unlike webhook payloads which can arrive
+// out of order or contain partial data.
+func (s *Service) updateSubscriptionFromSyncInfo(ctx context.Context, subscription *billing.Subscription, info *paymentprovider.SubscriptionInfo) error {
+
+	var (
+		log       = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logFields = []zap.Field{
+			zap.String("subscription-id", subscription.ID),
+			zap.String("synced-status", info.Status),
+		}
+	)
+
+	updateReq := &billing.UpdateSubscriptionRequest{
+		ID:     subscription.ID,
+		Status: &info.Status,
+	}
+
+	// Update plan info
+	if info.PlanName != "" {
+		updateReq.PlanName = &info.PlanName
+	}
+	if info.PlanID != "" {
+		updateReq.PlanID = &info.PlanID
+	}
+	if info.Currency != "" {
+		updateReq.Currency = &info.Currency
+	}
+	if info.BillingInterval != "" {
+		updateReq.BillingInterval = &info.BillingInterval
+	}
+
+	// Update amount from API (authoritative)
+	if info.Amount > 0 {
+		amount := int64(info.Amount)
+		updateReq.Amount = &amount
+	}
+
+	// Update dates
+	if info.NextBillingDate != "" {
+		log.Debug("updating-next-billing-date-from-sync", append(logFields, zap.String("next-billing-date", info.NextBillingDate))...)
+		nextBillingDate := parseTimeOrNil(info.NextBillingDate)
+		updateReq.NextBillingDate = nextBillingDate
+		// For Stripe, AvailableUntilDate mirrors NextBillingDate (access until period end)
+		updateReq.AvailableUntilDate = nextBillingDate
+	}
+
+	// Handle cancellation from API state
+	if info.CancelledAt != "" {
+		log.Info("marking-subscription-as-cancelled-from-sync", logFields...)
+		cancelledAt := parseTimeOrNil(info.CancelledAt)
+		updateReq.CancelledAt = cancelledAt
+	}
+
+	// Store provider-specific metadata (PriceID, CancelAtPeriodEnd, PaymentMethod)
+	metadata := make(map[string]interface{})
+	if subscription.Metadata != nil {
+		for k, v := range subscription.Metadata {
+			metadata[k] = v
+		}
+	}
+	if info.PriceID != "" {
+		metadata["price_id"] = info.PriceID
+	}
+	metadata["cancel_at_period_end"] = info.CancelAtPeriodEnd
+	if info.PaymentMethod != nil {
+		metadata["payment_method_brand"] = info.PaymentMethod.Brand
+		metadata["payment_method_last4"] = info.PaymentMethod.Last4
+	}
+	updateReq.Metadata = metadata
+
+	log.Info("updating-subscription-from-provider-api-sync", logFields...)
 	_, err := s.BillingService.UpdateSubscription(ctx, updateReq)
 	return err
 }

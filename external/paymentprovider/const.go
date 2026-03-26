@@ -87,6 +87,23 @@ const (
 	EventTypePaymentRefunded       = "payment.refunded"
 	EventTypePaymentActionRequired = "payment.action_required"
 
+	// Checkout events
+	EventTypeCheckoutCompleted = "checkout.completed"
+
+	// Invoice events
+	EventTypeInvoicePaid                = "invoice.paid"
+	EventTypeInvoiceUpcoming            = "invoice.upcoming"
+	EventTypeInvoiceMarkedUncollectible = "invoice.marked_uncollectible"
+
+	// Payment intent events
+	EventTypePaymentIntentSucceeded = "payment_intent.succeeded"
+	EventTypePaymentIntentFailed    = "payment_intent.failed"
+	EventTypePaymentIntentCancelled = "payment_intent.cancelled"
+
+	// Subscription pending update events
+	EventTypeSubscriptionPendingUpdateApplied = "subscription.pending_update_applied"
+	EventTypeSubscriptionPendingUpdateExpired = "subscription.pending_update_expired"
+
 	// Customer and trial events
 	EventTypeCustomerUpdated = "customer.updated"
 	EventTypeTrialWillEnd    = "trial.will_end"
