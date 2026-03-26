@@ -106,16 +106,16 @@ type Comms struct {
 	UpdatedAt string `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
 
 	// AdminNotes are notes added by admins regarding this comms
-	AdminNotes string `json:"admin_notes,omitempty" bson:"admin_notes,omitempty"`
+	AdminNotes string `json:"admin_notes,omitempty" bson:"admin_notes"`
 
 	// ReachedOutAt is the timestamp when an admin reached out to the user
 	ReachedOutAt string `json:"reached_out_at,omitempty" bson:"reached_out_at,omitempty"`
 
 	// AdminReply is the reply message from the admin to the user
-	AdminReply string `json:"admin_reply,omitempty" bson:"admin_reply,omitempty"`
+	AdminReply string `json:"admin_reply,omitempty" bson:"admin_reply"`
 
 	// LinkedCommsIds are the IDs of other comms linked to this one
-	LinkedCommsIds []string `json:"linked_comms_ids,omitempty" bson:"linked_comms_ids,omitempty"`
+	LinkedCommsIds []string `json:"linked_comms_ids,omitempty" bson:"linked_comms_ids"`
 }
 
 // take string, sanitize, and set correct comms type

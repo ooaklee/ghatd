@@ -101,16 +101,16 @@ type UpdateCommsRequest struct {
 	CommsId string
 
 	// AdminNotes are notes added by admins regarding this comms
-	AdminNotes string `json:"admin_notes,omitempty"`
+	AdminNotes *string `json:"admin_notes,omitempty"`
 
-	// ReachedOutAt indicates if the admin has reached out to the user
-	ReachedOut bool `json:"reached_out,omitempty"`
+	// ReachedOut indicates if the admin has reached out to the user
+	ReachedOut *bool `json:"reached_out,omitempty"`
 
 	// AdminReply is the reply message from the admin to the user
-	AdminReply string `json:"admin_reply,omitempty"`
+	AdminReply *string `json:"admin_reply,omitempty"`
 
 	// LinkedCommsIds are the IDs of other comms to link to this one
-	LinkedCommsIds []string `json:"linked_comms_ids,omitempty"`
+	LinkedCommsIds *[]string `json:"linked_comms_ids,omitempty"`
 }
 
 // GetMetaData returns a map of metadata about the GetCommsRequest, including the

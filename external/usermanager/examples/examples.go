@@ -578,16 +578,25 @@ func (m *MockContacterService) GetComms(ctx context.Context, req *contacter.GetC
 func (m *MockContacterService) UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error) {
 	// Simulate fetching existing comms and updating admin fields
 	comms := &contacter.Comms{
-		Id:             req.CommsId,
-		AdminNotes:     req.AdminNotes,
-		AdminReply:     req.AdminReply,
-		LinkedCommsIds: req.LinkedCommsIds,
-		UserLoggedIn:   true,
-		UpdatedAt:      time.Now().Format(time.RFC3339),
+		Id:           req.CommsId,
+		UserLoggedIn: true,
+		UpdatedAt:    time.Now().Format(time.RFC3339),
+	}
+
+	if req.AdminNotes != nil {
+		comms.AdminNotes = *req.AdminNotes
+	}
+
+	if req.AdminReply != nil {
+		comms.AdminReply = *req.AdminReply
+	}
+
+	if req.LinkedCommsIds != nil {
+		comms.LinkedCommsIds = *req.LinkedCommsIds
 	}
 
 	// Set reached out timestamp if flag is true
-	if req.ReachedOut {
+	if req.ReachedOut != nil && *req.ReachedOut {
 		comms.ReachedOutAt = time.Now().Format(time.RFC3339)
 	}
 

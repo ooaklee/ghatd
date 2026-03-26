@@ -188,13 +188,21 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 
 	comms := existingCommsSlice[0]
 
-	// Update admin fields
-	comms.AdminNotes = req.AdminNotes
-	comms.AdminReply = req.AdminReply
-	comms.LinkedCommsIds = req.LinkedCommsIds
+	// Update only the admin fields present on the request payload.
+	if req.AdminNotes != nil {
+		comms.AdminNotes = *req.AdminNotes
+	}
 
-	// Set reached out timestamp if flag is true and it wasn't previously set
-	if req.ReachedOut && comms.ReachedOutAt == "" {
+	if req.AdminReply != nil {
+		comms.AdminReply = *req.AdminReply
+	}
+
+	if req.LinkedCommsIds != nil {
+		comms.LinkedCommsIds = *req.LinkedCommsIds
+	}
+
+	// Set reached out timestamp if the provided flag is true and it wasn't previously set.
+	if req.ReachedOut != nil && *req.ReachedOut && comms.ReachedOutAt == "" {
 		comms.ReachedOutAt = toolbox.TimeNowUTC()
 	}
 
