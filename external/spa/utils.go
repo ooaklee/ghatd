@@ -15,12 +15,14 @@ type PathUpdateOptions struct {
 	bypassFileExtensions map[string]struct{}
 }
 
+// DefaultBypassExtensions defines the default file extensions that bypass SPA index rewriting.
+var DefaultBypassExtensions = []string{".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".txt", ".woff", ".woff2", ".traineddata", ".xml", ".avif"}
+
 // DefaultPathUpdateOptions returns the default options for NewHandleUpdatePathToIndex
 func DefaultPathUpdateOptions() *PathUpdateOptions {
-	defaultBypassExtensions := []string{".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".txt", ".woff", ".woff2", ".traineddata", ".xml", ".avif"}
 
 	result := &PathUpdateOptions{bypassFileExtensions: map[string]struct{}{}}
-	for _, extension := range defaultBypassExtensions {
+	for _, extension := range DefaultBypassExtensions {
 		result.bypassFileExtensions[extension] = struct{}{}
 	}
 
@@ -65,12 +67,35 @@ func IgnoreFileExtension(fileExtension string) PathOption {
 	}
 }
 
+// IgnoreDefaultFileExtensions removes all default bypass extensions from the
+// path update options.
+//
+// When passed to NewHandleUpdatePathToIndex, built-in static extensions
+// (for example .js, .css, .png) will no longer bypass SPA rewriting and will
+// be rewritten to "/" unless explicitly re-added with BypassWithFileExtension.
+func IgnoreDefaultFileExtensions() PathOption {
+
+	return func(options *PathUpdateOptions) {
+
+		for _, extension := range DefaultBypassExtensions {
+			if extension != "" {
+				delete(options.bypassFileExtensions, extension)
+			}
+		}
+	}
+}
+
 // NewHandleUpdatePathToIndex returns a request path updater for SPA routing.
 //
 // By default, common static file extensions are bypassed so those requests are
 // not rewritten to "/". Additional rules can be added with PathOption, for
 // example BypassWithFileExtension("webp") to allow an extension through
 // or IgnoreFileExtension("js") to force rewriting that extension to "/".
+//
+// Option order matters for default extensions:
+//
+// - IgnoreDefaultFileExtensions() then BypassWithFileExtension("js"): ".js" is added back and bypassed.
+// - BypassWithFileExtension("js") then IgnoreDefaultFileExtensions(): ".js" is removed again and rewritten.
 func NewHandleUpdatePathToIndex(options ...PathOption) func(r *http.Request) *http.Request {
 	pathOptions := DefaultPathUpdateOptions()
 	for _, option := range options {
