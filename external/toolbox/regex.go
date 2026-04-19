@@ -1,5 +1,7 @@
 package toolbox
 
+import "regexp"
+
 // ExampleEmailAddressDomainRegex regex pattern for the an example email address domain
 const ExampleEmailAddressDomainRegex string = ".*@example.io$"
 
@@ -18,3 +20,11 @@ const Base64EncodedRegex string = "^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-
 
 // UserRoleIdSuffixRegex is the pattern used when versioning the different roles (from payment integrators)
 const UserRoleIdSuffixRegex string = "(__[0-9]+)"
+
+// NonAlphanumericRegexEnglishAlphabetStringsRegex is the regex for pulling non alphanumeric characters
+// from english based alphabet strings
+var NonAlphanumericRegexEnglishAlphabetStringsRegex = regexp.MustCompile(`[^a-zA-Z0-9 ]+`)
+
+// NonAlphanumericRegexNonEnglishAlphabetStringsRegex is the regex for pulling non alphanumeric characters
+// from non-english based alphabet strings
+var NonAlphanumericRegexNonEnglishAlphabetStringsRegex = regexp.MustCompile(`[^\p{L}\p{N} ]+`)
