@@ -236,7 +236,8 @@ func (s *Service) GetPosts(ctx context.Context, req *GetPostsRequest) (*GetPosts
 		}(
 			toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithTypes),
 		),
-		Tags: toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithTags),
+		Tags:        toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithTags),
+		WithoutTags: toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithoutTags),
 		PostTextFormats: func(types []string) []TextFormat {
 			var postsTextFormat []TextFormat
 			for _, fmt := range types {

@@ -48,6 +48,9 @@ type GetTotalPostsRequest struct {
 	// Tags is the list of tags to filter by
 	Tags []string
 
+	// WithoutTags is the list of tags to filter out
+	WithoutTags []string
+
 	// PostTextFormats is the list of text formats to filter by
 	PostTextFormats []TextFormat
 
@@ -140,6 +143,10 @@ type GetPostsRequest struct {
 	// WithTags filters for post with the provided tags
 	// comma-separated list of tags
 	WithTags string `query:"with_tags"`
+
+	// WithoutTags filters for post without the provided tags
+	// comma-separated list of tags
+	WithoutTags string `query:"without_tags"`
 
 	// WithTextFormats filters for post with the provided text format
 	// comma-separated list of text formats

@@ -384,8 +384,18 @@ func (r *Repository) GetTotalPosts(ctx context.Context, req *GetTotalPostsReques
 		queryFilter["type"] = bson.M{"$in": standardisedProvidedPostTypes}
 	}
 
-	if len(req.Tags) > 0 {
-		queryFilter["tags"] = bson.M{"$in": req.Tags}
+	if len(req.Tags) > 0 || len(req.WithoutTags) > 0 {
+		tagFilter := bson.M{}
+
+		if len(req.Tags) > 0 {
+			tagFilter["$in"] = req.Tags
+		}
+
+		if len(req.WithoutTags) > 0 {
+			tagFilter["$nin"] = req.WithoutTags
+		}
+
+		queryFilter["tags"] = tagFilter
 	}
 
 	if len(req.PostTextFormats) > 0 {
@@ -530,8 +540,22 @@ func (r *Repository) GetPosts(ctx context.Context, req *GetPostsRequest) ([]Post
 		queryFilter = append(queryFilter, bson.E{Key: "type", Value: bson.M{"$in": internalToolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithTypes)}})
 	}
 
-	if req.WithTags != "" {
-		queryFilter = append(queryFilter, bson.E{Key: "tags", Value: bson.M{"$in": internalToolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithTags)}})
+	if req.WithTags != "" || req.WithoutTags != "" {
+		tagFilter := bson.M{}
+
+		withTags := internalToolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithTags)
+		if len(withTags) > 0 {
+			tagFilter["$in"] = withTags
+		}
+
+		withoutTags := internalToolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.WithoutTags)
+		if len(withoutTags) > 0 {
+			tagFilter["$nin"] = withoutTags
+		}
+
+		if len(tagFilter) > 0 {
+			queryFilter = append(queryFilter, bson.E{Key: "tags", Value: tagFilter})
+		}
 	}
 
 	if req.WithTextFormats != "" {

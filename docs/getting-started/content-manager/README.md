@@ -96,7 +96,7 @@ curl "http://localhost:8080/api/v1/cms/latest?types=article,changelog&limit=5"
 The changelog/glossary/faq/articles endpoints support common query params from `post.GetPostsRequest`, for example:
 
 ```bash
-curl "http://localhost:8080/api/v1/cms/changelog?per_page=10&page=1&meta=true&with_tags=bug-fix"
+curl "http://localhost:8080/api/v1/cms/changelog?per_page=10&page=1&meta=true&with_tags=bug-fix&without_tags=announcement"
 ```
 
 ## Behaviour Rules to Know
