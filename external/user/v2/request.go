@@ -26,6 +26,8 @@ type UpdateUserRequest struct {
 	Phone      string                 `json:"phone,omitempty"`
 	Status     string                 `json:"status,omitempty"`
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
+
+	User *UniversalUser `json:"-"`
 }
 
 // GetUserByIDRequest holds data for retrieving a user by ID

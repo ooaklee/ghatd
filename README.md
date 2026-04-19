@@ -53,7 +53,7 @@ A complete billing solution split into three composable packages for maximum fle
 
 ## Starting locally
 
-Before getting started please make sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [ASDF](https://github.com/asdf-vm/asdf) to install it with the following command
+Before getting started please make sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [ASDF](https://github.com/asdf-vm/asdf) to install it with the following command. **Minimum required Go version: 1.25.0** (older versions such as 1.23.x will fail to resolve dependencies like `golang.org/x/net@v0.52.0`).
 
 ```sh
 # Add the plugin for Go

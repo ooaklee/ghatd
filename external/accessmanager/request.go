@@ -5,7 +5,7 @@ import (
 	"net/url"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // RefreshTokenRequest holds refresh token which will be used to
@@ -47,7 +47,7 @@ type CreateUserRequest struct {
 // CreateEmailVerificationTokenRequest holds the data required for a user request
 type CreateEmailVerificationTokenRequest struct {
 	// User to create and send a verification token to
-	User user.User
+	User *userv2.UniversalUser
 
 	// IsDashboardRequest whether the request originates from
 	// our dashboard portal

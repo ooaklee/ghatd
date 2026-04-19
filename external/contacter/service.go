@@ -1,7 +1,10 @@
+// Package contacter implements contact management functionality for managing
+// user contacts, addresses, and communication preferences.
 package contacter
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -14,6 +17,8 @@ type contacterRepository interface {
 	GetTotalComms(ctx context.Context, req *GetTotalCommsRequest) (int64, error)
 	GetComms(ctx context.Context, req *GetCommsRequest) ([]Comms, error)
 	CreateComms(ctx context.Context, newComms *Comms) (*Comms, error)
+	UpdateComms(ctx context.Context, comms *Comms) (*Comms, error)
+	GetCommsByIds(ctx context.Context, commsIds []string) ([]Comms, error)
 }
 
 // Service represents the contacter service
@@ -46,6 +51,20 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 	logger.Debug("initiating-create-comms-request", zap.Any("request", req))
 
 	newComms = newComms.SetCommsType(string(req.Type)).SetStandardisedEmail(req.Email).SetStandardisedFullName(req.FullName)
+
+	// If UserId is not provided, FullName and Email are required
+	if req.UserId == "" {
+		var err error = nil
+		if req.FullName == "" {
+			err = errors.Join(err, errors.New(ErrKeyFullNameRequired))
+		}
+		if req.Email == "" {
+			err = errors.Join(err, errors.New(ErrKeyEmailRequired))
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if req.UserId != "" {
 		newComms.UserLoggedIn = true
@@ -139,4 +158,63 @@ func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetComms
 		PerPage:    paginatedResponse.ResourcePerPage,
 	}, nil
 
+}
+
+// UpdateComms updates an existing comms with admin information
+func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error) {
+
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	logger.Debug("initiating-update-comms-request", zap.Any("request", req))
+
+	if req.CommsId == "" {
+		return nil, errors.New(ErrKeyCommsIdRequired)
+	}
+
+	// Fetch existing comms to preserve existing data
+	existingCommsSlice, err := s.contacterRepository.GetCommsByIds(ctx, []string{req.CommsId})
+	if err != nil {
+		logger.Error("failed-to-update-comms-error-fetching-existing-comms", zap.String("comms_id", req.CommsId), zap.Error(err))
+		return &UpdateCommsResponse{}, err
+	}
+
+	if len(existingCommsSlice) == 0 {
+		return nil, errors.New(ErrKeyCommsNotFound)
+	}
+
+	comms := existingCommsSlice[0]
+
+	// Update only the admin fields present on the request payload.
+	if req.AdminNotes != nil {
+		comms.AdminNotes = *req.AdminNotes
+	}
+
+	if req.AdminReply != nil {
+		comms.AdminReply = *req.AdminReply
+	}
+
+	if req.LinkedCommsIds != nil {
+		comms.LinkedCommsIds = *req.LinkedCommsIds
+	}
+
+	// Set reached out timestamp if the provided flag is true and it wasn't previously set.
+	if req.ReachedOut != nil && *req.ReachedOut && comms.ReachedOutAt == "" {
+		comms.ReachedOutAt = toolbox.TimeNowUTC()
+	}
+
+	updatedComms, err := s.contacterRepository.UpdateComms(ctx, &comms)
+	if err != nil {
+		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", req), zap.Error(err))
+		return &UpdateCommsResponse{}, err
+	}
+
+	logger.Debug("update-comms-request-successful", zap.Any("request", req), zap.Any("updated-comms", updatedComms))
+
+	return &UpdateCommsResponse{
+		Comms: updatedComms,
+	}, nil
 }

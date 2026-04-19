@@ -8,5 +8,5 @@ import (
 // TODO: remove nolint
 // nolint will be used later
 var EphemeralStoreErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
-	ErrKeyRequestorLimitExceeded: {Title: "Rate Limited", Detail: "You have used up allocated requests allowance; please try again later or verify you have authenticated yourself.", StatusCode: 429},
+	ErrKeyRequestorLimitExceeded: {Title: "Rate Limited", Detail: "You have used up allocated requests allowance; please try again later or verify you have authenticated yourself.", StatusCode: 429, Code: "EPH0-001"},
 }

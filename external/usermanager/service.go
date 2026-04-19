@@ -6,17 +6,20 @@ import (
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/contacter"
+	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
 
 // UserService expected methods of a valid user service
 type UserService interface {
-	GetMicroProfile(ctx context.Context, r *user.GetMicroProfileRequest) (*user.GetMicroProfileResponse, error)
-	GetProfile(ctx context.Context, r *user.GetProfileRequest) (*user.GetProfileResponse, error)
-	UpdateUser(ctx context.Context, r *user.UpdateUserRequest) (*user.UpdateUserResponse, error)
-	DeleteUser(ctx context.Context, r *user.DeleteUserRequest) error
+	GetUserMicroProfile(ctx context.Context, r *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error)
+	GetUserProfile(ctx context.Context, r *userv2.GetUserProfileRequest) (*userv2.GetUserProfileResponse, error)
+	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
+	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
+	DeleteUser(ctx context.Context, r *userv2.DeleteUserRequest) error
 }
 
 // ApiTokenService expected methods of a valid api token service
@@ -34,6 +37,19 @@ type AuditService interface {
 type ContacterService interface {
 	CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error)
 	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
+	UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error)
+}
+
+// GroupService expected methods of a valid group service
+type GroupService interface {
+	GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error)
+	GetGroupByID(ctx context.Context, r *group.GetGroupByIDRequest) (*group.GetGroupByIDResponse, error)
+	GetGroupByNanoID(ctx context.Context, r *group.GetGroupByNanoIDRequest) (*group.GetGroupByNanoIDResponse, error)
+	GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error)
+	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
+	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error)
+	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateGroupResponse, error)
+	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
 }
 
 // Service holds and manages usermanager business logic
@@ -42,6 +58,7 @@ type Service struct {
 	ApiTokenService  ApiTokenService
 	AuditService     AuditService
 	ContacterService ContacterService
+	GroupService     GroupService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -70,10 +87,16 @@ func NewService(r *NewServiceRequest) *Service {
 	}
 }
 
+// WithGroupService adds group service integration
+func (s *Service) WithGroupService(groupSvc GroupService) *Service {
+	s.GroupService = groupSvc
+	return s
+}
+
 // UpdateUserProfile handles the business logic of updating the requesting user's profile
 func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error) {
-	serviceResponse, err := s.UserService.UpdateUser(ctx, &user.UpdateUserRequest{
-		Id:        r.UserId,
+	serviceResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+		ID:        r.UserId,
 		FirstName: r.FirstName,
 		LastName:  r.LastName,
 	})
@@ -89,30 +112,30 @@ func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileReq
 // GetUserMicroProfile handles the business logic of fetching the requesting user's micro profile
 func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error) {
 
-	serviceResponse, err := s.UserService.GetMicroProfile(ctx, &user.GetMicroProfileRequest{
-		Id: r.UserId,
+	serviceResponse, err := s.UserService.GetUserMicroProfile(ctx, &userv2.GetUserMicroProfileRequest{
+		ID: r.UserId,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetUserMicroProfileResponse{
-		GetMicroProfileResponse: serviceResponse,
+		GetUserMicroProfileResponse: serviceResponse,
 	}, nil
 }
 
 // GetUserProfile handles the business logic of fetching the requesting user's profile
 func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error) {
 
-	serviceResponse, err := s.UserService.GetProfile(ctx, &user.GetProfileRequest{
-		Id: r.UserId,
+	serviceResponse, err := s.UserService.GetUserProfile(ctx, &userv2.GetUserProfileRequest{
+		ID: r.UserId,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetUserProfileResponse{
-		GetProfileResponse: serviceResponse,
+		GetUserProfileResponse: serviceResponse,
 	}, nil
 }
 
@@ -126,7 +149,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 	loggr.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", r.UserId))
 
 	loggr.Info("initiate-wiping-user-account", zap.String("user-id", r.UserId))
-	err = s.UserService.DeleteUser(ctx, &user.DeleteUserRequest{Id: r.UserId})
+	err = s.UserService.DeleteUser(ctx, &userv2.DeleteUserRequest{ID: r.UserId})
 	if err != nil {
 		return err
 	}
@@ -191,4 +214,26 @@ func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetComms
 	response.Meta = commsResponse.GetMetaData()
 
 	return &response, nil
+}
+
+// UpdateComms handles the logic of updating a comms
+func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error) {
+
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	logger.Info("initiating-update-comms-request", zap.Any("request", req))
+
+	updateCommsResponse, err := s.ContacterService.UpdateComms(ctx, req.UpdateCommsRequest)
+	if err != nil {
+		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", req), zap.Error(err))
+		return &UpdateCommsResponse{}, err
+	}
+
+	return &UpdateCommsResponse{
+		Comms: updateCommsResponse.Comms,
+	}, nil
 }

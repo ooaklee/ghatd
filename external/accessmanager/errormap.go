@@ -34,4 +34,5 @@ var AccessmanagerErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestIt
 	ErrKeyInvalidLogOutUserOthersRequest:                      {Title: "Bad request to log off other devices", StatusCode: 400, Code: "AM00-024"},
 	ErrKeyInvalidAuthToken:                                    {Title: "Invalid authorization", StatusCode: 401, Code: "AM00-025"},
 	ErrKeyInvalidResultQueryParam:                             {Title: "Invalid result query param", StatusCode: 400, Code: "AM00-026"},
+	ErrKeyEmptyRefreshToken:                                   {Title: "Unauthorized", StatusCode: 401, Code: "AM00-027"},
 }

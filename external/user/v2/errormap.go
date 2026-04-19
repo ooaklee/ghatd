@@ -104,9 +104,9 @@ var UserErrorMap reply.ErrorManifest = reply.ErrorManifest{
 		Code:       "USV2-016",
 	},
 	ErrKeyNoChangesDetected: {
-		Title:      "Bad Request",
+		Title:      "Conflict",
 		Detail:     "No changes detected",
-		StatusCode: 400,
+		StatusCode: 409,
 		Code:       "USV2-017",
 	},
 	ErrKeyInvalidEmail: {

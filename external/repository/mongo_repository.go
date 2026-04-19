@@ -1,3 +1,14 @@
+// Package repository provides a flexible MongoDB repository implementation
+// with built-in logging, error handling, and common database operations.
+//
+// The package follows a helper pattern where common operations are abstracted
+// into a reusable helper, allowing for consistent error handling and logging
+// across all database interactions.
+//
+// Example usage:
+//
+//	repo := repository.NewMongoDbRepository(mongoClient, logger, "mydb")
+//	err := repo.ExecuteFindOneCommandDecodeResult(ctx, collection, filter, &result, "user", true, ErrUserNotFound)
 package repository
 
 import (

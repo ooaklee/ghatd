@@ -1,8 +1,6 @@
-# Billing Package Documentation
+# Billing
 
-## Overview
-
-The `billing` package (`external/billing`) provides core subscription and billing event management with MongoDB persistence. It forms the data layer of the billing system, handling storage, retrieval, and management of subscriptions and billing events with optimised indexes for performance.
+The `billing` package (`external/billing`) gives you the tools for core subscription and billing event management, with MongoDB persistence. It acts as the data layer for your billing system, handling how you store, retrieve, and manage subscriptions and billing events, using optimised indexes for better performance.
 
 ## Table of Contents
 
@@ -17,35 +15,35 @@ The `billing` package (`external/billing`) provides core subscription and billin
 ## Key Features
 
 ### 1. **Email-Based Subscriptions**
-Subscriptions can be created with just an email address, enabling pre-registration purchases:
-- Users can purchase before signing up
-- Automatic association when user creates account
-- Orphan subscription management tools
+Create subscriptions with just an email address, allowing for pre-registration purchases:
+- Users can purchase before signing up.
+- Automatic association when a user creates an account.
+- Tools for managing orphan subscriptions.
 
 ### 2. **Optimised MongoDB Indexes**
-Purpose-built indexes for efficient queries:
-- Standard user/email lookups
-- Partial indexes for orphaned subscriptions
-- Unique constraints preventing duplicates
-- Time-based sorting and filtering
+Comes with purpose-built indexes for efficient queries:
+- Standard user/email lookups.
+- Partial indexes for orphaned subscriptions.
+- Unique constraints to prevent duplicates.
+- Time-based sorting and filtering.
 
 ### 3. **Dual Repository Pattern**
-Flexible data access with two implementations:
-- **MongoDbStore**: Production-ready MongoDB persistence
-- **InMemoryRepositoryStore**: Testing and development
+A flexible data access layer with two implementations:
+- **MongoDbStore**: Production-ready MongoDB persistence.
+- **InMemoryRepositoryStore**: For testing and development.
 
 ### 4. **Comprehensive Event Tracking**
-Every billing action is recorded:
-- Payment events
-- Subscription changes
-- Status updates
-- Full audit trail
+Records every billing action:
+- Payment events.
+- Subscription changes.
+- Status updates.
+- A full audit trail.
 
 ## Architecture
 
 ### Service Layer
 
-The billing service provides business logic and orchestration:
+The billing service holds the business logic and orchestration:
 
 ```
 Application
@@ -83,16 +81,16 @@ Application
 
 The billing package uses two MongoDB collections:
 
-1. **`billing_subscriptions`** - Subscription records
-2. **`billing_events`** - Billing event history
+1. **`billing_subscriptions`** - Stores subscription records.
+2. **`billing_events`** - Holds the billing event history.
 
 ## MongoDB Setup
 
 ### Prerequisites
 
-- MongoDB 4.2 or higher
-- mongo-migrate library: `github.com/xakep666/mongo-migrate`
-- Go mongo driver: `go.mongodb.org/mongo-driver/mongo`
+- MongoDB 4.2 or higher.
+- `mongo-migrate` library: `github.com/xakep666/mongo-migrate`.
+- Go mongo driver: `go.mongodb.org/mongo-driver/mongo`.
 
 ### Installing Dependencies
 
@@ -103,7 +101,7 @@ go get go.mongodb.org/mongo-driver/mongo
 
 ### Running Migrations
 
-Create a migration runner to set up indexes:
+Create a migration runner to set up the indexes:
 
 ```go
 package main
@@ -185,11 +183,11 @@ Five indexes are created for the `billing_subscriptions` collection:
 
 | Index Name | Fields | Type | Purpose | Example Query |
 |------------|--------|------|---------|---------------|
-| `idx_subscriptions_user_id` | `user_id` | Standard | Fetch all subscriptions for a user | `db.billing_subscriptions.find({user_id: "user-123"})` |
-| `idx_subscriptions_email` | `email` | Standard | Query subscriptions by email | `db.billing_subscriptions.find({email: "user@example.com"})` |
-| `idx_subscriptions_email_no_user` | `email` | Partial | Find orphaned subscriptions (no user ID) | `db.billing_subscriptions.find({email: "user@example.com", user_id: {$in: ["", null]}})` |
-| `idx_subscriptions_integrator` | `integrator`, `integrator_subscription_id` | Unique Compound | Prevent duplicate subscriptions from same provider | Used internally by MongoDB for uniqueness |
-| `idx_subscriptions_created_at` | `created_at` | Standard (Descending) | Sort/filter by date | `db.billing_subscriptions.find().sort({created_at: -1})` |
+| `idx_subscriptions_user_id` | `user_id` | Standard | Fetch all subscriptions for a user. | `db.billing_subscriptions.find({user_id: "user-123"})` |
+| `idx_subscriptions_email` | `email` | Standard | Query subscriptions by email. | `db.billing_subscriptions.find({email: "user@example.com"})` |
+| `idx_subscriptions_email_no_user` | `email` | Partial | Find orphaned subscriptions (no user ID). | `db.billing_subscriptions.find({email: "user@example.com", user_id: {$in: ["", null]}})` |
+| `idx_subscriptions_integrator` | `integrator`, `integrator_subscription_id` | Unique Compound | Prevent duplicate subscriptions from the same provider. | Used internally by MongoDB for uniqueness. |
+| `idx_subscriptions_created_at` | `created_at` | Standard (Descending) | Sort/filter by date. | `db.billing_subscriptions.find().sort({created_at: -1})` |
 
 **Partial Index Details:**
 
@@ -213,10 +211,10 @@ Four indexes are created for the `billing_events` collection:
 
 | Index Name | Fields | Type | Purpose | Example Query |
 |------------|--------|------|---------|---------------|
-| `idx_billing_events_user_id` | `user_id` | Standard | Fetch event history for a user | `db.billing_events.find({user_id: "user-123"})` |
-| `idx_billing_events_email` | `email` | Standard | Query events by email | `db.billing_events.find({email: "user@example.com"})` |
-| `idx_billing_events_subscription_id` | `integrator_subscription_id` | Standard | Get all events for a subscription | `db.billing_events.find({integrator_subscription_id: "sub-123"})` |
-| `idx_billing_events_created_at` | `created_at` | Standard (Descending) | Sort/filter by date | `db.billing_events.find().sort({created_at: -1})` |
+| `idx_billing_events_user_id` | `user_id` | Standard | Fetch event history for a user. | `db.billing_events.find({user_id: "user-123"})` |
+| `idx_billing_events_email` | `email` | Standard | Query events by email. | `db.billing_events.find({email: "user@example.com"})` |
+| `idx_billing_events_subscription_id` | `integrator_subscription_id` | Standard | Get all events for a subscription. | `db.billing_events.find({integrator_subscription_id: "sub-123"})` |
+| `idx_billing_events_created_at` | `created_at` | Standard (Descending) | Sort/filter by date. | `db.billing_events.find().sort({created_at: -1})` |
 
 ### Verifying Indexes
 
@@ -265,22 +263,22 @@ go run cmd/mongo-migrator/migrator.go down 1
 
 ### Overview
 
-The billing package supports subscriptions without a user ID, enabling pre-registration purchases. This allows users to purchase subscriptions before creating an account.
+The billing package supports subscriptions without a user ID, enabling pre-registration purchases. This allows users to buy subscriptions before creating an account.
 
 ### Core Concept
 
 **Subscription States:**
 
-1. **Orphaned**: `UserID=""`, `Email="user@example.com"` (pre-registration)
-2. **Associated**: `UserID="user-123"`, `Email="user@example.com"` (after signup)
+1. **Orphaned**: `UserID=""`, `Email="user@example.com"` (pre-registration).
+2. **Associated**: `UserID="user-123"`, `Email="user@example.com"` (after signup).
 
 ### Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1. Pre-Registration Purchase                               │
-│     User purchases without account                          │
-│     Webhook creates subscription with email only            │
+│     User purchases without an account                       │
+│     Webhook creates a subscription with email only          │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
@@ -298,8 +296,8 @@ The billing package supports subscriptions without a user ID, enabling pre-regis
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  2. User Signs Up                                           │
-│     User creates account with same email                    │
-│     accessmanager calls AssociateSubscriptionsWithUser      │
+│     User creates an account with the same email             │
+│     `accessmanager` calls `AssociateSubscriptionsWithUser`  │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
@@ -320,26 +318,26 @@ The billing package supports subscriptions without a user ID, enabling pre-regis
 **1. Pre-Launch Sales**
 ```
 Marketing campaign before platform launch
-→ Users purchase early bird subscriptions
+→ Users purchase early-bird subscriptions
 → Platform launches
 → Users sign up
-→ Subscriptions automatically associated
+→ Subscriptions are automatically associated
 ```
 
 **2. Gift Subscriptions**
 ```
-Alice buys subscription for bob@example.com
-→ Bob doesn't have account yet
-→ Subscription stored with email
+Alice buys a subscription for bob@example.com
+→ Bob doesn't have an account yet
+→ Subscription is stored with the email
 → Bob signs up weeks later
-→ Gets subscription automatically
+→ Gets the subscription automatically
 ```
 
 **3. Corporate Bulk Purchases**
 ```
-Company admin buys 10 licenses
-→ Provides list of employee emails
-→ Subscriptions created for each email
+A company admin buys 10 licenses
+→ Provides a list of employee emails
+→ Subscriptions are created for each email
 → Employees sign up at their convenience
 → Each gets their subscription
 ```
@@ -348,7 +346,7 @@ Company admin buys 10 licenses
 
 #### Query by Email
 
-Retrieve subscriptions before user account exists:
+Retrieve subscriptions before a user account exists:
 
 ```go
 // Get all subscriptions for an email (regardless of user_id)
@@ -401,7 +399,7 @@ for _, event := range response.Events {
 Manually link email-based subscriptions to a user:
 
 ```go
-// When user signs up or when you want to manually associate
+// When a user signs up or when you want to manually associate
 result, err := billingService.AssociateSubscriptionsWithUser(ctx, 
     &billing.AssociateSubscriptionsWithUserRequest{
         UserID: "user-123",
@@ -525,24 +523,24 @@ db.billing_subscriptions.aggregate([
 ### Best Practices
 
 **1. Email Normalisation**
-- Emails are automatically converted to lowercase
-- Ensures consistent matching between purchase and signup
-- No manual normalisation required
+- Emails are automatically converted to lowercase.
+- This ensures consistent matching between purchase and signup.
+- No manual normalisation is required.
 
 **2. Monitoring**
-- Set up alerts for subscriptions orphaned > 30 days
-- Track conversion rate from orphaned to associated
-- Monitor by provider and date range
+- Set up alerts for subscriptions orphaned for more than 30 days.
+- Track the conversion rate from orphaned to associated.
+- Monitor by provider and date range.
 
 **3. User Experience**
-- Show "You have a pending subscription" message on signup page if email matches orphaned subscription
-- Send reminder emails to users with orphaned subscriptions
-- Provide clear instructions for claiming subscriptions
+- Show a "You have a pending subscription" message on the signup page if the email matches an orphaned subscription.
+- Send reminder emails to users with orphaned subscriptions.
+- Provide clear instructions for claiming subscriptions.
 
 **4. Administrative Tools**
-- Build admin dashboard showing orphaned subscriptions
-- Allow manual association via UI
-- Export orphaned subscriptions for analysis
+- Build an admin dashboard showing orphaned subscriptions.
+- Allow manual association via the UI.
+- Export orphaned subscriptions for analysis.
 
 ## Service Methods
 
@@ -559,7 +557,7 @@ response, err := billingService.CreateSubscription(ctx,
     &billing.CreateSubscriptionRequest{
         IntegratorSubscriptionID: "stripe_sub_abc123",
         Integrator:               "stripe",
-        UserID:                   "user-123",     // Can be empty for pre-reg
+        UserID:                   "user-123",     // Can be empty for pre-registration
         Email:                    "user@example.com",
         PlanName:                 "Pro Plan",
         Status:                   billing.StatusActive,

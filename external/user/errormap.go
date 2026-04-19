@@ -7,12 +7,13 @@ import (
 // UserErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // Use https://docs.microsoft.com/en-us/troubleshoot/iis/http-status-code to expand messages i.e. AccessDenied1
 var UserErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
-	ErrKeyInvalidUserBody:         {Title: "Bad Request", Detail: "Check submitted user information.", StatusCode: 400},
-	ErrKeyInvalidUserID:           {Title: "Bad Request", Detail: "User ID missing or malformatted.", StatusCode: 400},
-	ErrKeyUserNeverActivated:      {Title: "Invalid User State", Detail: "User resource state conflicts with request.", StatusCode: 409},
-	ErrKeyInvalidUserOriginStatus: {Title: "Invalid User State", Detail: "User resource state conflicts with request.", StatusCode: 409},
-	ErrKeyInvalidQueryParam:       {Title: "Bad Request.", Detail: "Invalid query param(s) passed.", StatusCode: 400},
-	ErrKeyPageOutOfRange:          {Title: "Bad Request.", Detail: "Page out of range.", StatusCode: 400},
-	ErrKeyResourceConflict:        {Title: "User registered on system.", StatusCode: 409},
-	ErrKeyResourceNotFound:        {Title: "User resource not found.", StatusCode: 404},
+	ErrKeyInvalidUserBody:         {Title: "Bad Request", Detail: "Check submitted user information.", StatusCode: 400, Code: "U0-001"},
+	ErrKeyInvalidUserID:           {Title: "Bad Request", Detail: "User ID missing or malformatted.", StatusCode: 400, Code: "U0-002"},
+	ErrKeyUserNeverActivated:      {Title: "Invalid User State", Detail: "User resource state conflicts with request.", StatusCode: 409, Code: "U0-003"},
+	ErrKeyInvalidUserOriginStatus: {Title: "Invalid User State", Detail: "User resource state conflicts with request.", StatusCode: 409, Code: "U0-004"},
+	ErrKeyInvalidQueryParam:       {Title: "Bad Request.", Detail: "Invalid query param(s) passed.", StatusCode: 400, Code: "U0-005"},
+	ErrKeyPageOutOfRange:          {Title: "Bad Request.", Detail: "Page out of range.", StatusCode: 400, Code: "U0-006"},
+	ErrKeyResourceConflict:        {Title: "Conflict", Detail: "User already exists on system.", StatusCode: 409, Code: "U0-007"},
+	ErrKeyResourceNotFound:        {Title: "Not Found", Detail: "User resource not found.", StatusCode: 404, Code: "U0-008"},
+	ErrKeyNoChangesDetected:       {Title: "Bad Request", Detail: "No changes detected.", StatusCode: 400, Code: "U0-009"},
 }

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/user"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // CreateUserAPITokenResponse  holds response data for CreateUserAPIToken request
@@ -16,7 +16,7 @@ type CreateUserAPITokenResponse struct {
 // CreateUserResponse holds response data for CreateUserResponse request
 type CreateUserResponse struct {
 	// User represents the user created on the platform
-	User user.User
+	User *userv2.UniversalUser
 }
 
 // TokenAsStringValidatorResponse holds the response for TokenAsStringValidator request
@@ -147,4 +147,14 @@ type OauthCallbackResponse struct {
 	// RequestUrl where the user should be redirected to once
 	// signed in
 	RequestUrl string
+}
+
+// MiddlewareAuthedUserResponse holds the data returned for authenticated user
+type MiddlewareAuthedUserResponse struct {
+
+	// UserID is the authenticated user's ID
+	UserID string
+
+	// User is the authenticated user
+	User *userv2.UniversalUser
 }

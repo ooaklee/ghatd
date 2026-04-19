@@ -1,3 +1,8 @@
+// Package emailmanager provides email sending functionality with template
+// support and integration with various email service providers.
+//
+// The package abstracts email provider details and provides a consistent
+// interface for sending transactional and marketing emails.
 package emailmanager
 
 import (

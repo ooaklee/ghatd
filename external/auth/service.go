@@ -1,3 +1,9 @@
+// Package auth implements JWT token signing, verification, and authentication
+// services. It provides functionality for creating and validating access tokens,
+// refresh tokens, and email verification tokens.
+//
+// The package supports standard JWT operations with HMAC signing and includes
+// user context extraction and validation.
 package auth
 
 import (
@@ -21,34 +27,38 @@ type UserModel interface {
 	GetUserStatus() string
 }
 
-// Service holds and manages auth business logic
+// Service manages JWT token creation, validation, and user authentication.
+// It handles access tokens, refresh tokens, and ephemeral tokens for various
+// authentication flows.
 type Service struct {
 	accessTokenSecret  string
 	refreshTokenSecret string
+	signingMethod      *jwt.SigningMethodHMAC
 }
 
-// NewServiceRequest holds expected variable needed for
-// a new auth service
-// TODO: Use a different secret for each token type
+// NewServiceRequest contains configuration for creating a new auth service.
+//
+// Both access and refresh token secrets should be cryptographically secure
+// random strings of at least 32 bytes.
 type NewServiceRequest struct {
 	AccessTokenSecret  string
 	RefreshTokenSecret string
 }
 
-// NewService creates auth service
+// NewService creates a new authentication service with the provided secrets.
+//
+// The service uses HS256 (HMAC with SHA-256) for token signing by default.
 func NewService(request *NewServiceRequest) *Service {
 	return &Service{
 		accessTokenSecret:  request.AccessTokenSecret,
 		refreshTokenSecret: request.RefreshTokenSecret,
+		signingMethod:      jwt.SigningMethodHS256,
 	}
 }
 
-// CreateInitalToken creates a shortlived JWT token to be used to verify user
-// name
-// TODO: Create tests
+// CreateInitalToken creates a short-lived JWT token for initial user verification.
+// The token is valid for 5 minutes and contains basic user information.
 func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
-	var err error
-
 	td := &TokenDetails{}
 	td.EtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(initialTokenDefaultTTL)
 	td.EtTTL = getTokenTimeToLive(td.EtExpires)
@@ -62,19 +72,18 @@ func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*Token
 		tokenClaimKeyExp:        td.EtExpires,
 	})
 
+	var err error
 	td.EphemeralToken, err = et.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signing ephemeral token: %w", err)
 	}
+
 	return td, nil
 }
 
-// CreateEmailVerificationToken creates a shortlived JWT token to be used to verify user's
-// email address. Gives user 10 minutes to verify account.
-// TODO: Create tests
+// CreateEmailVerificationToken creates a short-lived JWT token for email verification.
+// The token is valid for 10 minutes and must be used to verify the user's email address.
 func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
-	var err error
-
 	td := &TokenDetails{}
 	td.EvExpires = toolbox.GenerateTimeOfExpiryAsSeconds(emailVerificationTokenDefaultTTL)
 	td.EvTTL = getTokenTimeToLive(td.EvExpires)
@@ -88,21 +97,20 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 		tokenClaimKeyExp:        td.EvExpires,
 	})
 
+	var err error
 	td.EmailVerificationToken, err = evt.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signing email verification token: %w", err)
 	}
-	return td, nil
 
+	return td, nil
 }
 
-// CreateToken creates access and refresh JWT token to be used to
-// access some endpoints
-// TODO: Create tests
+// CreateToken creates access and refresh JWT tokens for user authentication.
+//
+// Access tokens are valid for 15 minutes and contain user session information.
+// Refresh tokens are valid for 7 days and can be used to obtain new access tokens.
 func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
-
-	var err error
-
 	td := &TokenDetails{}
 	td.AtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(accesstokenDefaultTTL)
 	td.AtTTL = getTokenTimeToLive(td.AtExpires)
@@ -119,9 +127,10 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 		AccessTokenTTLSeconds: td.AtExpires,
 	}))
 
+	var err error
 	td.AccessToken, err = at.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signing access token: %w", err)
 	}
 
 	// Create Refresh Token
@@ -133,30 +142,28 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 
 	td.RefreshToken, err = rt.SignedString([]byte(s.refreshTokenSecret))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signing refresh token: %w", err)
 	}
+
 	return td, nil
-
 }
 
-// ExtractToken attempts to retrieve bearer token out of request
-// Assume the token is passed in `Authorization` header. In the even
-// no header is passed error is returned
-// TODO: Create tests
+// ExtractToken retrieves the bearer token from the Authorization header.
+//
+// Returns an error if no Authorization header is present or if the header
+// format is invalid.
 func (s *Service) ExtractToken(ctx context.Context, r *http.Request) (string, error) {
-	headers := r.Header
-
-	_, ok := headers[httpHeaderKeyAuthorization]
-
-	if ok {
-		return getTokenFromHeaderBearerToken(r.Header.Get(httpHeaderKeyAuthorization)), nil
+	authorization := r.Header.Get(httpHeaderKeyAuthorization)
+	if authorization == "" {
+		return "", errors.New(ErrKeyNoBearerHeaderFound)
 	}
 
-	return "", errors.New(ErrKeyNoBearerHeaderFound)
+	return getTokenFromHeaderBearerToken(authorization), nil
 }
 
-// VerifyToken extracts and verifies token
-// TODO: Create tests
+// VerifyToken extracts and verifies the JWT token from the request.
+//
+// It validates the token signature and returns the parsed token if valid.
 func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token, error) {
 	tokenString, err := s.ExtractToken(ctx, r)
 	if err != nil {
@@ -166,46 +173,50 @@ func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token,
 	return s.ParseAccessTokenFromString(ctx, tokenString)
 }
 
-// ParseAccessTokenFromString parse string into token if valid, sure that the token is correctly signed.
-// Makes sure that the token method conform to "SigningMethodHMAC"
-// TODO: Create tests
+// ParseAccessTokenFromString parses and validates a JWT token string.
+//
+// It ensures the token uses HMAC signing and returns detailed errors for
+// expiration, malformed tokens, and other validation failures.
 func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
-	log := logger.AcquireFrom(ctx)
+	log := logger.Get(ctx)
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			log.Error("unexpected-signing-method:", zap.Any("method-used", token.Header[tokenHeaderKeyAlg]))
+			log.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
 			return nil, errors.New(ErrKeyUnauthorizedTokenUnexpectedSigningMethod)
 		}
 		return []byte(s.accessTokenSecret), nil
 	})
+
 	if err != nil {
-		switch err.Error() {
+		 switch err.Error() {
 		case "Token is expired":
 			return nil, errors.New(ErrKeyUnauthorizedParsedStringTokenExpired)
 		case "token contains an invalid number of segments":
 			return nil, errors.New(ErrKeyUnauthorizedMalformattedToken)
 		default:
-			log.Error("unknown-parsing-error:", zap.Error(err))
+			log.Error("token-parsing-error", zap.Error(err))
 			return nil, errors.New(ErrKeyUnauthorizedParsedStringUnknown)
 		}
 	}
+
 	return token, nil
 }
 
-// ParseRefreshTokenFromString parse string into token if valid, sure that the token is correctly signed.
-// Makes sure that the token method conform to "SigningMethodHMAC"
-// TODO: Create tests
+// ParseRefreshTokenFromString parses and validates a refresh token string.
+//
+// Similar to ParseAccessTokenFromString but uses the refresh token secret.
 func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
-	log := logger.AcquireFrom(ctx)
+	log := logger.Get(ctx)
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			log.Error("unexpected-signing-method:", zap.Any("method-used", token.Header[tokenHeaderKeyAlg]))
+			log.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
 			return nil, errors.New(ErrKeyUnauthorizedTokenUnexpectedSigningMethod)
 		}
 		return []byte(s.refreshTokenSecret), nil
 	})
+
 	if err != nil {
 		switch err.Error() {
 		case "Token is expired":
@@ -213,30 +224,31 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 		case "token contains an invalid number of segments":
 			return nil, errors.New(ErrKeyUnauthorizedMalformattedToken)
 		default:
-			log.Error("unknown-parsing-error:", zap.Error(err))
+			log.Error("token-parsing-error", zap.Error(err))
 			return nil, errors.New(ErrKeyUnauthorizedParsedStringUnknown)
 		}
 	}
+
 	return token, nil
 }
 
-// CheckTokenIsValid confirms if the token has expired/ is still
-// used
-// TODO: Create tests
+// CheckTokenIsValid verifies that the token is valid and has not expired.
 func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error {
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
 		return err
 	}
+
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
-		return err
+		return errors.New(ErrKeyUnauthorized)
 	}
+
 	return nil
 }
 
-// ExtractTokenMetadata retrieves token's meta data to be used to
-// query against persistent storage
-// TODO: Create tests
+// ExtractTokenMetadata retrieves and validates token metadata from the request.
+//
+// Returns TokenAccessDetails containing user ID, access UUID, and authorization status.
 func (s *Service) ExtractTokenMetadata(ctx context.Context, r *http.Request) (*TokenAccessDetails, error) {
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
@@ -244,11 +256,9 @@ func (s *Service) ExtractTokenMetadata(ctx context.Context, r *http.Request) (*T
 	}
 
 	return s.CheckAccessTokenValidityGetDetails(ctx, token)
-
 }
 
-// ExtractRefreshTokenMetadataByString retrieves refresh tokens
-// TODO: Create tests
+// ExtractRefreshTokenMetadataByString retrieves refresh token metadata from a token string.
 func (s *Service) ExtractRefreshTokenMetadataByString(ctx context.Context, tokenAsString string) (*TokenRefreshDetails, error) {
 	token, err := s.ParseRefreshTokenFromString(ctx, tokenAsString)
 	if err != nil {
@@ -258,8 +268,7 @@ func (s *Service) ExtractRefreshTokenMetadataByString(ctx context.Context, token
 	return s.GetRefreshTokenUUID(ctx, token)
 }
 
-// ExtractAccessTokenMetadataByString retrieves Access tokens
-// TODO: Create tests
+// ExtractAccessTokenMetadataByString retrieves access token metadata from a token string.
 func (s *Service) ExtractAccessTokenMetadataByString(ctx context.Context, tokenAsString string) (*TokenAccessDetails, error) {
 	token, err := s.ParseAccessTokenFromString(ctx, tokenAsString)
 	if err != nil {

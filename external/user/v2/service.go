@@ -94,18 +94,24 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 			Avatar:    req.Avatar,
 			Phone:     req.Phone,
 		}
+
+		user.SetFullName()
 	}
 
 	// Set roles
 	if len(req.Roles) > 0 {
 		user.Roles = req.Roles
 	} else {
+		user.Roles = []string{}
+
+		if s.Config.DefaultRole != "" {
+			user.Roles = append(user.Roles, s.Config.DefaultRole)
+		}
+
 		// Check if email matches auto-admin regex
 		isAutoAdmin := s.shouldBeAutoAdmin(user.Email)
 		if isAutoAdmin {
-			user.Roles = []string{UserRoleAdmin}
-		} else {
-			user.Roles = []string{UserRoleUser}
+			user.Roles = append(user.Roles, UserRoleAdmin)
 		}
 	}
 
@@ -134,6 +140,8 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 
 	// Set initial timestamps and state
 	user.SetInitialState()
+
+	user.Standardise()
 
 	// Validate user
 	if err := user.Validate(); err != nil {
@@ -227,72 +235,102 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*UpdateUserResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
+	targetUserId := req.ID
+	if req.User != nil && req.User.ID != "" {
+		targetUserId = req.User.ID
+	}
+
 	// Get existing user
-	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
+	user, err := s.UserRepository.GetUserByID(ctx, targetUserId)
 	if err != nil {
-		log.Error("failed to get user for update", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-update", zap.Error(err), zap.String("id", targetUserId))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
-	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	if req.User != nil {
+		userWithProvidedData := req.User
 
-	// Update fields
-	hasChanges := false
+		userWithProvidedData.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
-	if req.Email != "" && req.Email != user.Email {
-		// Check if new email already exists
-		existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
-		if existingUser != nil && existingUser.ID != user.ID {
-			return nil, errors.New(ErrKeyEmailAlreadyExists)
+		if userWithProvidedData.Email != "" && userWithProvidedData.Email != user.Email {
+			// Check if new email already exists
+			existingUser, _ := s.UserRepository.GetUserByEmail(ctx, userWithProvidedData.Email, false)
+			if existingUser != nil && existingUser.ID != user.ID {
+				return nil, errors.New(ErrKeyEmailAlreadyExists)
+			}
+			user.Email = normaliseUserEmail(userWithProvidedData.Email)
 		}
-		user.Email = normaliseUserEmail(req.Email)
-		hasChanges = true
+
+		userWithProvidedData.SetFullName()
+
+		user = userWithProvidedData
+
 	}
 
-	if req.FirstName != "" && req.FirstName != user.PersonalInfo.FirstName {
-		user.PersonalInfo.FirstName = req.FirstName
-		hasChanges = true
-	}
+	if req.User == nil {
+		user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
-	if req.LastName != "" && req.LastName != user.PersonalInfo.LastName {
-		user.PersonalInfo.LastName = req.LastName
-		hasChanges = true
-	}
+		// Update fields
+		hasChanges := false
 
-	if req.FullName != "" && req.FullName != user.PersonalInfo.FullName {
-		user.PersonalInfo.FullName = req.FullName
-		hasChanges = true
-	}
-
-	if req.Avatar != "" && req.Avatar != user.PersonalInfo.Avatar {
-		user.PersonalInfo.Avatar = req.Avatar
-		hasChanges = true
-	}
-
-	if req.Phone != "" && req.Phone != user.PersonalInfo.Phone {
-		user.PersonalInfo.Phone = req.Phone
-		hasChanges = true
-	}
-
-	if req.Status != "" && req.Status != user.Status {
-		_, err := user.UpdateStatus(req.Status)
-		if err != nil {
-			log.Error("failed to update user status", zap.Error(err))
-			return nil, err
+		if req.Email != "" && req.Email != user.Email {
+			// Check if new email already exists
+			existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
+			if existingUser != nil && existingUser.ID != user.ID {
+				return nil, errors.New(ErrKeyEmailAlreadyExists)
+			}
+			user.Email = normaliseUserEmail(req.Email)
+			hasChanges = true
 		}
-		hasChanges = true
-	}
 
-	if req.Extensions != nil {
-		for key, value := range req.Extensions {
-			user.SetExtension(key, value)
+		if req.FirstName != "" && req.FirstName != user.PersonalInfo.FirstName {
+			user.PersonalInfo.FirstName = req.FirstName
+			hasChanges = true
 		}
-		hasChanges = true
-	}
 
-	if !hasChanges {
-		return nil, errors.New(ErrKeyNoChangesDetected)
+		if req.LastName != "" && req.LastName != user.PersonalInfo.LastName {
+			user.PersonalInfo.LastName = req.LastName
+			hasChanges = true
+		}
+
+		if hasChanges {
+			user.SetFullName()
+		}
+
+		if req.FullName != "" && req.FullName != user.PersonalInfo.FullName {
+			user.PersonalInfo.FullName = req.FullName
+			hasChanges = true
+		}
+
+		if req.Avatar != "" && req.Avatar != user.PersonalInfo.Avatar {
+			user.PersonalInfo.Avatar = req.Avatar
+			hasChanges = true
+		}
+
+		if req.Phone != "" && req.Phone != user.PersonalInfo.Phone {
+			user.PersonalInfo.Phone = req.Phone
+			hasChanges = true
+		}
+
+		if req.Status != "" && req.Status != user.Status {
+			_, err := user.UpdateStatus(req.Status)
+			if err != nil {
+				log.Error("failed-to-update-user-status", zap.Error(err))
+				return nil, err
+			}
+			hasChanges = true
+		}
+
+		if req.Extensions != nil {
+			for key, value := range req.Extensions {
+				user.SetExtension(key, value)
+			}
+			hasChanges = true
+		}
+
+		if !hasChanges {
+			return &UpdateUserResponse{User: user}, nil
+		}
 	}
 
 	// Update timestamps
@@ -300,17 +338,19 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 	// Validate user
 	if err := user.Validate(); err != nil {
-		log.Error("user validation failed", zap.Error(err))
+		log.Error("user-validation-failed", zap.Error(err))
 		return nil, errors.New(ErrKeyValidationFailed)
 	}
 
 	// Ensure version is set to 2 for migrated users
 	user.EnsureVersion()
 
+	user.Standardise()
+
 	// Update in repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed to update user", zap.Error(err))
+		log.Error("failed-to-update-user", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -324,7 +364,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		})
 	}
 
-	log.Info("user updated successfully", zap.String("user-id", updatedUser.ID))
+	log.Info("user-updated-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &UpdateUserResponse{User: updatedUser}, nil
 }
@@ -336,14 +376,14 @@ func (s *Service) DeleteUser(ctx context.Context, req *DeleteUserRequest) error 
 	// Verify user exists
 	_, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("user not found", zap.Error(err), zap.String("id", req.ID))
+		log.Error("user-not-found", zap.Error(err), zap.String("id", req.ID))
 		return errors.New(ErrKeyUserNotFound)
 	}
 
 	// Delete user
 	err = s.UserRepository.DeleteUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to delete user", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-delete-user", zap.Error(err), zap.String("id", req.ID))
 		return errors.New(ErrKeyDatabaseError)
 	}
 
@@ -357,7 +397,7 @@ func (s *Service) DeleteUser(ctx context.Context, req *DeleteUserRequest) error 
 		})
 	}
 
-	log.Info("user deleted successfully", zap.String("user-id", req.ID))
+	log.Info("user-deleted-successfully", zap.String("user-id", req.ID))
 
 	return nil
 }
@@ -389,7 +429,7 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 
 	total, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
 	if err != nil {
-		log.Error("failed to get total users", zap.Error(err))
+		log.Error("failed-to-get-total-users", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -404,7 +444,7 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 	// Get users
 	users, err := s.UserRepository.GetUsers(ctx, req)
 	if err != nil {
-		log.Error("failed to get users", zap.Error(err))
+		log.Error("failed-to-get-users", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -432,7 +472,7 @@ func (s *Service) GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) 
 
 	total, err := s.UserRepository.GetTotalUsers(ctx, req)
 	if err != nil {
-		log.Error("failed to get total users", zap.Error(err))
+		log.Error("failed-to-get-total-users", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -446,7 +486,7 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user for status update", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-status-update", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
@@ -456,14 +496,14 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	// Update status
 	updatedUser, err := user.UpdateStatus(req.DesiredStatus)
 	if err != nil {
-		log.Error("failed to update user status", zap.Error(err))
+		log.Error("failed-to-update-user-status", zap.Error(err))
 		return nil, err
 	}
 
 	// Save to repository
 	updatedUser, err = s.UserRepository.UpdateUser(ctx, updatedUser)
 	if err != nil {
-		log.Error("failed to save user after status update", zap.Error(err))
+		log.Error("failed-to-save-user-after-status-update", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -477,7 +517,7 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 		})
 	}
 
-	log.Info("user status updated successfully", zap.String("user-id", updatedUser.ID), zap.String("status", req.DesiredStatus))
+	log.Info("user-status-updated-successfully", zap.String("user-id", updatedUser.ID), zap.String("status", req.DesiredStatus))
 
 	return &UpdateUserStatusResponse{User: updatedUser}, nil
 }
@@ -489,7 +529,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user for adding role", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-adding-role", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
@@ -502,7 +542,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed to save user after adding role", zap.Error(err))
+		log.Error("failed-to-save-user-after-adding-role", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -516,7 +556,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 		})
 	}
 
-	log.Info("user role added successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
+	log.Info("user-role-added-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
 
 	return &AddUserRoleResponse{User: updatedUser}, nil
 }
@@ -528,7 +568,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user for removing role", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-removing-role", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
@@ -541,7 +581,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed to save user after removing role", zap.Error(err))
+		log.Error("failed-to-save-user-after-removing-role", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -555,7 +595,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 		})
 	}
 
-	log.Info("user role removed successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
+	log.Info("user-role-removed-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
 
 	return &RemoveUserRoleResponse{User: updatedUser}, nil
 }
@@ -567,7 +607,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user for email verification", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-email-verification", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
@@ -580,7 +620,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed to save user after email verification", zap.Error(err))
+		log.Error("failed-to-save-user-after-email-verification", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -594,7 +634,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 		})
 	}
 
-	log.Info("user email verified successfully", zap.String("user-id", updatedUser.ID))
+	log.Info("user-email-verified-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &VerifyUserEmailResponse{User: updatedUser}, nil
 }
@@ -606,7 +646,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user for email unverification", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-email-unverification", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
@@ -619,7 +659,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed to save user after email unverification", zap.Error(err))
+		log.Error("failed-to-save-user-after-email-unverification", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -633,7 +673,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 		})
 	}
 
-	log.Info("user email unverified successfully", zap.String("user-id", updatedUser.ID))
+	log.Info("user-email-unverified-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &UnverifyUserEmailResponse{User: updatedUser}, nil
 }
@@ -645,7 +685,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user for phone verification", zap.Error(err), zap.String("id", req.ID))
+		log.Error("failed-to-get-user-for-phone-verification", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyUserNotFound)
 	}
 
@@ -658,7 +698,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed to save user after phone verification", zap.Error(err))
+		log.Error("failed-to-save-user-after-phone-verification", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
@@ -672,7 +712,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 		})
 	}
 
-	log.Info("user phone verified successfully", zap.String("user-id", updatedUser.ID))
+	log.Info("user-phone-verified-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &VerifyUserPhoneResponse{User: updatedUser}, nil
 }

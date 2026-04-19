@@ -87,6 +87,9 @@ const (
 
 	// ErrKeyInvalidResultQueryParam error when a user makes a request with invalid query param
 	ErrKeyInvalidResultQueryParam string = "InvalidResultQueryParam"
+
+	// ErrKeyEmptyRefreshToken error when a user makes a request with empty refresh token
+	ErrKeyEmptyRefreshToken string = "EmptyRefreshToken"
 )
 
 const (

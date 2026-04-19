@@ -93,6 +93,26 @@ type GetCommsRequest struct {
 	CreatedAtTo string `query:"created_at_to"`
 }
 
+// UpdateCommsRequest holds everything needed to make
+// the request to update a comms
+type UpdateCommsRequest struct {
+
+	// CommsId is the ID of the comms to update
+	CommsId string
+
+	// AdminNotes are notes added by admins regarding this comms
+	AdminNotes *string `json:"admin_notes,omitempty"`
+
+	// ReachedOut indicates if the admin has reached out to the user
+	ReachedOut *bool `json:"reached_out,omitempty"`
+
+	// AdminReply is the reply message from the admin to the user
+	AdminReply *string `json:"admin_reply,omitempty"`
+
+	// LinkedCommsIds are the IDs of other comms to link to this one
+	LinkedCommsIds *[]string `json:"linked_comms_ids,omitempty"`
+}
+
 // GetMetaData returns a map of metadata about the GetCommsRequest, including the
 // number of resources per page, the total number of resources, the total
 // number of pages, and the current page.
@@ -126,13 +146,15 @@ type CreateCommsRequest struct {
 	UserId string
 
 	// FullName is the full name of the person who made the comms
-	FullName string `json:"full_name" validate:"required"`
+	// Required if UserId is not provided
+	FullName string `json:"full_name"`
 
 	// Email is the email of the person who made the comms
-	Email string `json:"email" validate:"required,email"`
+	// Required if UserId is not provided
+	Email string `json:"email"`
 
 	// Type is the type of the comms
-	Type CommsType `json:"type" validate:"required"`
+	Type CommsType `json:"type"`
 
 	// Message is the body of the comms
 	Message string `json:"message"`
