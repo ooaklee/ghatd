@@ -512,3 +512,46 @@ func SplitCommaSeparatedStringAndRemoveEmptyStrings(str string) []string {
 	}
 	return result
 }
+
+// StringConvertToLowerSnakeCase converts a string to lowercase snake case by
+// trimming whitespace, removing special characters, converting to lowercase,
+// and replacing spaces with underscores.
+func StringConvertToLowerSnakeCase(text string) (string, error) {
+
+	// Trim string
+	text = strings.TrimSpace(text)
+
+	// Remove all the special characters
+	reg, err := regexp.Compile(`[^a-zA-Z0-9\\s]+`)
+	if err != nil {
+		return "", err
+	}
+	cleanedText := reg.ReplaceAllString(text, " ")
+
+	// Make sure it's lower case and remove double space
+	cleanedText = strings.ToLower(
+		StringRemoveMultiSpace(
+			cleanedText,
+		),
+	)
+
+	// Remove Spaces for hyphen
+	cleanedText = strings.ReplaceAll(cleanedText, " ", "_")
+
+	return cleanedText, nil
+}
+
+// StandardisedTypesAsStrings takes a slice of strings representing types and
+// returns a new slice with each type string converted to lowercase and with
+// spaces replaced by hyphens.
+func StandardisedTypesAsStrings[T ~string](types []T) []string {
+	standardisedTypes := []string{}
+	for _, typ := range types {
+		standardisedTypes = append(standardisedTypes, strings.ReplaceAll(
+			strings.ToLower(string(typ)),
+			" ",
+			"-",
+		))
+	}
+	return standardisedTypes
+}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/ettle/strcase"
 	"github.com/ooaklee/ghatd/external/logger"
-	"github.com/ooaklee/reply"
 	"go.uber.org/zap"
 )
 
@@ -15,11 +14,6 @@ const (
 	// ErrKeyPageOutOfRange returned when requested page is out of range
 	ErrKeyPageOutOfRange string = "PageOutOfRange"
 )
-
-// GetResourcePaginationErrorMap holds Error keys, their corresponding human-friendly message, and response status code
-var GetResourcePaginationErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
-	ErrKeyPageOutOfRange: {Title: "Bad Request", Detail: "Page out of range", StatusCode: 400, Code: "TLBPG-001"},
-}
 
 // ResponseMetaKey is a string type used as the keys in the map returned
 // by requests
