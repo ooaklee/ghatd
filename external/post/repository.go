@@ -470,14 +470,18 @@ func (r *Repository) GetTotalPosts(ctx context.Context, req *GetTotalPostsReques
 	}
 
 	if req.IsPublished {
-		// the date exists and it cannot be after now
+		// the date exists, is not empty, and cannot be after now
 		currentTime := toolbox.TimeNowUTC()
-		queryFilter["published_at"] = bson.M{"$exists": true, "$lte": currentTime}
+		queryFilter["published_at"] = bson.M{"$exists": true, "$ne": "", "$lte": currentTime}
 	}
 	if req.IsNotPublished {
-		// the date does not exist or it is after now
+		// the date does not exist, is empty, or is after now
 		currentTime := toolbox.TimeNowUTC()
-		queryFilter["published_at"] = bson.M{"$exists": false, "$gte": currentTime}
+		queryFilter["$or"] = []bson.M{
+			{"published_at": bson.M{"$exists": false}},
+			{"published_at": ""},
+			{"published_at": bson.M{"$gt": currentTime}},
+		}
 	}
 
 	collection, err := r.GetPostCollection(ctx)
@@ -626,14 +630,18 @@ func (r *Repository) GetPosts(ctx context.Context, req *GetPostsRequest) ([]Post
 	}
 
 	if req.IsPublished {
-		// the date exists and it cannot be after now
+		// the date exists, is not empty, and cannot be after now
 		currentTime := toolbox.TimeNowUTC()
-		queryFilter = append(queryFilter, bson.E{Key: "published_at", Value: bson.M{"$exists": true, "$lte": currentTime}})
+		queryFilter = append(queryFilter, bson.E{Key: "published_at", Value: bson.M{"$exists": true, "$ne": "", "$lte": currentTime}})
 	}
 	if req.IsNotPublished {
-		// the date does not exist or it is after now
+		// the date does not exist, is empty, or is after now
 		currentTime := toolbox.TimeNowUTC()
-		queryFilter = append(queryFilter, bson.E{Key: "published_at", Value: bson.M{"$exists": false, "$gte": currentTime}})
+		queryFilter = append(queryFilter, bson.E{Key: "$or", Value: []bson.M{
+			{"published_at": bson.M{"$exists": false}},
+			{"published_at": ""},
+			{"published_at": bson.M{"$gt": currentTime}},
+		}})
 	}
 
 	// generate sort filter from request
