@@ -26,8 +26,6 @@ type UserRepository interface {
 	DeleteUserByID(ctx context.Context, id string) error
 	GetUsers(ctx context.Context, req *GetUsersRequest) ([]UniversalUser, error)
 	GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) (int64, error)
-	GetUsersByRoles(ctx context.Context, roles []string, page, perPage int, order string) ([]UniversalUser, error)
-	GetUsersByStatus(ctx context.Context, status string, page, perPage int, order string) ([]UniversalUser, error)
 	SearchUsersByExtension(ctx context.Context, key string, value interface{}, page, perPage int) ([]UniversalUser, error)
 }
 
@@ -1004,102 +1002,6 @@ func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *BulkUpdateUser
 	return &BulkUpdateUsersStatusResponse{
 		UpdatedCount: successCount,
 		FailedIDs:    failedIDs,
-	}, nil
-}
-
-// GetUsersByRoles retrieves users with specific roles
-func (s *Service) GetUsersByRoles(ctx context.Context, req *GetUsersByRolesRequest) (*GetUsersByRolesResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-users-by-roles")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	// Validate pagination
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.PerPage < 1 || req.PerPage > 100 {
-		req.PerPage = 25
-	}
-
-	// Get users
-	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, &GetTotalUsersRequest{
-		RolesFilter: req.Roles,
-	})
-	if err != nil {
-		log.Error("failed-to-get-total-users-for-roles-search", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	users, err := s.UserRepository.GetUsersByRoles(ctx, req.Roles, req.Page, req.PerPage, req.Order)
-	if err != nil {
-		log.Error("failed-to-get-users-by-roles", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-
-	// Reinject dependencies for all users
-	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-	}
-
-	// handle page pagination
-	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetUsersByRolesResponse{
-		Users: paginatedResponse.Resources,
-		Meta: &PaginationMetadata{
-			Page:           paginatedResponse.Page,
-			PerPage:        paginatedResponse.ResourcePerPage,
-			TotalResources: int64(paginatedResponse.Total),
-			TotalPages:     paginatedResponse.TotalPages,
-		},
-	}, nil
-}
-
-// GetUsersByStatus retrieves users with a specific status
-func (s *Service) GetUsersByStatus(ctx context.Context, req *GetUsersByStatusRequest) (*GetUsersByStatusResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-users-by-status")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	// Validate pagination
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.PerPage < 1 || req.PerPage > 100 {
-		req.PerPage = 25
-	}
-
-	// Get users
-	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, &GetTotalUsersRequest{
-		StatusFilter: req.Status,
-	})
-	if err != nil {
-		log.Error("failed-to-get-total-users-for-status-search", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	users, err := s.UserRepository.GetUsersByStatus(ctx, req.Status, req.Page, req.PerPage, req.Order)
-	if err != nil {
-		log.Error("failed-to-get-users-by-status", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-
-	// Reinject dependencies for all users
-	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-	}
-
-	// handle page pagination
-	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetUsersByStatusResponse{
-		Users: paginatedResponse.Resources,
-		Meta: &PaginationMetadata{
-			Page:           paginatedResponse.Page,
-			PerPage:        paginatedResponse.ResourcePerPage,
-			TotalResources: int64(paginatedResponse.Total),
-			TotalPages:     paginatedResponse.TotalPages,
-		},
 	}, nil
 }
 

@@ -411,8 +411,8 @@ All v2 endpoints are under: `/api/v2/users`
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| GET | `/api/v2/users/by-roles?roles=ADMIN,USER` | Get users by roles | ✓ |
-| GET | `/api/v2/users/by-status?status=ACTIVE` | Get users by status | ✓ |
+| GET | `/api/v2/users?with_roles=ADMIN,USER` | List users filtered by roles | ✓ |
+| GET | `/api/v2/users?with_status=ACTIVE` | List users filtered by status | ✓ |
 | GET | `/api/v2/users/search/extensions?key=x&value=y` | Search by extension | ✓ |
 
 ### Bulk Operations

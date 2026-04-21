@@ -128,18 +128,6 @@ type BulkUpdateUsersStatusResponse struct {
 	FailedIDs    []string `json:"failed_ids,omitempty"`
 }
 
-// GetUsersByRolesResponse holds the response for retrieving users by roles
-type GetUsersByRolesResponse struct {
-	Users []UniversalUser     `json:"users"`
-	Meta  *PaginationMetadata `json:"meta"`
-}
-
-// GetUsersByStatusResponse holds the response for retrieving users by status
-type GetUsersByStatusResponse struct {
-	Users []UniversalUser     `json:"users"`
-	Meta  *PaginationMetadata `json:"meta"`
-}
-
 // DeleteUserResponse holds the response for deleting a user (if needed)
 type DeleteUserResponse struct {
 	Success bool   `json:"success"`

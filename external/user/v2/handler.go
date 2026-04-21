@@ -32,8 +32,6 @@ type UserService interface {
 	ValidateUser(ctx context.Context, r *ValidateUserRequest) (*ValidateUserResponse, error)
 	SearchUsersByExtension(ctx context.Context, r *SearchUsersByExtensionRequest) (*SearchUsersByExtensionResponse, error)
 	BulkUpdateUsersStatus(ctx context.Context, r *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error)
-	GetUsersByRoles(ctx context.Context, r *GetUsersByRolesRequest) (*GetUsersByRolesResponse, error)
-	GetUsersByStatus(ctx context.Context, r *GetUsersByStatusRequest) (*GetUsersByStatusResponse, error)
 }
 
 // UserValidator interface defines expected methods of a valid validator
@@ -433,38 +431,4 @@ func (h *Handler) BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
-}
-
-// GetUsersByRoles handles retrieving users by roles
-func (h *Handler) GetUsersByRoles(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetUsersByRolesRequest(r, h.Validator)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.GetUsersByRoles(r.Context(), request)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
-}
-
-// GetUsersByStatus handles retrieving users by status
-func (h *Handler) GetUsersByStatus(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetUsersByStatusRequest(r, h.Validator)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.GetUsersByStatus(r.Context(), request)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
 }

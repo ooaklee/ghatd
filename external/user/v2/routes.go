@@ -31,8 +31,6 @@ type UserHandler interface {
 	ValidateUser(w http.ResponseWriter, r *http.Request)
 	SearchUsersByExtension(w http.ResponseWriter, r *http.Request)
 	BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request)
-	GetUsersByRoles(w http.ResponseWriter, r *http.Request)
-	GetUsersByStatus(w http.ResponseWriter, r *http.Request)
 }
 
 // APIUsersV2Prefix base URI prefix for all v2 users routes
@@ -77,8 +75,6 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/personal-info", request.Handler.UpdateUserPersonalInfo).Methods(http.MethodPatch, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/validate", request.Handler.ValidateUser).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/search/extensions", request.Handler.SearchUsersByExtension).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/by-roles", request.Handler.GetUsersByRoles).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/by-status", request.Handler.GetUsersByStatus).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
 	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
 }

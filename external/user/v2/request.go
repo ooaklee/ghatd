@@ -180,19 +180,3 @@ type BulkUpdateUsersStatusRequest struct {
 	IDs           []string `json:"ids"`
 	DesiredStatus string   `json:"desired_status"`
 }
-
-// GetUsersByRolesRequest holds data for retrieving users by roles
-type GetUsersByRolesRequest struct {
-	Roles   []string `query:"roles"`
-	Page    int      `query:"page"`
-	PerPage int      `query:"per_page"`
-	Order   string   `query:"order"`
-}
-
-// GetUsersByStatusRequest holds data for retrieving users by status
-type GetUsersByStatusRequest struct {
-	Status  string `query:"status"`
-	Page    int    `query:"page"`
-	PerPage int    `query:"per_page"`
-	Order   string `query:"order"`
-}

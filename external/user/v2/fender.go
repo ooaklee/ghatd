@@ -441,46 +441,6 @@ func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator U
 	return parsedRequest, nil
 }
 
-// MapRequestToGetUsersByRolesRequest maps incoming GetUsersByRoles request to correct struct
-func MapRequestToGetUsersByRolesRequest(request *http.Request, validator UserValidator) (*GetUsersByRolesRequest, error) {
-	var err error
-	parsedRequest := &GetUsersByRolesRequest{}
-
-	// get request queries
-	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	return parsedRequest, nil
-}
-
-// MapRequestToGetUsersByStatusRequest maps incoming GetUsersByStatus request to correct struct
-func MapRequestToGetUsersByStatusRequest(request *http.Request, validator UserValidator) (*GetUsersByStatusRequest, error) {
-	var err error
-	parsedRequest := &GetUsersByStatusRequest{}
-
-	// get request queries
-	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	return parsedRequest, nil
-}
-
 // validateParsedRequest validates based on tags. On failure an error is returned
 func validateParsedRequest(request interface{}, validator UserValidator) error {
 	return validator.Validate(request)
