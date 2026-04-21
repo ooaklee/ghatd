@@ -26,7 +26,6 @@ type UserRepository interface {
 	DeleteUserByID(ctx context.Context, id string) error
 	GetUsers(ctx context.Context, req *GetUsersRequest) ([]UniversalUser, error)
 	GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) (int64, error)
-	SearchUsersByExtension(ctx context.Context, key string, value interface{}, page, perPage int) ([]UniversalUser, error)
 }
 
 // Service holds and manages user business logic
@@ -422,6 +421,8 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 		OnlyAdmin:       req.OnlyAdmin,
 		EmailVerified:   req.EmailVerified,
 		PhoneVerified:   req.PhoneVerified,
+		ExtensionKey:    req.ExtensionKey,
+		ExtensionValue:  req.ExtensionValue,
 	}
 
 	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
@@ -923,55 +924,6 @@ func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*
 	}
 
 	return &ValidateUserResponse{Valid: true, Errors: []string{}}, nil
-}
-
-// SearchUsersByExtension searches for users by extension field value
-func (s *Service) SearchUsersByExtension(ctx context.Context, req *SearchUsersByExtensionRequest) (*SearchUsersByExtensionResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "search-users-by-extension")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	// Validate pagination
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.PerPage < 1 || req.PerPage > 100 {
-		req.PerPage = 25
-	}
-
-	// Search
-	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, &GetTotalUsersRequest{
-		ExtensionKey:   req.Key,
-		ExtensionValue: req.Value,
-	})
-	if err != nil {
-		log.Error("failed-to-get-total-users-for-extension-search", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	users, err := s.UserRepository.SearchUsersByExtension(ctx, req.Key, req.Value, req.Page, req.PerPage)
-	if err != nil {
-		log.Error("failed-to-search-users-by-extension", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-
-	// Reinject dependencies for all users
-	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-	}
-
-	// handle page pagination
-	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
-	if err != nil {
-		return nil, err
-	}
-
-	return &SearchUsersByExtensionResponse{
-		Users: paginatedResponse.Resources,
-		Meta: &PaginationMetadata{
-			Page:           paginatedResponse.Page,
-			PerPage:        paginatedResponse.ResourcePerPage,
-			TotalResources: int64(paginatedResponse.Total),
-			TotalPages:     paginatedResponse.TotalPages,
-		},
-	}, nil
 }
 
 // BulkUpdateUsersStatus updates status for multiple users

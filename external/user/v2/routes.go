@@ -29,7 +29,6 @@ type UserHandler interface {
 	GetUserExtension(w http.ResponseWriter, r *http.Request)
 	UpdateUserPersonalInfo(w http.ResponseWriter, r *http.Request)
 	ValidateUser(w http.ResponseWriter, r *http.Request)
-	SearchUsersByExtension(w http.ResponseWriter, r *http.Request)
 	BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request)
 }
 
@@ -74,7 +73,6 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/extensions/{extensionKey}", request.Handler.GetUserExtension).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/personal-info", request.Handler.UpdateUserPersonalInfo).Methods(http.MethodPatch, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/validate", request.Handler.ValidateUser).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/search/extensions", request.Handler.SearchUsersByExtension).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
 	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
 }

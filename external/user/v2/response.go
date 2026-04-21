@@ -116,12 +116,6 @@ type ValidateUserResponse struct {
 	Errors []string `json:"errors,omitempty"`
 }
 
-// SearchUsersByExtensionResponse holds the response for searching users by extension field
-type SearchUsersByExtensionResponse struct {
-	Users []UniversalUser     `json:"users"`
-	Meta  *PaginationMetadata `json:"meta"`
-}
-
 // BulkUpdateUsersStatusResponse holds the response for bulk updating user statuses
 type BulkUpdateUsersStatusResponse struct {
 	UpdatedCount int      `json:"updated_count"`

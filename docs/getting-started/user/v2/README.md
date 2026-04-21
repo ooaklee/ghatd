@@ -413,7 +413,7 @@ All v2 endpoints are under: `/api/v2/users`
 |--------|----------|-------------|------------|
 | GET | `/api/v2/users?with_roles=ADMIN,USER` | List users filtered by roles | ✓ |
 | GET | `/api/v2/users?with_status=ACTIVE` | List users filtered by status | ✓ |
-| GET | `/api/v2/users/search/extensions?key=x&value=y` | Search by extension | ✓ |
+| GET | `/api/v2/users?with_extension_key=x&with_extension_value=y` | List users filtered by extension key/value | ✓ |
 
 ### Bulk Operations
 

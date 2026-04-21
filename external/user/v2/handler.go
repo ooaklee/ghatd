@@ -30,7 +30,6 @@ type UserService interface {
 	GetUserExtension(ctx context.Context, r *GetUserExtensionRequest) (*GetUserExtensionResponse, error)
 	UpdateUserPersonalInfo(ctx context.Context, r *UpdateUserPersonalInfoRequest) (*UpdateUserPersonalInfoResponse, error)
 	ValidateUser(ctx context.Context, r *ValidateUserRequest) (*ValidateUserResponse, error)
-	SearchUsersByExtension(ctx context.Context, r *SearchUsersByExtensionRequest) (*SearchUsersByExtensionResponse, error)
 	BulkUpdateUsersStatus(ctx context.Context, r *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error)
 }
 
@@ -397,23 +396,6 @@ func (h *Handler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
-}
-
-// SearchUsersByExtension handles searching for users by extension field value
-func (h *Handler) SearchUsersByExtension(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToSearchUsersByExtensionRequest(r, h.Validator)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.SearchUsersByExtension(r.Context(), request)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
 }
 
 // BulkUpdateUsersStatus handles bulk updating user statuses

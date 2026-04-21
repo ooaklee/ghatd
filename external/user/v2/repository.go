@@ -229,38 +229,6 @@ func (r *Repository) GetTotalUsers(ctx context.Context, req *GetTotalUsersReques
 	return count, nil
 }
 
-// SearchUsersByExtension searches users by extension field
-func (r *Repository) SearchUsersByExtension(ctx context.Context, key string, value interface{}, page, perPage int) ([]UniversalUser, error) {
-	collection, err := r.GetUserCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	queryFilter := bson.M{
-		"extensions." + key: value,
-	}
-
-	skip := int64((page - 1) * perPage)
-	limit := int64(perPage)
-
-	options := options.Find().
-		SetSkip(skip).
-		SetLimit(limit)
-
-	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options)
-	if err != nil {
-		return nil, err
-	}
-
-	var results []UniversalUser
-	err = r.Store.MapAllInCursorToResult(ctx, cursor, &results, "user")
-	if err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
 // Helper methods
 
 // buildUserQueryFilter builds a query filter for user searches

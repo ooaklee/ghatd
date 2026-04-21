@@ -405,26 +405,6 @@ func MapRequestToValidateUserRequest(request *http.Request, validator UserValida
 	return parsedRequest, nil
 }
 
-// MapRequestToSearchUsersByExtensionRequest maps incoming SearchUsersByExtension request to correct struct
-func MapRequestToSearchUsersByExtensionRequest(request *http.Request, validator UserValidator) (*SearchUsersByExtensionRequest, error) {
-	var err error
-	parsedRequest := &SearchUsersByExtensionRequest{}
-
-	// get request queries
-	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	return parsedRequest, nil
-}
-
 // MapRequestToBulkUpdateUsersStatusRequest maps incoming BulkUpdateUsersStatus request to correct struct
 func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator UserValidator) (*BulkUpdateUsersStatusRequest, error) {
 	parsedRequest := &BulkUpdateUsersStatusRequest{}

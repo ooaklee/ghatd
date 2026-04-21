@@ -167,14 +167,6 @@ type ValidateUserRequest struct {
 	ID string `json:"id"`
 }
 
-// SearchUsersByExtensionRequest holds data for searching users by extension field
-type SearchUsersByExtensionRequest struct {
-	Key     string      `json:"key"`
-	Value   interface{} `query:"value"`
-	Page    int         `query:"page"`
-	PerPage int         `query:"per_page"`
-}
-
 // BulkUpdateUsersStatusRequest holds data for bulk updating user statuses
 type BulkUpdateUsersStatusRequest struct {
 	IDs           []string `json:"ids"`
