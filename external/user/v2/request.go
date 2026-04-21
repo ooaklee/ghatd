@@ -63,32 +63,32 @@ type GetUsersRequest struct {
 	IncludeMeta bool `query:"meta"`
 
 	// Filters
-	EmailFilter     string      `query:"email_filter"`
-	FirstNameFilter string      `query:"first_name_filter"`
-	LastNameFilter  string      `query:"last_name_filter"`
-	StatusFilter    string      `query:"status_filter"`
-	RoleFilter      string      `query:"role_filter"`
-	RolesFilter     []string    `query:"roles_filter"`
+	EmailFilter     string      `query:"with_email"`
+	FirstNameFilter string      `query:"with_first_name"`
+	LastNameFilter  string      `query:"with_last_name"`
+	StatusFilter    string      `query:"with_status"`
+	RoleFilter      string      `query:"with_role"`
+	RolesFilter     []string    `query:"with_roles"`
 	OnlyAdmin       bool        `query:"only_admin"`
 	EmailVerified   *bool       `query:"email_verified"`
 	PhoneVerified   *bool       `query:"phone_verified"`
-	ExtensionKey    string      `query:"extension_key"`
-	ExtensionValue  interface{} `query:"extension_value"`
+	ExtensionKey    string      `query:"with_extension_key"`
+	ExtensionValue  interface{} `query:"with_extension_value"`
 }
 
 // GetTotalUsersRequest holds filters for counting total users
 type GetTotalUsersRequest struct {
-	EmailFilter     string      `query:"email_filter"`
-	FirstNameFilter string      `query:"first_name_filter"`
-	LastNameFilter  string      `query:"last_name_filter"`
-	StatusFilter    string      `query:"status_filter"`
-	RoleFilter      string      `query:"role_filter"`
-	RolesFilter     []string    `query:"roles_filter"`
+	EmailFilter     string      `query:"with_email"`
+	FirstNameFilter string      `query:"with_first_name"`
+	LastNameFilter  string      `query:"with_last_name"`
+	StatusFilter    string      `query:"with_status"`
+	RoleFilter      string      `query:"with_role"`
+	RolesFilter     []string    `query:"with_roles"`
 	OnlyAdmin       bool        `query:"only_admin"`
 	EmailVerified   *bool       `query:"email_verified"`
 	PhoneVerified   *bool       `query:"phone_verified"`
-	ExtensionKey    string      `query:"extension_key"`
-	ExtensionValue  interface{} `query:"extension_value"`
+	ExtensionKey    string      `query:"with_extension_key"`
+	ExtensionValue  interface{} `query:"with_extension_value"`
 }
 
 // UpdateUserStatusRequest holds data for updating user status

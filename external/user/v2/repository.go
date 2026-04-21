@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -356,7 +357,7 @@ func (r *Repository) buildUserQueryFilter(emailFilter, firstNameFilter, lastName
 	}
 
 	if statusFilter != "" {
-		queryFilter["status"] = statusFilter
+		queryFilter["status"] = toolbox.StringStandardisedToUpper(statusFilter)
 	}
 
 	if roleFilter != "" {

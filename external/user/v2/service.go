@@ -3,7 +3,6 @@ package user
 import (
 	"context"
 	"errors"
-	"math"
 	"regexp"
 
 	"github.com/ooaklee/ghatd/external/audit"
@@ -427,18 +426,10 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 		PhoneVerified:   req.PhoneVerified,
 	}
 
-	total, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
+	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
 	if err != nil {
 		log.Error("failed-to-get-total-users", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
-	}
-
-	// Calculate total pages
-	totalPages := int(math.Ceil(float64(total) / float64(req.PerPage)))
-
-	// Validate page is in range
-	if req.Page > totalPages && totalPages > 0 {
-		return nil, errors.New(ErrKeyPageOutOfRange)
 	}
 
 	// Get users
@@ -453,16 +444,20 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 	}
 
-	meta := &PaginationMetadata{
-		Page:           req.Page,
-		PerPage:        req.PerPage,
-		TotalResources: total,
-		TotalPages:     totalPages,
+	// handle page pagination
+	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
+	if err != nil {
+		return nil, err
 	}
 
 	return &GetUsersResponse{
-		Users: users,
-		Meta:  meta,
+		Users: paginatedResponse.Resources,
+		Meta: &PaginationMetadata{
+			Page:           paginatedResponse.Page,
+			PerPage:        paginatedResponse.ResourcePerPage,
+			TotalResources: int64(paginatedResponse.Total),
+			TotalPages:     paginatedResponse.TotalPages,
+		},
 	}, nil
 }
 
