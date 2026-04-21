@@ -127,10 +127,16 @@ type GetUserStatsResponse struct {
 	*UserStats
 }
 
-// GetUserConfigsResponse holds the currently active user config capabilities.
+// AvailableUserConfig describes one supported user config preset.
+type AvailableUserConfig struct {
+	Type   string                  `json:"type"`
+	Config *UserConfigCapabilities `json:"config"`
+}
+
+// GetUserConfigsResponse holds the supported user config capabilities.
 type GetUserConfigsResponse struct {
-	ConfigName string                  `json:"config_name"`
-	Config     *UserConfigCapabilities `json:"config"`
+	DefaultConfigType string                `json:"default_config_type"`
+	Configs           []AvailableUserConfig `json:"configs"`
 }
 
 // DeleteUserResponse holds the response for deleting a user (if needed)

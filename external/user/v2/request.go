@@ -3,6 +3,7 @@ package user
 // CreateUserRequest holds data for creating a new user
 type CreateUserRequest struct {
 	Email          string                 `json:"email"`
+	Type           string                 `json:"type,omitempty"`
 	FirstName      string                 `json:"first_name,omitempty"`
 	LastName       string                 `json:"last_name,omitempty"`
 	FullName       string                 `json:"full_name,omitempty"`
@@ -19,6 +20,7 @@ type CreateUserRequest struct {
 type UpdateUserRequest struct {
 	ID         string                 `json:"id"`
 	Email      string                 `json:"email,omitempty"`
+	Type       string                 `json:"type,omitempty"`
 	FirstName  string                 `json:"first_name,omitempty"`
 	LastName   string                 `json:"last_name,omitempty"`
 	FullName   string                 `json:"full_name,omitempty"`

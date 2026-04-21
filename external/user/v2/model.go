@@ -65,7 +65,7 @@ type UserStats struct {
 
 // UserConfig holds configuration for user behavior
 type UserConfig struct {
-	Name                      string
+	Type                      string
 	DefaultStatus             string
 	StatusTransitions         map[string][]string
 	RequiredFields            []string
@@ -131,18 +131,22 @@ func (c *UserConfig) ToCapabilities(fallback *UserConfig) *UserConfigCapabilitie
 	}
 }
 
-// GetName returns the config name, or package default.
-// If the resolved config has no explicit name, UserConfigNameCustom is returned.
-func (c *UserConfig) GetName() string {
+// GetType returns the config type from the receiver, fallback, or package default.
+// If the resolved config has no explicit type, UserConfigTypeCustom is returned.
+func (c *UserConfig) GetType(fallback *UserConfig) string {
 	if c == nil {
-		return UserConfigNameCustom
+		c = fallback
 	}
 
-	if c.Name == "" {
-		return UserConfigNameCustom
+	if c == nil {
+		c = DefaultUserConfig()
 	}
 
-	return c.Name
+	if c.Type == "" {
+		return UserConfigTypeCustom
+	}
+
+	return c.Type
 }
 
 // UniversalUser represents a flexible user model
@@ -151,6 +155,7 @@ type UniversalUser struct {
 	ID     string `json:"id" bson:"_id" db:"id"`
 	Email  string `json:"email" bson:"email" db:"email"`
 	Status string `json:"status" bson:"status" db:"status"`
+	Type   string `json:"type,omitempty" bson:"type,omitempty" db:"type"`
 
 	// Version field for tracking model version (stored internally only)
 	Version int `json:"-" bson:"version" db:"version"`
@@ -230,6 +235,7 @@ func NewUniversalUser(
 		Metadata: &UserMetadata{
 			CustomTimestamps: make(map[string]string),
 		},
+		Type:         config.GetType(DefaultUserConfig()),
 		config:       config,
 		idGenerator:  idGenerator,
 		timeProvider: timeProvider,
@@ -252,6 +258,9 @@ func (u *UniversalUser) SetDependencies(
 	u.idGenerator = idGenerator
 	u.timeProvider = timeProvider
 	u.stringUtils = stringUtils
+	if u.Type == "" {
+		u.Type = config.GetType(DefaultUserConfig())
+	}
 
 	// Initialise nil fields if needed
 	if u.Extensions == nil {
