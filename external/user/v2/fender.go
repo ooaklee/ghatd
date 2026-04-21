@@ -441,6 +441,18 @@ func MapRequestToGetUserStatsRequest(request *http.Request, validator UserValida
 	return parsedRequest, nil
 }
 
+// MapRequestToGetUserConfigsRequest maps incoming GetUserConfigs request to correct struct
+func MapRequestToGetUserConfigsRequest(_ *http.Request, validator UserValidator) (*GetUserConfigsRequest, error) {
+	parsedRequest := &GetUserConfigsRequest{}
+
+	err := validator.Validate(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	return parsedRequest, nil
+}
+
 // validateParsedRequest validates based on tags. On failure an error is returned
 func validateParsedRequest(request interface{}, validator UserValidator) error {
 	return validator.Validate(request)

@@ -971,6 +971,19 @@ func (s *Service) GetUserStats(ctx context.Context, req *GetUserStatsRequest) (*
 	return &GetUserStatsResponse{UserStats: stats}, nil
 }
 
+// GetUserConfigs returns supported user config presets and capabilities.
+func (s *Service) GetUserConfigs(_ context.Context, _ *GetUserConfigsRequest) (*GetUserConfigsResponse, error) {
+	config := s.Config
+	if config == nil {
+		config = DefaultUserConfig()
+	}
+
+	return &GetUserConfigsResponse{
+		ConfigName: config.GetName(),
+		Config:     config.ToCapabilities(DefaultUserConfig()),
+	}, nil
+}
+
 // Helper methods
 
 // shouldBeAutoAdmin checks if email matches auto-admin regex

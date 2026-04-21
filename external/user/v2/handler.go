@@ -32,6 +32,7 @@ type UserService interface {
 	ValidateUser(ctx context.Context, r *ValidateUserRequest) (*ValidateUserResponse, error)
 	BulkUpdateUsersStatus(ctx context.Context, r *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error)
 	GetUserStats(ctx context.Context, r *GetUserStatsRequest) (*GetUserStatsResponse, error)
+	GetUserConfigs(ctx context.Context, r *GetUserConfigsRequest) (*GetUserConfigsResponse, error)
 }
 
 // UserValidator interface defines expected methods of a valid validator
@@ -425,6 +426,23 @@ func (h *Handler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.GetUserStats(r.Context(), request)
+	if err != nil {
+		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetUserConfigs handles retrieving supported user config presets
+func (h *Handler) GetUserConfigs(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserConfigsRequest(r, h.Validator)
+	if err != nil {
+		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetUserConfigs(r.Context(), request)
 	if err != nil {
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

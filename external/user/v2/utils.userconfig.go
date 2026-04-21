@@ -1,8 +1,17 @@
 package user
 
+const (
+	UserConfigNameDefault      = "default"
+	UserConfigNameWebApp       = "web_app"
+	UserConfigNameAPIService   = "api_service"
+	UserConfigNameMicroservice = "microservice"
+	UserConfigNameCustom       = "custom"
+)
+
 // DefaultUserConfig returns a sensible default configuration
 func DefaultUserConfig() *UserConfig {
 	return &UserConfig{
+		Name:          UserConfigNameDefault,
 		DefaultStatus: "PROVISIONED",
 		StatusTransitions: map[string][]string{
 			"ACTIVE":       {"PROVISIONED"},
@@ -23,6 +32,7 @@ func DefaultUserConfig() *UserConfig {
 // WebAppUserConfig returns configuration suitable for web applications
 func WebAppUserConfig() *UserConfig {
 	return &UserConfig{
+		Name:          UserConfigNameWebApp,
 		DefaultStatus: "PROVISIONED",
 		StatusTransitions: map[string][]string{
 			"ACTIVE":       {"PROVISIONED", "DEACTIVATED"},
@@ -42,6 +52,7 @@ func WebAppUserConfig() *UserConfig {
 // APIServiceUserConfig returns configuration suitable for API services
 func APIServiceUserConfig() *UserConfig {
 	return &UserConfig{
+		Name:          UserConfigNameAPIService,
 		DefaultStatus: "ACTIVE",
 		StatusTransitions: map[string][]string{
 			"ACTIVE":       {"PROVISIONED"},
@@ -59,6 +70,7 @@ func APIServiceUserConfig() *UserConfig {
 // MicroserviceUserConfig returns minimal configuration for microservices
 func MicroserviceUserConfig() *UserConfig {
 	return &UserConfig{
+		Name:          UserConfigNameMicroservice,
 		DefaultStatus: "ACTIVE",
 		StatusTransitions: map[string][]string{
 			"ACTIVE":       {},

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -29,8 +30,42 @@ type StringUtils interface {
 	InSlice(item string, slice []string) bool
 }
 
+// UserConfigCapabilities describes what a given user config preset supports.
+type UserConfigCapabilities struct {
+	DefaultStatus               string              `json:"default_status"`
+	SupportedStatusTransitions  map[string][]string `json:"supported_status_transitions"`
+	RequiredFields              []string            `json:"required_fields"`
+	ValidRoles                  []string            `json:"valid_roles"`
+	EmailVerificationRequired   bool                `json:"email_verification_required"`
+	SupportsMultipleIdentifiers bool                `json:"supports_multiple_identifiers"`
+	SupportedStatuses           []string            `json:"supported_statuses"`
+}
+
+// UserStatusStats holds counts per account status
+type UserStatusStats struct {
+	Provisioned int64 `json:"provisioned"`
+	Active      int64 `json:"active"`
+	Deactivated int64 `json:"deactivated"`
+	LockedOut   int64 `json:"locked_out"`
+	Recovery    int64 `json:"recovery"`
+	Suspended   int64 `json:"suspended"`
+}
+
+// CalculateTotal returns the sum of all status counts.
+func (s *UserStatusStats) CalculateTotal() int64 {
+	return s.Provisioned + s.Active + s.Deactivated + s.LockedOut + s.Recovery + s.Suspended
+}
+
+// UserStats holds aggregated platform user statistics.
+// Designed to grow as new stat dimensions are added.
+type UserStats struct {
+	Total    int64           `json:"total"`
+	ByStatus UserStatusStats `json:"by_status"`
+}
+
 // UserConfig holds configuration for user behavior
 type UserConfig struct {
+	Name                      string
 	DefaultStatus             string
 	StatusTransitions         map[string][]string
 	RequiredFields            []string
@@ -38,6 +73,76 @@ type UserConfig struct {
 	ValidRoles                []string
 	EmailVerificationRequired bool
 	MultipleIdentifiers       bool // Support both UUID and NanoID
+}
+
+// GetSupportedStatuses returns a unique sorted list of statuses derived from
+// both transition targets (keys) and transition source statuses (values).
+func (c *UserConfig) GetSupportedStatuses() []string {
+	if c == nil {
+		return []string{}
+	}
+
+	statusSet := make(map[string]struct{})
+
+	for targetStatus, sourceStatuses := range c.StatusTransitions {
+		if targetStatus != "" {
+			statusSet[targetStatus] = struct{}{}
+		}
+
+		for _, sourceStatus := range sourceStatuses {
+			if sourceStatus == "" {
+				continue
+			}
+
+			statusSet[sourceStatus] = struct{}{}
+		}
+	}
+
+	supportedStatuses := make([]string, 0, len(statusSet))
+	for status := range statusSet {
+		supportedStatuses = append(supportedStatuses, status)
+	}
+
+	sort.Strings(supportedStatuses)
+
+	return supportedStatuses
+}
+
+// ToCapabilities maps a user configuration into API-facing capabilities.
+// If the receiver is nil, it falls back to the provided config, and finally
+// to DefaultUserConfig when both are nil.
+func (c *UserConfig) ToCapabilities(fallback *UserConfig) *UserConfigCapabilities {
+	if c == nil {
+		c = fallback
+	}
+
+	if c == nil {
+		c = DefaultUserConfig()
+	}
+
+	return &UserConfigCapabilities{
+		DefaultStatus:               c.DefaultStatus,
+		SupportedStatusTransitions:  c.StatusTransitions,
+		RequiredFields:              c.RequiredFields,
+		ValidRoles:                  c.ValidRoles,
+		EmailVerificationRequired:   c.EmailVerificationRequired,
+		SupportsMultipleIdentifiers: c.MultipleIdentifiers,
+		SupportedStatuses:           c.GetSupportedStatuses(),
+	}
+}
+
+// GetName returns the config name, or package default.
+// If the resolved config has no explicit name, UserConfigNameCustom is returned.
+func (c *UserConfig) GetName() string {
+	if c == nil {
+		return UserConfigNameCustom
+	}
+
+	if c.Name == "" {
+		return UserConfigNameCustom
+	}
+
+	return c.Name
 }
 
 // UniversalUser represents a flexible user model

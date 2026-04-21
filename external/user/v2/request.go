@@ -183,3 +183,6 @@ type GetUserStatsRequest struct {
 	// WithEmailRegex filters stats to users whose email matches the provided regex pattern
 	WithEmailRegex string `query:"with_email_regex"`
 }
+
+// GetUserConfigsRequest holds input for retrieving supported user configs
+type GetUserConfigsRequest struct{}
