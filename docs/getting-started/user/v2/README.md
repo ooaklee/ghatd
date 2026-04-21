@@ -407,6 +407,13 @@ All v2 endpoints are under: `/api/v2/users`
 | POST | `/api/v2/users/{userID}/extensions` | Set extension field | ✓ |
 | GET | `/api/v2/users/{userID}/extensions/{extensionKey}` | Get extension field | ✓ |
 
+### Stats
+
+| Method | Endpoint | Description | Admin Only |
+|--------|----------|-------------|------------|
+| GET | `/api/v2/users/stats` | Get user platform stats | ✓ |
+| GET | `/api/v2/users/stats?with_email_regex=@example\.com$` | Stats scoped to email domain | ✓ |
+
 ### Advanced Queries
 
 | Method | Endpoint | Description | Admin Only |

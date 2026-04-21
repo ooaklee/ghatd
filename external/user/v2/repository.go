@@ -184,7 +184,7 @@ func (r *Repository) GetUsers(ctx context.Context, req *GetUsersRequest) ([]Univ
 	}
 
 	// Build query filter
-	queryFilter := r.buildUserQueryFilter(req.EmailFilter, req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
+	queryFilter := r.buildUserQueryFilter(req.EmailFilter, "", req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
 
 	// Build sort options
 	sortOptions := r.buildSortOptions(req.Order)
@@ -219,7 +219,7 @@ func (r *Repository) GetTotalUsers(ctx context.Context, req *GetTotalUsersReques
 		return 0, err
 	}
 
-	queryFilter := r.buildUserQueryFilter(req.EmailFilter, req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
+	queryFilter := r.buildUserQueryFilter(req.EmailFilter, req.EmailRegex, req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
 
 	count, err := r.Store.ExecuteCountDocuments(ctx, collection, queryFilter)
 	if err != nil {
@@ -229,13 +229,95 @@ func (r *Repository) GetTotalUsers(ctx context.Context, req *GetTotalUsersReques
 	return count, nil
 }
 
+// GetUserStatsCounts retrieves per-status user counts in a single round-trip using
+// a $facet aggregation, giving a consistent point-in-time snapshot.
+func (r *Repository) GetUserStatsCounts(ctx context.Context, req *GetUserStatsRequest) (*UserStats, error) {
+	collection, err := r.GetUserCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build the base match stage from the email regex filter (if provided).
+	matchStage := bson.D{}
+	if req.WithEmailRegex != "" {
+		matchStage = bson.D{{Key: "email", Value: bson.M{"$regex": req.WithEmailRegex}}}
+	}
+
+	statusCountPipeline := func(status string) bson.A {
+		return bson.A{
+			bson.D{{Key: "$match", Value: bson.M{"status": status}}},
+			bson.D{{Key: "$count", Value: "count"}},
+		}
+	}
+
+	pipeline := []bson.D{
+		{{Key: "$match", Value: matchStage}},
+		{{Key: "$facet", Value: bson.D{
+			{Key: AccountStatusKeyProvisioned, Value: statusCountPipeline(AccountStatusKeyProvisioned)},
+			{Key: AccountStatusKeyActive, Value: statusCountPipeline(AccountStatusKeyActive)},
+			{Key: AccountStatusKeyDeactivated, Value: statusCountPipeline(AccountStatusKeyDeactivated)},
+			{Key: AccountStatusKeyLockedOut, Value: statusCountPipeline(AccountStatusKeyLockedOut)},
+			{Key: AccountStatusKeyRecovery, Value: statusCountPipeline(AccountStatusKeyRecovery)},
+			{Key: AccountStatusKeySuspended, Value: statusCountPipeline(AccountStatusKeySuspended)},
+		}}},
+	}
+
+	cursor, err := r.Store.ExecuteAggregateCommand(ctx, collection, pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	// $facet always returns exactly one document.
+	type countDoc struct {
+		Count int64 `bson:"count"`
+	}
+	type facetResult struct {
+		Provisioned []countDoc `bson:"PROVISIONED"`
+		Active      []countDoc `bson:"ACTIVE"`
+		Deactivated []countDoc `bson:"DEACTIVATED"`
+		LockedOut   []countDoc `bson:"LOCKED_OUT"`
+		Recovery    []countDoc `bson:"RECOVERY"`
+		Suspended   []countDoc `bson:"SUSPENDED"`
+	}
+
+	var result facetResult
+	if err := r.Store.MapOneInCursorToResult(ctx, cursor, &result, "user-stats-counts"); err != nil {
+		return nil, err
+	}
+
+	extractCount := func(docs []countDoc) int64 {
+		if len(docs) == 0 {
+			return 0
+		}
+		return docs[0].Count
+	}
+
+	byStatus := &UserStatusStats{
+		Provisioned: extractCount(result.Provisioned),
+		Active:      extractCount(result.Active),
+		Deactivated: extractCount(result.Deactivated),
+		LockedOut:   extractCount(result.LockedOut),
+		Recovery:    extractCount(result.Recovery),
+		Suspended:   extractCount(result.Suspended),
+	}
+
+	return &UserStats{
+		Total:    byStatus.CalculateTotal(),
+		ByStatus: *byStatus,
+	}, nil
+}
+
 // Helper methods
 
 // buildUserQueryFilter builds a query filter for user searches
-func (r *Repository) buildUserQueryFilter(emailFilter, firstNameFilter, lastNameFilter, statusFilter, roleFilter string, rolesFilter []string, onlyAdmin bool, emailVerified, phoneVerified *bool, extensionKey string, extensionValue interface{}) bson.M {
+func (r *Repository) buildUserQueryFilter(emailFilter, emailRegex, firstNameFilter, lastNameFilter, statusFilter, roleFilter string, rolesFilter []string, onlyAdmin bool, emailVerified, phoneVerified *bool, extensionKey string, extensionValue interface{}) bson.M {
 	queryFilter := bson.M{}
 
-	if emailFilter != "" {
+	if emailRegex != "" {
+		queryFilter["email"] = bson.M{
+			"$regex": emailRegex,
+		}
+	} else if emailFilter != "" {
 		queryFilter["email"] = bson.M{
 			"$regex":   emailFilter,
 			"$options": "i",

@@ -30,6 +30,7 @@ type UserHandler interface {
 	UpdateUserPersonalInfo(w http.ResponseWriter, r *http.Request)
 	ValidateUser(w http.ResponseWriter, r *http.Request)
 	BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request)
+	GetUserStats(w http.ResponseWriter, r *http.Request)
 }
 
 // APIUsersV2Prefix base URI prefix for all v2 users routes
@@ -74,5 +75,6 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/personal-info", request.Handler.UpdateUserPersonalInfo).Methods(http.MethodPatch, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/validate", request.Handler.ValidateUser).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
+	usersAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetUserStats).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
 }

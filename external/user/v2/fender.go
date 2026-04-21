@@ -421,6 +421,26 @@ func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator U
 	return parsedRequest, nil
 }
 
+// MapRequestToGetUserStatsRequest maps incoming GetUserStats request to correct struct
+func MapRequestToGetUserStatsRequest(request *http.Request, validator UserValidator) (*GetUserStatsRequest, error) {
+	var err error
+	parsedRequest := &GetUserStatsRequest{}
+
+	// get request queries
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	err = validator.Validate(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	return parsedRequest, nil
+}
+
 // validateParsedRequest validates based on tags. On failure an error is returned
 func validateParsedRequest(request interface{}, validator UserValidator) error {
 	return validator.Validate(request)

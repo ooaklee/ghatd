@@ -26,6 +26,7 @@ type UserRepository interface {
 	DeleteUserByID(ctx context.Context, id string) error
 	GetUsers(ctx context.Context, req *GetUsersRequest) ([]UniversalUser, error)
 	GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) (int64, error)
+	GetUserStatsCounts(ctx context.Context, req *GetUserStatsRequest) (*UserStats, error)
 }
 
 // Service holds and manages user business logic
@@ -955,6 +956,19 @@ func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *BulkUpdateUser
 		UpdatedCount: successCount,
 		FailedIDs:    failedIDs,
 	}, nil
+}
+
+// GetUserStats retrieves aggregated stats about platform users
+func (s *Service) GetUserStats(ctx context.Context, req *GetUserStatsRequest) (*GetUserStatsResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-stats")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	stats, err := s.UserRepository.GetUserStatsCounts(ctx, req)
+	if err != nil {
+		log.Error("failed-to-get-user-stats-counts", zap.Error(err))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	return &GetUserStatsResponse{UserStats: stats}, nil
 }
 
 // Helper methods

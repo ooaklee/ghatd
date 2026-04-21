@@ -31,6 +31,7 @@ type UserService interface {
 	UpdateUserPersonalInfo(ctx context.Context, r *UpdateUserPersonalInfoRequest) (*UpdateUserPersonalInfoResponse, error)
 	ValidateUser(ctx context.Context, r *ValidateUserRequest) (*ValidateUserResponse, error)
 	BulkUpdateUsersStatus(ctx context.Context, r *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error)
+	GetUserStats(ctx context.Context, r *GetUserStatsRequest) (*GetUserStatsResponse, error)
 }
 
 // UserValidator interface defines expected methods of a valid validator
@@ -407,6 +408,23 @@ func (h *Handler) BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response, err := h.Service.BulkUpdateUsersStatus(r.Context(), request)
+	if err != nil {
+		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetUserStats handles retrieving aggregated stats about platform users
+func (h *Handler) GetUserStats(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserStatsRequest(r, h.Validator)
+	if err != nil {
+		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetUserStats(r.Context(), request)
 	if err != nil {
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

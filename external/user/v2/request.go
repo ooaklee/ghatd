@@ -89,6 +89,10 @@ type GetTotalUsersRequest struct {
 	PhoneVerified   *bool       `query:"phone_verified"`
 	ExtensionKey    string      `query:"with_extension_key"`
 	ExtensionValue  interface{} `query:"with_extension_value"`
+
+	// EmailRegex is an internal-only server-side regex applied directly against
+	// the email field
+	EmailRegex string
 }
 
 // UpdateUserStatusRequest holds data for updating user status
@@ -171,4 +175,11 @@ type ValidateUserRequest struct {
 type BulkUpdateUsersStatusRequest struct {
 	IDs           []string `json:"ids"`
 	DesiredStatus string   `json:"desired_status"`
+}
+
+// GetUserStatsRequest holds filters for retrieving user stats
+type GetUserStatsRequest struct {
+
+	// WithEmailRegex filters stats to users whose email matches the provided regex pattern
+	WithEmailRegex string `query:"with_email_regex"`
 }

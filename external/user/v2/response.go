@@ -122,6 +122,33 @@ type BulkUpdateUsersStatusResponse struct {
 	FailedIDs    []string `json:"failed_ids,omitempty"`
 }
 
+// UserStatusStats holds counts per account status
+type UserStatusStats struct {
+	Provisioned int64 `json:"provisioned"`
+	Active      int64 `json:"active"`
+	Deactivated int64 `json:"deactivated"`
+	LockedOut   int64 `json:"locked_out"`
+	Recovery    int64 `json:"recovery"`
+	Suspended   int64 `json:"suspended"`
+}
+
+// CalculateTotal returns the sum of all status counts.
+func (s *UserStatusStats) CalculateTotal() int64 {
+	return s.Provisioned + s.Active + s.Deactivated + s.LockedOut + s.Recovery + s.Suspended
+}
+
+// UserStats holds aggregated platform user statistics.
+// Designed to grow as new stat dimensions are added.
+type UserStats struct {
+	Total    int64           `json:"total"`
+	ByStatus UserStatusStats `json:"by_status"`
+}
+
+// GetUserStatsResponse holds the response for user stats
+type GetUserStatsResponse struct {
+	*UserStats
+}
+
 // DeleteUserResponse holds the response for deleting a user (if needed)
 type DeleteUserResponse struct {
 	Success bool   `json:"success"`
