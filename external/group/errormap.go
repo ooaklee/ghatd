@@ -6,9 +6,9 @@ import (
 	"github.com/ooaklee/reply"
 )
 
-// GroupErrorResponseMap holds Error keys, their corresponding human-friendly message, and response status code
+// GroupErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // nolint will be used later
-var GroupErrorResponseMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
+var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 	ErrKeyGroupConfigNotSet: {
 		StatusCode: http.StatusInternalServerError,
 		Code:       "GRP0-001",
@@ -140,5 +140,20 @@ var GroupErrorResponseMap reply.ErrorManifest = map[string]reply.ErrorManifestIt
 		StatusCode: http.StatusBadRequest,
 		Code:       "GRP0-024",
 		Detail:     "One or more query parameters are invalid",
+	},
+	ErrKeyInvalidGroupHierarchyTree: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-025",
+		Detail:     "The configured group hierarchy tree is invalid",
+	},
+	ErrKeyInvalidParentChildRelation: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-026",
+		Detail:     "The group type cannot be created under the specified parent group",
+	},
+	ErrKeyGroupDependedOnByOtherGroups: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-027",
+		Detail:     "The group is depended on by other group(s)",
 	},
 }

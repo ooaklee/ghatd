@@ -54,13 +54,14 @@ type GetGroupByNameRequest struct {
 
 // CreateGroupRequest defines the request for creating a new group
 type CreateGroupRequest struct {
-	Name        string                 `json:"name" validate:"required"`
-	Type        string                 `json:"type" validate:"required"`
-	Description string                 `json:"description,omitempty"`
-	Email       string                 `json:"email,omitempty"`
-	Icon        string                 `json:"icon,omitempty"`
-	Visibility  string                 `json:"visibility,omitempty"`
-	Extensions  map[string]interface{} `json:"extensions,omitempty"`
+	Name          string                 `json:"name" validate:"required"`
+	Type          string                 `json:"type" validate:"required"`
+	ParentGroupID string                 `json:"parent_group_id,omitempty"`
+	Description   string                 `json:"description,omitempty"`
+	Email         string                 `json:"email,omitempty"`
+	Icon          string                 `json:"icon,omitempty"`
+	Visibility    string                 `json:"visibility,omitempty"`
+	Extensions    map[string]interface{} `json:"extensions,omitempty"`
 
 	// Initial members
 	InitialMembers []CreateMemberRequest `json:"initial_members,omitempty"`
@@ -149,3 +150,9 @@ type RestoreGroupRequest struct {
 type GetGroupStatsRequest struct {
 	ID string `path:"groupID"`
 }
+
+// GetGroupsStatsRequest defines the request for getting aggregate groups stats
+type GetGroupsStatsRequest struct{}
+
+// GetGroupsConfigRequest defines the request for getting the groups config
+type GetGroupsConfigRequest struct{}

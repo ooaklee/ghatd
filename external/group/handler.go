@@ -14,7 +14,7 @@ type GroupService interface {
 	GetGroupByNanoID(ctx context.Context, r *GetGroupByNanoIDRequest) (*GetGroupByNanoIDResponse, error)
 	GetGroupByName(ctx context.Context, r *GetGroupByNameRequest) (*GetGroupByNameResponse, error)
 	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
-	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) error
+	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error)
 	GetGroups(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	GetGroupsByMemberID(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	GetGroupsByLeaderID(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
@@ -27,6 +27,8 @@ type GroupService interface {
 	ArchiveGroup(ctx context.Context, r *ArchiveGroupRequest) (*ArchiveGroupResponse, error)
 	RestoreGroup(ctx context.Context, r *RestoreGroupRequest) (*RestoreGroupResponse, error)
 	GetGroupStats(ctx context.Context, groupID string) (*GetGroupStatsResponse, error)
+	GetGroupsStats(ctx context.Context, r *GetGroupsStatsRequest) (*GetGroupsStatsResponse, error)
+	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
 }
 
 // GroupValidator interface defines expected methods of a valid validator
@@ -235,7 +237,7 @@ func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.Service.DeleteGroup(r.Context(), request)
+	_, err = h.Service.DeleteGroup(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
@@ -378,6 +380,28 @@ func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetGroupsStats handles getting aggregate stats across all groups
+func (h *Handler) GetGroupsStats(w http.ResponseWriter, r *http.Request) {
+	response, err := h.Service.GetGroupsStats(r.Context(), &GetGroupsStatsRequest{})
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetGroupsConfig handles getting the group service config
+func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
+	response, err := h.Service.GetGroupsConfig(r.Context(), &GetGroupsConfigRequest{})
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
 }
 
 // getBaseResponseHandler returns response handler configured with group error maps

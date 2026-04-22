@@ -48,7 +48,7 @@ type GroupService interface {
 	GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error)
 	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
 	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error)
-	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateGroupResponse, error)
+	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error)
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
 }
 

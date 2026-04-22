@@ -433,6 +433,39 @@ func (r *Repository) SearchGroupsByExtension(ctx context.Context, key string, va
 	return results, nil
 }
 
+// HasGroupDependents checks if any active group references the target group.
+// A dependency means either:
+// 1) parent_group_id equals the target ID, or
+// 2) members contains a GROUP member whose id equals the target ID.
+func (r *Repository) HasGroupDependents(ctx context.Context, groupID string) (bool, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	queryFilter := bson.M{
+		"$or": []bson.M{
+			{"parent_group_id": groupID},
+			{
+				"members": bson.M{
+					"$elemMatch": bson.M{
+						"id":   groupID,
+						"type": MemberTypeGroup,
+					},
+				},
+			},
+		},
+		"metadata.deleted_at": bson.M{"$exists": false},
+	}
+
+	count, err := r.Store.ExecuteCountDocuments(ctx, collection, queryFilter)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 // AddMemberToGroup adds a member to a group
 func (r *Repository) AddMemberToGroup(ctx context.Context, groupID string, member Member) error {
 	collection, err := r.GetGroupCollection(ctx)
@@ -618,4 +651,157 @@ func (r *Repository) buildSortOptions(order string) bson.D {
 // normaliseGroupName standardises group name
 func normaliseGroupName(name string) string {
 	return strings.TrimSpace(name)
+}
+
+// GetGroupsStatsCounts retrieves aggregated group statistics using a $facet aggregation.
+func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Exclude soft-deleted groups
+	baseMatch := bson.D{{Key: "$match", Value: bson.M{"metadata.deleted_at": bson.M{"$exists": false}}}}
+
+	countPipeline := func(filter bson.M) bson.A {
+		return bson.A{
+			bson.D{{Key: "$match", Value: filter}},
+			bson.D{{Key: "$count", Value: "count"}},
+		}
+	}
+
+	pipeline := []bson.D{
+		baseMatch,
+		{{Key: "$facet", Value: bson.D{
+			// Total
+			{Key: "total", Value: bson.A{
+				bson.D{{Key: "$count", Value: "count"}},
+			}},
+			// By status
+			{Key: "status_active", Value: countPipeline(bson.M{"status": GroupStatusActive})},
+			{Key: "status_inactive", Value: countPipeline(bson.M{"status": GroupStatusInactive})},
+			{Key: "status_archived", Value: countPipeline(bson.M{"status": GroupStatusArchived})},
+			{Key: "status_suspended", Value: countPipeline(bson.M{"status": GroupStatusSuspended})},
+			{Key: "status_provisioned", Value: countPipeline(bson.M{"status": GroupStatusProvisioned})},
+			// By type
+			{Key: "by_type", Value: bson.A{
+				bson.D{{Key: "$group", Value: bson.M{"_id": "$type", "count": bson.M{"$sum": 1}}}},
+			}},
+			// By visibility
+			{Key: "visibility_public", Value: countPipeline(bson.M{"settings.visibility": VisibilityPublic})},
+			{Key: "visibility_private", Value: countPipeline(bson.M{"settings.visibility": VisibilityPrivate})},
+			{Key: "visibility_internal", Value: countPipeline(bson.M{"settings.visibility": VisibilityInternal})},
+			// Integrations
+			{Key: "with_slack", Value: countPipeline(bson.M{"integrations.slack": bson.M{"$exists": true, "$ne": nil}})},
+			{Key: "with_custom", Value: countPipeline(bson.M{"integrations.custom": bson.M{"$exists": true, "$ne": nil, "$gt": bson.M{}}})},
+			// Leadership
+			{Key: "with_owner", Value: countPipeline(bson.M{"leadership.owner_id": bson.M{"$exists": true, "$ne": ""}})},
+			{Key: "with_head", Value: countPipeline(bson.M{"leadership.head_id": bson.M{"$exists": true, "$ne": ""}})},
+			{Key: "with_lead", Value: countPipeline(bson.M{"leadership.lead_id": bson.M{"$exists": true, "$ne": ""}})},
+			// Total members (sum of members array sizes)
+			{Key: "member_totals", Value: bson.A{
+				bson.D{{Key: "$project", Value: bson.M{"member_count": bson.M{"$size": bson.M{"$ifNull": bson.A{"$members", bson.A{}}}}}}},
+				bson.D{{Key: "$group", Value: bson.M{"_id": nil, "total": bson.M{"$sum": "$member_count"}}}},
+			}},
+		}}},
+	}
+
+	cursor, err := r.Store.ExecuteAggregateCommand(ctx, collection, pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	type countDoc struct {
+		Count int64 `bson:"count"`
+	}
+	type typeCountDoc struct {
+		Type  string `bson:"_id"`
+		Count int64  `bson:"count"`
+	}
+	type memberTotalDoc struct {
+		Total int64 `bson:"total"`
+	}
+	type facetResult struct {
+		Total              []countDoc       `bson:"total"`
+		StatusActive       []countDoc       `bson:"status_active"`
+		StatusInactive     []countDoc       `bson:"status_inactive"`
+		StatusArchived     []countDoc       `bson:"status_archived"`
+		StatusSuspended    []countDoc       `bson:"status_suspended"`
+		StatusProvisioned  []countDoc       `bson:"status_provisioned"`
+		ByType             []typeCountDoc   `bson:"by_type"`
+		VisibilityPublic   []countDoc       `bson:"visibility_public"`
+		VisibilityPrivate  []countDoc       `bson:"visibility_private"`
+		VisibilityInternal []countDoc       `bson:"visibility_internal"`
+		WithSlack          []countDoc       `bson:"with_slack"`
+		WithCustom         []countDoc       `bson:"with_custom"`
+		WithOwner          []countDoc       `bson:"with_owner"`
+		WithHead           []countDoc       `bson:"with_head"`
+		WithLead           []countDoc       `bson:"with_lead"`
+		MemberTotals       []memberTotalDoc `bson:"member_totals"`
+	}
+
+	var result facetResult
+	if err := r.Store.MapOneInCursorToResult(ctx, cursor, &result, "groups-stats-counts"); err != nil {
+		return nil, err
+	}
+
+	extractCount := func(docs []countDoc) int64 {
+		if len(docs) == 0 {
+			return 0
+		}
+		return docs[0].Count
+	}
+
+	var totalMembers int64
+	if len(result.MemberTotals) > 0 {
+		totalMembers = result.MemberTotals[0].Total
+	}
+
+	byType := make(GroupsByTypeStats, len(result.ByType))
+	for _, tc := range result.ByType {
+		byType[tc.Type] = tc.Count
+	}
+
+	withSlack := extractCount(result.WithSlack)
+	withCustom := extractCount(result.WithCustom)
+
+	withOwner := extractCount(result.WithOwner)
+	withHead := extractCount(result.WithHead)
+	withLead := extractCount(result.WithLead)
+	withAnyLeadership := withOwner
+	if withHead > withAnyLeadership {
+		withAnyLeadership = withHead
+	}
+	if withLead > withAnyLeadership {
+		withAnyLeadership = withLead
+	}
+
+	return &AllGroupsStats{
+		Total:        extractCount(result.Total),
+		TotalMembers: totalMembers,
+		ByStatus: GroupsByStatusStats{
+			GroupStatusActive:      extractCount(result.StatusActive),
+			GroupStatusInactive:    extractCount(result.StatusInactive),
+			GroupStatusArchived:    extractCount(result.StatusArchived),
+			GroupStatusSuspended:   extractCount(result.StatusSuspended),
+			GroupStatusProvisioned: extractCount(result.StatusProvisioned),
+		},
+		ByType: byType,
+		ByVisibility: GroupsByVisibilityStats{
+			VisibilityPublic:   extractCount(result.VisibilityPublic),
+			VisibilityPrivate:  extractCount(result.VisibilityPrivate),
+			VisibilityInternal: extractCount(result.VisibilityInternal),
+		},
+		Integrations: GroupIntegrationStats{
+			WithSlack:          withSlack,
+			WithCustom:         withCustom,
+			WithAnyIntegration: withSlack + withCustom,
+		},
+		Leadership: GroupLeadershipStats{
+			WithOwner: withOwner,
+			WithHead:  withHead,
+			WithLead:  withLead,
+			WithAny:   withAnyLeadership,
+		},
+	}, nil
 }

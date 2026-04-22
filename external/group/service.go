@@ -41,9 +41,11 @@ type GroupRepository interface {
 	GetGroupsByMemberID(ctx context.Context, memberID string, memberType string, page, pageSize int) ([]UniversalGroup, error)
 	GetGroupsByLeaderID(ctx context.Context, leaderID string, page, pageSize int) ([]UniversalGroup, error)
 	SearchGroupsByExtension(ctx context.Context, key string, value interface{}, page, pageSize int) ([]UniversalGroup, error)
+	HasGroupDependents(ctx context.Context, groupID string) (bool, error)
 	AddMemberToGroup(ctx context.Context, groupID string, member Member) error
 	RemoveMemberFromGroup(ctx context.Context, groupID, memberID string) error
 	BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string, status string) error
+	GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats, error)
 }
 
 // Service manages group business logic and orchestrates group operations.
@@ -67,9 +69,15 @@ func NewService(
 	idGenerator IDGenerator,
 	timeProvider TimeProvider,
 	stringUtils StringUtils,
-) *Service {
+) (*Service, error) {
 	if config == nil {
 		config = DefaultGroupConfig()
+	}
+
+	if len(config.Tree) > 0 {
+		if err := config.ValidateHierarchy(); err != nil {
+			return nil, errors.New(ErrKeyInvalidGroupHierarchyTree)
+		}
 	}
 
 	return &Service{
@@ -79,13 +87,43 @@ func NewService(
 		IDGenerator:     idGenerator,
 		TimeProvider:    timeProvider,
 		StringUtils:     stringUtils,
+	}, nil
+}
+
+// validateHierarchyTreeConfig validates the configured group hierarchy tree
+// when hierarchy rules are explicitly defined on the service config.
+// It returns ErrKeyInvalidGroupHierarchyTree when validation fails.
+func (s *Service) validateHierarchyTreeConfig(log *zap.Logger) error {
+	if s.Config == nil || len(s.Config.Tree) == 0 {
+		return nil
 	}
+
+	if err := s.Config.ValidateHierarchy(); err != nil {
+		log.Error("group-hierarchy-tree-validation-failed", zap.Error(err))
+		return errors.New(ErrKeyInvalidGroupHierarchyTree)
+	}
+
+	return nil
 }
 
 // CreateGroup creates a new group
 func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*CreateGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-group")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("creating-group", zap.String("name", req.Name), zap.String("type", req.Type))
+
+	if err := s.validateHierarchyTreeConfig(log); err != nil {
+		return nil, err
+	}
+
+	var parentGroup *UniversalGroup
+	if req.ParentGroupID != "" {
+		parentGroupResult, parentErr := s.GroupRepository.GetGroupByID(ctx, req.ParentGroupID)
+		if parentErr != nil {
+			log.Error("failed-to-get-parent-group", zap.Error(parentErr), zap.String("parent_group_id", req.ParentGroupID))
+			return nil, parentErr
+		}
+		parentGroup = parentGroupResult
+	}
 
 	// Check if group with same name already exists
 	existingGroup, err := s.GroupRepository.GetGroupByName(ctx, req.Name, req.Type, false)
@@ -148,6 +186,18 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 	if err := group.Validate(); err != nil {
 		log.Error("group-validation-failed", zap.Error(err))
 		return nil, err
+	}
+
+	if parentGroup != nil {
+		if !s.Config.CanHaveChildType(parentGroup.Type, group.Type) {
+			log.Error(
+				"invalid-parent-child-group-relation",
+				zap.String("parent_group_id", parentGroup.ID),
+				zap.String("parent_group_type", parentGroup.Type),
+				zap.String("child_group_type", group.Type),
+			)
+			return nil, errors.New(ErrKeyInvalidParentChildRelation)
+		}
 	}
 
 	// Create group in repository
@@ -227,6 +277,10 @@ func (s *Service) GetGroupByName(ctx context.Context, req *GetGroupByNameRequest
 func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*UpdateGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-group")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("updating-group", zap.String("id", req.ID))
+
+	if err := s.validateHierarchyTreeConfig(log); err != nil {
+		return nil, err
+	}
 
 	targetGroupID := req.ID
 	if req.Group != nil && req.Group.ID != "" {
@@ -357,6 +411,17 @@ func (s *Service) DeleteGroup(ctx context.Context, req *DeleteGroupRequest) (*De
 	if err != nil {
 		log.Error("group-not-found-for-deletion", zap.Error(err), zap.String("id", req.ID))
 		return nil, err
+	}
+
+	// Block deletion when other groups depend on this group.
+	hasDependents, err := s.GroupRepository.HasGroupDependents(ctx, req.ID)
+	if err != nil {
+		log.Error("failed-to-check-group-dependencies", zap.Error(err), zap.String("id", req.ID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+	if hasDependents {
+		log.Warn("group-deletion-blocked-due-to-dependencies", zap.String("id", req.ID))
+		return nil, errors.New(ErrKeyGroupDependedOnByOtherGroups)
 	}
 
 	if req.HardDelete {
@@ -545,7 +610,7 @@ func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*
 }
 
 // UpdateMemberRole updates a member's role in a group
-func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleRequest) (*UpdateGroupResponse, error) {
+func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleRequest) (*UpdateMemberRoleResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-member-role")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("updating-member-role", zap.String("group_id", req.GroupID), zap.String("member_id", req.MemberID))
 
@@ -585,7 +650,7 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 		})
 	}
 
-	return &UpdateGroupResponse{Group: updatedGroup}, nil
+	return &UpdateMemberRoleResponse{Group: updatedGroup}, nil
 }
 
 // GetGroupMembers retrieves members of a group with optional filters
@@ -629,7 +694,7 @@ func (s *Service) GetGroupMembers(ctx context.Context, req *GetGroupMembersReque
 }
 
 // UpdateLeadership updates group leadership
-func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipRequest) (*UpdateGroupResponse, error) {
+func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipRequest) (*UpdateLeadershipResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-leadership")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("updating-group-leadership", zap.String("group_id", req.GroupID))
 
@@ -680,11 +745,11 @@ func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipReq
 		})
 	}
 
-	return &UpdateGroupResponse{Group: updatedGroup}, nil
+	return &UpdateLeadershipResponse{Group: updatedGroup}, nil
 }
 
 // ArchiveGroup archives a group
-func (s *Service) ArchiveGroup(ctx context.Context, req *ArchiveGroupRequest) (*UpdateGroupResponse, error) {
+func (s *Service) ArchiveGroup(ctx context.Context, req *ArchiveGroupRequest) (*ArchiveGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "archive-group")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("archiving-group", zap.String("id", req.ID))
 
@@ -720,11 +785,11 @@ func (s *Service) ArchiveGroup(ctx context.Context, req *ArchiveGroupRequest) (*
 		})
 	}
 
-	return &UpdateGroupResponse{Group: updatedGroup}, nil
+	return &ArchiveGroupResponse{Group: updatedGroup}, nil
 }
 
 // RestoreGroup restores an archived group
-func (s *Service) RestoreGroup(ctx context.Context, req *RestoreGroupRequest) (*UpdateGroupResponse, error) {
+func (s *Service) RestoreGroup(ctx context.Context, req *RestoreGroupRequest) (*RestoreGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "restore-group")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("restoring-group", zap.String("id", req.ID))
 
@@ -760,7 +825,7 @@ func (s *Service) RestoreGroup(ctx context.Context, req *RestoreGroupRequest) (*
 		})
 	}
 
-	return &UpdateGroupResponse{Group: updatedGroup}, nil
+	return &RestoreGroupResponse{Group: updatedGroup}, nil
 }
 
 // GetGroupsByMemberID retrieves groups that contain a specific member
@@ -915,6 +980,44 @@ func (s *Service) GetGroupStats(ctx context.Context, groupID string) (*GetGroupS
 		UserMemberCount:  userCount,
 		GroupMemberCount: groupCount,
 		SubgroupCount:    groupCount,
+	}, nil
+}
+
+// GetGroupsStats retrieves aggregated statistics across all groups.
+func (s *Service) GetGroupsStats(ctx context.Context, _ *GetGroupsStatsRequest) (*GetGroupsStatsResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-groups-stats")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	stats, err := s.GroupRepository.GetGroupsStatsCounts(ctx)
+	if err != nil {
+		log.Error("failed-to-get-groups-stats-counts", zap.Error(err))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	response := &GetGroupsStatsResponse{AllGroupsStats: stats}
+	response.NormaliseGroupsStatsKeysToSnakeCase()
+
+	return response, nil
+}
+
+// GetGroupsConfig returns the capabilities of the service's single group config.
+func (s *Service) GetGroupsConfig(_ context.Context, _ *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error) {
+	cfg := s.Config
+	if cfg == nil {
+		cfg = DefaultGroupConfig()
+	}
+
+	return &GetGroupsConfigResponse{
+		Config: &GroupConfigCapabilities{
+			DefaultStatus:       cfg.DefaultStatus,
+			StatusTransitions:   cfg.StatusTransitions,
+			ValidTypes:          cfg.ValidTypes,
+			ValidMemberTypes:    cfg.ValidMemberTypes,
+			Tree:                cfg.Tree,
+			AllowNestedGroups:   cfg.AllowNestedGroups,
+			MaxNestingDepth:     cfg.MaxNestingDepth,
+			RequiredFields:      cfg.RequiredFields,
+			MultipleIdentifiers: cfg.MultipleIdentifiers,
+		},
 	}, nil
 }
 

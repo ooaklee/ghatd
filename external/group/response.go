@@ -1,5 +1,7 @@
 package group
 
+import "github.com/ooaklee/ghatd/external/toolbox"
+
 // GetGroupsResponse defines the response structure for getting groups
 type GetGroupsResponse struct {
 	Total      int               `json:"total"`
@@ -93,4 +95,89 @@ type GetGroupStatsResponse struct {
 	UserMemberCount  int    `json:"user_member_count"`
 	GroupMemberCount int    `json:"group_member_count"`
 	SubgroupCount    int    `json:"subgroup_count,omitempty"`
+}
+
+// GroupsByStatusStats holds per-status group counts.
+type GroupsByStatusStats map[string]int64
+
+// GroupsByTypeStats holds per-type group counts.
+type GroupsByTypeStats map[string]int64
+
+// GroupsByVisibilityStats holds per-visibility group counts.
+type GroupsByVisibilityStats map[string]int64
+
+// GroupIntegrationStats holds integration-related group counts.
+type GroupIntegrationStats struct {
+	WithSlack          int64 `json:"with_slack"`
+	WithCustom         int64 `json:"with_custom"`
+	WithAnyIntegration int64 `json:"with_any_integration"`
+}
+
+// GroupLeadershipStats holds leadership-related group counts.
+type GroupLeadershipStats struct {
+	WithOwner int64 `json:"with_owner"`
+	WithHead  int64 `json:"with_head"`
+	WithLead  int64 `json:"with_lead"`
+	WithAny   int64 `json:"with_any"`
+}
+
+// AllGroupsStats holds aggregated platform group statistics.
+type AllGroupsStats struct {
+	Total        int64                   `json:"total"`
+	TotalMembers int64                   `json:"total_members"`
+	ByStatus     GroupsByStatusStats     `json:"by_status"`
+	ByType       GroupsByTypeStats       `json:"by_type"`
+	ByVisibility GroupsByVisibilityStats `json:"by_visibility"`
+	Integrations GroupIntegrationStats   `json:"integrations"`
+	Leadership   GroupLeadershipStats    `json:"leadership"`
+}
+
+// GetGroupsStatsResponse defines the response for aggregate groups stats.
+type GetGroupsStatsResponse struct {
+	*AllGroupsStats
+}
+
+// NormaliseGroupsStatsKeysToSnakeCase normalises dynamic map keys in stats payloads.
+func (r *GetGroupsStatsResponse) NormaliseGroupsStatsKeysToSnakeCase() {
+	if r == nil || r.AllGroupsStats == nil {
+		return
+	}
+
+	r.ByStatus = normaliseStatsMapKeysToSnakeCase(r.ByStatus)
+	r.ByType = normaliseStatsMapKeysToSnakeCase(r.ByType)
+	r.ByVisibility = normaliseStatsMapKeysToSnakeCase(r.ByVisibility)
+}
+
+// normaliseStatsMapKeysToSnakeCase converts dynamic stats map keys into
+// lower snake_case while preserving their associated counts.
+func normaliseStatsMapKeysToSnakeCase(input map[string]int64) map[string]int64 {
+	if input == nil {
+		return nil
+	}
+
+	output := make(map[string]int64, len(input))
+	for key, value := range input {
+		normalisedKey := toolbox.StringConvertToSnakeCase(toolbox.StringStandardisedToLower(key))
+		output[normalisedKey] = value
+	}
+
+	return output
+}
+
+// GroupConfigCapabilities describes the capabilities exposed by the group config.
+type GroupConfigCapabilities struct {
+	DefaultStatus       string              `json:"default_status"`
+	StatusTransitions   map[string][]string `json:"status_transitions"`
+	ValidTypes          []string            `json:"valid_types"`
+	ValidMemberTypes    []string            `json:"valid_member_types"`
+	Tree                map[string][]string `json:"tree,omitempty"`
+	AllowNestedGroups   bool                `json:"allow_nested_groups"`
+	MaxNestingDepth     int                 `json:"max_nesting_depth"`
+	RequiredFields      []string            `json:"required_fields,omitempty"`
+	MultipleIdentifiers bool                `json:"multiple_identifiers"`
+}
+
+// GetGroupsConfigResponse defines the response for the groups config endpoint.
+type GetGroupsConfigResponse struct {
+	Config *GroupConfigCapabilities `json:"config"`
 }
