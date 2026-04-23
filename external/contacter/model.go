@@ -248,21 +248,21 @@ type CommsStats struct {
 // CommsTypeStats holds counts of comms by type
 type CommsTypeStats struct {
 	GeneralInquiry                int64 `json:"general_inquiry"`
-	CustomerSupport              int64 `json:"customer_support"`
-	TechnicalSupport             int64 `json:"technical_support"`
-	FeatureRequest               int64 `json:"feature_request"`
-	Feedback                     int64 `json:"feedback"`
-	ProductInformation           int64 `json:"product_information"`
-	PressInquiry                 int64 `json:"press_inquiry"`
-	PartnershipOpportunities     int64 `json:"partnership_opportunities"`
-	Complaints                   int64 `json:"complaints"`
-	WebsiteIssues                int64 `json:"website_issues"`
+	CustomerSupport               int64 `json:"customer_support"`
+	TechnicalSupport              int64 `json:"technical_support"`
+	FeatureRequest                int64 `json:"feature_request"`
+	Feedback                      int64 `json:"feedback"`
+	ProductInformation            int64 `json:"product_information"`
+	PressInquiry                  int64 `json:"press_inquiry"`
+	PartnershipOpportunities      int64 `json:"partnership_opportunities"`
+	Complaints                    int64 `json:"complaints"`
+	WebsiteIssues                 int64 `json:"website_issues"`
 	DonatingSupportingUsQuestions int64 `json:"donating_supporting_us_questions"`
-	Other                        int64 `json:"other"`
+	Other                         int64 `json:"other"`
 }
 
 // CommsStatusStats holds status information for comms
 type CommsStatusStats struct {
-	ReachedOut  int64 `json:"reached_out"`
+	ReachedOut    int64 `json:"reached_out"`
 	NotReachedOut int64 `json:"not_reached_out"`
 }

@@ -440,7 +440,7 @@ func (r *Repository) GetCommsStatsCounts(ctx context.Context, req *GetCommsStats
 			}},
 			{Key: "by_type", Value: bson.A{
 				bson.D{{Key: "$group", Value: bson.M{
-					"_id":  "$type",
+					"_id":   "$type",
 					"count": bson.M{"$sum": 1},
 				}}},
 			}},
@@ -470,16 +470,16 @@ func (r *Repository) GetCommsStatsCounts(ctx context.Context, req *GetCommsStats
 	}
 
 	type facetResult struct {
-		Total              []countDoc        `bson:"total"`
-		RepliedTo          []countDoc        `bson:"replied_to"`
-		ReachedOut         []countDoc        `bson:"reached_out"`
-		WithAdminNotes     []countDoc        `bson:"with_admin_notes"`
-		WithLinkedComms    []countDoc        `bson:"with_linked_comms"`
-		FromLoggedInUsers  []countDoc        `bson:"from_logged_in_users"`
-		FromGuests         []countDoc        `bson:"from_guests"`
-		MostRecent         []dateDoc         `bson:"most_recent"`
-		AvgReplyTime       []replyTimeDoc    `bson:"avg_reply_time"`
-		ByType             []typeCountDoc    `bson:"by_type"`
+		Total             []countDoc     `bson:"total"`
+		RepliedTo         []countDoc     `bson:"replied_to"`
+		ReachedOut        []countDoc     `bson:"reached_out"`
+		WithAdminNotes    []countDoc     `bson:"with_admin_notes"`
+		WithLinkedComms   []countDoc     `bson:"with_linked_comms"`
+		FromLoggedInUsers []countDoc     `bson:"from_logged_in_users"`
+		FromGuests        []countDoc     `bson:"from_guests"`
+		MostRecent        []dateDoc      `bson:"most_recent"`
+		AvgReplyTime      []replyTimeDoc `bson:"avg_reply_time"`
+		ByType            []typeCountDoc `bson:"by_type"`
 	}
 
 	var result facetResult
@@ -542,21 +542,21 @@ func (r *Repository) GetCommsStatsCounts(ctx context.Context, req *GetCommsStats
 
 	totalComms := extractCount(result.Total)
 	statusStats := CommsStatusStats{
-		ReachedOut:        extractCount(result.ReachedOut),
-		NotReachedOut:     totalComms - extractCount(result.ReachedOut),
+		ReachedOut:    extractCount(result.ReachedOut),
+		NotReachedOut: totalComms - extractCount(result.ReachedOut),
 	}
 
 	return &CommsStats{
-		Total:                  totalComms,
-		RepliedTo:              extractCount(result.RepliedTo),
-		ReachedOut:             extractCount(result.ReachedOut),
-		WithAdminNotes:         extractCount(result.WithAdminNotes),
-		WithLinkedComms:        extractCount(result.WithLinkedComms),
-		FromLoggedInUsers:      extractCount(result.FromLoggedInUsers),
-		FromGuests:             extractCount(result.FromGuests),
-		MostRecentCommsAt:      extractDate(result.MostRecent),
+		Total:                   totalComms,
+		RepliedTo:               extractCount(result.RepliedTo),
+		ReachedOut:              extractCount(result.ReachedOut),
+		WithAdminNotes:          extractCount(result.WithAdminNotes),
+		WithLinkedComms:         extractCount(result.WithLinkedComms),
+		FromLoggedInUsers:       extractCount(result.FromLoggedInUsers),
+		FromGuests:              extractCount(result.FromGuests),
+		MostRecentCommsAt:       extractDate(result.MostRecent),
 		AverageReplyTimeMinutes: extractAvgTime(result.AvgReplyTime),
-		ByType:                 typeStats,
-		ByStatus:               statusStats,
+		ByType:                  typeStats,
+		ByStatus:                statusStats,
 	}, nil
 }

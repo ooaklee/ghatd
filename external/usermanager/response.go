@@ -37,6 +37,11 @@ type UpdateCommsResponse struct {
 	Comms *contacter.Comms `json:"comms"`
 }
 
+// GetCommsStatsResponse holds the response from getting comms stats
+type GetCommsStatsResponse struct {
+	Stats *contacter.CommsStats `json:"stats"`
+}
+
 // GetEnrichedUserProfileResponse holds the response for an enriched user profile
 type GetEnrichedUserProfileResponse struct {
 	Profile *EnrichedUserProfile `json:"profile"`

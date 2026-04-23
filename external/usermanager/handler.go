@@ -18,6 +18,7 @@ type UsermanagerService interface {
 	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
 	GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error)
 	UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error)
+	GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error)
 	// Group/Team management methods
 	GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error)
 	GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
@@ -215,6 +216,27 @@ func (h *Handler) GetComms(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsResponse.Comms)
+}
+
+// GetCommsStats handles the request to get comms stats
+func (h *Handler) GetCommsStats(w http.ResponseWriter, r *http.Request) {
+
+	request, err := mapGetCommsStatsRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	getCommsStatsResponse, err := h.Service.GetCommsStats(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsStatsResponse.Stats)
 }
 
 // UpdateComms handles the request to update a comms

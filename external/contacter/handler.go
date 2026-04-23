@@ -51,4 +51,3 @@ func (h *Handler) GetCommsStats(w http.ResponseWriter, r *http.Request) {
 
 	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
-
