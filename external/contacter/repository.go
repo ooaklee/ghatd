@@ -21,7 +21,7 @@ type MongoDbStore interface {
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
-	// ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
+	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
 	// ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
 	// ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 	// ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
@@ -384,4 +384,179 @@ func standardisedEmails(emails []string) []string {
 		standardisedEmails = append(standardisedEmails, toolbox.StringStandardisedToLower(email))
 	}
 	return standardisedEmails
+}
+
+// GetCommsStatsCounts retrieves aggregated comms stats in a single round-trip using
+// an aggregation pipeline.
+func (r *Repository) GetCommsStatsCounts(ctx context.Context, req *GetCommsStatsRequest) (*CommsStats, error) {
+	collection, err := r.GetCommsCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build the base match stage from the email regex filter (if provided).
+	matchStage := bson.D{}
+	if req.WithEmailRegex != "" {
+		matchStage = bson.D{{Key: "email", Value: bson.M{"$regex": req.WithEmailRegex}}}
+	}
+
+	// Helper function to count documents with a specific condition
+	countStageForCondition := func(condition interface{}) bson.A {
+		return bson.A{
+			bson.D{{Key: "$match", Value: condition}},
+			bson.D{{Key: "$count", Value: "count"}},
+		}
+	}
+
+	pipeline := []bson.D{
+		{{Key: "$match", Value: matchStage}},
+		{{Key: "$facet", Value: bson.D{
+			{Key: "total", Value: bson.A{
+				bson.D{{Key: "$count", Value: "count"}},
+			}},
+			{Key: "replied_to", Value: countStageForCondition(bson.M{"admin_reply": bson.M{"$ne": ""}})},
+			{Key: "reached_out", Value: countStageForCondition(bson.M{"reached_out_at": bson.M{"$exists": true, "$ne": ""}})},
+			{Key: "with_admin_notes", Value: countStageForCondition(bson.M{"admin_notes": bson.M{"$ne": ""}})},
+			{Key: "with_linked_comms", Value: countStageForCondition(bson.M{"linked_comms_ids": bson.M{"$exists": true, "$ne": bson.A{}}})},
+			{Key: "from_logged_in_users", Value: countStageForCondition(bson.M{"user_logged_in": true})},
+			{Key: "from_guests", Value: countStageForCondition(bson.M{"user_logged_in": false})},
+			{Key: "most_recent", Value: bson.A{
+				bson.D{{Key: "$sort", Value: bson.M{"created_at": -1}}},
+				bson.D{{Key: "$limit", Value: 1}},
+				bson.D{{Key: "$project", Value: bson.M{"created_at": 1}}},
+			}},
+			{Key: "avg_reply_time", Value: bson.A{
+				bson.D{{Key: "$match", Value: bson.M{"reached_out_at": bson.M{"$exists": true, "$ne": ""}}}},
+				bson.D{{Key: "$project", Value: bson.M{
+					"reply_time_ms": bson.M{"$subtract": bson.A{
+						bson.M{"$dateFromString": bson.M{"dateString": "$reached_out_at"}},
+						bson.M{"$dateFromString": bson.M{"dateString": "$created_at"}},
+					}},
+				}}},
+				bson.D{{Key: "$group", Value: bson.M{
+					"_id":    nil,
+					"avg_ms": bson.M{"$avg": "$reply_time_ms"},
+				}}},
+			}},
+			{Key: "by_type", Value: bson.A{
+				bson.D{{Key: "$group", Value: bson.M{
+					"_id":  "$type",
+					"count": bson.M{"$sum": 1},
+				}}},
+			}},
+		}}},
+	}
+
+	cursor, err := r.Store.ExecuteAggregateCommand(ctx, collection, pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	type countDoc struct {
+		Count int64 `bson:"count"`
+	}
+
+	type dateDoc struct {
+		CreatedAt string `bson:"created_at"`
+	}
+
+	type replyTimeDoc struct {
+		AvgMs float64 `bson:"avg_ms"`
+	}
+
+	type typeCountDoc struct {
+		Type  string `bson:"_id"`
+		Count int64  `bson:"count"`
+	}
+
+	type facetResult struct {
+		Total              []countDoc        `bson:"total"`
+		RepliedTo          []countDoc        `bson:"replied_to"`
+		ReachedOut         []countDoc        `bson:"reached_out"`
+		WithAdminNotes     []countDoc        `bson:"with_admin_notes"`
+		WithLinkedComms    []countDoc        `bson:"with_linked_comms"`
+		FromLoggedInUsers  []countDoc        `bson:"from_logged_in_users"`
+		FromGuests         []countDoc        `bson:"from_guests"`
+		MostRecent         []dateDoc         `bson:"most_recent"`
+		AvgReplyTime       []replyTimeDoc    `bson:"avg_reply_time"`
+		ByType             []typeCountDoc    `bson:"by_type"`
+	}
+
+	var result facetResult
+	if err := r.Store.MapOneInCursorToResult(ctx, cursor, &result, "comms-stats-counts"); err != nil {
+		return nil, err
+	}
+
+	extractCount := func(docs []countDoc) int64 {
+		if len(docs) == 0 {
+			return 0
+		}
+		return docs[0].Count
+	}
+
+	extractDate := func(docs []dateDoc) string {
+		if len(docs) == 0 {
+			return ""
+		}
+		return docs[0].CreatedAt
+	}
+
+	extractAvgTime := func(docs []replyTimeDoc) float64 {
+		if len(docs) == 0 {
+			return 0
+		}
+		// Convert milliseconds to minutes
+		return docs[0].AvgMs / (1000 * 60)
+	}
+
+	// Build type stats
+	typeStats := CommsTypeStats{}
+	for _, typeCount := range result.ByType {
+		switch typeCount.Type {
+		case "general-inquiry":
+			typeStats.GeneralInquiry = typeCount.Count
+		case "customer-support":
+			typeStats.CustomerSupport = typeCount.Count
+		case "technical-support":
+			typeStats.TechnicalSupport = typeCount.Count
+		case "feature-request":
+			typeStats.FeatureRequest = typeCount.Count
+		case "feedback":
+			typeStats.Feedback = typeCount.Count
+		case "product-information":
+			typeStats.ProductInformation = typeCount.Count
+		case "press-inquiry":
+			typeStats.PressInquiry = typeCount.Count
+		case "partnership-opportunities":
+			typeStats.PartnershipOpportunities = typeCount.Count
+		case "complaints":
+			typeStats.Complaints = typeCount.Count
+		case "website-issues":
+			typeStats.WebsiteIssues = typeCount.Count
+		case "donating-supporting-us-questions":
+			typeStats.DonatingSupportingUsQuestions = typeCount.Count
+		case "other":
+			typeStats.Other = typeCount.Count
+		}
+	}
+
+	totalComms := extractCount(result.Total)
+	statusStats := CommsStatusStats{
+		ReachedOut:        extractCount(result.ReachedOut),
+		NotReachedOut:     totalComms - extractCount(result.ReachedOut),
+	}
+
+	return &CommsStats{
+		Total:                  totalComms,
+		RepliedTo:              extractCount(result.RepliedTo),
+		ReachedOut:             extractCount(result.ReachedOut),
+		WithAdminNotes:         extractCount(result.WithAdminNotes),
+		WithLinkedComms:        extractCount(result.WithLinkedComms),
+		FromLoggedInUsers:      extractCount(result.FromLoggedInUsers),
+		FromGuests:             extractCount(result.FromGuests),
+		MostRecentCommsAt:      extractDate(result.MostRecent),
+		AverageReplyTimeMinutes: extractAvgTime(result.AvgReplyTime),
+		ByType:                 typeStats,
+		ByStatus:               statusStats,
+	}, nil
 }

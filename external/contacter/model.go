@@ -206,3 +206,63 @@ func (c *Comms) SetStandardisedFullName(fullName string) *Comms {
 
 	return c
 }
+
+// CommsStats holds aggregated platform comms statistics.
+// Designed to grow as new stat dimensions are added.
+type CommsStats struct {
+	// Total is the total number of comms
+	Total int64 `json:"total"`
+
+	// RepliedTo is the number of comms with admin replies
+	RepliedTo int64 `json:"replied_to"`
+
+	// ReachedOut is the number of comms where admin has reached out
+	ReachedOut int64 `json:"reached_out"`
+
+	// WithAdminNotes is the number of comms with admin notes
+	WithAdminNotes int64 `json:"with_admin_notes"`
+
+	// WithLinkedComms is the number of comms with linked comms
+	WithLinkedComms int64 `json:"with_linked_comms"`
+
+	// FromLoggedInUsers is the number of comms from logged-in users
+	FromLoggedInUsers int64 `json:"from_logged_in_users"`
+
+	// FromGuests is the number of comms from guest users
+	FromGuests int64 `json:"from_guests"`
+
+	// MostRecentCommsAt is the timestamp of the most recent comms
+	MostRecentCommsAt string `json:"most_recent_comms_at,omitempty"`
+
+	// AverageReplyTimeMinutes is the average time in minutes it takes to reply to comms
+	// (calculated from CreatedAt to ReachedOutAt for comms that have been reached out)
+	AverageReplyTimeMinutes float64 `json:"average_reply_time_minutes"`
+
+	// ByType holds counts of comms by type
+	ByType CommsTypeStats `json:"by_type"`
+
+	// ByStatus holds status information
+	ByStatus CommsStatusStats `json:"by_status"`
+}
+
+// CommsTypeStats holds counts of comms by type
+type CommsTypeStats struct {
+	GeneralInquiry                int64 `json:"general_inquiry"`
+	CustomerSupport              int64 `json:"customer_support"`
+	TechnicalSupport             int64 `json:"technical_support"`
+	FeatureRequest               int64 `json:"feature_request"`
+	Feedback                     int64 `json:"feedback"`
+	ProductInformation           int64 `json:"product_information"`
+	PressInquiry                 int64 `json:"press_inquiry"`
+	PartnershipOpportunities     int64 `json:"partnership_opportunities"`
+	Complaints                   int64 `json:"complaints"`
+	WebsiteIssues                int64 `json:"website_issues"`
+	DonatingSupportingUsQuestions int64 `json:"donating_supporting_us_questions"`
+	Other                        int64 `json:"other"`
+}
+
+// CommsStatusStats holds status information for comms
+type CommsStatusStats struct {
+	ReachedOut  int64 `json:"reached_out"`
+	NotReachedOut int64 `json:"not_reached_out"`
+}

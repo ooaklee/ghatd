@@ -38,6 +38,7 @@ type ContacterService interface {
 	CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error)
 	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
 	UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error)
+	GetCommsStats(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error)
 }
 
 // GroupService expected methods of a valid group service
