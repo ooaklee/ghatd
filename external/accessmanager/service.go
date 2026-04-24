@@ -807,9 +807,10 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 
 	// Generate token
 	apiTokenResponse, err := s.ApitokenService.CreateAPIToken(ctx, &apitoken.CreateAPITokenRequest{
-		UserID:     persistentUser.ID,
-		UserNanoId: persistentUser.NanoID,
-		TokenTtl:   r.Ttl,
+		UserID:      persistentUser.ID,
+		UserNanoId:  persistentUser.NanoID,
+		TokenTtl:    r.Ttl,
+		Description: r.Description,
 	})
 	if err != nil {
 		return nil, err

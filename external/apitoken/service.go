@@ -64,6 +64,10 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 		return nil, errors.New(ErrKeyRequiredUserIDMissing)
 	}
 
+	if r.Description != "" {
+		r.Description = strings.TrimSpace(r.Description)
+	}
+
 	// Prep apiToken
 	apiToken := UserAPIToken{
 		CreatedByID:     r.UserID,
@@ -71,6 +75,12 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 	}
 
 	apiToken.SetStatus(UserTokenStatusKeyActive).SetCreatedAtTimeToNow()
+
+	if r.Description == "" {
+		apiToken.GenerateNewCodename()
+	} else {
+		apiToken.Description = r.Description
+	}
 
 	// see if token short lived
 	if r.TokenTtl != 0 {
