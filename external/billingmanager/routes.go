@@ -51,10 +51,4 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/billing", request.Handler.GetUserBillingDetail).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerActiveOnlyRoutes.Use(request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
 
-	billingmanagerAdminRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix + "/admin").Subrouter()
-	billingmanagerAdminRoutes.HandleFunc("/billings/users/{userId}/events", request.Handler.GetUserBillingEvents).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerAdminRoutes.HandleFunc("/users/{userId}/details/subscription", request.Handler.GetUserSubscriptionStatus).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerAdminRoutes.HandleFunc("/users/{userId}/details/billing", request.Handler.GetUserBillingDetail).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerAdminRoutes.Use(request.MiddlewareAdminOnlyMiddleware)
-
 }
