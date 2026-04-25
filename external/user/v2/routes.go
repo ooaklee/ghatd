@@ -29,10 +29,9 @@ type UserHandler interface {
 	GetUserExtension(w http.ResponseWriter, r *http.Request)
 	UpdateUserPersonalInfo(w http.ResponseWriter, r *http.Request)
 	ValidateUser(w http.ResponseWriter, r *http.Request)
-	SearchUsersByExtension(w http.ResponseWriter, r *http.Request)
 	BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request)
-	GetUsersByRoles(w http.ResponseWriter, r *http.Request)
-	GetUsersByStatus(w http.ResponseWriter, r *http.Request)
+	GetUserStats(w http.ResponseWriter, r *http.Request)
+	GetUserConfigs(w http.ResponseWriter, r *http.Request)
 }
 
 // APIUsersV2Prefix base URI prefix for all v2 users routes
@@ -58,11 +57,14 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes := httpRouter.PathPrefix(APIUsersV2Prefix).Subrouter()
 	usersAdminOnlyRoutes.HandleFunc("", request.Handler.CreateUser).Methods(http.MethodPost, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
+	usersAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetUserStats).Methods(http.MethodGet, http.MethodOptions)
+	usersAdminOnlyRoutes.HandleFunc("/configs", request.Handler.GetUserConfigs).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}", request.Handler.UpdateUser).Methods(http.MethodPatch, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}", request.Handler.DeleteUser).Methods(http.MethodDelete, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/nano/{nanoID}", request.Handler.GetUserByNanoID).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/email/{email}", request.Handler.GetUserByEmail).Methods(http.MethodGet, http.MethodOptions)
+	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/profile", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/micro", request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/status", request.Handler.UpdateUserStatus).Methods(http.MethodPatch, http.MethodOptions)
@@ -76,9 +78,5 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/extensions/{extensionKey}", request.Handler.GetUserExtension).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/personal-info", request.Handler.UpdateUserPersonalInfo).Methods(http.MethodPatch, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/validate", request.Handler.ValidateUser).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/search/extensions", request.Handler.SearchUsersByExtension).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/by-roles", request.Handler.GetUsersByRoles).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/by-status", request.Handler.GetUsersByStatus).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
 	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
 }

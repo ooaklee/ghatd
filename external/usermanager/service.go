@@ -38,6 +38,7 @@ type ContacterService interface {
 	CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error)
 	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
 	UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error)
+	GetCommsStats(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error)
 }
 
 // GroupService expected methods of a valid group service
@@ -48,7 +49,7 @@ type GroupService interface {
 	GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error)
 	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
 	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error)
-	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateGroupResponse, error)
+	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error)
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
 }
 
@@ -235,5 +236,27 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 
 	return &UpdateCommsResponse{
 		Comms: updateCommsResponse.Comms,
+	}, nil
+}
+
+// GetCommsStats handles the logic of getting comms stats
+func (s *Service) GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error) {
+
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	logger.Info("initiating-get-comms-stats-request", zap.Any("request", req))
+
+	statsResponse, err := s.ContacterService.GetCommsStats(ctx, req.GetCommsStatsRequest)
+	if err != nil {
+		logger.Error("failed-to-get-comms-stats-error-getting-comms-stats", zap.Any("request", req), zap.Error(err))
+		return &GetCommsStatsResponse{}, err
+	}
+
+	return &GetCommsStatsResponse{
+		Stats: statsResponse.CommsStats,
 	}, nil
 }

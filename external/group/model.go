@@ -33,6 +33,7 @@ type StringUtils interface {
 type GroupConfig struct {
 	DefaultStatus       string
 	StatusTransitions   map[string][]string
+	Tree                map[string][]string
 	RequiredFields      []string
 	ValidTypes          []string
 	ValidMemberTypes    []string
@@ -44,10 +45,11 @@ type GroupConfig struct {
 // UniversalGroup represents a flexible group/collection model
 type UniversalGroup struct {
 	// Core required fields
-	ID     string `json:"id" bson:"_id" db:"id"`
-	Name   string `json:"name" bson:"name" db:"name"`
-	Type   string `json:"type" bson:"type" db:"type"`
-	Status string `json:"status" bson:"status" db:"status"`
+	ID            string `json:"id" bson:"_id" db:"id"`
+	Name          string `json:"name" bson:"name" db:"name"`
+	Type          string `json:"type" bson:"type" db:"type"`
+	Status        string `json:"status" bson:"status" db:"status"`
+	ParentGroupID string `json:"parent_group_id,omitempty" bson:"parent_group_id,omitempty" db:"parent_group_id"`
 
 	// Version field for tracking model version
 	Version int `json:"-" bson:"version" db:"version"`
@@ -529,20 +531,11 @@ func (g *UniversalGroup) Validate() error {
 
 // isValidType checks if group type is valid
 func (g *UniversalGroup) isValidType(groupType string) bool {
-	if g.config == nil || len(g.config.ValidTypes) == 0 {
-		return true // Allow any if not configured
+	if g.config == nil {
+		return true
 	}
 
-	if g.stringUtils != nil {
-		return g.stringUtils.InSlice(groupType, g.config.ValidTypes)
-	}
-
-	for _, validType := range g.config.ValidTypes {
-		if validType == groupType {
-			return true
-		}
-	}
-	return false
+	return g.config.IsValidType(groupType)
 }
 
 // Utility Methods

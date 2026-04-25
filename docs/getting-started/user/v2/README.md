@@ -33,6 +33,8 @@ type TimeProvider interface {
 
 type StringUtils interface {
     ToTitleCase(s string) string
+    ToLowerCase(s string) string
+    ToUpperCase(s string) string
     InSlice(item string, slice []string) bool
 }
 ```
@@ -56,15 +58,18 @@ db.users.find({ $or: [ { version: { $exists: false } }, { version: { $ne: 2 } } 
 ```
 
 ### 3. **Configurable Status System**
-Define your own status transitions and validation rules:
+Define your own status transitions and validation rules. Each config also carries a `Type` identifier so the service can look up and serve the right preset at runtime:
 
 ```go
 config := &UserConfig{
+    Type:          "web_app",
     DefaultStatus: "PROVISIONED",
     StatusTransitions: map[string][]string{
-        "ACTIVE":      {"PROVISIONED"},
-        "SUSPENDED":   {"ACTIVE"},
-        "DEACTIVATED": {"PROVISIONED", "ACTIVE", "SUSPENDED"},
+        "ACTIVE":       {"PROVISIONED", "DEACTIVATED"},
+        "SUSPENDED":    {"ACTIVE"},
+        "DEACTIVATED":  {"ACTIVE", "SUSPENDED"},
+        "UNSUSPEND":    {"SUSPENDED"},
+        "EMAIL_CHANGE": {"PROVISIONED", "ACTIVE"},
     },
 }
 ```
@@ -266,10 +271,12 @@ The following indexes are created for the `users` collection:
 All timestamp fields in the `metadata` object are indexed for efficient sorting and filtering:
 - `created_at` - Registration date
 - `updated_at` - Last modification
-- `last_login_at` - Activity tracking
+- `last_login_at` - Activity tracking (any login)
 - `activated_at` - Activation tracking
 - `status_changed_at` - Status change history
 - `email_verified_at` - Verification history
+
+> **Note:** `last_fresh_login_at` is also stored on the metadata object to distinguish full credential logins from session refreshes. It is not currently indexed.
 
 ### Verifying Indexes
 
@@ -407,13 +414,26 @@ All v2 endpoints are under: `/api/v2/users`
 | POST | `/api/v2/users/{userID}/extensions` | Set extension field | ✓ |
 | GET | `/api/v2/users/{userID}/extensions/{extensionKey}` | Get extension field | ✓ |
 
+### Stats
+
+| Method | Endpoint | Description | Admin Only |
+|--------|----------|-------------|------------|
+| GET | `/api/v2/users/stats` | Get user platform stats | ✓ |
+| GET | `/api/v2/users/stats?with_email_regex=@example\.com$` | Stats scoped to email domain | ✓ |
+
+### Configuration
+
+| Method | Endpoint | Description | Admin Only |
+|--------|----------|-------------|------------|
+| GET | `/api/v2/users/configs` | List supported user config presets | ✓ |
+
 ### Advanced Queries
 
 | Method | Endpoint | Description | Admin Only |
 |--------|----------|-------------|------------|
-| GET | `/api/v2/users/by-roles?roles=ADMIN,USER` | Get users by roles | ✓ |
-| GET | `/api/v2/users/by-status?status=ACTIVE` | Get users by status | ✓ |
-| GET | `/api/v2/users/search/extensions?key=x&value=y` | Search by extension | ✓ |
+| GET | `/api/v2/users?with_roles=ADMIN,USER` | List users filtered by roles | ✓ |
+| GET | `/api/v2/users?with_status=ACTIVE` | List users filtered by status | ✓ |
+| GET | `/api/v2/users?with_extension_key=x&with_extension_value=y` | List users filtered by extension key/value | ✓ |
 
 ### Bulk Operations
 
@@ -428,7 +448,51 @@ All v2 endpoints are under: `/api/v2/users`
 | GET | `/api/v2/users/{userID}/validate` | Validate user | ✓ |
 | POST | `/api/v2/users/{userID}/recordings/login` | Record login | ✓ |
 
-## Migration Guide
+### Response Shapes
+
+#### `/stats` — `UserStats`
+
+```json
+{
+  "total": 1042,
+  "by_status": {
+    "provisioned": 120,
+    "active": 850,
+    "suspended": 12,
+    "deactivated": 40,
+    "locked_out": 8,
+    "recovery": 12
+  }
+}
+```
+
+The `total` field is the sum of all status counts. Pass `?with_email_regex=` to scope results to a subset of users matched by email pattern.
+
+#### `/configs` — `[]UserConfigCapabilities`
+
+Returns the list of built-in config presets the service was initialised with. Each entry describes exactly what that preset allows:
+
+```json
+[
+  {
+    "default_status": "PROVISIONED",
+    "supported_status_transitions": {
+      "ACTIVE": ["PROVISIONED", "DEACTIVATED"],
+      "SUSPENDED": ["ACTIVE"],
+      "DEACTIVATED": ["ACTIVE", "SUSPENDED"]
+    },
+    "required_fields": ["email", "first_name", "last_name"],
+    "valid_roles": ["ADMIN", "USER"],
+    "email_verification_required": true,
+    "supports_multiple_identifiers": false,
+    "supported_statuses": ["ACTIVE", "DEACTIVATED", "PROVISIONED", "SUSPENDED"]
+  }
+]
+```
+
+`supported_statuses` is derived automatically from all keys and values in `supported_status_transitions`, so you never have to keep a separate list in sync.
+
+
 
 ### Understanding the Version Field
 
@@ -632,54 +696,116 @@ func BatchMigrateAllUsers(ctx context.Context) error {
 
 ## Configuration Examples
 
-### Web Application
+Four built-in presets are available out of the box. Each is identified by a `Type` string so the service can resolve the right config at runtime:
+
+| Type constant | Value | When to use |
+|---|---|---|
+| `UserConfigTypeDefault` | `"default"` | General purpose; a safe starting point |
+| `UserConfigTypeWebApp` | `"web_app"` | Consumer web applications |
+| `UserConfigTypeAPIService` | `"api_service"` | Machine-to-machine API clients |
+| `UserConfigTypeMicroservice` | `"microservice"` | Internal services with minimal lifecycle |
+| `UserConfigTypeCustom` | `"custom"` | Any config without an explicit type set |
+
+You can pass one primary config to `NewService` and register additional presets with `WithConfigs`. This lets callers request a specific config type at create-time:
+
 ```go
-func WebAppUserConfig() *UserConfig {
+service := NewService(repo, auditSvc, DefaultUserConfig(), idGen, timeProv, strUtils, adminRegex).
+    WithConfigs(WebAppUserConfig(), APIServiceUserConfig(), MicroserviceUserConfig())
+```
+
+To get all four built-in presets at once, use the helper:
+
+```go
+for _, cfg := range BuiltInUserConfigs() {
+    fmt.Println(cfg.Type)
+}
+// default, web_app, api_service, microservice
+```
+
+### Default
+
+```go
+func DefaultUserConfig() *UserConfig {
     return &UserConfig{
+        Type:          "default",
         DefaultStatus: "PROVISIONED",
         StatusTransitions: map[string][]string{
-            "ACTIVE":      {"PROVISIONED"},
-            "SUSPENDED":   {"ACTIVE"},
-            "DEACTIVATED": {"PROVISIONED", "ACTIVE", "SUSPENDED"},
+            "ACTIVE":       {"PROVISIONED"},
+            "DEACTIVATED":  {"PROVISIONED", "ACTIVE", "LOCKED_OUT", "RECOVERY", "SUSPENDED"},
+            "SUSPENDED":    {"ACTIVE"},
+            "EMAIL_CHANGE": {"PROVISIONED", "ACTIVE"},
+            "LOCKED_OUT":   {"ACTIVE"},
+            "RECOVERY":     {"ACTIVE"},
         },
-        RequiredFields: []string{"email", "first_name", "last_name"},
-        ValidRoles:     []string{"ADMIN", "USER", "MODERATOR"},
+        RequiredFields:            []string{"email", "first_name", "last_name"},
+        DefaultRole:               "USER",
+        ValidRoles:                []string{"ADMIN", "USER"},
         EmailVerificationRequired: true,
-        MultipleIdentifiers: true,
+        MultipleIdentifiers:       true,
     }
 }
 ```
 
-### Microservice
+### Web Application
+
 ```go
-func MicroserviceUserConfig() *UserConfig {
+func WebAppUserConfig() *UserConfig {
     return &UserConfig{
-        DefaultStatus: "ACTIVE",
+        Type:          "web_app",
+        DefaultStatus: "PROVISIONED",
         StatusTransitions: map[string][]string{
-            "ACTIVE":   {},
-            "INACTIVE": {"ACTIVE"},
+            "ACTIVE":       {"PROVISIONED", "DEACTIVATED"},
+            "SUSPENDED":    {"ACTIVE"},
+            "DEACTIVATED":  {"ACTIVE", "SUSPENDED"},
+            "UNSUSPEND":    {"SUSPENDED"},
+            "EMAIL_CHANGE": {"PROVISIONED", "ACTIVE"},
         },
-        RequiredFields: []string{"email"},
-        ValidRoles:     []string{}, // Allow any roles
-        EmailVerificationRequired: false,
-        MultipleIdentifiers: false,
+        RequiredFields:            []string{"email", "first_name", "last_name"},
+        DefaultRole:               "USER",
+        ValidRoles:                []string{"ADMIN", "USER"},
+        EmailVerificationRequired: true,
+        MultipleIdentifiers:       false,
     }
 }
 ```
 
 ### API Service
+
 ```go
 func APIServiceUserConfig() *UserConfig {
     return &UserConfig{
+        Type:          "api_service",
         DefaultStatus: "ACTIVE",
         StatusTransitions: map[string][]string{
-            "ACTIVE":    {"PROVISIONED"},
-            "SUSPENDED": {"ACTIVE"},
-            "DISABLED":  {"ACTIVE", "SUSPENDED"},
+            "ACTIVE":       {"PROVISIONED", "DEACTIVATED"},
+            "SUSPENDED":    {"ACTIVE"},
+            "DEACTIVATED":  {"ACTIVE", "SUSPENDED"},
+            "EMAIL_CHANGE": {"PROVISIONED", "ACTIVE"},
         },
-        RequiredFields: []string{"email"},
-        ValidRoles:     []string{"SERVICE", "CLIENT", "ADMIN"},
-        MultipleIdentifiers: true,
+        RequiredFields:            []string{"email"},
+        ValidRoles:                []string{"SERVICE", "CLIENT", "ADMIN"},
+        EmailVerificationRequired: false,
+        MultipleIdentifiers:       true,
+    }
+}
+```
+
+### Microservice
+
+```go
+func MicroserviceUserConfig() *UserConfig {
+    return &UserConfig{
+        Type:          "microservice",
+        DefaultStatus: "ACTIVE",
+        StatusTransitions: map[string][]string{
+            "ACTIVE":       {},
+            "DEACTIVATED":  {"ACTIVE"},
+            "EMAIL_CHANGE": {"DEACTIVATED", "ACTIVE"},
+        },
+        RequiredFields:            []string{"email"},
+        ValidRoles:                []string{}, // Allow any roles
+        EmailVerificationRequired: false,
+        MultipleIdentifiers:       true,
     }
 }
 ```
@@ -857,14 +983,12 @@ For issues or questions:
 - Review the [model.go](../../external/user/v2/model.go) for implementation details
 - Check [service.go](../../external/user/v2/service.go) for business logic
 - See [handler.go](../../external/user/v2/handler.go) for HTTP endpoints
-- Refer to [routes.go](../../external/user/v2/routes.go) for route configuration 
+- Refer to [routes.go](../../external/user/v2/routes.go) for route configuration
 
 
-#### 1. **Utilising Dependency Injection**
+The decision to use dependency injection makes testing easier with the new model. See how the generation of the user's ID now uses an injected dependency.
 
-The decision to use dependency injection makes testing easier with the new model. See how  the generation of the user's ID now uses an injected dependency.
-
-> see the default dependencies [here](.utils.go).
+> See the default implementations in [utils.go](../../external/user/v2/utils.go).
 
 ```go
 type IDGenerator interface {

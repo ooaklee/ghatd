@@ -30,10 +30,9 @@ type UserService interface {
 	GetUserExtension(ctx context.Context, r *GetUserExtensionRequest) (*GetUserExtensionResponse, error)
 	UpdateUserPersonalInfo(ctx context.Context, r *UpdateUserPersonalInfoRequest) (*UpdateUserPersonalInfoResponse, error)
 	ValidateUser(ctx context.Context, r *ValidateUserRequest) (*ValidateUserResponse, error)
-	SearchUsersByExtension(ctx context.Context, r *SearchUsersByExtensionRequest) (*SearchUsersByExtensionResponse, error)
 	BulkUpdateUsersStatus(ctx context.Context, r *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error)
-	GetUsersByRoles(ctx context.Context, r *GetUsersByRolesRequest) (*GetUsersByRolesResponse, error)
-	GetUsersByStatus(ctx context.Context, r *GetUsersByStatusRequest) (*GetUsersByStatusResponse, error)
+	GetUserStats(ctx context.Context, r *GetUserStatsRequest) (*GetUserStatsResponse, error)
+	GetUserConfigs(ctx context.Context, r *GetUserConfigsRequest) (*GetUserConfigsResponse, error)
 }
 
 // UserValidator interface defines expected methods of a valid validator
@@ -401,23 +400,6 @@ func (h *Handler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
-// SearchUsersByExtension handles searching for users by extension field value
-func (h *Handler) SearchUsersByExtension(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToSearchUsersByExtensionRequest(r, h.Validator)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.SearchUsersByExtension(r.Context(), request)
-	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
-}
-
 // BulkUpdateUsersStatus handles bulk updating user statuses
 func (h *Handler) BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToBulkUpdateUsersStatusRequest(r, h.Validator)
@@ -435,36 +417,36 @@ func (h *Handler) BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request) 
 	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
-// GetUsersByRoles handles retrieving users by roles
-func (h *Handler) GetUsersByRoles(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetUsersByRolesRequest(r, h.Validator)
+// GetUserStats handles retrieving aggregated stats about platform users
+func (h *Handler) GetUserStats(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserStatsRequest(r, h.Validator)
 	if err != nil {
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	response, err := h.Service.GetUsersByRoles(r.Context(), request)
+	response, err := h.Service.GetUserStats(r.Context(), request)
 	if err != nil {
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
+	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
-// GetUsersByStatus handles retrieving users by status
-func (h *Handler) GetUsersByStatus(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetUsersByStatusRequest(r, h.Validator)
+// GetUserConfigs handles retrieving supported user config presets
+func (h *Handler) GetUserConfigs(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserConfigsRequest(r, h.Validator)
 	if err != nil {
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	response, err := h.Service.GetUsersByStatus(r.Context(), request)
+	response, err := h.Service.GetUserConfigs(r.Context(), request)
 	if err != nil {
 		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
+	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }

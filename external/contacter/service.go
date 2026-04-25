@@ -19,6 +19,7 @@ type contacterRepository interface {
 	CreateComms(ctx context.Context, newComms *Comms) (*Comms, error)
 	UpdateComms(ctx context.Context, comms *Comms) (*Comms, error)
 	GetCommsByIds(ctx context.Context, commsIds []string) ([]Comms, error)
+	GetCommsStatsCounts(ctx context.Context, req *GetCommsStatsRequest) (*CommsStats, error)
 }
 
 // Service represents the contacter service
@@ -217,4 +218,22 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 	return &UpdateCommsResponse{
 		Comms: updatedComms,
 	}, nil
+}
+
+// GetCommsStats retrieves aggregated stats about platform comms
+func (s *Service) GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error) {
+
+	var logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
+
+	logger.Debug("initiating-get-comms-stats-request", zap.Any("request", req))
+
+	stats, err := s.contacterRepository.GetCommsStatsCounts(ctx, req)
+	if err != nil {
+		logger.Error("failed-to-get-comms-stats-counts", zap.Error(err))
+		return nil, errors.New("failed to retrieve comms statistics")
+	}
+
+	return &GetCommsStatsResponse{CommsStats: stats}, nil
 }

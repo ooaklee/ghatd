@@ -24,6 +24,8 @@ type GroupHandler interface {
 	ArchiveGroup(w http.ResponseWriter, r *http.Request)
 	RestoreGroup(w http.ResponseWriter, r *http.Request)
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
+	GetGroupsStats(w http.ResponseWriter, r *http.Request)
+	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
 }
 
 // APIGroupsV1Prefix base URI prefix for all v1 groups routes
@@ -52,6 +54,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes := httpRouter.PathPrefix(APIGroupsV1Prefix).Subrouter()
 	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.GetGroups).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetGroupsStats).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/configs", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.GetGroupByID).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)

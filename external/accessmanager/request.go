@@ -117,6 +117,11 @@ type CreateUserAPITokenRequest struct {
 
 	// Ttl is the time to live on the access token
 	Ttl int64 `json:"ttl"`
+
+	// Description is a reminder about or name for this token
+	// that will be created. If left empty, a random codename string
+	// will be generated and assigned as the token's description
+	Description string `json:"description,omitempty"`
 }
 
 // DeleteUserAPITokenRequest holds the data required for deleting an api token

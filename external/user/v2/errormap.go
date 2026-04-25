@@ -151,4 +151,10 @@ var UserErrorMap reply.ErrorManifest = reply.ErrorManifest{
 		StatusCode: 400,
 		Code:       "USV2-024",
 	},
+	ErrKeyInvalidUserConfigType: {
+		Title:      "Bad Request",
+		Detail:     "Invalid user config type",
+		StatusCode: 400,
+		Code:       "USV2-025",
+	},
 }

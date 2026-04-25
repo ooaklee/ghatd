@@ -1,6 +1,9 @@
 package contacter
 
-import "github.com/ooaklee/ghatd/external/toolbox"
+import (
+	"github.com/ooaklee/ghatd/external/toolbox"
+	"github.com/ooaklee/reply"
+)
 
 // CreateCommsResponse holds everything needed to return
 // the response to creating a comms
@@ -50,4 +53,14 @@ type UpdateCommsResponse struct {
 
 	// Comms is the comms that was updated
 	Comms *Comms `json:"comms"`
+}
+
+// GetCommsStatsResponse holds the response for comms stats
+type GetCommsStatsResponse struct {
+	*CommsStats
+}
+
+// GetBaseResponseHandler returns response handler configured with contacter error map
+func GetBaseResponseHandler() *reply.Replier {
+	return reply.NewReplier(append([]reply.ErrorManifest{}, ContacterErrorMap))
 }

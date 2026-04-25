@@ -116,28 +116,27 @@ type ValidateUserResponse struct {
 	Errors []string `json:"errors,omitempty"`
 }
 
-// SearchUsersByExtensionResponse holds the response for searching users by extension field
-type SearchUsersByExtensionResponse struct {
-	Users []UniversalUser     `json:"users"`
-	Meta  *PaginationMetadata `json:"meta"`
-}
-
 // BulkUpdateUsersStatusResponse holds the response for bulk updating user statuses
 type BulkUpdateUsersStatusResponse struct {
 	UpdatedCount int      `json:"updated_count"`
 	FailedIDs    []string `json:"failed_ids,omitempty"`
 }
 
-// GetUsersByRolesResponse holds the response for retrieving users by roles
-type GetUsersByRolesResponse struct {
-	Users []UniversalUser     `json:"users"`
-	Meta  *PaginationMetadata `json:"meta"`
+// GetUserStatsResponse holds the response for user stats
+type GetUserStatsResponse struct {
+	*UserStats
 }
 
-// GetUsersByStatusResponse holds the response for retrieving users by status
-type GetUsersByStatusResponse struct {
-	Users []UniversalUser     `json:"users"`
-	Meta  *PaginationMetadata `json:"meta"`
+// AvailableUserConfig describes one supported user config preset.
+type AvailableUserConfig struct {
+	Type   string                  `json:"type"`
+	Config *UserConfigCapabilities `json:"config"`
+}
+
+// GetUserConfigsResponse holds the supported user config capabilities.
+type GetUserConfigsResponse struct {
+	DefaultConfigType string                `json:"default_config_type"`
+	Configs           []AvailableUserConfig `json:"configs"`
 }
 
 // DeleteUserResponse holds the response for deleting a user (if needed)

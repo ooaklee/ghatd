@@ -16,6 +16,7 @@ type UsermanagerHandler interface {
 	CreateComms(w http.ResponseWriter, r *http.Request)
 	GetComms(w http.ResponseWriter, r *http.Request)
 	UpdateComms(w http.ResponseWriter, r *http.Request)
+	GetCommsStats(w http.ResponseWriter, r *http.Request)
 	// Group/Team management methods
 	GetEnrichedUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserGroups(w http.ResponseWriter, r *http.Request)
@@ -87,6 +88,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerV2Prefix).Subrouter()
 	usermanagerAdminRoutes.HandleFunc("/comms", request.Handler.GetComms).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/comms/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/comms/{id}", request.Handler.UpdateComms).Methods(http.MethodPut, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/admin/users/{id}/groups/bulk", request.Handler.BulkUpdateUserGroupMemberships).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/admin/groups", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)

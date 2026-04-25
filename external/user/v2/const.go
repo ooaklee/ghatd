@@ -43,6 +43,7 @@ const (
 	ErrKeyValidationFailed                  = "UserValidationFailed"
 	ErrKeyDatabaseError                     = "UserDatabaseError"
 	ErrKeyInvalidNanoID                     = "UserInvalidNanoID"
+	ErrKeyInvalidUserConfigType             = "UserInvalidConfigType"
 )
 
 const (

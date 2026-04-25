@@ -169,7 +169,7 @@ func (r *Repository) CreateUserAPIToken(ctx context.Context, apiToken *UserAPITo
 		return nil, err
 	}
 
-	apiToken.Generate().GenerateNewCodename().GenerateNewUUID()
+	apiToken.Generate().GenerateNewUUID()
 
 	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, apiToken, "api-token")
 	if err != nil {

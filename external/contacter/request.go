@@ -162,3 +162,9 @@ type CreateCommsRequest struct {
 	// Meta is the meta data for the comms
 	Meta map[string]interface{} `json:"meta,omitempty"`
 }
+
+// GetCommsStatsRequest holds filters for retrieving comms stats
+type GetCommsStatsRequest struct {
+	// WithEmailRegex filters stats to comms whose email matches the provided regex pattern
+	WithEmailRegex string `query:"with_email_regex"`
+}

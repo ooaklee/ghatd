@@ -134,6 +134,9 @@ type CreateAPITokenRequest struct {
 	// if 0 - forever
 	// as seconds
 	TokenTtl int64
+
+	// Description is the token's description
+	Description string
 }
 
 // analyseTokenTTLDataRequest is holding attributes need to assess

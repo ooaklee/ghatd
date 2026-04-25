@@ -3,7 +3,6 @@ package user
 import (
 	"context"
 	"errors"
-	"math"
 	"regexp"
 
 	"github.com/ooaklee/ghatd/external/audit"
@@ -27,9 +26,7 @@ type UserRepository interface {
 	DeleteUserByID(ctx context.Context, id string) error
 	GetUsers(ctx context.Context, req *GetUsersRequest) ([]UniversalUser, error)
 	GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) (int64, error)
-	GetUsersByRoles(ctx context.Context, roles []string, page, perPage int, order string) ([]UniversalUser, error)
-	GetUsersByStatus(ctx context.Context, status string, page, perPage int, order string) ([]UniversalUser, error)
-	SearchUsersByExtension(ctx context.Context, key string, value interface{}, page, perPage int) ([]UniversalUser, error)
+	GetUserStatsCounts(ctx context.Context, req *GetUserStatsRequest) (*UserStats, error)
 }
 
 // Service holds and manages user business logic
@@ -37,6 +34,7 @@ type Service struct {
 	UserRepository             UserRepository
 	AuditService               AuditService
 	Config                     *UserConfig
+	Configs                    []*UserConfig
 	IDGenerator                IDGenerator
 	TimeProvider               TimeProvider
 	StringUtils                StringUtils
@@ -56,21 +54,36 @@ func NewService(
 	if config == nil {
 		config = DefaultUserConfig()
 	}
+	config = ensureUserConfigType(config)
 
-	return &Service{
+	service := &Service{
 		UserRepository:             userRepository,
 		AuditService:               auditService,
 		Config:                     config,
+		Configs:                    registerUserConfigs(config),
 		IDGenerator:                idGenerator,
 		TimeProvider:               timeProvider,
 		StringUtils:                stringUtils,
 		AutoAdminEmailAddressRegex: autoAdminEmailAddressRegex,
 	}
+
+	return service
+}
+
+// WithConfigs registers additional user configs supported by the service.
+func (s *Service) WithConfigs(configs ...*UserConfig) *Service {
+	s.Configs = registerUserConfigs(append([]*UserConfig{s.defaultConfig()}, configs...)...)
+	return s
 }
 
 // CreateUser creates a new user
 func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*CreateUserResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	config, err := s.resolveRequestedConfig(req.Type)
+	if err != nil {
+		log.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
+		return nil, err
+	}
 
 	// Check if user already exists
 	existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
@@ -80,7 +93,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	}
 
 	// Create new user with dependencies
-	user := NewUniversalUser(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	user := NewUniversalUser(config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	// Set basic fields
 	user.Email = normaliseUserEmail(req.Email)
@@ -104,8 +117,8 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	} else {
 		user.Roles = []string{}
 
-		if s.Config.DefaultRole != "" {
-			user.Roles = append(user.Roles, s.Config.DefaultRole)
+		if config.DefaultRole != "" {
+			user.Roles = append(user.Roles, config.DefaultRole)
 		}
 
 		// Check if email matches auto-admin regex
@@ -119,7 +132,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	if req.Status != "" {
 		user.Status = req.Status
 	} else {
-		user.Status = s.Config.DefaultStatus
+		user.Status = config.DefaultStatus
 	}
 
 	// Set extensions
@@ -134,7 +147,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 		user.ID = toolbox.GenerateUuidV4()
 	}
 
-	if req.GenerateNanoID && s.Config.MultipleIdentifiers {
+	if req.GenerateNanoID && config.MultipleIdentifiers {
 		user.GenerateNewNanoID()
 	}
 
@@ -186,7 +199,7 @@ func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*Ge
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	return &GetUserByIDResponse{User: user}, nil
 }
@@ -206,7 +219,7 @@ func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDReque
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	return &GetUserByNanoIDResponse{User: user}, nil
 }
@@ -226,7 +239,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	return &GetUserByEmailResponse{User: user}, nil
 }
@@ -249,8 +262,19 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 	if req.User != nil {
 		userWithProvidedData := req.User
+		requestedType := userWithProvidedData.Type
+		if requestedType == "" {
+			requestedType = user.Type
+		}
 
-		userWithProvidedData.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+		config, err := s.resolveRequestedConfig(requestedType)
+		if err != nil {
+			log.Error("invalid-user-config-type", zap.String("config-type", requestedType), zap.Error(err))
+			return nil, err
+		}
+
+		userWithProvidedData.SetDependencies(config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+		userWithProvidedData.Type = config.GetType(s.defaultConfig())
 
 		if userWithProvidedData.Email != "" && userWithProvidedData.Email != user.Email {
 			// Check if new email already exists
@@ -268,10 +292,22 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	}
 
 	if req.User == nil {
-		user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+		s.setUserDependencies(user)
 
 		// Update fields
 		hasChanges := false
+
+		if req.Type != "" && req.Type != user.Type {
+			config, err := s.resolveRequestedConfig(req.Type)
+			if err != nil {
+				log.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
+				return nil, err
+			}
+
+			user.Type = config.GetType(s.defaultConfig())
+			user.SetDependencies(config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+			hasChanges = true
+		}
 
 		if req.Email != "" && req.Email != user.Email {
 			// Check if new email already exists
@@ -425,20 +461,14 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 		OnlyAdmin:       req.OnlyAdmin,
 		EmailVerified:   req.EmailVerified,
 		PhoneVerified:   req.PhoneVerified,
+		ExtensionKey:    req.ExtensionKey,
+		ExtensionValue:  req.ExtensionValue,
 	}
 
-	total, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
+	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
 	if err != nil {
 		log.Error("failed-to-get-total-users", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
-	}
-
-	// Calculate total pages
-	totalPages := int(math.Ceil(float64(total) / float64(req.PerPage)))
-
-	// Validate page is in range
-	if req.Page > totalPages && totalPages > 0 {
-		return nil, errors.New(ErrKeyPageOutOfRange)
 	}
 
 	// Get users
@@ -450,19 +480,23 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 
 	// Reinject dependencies for all users
 	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+		s.setUserDependencies(&users[i])
 	}
 
-	meta := &PaginationMetadata{
-		Page:           req.Page,
-		PerPage:        req.PerPage,
-		TotalResources: total,
-		TotalPages:     totalPages,
+	// handle page pagination
+	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
+	if err != nil {
+		return nil, err
 	}
 
 	return &GetUsersResponse{
-		Users: users,
-		Meta:  meta,
+		Users: paginatedResponse.Resources,
+		Meta: &PaginationMetadata{
+			Page:           paginatedResponse.Page,
+			PerPage:        paginatedResponse.ResourcePerPage,
+			TotalResources: int64(paginatedResponse.Total),
+			TotalPages:     paginatedResponse.TotalPages,
+		},
 	}, nil
 }
 
@@ -491,7 +525,7 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Update status
 	updatedUser, err := user.UpdateStatus(req.DesiredStatus)
@@ -534,7 +568,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Add role
 	user.AddRole(req.Role)
@@ -573,7 +607,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Remove role
 	user.RemoveRole(req.Role)
@@ -612,7 +646,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Verify email
 	user.VerifyEmail()
@@ -651,7 +685,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Unverify email
 	user.UnverifyEmail()
@@ -690,7 +724,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Verify phone
 	user.VerifyPhone()
@@ -729,7 +763,7 @@ func (s *Service) RecordUserLogin(ctx context.Context, req *RecordUserLoginReque
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Update last login timestamp
 	user.SetLastLoginAtNow()
@@ -789,7 +823,7 @@ func (s *Service) SetUserExtension(ctx context.Context, req *SetUserExtensionReq
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Set extension
 	if user.Extensions == nil {
@@ -842,7 +876,7 @@ func (s *Service) UpdateUserPersonalInfo(ctx context.Context, req *UpdateUserPer
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Update personal info fields
 	if user.PersonalInfo == nil {
@@ -915,7 +949,7 @@ func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*
 	}
 
 	// Reinject dependencies
-	user.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	s.setUserDependencies(user)
 
 	// Validate
 	validationErr := user.Validate()
@@ -930,55 +964,6 @@ func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*
 	}
 
 	return &ValidateUserResponse{Valid: true, Errors: []string{}}, nil
-}
-
-// SearchUsersByExtension searches for users by extension field value
-func (s *Service) SearchUsersByExtension(ctx context.Context, req *SearchUsersByExtensionRequest) (*SearchUsersByExtensionResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "search-users-by-extension")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	// Validate pagination
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.PerPage < 1 || req.PerPage > 100 {
-		req.PerPage = 25
-	}
-
-	// Search
-	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, &GetTotalUsersRequest{
-		ExtensionKey:   req.Key,
-		ExtensionValue: req.Value,
-	})
-	if err != nil {
-		log.Error("failed-to-get-total-users-for-extension-search", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	users, err := s.UserRepository.SearchUsersByExtension(ctx, req.Key, req.Value, req.Page, req.PerPage)
-	if err != nil {
-		log.Error("failed-to-search-users-by-extension", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-
-	// Reinject dependencies for all users
-	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-	}
-
-	// handle page pagination
-	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
-	if err != nil {
-		return nil, err
-	}
-
-	return &SearchUsersByExtensionResponse{
-		Users: paginatedResponse.Resources,
-		Meta: &PaginationMetadata{
-			Page:           paginatedResponse.Page,
-			PerPage:        paginatedResponse.ResourcePerPage,
-			TotalResources: int64(paginatedResponse.Total),
-			TotalPages:     paginatedResponse.TotalPages,
-		},
-	}, nil
 }
 
 // BulkUpdateUsersStatus updates status for multiple users
@@ -1012,103 +997,83 @@ func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *BulkUpdateUser
 	}, nil
 }
 
-// GetUsersByRoles retrieves users with specific roles
-func (s *Service) GetUsersByRoles(ctx context.Context, req *GetUsersByRolesRequest) (*GetUsersByRolesResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-users-by-roles")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+// GetUserStats retrieves aggregated stats about platform users
+func (s *Service) GetUserStats(ctx context.Context, req *GetUserStatsRequest) (*GetUserStatsResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-stats")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	// Validate pagination
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.PerPage < 1 || req.PerPage > 100 {
-		req.PerPage = 25
-	}
-
-	// Get users
-	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, &GetTotalUsersRequest{
-		RolesFilter: req.Roles,
-	})
+	stats, err := s.UserRepository.GetUserStatsCounts(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-total-users-for-roles-search", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	users, err := s.UserRepository.GetUsersByRoles(ctx, req.Roles, req.Page, req.PerPage, req.Order)
-	if err != nil {
-		log.Error("failed-to-get-users-by-roles", zap.Error(err))
+		log.Error("failed-to-get-user-stats-counts", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
-	// Reinject dependencies for all users
-	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-	}
-
-	// handle page pagination
-	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetUsersByRolesResponse{
-		Users: paginatedResponse.Resources,
-		Meta: &PaginationMetadata{
-			Page:           paginatedResponse.Page,
-			PerPage:        paginatedResponse.ResourcePerPage,
-			TotalResources: int64(paginatedResponse.Total),
-			TotalPages:     paginatedResponse.TotalPages,
-		},
-	}, nil
+	return &GetUserStatsResponse{UserStats: stats}, nil
 }
 
-// GetUsersByStatus retrieves users with a specific status
-func (s *Service) GetUsersByStatus(ctx context.Context, req *GetUsersByStatusRequest) (*GetUsersByStatusResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-users-by-status")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	// Validate pagination
-	if req.Page < 1 {
-		req.Page = 1
-	}
-	if req.PerPage < 1 || req.PerPage > 100 {
-		req.PerPage = 25
-	}
-
-	// Get users
-	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, &GetTotalUsersRequest{
-		StatusFilter: req.Status,
-	})
-	if err != nil {
-		log.Error("failed-to-get-total-users-for-status-search", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	users, err := s.UserRepository.GetUsersByStatus(ctx, req.Status, req.Page, req.PerPage, req.Order)
-	if err != nil {
-		log.Error("failed-to-get-users-by-status", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+// GetUserConfigs returns supported user config presets and capabilities.
+func (s *Service) GetUserConfigs(_ context.Context, _ *GetUserConfigsRequest) (*GetUserConfigsResponse, error) {
+	defaultConfig := s.defaultConfig()
+	configs := s.availableConfigs()
+	availableConfigs := make([]AvailableUserConfig, 0, len(configs))
+	for _, config := range configs {
+		availableConfigs = append(availableConfigs, AvailableUserConfig{
+			Type:   config.GetType(defaultConfig),
+			Config: config.ToCapabilities(defaultConfig),
+		})
 	}
 
-	// Reinject dependencies for all users
-	for i := range users {
-		users[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-	}
-
-	// handle page pagination
-	paginatedResponse, err := toolbox.Paginate(ctx, &toolbox.PaginationRequest{PerPage: req.PerPage, Page: req.Page}, users, int(totalMatchingUsers))
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetUsersByStatusResponse{
-		Users: paginatedResponse.Resources,
-		Meta: &PaginationMetadata{
-			Page:           paginatedResponse.Page,
-			PerPage:        paginatedResponse.ResourcePerPage,
-			TotalResources: int64(paginatedResponse.Total),
-			TotalPages:     paginatedResponse.TotalPages,
-		},
+	return &GetUserConfigsResponse{
+		DefaultConfigType: defaultConfig.GetType(DefaultUserConfig()),
+		Configs:           availableConfigs,
 	}, nil
 }
 
 // Helper methods
+
+func (s *Service) defaultConfig() *UserConfig {
+	if s.Config == nil {
+		s.Config = DefaultUserConfig()
+	}
+
+	s.Config = ensureUserConfigType(s.Config)
+	return s.Config
+}
+
+func (s *Service) availableConfigs() []*UserConfig {
+	if len(s.Configs) == 0 {
+		s.Configs = registerUserConfigs(s.defaultConfig())
+	}
+
+	return s.Configs
+}
+
+func (s *Service) resolveRequestedConfig(configType string) (*UserConfig, error) {
+	if configType == "" {
+		return s.defaultConfig(), nil
+	}
+
+	for _, config := range s.availableConfigs() {
+		if config.GetType(s.defaultConfig()) == configType {
+			return config, nil
+		}
+	}
+
+	return nil, errors.New(ErrKeyInvalidUserConfigType)
+}
+
+func (s *Service) resolveStoredConfig(configType string) *UserConfig {
+	config, err := s.resolveRequestedConfig(configType)
+	if err != nil {
+		return s.defaultConfig()
+	}
+
+	return config
+}
+
+func (s *Service) setUserDependencies(user *UniversalUser) *UniversalUser {
+	config := s.resolveStoredConfig(user.Type)
+	return user.SetDependencies(config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+}
 
 // shouldBeAutoAdmin checks if email matches auto-admin regex
 func (s *Service) shouldBeAutoAdmin(email string) bool {

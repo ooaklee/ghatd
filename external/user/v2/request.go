@@ -3,6 +3,7 @@ package user
 // CreateUserRequest holds data for creating a new user
 type CreateUserRequest struct {
 	Email          string                 `json:"email"`
+	Type           string                 `json:"type,omitempty"`
 	FirstName      string                 `json:"first_name,omitempty"`
 	LastName       string                 `json:"last_name,omitempty"`
 	FullName       string                 `json:"full_name,omitempty"`
@@ -19,6 +20,7 @@ type CreateUserRequest struct {
 type UpdateUserRequest struct {
 	ID         string                 `json:"id"`
 	Email      string                 `json:"email,omitempty"`
+	Type       string                 `json:"type,omitempty"`
 	FirstName  string                 `json:"first_name,omitempty"`
 	LastName   string                 `json:"last_name,omitempty"`
 	FullName   string                 `json:"full_name,omitempty"`
@@ -63,32 +65,36 @@ type GetUsersRequest struct {
 	IncludeMeta bool `query:"meta"`
 
 	// Filters
-	EmailFilter     string      `query:"email_filter"`
-	FirstNameFilter string      `query:"first_name_filter"`
-	LastNameFilter  string      `query:"last_name_filter"`
-	StatusFilter    string      `query:"status_filter"`
-	RoleFilter      string      `query:"role_filter"`
-	RolesFilter     []string    `query:"roles_filter"`
+	EmailFilter     string      `query:"with_email"`
+	FirstNameFilter string      `query:"with_first_name"`
+	LastNameFilter  string      `query:"with_last_name"`
+	StatusFilter    string      `query:"with_status"`
+	RoleFilter      string      `query:"with_role"`
+	RolesFilter     []string    `query:"with_roles"`
 	OnlyAdmin       bool        `query:"only_admin"`
 	EmailVerified   *bool       `query:"email_verified"`
 	PhoneVerified   *bool       `query:"phone_verified"`
-	ExtensionKey    string      `query:"extension_key"`
-	ExtensionValue  interface{} `query:"extension_value"`
+	ExtensionKey    string      `query:"with_extension_key"`
+	ExtensionValue  interface{} `query:"with_extension_value"`
 }
 
 // GetTotalUsersRequest holds filters for counting total users
 type GetTotalUsersRequest struct {
-	EmailFilter     string      `query:"email_filter"`
-	FirstNameFilter string      `query:"first_name_filter"`
-	LastNameFilter  string      `query:"last_name_filter"`
-	StatusFilter    string      `query:"status_filter"`
-	RoleFilter      string      `query:"role_filter"`
-	RolesFilter     []string    `query:"roles_filter"`
+	EmailFilter     string      `query:"with_email"`
+	FirstNameFilter string      `query:"with_first_name"`
+	LastNameFilter  string      `query:"with_last_name"`
+	StatusFilter    string      `query:"with_status"`
+	RoleFilter      string      `query:"with_role"`
+	RolesFilter     []string    `query:"with_roles"`
 	OnlyAdmin       bool        `query:"only_admin"`
 	EmailVerified   *bool       `query:"email_verified"`
 	PhoneVerified   *bool       `query:"phone_verified"`
-	ExtensionKey    string      `query:"extension_key"`
-	ExtensionValue  interface{} `query:"extension_value"`
+	ExtensionKey    string      `query:"with_extension_key"`
+	ExtensionValue  interface{} `query:"with_extension_value"`
+
+	// EmailRegex is an internal-only server-side regex applied directly against
+	// the email field
+	EmailRegex string
 }
 
 // UpdateUserStatusRequest holds data for updating user status
@@ -167,32 +173,18 @@ type ValidateUserRequest struct {
 	ID string `json:"id"`
 }
 
-// SearchUsersByExtensionRequest holds data for searching users by extension field
-type SearchUsersByExtensionRequest struct {
-	Key     string      `json:"key"`
-	Value   interface{} `query:"value"`
-	Page    int         `query:"page"`
-	PerPage int         `query:"per_page"`
-}
-
 // BulkUpdateUsersStatusRequest holds data for bulk updating user statuses
 type BulkUpdateUsersStatusRequest struct {
 	IDs           []string `json:"ids"`
 	DesiredStatus string   `json:"desired_status"`
 }
 
-// GetUsersByRolesRequest holds data for retrieving users by roles
-type GetUsersByRolesRequest struct {
-	Roles   []string `query:"roles"`
-	Page    int      `query:"page"`
-	PerPage int      `query:"per_page"`
-	Order   string   `query:"order"`
+// GetUserStatsRequest holds filters for retrieving user stats
+type GetUserStatsRequest struct {
+
+	// WithEmailRegex filters stats to users whose email matches the provided regex pattern
+	WithEmailRegex string `query:"with_email_regex"`
 }
 
-// GetUsersByStatusRequest holds data for retrieving users by status
-type GetUsersByStatusRequest struct {
-	Status  string `query:"status"`
-	Page    int    `query:"page"`
-	PerPage int    `query:"per_page"`
-	Order   string `query:"order"`
-}
+// GetUserConfigsRequest holds input for retrieving supported user configs
+type GetUserConfigsRequest struct{}

@@ -75,6 +75,16 @@ type UpdateCommsRequest struct {
 	*contacter.UpdateCommsRequest
 }
 
+// GetCommsStatsRequest holds everything needed to make
+// the request to get comms stats
+type GetCommsStatsRequest struct {
+
+	// UserId is the id of the user making the request
+	UserId string
+
+	*contacter.GetCommsStatsRequest
+}
+
 // GetEnrichedUserProfileRequest holds the data needed to get an enriched user profile
 type GetEnrichedUserProfileRequest struct {
 

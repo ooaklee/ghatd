@@ -405,26 +405,6 @@ func MapRequestToValidateUserRequest(request *http.Request, validator UserValida
 	return parsedRequest, nil
 }
 
-// MapRequestToSearchUsersByExtensionRequest maps incoming SearchUsersByExtension request to correct struct
-func MapRequestToSearchUsersByExtensionRequest(request *http.Request, validator UserValidator) (*SearchUsersByExtensionRequest, error) {
-	var err error
-	parsedRequest := &SearchUsersByExtensionRequest{}
-
-	// get request queries
-	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	return parsedRequest, nil
-}
-
 // MapRequestToBulkUpdateUsersStatusRequest maps incoming BulkUpdateUsersStatus request to correct struct
 func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator UserValidator) (*BulkUpdateUsersStatusRequest, error) {
 	parsedRequest := &BulkUpdateUsersStatusRequest{}
@@ -441,10 +421,10 @@ func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator U
 	return parsedRequest, nil
 }
 
-// MapRequestToGetUsersByRolesRequest maps incoming GetUsersByRoles request to correct struct
-func MapRequestToGetUsersByRolesRequest(request *http.Request, validator UserValidator) (*GetUsersByRolesRequest, error) {
+// MapRequestToGetUserStatsRequest maps incoming GetUserStats request to correct struct
+func MapRequestToGetUserStatsRequest(request *http.Request, validator UserValidator) (*GetUserStatsRequest, error) {
 	var err error
-	parsedRequest := &GetUsersByRolesRequest{}
+	parsedRequest := &GetUserStatsRequest{}
 
 	// get request queries
 	query := request.URL.Query()
@@ -461,19 +441,11 @@ func MapRequestToGetUsersByRolesRequest(request *http.Request, validator UserVal
 	return parsedRequest, nil
 }
 
-// MapRequestToGetUsersByStatusRequest maps incoming GetUsersByStatus request to correct struct
-func MapRequestToGetUsersByStatusRequest(request *http.Request, validator UserValidator) (*GetUsersByStatusRequest, error) {
-	var err error
-	parsedRequest := &GetUsersByStatusRequest{}
+// MapRequestToGetUserConfigsRequest maps incoming GetUserConfigs request to correct struct
+func MapRequestToGetUserConfigsRequest(_ *http.Request, validator UserValidator) (*GetUserConfigsRequest, error) {
+	parsedRequest := &GetUserConfigsRequest{}
 
-	// get request queries
-	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	err = validator.Validate(parsedRequest)
+	err := validator.Validate(parsedRequest)
 	if err != nil {
 		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}

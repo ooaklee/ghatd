@@ -139,6 +139,32 @@ func mapGetCommsRequest(r *http.Request, validator UsermanagerValidator) (*GetCo
 	return &parsedRequest, nil
 }
 
+// mapGetCommsStatsRequest maps the request to a GetCommsStatsRequest
+func mapGetCommsStatsRequest(r *http.Request, validator UsermanagerValidator) (*GetCommsStatsRequest, error) {
+
+	parsedRequest := GetCommsStatsRequest{
+		GetCommsStatsRequest: &contacter.GetCommsStatsRequest{},
+	}
+
+	baseRequest := contacter.GetCommsStatsRequest{}
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+
+	query := r.URL.Query()
+	err := querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		return nil, errors.New(contacter.ErrKeyInvalidCommsPayload)
+	}
+
+	parsedRequest.GetCommsStatsRequest = &baseRequest
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // validateParsedRequest validates based on tags. On failure an error is returned
 func validateParsedRequest(request interface{}, validator UsermanagerValidator) error {
 	return validator.Validate(request)
