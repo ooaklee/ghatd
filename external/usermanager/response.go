@@ -11,6 +11,13 @@ type GetUserMicroProfileResponse struct {
 	*userv2.GetUserMicroProfileResponse
 }
 
+// GetUserByIDResponse holds response data for GetUserByID request
+type GetUserByIDResponse struct {
+
+	// User is user that was requested by ID
+	User *userv2.UniversalUser
+}
+
 // GetUserProfileResponse holds response data for GetUserProfile request
 type GetUserProfileResponse struct {
 	*userv2.GetUserProfileResponse
@@ -130,4 +137,70 @@ type GetGroupDetailResponse struct {
 // GetGroupStatsResponse holds the response for group stats
 type GetGroupStatsResponse struct {
 	Stats GroupStats `json:"stats"`
+}
+
+// EnrichedMember holds a group member with their user profile details resolved
+type EnrichedMember struct {
+	// ID is the user or group ID
+	ID string `json:"id"`
+
+	// FullName is the member's resolved full name
+	FullName string `json:"full_name,omitempty"`
+
+	// Initials are derived from the resolved name for avatar display
+	Initials string `json:"initials,omitempty"`
+
+	// Email is the member's resolved email address
+	Email string `json:"email,omitempty"`
+
+	// Type is the user's account type (for example USER, SERVICE, API)
+	Type string `json:"type,omitempty"`
+
+	// Roles are the user's platform roles
+	Roles []string `json:"roles,omitempty"`
+
+	// Role is the member's role within the group
+	Role string `json:"role,omitempty"`
+
+	// JoinedAt is when the member joined the group
+	JoinedAt string `json:"joined_at,omitempty"`
+}
+
+// EnrichedLeadership holds resolved leadership positions with user details
+type EnrichedLeadership struct {
+	Owner *EnrichedMember `json:"owner,omitempty"`
+	Head  *EnrichedMember `json:"head,omitempty"`
+	Lead  *EnrichedMember `json:"lead,omitempty"`
+}
+
+// AdminGroupDetail holds the full enriched group view returned to the admin
+type AdminGroupDetail struct {
+	// Group is the raw group object
+	Group *group.UniversalGroup `json:"group"`
+
+	// Members is the list of current members enriched with user profile data
+	Members []EnrichedMember `json:"members"`
+
+	// Leadership holds the resolved leadership positions
+	Leadership *EnrichedLeadership `json:"leadership,omitempty"`
+}
+
+// GetAdminGroupDetailResponse holds the response for the admin get-group-detail endpoint
+type GetAdminGroupDetailResponse struct {
+	Detail *AdminGroupDetail `json:"detail"`
+}
+
+// AdminAddGroupMemberResponse holds the response for adding a member to a group
+type AdminAddGroupMemberResponse struct {
+	Success bool `json:"success"`
+}
+
+// AdminRemoveGroupMemberResponse holds the response for removing a member from a group
+type AdminRemoveGroupMemberResponse struct {
+	Success bool `json:"success"`
+}
+
+// AdminUpdateGroupLeadershipResponse holds the response for updating group leadership
+type AdminUpdateGroupLeadershipResponse struct {
+	Leadership *EnrichedLeadership `json:"leadership"`
 }

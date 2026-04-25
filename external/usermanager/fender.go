@@ -55,12 +55,58 @@ func MapRequestToGetUserMicroProfileRequest(r *http.Request, validator Usermanag
 	return &parsedRequest, nil
 }
 
+// MapRequestToGetUserByIDRequest maps incoming GetUserByID request to correct struct
+func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValidator) (*GetUserByIDRequest, error) {
+	var parsedRequest GetUserByIDRequest
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	baseRequest := userv2.GetUserByIDRequest{}
+
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	// Extract target user ID from URL path
+	targetUserId, err := toolbox.GetVariableValueFromUri(r, "userId")
+	if err != nil {
+		log.Error("unable-get-user-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	baseRequest.ID = targetUserId
+	parsedRequest.GetUserByIDRequest = &baseRequest
+
+	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
+		log.Error("get-user-by-id-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToGetUserProfileRequest maps incoming GetUserProfile request to correct
 // struct.
 func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetUserProfileRequest, error) {
-	var parsedRequest GetUserProfileRequest
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	parsedRequest := GetUserProfileRequest{
+		GetUserProfileRequest: &userv2.GetUserProfileRequest{},
+	}
+
+	baseRequest := userv2.GetUserProfileRequest{}
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+
+	// get request queries
+	query := r.URL.Query()
+	err := querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.GetUserProfileRequest = &baseRequest
 
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
@@ -70,7 +116,7 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 	return &parsedRequest, nil
 }
 
-// MapRequestToDeleteUserPermanentlyRequest maps incoming GetUserMicroProfile request to correct
+// MapRequestToDeleteUserPermanentlyRequest maps incoming DeleteUserPermanently request to correct
 // struct.
 func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator UsermanagerValidator) (*DeleteUserPermanentlyRequest, error) {
 	var parsedRequest DeleteUserPermanentlyRequest
@@ -475,6 +521,110 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToAdminGetGroupDetailRequest maps an admin get-group-detail request to the correct struct
+func MapRequestToAdminGetGroupDetailRequest(r *http.Request, validator UsermanagerValidator) (*AdminGetGroupDetailRequest, error) {
+	var parsedRequest AdminGetGroupDetailRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.AdminUserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.AdminUserId == "" {
+		log.Error("unable-get-admin-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToAdminAddGroupMemberRequest maps an admin add-member request to the correct struct
+func MapRequestToAdminAddGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*AdminAddGroupMemberRequest, error) {
+	var parsedRequest AdminAddGroupMemberRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.AdminUserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.AdminUserId == "" {
+		log.Error("unable-get-admin-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("admin-add-group-member-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToAdminRemoveGroupMemberRequest maps an admin remove-member request to the correct struct
+func MapRequestToAdminRemoveGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*AdminRemoveGroupMemberRequest, error) {
+	var parsedRequest AdminRemoveGroupMemberRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.AdminUserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.AdminUserId == "" {
+		log.Error("unable-get-admin-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
+	if err != nil {
+		log.Error("unable-get-member-id-from-uri")
+		return nil, errors.New(ErrKeyInvalidMemberID)
+	}
+	parsedRequest.MemberID = memberID
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToAdminUpdateGroupLeadershipRequest maps an admin update-leadership request to the correct struct
+func MapRequestToAdminUpdateGroupLeadershipRequest(r *http.Request, validator UsermanagerValidator) (*AdminUpdateGroupLeadershipRequest, error) {
+	var parsedRequest AdminUpdateGroupLeadershipRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.AdminUserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.AdminUserId == "" {
+		log.Error("unable-get-admin-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
 		return nil, errors.New(ErrKeyRequestFailedValidation)
 	}
 

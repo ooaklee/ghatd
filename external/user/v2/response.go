@@ -102,6 +102,7 @@ type RecordUserLoginResponse struct {
 
 // GetUserProfileResponse holds the response for retrieving a user profile
 type GetUserProfileResponse struct {
+	// Profile contains the user's profile information
 	Profile *UserProfile `json:"profile"`
 }
 

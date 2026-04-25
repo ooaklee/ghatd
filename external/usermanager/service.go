@@ -2,6 +2,7 @@ package usermanager
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
@@ -50,6 +51,7 @@ type GroupService interface {
 	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
 	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error)
 	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error)
+	UpdateLeadership(ctx context.Context, req *group.UpdateLeadershipRequest) (*group.UpdateLeadershipResponse, error)
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
 }
 
@@ -122,6 +124,37 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfil
 
 	return &GetUserMicroProfileResponse{
 		GetUserMicroProfileResponse: serviceResponse,
+	}, nil
+}
+
+// GetUserByID handles the business logic of fetching a user by ID.
+func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error) {
+
+	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	logger.Debug("fetching-user-by-id", zap.String("user-id", r.ID))
+
+	requestedUser, err := s.UserService.GetUserByID(ctx, r.GetUserByIDRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	if requestedUser.User.GetUserId() != r.UserId {
+		logger.Warn("user-attempting-to-access-another-user-by-id", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		if err != nil {
+			return nil, err
+		}
+
+		if !requestingUser.User.IsAdmin() {
+			logger.Warn("non-admin-user-attempting-to-access-another-user-by-id", zap.String("user-id", r.UserId))
+			return nil, errors.New(userv2.ErrKeyUnauthorisedAccess)
+		}
+	}
+
+	return &GetUserByIDResponse{
+		User: requestedUser.User,
 	}, nil
 }
 

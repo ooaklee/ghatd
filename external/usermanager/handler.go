@@ -13,6 +13,7 @@ import (
 type UsermanagerService interface {
 	GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error)
 	GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error)
+	GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error)
 	UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error)
 	DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error
 	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
@@ -31,6 +32,11 @@ type UsermanagerService interface {
 	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
+	// Admin group management methods
+	GetAdminGroupDetail(ctx context.Context, r *AdminGetGroupDetailRequest) (*GetAdminGroupDetailResponse, error)
+	AdminAddGroupMember(ctx context.Context, r *AdminAddGroupMemberRequest) (*AdminAddGroupMemberResponse, error)
+	AdminRemoveGroupMember(ctx context.Context, r *AdminRemoveGroupMemberRequest) (*AdminRemoveGroupMemberResponse, error)
+	AdminUpdateGroupLeadership(ctx context.Context, r *AdminUpdateGroupLeadershipRequest) (*AdminUpdateGroupLeadershipResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
@@ -147,6 +153,27 @@ func (h *Handler) GetUserMicroProfile(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
+}
+
+// GetUserByID returns response for request to get user by ID
+func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserByIDRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetUserByID(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+
 }
 
 // GetUserProfile returns response for request to get user's
@@ -496,6 +523,74 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Group)
+}
+
+// AdminGetGroupDetail handles the admin request to get enriched group detail
+func (h *Handler) AdminGetGroupDetail(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAdminGetGroupDetailRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetAdminGroupDetail(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Detail)
+}
+
+// AdminAddGroupMember handles the admin request to add a member to a group
+func (h *Handler) AdminAddGroupMember(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAdminAddGroupMemberRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.AdminAddGroupMember(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// AdminRemoveGroupMember handles the admin request to remove a member from a group
+func (h *Handler) AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAdminRemoveGroupMemberRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.AdminRemoveGroupMember(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// AdminUpdateGroupLeadership handles the admin request to update group leadership
+func (h *Handler) AdminUpdateGroupLeadership(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAdminUpdateGroupLeadershipRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.AdminUpdateGroupLeadership(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetBaseResponseHandler returns response handler configured with auth error map

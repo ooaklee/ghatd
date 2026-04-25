@@ -605,6 +605,10 @@ func (m *MockContacterService) UpdateComms(ctx context.Context, req *contacter.U
 	}, nil
 }
 
+func (m *MockContacterService) GetCommsStats(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error) {
+	return &contacter.GetCommsStatsResponse{}, nil
+}
+
 type MockGroupService struct{}
 
 func (m *MockGroupService) GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error) {
@@ -775,7 +779,7 @@ func (m *MockGroupService) RemoveMember(ctx context.Context, r *group.RemoveMemb
 	return &group.RemoveMemberResponse{Group: updatedGroup}, nil
 }
 
-func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) (*group.UpdateGroupResponse, error) {
+func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil {
 		return nil, err
@@ -786,7 +790,7 @@ func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.Update
 		return nil, err
 	}
 
-	return &group.UpdateGroupResponse{Group: updatedGroup}, nil
+	return &group.UpdateMemberRoleResponse{Group: updatedGroup}, nil
 }
 
 func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error) {
@@ -797,8 +801,6 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 		req.Type,
 		len(req.InitialMembers),
 	)
-
-	// Set additional fields from request
 	newGroup.DisplayInfo.Description = req.Description
 	newGroup.DisplayInfo.Email = req.Email
 	newGroup.DisplayInfo.Icon = req.Icon
@@ -829,6 +831,27 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 	return &group.CreateGroupResponse{
 		Group: newGroup,
 	}, nil
+}
+
+func (m *MockGroupService) UpdateLeadership(ctx context.Context, req *group.UpdateLeadershipRequest) (*group.UpdateLeadershipResponse, error) {
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.GroupID})
+	if err != nil {
+		return nil, err
+	}
+	g := groupResp.Group
+	if g.Leadership == nil {
+		g.Leadership = &group.Leadership{}
+	}
+	if req.OwnerID != nil {
+		g.Leadership.OwnerID = *req.OwnerID
+	}
+	if req.HeadID != nil {
+		g.Leadership.HeadID = *req.HeadID
+	}
+	if req.LeadID != nil {
+		g.Leadership.LeadID = *req.LeadID
+	}
+	return &group.UpdateLeadershipResponse{Group: g}, nil
 }
 
 func createMockGroup(id, name, groupType string, memberCount int) *group.UniversalGroup {

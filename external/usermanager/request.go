@@ -18,6 +18,17 @@ type GetUserProfileRequest struct {
 
 	// UserId the ID of the user requesting their profile
 	UserId string
+
+	*userv2.GetUserProfileRequest
+}
+
+// GetUserByIDRequest holds all the data needed to action user retrieval request
+type GetUserByIDRequest struct {
+
+	// UserId the ID of the user making the request
+	UserId string
+
+	*userv2.GetUserByIDRequest
 }
 
 // UpdateUserProfileRequest holds all the data needed to action user
@@ -292,4 +303,62 @@ type GetGroupStatsRequest struct {
 
 	// GroupID is the ID of the group to fetch
 	GroupID string
+}
+
+// AdminGetGroupDetailRequest holds the data needed for an admin to fetch enriched group detail
+type AdminGetGroupDetailRequest struct {
+
+	// AdminUserId is the ID of the admin making the request
+	AdminUserId string
+
+	// GroupID is the ID of the group to fetch
+	GroupID string
+}
+
+// AdminAddGroupMemberRequest holds the data needed for an admin to add a user to a group
+type AdminAddGroupMemberRequest struct {
+
+	// AdminUserId is the ID of the admin making the request
+	AdminUserId string
+
+	// GroupID is the ID of the group
+	GroupID string
+
+	// MemberID is the ID of the user to add
+	MemberID string `json:"member_id" validate:"required"`
+
+	// Role is the role to assign to the new member (optional)
+	Role string `json:"role,omitempty"`
+}
+
+// AdminRemoveGroupMemberRequest holds the data needed for an admin to remove a user from a group
+type AdminRemoveGroupMemberRequest struct {
+
+	// AdminUserId is the ID of the admin making the request
+	AdminUserId string
+
+	// GroupID is the ID of the group
+	GroupID string
+
+	// MemberID is the ID of the member to remove
+	MemberID string
+}
+
+// AdminUpdateGroupLeadershipRequest holds the data needed for an admin to update group leadership
+type AdminUpdateGroupLeadershipRequest struct {
+
+	// AdminUserId is the ID of the admin making the request
+	AdminUserId string
+
+	// GroupID is the ID of the group
+	GroupID string
+
+	// OwnerID is the new owner's user ID (nil = no change, empty string = clear)
+	OwnerID *string `json:"owner_id,omitempty"`
+
+	// HeadID is the new head's user ID (nil = no change, empty string = clear)
+	HeadID *string `json:"head_id,omitempty"`
+
+	// LeadID is the new lead's user ID (nil = no change, empty string = clear)
+	LeadID *string `json:"lead_id,omitempty"`
 }

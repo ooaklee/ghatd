@@ -101,7 +101,7 @@ var (
 				LongLivedUserTokenLimit:      9999,
 				ShortLivedUserTokenLimit:     9999,
 				ShortLivedMinimumAllowedTime: 60,      // 1 minute
-				ShortLivedMaximumAllowedTime: 2628337, // 1 month
+				ShortLivedMaximumAllowedTime: 7776000, // 90 days
 				ShortLivedMinimumIncrements:  1,
 				//////
 			},
