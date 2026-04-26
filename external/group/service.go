@@ -479,12 +479,21 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 		groupWithProvidedData.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 		if groupWithProvidedData.Name != "" && groupWithProvidedData.Name != group.Name {
-			// Check if new name already exists
-			existingGroup, _ := s.GroupRepository.GetGroupByName(ctx, groupWithProvidedData.Name, groupWithProvidedData.Type, false)
-			if existingGroup != nil && existingGroup.ID != group.ID {
+			nameValidation, nameValidationErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+				Name:          groupWithProvidedData.Name,
+				Type:          group.Type,
+				ParentGroupID: group.ParentGroupID,
+			})
+			if nameValidationErr != nil {
+				log.Error("failed-to-validate-group-name-for-update", zap.Error(nameValidationErr), zap.String("name", groupWithProvidedData.Name))
+				return nil, nameValidationErr
+			}
+			if !nameValidation.Available && nameValidation.IsRootType {
 				return nil, errors.New(ErrKeyNameAlreadyExists)
 			}
-			group.Name = groupWithProvidedData.Name
+
+			groupWithProvidedData.RawName = nameValidation.RawName
+			groupWithProvidedData.Name = nameValidation.Name
 		}
 
 		group = groupWithProvidedData
@@ -497,9 +506,25 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 		hasChanges := false
 
 		// Update fields if provided
-		if req.Name != nil && *req.Name != group.Name {
-			group.Name = *req.Name
-			hasChanges = true
+		if req.Name != nil {
+			nameValidation, nameValidationErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+				Name:          *req.Name,
+				Type:          group.Type,
+				ParentGroupID: group.ParentGroupID,
+			})
+			if nameValidationErr != nil {
+				log.Error("failed-to-validate-group-name-for-update", zap.Error(nameValidationErr), zap.String("name", *req.Name))
+				return nil, nameValidationErr
+			}
+			if !nameValidation.Available && nameValidation.IsRootType {
+				return nil, errors.New(ErrKeyNameAlreadyExists)
+			}
+
+			if nameValidation.Name != group.Name || nameValidation.RawName != group.RawName {
+				group.Name = nameValidation.Name
+				group.RawName = nameValidation.RawName
+				hasChanges = true
+			}
 		}
 
 		if req.Description != nil && *req.Description != group.DisplayInfo.Description {
