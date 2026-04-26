@@ -21,7 +21,7 @@ type GroupHandler interface {
 	RemoveMember(w http.ResponseWriter, r *http.Request)
 	UpdateMemberRole(w http.ResponseWriter, r *http.Request)
 	GetGroupMembers(w http.ResponseWriter, r *http.Request)
-	UpdateLeadership(w http.ResponseWriter, r *http.Request)
+	UpdateOwner(w http.ResponseWriter, r *http.Request)
 	RepairInvalidMembers(w http.ResponseWriter, r *http.Request)
 	ArchiveGroup(w http.ResponseWriter, r *http.Request)
 	RestoreGroup(w http.ResponseWriter, r *http.Request)
@@ -78,8 +78,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members/{memberID}", request.Handler.RemoveMember).Methods(http.MethodDelete, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members/{memberID}/role", request.Handler.UpdateMemberRole).Methods(http.MethodPut, http.MethodOptions)
 
-	// Leadership management
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/leadership", request.Handler.UpdateLeadership).Methods(http.MethodPut, http.MethodOptions)
+	// Ownership management
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/owner", request.Handler.UpdateOwner).Methods(http.MethodPut, http.MethodOptions)
 
 	// Statistics
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)

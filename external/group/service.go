@@ -1285,10 +1285,10 @@ func (s *Service) GetGroupMembers(ctx context.Context, req *GetGroupMembersReque
 	}, nil
 }
 
-// UpdateLeadership updates group leadership
-func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipRequest) (*UpdateLeadershipResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-leadership")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("updating-group-leadership", zap.String("group_id", req.GroupID))
+// UpdateOwner updates group ownership
+func (s *Service) UpdateOwner(ctx context.Context, req *UpdateOwnerRequest) (*UpdateOwnerResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-owner")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("updating-group-owner", zap.String("group_id", req.GroupID))
 
 	// Get group
 	group, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
@@ -1357,12 +1357,12 @@ func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipReq
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 			TargetType: "group",
 			Domain:     "group",
-			Action:     "group.leadership.updated",
+			Action:     "group.owner.updated",
 			TargetId:   req.GroupID,
 		})
 	}
 
-	return &UpdateLeadershipResponse{Group: updatedGroup}, nil
+	return &UpdateOwnerResponse{Group: updatedGroup}, nil
 }
 
 // ArchiveGroup archives a group

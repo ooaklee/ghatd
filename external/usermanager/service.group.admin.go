@@ -200,7 +200,7 @@ func (s *Service) AdminUpdateGroupLeadership(ctx context.Context, r *AdminUpdate
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	_, err := s.GroupService.UpdateLeadership(ctx, &group.UpdateLeadershipRequest{
+	_, err := s.GroupService.UpdateOwner(ctx, &group.UpdateOwnerRequest{
 		GroupID: r.GroupID,
 		OwnerID: r.OwnerID,
 	})

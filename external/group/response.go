@@ -92,8 +92,8 @@ type UpdateMemberRoleResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
 
-// UpdateLeadershipResponse defines the response for updating ownership.
-type UpdateLeadershipResponse struct {
+// UpdateOwnerResponse defines the response for updating ownership.
+type UpdateOwnerResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
 

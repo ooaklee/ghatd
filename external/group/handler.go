@@ -24,7 +24,7 @@ type GroupService interface {
 	RemoveMember(ctx context.Context, r *RemoveMemberRequest) (*RemoveMemberResponse, error)
 	UpdateMemberRole(ctx context.Context, r *UpdateMemberRoleRequest) (*UpdateMemberRoleResponse, error)
 	GetGroupMembers(ctx context.Context, r *GetGroupMembersRequest) (*GetGroupMembersResponse, error)
-	UpdateLeadership(ctx context.Context, r *UpdateLeadershipRequest) (*UpdateLeadershipResponse, error)
+	UpdateOwner(ctx context.Context, r *UpdateOwnerRequest) (*UpdateOwnerResponse, error)
 	RepairInvalidMembers(ctx context.Context) (*RepairInvalidMembersResponse, error)
 	ArchiveGroup(ctx context.Context, r *ArchiveGroupRequest) (*ArchiveGroupResponse, error)
 	RestoreGroup(ctx context.Context, r *RestoreGroupRequest) (*RestoreGroupResponse, error)
@@ -334,15 +334,15 @@ func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Members)
 }
 
-// UpdateLeadership handles updating group leadership
-func (h *Handler) UpdateLeadership(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToUpdateLeadershipRequest(r, h.Validator)
+// UpdateOwner handles updating group owner
+func (h *Handler) UpdateOwner(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateOwnerRequest(r, h.Validator)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	response, err := h.Service.UpdateLeadership(r.Context(), request)
+	response, err := h.Service.UpdateOwner(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

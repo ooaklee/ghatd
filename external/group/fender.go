@@ -277,10 +277,10 @@ func MapRequestToGetGroupMembersRequest(request *http.Request, validator GroupVa
 	return parsedRequest, nil
 }
 
-// MapRequestToUpdateLeadershipRequest maps incoming UpdateLeadership request to correct struct
-func MapRequestToUpdateLeadershipRequest(request *http.Request, validator GroupValidator) (*UpdateLeadershipRequest, error) {
+// MapRequestToUpdateOwnerRequest maps incoming UpdateOwner request to correct struct
+func MapRequestToUpdateOwnerRequest(request *http.Request, validator GroupValidator) (*UpdateOwnerRequest, error) {
 	var err error
-	parsedRequest := &UpdateLeadershipRequest{}
+	parsedRequest := &UpdateOwnerRequest{}
 
 	// get group id from uri
 	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")

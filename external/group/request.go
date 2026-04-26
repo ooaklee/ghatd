@@ -112,8 +112,8 @@ type GetGroupMembersRequest struct {
 	Role       string `query:"role"`
 }
 
-// UpdateLeadershipRequest defines the request for updating ownership.
-type UpdateLeadershipRequest struct {
+// UpdateOwnerRequest defines the request for updating ownership.
+type UpdateOwnerRequest struct {
 	GroupID string  `path:"groupID"`
 	OwnerID *string `json:"owner_id,omitempty"`
 }
