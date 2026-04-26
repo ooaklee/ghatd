@@ -305,6 +305,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 			RawName:       lineageGroup.RawName,
 			Type:          lineageGroup.Type,
 			IsMember:      asUserID != "" && lineageGroup.HasMember(asUserID),
+			IsOwner:       asUserID != "" && strings.TrimSpace(lineageGroup.OwnerID) == asUserID,
 		})
 	}
 
@@ -356,6 +357,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 			RawName:       targetGroup.RawName,
 			Type:          targetGroup.Type,
 			IsMember:      asUserID != "" && targetGroup.HasMember(asUserID),
+			IsOwner:       asUserID != "" && strings.TrimSpace(targetGroup.OwnerID) == asUserID,
 		})
 		maxLevel = 0
 	}
@@ -385,6 +387,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 			RawName:       group.RawName,
 			Type:          group.Type,
 			IsMember:      asUserID != "" && group.HasMember(asUserID),
+			IsOwner:       asUserID != "" && strings.TrimSpace(group.OwnerID) == asUserID,
 		})
 
 		if depth > maxLevel {
