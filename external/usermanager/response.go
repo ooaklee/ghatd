@@ -169,8 +169,6 @@ type EnrichedMember struct {
 // EnrichedLeadership holds resolved leadership positions with user details
 type EnrichedLeadership struct {
 	Owner *EnrichedMember `json:"owner,omitempty"`
-	Head  *EnrichedMember `json:"head,omitempty"`
-	Lead  *EnrichedMember `json:"lead,omitempty"`
 }
 
 // AdminGroupDetail holds the full enriched group view returned to the admin

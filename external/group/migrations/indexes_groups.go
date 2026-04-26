@@ -74,28 +74,10 @@ func InitGroupsIndexesUp(db *mongo.Database) error { //Up
 		Options: options.Index().SetName("idx_groups_members_id_type"),
 	}
 
-	// Index on leadership.owner_id for finding groups by owner
+	// Index on owner_id for finding groups by owner
 	ownerIdIndexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "leadership.owner_id", Value: 1}},
+		Keys:    bson.D{{Key: "owner_id", Value: 1}},
 		Options: options.Index().SetName("idx_groups_owner_id"),
-	}
-
-	// Index on leadership.head_id for finding groups by head
-	headIdIndexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "leadership.head_id", Value: 1}},
-		Options: options.Index().SetName("idx_groups_head_id"),
-	}
-
-	// Index on leadership.lead_id for finding groups by lead
-	leadIdIndexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "leadership.lead_id", Value: 1}},
-		Options: options.Index().SetName("idx_groups_lead_id"),
-	}
-
-	// Index on leadership.admin_ids for finding groups by admin
-	adminIdsIndexModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "leadership.admin_ids", Value: 1}},
-		Options: options.Index().SetName("idx_groups_admin_ids"),
 	}
 
 	// Index on settings.visibility for filtering by visibility
@@ -168,9 +150,6 @@ func InitGroupsIndexesUp(db *mongo.Database) error { //Up
 			membersIdIndexModel,
 			membersIdTypeIndexModel,
 			ownerIdIndexModel,
-			headIdIndexModel,
-			leadIdIndexModel,
-			adminIdsIndexModel,
 			visibilityIndexModel,
 			nameTextIndexModel,
 			createdAtIndexModel,

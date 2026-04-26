@@ -303,12 +303,8 @@ func (s *Service) GetUserTeamMemberships(ctx context.Context, r *GetUserTeamMemb
 			}
 		}
 
-		// Check leadership roles
-		if team.Leadership != nil {
-			membership.IsOwner = team.Leadership.OwnerID == targetUserID
-			membership.IsLead = team.Leadership.LeadID == targetUserID
-			membership.IsHead = team.Leadership.HeadID == targetUserID
-		}
+		// Check owner role
+		membership.IsOwner = team.OwnerID == targetUserID
 
 		memberships[team.Name] = membership
 	}
@@ -720,11 +716,7 @@ func (s *Service) getUserGroupsByType(ctx context.Context, userID, groupType str
 			membership.JoinedAt = member.JoinedAt
 		}
 
-		if g.Leadership != nil {
-			membership.IsOwner = g.Leadership.OwnerID == userID
-			membership.IsLead = g.Leadership.LeadID == userID
-			membership.IsHead = g.Leadership.HeadID == userID
-		}
+		membership.IsOwner = g.OwnerID == userID
 
 		memberships = append(memberships, membership)
 	}
@@ -769,11 +761,7 @@ func (s *Service) getUserAllGroups(ctx context.Context, userID string) ([]UserGr
 			membership.JoinedAt = member.JoinedAt
 		}
 
-		if g.Leadership != nil {
-			membership.IsOwner = g.Leadership.OwnerID == userID
-			membership.IsLead = g.Leadership.LeadID == userID
-			membership.IsHead = g.Leadership.HeadID == userID
-		}
+		membership.IsOwner = g.OwnerID == userID
 
 		memberships = append(memberships, membership)
 	}
@@ -810,10 +798,8 @@ func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, i
 		return true
 	}
 
-	if grp.Leadership != nil {
-		if grp.Leadership.OwnerID == userID || grp.Leadership.HeadID == userID || grp.Leadership.LeadID == userID {
-			return true
-		}
+	if grp.OwnerID == userID {
+		return true
 	}
 
 	// Check if user has admin or moderator role in the group members
@@ -826,7 +812,7 @@ func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, i
 	return false
 }
 
-// calculateGroupSeatUsage computes total unique users including nested group members and leadership
+// calculateGroupSeatUsage computes total unique users including nested group members and owner
 func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.UniversalGroup, log *zap.Logger) (int, map[string]int) {
 	seenGroups := make(map[string]struct{})
 	seenUsers := make(map[string]struct{})
@@ -863,27 +849,11 @@ func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.Univer
 			}
 		}
 
-		if g.Leadership != nil {
-			leadRoles := []struct {
-				id   string
-				role string
-			}{
-				{id: g.Leadership.OwnerID, role: "OWNER"},
-				{id: g.Leadership.HeadID, role: "HEAD"},
-				{id: g.Leadership.LeadID, role: "LEAD"},
+		if g.OwnerID != "" {
+			if _, exists := seenUsers[g.OwnerID]; !exists {
+				seenUsers[g.OwnerID] = struct{}{}
 			}
-
-			for _, lead := range leadRoles {
-				if lead.id == "" {
-					continue
-				}
-
-				if _, exists := seenUsers[lead.id]; !exists {
-					seenUsers[lead.id] = struct{}{}
-				}
-				roleBreakdown[lead.role]++
-			}
-
+			roleBreakdown["OWNER"]++
 		}
 	}
 

@@ -32,8 +32,8 @@ func CreateSimpleTeam() {
 	team.AddMember("user-charlie", group.MemberTypeUser, group.MemberRoleMember)
 	team.AddMember("user-diana", group.MemberTypeUser, group.MemberRoleMember)
 
-	// Set leadership
-	team.Leadership.HeadID = "user-alice"
+	// Set owner
+	team.OwnerID = "user-alice"
 
 	// Add custom extensions
 	team.SetExtension("github_team", "frontend-eng")

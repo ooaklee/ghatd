@@ -97,7 +97,7 @@ type UpdateMemberRoleResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
 
-// UpdateLeadershipResponse defines the response for updating leadership
+// UpdateLeadershipResponse defines the response for updating ownership.
 type UpdateLeadershipResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
@@ -137,11 +137,9 @@ type GroupIntegrationStats struct {
 	WithAnyIntegration int64 `json:"with_any_integration"`
 }
 
-// GroupLeadershipStats holds leadership-related group counts.
+// GroupLeadershipStats holds ownership-related group counts.
 type GroupLeadershipStats struct {
 	WithOwner int64 `json:"with_owner"`
-	WithHead  int64 `json:"with_head"`
-	WithLead  int64 `json:"with_lead"`
 	WithAny   int64 `json:"with_any"`
 }
 

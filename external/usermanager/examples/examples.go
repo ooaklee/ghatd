@@ -396,7 +396,7 @@ func Example12_AdminCreateGroup() {
 		Visibility:        group.VisibilityPrivate,
 		InitialMemberIDs:  []string{"user-123", "user-456", "user-789"},
 		InitialMemberRole: group.MemberRoleMember,
-		HeadID:            "user-123",
+		OwnerID:           "user-123",
 		Extensions: map[string]interface{}{
 			"slack_channel": "#ml-team",
 			"cost_center":   "ENG-ML-001",
@@ -813,14 +813,9 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 		newGroup.Extensions = req.Extensions
 	}
 
-	// Set leadership
-	if req.OwnerID != "" || req.HeadID != "" || req.LeadID != "" {
-		if newGroup.Leadership == nil {
-			newGroup.Leadership = &group.Leadership{}
-		}
-		newGroup.Leadership.OwnerID = req.OwnerID
-		newGroup.Leadership.HeadID = req.HeadID
-		newGroup.Leadership.LeadID = req.LeadID
+	// Set owner
+	if req.OwnerID != "" {
+		newGroup.OwnerID = req.OwnerID
 	}
 
 	// Add initial members
@@ -839,17 +834,8 @@ func (m *MockGroupService) UpdateLeadership(ctx context.Context, req *group.Upda
 		return nil, err
 	}
 	g := groupResp.Group
-	if g.Leadership == nil {
-		g.Leadership = &group.Leadership{}
-	}
 	if req.OwnerID != nil {
-		g.Leadership.OwnerID = *req.OwnerID
-	}
-	if req.HeadID != nil {
-		g.Leadership.HeadID = *req.HeadID
-	}
-	if req.LeadID != nil {
-		g.Leadership.LeadID = *req.LeadID
+		g.OwnerID = *req.OwnerID
 	}
 	return &group.UpdateLeadershipResponse{Group: g}, nil
 }
@@ -868,17 +854,12 @@ func createMockGroup(id, name, groupType string, memberCount int) *group.Univers
 	g.DisplayInfo.Description = fmt.Sprintf("%s - A collaborative group", name)
 	g.Metadata.CreatedAt = time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)
 
-	// Initialize leadership
-	if g.Leadership == nil {
-		g.Leadership = &group.Leadership{}
-	}
-
 	// Add some mock members with varied roles
 	for i := 0; i < memberCount; i++ {
 		role := group.MemberRoleMember
 		if i == 0 {
-			role = group.MemberRoleHead
-			g.Leadership.HeadID = fmt.Sprintf("user-%d", i+1)
+			role = group.MemberRoleOwner
+			g.OwnerID = fmt.Sprintf("user-%d", i+1)
 		} else if i == 1 {
 			role = group.MemberRoleAdmin
 		}

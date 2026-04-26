@@ -277,12 +277,6 @@ type CreateGroupRequest struct {
 
 	// OwnerID is the ID of the group owner
 	OwnerID string `json:"owner_id,omitempty"`
-
-	// HeadID is the ID of the group head
-	HeadID string `json:"head_id,omitempty"`
-
-	// LeadID is the ID of the group lead
-	LeadID string `json:"lead_id,omitempty"`
 }
 
 // GetGroupDetailRequest holds the data needed to fetch a specific group's detail
@@ -355,10 +349,4 @@ type AdminUpdateGroupLeadershipRequest struct {
 
 	// OwnerID is the new owner's user ID (nil = no change, empty string = clear)
 	OwnerID *string `json:"owner_id,omitempty"`
-
-	// HeadID is the new head's user ID (nil = no change, empty string = clear)
-	HeadID *string `json:"head_id,omitempty"`
-
-	// LeadID is the new lead's user ID (nil = no change, empty string = clear)
-	LeadID *string `json:"lead_id,omitempty"`
 }

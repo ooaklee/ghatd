@@ -1,7 +1,7 @@
 // Package group implements a universal group management system supporting
 // teams, organizations, projects, and other hierarchical groupings.
 //
-// Groups can contain members (users or other groups), have leadership structures,
+// Groups can contain members (users or other groups), track ownership,
 // and support custom extensions for domain-specific requirements. The package
 // provides comprehensive CRUD operations, member management, and status lifecycle
 // management.
@@ -184,11 +184,9 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 		group.Extensions = req.Extensions
 	}
 
-	// Set leadership
-	if req.OwnerID != "" || req.HeadID != "" || req.LeadID != "" {
-		group.Leadership.OwnerID = req.OwnerID
-		group.Leadership.HeadID = req.HeadID
-		group.Leadership.LeadID = req.LeadID
+	// Set owner
+	if req.OwnerID != "" {
+		group.OwnerID = req.OwnerID
 	}
 
 	// Generate IDs
@@ -921,18 +919,10 @@ func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipReq
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
-	// Update leadership fields
+	// Update owner field
 	hasChanges := false
-	if req.OwnerID != nil && *req.OwnerID != group.Leadership.OwnerID {
-		group.Leadership.OwnerID = *req.OwnerID
-		hasChanges = true
-	}
-	if req.HeadID != nil && *req.HeadID != group.Leadership.HeadID {
-		group.Leadership.HeadID = *req.HeadID
-		hasChanges = true
-	}
-	if req.LeadID != nil && *req.LeadID != group.Leadership.LeadID {
-		group.Leadership.LeadID = *req.LeadID
+	if req.OwnerID != nil && *req.OwnerID != group.OwnerID {
+		group.OwnerID = *req.OwnerID
 		hasChanges = true
 	}
 
@@ -1103,7 +1093,7 @@ func (s *Service) GetGroupsByMemberID(ctx context.Context, req *GetGroupsRequest
 // GetGroupsByLeaderID retrieves groups where user is a leader
 func (s *Service) GetGroupsByLeaderID(ctx context.Context, req *GetGroupsRequest) (*GetGroupsResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-groups-by-leader-id")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("getting-groups-by-leader-id", zap.String("owner_id", req.OwnerID), zap.String("head_id", req.HeadID), zap.String("lead_id", req.LeadID))
+	log.Debug("getting-groups-by-leader-id", zap.String("owner_id", req.OwnerID))
 
 	// Normalize PerPage to PageSize
 	if req.PerPage > 0 {
@@ -1128,14 +1118,7 @@ func (s *Service) GetGroupsByLeaderID(ctx context.Context, req *GetGroupsRequest
 	req.TotalCount = int(totalGroups)
 	log.Debug("handling-get-groups-by-leader-id-total-groups-found", zap.Int64("total", totalGroups), zap.Any("request", req))
 
-	// Determine which leader field to use
 	leaderID := req.OwnerID
-	if leaderID == "" {
-		leaderID = req.HeadID
-	}
-	if leaderID == "" {
-		leaderID = req.LeadID
-	}
 
 	groups, err := s.GroupRepository.GetGroupsByLeaderID(ctx, leaderID, req.Page, req.PageSize)
 	if err != nil {

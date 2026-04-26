@@ -384,7 +384,7 @@ func (r *Repository) GetGroupsByMemberID(ctx context.Context, memberID string, m
 	return results, nil
 }
 
-// GetGroupsByLeaderID retrieves groups where user is a leader (owner, head, or lead)
+// GetGroupsByLeaderID retrieves groups where the user is the owner.
 func (r *Repository) GetGroupsByLeaderID(ctx context.Context, leaderID string, page, pageSize int) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
 	if err != nil {
@@ -393,10 +393,7 @@ func (r *Repository) GetGroupsByLeaderID(ctx context.Context, leaderID string, p
 
 	queryFilter := bson.M{
 		"$or": []bson.M{
-			{"leadership.owner_id": leaderID},
-			{"leadership.head_id": leaderID},
-			{"leadership.lead_id": leaderID},
-			{"leadership.admin_ids": leaderID},
+			{"owner_id": leaderID},
 		},
 	}
 
@@ -634,15 +631,9 @@ func (r *Repository) buildGroupQueryFilter(req *GetGroupsRequest) bson.M {
 		}
 	}
 
-	// Leadership filters
+	// Owner filter
 	if req.OwnerID != "" {
-		queryFilter["leadership.owner_id"] = req.OwnerID
-	}
-	if req.HeadID != "" {
-		queryFilter["leadership.head_id"] = req.HeadID
-	}
-	if req.LeadID != "" {
-		queryFilter["leadership.lead_id"] = req.LeadID
+		queryFilter["owner_id"] = req.OwnerID
 	}
 
 	// Settings filters
@@ -741,10 +732,8 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 			// Integrations
 			{Key: "with_slack", Value: countPipeline(bson.M{"integrations.slack": bson.M{"$exists": true, "$ne": nil}})},
 			{Key: "with_custom", Value: countPipeline(bson.M{"integrations.custom": bson.M{"$exists": true, "$ne": nil, "$gt": bson.M{}}})},
-			// Leadership
-			{Key: "with_owner", Value: countPipeline(bson.M{"leadership.owner_id": bson.M{"$exists": true, "$ne": ""}})},
-			{Key: "with_head", Value: countPipeline(bson.M{"leadership.head_id": bson.M{"$exists": true, "$ne": ""}})},
-			{Key: "with_lead", Value: countPipeline(bson.M{"leadership.lead_id": bson.M{"$exists": true, "$ne": ""}})},
+			// Ownership
+			{Key: "with_owner", Value: countPipeline(bson.M{"owner_id": bson.M{"$exists": true, "$ne": ""}})},
 			// Total members (sum of members array sizes)
 			{Key: "member_totals", Value: bson.A{
 				bson.D{{Key: "$project", Value: bson.M{"member_count": bson.M{"$size": bson.M{"$ifNull": bson.A{"$members", bson.A{}}}}}}},
@@ -782,8 +771,6 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 		WithSlack          []countDoc       `bson:"with_slack"`
 		WithCustom         []countDoc       `bson:"with_custom"`
 		WithOwner          []countDoc       `bson:"with_owner"`
-		WithHead           []countDoc       `bson:"with_head"`
-		WithLead           []countDoc       `bson:"with_lead"`
 		MemberTotals       []memberTotalDoc `bson:"member_totals"`
 	}
 
@@ -813,15 +800,6 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 	withCustom := extractCount(result.WithCustom)
 
 	withOwner := extractCount(result.WithOwner)
-	withHead := extractCount(result.WithHead)
-	withLead := extractCount(result.WithLead)
-	withAnyLeadership := withOwner
-	if withHead > withAnyLeadership {
-		withAnyLeadership = withHead
-	}
-	if withLead > withAnyLeadership {
-		withAnyLeadership = withLead
-	}
 
 	return &AllGroupsStats{
 		Total:        extractCount(result.Total),
@@ -846,9 +824,7 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 		},
 		Leadership: GroupLeadershipStats{
 			WithOwner: withOwner,
-			WithHead:  withHead,
-			WithLead:  withLead,
-			WithAny:   withAnyLeadership,
+			WithAny:   withOwner,
 		},
 	}, nil
 }

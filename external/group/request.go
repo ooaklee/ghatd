@@ -13,10 +13,8 @@ type GetGroupsRequest struct {
 	MemberType     string              ` query:"member_type"`
 	MembersWithIDs map[string][]string ` query:"members_with_ids"`
 
-	// Leadership filters
+	// Owner filter
 	OwnerID string ` query:"owner_id"`
-	HeadID  string ` query:"head_id"`
-	LeadID  string ` query:"lead_id"`
 
 	// Settings filters
 	Visibility string `query:"visibility"`
@@ -66,10 +64,8 @@ type CreateGroupRequest struct {
 	// Initial members
 	InitialMembers []CreateMemberRequest `json:"initial_members,omitempty"`
 
-	// Initial leadership
+	// Initial owner
 	OwnerID string `json:"owner_id,omitempty"`
-	HeadID  string `json:"head_id,omitempty"`
-	LeadID  string `json:"lead_id,omitempty"`
 }
 
 // CreateMemberRequest defines member data for creation
@@ -121,12 +117,10 @@ type GetGroupMembersRequest struct {
 	Role       string `query:"role"`
 }
 
-// UpdateLeadershipRequest defines the request for updating leadership
+// UpdateLeadershipRequest defines the request for updating ownership.
 type UpdateLeadershipRequest struct {
 	GroupID string  `path:"groupID"`
 	OwnerID *string `json:"owner_id,omitempty"`
-	HeadID  *string `json:"head_id,omitempty"`
-	LeadID  *string `json:"lead_id,omitempty"`
 }
 
 // DeleteGroupRequest defines the request for deleting a group

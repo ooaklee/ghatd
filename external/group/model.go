@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
-	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
 // IDGenerator generates unique identifiers
@@ -54,6 +53,7 @@ type UniversalGroup struct {
 	Type          string `json:"type" bson:"type" db:"type"`
 	Status        string `json:"status" bson:"status" db:"status"`
 	ParentGroupID string `json:"parent_group_id,omitempty" bson:"parent_group_id,omitempty" db:"parent_group_id"`
+	OwnerID       string `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
 
 	// Lineage field for efficient hierarchical queries (root-first, e.g. ["rootID", "parentID"])
 	Lineage []string `json:"lineage,omitempty" bson:"lineage,omitempty" db:"lineage"`
@@ -69,9 +69,6 @@ type UniversalGroup struct {
 
 	// Members collection - supports both users and nested groups
 	Members []Member `json:"members,omitempty" bson:"members,omitempty" db:"members"`
-
-	// Leadership/hierarchy
-	Leadership *Leadership `json:"leadership,omitempty" bson:"leadership,omitempty" db:"leadership"`
 
 	// Settings and permissions
 	Settings *GroupSettings `json:"settings,omitempty" bson:"settings,omitempty" db:"settings"`
@@ -110,13 +107,6 @@ type Member struct {
 	Role     string                 `json:"role,omitempty" bson:"role,omitempty" db:"role"`
 	JoinedAt string                 `json:"joined_at,omitempty" bson:"joined_at,omitempty" db:"joined_at"`
 	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty" db:"metadata"`
-}
-
-// Leadership holds leadership structure
-type Leadership struct {
-	OwnerID string `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
-	HeadID  string `json:"head_id,omitempty" bson:"head_id,omitempty" db:"head_id"`
-	LeadID  string `json:"lead_id,omitempty" bson:"lead_id,omitempty" db:"lead_id"`
 }
 
 // GroupSettings holds group configuration
@@ -170,7 +160,6 @@ func NewUniversalGroup(
 		Members:      []Member{},
 		Extensions:   make(map[string]interface{}),
 		DisplayInfo:  &DisplayInfo{},
-		Leadership:   &Leadership{},
 		Settings:     &GroupSettings{},
 		Integrations: &Integrations{},
 		Metadata: &GroupMetadata{
@@ -205,9 +194,6 @@ func (g *UniversalGroup) SetDependencies(
 	}
 	if g.DisplayInfo == nil {
 		g.DisplayInfo = &DisplayInfo{}
-	}
-	if g.Leadership == nil {
-		g.Leadership = &Leadership{}
 	}
 	if g.Settings == nil {
 		g.Settings = &GroupSettings{}
@@ -575,56 +561,4 @@ func (g *UniversalGroup) BuildChildLineage() []string {
 	}
 
 	return childLineage
-}
-
-// Legacy method aliases for backward compatibility
-
-func (g *UniversalGroup) GetId() string {
-	return g.ID
-}
-
-func (g *UniversalGroup) GetFullName() string {
-	return g.Name
-}
-
-func (g *UniversalGroup) GetType() string {
-	return g.Type
-}
-
-func (g *UniversalGroup) GetHeadId() string {
-	if g.Leadership != nil {
-		return g.Leadership.HeadID
-	}
-	return ""
-}
-
-func (g *UniversalGroup) GetLeadId() string {
-	if g.Leadership != nil {
-		return g.Leadership.LeadID
-	}
-	return ""
-}
-
-func (g *UniversalGroup) GetMemberIdsByKind(kind string) []string {
-	return g.GetMemberIDsByType(toolbox.StringStandardisedToUpper(kind))
-}
-
-func (g *UniversalGroup) GetUserMembersIds() []string {
-	return g.GetUserMemberIDs()
-}
-
-func (g *UniversalGroup) SetCreatedAtTimeToNow() *UniversalGroup {
-	return g.SetCreatedAtNow()
-}
-
-func (g *UniversalGroup) SetUpdatedAtTimeToNow() *UniversalGroup {
-	return g.SetUpdatedAtNow()
-}
-
-func (g *UniversalGroup) GenerateNewUuid() *UniversalGroup {
-	return g.GenerateNewUUID()
-}
-
-func (g *UniversalGroup) GetAttributeByJsonPath(jsonPath string) (interface{}, error) {
-	return g.GetAttributeByJSONPath(jsonPath)
 }
