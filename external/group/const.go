@@ -39,8 +39,15 @@ const (
 	MemberRoleCoordinator = "COORDINATOR"
 
 	// Visibility Keys
-	VisibilityPublic   = "PUBLIC"
-	VisibilityPrivate  = "PRIVATE"
+
+	// VisibilityPublic indicates that the group is visible to everyone.
+	VisibilityPublic = "PUBLIC"
+
+	// VisibilityPrivate indicates that the group is only visible to its members.
+	VisibilityPrivate = "PRIVATE"
+
+	// VisibilityInternal indicates that the group is visible only to its members and
+	// to non-members within the same hierarchy or who share the same root, if applicable.
 	VisibilityInternal = "INTERNAL"
 )
 

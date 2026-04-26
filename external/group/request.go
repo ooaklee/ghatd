@@ -156,6 +156,11 @@ type GetGroupDescendantsRequest struct {
 	ID          string `path:"groupID"`
 	MaxDepth    int    `query:"max_depth"`
 	IncludeSelf bool   `query:"include_self"`
+
+	// AsUserID allows permission checks using the specified user ID when retrieving
+	// group descendants, ensuring that the response includes only the groups the
+	// user can access.
+	AsUserID string `query:"as_user_id"`
 }
 
 // GetGroupsStatsRequest defines the request for getting aggregate groups stats

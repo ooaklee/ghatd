@@ -313,11 +313,13 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 // Index 0 contains direct children, index 1 grandchildren, and so on.
 func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-group-descendants")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	asUserID := strings.TrimSpace(req.AsUserID)
 	log.Debug(
 		"getting-group-descendants",
 		zap.String("id", req.ID),
 		zap.Int("max_depth", req.MaxDepth),
 		zap.Bool("include_self", req.IncludeSelf),
+		zap.String("as_user_id", asUserID),
 	)
 
 	if req.MaxDepth < 0 {
@@ -336,10 +338,15 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 		return nil, err
 	}
 
+	canSeeRequestedGroup := true
+	if asUserID != "" {
+		descendantGroups, canSeeRequestedGroup = s.filterVisibleDescendantsForUser(targetGroup, asUserID, descendantGroups)
+	}
+
 	levelsMap := map[int][]GroupDescendantsNode{}
 	maxLevel := -1
 
-	if req.IncludeSelf {
+	if req.IncludeSelf && (asUserID == "" || canSeeRequestedGroup) {
 		levelsMap[0] = append(levelsMap[0], GroupDescendantsNode{
 			ID:            targetGroup.ID,
 			ParentGroupID: targetGroup.ParentGroupID,
@@ -416,6 +423,114 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 	}
 
 	return &GetGroupDescendantsResponse{Descendants: responseLevels}, nil
+}
+
+// filterVisibleDescendantsForUser applies visibility constraints for descendant queries when
+// a request is made as a specific user. PRIVATE ("secret") groups are visible only when the user is in
+// the private branch (member of that private group or one of its descendants).
+func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asUserID string, descendants []UniversalGroup) ([]UniversalGroup, bool) {
+	if asUserID == "" {
+		return descendants, true
+	}
+
+	groupsByID := make(map[string]*UniversalGroup, len(descendants))
+	for i := range descendants {
+		groupsByID[descendants[i].ID] = &descendants[i]
+	}
+
+	visiblePrivateGroupIDs := make(map[string]struct{})
+	canSeeRootGroup := s.groupVisibility(rootGroup) != VisibilityPrivate
+	if rootGroup.HasMember(asUserID) {
+		canSeeRootGroup = true
+	}
+
+	for i := range descendants {
+		group := &descendants[i]
+		if !group.HasMember(asUserID) {
+			continue
+		}
+
+		if s.groupVisibility(group) == VisibilityPrivate {
+			visiblePrivateGroupIDs[group.ID] = struct{}{}
+		}
+
+		for _, lineageID := range group.Lineage {
+			if lineageID == rootGroup.ID {
+				if s.groupVisibility(rootGroup) == VisibilityPrivate {
+					canSeeRootGroup = true
+				}
+				continue
+			}
+
+			ancestor, exists := groupsByID[lineageID]
+			if !exists {
+				continue
+			}
+
+			if s.groupVisibility(ancestor) == VisibilityPrivate {
+				visiblePrivateGroupIDs[ancestor.ID] = struct{}{}
+			}
+		}
+	}
+
+	filtered := make([]UniversalGroup, 0, len(descendants))
+	for i := range descendants {
+		group := descendants[i]
+		groupVisibility := s.groupVisibility(&group)
+
+		if groupVisibility == VisibilityPrivate {
+			_, isVisiblePrivateGroup := visiblePrivateGroupIDs[group.ID]
+			if !group.HasMember(asUserID) && !isVisiblePrivateGroup {
+				continue
+			}
+		}
+
+		isBlockedByHiddenPrivateAncestor := false
+		for _, lineageID := range group.Lineage {
+			if lineageID == rootGroup.ID {
+				if s.groupVisibility(rootGroup) == VisibilityPrivate && !canSeeRootGroup {
+					isBlockedByHiddenPrivateAncestor = true
+					break
+				}
+				continue
+			}
+
+			ancestor, exists := groupsByID[lineageID]
+			if !exists {
+				continue
+			}
+
+			if s.groupVisibility(ancestor) != VisibilityPrivate {
+				continue
+			}
+
+			if _, isVisiblePrivateAncestor := visiblePrivateGroupIDs[ancestor.ID]; !isVisiblePrivateAncestor {
+				isBlockedByHiddenPrivateAncestor = true
+				break
+			}
+		}
+
+		if isBlockedByHiddenPrivateAncestor {
+			continue
+		}
+
+		filtered = append(filtered, group)
+	}
+
+	return filtered, canSeeRootGroup
+}
+
+func (s *Service) groupVisibility(group *UniversalGroup) string {
+	if group == nil || group.Settings == nil {
+		return VisibilityPublic
+	}
+
+	visibility := strings.TrimSpace(strings.ToUpper(group.Settings.Visibility))
+	if visibility == "" {
+		return VisibilityPublic
+	}
+
+	return visibility
 }
 
 // GetGroupByName retrieves a group by its name
