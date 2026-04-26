@@ -53,6 +53,12 @@ func MapRequestToGetGroupLineageRequest(request *http.Request, validator GroupVa
 		return nil, errors.New(ErrKeyInvalidGroupID)
 	}
 
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidGroupID)
 	}

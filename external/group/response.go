@@ -38,6 +38,7 @@ type GroupLineageNode struct {
 	Name          string `json:"name"`
 	RawName       string `json:"raw_name,omitempty"`
 	Type          string `json:"type"`
+	IsMember      bool   `json:"is_member,omitempty"`
 }
 
 // GetGroupLineageResponse defines the response for getting a group's lineage.

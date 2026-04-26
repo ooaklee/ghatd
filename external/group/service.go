@@ -278,7 +278,8 @@ func (s *Service) GetGroupByID(ctx context.Context, req *GetGroupByIDRequest) (*
 // GetGroupLineage retrieves the root-first lineage for a group, including the group itself.
 func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageRequest) (*GetGroupLineageResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-group-lineage")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("getting-group-lineage", zap.String("id", req.ID))
+	asUserID := strings.TrimSpace(req.AsUserID)
+	log.Debug("getting-group-lineage", zap.String("id", req.ID), zap.String("as_user_id", asUserID))
 
 	group, err := s.GroupRepository.GetGroupByID(ctx, req.ID)
 	if err != nil {
@@ -303,6 +304,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 			Name:          lineageGroup.Name,
 			RawName:       lineageGroup.RawName,
 			Type:          lineageGroup.Type,
+			IsMember:      asUserID != "" && lineageGroup.HasMember(asUserID),
 		})
 	}
 
@@ -353,6 +355,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 			Name:          targetGroup.Name,
 			RawName:       targetGroup.RawName,
 			Type:          targetGroup.Type,
+			IsMember:      asUserID != "" && targetGroup.HasMember(asUserID),
 		})
 		maxLevel = 0
 	}
@@ -381,6 +384,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 			Name:          group.Name,
 			RawName:       group.RawName,
 			Type:          group.Type,
+			IsMember:      asUserID != "" && group.HasMember(asUserID),
 		})
 
 		if depth > maxLevel {

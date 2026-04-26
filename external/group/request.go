@@ -143,6 +143,10 @@ type GetGroupStatsRequest struct {
 // GetGroupLineageRequest defines the request for getting a group's lineage
 type GetGroupLineageRequest struct {
 	ID string `path:"groupID"`
+
+	// AsUserID if provided, checks whether given ID is a direct member of
+	// each lineage group and includes this information in the response
+	AsUserID string `query:"as_user_id"`
 }
 
 // GetGroupDescendantsRequest defines the request for getting all descendants of a group.
