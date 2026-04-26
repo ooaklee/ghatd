@@ -40,6 +40,9 @@ type GroupConfig struct {
 	AllowNestedGroups   bool
 	MaxNestingDepth     int
 	MultipleIdentifiers bool // Support both UUID and NanoID
+	// Role configuration: maps group type to allowed roles
+	TypeToRoleOverrides map[string][]string // e.g., "TEAM" -> ["ADMIN", "MEMBER", "READER"]
+	DefaultRoles        []string            // Fallback roles when group type not in TypeToRoleOverrides
 }
 
 // UniversalGroup represents a flexible group/collection model
@@ -111,11 +114,9 @@ type Member struct {
 
 // Leadership holds leadership structure
 type Leadership struct {
-	OwnerID      string   `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
-	HeadID       string   `json:"head_id,omitempty" bson:"head_id,omitempty" db:"head_id"`
-	LeadID       string   `json:"lead_id,omitempty" bson:"lead_id,omitempty" db:"lead_id"`
-	AdminIDs     []string `json:"admin_ids,omitempty" bson:"admin_ids,omitempty" db:"admin_ids"`
-	ModeratorIDs []string `json:"moderator_ids,omitempty" bson:"moderator_ids,omitempty" db:"moderator_ids"`
+	OwnerID string `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
+	HeadID  string `json:"head_id,omitempty" bson:"head_id,omitempty" db:"head_id"`
+	LeadID  string `json:"lead_id,omitempty" bson:"lead_id,omitempty" db:"lead_id"`
 }
 
 // GroupSettings holds group configuration

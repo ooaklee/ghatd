@@ -814,17 +814,12 @@ func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, i
 		if grp.Leadership.OwnerID == userID || grp.Leadership.HeadID == userID || grp.Leadership.LeadID == userID {
 			return true
 		}
+	}
 
-		for _, adminID := range grp.Leadership.AdminIDs {
-			if adminID == userID {
-				return true
-			}
-		}
-
-		for _, moderatorID := range grp.Leadership.ModeratorIDs {
-			if moderatorID == userID {
-				return true
-			}
+	// Check if user has admin or moderator role in the group members
+	for _, member := range grp.Members {
+		if member.ID == userID && (member.Role == "ADMIN" || member.Role == "MODERATOR") {
+			return true
 		}
 	}
 
@@ -889,25 +884,6 @@ func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.Univer
 				roleBreakdown[lead.role]++
 			}
 
-			for _, adminID := range g.Leadership.AdminIDs {
-				if adminID == "" {
-					continue
-				}
-				if _, exists := seenUsers[adminID]; !exists {
-					seenUsers[adminID] = struct{}{}
-				}
-				roleBreakdown["ADMIN"]++
-			}
-
-			for _, moderatorID := range g.Leadership.ModeratorIDs {
-				if moderatorID == "" {
-					continue
-				}
-				if _, exists := seenUsers[moderatorID]; !exists {
-					seenUsers[moderatorID] = struct{}{}
-				}
-				roleBreakdown["MODERATOR"]++
-			}
 		}
 	}
 

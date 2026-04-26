@@ -199,6 +199,8 @@ type GroupConfigCapabilities struct {
 	MaxNestingDepth     int                 `json:"max_nesting_depth"`
 	RequiredFields      []string            `json:"required_fields,omitempty"`
 	MultipleIdentifiers bool                `json:"multiple_identifiers"`
+	TypeToRoleOverrides map[string][]string `json:"type_to_role_overrides"` // group type -> allowed roles
+	DefaultRoles        []string            `json:"default_roles"`
 }
 
 // GetGroupsConfigResponse defines the response for the groups config endpoint.

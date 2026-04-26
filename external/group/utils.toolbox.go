@@ -6,7 +6,7 @@ import (
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
-// DefaultIDGenerator implementation using toolbox
+// DefaultIDGenerator implementation using toolbox.
 type DefaultIDGenerator struct{}
 
 func (d *DefaultIDGenerator) GenerateUUID() string {

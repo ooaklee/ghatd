@@ -34,7 +34,6 @@ func CreateSimpleTeam() {
 
 	// Set leadership
 	team.Leadership.HeadID = "user-alice"
-	team.Leadership.AdminIDs = []string{"user-bob"}
 
 	// Add custom extensions
 	team.SetExtension("github_team", "frontend-eng")

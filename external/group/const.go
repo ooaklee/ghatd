@@ -1,5 +1,8 @@
 package group
 
+// DefaultRoles is the default set of roles that can be assigned to members when a group type does not have specific roles defined in the configuration.
+var DefaultRoles = []string{"MEMBER", "ADMIN"}
+
 const (
 	// Group Type Keys
 	GroupTypeTeam         = "TEAM"
@@ -56,6 +59,7 @@ const (
 	ErrKeyInvalidQueryParam            = "GroupInvalidQueryParam"
 	ErrKeyNoChangesDetected            = "GroupNoChangesDetected"
 	ErrKeyInvalidMemberType            = "InvalidMemberType"
+	ErrKeyInvalidMemberRole            = "InvalidMemberRole"
 	ErrKeyMemberNotFound               = "MemberNotFound"
 	ErrKeyMemberAlreadyExists          = "MemberAlreadyExists"
 	ErrKeyInsufficientPermissions      = "InsufficientPermissions"

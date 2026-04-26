@@ -85,6 +85,14 @@ func NewService(
 		}
 	}
 
+	if config.DefaultRoles == nil {
+		config.DefaultRoles = DefaultRoles
+	}
+
+	if config.TypeToRoleOverrides == nil || len(config.TypeToRoleOverrides) == 0 {
+		config.TypeToRoleOverrides = map[string][]string{}
+	}
+
 	return &Service{
 		GroupRepository: groupRepository,
 		AuditService:    auditService,
@@ -692,6 +700,12 @@ func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMem
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
+	// Validate role against group type configuration
+	if err := s.isValidMemberRole(group.Type, req.Role); err != nil {
+		log.Error("invalid-member-role", zap.Error(err), zap.String("role", req.Role), zap.String("group_type", group.Type))
+		return nil, err
+	}
+
 	// Add member
 	if _, err := group.AddMember(req.MemberID, req.Type, req.Role); err != nil {
 		log.Error("failed-to-add-member", zap.Error(err))
@@ -785,6 +799,12 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
+	// Validate new role against group type configuration
+	if err := s.isValidMemberRole(group.Type, req.NewRole); err != nil {
+		log.Error("invalid-member-role", zap.Error(err), zap.String("new_role", req.NewRole), zap.String("group_type", group.Type))
+		return nil, err
+	}
+
 	// Update role
 	if group, err = group.UpdateMemberRole(req.MemberID, req.NewRole); err != nil {
 		log.Error("failed-to-update-member-role", zap.Error(err))
@@ -812,6 +832,38 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 	}
 
 	return &UpdateMemberRoleResponse{Group: updatedGroup}, nil
+}
+
+// isValidMemberRole validates if a role is allowed for a given group type
+// Returns error with ErrKeyInvalidMemberRole if role is not allowed
+func (s *Service) isValidMemberRole(groupType, role string) error {
+	cfg := s.Config
+	if cfg == nil {
+		cfg = DefaultGroupConfig()
+	}
+
+	// If TypeToRoleOverrides exists for this group type, validate against it
+	if allowedRoles, exists := cfg.TypeToRoleOverrides[groupType]; exists {
+		for _, allowedRole := range allowedRoles {
+			if allowedRole == role {
+				return nil // Role is valid
+			}
+		}
+		return errors.New(ErrKeyInvalidMemberRole)
+	}
+
+	// If no override for group type, check DefaultRoles
+	if len(cfg.DefaultRoles) > 0 {
+		for _, defaultRole := range cfg.DefaultRoles {
+			if defaultRole == role {
+				return nil // Role is valid
+			}
+		}
+		return errors.New(ErrKeyInvalidMemberRole)
+	}
+
+	// If no default roles defined, allow any role (backward compatibility)
+	return nil
 }
 
 // GetGroupMembers retrieves members of a group with optional filters
@@ -1260,6 +1312,8 @@ func (s *Service) GetGroupsConfig(_ context.Context, _ *GetGroupsConfigRequest) 
 			MaxNestingDepth:     cfg.MaxNestingDepth,
 			RequiredFields:      cfg.RequiredFields,
 			MultipleIdentifiers: cfg.MultipleIdentifiers,
+			TypeToRoleOverrides: cfg.TypeToRoleOverrides,
+			DefaultRoles:        cfg.DefaultRoles,
 		},
 	}, nil
 }
