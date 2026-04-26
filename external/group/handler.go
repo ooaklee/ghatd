@@ -11,6 +11,7 @@ import (
 type GroupService interface {
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
 	GetGroupByID(ctx context.Context, r *GetGroupByIDRequest) (*GetGroupByIDResponse, error)
+	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
 	GetGroupByNanoID(ctx context.Context, r *GetGroupByNanoIDRequest) (*GetGroupByNanoIDResponse, error)
 	GetGroupByName(ctx context.Context, r *GetGroupByNameRequest) (*GetGroupByNameResponse, error)
 	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
@@ -29,6 +30,7 @@ type GroupService interface {
 	GetGroupStats(ctx context.Context, groupID string) (*GetGroupStatsResponse, error)
 	GetGroupsStats(ctx context.Context, r *GetGroupsStatsRequest) (*GetGroupsStatsResponse, error)
 	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
+	ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error)
 }
 
 // GroupValidator interface defines expected methods of a valid validator
@@ -84,6 +86,23 @@ func (h *Handler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// GetGroupLineage handles getting a group's root-first lineage
+func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupLineageRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupLineage(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Lineage)
 }
 
 // GetGroupByNanoID handles getting a group by nano ID
@@ -402,6 +421,24 @@ func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
+}
+
+// ValidateGroupName handles validating a proposed group name without persisting anything.
+// Front-end forms can call this to preview what RawName and Name will be stored.
+func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToValidateGroupNameRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ValidateGroupName(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // getBaseResponseHandler returns response handler configured with group error maps

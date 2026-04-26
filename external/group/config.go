@@ -276,6 +276,35 @@ func (c *GroupConfig) CanHaveChildType(parentType, childType string) bool {
 	return false
 }
 
+// GetIndependentHierarchyTrees returns the root types of each independent hierarchy tree.
+// Root types are those that appear as parents in the tree but never appear as children,
+// meaning they have no parent types and represent the top of their respective hierarchies.
+func (c *GroupConfig) GetIndependentHierarchyTrees() []string {
+	if c == nil || len(c.Tree) == 0 {
+		return []string{}
+	}
+
+	// Track all types that appear as children
+	childTypes := make(map[string]struct{})
+	for _, children := range c.Tree {
+		for _, childType := range children {
+			childTypes[childType] = struct{}{}
+		}
+	}
+
+	// Find parent types that are never children (the roots)
+	var roots []string
+	for parentType := range c.Tree {
+		if _, isChild := childTypes[parentType]; !isChild {
+			roots = append(roots, parentType)
+		}
+	}
+
+	// Sort for consistent ordering
+	sort.Strings(roots)
+	return roots
+}
+
 // uniqueStrings returns input values with duplicates removed while preserving
 // the order of first appearance.
 func uniqueStrings(values []string) []string {

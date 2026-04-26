@@ -140,6 +140,27 @@ func (r *Repository) GetGroupByName(ctx context.Context, name, groupType string,
 	return &result, nil
 }
 
+// GetGroupByNameAndParent retrieves a group by name under a specific parent.
+func (r *Repository) GetGroupByNameAndParent(ctx context.Context, name, parentGroupID string, logError bool) (*UniversalGroup, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"name":            normaliseGroupName(name),
+		"parent_group_id": parentGroupID,
+	}
+
+	var result UniversalGroup
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", logError, errors.New(ErrKeyUnableToFindGroupWithName))
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 // UpdateGroup updates an existing group
 func (r *Repository) UpdateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)

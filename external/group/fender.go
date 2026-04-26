@@ -42,6 +42,24 @@ func MapRequestToGetGroupByIDRequest(request *http.Request, validator GroupValid
 	return parsedRequest, nil
 }
 
+// MapRequestToGetGroupLineageRequest maps incoming GetGroupLineage request to correct struct
+func MapRequestToGetGroupLineageRequest(request *http.Request, validator GroupValidator) (*GetGroupLineageRequest, error) {
+	var err error
+	parsedRequest := &GetGroupLineageRequest{}
+
+	// get group id from uri
+	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToGetGroupByNanoIDRequest maps incoming GetGroupByNanoID request to correct struct
 func MapRequestToGetGroupByNanoIDRequest(request *http.Request, validator GroupValidator) (*GetGroupByNanoIDRequest, error) {
 	var err error
@@ -323,6 +341,23 @@ func MapRequestToGetGroupStatsRequest(request *http.Request, validator GroupVali
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToValidateGroupNameRequest maps incoming ValidateGroupName request to correct struct
+func MapRequestToValidateGroupNameRequest(request *http.Request, validator GroupValidator) (*ValidateGroupNameRequest, error) {
+	parsedRequest := &ValidateGroupNameRequest{}
+
+	query := request.URL.Query()
+	err := querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
 	}
 
 	return parsedRequest, nil

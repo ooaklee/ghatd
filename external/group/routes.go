@@ -11,6 +11,7 @@ import (
 type GroupHandler interface {
 	CreateGroup(w http.ResponseWriter, r *http.Request)
 	GetGroupByID(w http.ResponseWriter, r *http.Request)
+	GetGroupLineage(w http.ResponseWriter, r *http.Request)
 	GetGroupByNanoID(w http.ResponseWriter, r *http.Request)
 	GetGroupByName(w http.ResponseWriter, r *http.Request)
 	UpdateGroup(w http.ResponseWriter, r *http.Request)
@@ -26,6 +27,7 @@ type GroupHandler interface {
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
 	GetGroupsStats(w http.ResponseWriter, r *http.Request)
 	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
+	ValidateGroupName(w http.ResponseWriter, r *http.Request)
 }
 
 // APIGroupsV1Prefix base URI prefix for all v1 groups routes
@@ -56,7 +58,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.GetGroups).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetGroupsStats).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/configs", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/validate-name", request.Handler.ValidateGroupName).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.GetGroupByID).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/nano/{groupNanoID}", request.Handler.GetGroupByNanoID).Methods(http.MethodGet, http.MethodOptions)

@@ -10,6 +10,8 @@ package group
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -31,6 +33,7 @@ type GroupRepository interface {
 	GetGroupByID(ctx context.Context, id string) (*UniversalGroup, error)
 	GetGroupByNanoID(ctx context.Context, nanoID string) (*UniversalGroup, error)
 	GetGroupByName(ctx context.Context, name, groupType string, logError bool) (*UniversalGroup, error)
+	GetGroupByNameAndParent(ctx context.Context, name, parentGroupID string, logError bool) (*UniversalGroup, error)
 	UpdateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error)
 	DeleteGroupByID(ctx context.Context, id string) error
 	SoftDeleteGroup(ctx context.Context, id, deletedByID string, deletedAt string) error
@@ -125,10 +128,17 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 		parentGroup = parentGroupResult
 	}
 
-	// Check if group with same name already exists
-	existingGroup, err := s.GroupRepository.GetGroupByName(ctx, req.Name, req.Type, false)
-	if err == nil && existingGroup != nil {
-		log.Debug("group-with-name-already-exists", zap.String("name", req.Name))
+	nameValidation, err := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+		Name:          req.Name,
+		Type:          req.Type,
+		ParentGroupID: req.ParentGroupID,
+	})
+	if err != nil {
+		log.Error("failed-to-validate-group-name", zap.Error(err), zap.String("name", req.Name))
+		return nil, err
+	}
+	if !nameValidation.Available && nameValidation.IsRootType {
+		log.Debug("group-with-name-already-exists", zap.String("name", nameValidation.Name))
 		return nil, errors.New(ErrKeyNameAlreadyExists)
 	}
 
@@ -136,8 +146,14 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 	group := NewUniversalGroup(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	// Set basic fields
-	group.Name = req.Name
+	group.RawName = nameValidation.RawName
+	group.Name = nameValidation.Name
 	group.Type = req.Type
+
+	if parentGroup != nil {
+		group.ParentGroupID = parentGroup.ID
+		group.Ancestry = parentGroup.BuildChildAncestry()
+	}
 
 	// Set display info if provided
 	if req.Description != "" || req.Email != "" || req.Icon != "" {
@@ -237,6 +253,40 @@ func (s *Service) GetGroupByID(ctx context.Context, req *GetGroupByIDRequest) (*
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	return &GetGroupByIDResponse{Group: group}, nil
+}
+
+// GetGroupLineage retrieves the root-first lineage for a group, including the group itself.
+func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageRequest) (*GetGroupLineageResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-group-lineage")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("getting-group-lineage", zap.String("id", req.ID))
+
+	group, err := s.GroupRepository.GetGroupByID(ctx, req.ID)
+	if err != nil {
+		log.Error("failed-to-get-group-for-lineage", zap.Error(err), zap.String("id", req.ID))
+		return nil, err
+	}
+
+	lineageIDs := append([]string{}, group.Ancestry...)
+	lineageIDs = append(lineageIDs, group.ID)
+
+	lineage := make([]GroupLineageNode, 0, len(lineageIDs))
+	for _, groupID := range lineageIDs {
+		lineageGroup, lineageErr := s.GroupRepository.GetGroupByID(ctx, groupID)
+		if lineageErr != nil {
+			log.Warn("failed-to-get-lineage-group", zap.Error(lineageErr), zap.String("lineage_group_id", groupID))
+			continue
+		}
+
+		lineage = append(lineage, GroupLineageNode{
+			ID:            lineageGroup.ID,
+			ParentGroupID: lineageGroup.ParentGroupID,
+			Name:          lineageGroup.Name,
+			RawName:       lineageGroup.RawName,
+			Type:          lineageGroup.Type,
+		})
+	}
+
+	return &GetGroupLineageResponse{Lineage: lineage}, nil
 }
 
 // GetGroupByName retrieves a group by its name
@@ -997,6 +1047,88 @@ func (s *Service) GetGroupsStats(ctx context.Context, _ *GetGroupsStatsRequest) 
 	response.NormaliseGroupsStatsKeysToSnakeCase()
 
 	return response, nil
+}
+
+// ValidateGroupName returns what RawName and Name would be for a given input
+// without persisting anything.  It mirrors the name-resolution logic inside
+// CreateGroup so that front-end forms can show live feedback to the user.
+func (s *Service) ValidateGroupName(ctx context.Context, req *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error) {
+	trimmedRawName := strings.TrimSpace(req.Name)
+	trimmedParentGroupID := strings.TrimSpace(req.ParentGroupID)
+	baseName, err := toolbox.StringConvertToKebabCase(trimmedRawName)
+	if err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	// Determine whether this type is a hierarchy root.
+	independentRoots := s.Config.GetIndependentHierarchyTrees()
+	isRootType := false
+	for _, root := range independentRoots {
+		if root == req.Type {
+			isRootType = true
+			break
+		}
+	}
+
+	// Check if the base name is already taken. If parent is provided, enforce
+	// uniqueness among siblings (same parent) regardless of child type.
+	var existing *UniversalGroup
+	if trimmedParentGroupID != "" {
+		existing, _ = s.GroupRepository.GetGroupByNameAndParent(ctx, baseName, trimmedParentGroupID, false)
+	} else {
+		existing, _ = s.GroupRepository.GetGroupByName(ctx, baseName, req.Type, false)
+	}
+	available := existing == nil
+
+	resolvedName := baseName
+	adjusted := false
+
+	if !available {
+		if isRootType && trimmedParentGroupID == "" {
+			// Root types require a unique name — report the conflict.
+			return &ValidateGroupNameResponse{
+				RawName:    trimmedRawName,
+				Name:       baseName,
+				Adjusted:   false,
+				Available:  false,
+				IsRootType: true,
+				Hint:       fmt.Sprintf("The name %q is already taken. Root-type groups must have a unique name.", baseName),
+			}, nil
+		}
+
+		// Non-root: find the next available auto-incremented name.
+		for i := 1; ; i++ {
+			candidate := fmt.Sprintf("%s-%d", baseName, i)
+
+			var ex *UniversalGroup
+			if trimmedParentGroupID != "" {
+				ex, _ = s.GroupRepository.GetGroupByNameAndParent(ctx, candidate, trimmedParentGroupID, false)
+			} else {
+				ex, _ = s.GroupRepository.GetGroupByName(ctx, candidate, req.Type, false)
+			}
+			if ex == nil {
+				resolvedName = candidate
+				adjusted = true
+				break
+			}
+		}
+	}
+
+	hint := ""
+	if adjusted {
+		hint = fmt.Sprintf("The name %q is already taken. Your group will be created as %q", baseName, resolvedName)
+	} else if isRootType {
+		hint = fmt.Sprintf("%s will be the internal reference name, which has been adjusted to comply with our naming rules", resolvedName)
+	}
+
+	return &ValidateGroupNameResponse{
+		RawName:    trimmedRawName,
+		Name:       resolvedName,
+		Adjusted:   adjusted,
+		Available:  available,
+		IsRootType: isRootType,
+		Hint:       hint,
+	}, nil
 }
 
 // GetGroupsConfig returns the capabilities of the service's single group config.

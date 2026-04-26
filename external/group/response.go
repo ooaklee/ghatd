@@ -36,6 +36,20 @@ type GetGroupByNameResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
 
+// GroupLineageNode is a compact representation of a group in a lineage chain.
+type GroupLineageNode struct {
+	ID            string `json:"id"`
+	ParentGroupID string `json:"parent_group_id,omitempty"`
+	Name          string `json:"name"`
+	RawName       string `json:"raw_name,omitempty"`
+	Type          string `json:"type"`
+}
+
+// GetGroupLineageResponse defines the response for getting a group's lineage.
+type GetGroupLineageResponse struct {
+	Lineage []GroupLineageNode `json:"lineage"`
+}
+
 // CreateGroupResponse defines the response for creating a group
 type CreateGroupResponse struct {
 	Group *UniversalGroup `json:"group"`
@@ -180,4 +194,34 @@ type GroupConfigCapabilities struct {
 // GetGroupsConfigResponse defines the response for the groups config endpoint.
 type GetGroupsConfigResponse struct {
 	Config *GroupConfigCapabilities `json:"config"`
+}
+
+// ValidateGroupNameResponse describes the outcome of a name validation check.
+// It is intended for use by front-end forms so they can show the user exactly
+// what name will be stored before they submit the create request.
+type ValidateGroupNameResponse struct {
+	// RawName is the user's input after leading/trailing whitespace is removed.
+	RawName string `json:"raw_name"`
+
+	// Name is the kebab-case, de-duplicated name that will be persisted if the
+	// user proceeds with creation.
+	Name string `json:"name"`
+
+	// Adjusted is true whenever Name differs from the kebab-case conversion of
+	// RawName (i.e. a numeric suffix was appended to avoid a collision).
+	Adjusted bool `json:"adjusted"`
+
+	// Available is true when no existing group of the same type already uses
+	// the base kebab-case name.  For non-root types this is always true because
+	// a unique suffix is generated automatically.
+	Available bool `json:"available"`
+
+	// IsRootType is true when the requested group type is a root of one of the
+	// independent hierarchy trees (e.g. ORGANISATION, COMMUNITY).  Root-type
+	// groups require globally unique names as they are used for @-mentions.
+	IsRootType bool `json:"is_root_type"`
+
+	// Hint is a human-readable message suitable for display below a name input
+	// field, explaining any adjustments or naming rules that apply.
+	Hint string `json:"hint,omitempty"`
 }

@@ -151,8 +151,20 @@ type GetGroupStatsRequest struct {
 	ID string `path:"groupID"`
 }
 
+// GetGroupLineageRequest defines the request for getting a group's lineage
+type GetGroupLineageRequest struct {
+	ID string `path:"groupID"`
+}
+
 // GetGroupsStatsRequest defines the request for getting aggregate groups stats
 type GetGroupsStatsRequest struct{}
 
 // GetGroupsConfigRequest defines the request for getting the groups config
 type GetGroupsConfigRequest struct{}
+
+// ValidateGroupNameRequest defines the request for validating a proposed group name
+type ValidateGroupNameRequest struct {
+	Name          string `json:"name" query:"name" validate:"required"`
+	Type          string `json:"type" query:"type" validate:"required"`
+	ParentGroupID string `json:"parent_group_id,omitempty" query:"parent_group_id"`
+}

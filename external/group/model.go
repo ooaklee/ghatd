@@ -47,9 +47,13 @@ type UniversalGroup struct {
 	// Core required fields
 	ID            string `json:"id" bson:"_id" db:"id"`
 	Name          string `json:"name" bson:"name" db:"name"`
+	RawName       string `json:"raw_name" bson:"raw_name" db:"raw_name"`
 	Type          string `json:"type" bson:"type" db:"type"`
 	Status        string `json:"status" bson:"status" db:"status"`
 	ParentGroupID string `json:"parent_group_id,omitempty" bson:"parent_group_id,omitempty" db:"parent_group_id"`
+
+	// Ancestry field for efficient hierarchical queries (root-first, e.g. ["rootID", "parentID"])
+	Ancestry []string `json:"ancestry,omitempty" bson:"ancestry,omitempty" db:"ancestry"`
 
 	// Version field for tracking model version
 	Version int `json:"-" bson:"version" db:"version"`
@@ -558,6 +562,18 @@ func (g *UniversalGroup) GetAttributeByJSONPath(jsonPath string) (interface{}, e
 	}
 
 	return result, nil
+}
+
+// BuildChildAncestry returns the ancestry slice for a direct child of this group.
+// Ordering is root-first and ends at this group's ID.
+func (g *UniversalGroup) BuildChildAncestry() []string {
+	childAncestry := make([]string, 0, len(g.Ancestry)+1)
+	childAncestry = append(childAncestry, g.Ancestry...)
+	if g.ID != "" {
+		childAncestry = append(childAncestry, g.ID)
+	}
+
+	return childAncestry
 }
 
 // Legacy method aliases for backward compatibility
