@@ -593,22 +593,42 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 
 		groupWithProvidedData.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
-		if groupWithProvidedData.Name != "" && groupWithProvidedData.Name != group.Name {
-			nameValidation, nameValidationErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+		if groupWithProvidedData.Name != "" {
+			// Normalises the incoming name using the same logic as ValidateGroupName so
+			// the comparison is always consistent. Errors here mean the name is
+			// unparseable, so treat the slugs as different and let full validation
+			// report the problem.
+			normalisedIncoming := group.Name // fallback: treat as unchanged
+			if precheck, precheckErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
 				Name:          groupWithProvidedData.Name,
 				Type:          group.Type,
 				ParentGroupID: group.ParentGroupID,
-			})
-			if nameValidationErr != nil {
-				log.Error("failed-to-validate-group-name-for-update", zap.Error(nameValidationErr), zap.String("name", groupWithProvidedData.Name))
-				return nil, nameValidationErr
+			}); precheckErr == nil {
+				normalisedIncoming = precheck.Name
 			}
-			if !nameValidation.Available && nameValidation.IsRootType {
-				return nil, errors.New(ErrKeyNameAlreadyExists)
+			if normalisedIncoming != group.Name {
+				nameValidation, nameValidationErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+					Name:          groupWithProvidedData.Name,
+					Type:          group.Type,
+					ParentGroupID: group.ParentGroupID,
+				})
+				if nameValidationErr != nil {
+					log.Error("failed-to-validate-group-name-for-update", zap.Error(nameValidationErr), zap.String("name", groupWithProvidedData.Name))
+					return nil, nameValidationErr
+				}
+				if !nameValidation.Available && nameValidation.IsRootType {
+					return nil, errors.New(ErrKeyNameAlreadyExists)
+				}
+				groupWithProvidedData.RawName = nameValidation.RawName
+				groupWithProvidedData.Name = nameValidation.Name
+			} else {
+				// Slug unchanged — preserve the stored name values; allow the raw display
+				// name to be updated in case casing/spacing was adjusted.
+				groupWithProvidedData.Name = group.Name
+				if groupWithProvidedData.RawName == "" {
+					groupWithProvidedData.RawName = group.RawName
+				}
 			}
-
-			groupWithProvidedData.RawName = nameValidation.RawName
-			groupWithProvidedData.Name = nameValidation.Name
 		}
 
 		group = groupWithProvidedData
@@ -622,23 +642,34 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 
 		// Update fields if provided
 		if req.Name != nil {
-			nameValidation, nameValidationErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+			// Normalize using the same logic as ValidateGroupName so the comparison
+			// is always consistent. Errors fall through to full validation below.
+			normalisedIncoming := group.Name // fallback: treat as unchanged
+			if precheck, precheckErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
 				Name:          *req.Name,
 				Type:          group.Type,
 				ParentGroupID: group.ParentGroupID,
-			})
-			if nameValidationErr != nil {
-				log.Error("failed-to-validate-group-name-for-update", zap.Error(nameValidationErr), zap.String("name", *req.Name))
-				return nil, nameValidationErr
+			}); precheckErr == nil {
+				normalisedIncoming = precheck.Name
 			}
-			if !nameValidation.Available && nameValidation.IsRootType {
-				return nil, errors.New(ErrKeyNameAlreadyExists)
-			}
-
-			if nameValidation.Name != group.Name || nameValidation.RawName != group.RawName {
-				group.Name = nameValidation.Name
-				group.RawName = nameValidation.RawName
-				hasChanges = true
+			if normalisedIncoming != group.Name {
+				nameValidation, nameValidationErr := s.ValidateGroupName(ctx, &ValidateGroupNameRequest{
+					Name:          *req.Name,
+					Type:          group.Type,
+					ParentGroupID: group.ParentGroupID,
+				})
+				if nameValidationErr != nil {
+					log.Error("failed-to-validate-group-name-for-update", zap.Error(nameValidationErr), zap.String("name", *req.Name))
+					return nil, nameValidationErr
+				}
+				if !nameValidation.Available && nameValidation.IsRootType {
+					return nil, errors.New(ErrKeyNameAlreadyExists)
+				}
+				if nameValidation.Name != group.Name || nameValidation.RawName != group.RawName {
+					group.Name = nameValidation.Name
+					group.RawName = nameValidation.RawName
+					hasChanges = true
+				}
 			}
 		}
 
