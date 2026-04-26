@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/audit"
@@ -34,6 +35,7 @@ type GroupRepository interface {
 	GetGroupByNanoID(ctx context.Context, nanoID string) (*UniversalGroup, error)
 	GetGroupByName(ctx context.Context, name, groupType string, logError bool) (*UniversalGroup, error)
 	GetGroupByNameAndParent(ctx context.Context, name, parentGroupID string, logError bool) (*UniversalGroup, error)
+	GetGroupsByLineageAncestor(ctx context.Context, ancestorGroupID string) ([]UniversalGroup, error)
 	UpdateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error)
 	DeleteGroupByID(ctx context.Context, id string) error
 	SoftDeleteGroup(ctx context.Context, id, deletedByID string, deletedAt string) error
@@ -287,6 +289,115 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 	}
 
 	return &GetGroupLineageResponse{Lineage: lineage}, nil
+}
+
+// GetGroupDescendants retrieves all descendants for a group grouped by depth level.
+// Index 0 contains direct children, index 1 grandchildren, and so on.
+func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-group-descendants")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug(
+		"getting-group-descendants",
+		zap.String("id", req.ID),
+		zap.Int("max_depth", req.MaxDepth),
+		zap.Bool("include_self", req.IncludeSelf),
+	)
+
+	if req.MaxDepth < 0 {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.ID)
+	if err != nil {
+		log.Error("failed-to-get-group-for-descendants", zap.Error(err), zap.String("id", req.ID))
+		return nil, err
+	}
+
+	descendantGroups, err := s.GroupRepository.GetGroupsByLineageAncestor(ctx, req.ID)
+	if err != nil {
+		log.Error("failed-to-get-descendant-groups", zap.Error(err), zap.String("id", req.ID))
+		return nil, err
+	}
+
+	levelsMap := map[int][]GroupDescendantsNode{}
+	maxLevel := -1
+
+	if req.IncludeSelf {
+		levelsMap[0] = append(levelsMap[0], GroupDescendantsNode{
+			ID:            targetGroup.ID,
+			ParentGroupID: targetGroup.ParentGroupID,
+			Name:          targetGroup.Name,
+			RawName:       targetGroup.RawName,
+			Type:          targetGroup.Type,
+		})
+		maxLevel = 0
+	}
+
+	for _, group := range descendantGroups {
+		ancestorIndex := -1
+		for i, lineageID := range group.Lineage {
+			if lineageID == req.ID {
+				ancestorIndex = i
+				break
+			}
+		}
+
+		if ancestorIndex == -1 {
+			continue
+		}
+
+		depth := len(group.Lineage) - ancestorIndex
+		if req.MaxDepth > 0 && depth > req.MaxDepth {
+			continue
+		}
+
+		levelsMap[depth] = append(levelsMap[depth], GroupDescendantsNode{
+			ID:            group.ID,
+			ParentGroupID: group.ParentGroupID,
+			Name:          group.Name,
+			RawName:       group.RawName,
+			Type:          group.Type,
+		})
+
+		if depth > maxLevel {
+			maxLevel = depth
+		}
+	}
+
+	if maxLevel < 0 {
+		return &GetGroupDescendantsResponse{Descendants: [][]GroupDescendantsNode{}}, nil
+	}
+
+	startLevel := 1
+	if req.IncludeSelf {
+		startLevel = 0
+	}
+
+	responseLevels := make([][]GroupDescendantsNode, 0, maxLevel-startLevel+1)
+	for level := startLevel; level <= maxLevel; level++ {
+		nodes := levelsMap[level]
+		sort.Slice(nodes, func(i, j int) bool {
+			leftRaw := strings.TrimSpace(nodes[i].RawName)
+			rightRaw := strings.TrimSpace(nodes[j].RawName)
+			if leftRaw == "" {
+				leftRaw = nodes[i].Name
+			}
+			if rightRaw == "" {
+				rightRaw = nodes[j].Name
+			}
+
+			if leftRaw != rightRaw {
+				return leftRaw < rightRaw
+			}
+
+			return nodes[i].ID < nodes[j].ID
+		})
+
+		if len(nodes) > 0 {
+			responseLevels = append(responseLevels, nodes)
+		}
+	}
+
+	return &GetGroupDescendantsResponse{Descendants: responseLevels}, nil
 }
 
 // GetGroupByName retrieves a group by its name

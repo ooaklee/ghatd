@@ -50,6 +50,16 @@ type GetGroupLineageResponse struct {
 	Lineage []GroupLineageNode `json:"lineage"`
 }
 
+// GroupDescendantsNode is a compact representation of a group in descendants results.
+// It intentionally matches GroupLineageNode.
+type GroupDescendantsNode = GroupLineageNode
+
+// GetGroupDescendantsResponse defines the response for getting a group's descendants.
+// Descendants are grouped by level depth where index 0 = direct children.
+type GetGroupDescendantsResponse struct {
+	Descendants [][]GroupDescendantsNode `json:"descendants"`
+}
+
 // CreateGroupResponse defines the response for creating a group
 type CreateGroupResponse struct {
 	Group *UniversalGroup `json:"group"`

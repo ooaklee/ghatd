@@ -60,6 +60,30 @@ func MapRequestToGetGroupLineageRequest(request *http.Request, validator GroupVa
 	return parsedRequest, nil
 }
 
+// MapRequestToGetGroupDescendantsRequest maps incoming GetGroupDescendants request to correct struct
+func MapRequestToGetGroupDescendantsRequest(request *http.Request, validator GroupValidator) (*GetGroupDescendantsRequest, error) {
+	var err error
+	parsedRequest := &GetGroupDescendantsRequest{}
+
+	// get group id from uri
+	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToGetGroupByNanoIDRequest maps incoming GetGroupByNanoID request to correct struct
 func MapRequestToGetGroupByNanoIDRequest(request *http.Request, validator GroupValidator) (*GetGroupByNanoIDRequest, error) {
 	var err error

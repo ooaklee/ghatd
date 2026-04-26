@@ -156,6 +156,13 @@ type GetGroupLineageRequest struct {
 	ID string `path:"groupID"`
 }
 
+// GetGroupDescendantsRequest defines the request for getting all descendants of a group.
+type GetGroupDescendantsRequest struct {
+	ID          string `path:"groupID"`
+	MaxDepth    int    `query:"max_depth"`
+	IncludeSelf bool   `query:"include_self"`
+}
+
 // GetGroupsStatsRequest defines the request for getting aggregate groups stats
 type GetGroupsStatsRequest struct{}
 

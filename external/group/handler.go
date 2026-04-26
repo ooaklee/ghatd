@@ -12,6 +12,7 @@ type GroupService interface {
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
 	GetGroupByID(ctx context.Context, r *GetGroupByIDRequest) (*GetGroupByIDResponse, error)
 	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
+	GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error)
 	GetGroupByNanoID(ctx context.Context, r *GetGroupByNanoIDRequest) (*GetGroupByNanoIDResponse, error)
 	GetGroupByName(ctx context.Context, r *GetGroupByNameRequest) (*GetGroupByNameResponse, error)
 	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
@@ -103,6 +104,23 @@ func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Lineage)
+}
+
+// GetGroupDescendants handles getting a group's descendants grouped by depth level
+func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupDescendantsRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupDescendants(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Descendants)
 }
 
 // GetGroupByNanoID handles getting a group by nano ID

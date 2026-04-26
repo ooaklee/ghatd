@@ -422,6 +422,32 @@ func (r *Repository) GetGroupsByLeaderID(ctx context.Context, leaderID string, p
 	return results, nil
 }
 
+// GetGroupsByLineageAncestor retrieves all groups that descend from the provided ancestor group ID.
+func (r *Repository) GetGroupsByLineageAncestor(ctx context.Context, ancestorGroupID string) ([]UniversalGroup, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"lineage":             ancestorGroupID,
+		"metadata.deleted_at": bson.M{"$exists": false},
+	}
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []UniversalGroup
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &results, "group")
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // SearchGroupsByExtension searches groups by extension field
 func (r *Repository) SearchGroupsByExtension(ctx context.Context, key string, value interface{}, page, pageSize int) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
