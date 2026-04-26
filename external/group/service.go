@@ -152,7 +152,7 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 
 	if parentGroup != nil {
 		group.ParentGroupID = parentGroup.ID
-		group.Ancestry = parentGroup.BuildChildAncestry()
+		group.Lineage = parentGroup.BuildChildLineage()
 	}
 
 	// Set display info if provided
@@ -266,7 +266,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 		return nil, err
 	}
 
-	lineageIDs := append([]string{}, group.Ancestry...)
+	lineageIDs := append([]string{}, group.Lineage...)
 	lineageIDs = append(lineageIDs, group.ID)
 
 	lineage := make([]GroupLineageNode, 0, len(lineageIDs))

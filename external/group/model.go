@@ -52,8 +52,8 @@ type UniversalGroup struct {
 	Status        string `json:"status" bson:"status" db:"status"`
 	ParentGroupID string `json:"parent_group_id,omitempty" bson:"parent_group_id,omitempty" db:"parent_group_id"`
 
-	// Ancestry field for efficient hierarchical queries (root-first, e.g. ["rootID", "parentID"])
-	Ancestry []string `json:"ancestry,omitempty" bson:"ancestry,omitempty" db:"ancestry"`
+	// Lineage field for efficient hierarchical queries (root-first, e.g. ["rootID", "parentID"])
+	Lineage []string `json:"lineage,omitempty" bson:"lineage,omitempty" db:"lineage"`
 
 	// Version field for tracking model version
 	Version int `json:"-" bson:"version" db:"version"`
@@ -564,16 +564,16 @@ func (g *UniversalGroup) GetAttributeByJSONPath(jsonPath string) (interface{}, e
 	return result, nil
 }
 
-// BuildChildAncestry returns the ancestry slice for a direct child of this group.
+// BuildChildLineage returns the lineage slice for a direct child of this group.
 // Ordering is root-first and ends at this group's ID.
-func (g *UniversalGroup) BuildChildAncestry() []string {
-	childAncestry := make([]string, 0, len(g.Ancestry)+1)
-	childAncestry = append(childAncestry, g.Ancestry...)
+func (g *UniversalGroup) BuildChildLineage() []string {
+	childLineage := make([]string, 0, len(g.Lineage)+1)
+	childLineage = append(childLineage, g.Lineage...)
 	if g.ID != "" {
-		childAncestry = append(childAncestry, g.ID)
+		childLineage = append(childLineage, g.ID)
 	}
 
-	return childAncestry
+	return childLineage
 }
 
 // Legacy method aliases for backward compatibility
