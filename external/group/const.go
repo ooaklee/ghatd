@@ -71,6 +71,7 @@ const (
 	ErrKeyInvalidGroupID               = "GroupInvalidID"
 	ErrKeyInvalidGroupBody             = "GroupInvalidBody"
 	ErrKeyInvalidMemberID              = "GroupInvalidMemberID"
+	ErrKeyOwnerRemovalRequiresConfirm  = "GroupOwnerRemovalRequiresConfirm"
 	ErrKeyInvalidGroupHierarchyTree    = "InvalidGroupHierarchyTree"
 	ErrKeyInvalidParentChildRelation   = "InvalidParentChildRelation"
 	ErrKeyGroupDependedOnByOtherGroups = "GroupDependedOnByOtherGroups"

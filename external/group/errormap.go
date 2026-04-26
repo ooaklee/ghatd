@@ -115,6 +115,11 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		Code:       "GRP0-019",
 		Detail:     "The provided member ID is invalid",
 	},
+	ErrKeyOwnerRemovalRequiresConfirm: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-029",
+		Detail:     "Removing the current group owner requires explicit confirmation",
+	},
 
 	// Hierarchy errors
 	ErrKeyCircularReferenceDetected: {

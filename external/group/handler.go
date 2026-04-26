@@ -26,6 +26,7 @@ type GroupService interface {
 	UpdateMemberRole(ctx context.Context, r *UpdateMemberRoleRequest) (*UpdateMemberRoleResponse, error)
 	GetGroupMembers(ctx context.Context, r *GetGroupMembersRequest) (*GetGroupMembersResponse, error)
 	UpdateLeadership(ctx context.Context, r *UpdateLeadershipRequest) (*UpdateLeadershipResponse, error)
+	RepairInvalidMembers(ctx context.Context) (*RepairInvalidMembersResponse, error)
 	ArchiveGroup(ctx context.Context, r *ArchiveGroupRequest) (*ArchiveGroupResponse, error)
 	RestoreGroup(ctx context.Context, r *RestoreGroupRequest) (*RestoreGroupResponse, error)
 	GetGroupStats(ctx context.Context, groupID string) (*GetGroupStatsResponse, error)
@@ -366,6 +367,17 @@ func (h *Handler) UpdateLeadership(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// RepairInvalidMembers handles repairing groups that contain members with empty or null IDs.
+func (h *Handler) RepairInvalidMembers(w http.ResponseWriter, r *http.Request) {
+	response, err := h.Service.RepairInvalidMembers(r.Context())
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // ArchiveGroup handles archiving a group

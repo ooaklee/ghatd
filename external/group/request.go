@@ -99,8 +99,9 @@ type AddMemberRequest struct {
 
 // RemoveMemberRequest defines the request for removing a member
 type RemoveMemberRequest struct {
-	GroupID  string `path:"groupID"`
-	MemberID string `path:"memberID"`
+	GroupID             string `path:"groupID"`
+	MemberID            string `path:"memberID"`
+	ConfirmOwnerRemoval bool   `query:"confirm_owner_removal"`
 }
 
 // UpdateMemberRoleRequest defines the request for updating a member's role

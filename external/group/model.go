@@ -3,6 +3,7 @@ package group
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -53,7 +54,7 @@ type UniversalGroup struct {
 	Type          string `json:"type" bson:"type" db:"type"`
 	Status        string `json:"status" bson:"status" db:"status"`
 	ParentGroupID string `json:"parent_group_id,omitempty" bson:"parent_group_id,omitempty" db:"parent_group_id"`
-	OwnerID       string `json:"owner_id,omitempty" bson:"owner_id,omitempty" db:"owner_id"`
+	OwnerID       string `json:"owner_id" bson:"owner_id" db:"owner_id"`
 
 	// Lineage field for efficient hierarchical queries (root-first, e.g. ["rootID", "parentID"])
 	Lineage []string `json:"lineage,omitempty" bson:"lineage,omitempty" db:"lineage"`
@@ -340,6 +341,11 @@ func (g *UniversalGroup) IsValidStatus(status string) bool {
 
 // AddMember adds a member to the group
 func (g *UniversalGroup) AddMember(memberID, memberType, role string) (*UniversalGroup, error) {
+	memberID = strings.TrimSpace(memberID)
+	if memberID == "" {
+		return g, errors.New(ErrKeyInvalidMemberID)
+	}
+
 	// Validate member type
 	if !g.isValidMemberType(memberType) {
 		return g, errors.New(ErrKeyInvalidMemberType)

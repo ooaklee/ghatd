@@ -219,6 +219,7 @@ func MapRequestToAddMemberRequest(request *http.Request, validator GroupValidato
 func MapRequestToRemoveMemberRequest(request *http.Request, validator GroupValidator) (*RemoveMemberRequest, error) {
 	var err error
 	parsedRequest := &RemoveMemberRequest{}
+	query := request.URL.Query()
 
 	// get group id from uri
 	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
@@ -234,6 +235,11 @@ func MapRequestToRemoveMemberRequest(request *http.Request, validator GroupValid
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidMemberID)
+	}
+
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}
 
 	return parsedRequest, nil

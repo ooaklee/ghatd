@@ -49,6 +49,9 @@ type GroupRepository interface {
 	HasGroupDependents(ctx context.Context, groupID string) (bool, error)
 	AddMemberToGroup(ctx context.Context, groupID string, member Member) error
 	RemoveMemberFromGroup(ctx context.Context, groupID, memberID string) error
+	ClearOwnerFromGroup(ctx context.Context, groupID, ownerID string) error
+	GetGroupIDsWithInvalidMembers(ctx context.Context) ([]string, error)
+	RepairInvalidMembers(ctx context.Context) error
 	BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string, status string) error
 	GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats, error)
 }
@@ -206,6 +209,13 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 		}
 	}
 
+	if group.OwnerID != "" {
+		if err := s.ensureOwnerMembershipAndAdminRole(ctx, group, group.OwnerID); err != nil {
+			log.Error("failed-to-ensure-owner-membership-on-create", zap.Error(err), zap.String("owner_id", group.OwnerID))
+			return nil, err
+		}
+	}
+
 	// Validate group
 	if err := group.Validate(); err != nil {
 		log.Error("group-validation-failed", zap.Error(err))
@@ -234,8 +244,10 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.created",
-			TargetId: createdGroup.ID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.created",
+			TargetId:   createdGroup.ID,
 			Details: map[string]interface{}{
 				"group_name": createdGroup.Name,
 				"group_type": createdGroup.Type,
@@ -555,8 +567,10 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.updated",
-			TargetId: updatedGroup.ID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.updated",
+			TargetId:   updatedGroup.ID,
 			Details: map[string]interface{}{
 				"group_name": updatedGroup.Name,
 			},
@@ -608,8 +622,10 @@ func (s *Service) DeleteGroup(ctx context.Context, req *DeleteGroupRequest) (*De
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.deleted",
-			TargetId: req.ID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.deleted",
+			TargetId:   req.ID,
 			Details: map[string]interface{}{
 				"hard_delete":   req.HardDelete,
 				"deleted_by_id": req.DeletedByID,
@@ -704,6 +720,13 @@ func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMem
 		return nil, err
 	}
 
+	if len(group.Lineage) > 0 {
+		if err := s.ensureRootMembership(ctx, group, req.MemberID, req.Type); err != nil {
+			log.Error("failed-to-ensure-root-membership", zap.Error(err), zap.String("group_id", req.GroupID), zap.String("member_id", req.MemberID))
+			return nil, err
+		}
+	}
+
 	// Add member
 	if _, err := group.AddMember(req.MemberID, req.Type, req.Role); err != nil {
 		log.Error("failed-to-add-member", zap.Error(err))
@@ -723,8 +746,10 @@ func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMem
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.member.added",
-			TargetId: req.GroupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.added",
+			TargetId:   req.GroupID,
 			Details: map[string]interface{}{
 				"member": addedMember,
 			},
@@ -751,29 +776,91 @@ func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
+	if group.OwnerID == req.MemberID && !req.ConfirmOwnerRemoval {
+		log.Warn(
+			"owner-removal-requires-explicit-confirmation",
+			zap.String("group_id", req.GroupID),
+			zap.String("member_id", req.MemberID),
+		)
+		return nil, errors.New(ErrKeyOwnerRemovalRequiresConfirm)
+	}
+
 	// Remove member
 	if group, err = group.RemoveMember(req.MemberID); err != nil {
 		log.Error("failed-to-remove-member", zap.Error(err))
 		return nil, err
 	}
 
-	// Save to repository
-	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
+	if group.OwnerID == req.MemberID {
+		group.OwnerID = ""
+
+		err = s.GroupRepository.ClearOwnerFromGroup(ctx, req.GroupID, req.MemberID)
+		if err != nil {
+			log.Error("failed-to-clear-owner-from-group-in-repository", zap.Error(err))
+			return nil, errors.New(ErrKeyDatabaseError)
+		}
+	}
+
+	// Persist removal directly so member-array updates do not depend on full-document $set behavior.
+	err = s.GroupRepository.RemoveMemberFromGroup(ctx, req.GroupID, req.MemberID)
 	if err != nil {
-		log.Error("failed-to-update-group-in-repository", zap.Error(err))
+		log.Error("failed-to-remove-member-from-group-in-repository", zap.Error(err))
 		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	updatedGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
+	if err != nil {
+		log.Error("failed-to-get-updated-group-after-member-removal", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, err
+	}
+
+	removedCascadeGroupIDs := []string{}
+	failedCascadeGroupIDs := []string{}
+	if len(group.Lineage) == 0 {
+		removedCascadeGroupIDs, failedCascadeGroupIDs = s.cascadeRemoveMemberFromDescendants(ctx, req.GroupID, req.MemberID)
+		if len(failedCascadeGroupIDs) > 0 {
+			log.Warn(
+				"failed-to-remove-member-from-some-descendants",
+				zap.String("root_group_id", req.GroupID),
+				zap.String("member_id", req.MemberID),
+				zap.Strings("failed_descendant_group_ids", failedCascadeGroupIDs),
+			)
+		}
 	}
 
 	// Audit log
 	if s.AuditService != nil {
-		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.member.removed",
-			TargetId: req.GroupID,
-			Details: map[string]interface{}{
-				"member": map[string]string{
-					"id": req.MemberID,
-				},
+		details := map[string]interface{}{
+			"member": map[string]string{
+				"id": req.MemberID,
 			},
+		}
+		if len(group.Lineage) == 0 {
+			details["cascade_removed_from_descendants"] = len(removedCascadeGroupIDs)
+			details["removed_descendant_group_ids"] = removedCascadeGroupIDs
+			if len(failedCascadeGroupIDs) > 0 {
+				details["failed_descendant_group_ids"] = failedCascadeGroupIDs
+			}
+
+			s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+				TargetType: "group",
+				Domain:     "group",
+				Action:     "group.member.removed.cascade",
+				TargetId:   req.GroupID,
+				Details: map[string]interface{}{
+					"member_id":                    req.MemberID,
+					"removed_descendant_group_ids": removedCascadeGroupIDs,
+					"failed_descendant_group_ids":  failedCascadeGroupIDs,
+				},
+			})
+		}
+
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.removed",
+			TargetId:   req.GroupID,
+			Details:    details,
 		})
 	}
 
@@ -821,8 +908,10 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.member.role_updated",
-			TargetId: req.GroupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.role_updated",
+			TargetId:   req.GroupID,
 			Details: map[string]interface{}{
 				"member": memberInfo,
 			},
@@ -830,6 +919,135 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 	}
 
 	return &UpdateMemberRoleResponse{Group: updatedGroup}, nil
+}
+
+// ensureOwnerMembershipAndAdminRole ensures the owner exists as a USER member of the
+// target group and is assigned the ADMIN role. For nested groups it also ensures the
+// owner exists in the root group to preserve hierarchy membership invariants.
+func (s *Service) ensureOwnerMembershipAndAdminRole(ctx context.Context, group *UniversalGroup, ownerID string) error {
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" {
+		return nil
+	}
+
+	if len(group.Lineage) > 0 {
+		if err := s.ensureRootMembership(ctx, group, ownerID, MemberTypeUser); err != nil {
+			return err
+		}
+	}
+
+	if !group.HasMember(ownerID) {
+		if _, err := group.AddMember(ownerID, MemberTypeUser, MemberRoleAdmin); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	memberInfo, err := group.GetMemberByID(ownerID)
+	if err != nil {
+		return err
+	}
+
+	if memberInfo.Role == MemberRoleAdmin {
+		return nil
+	}
+
+	_, err = group.UpdateMemberRole(ownerID, MemberRoleAdmin)
+	return err
+}
+
+// ensureRootMembership ensures the member exists in the root group of a nested hierarchy.
+// If absent, it adds the member to the root with an empty role and writes an audit event.
+func (s *Service) ensureRootMembership(ctx context.Context, group *UniversalGroup, memberID, memberType string) error {
+	rootGroupID, err := s.getRootGroupID(group.Lineage)
+	if err != nil {
+		return err
+	}
+
+	rootGroup, err := s.GroupRepository.GetGroupByID(ctx, rootGroupID)
+	if err != nil {
+		return err
+	}
+
+	rootGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+	if rootGroup.HasMember(memberID) {
+		return nil
+	}
+
+	if _, err := rootGroup.AddMember(memberID, memberType, ""); err != nil {
+		return err
+	}
+
+	if _, err := s.GroupRepository.UpdateGroup(ctx, rootGroup); err != nil {
+		return errors.New(ErrKeyDatabaseError)
+	}
+
+	if s.AuditService != nil {
+		rootMember, _ := rootGroup.GetMemberByID(memberID)
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.added",
+			TargetId:   rootGroupID,
+			Details: map[string]interface{}{
+				"member":     rootMember,
+				"propagated": true,
+			},
+		})
+	}
+
+	return nil
+}
+
+// cascadeRemoveMemberFromDescendants removes a member from all descendant groups of a root group.
+// It performs best-effort updates and returns removed descendant IDs and failed descendant IDs.
+func (s *Service) cascadeRemoveMemberFromDescendants(ctx context.Context, rootGroupID, memberID string) ([]string, []string) {
+	descendants, err := s.GroupRepository.GetGroupsByLineageAncestor(ctx, rootGroupID)
+	if err != nil {
+		logger.AcquireFrom(ctx).With(zap.String("method", "remove-member")).Warn(
+			"failed-to-load-descendants-for-member-removal",
+			zap.Error(err),
+			zap.String("root_group_id", rootGroupID),
+			zap.String("member_id", memberID),
+		)
+		return []string{}, []string{rootGroupID}
+	}
+
+	removedGroupIDs := []string{}
+	failedGroupIDs := []string{}
+	for i := range descendants {
+		descendant := &descendants[i]
+
+		if !descendant.HasMember(memberID) {
+			continue
+		}
+
+		if err := s.GroupRepository.RemoveMemberFromGroup(ctx, descendant.ID, memberID); err != nil {
+			failedGroupIDs = append(failedGroupIDs, descendant.ID)
+			continue
+		}
+
+		if descendant.OwnerID == memberID {
+			if err := s.GroupRepository.ClearOwnerFromGroup(ctx, descendant.ID, memberID); err != nil {
+				failedGroupIDs = append(failedGroupIDs, descendant.ID)
+				continue
+			}
+		}
+
+		removedGroupIDs = append(removedGroupIDs, descendant.ID)
+	}
+
+	return removedGroupIDs, failedGroupIDs
+}
+
+// getRootGroupID extracts the root group ID from a root-first lineage slice.
+func (s *Service) getRootGroupID(lineage []string) (string, error) {
+	if len(lineage) == 0 || strings.TrimSpace(lineage[0]) == "" {
+		return "", errors.New(ErrKeyInvalidGroupID)
+	}
+
+	return lineage[0], nil
 }
 
 // isValidMemberRole validates if a role is allowed for a given group type
@@ -922,7 +1140,38 @@ func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipReq
 	// Update owner field
 	hasChanges := false
 	if req.OwnerID != nil && *req.OwnerID != group.OwnerID {
-		group.OwnerID = *req.OwnerID
+		nextOwnerID := strings.TrimSpace(*req.OwnerID)
+		if nextOwnerID != "" {
+			if len(group.Lineage) > 0 {
+				if err := s.ensureRootMembership(ctx, group, nextOwnerID, MemberTypeUser); err != nil {
+					log.Error("failed-to-ensure-owner-root-membership", zap.Error(err), zap.String("group_id", req.GroupID), zap.String("owner_id", nextOwnerID))
+					return nil, err
+				}
+			}
+
+			// Owner must be a member of the target group and hold ADMIN role.
+			if !group.HasMember(nextOwnerID) {
+				if _, err := group.AddMember(nextOwnerID, MemberTypeUser, MemberRoleAdmin); err != nil {
+					log.Error("failed-to-add-owner-to-group", zap.Error(err), zap.String("group_id", req.GroupID), zap.String("owner_id", nextOwnerID))
+					return nil, err
+				}
+			} else {
+				memberInfo, memberErr := group.GetMemberByID(nextOwnerID)
+				if memberErr != nil {
+					log.Error("failed-to-get-owner-member", zap.Error(memberErr), zap.String("group_id", req.GroupID), zap.String("owner_id", nextOwnerID))
+					return nil, memberErr
+				}
+
+				if memberInfo.Role != MemberRoleAdmin {
+					if _, err := group.UpdateMemberRole(nextOwnerID, MemberRoleAdmin); err != nil {
+						log.Error("failed-to-promote-owner-member-to-admin", zap.Error(err), zap.String("group_id", req.GroupID), zap.String("owner_id", nextOwnerID))
+						return nil, err
+					}
+				}
+			}
+		}
+
+		group.OwnerID = nextOwnerID
 		hasChanges = true
 	}
 
@@ -943,8 +1192,10 @@ func (s *Service) UpdateLeadership(ctx context.Context, req *UpdateLeadershipReq
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.leadership.updated",
-			TargetId: req.GroupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.leadership.updated",
+			TargetId:   req.GroupID,
 		})
 	}
 
@@ -983,8 +1234,10 @@ func (s *Service) ArchiveGroup(ctx context.Context, req *ArchiveGroupRequest) (*
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.archived",
-			TargetId: req.ID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.archived",
+			TargetId:   req.ID,
 		})
 	}
 
@@ -1023,8 +1276,10 @@ func (s *Service) RestoreGroup(ctx context.Context, req *RestoreGroupRequest) (*
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:   "group.restored",
-			TargetId: req.ID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.restored",
+			TargetId:   req.ID,
 		})
 	}
 
@@ -1289,6 +1544,63 @@ func (s *Service) GetGroupsConfig(_ context.Context, _ *GetGroupsConfigRequest) 
 	}, nil
 }
 
+// RepairInvalidMembers repairs groups that contain members with empty or null IDs
+// and returns affected group IDs before and after the repair.
+func (s *Service) RepairInvalidMembers(ctx context.Context) (*RepairInvalidMembersResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "repair-invalid-members")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	beforeAffectedGroupIDs, err := s.GroupRepository.GetGroupIDsWithInvalidMembers(ctx)
+	if err != nil {
+		log.Error("failed-to-get-groups-with-invalid-members-before-repair", zap.Error(err))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	if err := s.GroupRepository.RepairInvalidMembers(ctx); err != nil {
+		log.Error("failed-to-repair-invalid-members", zap.Error(err))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	afterAffectedGroupIDs, err := s.GroupRepository.GetGroupIDsWithInvalidMembers(ctx)
+	if err != nil {
+		log.Error("failed-to-get-groups-with-invalid-members-after-repair", zap.Error(err))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	afterSet := make(map[string]struct{}, len(afterAffectedGroupIDs))
+	for _, groupID := range afterAffectedGroupIDs {
+		afterSet[groupID] = struct{}{}
+	}
+
+	repairedGroupIDs := make([]string, 0, len(beforeAffectedGroupIDs))
+	for _, groupID := range beforeAffectedGroupIDs {
+		if _, stillAffected := afterSet[groupID]; !stillAffected {
+			repairedGroupIDs = append(repairedGroupIDs, groupID)
+		}
+	}
+
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "groups.members.repaired",
+			Details: map[string]interface{}{
+				"before_affected_group_ids": beforeAffectedGroupIDs,
+				"after_affected_group_ids":  afterAffectedGroupIDs,
+				"repaired_group_ids":        repairedGroupIDs,
+			},
+		})
+	}
+
+	return &RepairInvalidMembersResponse{
+		BeforeAffectedGroupIDs: beforeAffectedGroupIDs,
+		AfterAffectedGroupIDs:  afterAffectedGroupIDs,
+		RepairedGroupIDs:       repairedGroupIDs,
+		BeforeCount:            len(beforeAffectedGroupIDs),
+		AfterCount:             len(afterAffectedGroupIDs),
+		RepairedCount:          len(repairedGroupIDs),
+	}, nil
+}
+
 // SetGroupExtension sets an extension field value
 func (s *Service) SetGroupExtension(ctx context.Context, groupID, key string, value interface{}) (*UpdateGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "set-group-extension")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
@@ -1399,7 +1711,9 @@ func (s *Service) BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string,
 	// Audit log
 	if s.AuditService != nil {
 		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action: "groups.bulk_status_updated",
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "groups.bulk_status_updated",
 			Details: map[string]interface{}{
 				"group_ids": groupIDs,
 				"status":    status,

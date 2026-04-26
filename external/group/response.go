@@ -102,6 +102,16 @@ type UpdateLeadershipResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
 
+// RepairInvalidMembersResponse defines the response for invalid member repair operations.
+type RepairInvalidMembersResponse struct {
+	BeforeAffectedGroupIDs []string `json:"before_affected_group_ids"`
+	AfterAffectedGroupIDs  []string `json:"after_affected_group_ids"`
+	RepairedGroupIDs       []string `json:"repaired_group_ids"`
+	BeforeCount            int      `json:"before_count"`
+	AfterCount             int      `json:"after_count"`
+	RepairedCount          int      `json:"repaired_count"`
+}
+
 // ArchiveGroupResponse defines the response for archiving a group
 type ArchiveGroupResponse struct {
 	Group *UniversalGroup `json:"group"`

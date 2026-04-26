@@ -176,6 +176,12 @@ func (r *Repository) UpdateGroup(ctx context.Context, group *UniversalGroup) (*U
 		"$set": group,
 	}
 
+	if len(group.Members) == 0 {
+		update["$unset"] = bson.M{
+			"members": "",
+		}
+	}
+
 	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "group")
 	if err != nil {
 		return nil, err
@@ -539,7 +545,8 @@ func (r *Repository) RemoveMemberFromGroup(ctx context.Context, groupID, memberI
 	}
 
 	queryFilter := bson.M{
-		"_id": groupID,
+		"_id":        groupID,
+		"members.id": memberID,
 	}
 
 	update := bson.M{
@@ -552,6 +559,99 @@ func (r *Repository) RemoveMemberFromGroup(ctx context.Context, groupID, memberI
 
 	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "group")
 	return err
+}
+
+// ClearOwnerFromGroup clears owner_id for a group when it currently matches the provided owner ID.
+func (r *Repository) ClearOwnerFromGroup(ctx context.Context, groupID, ownerID string) error {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	queryFilter := bson.M{
+		"_id":      groupID,
+		"owner_id": ownerID,
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"owner_id": "",
+		},
+	}
+
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "group")
+	return err
+}
+
+// GetGroupIDsWithInvalidMembers returns IDs of groups containing members with empty or null IDs.
+func (r *Repository) GetGroupIDsWithInvalidMembers(ctx context.Context) ([]string, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"members": bson.M{
+			"$elemMatch": bson.M{
+				"$or": bson.A{
+					bson.M{"id": ""},
+					bson.M{"id": nil},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return nil, err
+	}
+
+	type groupIDResult struct {
+		ID string `bson:"_id"`
+	}
+
+	results := []groupIDResult{}
+	if err := r.Store.MapAllInCursorToResult(ctx, cursor, &results, "groups"); err != nil {
+		return nil, err
+	}
+
+	groupIDs := make([]string, 0, len(results))
+	for _, result := range results {
+		groupIDs = append(groupIDs, result.ID)
+	}
+
+	return groupIDs, nil
+}
+
+// RepairInvalidMembers removes members with empty or null IDs from all affected groups.
+func (r *Repository) RepairInvalidMembers(ctx context.Context) error {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	queryFilter := bson.M{
+		"members": bson.M{
+			"$elemMatch": bson.M{
+				"$or": bson.A{
+					bson.M{"id": ""},
+					bson.M{"id": nil},
+				},
+			},
+		},
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"members": bson.M{
+				"id": bson.M{
+					"$in": bson.A{"", nil},
+				},
+			},
+		},
+	}
+
+	return r.Store.ExecuteUpdateManyCommand(ctx, collection, queryFilter, update, "groups")
 }
 
 // BulkUpdateGroupsStatus updates status for multiple groups
