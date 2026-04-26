@@ -426,8 +426,10 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 }
 
 // filterVisibleDescendantsForUser applies visibility constraints for descendant queries when
-// a request is made as a specific user. PRIVATE ("secret") groups are visible only when the user is in
-// the private branch (member of that private group or one of its descendants).
+// a request is made as a specific user. PRIVATE ("secret") and INTERNAL groups are only
+// visible when the user has a membership connection to that branch of the hierarchy.
+// INTERNAL groups follow the same membership rules as PRIVATE but do not hide the
+// group's existence from hierarchy members who discover it via a visible ancestor.
 func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asUserID string, descendants []UniversalGroup) ([]UniversalGroup, bool) {
 	if asUserID == "" {
 		return descendants, true
@@ -438,8 +440,15 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 		groupsByID[descendants[i].ID] = &descendants[i]
 	}
 
-	visiblePrivateGroupIDs := make(map[string]struct{})
-	canSeeRootGroup := s.groupVisibility(rootGroup) != VisibilityPrivate
+	// requiresMembership returns true for any visibility mode that restricts access
+	// to group members only (PRIVATE and INTERNAL both require membership when
+	// filtering on behalf of a specific user).
+	requiresMembership := func(vis string) bool {
+		return vis == VisibilityPrivate || vis == VisibilityInternal
+	}
+
+	visibleRestrictedGroupIDs := make(map[string]struct{})
+	canSeeRootGroup := !requiresMembership(s.groupVisibility(rootGroup))
 	if rootGroup.HasMember(asUserID) {
 		canSeeRootGroup = true
 	}
@@ -450,13 +459,13 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 			continue
 		}
 
-		if s.groupVisibility(group) == VisibilityPrivate {
-			visiblePrivateGroupIDs[group.ID] = struct{}{}
+		if requiresMembership(s.groupVisibility(group)) {
+			visibleRestrictedGroupIDs[group.ID] = struct{}{}
 		}
 
 		for _, lineageID := range group.Lineage {
 			if lineageID == rootGroup.ID {
-				if s.groupVisibility(rootGroup) == VisibilityPrivate {
+				if requiresMembership(s.groupVisibility(rootGroup)) {
 					canSeeRootGroup = true
 				}
 				continue
@@ -467,8 +476,8 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 				continue
 			}
 
-			if s.groupVisibility(ancestor) == VisibilityPrivate {
-				visiblePrivateGroupIDs[ancestor.ID] = struct{}{}
+			if requiresMembership(s.groupVisibility(ancestor)) {
+				visibleRestrictedGroupIDs[ancestor.ID] = struct{}{}
 			}
 		}
 	}
@@ -478,18 +487,18 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 		group := descendants[i]
 		groupVisibility := s.groupVisibility(&group)
 
-		if groupVisibility == VisibilityPrivate {
-			_, isVisiblePrivateGroup := visiblePrivateGroupIDs[group.ID]
-			if !group.HasMember(asUserID) && !isVisiblePrivateGroup {
+		if requiresMembership(groupVisibility) {
+			_, isVisibleRestrictedGroup := visibleRestrictedGroupIDs[group.ID]
+			if !group.HasMember(asUserID) && !isVisibleRestrictedGroup {
 				continue
 			}
 		}
 
-		isBlockedByHiddenPrivateAncestor := false
+		isBlockedByHiddenAncestor := false
 		for _, lineageID := range group.Lineage {
 			if lineageID == rootGroup.ID {
-				if s.groupVisibility(rootGroup) == VisibilityPrivate && !canSeeRootGroup {
-					isBlockedByHiddenPrivateAncestor = true
+				if requiresMembership(s.groupVisibility(rootGroup)) && !canSeeRootGroup {
+					isBlockedByHiddenAncestor = true
 					break
 				}
 				continue
@@ -500,17 +509,17 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 				continue
 			}
 
-			if s.groupVisibility(ancestor) != VisibilityPrivate {
+			if !requiresMembership(s.groupVisibility(ancestor)) {
 				continue
 			}
 
-			if _, isVisiblePrivateAncestor := visiblePrivateGroupIDs[ancestor.ID]; !isVisiblePrivateAncestor {
-				isBlockedByHiddenPrivateAncestor = true
+			if _, isVisibleRestrictedAncestor := visibleRestrictedGroupIDs[ancestor.ID]; !isVisibleRestrictedAncestor {
+				isBlockedByHiddenAncestor = true
 				break
 			}
 		}
 
-		if isBlockedByHiddenPrivateAncestor {
+		if isBlockedByHiddenAncestor {
 			continue
 		}
 
