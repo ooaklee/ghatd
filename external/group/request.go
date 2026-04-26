@@ -44,12 +44,6 @@ type GetGroupByNanoIDRequest struct {
 	NanoID string `path:"groupNanoID"`
 }
 
-// GetGroupByNameRequest defines the request for getting a group by name
-type GetGroupByNameRequest struct {
-	Name string `query:"name"`
-	Type string `query:"type"` // Optional type filter
-}
-
 // CreateGroupRequest defines the request for creating a new group
 type CreateGroupRequest struct {
 	Name          string                 `json:"name" validate:"required"`

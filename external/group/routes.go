@@ -14,7 +14,6 @@ type GroupHandler interface {
 	GetGroupLineage(w http.ResponseWriter, r *http.Request)
 	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
 	GetGroupByNanoID(w http.ResponseWriter, r *http.Request)
-	GetGroupByName(w http.ResponseWriter, r *http.Request)
 	UpdateGroup(w http.ResponseWriter, r *http.Request)
 	DeleteGroup(w http.ResponseWriter, r *http.Request)
 	GetGroups(w http.ResponseWriter, r *http.Request)
@@ -68,7 +67,6 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/nano/{groupNanoID}", request.Handler.GetGroupByNanoID).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/search", request.Handler.GetGroupByName).Methods(http.MethodGet, http.MethodOptions)
 
 	// Group status operations
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/archive", request.Handler.ArchiveGroup).Methods(http.MethodPost, http.MethodOptions)

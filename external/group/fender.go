@@ -102,28 +102,6 @@ func MapRequestToGetGroupByNanoIDRequest(request *http.Request, validator GroupV
 	return parsedRequest, nil
 }
 
-// MapRequestToGetGroupByNameRequest maps incoming GetGroupByName request to correct struct
-func MapRequestToGetGroupByNameRequest(request *http.Request, validator GroupValidator) (*GetGroupByNameRequest, error) {
-	parsedRequest := &GetGroupByNameRequest{}
-
-	// get query parameters
-	query := request.URL.Query()
-	err := querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	if parsedRequest.Name == "" {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	return parsedRequest, nil
-}
-
 // MapRequestToUpdateGroupRequest maps incoming UpdateGroup request to correct struct
 func MapRequestToUpdateGroupRequest(request *http.Request, validator GroupValidator) (*UpdateGroupRequest, error) {
 	var err error

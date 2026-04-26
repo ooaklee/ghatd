@@ -14,7 +14,6 @@ type GroupService interface {
 	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
 	GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error)
 	GetGroupByNanoID(ctx context.Context, r *GetGroupByNanoIDRequest) (*GetGroupByNanoIDResponse, error)
-	GetGroupByName(ctx context.Context, r *GetGroupByNameRequest) (*GetGroupByNameResponse, error)
 	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
 	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error)
 	GetGroups(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
@@ -133,23 +132,6 @@ func (h *Handler) GetGroupByNanoID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.GetGroupByNanoID(r.Context(), request)
-	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
-}
-
-// GetGroupByName handles getting a group by name
-func (h *Handler) GetGroupByName(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetGroupByNameRequest(r, h.Validator)
-	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.GetGroupByName(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

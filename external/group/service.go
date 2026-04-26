@@ -559,23 +559,6 @@ func (s *Service) GetGroupByNanoID(ctx context.Context, req *GetGroupByNanoIDReq
 	return &GetGroupByNanoIDResponse{Group: group}, nil
 }
 
-// GetGroupByName retrieves a group by name and optional type
-func (s *Service) GetGroupByName(ctx context.Context, req *GetGroupByNameRequest) (*GetGroupByNameResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-group-by-name")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("getting-group-by-name", zap.String("name", req.Name), zap.String("type", req.Type))
-
-	group, err := s.GroupRepository.GetGroupByName(ctx, req.Name, req.Type, true)
-	if err != nil {
-		log.Error("failed-to-get-group-by-name", zap.Error(err), zap.String("name", req.Name))
-		return nil, err
-	}
-
-	// Reinject dependencies
-	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-
-	return &GetGroupByNameResponse{Group: group}, nil
-}
-
 // UpdateGroup updates an existing group
 func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*UpdateGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-group")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))

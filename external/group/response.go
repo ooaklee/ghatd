@@ -31,11 +31,6 @@ type GetGroupByNanoIDResponse struct {
 	Group *UniversalGroup `json:"group"`
 }
 
-// GetGroupByNameResponse defines the response for getting a group by name
-type GetGroupByNameResponse struct {
-	Group *UniversalGroup `json:"group"`
-}
-
 // GroupLineageNode is a compact representation of a group in a lineage chain.
 type GroupLineageNode struct {
 	ID            string `json:"id"`
