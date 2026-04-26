@@ -1285,19 +1285,7 @@ func (s *Service) GetGroupsConfig(_ context.Context, _ *GetGroupsConfigRequest) 
 	}
 
 	return &GetGroupsConfigResponse{
-		Config: &GroupConfigCapabilities{
-			DefaultStatus:       cfg.DefaultStatus,
-			StatusTransitions:   cfg.StatusTransitions,
-			ValidTypes:          cfg.ValidTypes,
-			ValidMemberTypes:    cfg.ValidMemberTypes,
-			Tree:                cfg.Tree,
-			AllowNestedGroups:   cfg.AllowNestedGroups,
-			MaxNestingDepth:     cfg.MaxNestingDepth,
-			RequiredFields:      cfg.RequiredFields,
-			MultipleIdentifiers: cfg.MultipleIdentifiers,
-			TypeToRoleOverrides: cfg.TypeToRoleOverrides,
-			DefaultRoles:        cfg.DefaultRoles,
-		},
+		Config: cfg.toGroupConfigCapabilities(),
 	}, nil
 }
 

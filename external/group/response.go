@@ -186,19 +186,40 @@ func normaliseStatsMapKeysToSnakeCase(input map[string]int64) map[string]int64 {
 	return output
 }
 
+// Statuses describes status configuration for groups.
+type Statuses struct {
+	Default     string              `json:"default"`
+	Valid       []string            `json:"valid"`
+	Transitions map[string][]string `json:"transitions"`
+}
+
+// Types describes valid group and member types.
+type Types struct {
+	Valid            []string `json:"valid"`
+	ValidMemberTypes []string `json:"valid_member_types"`
+}
+
+// GroupNesting describes hierarchical group nesting configuration.
+type GroupNesting struct {
+	Allow           bool                `json:"allow"`
+	MaxNestingDepth int                 `json:"max_nesting_depth"`
+	Tree            map[string][]string `json:"tree,omitempty"`
+}
+
+// Roles describes role configuration for groups.
+type Roles struct {
+	Default       []string            `json:"default"`
+	TypeOverrides map[string][]string `json:"type_overrides"`
+}
+
 // GroupConfigCapabilities describes the capabilities exposed by the group config.
 type GroupConfigCapabilities struct {
-	DefaultStatus       string              `json:"default_status"`
-	StatusTransitions   map[string][]string `json:"status_transitions"`
-	ValidTypes          []string            `json:"valid_types"`
-	ValidMemberTypes    []string            `json:"valid_member_types"`
-	Tree                map[string][]string `json:"tree,omitempty"`
-	AllowNestedGroups   bool                `json:"allow_nested_groups"`
-	MaxNestingDepth     int                 `json:"max_nesting_depth"`
-	RequiredFields      []string            `json:"required_fields,omitempty"`
-	MultipleIdentifiers bool                `json:"multiple_identifiers"`
-	TypeToRoleOverrides map[string][]string `json:"type_to_role_overrides"` // group type -> allowed roles
-	DefaultRoles        []string            `json:"default_roles"`
+	RequiredFields      []string     `json:"required_fields,omitempty"`
+	MultipleIdentifiers bool         `json:"multiple_identifiers"`
+	Statuses            Statuses     `json:"statuses"`
+	Types               Types        `json:"types"`
+	GroupNesting        GroupNesting `json:"group_nesting"`
+	Roles               Roles        `json:"roles"`
 }
 
 // GetGroupsConfigResponse defines the response for the groups config endpoint.

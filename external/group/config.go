@@ -144,6 +144,43 @@ func (c *GroupConfig) WithMultipleIdentifiers(allow bool) *GroupConfig {
 	return c
 }
 
+// toGroupConfigCapabilities converts GroupConfig to GroupConfigCapabilities response DTO.
+func (c *GroupConfig) toGroupConfigCapabilities() *GroupConfigCapabilities {
+	if c == nil {
+		c = DefaultGroupConfig()
+	}
+
+	// Compute valid statuses from transition keys.
+	validStatuses := make([]string, 0, len(c.StatusTransitions))
+	for status := range c.StatusTransitions {
+		validStatuses = append(validStatuses, status)
+	}
+	sort.Strings(validStatuses)
+
+	return &GroupConfigCapabilities{
+		RequiredFields:      c.RequiredFields,
+		MultipleIdentifiers: c.MultipleIdentifiers,
+		Statuses: Statuses{
+			Default:     c.DefaultStatus,
+			Valid:       validStatuses,
+			Transitions: c.StatusTransitions,
+		},
+		Types: Types{
+			Valid:            c.ValidTypes,
+			ValidMemberTypes: c.ValidMemberTypes,
+		},
+		GroupNesting: GroupNesting{
+			Allow:           c.AllowNestedGroups,
+			MaxNestingDepth: c.MaxNestingDepth,
+			Tree:            c.Tree,
+		},
+		Roles: Roles{
+			Default:       c.DefaultRoles,
+			TypeOverrides: c.TypeToRoleOverrides,
+		},
+	}
+}
+
 // IsValidType checks whether a group type is allowed by this config.
 // If no valid types are configured, any type is accepted.
 func (c *GroupConfig) IsValidType(groupType string) bool {
