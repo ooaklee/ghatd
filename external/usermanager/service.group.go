@@ -165,7 +165,7 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
-	if !s.userHasGroupAccess(r.UserId, groupResp.Group, isAdmin) {
+	if !s.userHasGroupAccess(ctx, r.UserId, groupResp.Group, isAdmin) {
 		return nil, errors.New(ErrKeyGroupNotFound)
 	}
 
@@ -188,7 +188,7 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
-	if !s.userHasGroupAccess(r.UserId, groupResp.Group, isAdmin) {
+	if !s.userHasGroupAccess(ctx, r.UserId, groupResp.Group, isAdmin) {
 		return nil, errors.New(ErrKeyGroupNotFound)
 	}
 
@@ -784,8 +784,10 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 	return userResp.User.IsAdmin()
 }
 
-// userHasGroupAccess verifies membership or ownership (or admin override)
-func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, isAdmin bool) bool {
+// userHasGroupAccess verifies if a user has access to a group using descendant visibility filtering.
+// For root groups, checks direct membership/ownership. For subgroups, uses GetGroupDescendants with
+// user context to leverage existing visibility and access control logic from the group service.
+func (s *Service) userHasGroupAccess(ctx context.Context, userID string, grp *group.UniversalGroup, isAdmin bool) bool {
 	if grp == nil {
 		return false
 	}
@@ -794,18 +796,44 @@ func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, i
 		return true
 	}
 
-	if grp.HasMember(userID) {
-		return true
-	}
-
-	if grp.OwnerID == userID {
-		return true
-	}
-
-	// Check if user has admin or moderator role in the group members
-	for _, member := range grp.Members {
-		if member.ID == userID && (member.Role == "ADMIN" || member.Role == "MODERATOR") {
+	// If group has no lineage, it's a root group — check direct membership/ownership
+	if len(grp.Lineage) == 0 {
+		if grp.HasMember(userID) || grp.OwnerID == userID {
 			return true
+		}
+
+		// Check if user has admin or moderator role in the group members
+		for _, member := range grp.Members {
+			if member.ID == userID && (member.Role == "ADMIN") {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	// For subgroups, use GetGroupDescendants with user context for visibility filtering
+	// Get root group ID (first element in lineage)
+	rootGroupID := grp.Lineage[0]
+
+	descendantsResp, err := s.GroupService.GetGroupDescendants(ctx, &group.GetGroupDescendantsRequest{
+		ID:       rootGroupID,
+		AsUserID: userID,
+	})
+	if err != nil {
+		return false
+	}
+
+	if descendantsResp == nil || len(descendantsResp.Descendants) == 0 {
+		return false
+	}
+
+	// Check if requested group is in descendants at any level
+	for _, level := range descendantsResp.Descendants {
+		for _, node := range level {
+			if node.ID == grp.ID {
+				return true
+			}
 		}
 	}
 

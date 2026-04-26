@@ -53,6 +53,7 @@ type GroupService interface {
 	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error)
 	UpdateOwner(ctx context.Context, req *group.UpdateOwnerRequest) (*group.UpdateOwnerResponse, error)
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
+	GetGroupDescendants(ctx context.Context, req *group.GetGroupDescendantsRequest) (*group.GetGroupDescendantsResponse, error)
 }
 
 // Service holds and manages usermanager business logic

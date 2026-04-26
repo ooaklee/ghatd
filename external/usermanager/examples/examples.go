@@ -840,6 +840,14 @@ func (m *MockGroupService) UpdateOwner(ctx context.Context, req *group.UpdateOwn
 	return &group.UpdateOwnerResponse{Group: g}, nil
 }
 
+func (m *MockGroupService) GetGroupDescendants(ctx context.Context, req *group.GetGroupDescendantsRequest) (*group.GetGroupDescendantsResponse, error) {
+	// Mock implementation - return empty descendants for now
+	return &group.GetGroupDescendantsResponse{
+		Descendants: [][]group.GroupDescendantsNode{},
+	}, nil
+}
+
+
 func createMockGroup(id, name, groupType string, memberCount int) *group.UniversalGroup {
 	config := group.DefaultGroupConfig()
 	idGen := group.NewDefaultIDGenerator()
