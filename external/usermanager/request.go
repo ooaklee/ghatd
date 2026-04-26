@@ -338,8 +338,8 @@ type AdminRemoveGroupMemberRequest struct {
 	MemberID string
 }
 
-// AdminUpdateGroupLeadershipRequest holds the data needed for an admin to update group leadership
-type AdminUpdateGroupLeadershipRequest struct {
+// AdminUpdateGroupOwnerRequest holds the data needed for an admin to update group ownership
+type AdminUpdateGroupOwnerRequest struct {
 
 	// AdminUserId is the ID of the admin making the request
 	AdminUserId string

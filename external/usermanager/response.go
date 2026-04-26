@@ -166,8 +166,8 @@ type EnrichedMember struct {
 	JoinedAt string `json:"joined_at,omitempty"`
 }
 
-// EnrichedLeadership holds resolved leadership positions with user details
-type EnrichedLeadership struct {
+// EnrichedOwner holds resolved owner details
+type EnrichedOwner struct {
 	Owner *EnrichedMember `json:"owner,omitempty"`
 }
 
@@ -179,8 +179,8 @@ type AdminGroupDetail struct {
 	// Members is the list of current members enriched with user profile data
 	Members []EnrichedMember `json:"members"`
 
-	// Leadership holds the resolved leadership positions
-	Leadership *EnrichedLeadership `json:"leadership,omitempty"`
+	// Owner holds the resolved owner position
+	Owner *EnrichedOwner `json:"owner,omitempty"`
 }
 
 // GetAdminGroupDetailResponse holds the response for the admin get-group-detail endpoint
@@ -198,7 +198,7 @@ type AdminRemoveGroupMemberResponse struct {
 	Success bool `json:"success"`
 }
 
-// AdminUpdateGroupLeadershipResponse holds the response for updating group leadership
-type AdminUpdateGroupLeadershipResponse struct {
-	Leadership *EnrichedLeadership `json:"leadership"`
+// AdminUpdateGroupOwnerResponse holds the response for updating group ownership
+type AdminUpdateGroupOwnerResponse struct {
+	Owner *EnrichedOwner `json:"owner"`
 }

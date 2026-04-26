@@ -606,9 +606,9 @@ func MapRequestToAdminRemoveGroupMemberRequest(r *http.Request, validator Userma
 	return &parsedRequest, nil
 }
 
-// MapRequestToAdminUpdateGroupLeadershipRequest maps an admin update-leadership request to the correct struct
-func MapRequestToAdminUpdateGroupLeadershipRequest(r *http.Request, validator UsermanagerValidator) (*AdminUpdateGroupLeadershipRequest, error) {
-	var parsedRequest AdminUpdateGroupLeadershipRequest
+// MapRequestToAdminUpdateGroupOwnerRequest maps an admin update-ownership request to the correct struct
+func MapRequestToAdminUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerValidator) (*AdminUpdateGroupOwnerRequest, error) {
+	var parsedRequest AdminUpdateGroupOwnerRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	parsedRequest.AdminUserId = accessmanagerhelpers.AcquireFrom(r.Context())

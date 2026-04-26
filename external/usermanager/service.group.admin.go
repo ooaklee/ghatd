@@ -75,7 +75,7 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 	}, nil
 }
 
-// GetAdminGroupDetail returns an enriched group view for admin use — members and leadership
+// GetAdminGroupDetail returns an enriched group view for admin use — members and owner
 // are resolved to user profiles in a single call, avoiding multiple round-trips from the client.
 func (s *Service) GetAdminGroupDetail(ctx context.Context, r *AdminGetGroupDetailRequest) (*GetAdminGroupDetailResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
@@ -123,18 +123,18 @@ func (s *Service) GetAdminGroupDetail(ctx context.Context, r *AdminGetGroupDetai
 	}
 
 	// Enrich owner details
-	var leadership *EnrichedLeadership
+	var owner *EnrichedOwner
 	if g.OwnerID != "" {
-		leadership = &EnrichedLeadership{
+		owner = &EnrichedOwner{
 			Owner: s.resolveUserToEnrichedMember(ctx, g.OwnerID),
 		}
 	}
 
 	return &GetAdminGroupDetailResponse{
 		Detail: &AdminGroupDetail{
-			Group:      g,
-			Members:    enrichedMembers,
-			Leadership: leadership,
+			Group:   g,
+			Members: enrichedMembers,
+			Owner:   owner,
 		},
 	}, nil
 }
@@ -191,8 +191,8 @@ func (s *Service) AdminRemoveGroupMember(ctx context.Context, r *AdminRemoveGrou
 	return &AdminRemoveGroupMemberResponse{Success: true}, nil
 }
 
-// AdminUpdateGroupLeadership updates the owner of a group as an admin operation
-func (s *Service) AdminUpdateGroupLeadership(ctx context.Context, r *AdminUpdateGroupLeadershipRequest) (*AdminUpdateGroupLeadershipResponse, error) {
+// AdminUpdateGroupOwner updates the owner of a group as an admin operation
+func (s *Service) AdminUpdateGroupOwner(ctx context.Context, r *AdminUpdateGroupOwnerRequest) (*AdminUpdateGroupOwnerResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if s.GroupService == nil {
@@ -205,24 +205,24 @@ func (s *Service) AdminUpdateGroupLeadership(ctx context.Context, r *AdminUpdate
 		OwnerID: r.OwnerID,
 	})
 	if err != nil {
-		log.Error("admin-update-group-leadership-failed",
+		log.Error("admin-update-group-owner-failed",
 			zap.String("group-id", r.GroupID),
 			zap.Error(err),
 		)
-		return nil, errors.New(ErrKeyFailedToUpdateGroupLeadership)
+		return nil, errors.New(ErrKeyFailedToUpdateGroupOwner)
 	}
 
 	// Re-fetch and resolve the updated owner to return enriched data
 	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
-		return &AdminUpdateGroupLeadershipResponse{Leadership: &EnrichedLeadership{}}, nil
+		return &AdminUpdateGroupOwnerResponse{Owner: &EnrichedOwner{}}, nil
 	}
 
-	leadership := &EnrichedLeadership{
+	owner := &EnrichedOwner{
 		Owner: s.resolveUserToEnrichedMember(ctx, groupResp.Group.OwnerID),
 	}
 
-	return &AdminUpdateGroupLeadershipResponse{Leadership: leadership}, nil
+	return &AdminUpdateGroupOwnerResponse{Owner: owner}, nil
 }
 
 // resolveUserToEnrichedMember looks up a user by ID and returns an EnrichedMember.

@@ -149,7 +149,7 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 	return response, nil
 }
 
-// GetGroupDetail handles fetching a single group for a requester with membership/leadership checks
+// GetGroupDetail handles fetching a single group for a requester with membership/owner checks
 func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
@@ -172,7 +172,7 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 	return &GetGroupDetailResponse{Group: groupResp.Group}, nil
 }
 
-// GetGroupStats handles fetching group stats for a requester with membership/leadership checks
+// GetGroupStats handles fetching group stats for a requester with membership/owner checks
 func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
@@ -784,7 +784,7 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 	return userResp.User.IsAdmin()
 }
 
-// userHasGroupAccess verifies membership or leadership (or admin override)
+// userHasGroupAccess verifies membership or ownership (or admin override)
 func (s *Service) userHasGroupAccess(userID string, grp *group.UniversalGroup, isAdmin bool) bool {
 	if grp == nil {
 		return false

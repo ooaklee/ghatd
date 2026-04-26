@@ -34,7 +34,7 @@ type UsermanagerHandler interface {
 	AdminGetGroupDetail(w http.ResponseWriter, r *http.Request)
 	AdminAddGroupMember(w http.ResponseWriter, r *http.Request)
 	AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request)
-	AdminUpdateGroupLeadership(w http.ResponseWriter, r *http.Request)
+	AdminUpdateGroupOwner(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -101,7 +101,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAdminRoutes.HandleFunc("/admin/groups", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
 	// Admin group detail & member management (enriched, single-call)
 	usermanagerAdminRoutes.HandleFunc("/admin/groups/{"+UserManagerURIVariableGroupID+"}", request.Handler.AdminGetGroupDetail).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/admin/groups/{"+UserManagerURIVariableGroupID+"}/leadership", request.Handler.AdminUpdateGroupLeadership).Methods(http.MethodPut, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/admin/groups/{"+UserManagerURIVariableGroupID+"}/owner", request.Handler.AdminUpdateGroupOwner).Methods(http.MethodPut, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/admin/groups/{"+UserManagerURIVariableGroupID+"}/members", request.Handler.AdminAddGroupMember).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/admin/groups/{"+UserManagerURIVariableGroupID+"}/members/{"+UserManagerURIVariableMemberID+"}", request.Handler.AdminRemoveGroupMember).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/groups", request.Handler.GetGroupsByType).Methods(http.MethodGet, http.MethodOptions)

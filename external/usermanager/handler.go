@@ -36,7 +36,7 @@ type UsermanagerService interface {
 	GetAdminGroupDetail(ctx context.Context, r *AdminGetGroupDetailRequest) (*GetAdminGroupDetailResponse, error)
 	AdminAddGroupMember(ctx context.Context, r *AdminAddGroupMemberRequest) (*AdminAddGroupMemberResponse, error)
 	AdminRemoveGroupMember(ctx context.Context, r *AdminRemoveGroupMemberRequest) (*AdminRemoveGroupMemberResponse, error)
-	AdminUpdateGroupLeadership(ctx context.Context, r *AdminUpdateGroupLeadershipRequest) (*AdminUpdateGroupLeadershipResponse, error)
+	AdminUpdateGroupOwner(ctx context.Context, r *AdminUpdateGroupOwnerRequest) (*AdminUpdateGroupOwnerResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
@@ -576,15 +576,15 @@ func (h *Handler) AdminRemoveGroupMember(w http.ResponseWriter, r *http.Request)
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
-// AdminUpdateGroupLeadership handles the admin request to update group leadership
-func (h *Handler) AdminUpdateGroupLeadership(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToAdminUpdateGroupLeadershipRequest(r, h.Validator)
+// AdminUpdateGroupOwner handles the admin request to update group ownership
+func (h *Handler) AdminUpdateGroupOwner(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAdminUpdateGroupOwnerRequest(r, h.Validator)
 	if err != nil {
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	response, err := h.Service.AdminUpdateGroupLeadership(r.Context(), request)
+	response, err := h.Service.AdminUpdateGroupOwner(r.Context(), request)
 	if err != nil {
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
