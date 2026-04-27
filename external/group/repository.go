@@ -349,6 +349,43 @@ func (r *Repository) GetGroupsByStatus(ctx context.Context, status string, page,
 	return results, nil
 }
 
+// GetGroupsByReferencedUserID retrieves groups where user is either owner or a member.
+func (r *Repository) GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"$or": []bson.M{
+			{"owner_id": userID},
+			{
+				"members": bson.M{
+					"$elemMatch": bson.M{
+						"id": userID,
+					},
+				},
+			},
+		},
+		"metadata.deleted_at": bson.M{"$exists": false},
+	}
+
+	options := options.Find().SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []UniversalGroup
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &results, "group")
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // GetGroupsByMemberID retrieves groups that contain a specific member
 func (r *Repository) GetGroupsByMemberID(ctx context.Context, memberID string, memberType string, page, pageSize int) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)

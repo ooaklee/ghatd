@@ -2,8 +2,22 @@ package usermanager
 
 import (
 	"github.com/ooaklee/ghatd/external/contacter"
+	"github.com/ooaklee/ghatd/external/group"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
+
+// GetUserGroupMembershipsRequest represents the request for fetching user group memberships with filtering options
+type GetUserGroupMembershipsRequest struct {
+
+	// UserID is the ID of the user making the request
+	UserID string
+
+	// GroupType if specified, filters groups to a specific type (e.g. "team", "department")
+	GroupType string `query:"group_type"`
+
+	// IncludeDescendants if true, includes descendant groups per root group that the user can access
+	IncludeDescendants bool `query:"include_descendants"`
+}
 
 // GetUserMicroProfileRequest holds all the data needed to action request
 type GetUserMicroProfileRequest struct {
@@ -46,6 +60,9 @@ type DeleteUserPermanentlyRequest struct {
 
 	// UserId the Id of the user requesting the deletion
 	UserId string
+
+	// ID is the ID of the user to be deleted
+	ID string `path:"userID"`
 }
 
 // GetUserInsightsUsageRequest holds all the data needed to get basic user insights
@@ -134,149 +151,13 @@ type GetUserGroupsRequest struct {
 	Meta bool `query:"meta"`
 }
 
-// GetUserTeamMembershipsRequest holds the data needed to get team memberships for a user
-type GetUserTeamMembershipsRequest struct {
-
-	// UserId is the ID of the user (can be current user or admin checking another user)
-	UserId string
-
-	// TargetUserId is the ID of the user to check memberships for (admin feature)
-	TargetUserId string `query:"target_user_id"`
-
-	// IncludeInactive indicates whether to include inactive teams
-	IncludeInactive bool `query:"include_inactive"`
-}
-
-// UpdateUserTeamMembershipRequest holds the data needed to update a user's team membership
-type UpdateUserTeamMembershipRequest struct {
-
-	// UserId is the ID of the user making the request
-	UserId string
-
-	// GroupID is the ID of the group to join/update
-	GroupID string
-
-	// Role is the role to assign (optional, uses default if not specified)
-	Role string `json:"role,omitempty"`
-
-	// RemoveFromOtherTeams indicates whether to leave other teams of the same type
-	RemoveFromOtherTeams bool `json:"remove_from_other_teams,omitempty"`
-
-	// DisableNotification specifies whether to disable notifications for this action
-	DisableNotification bool `json:"disable_notification,omitempty"`
-}
-
-// RemoveUserFromGroupRequest holds the data needed to remove a user from a group
-type RemoveUserFromGroupRequest struct {
-
-	// UserId is the ID of the user making the request
-	UserId string
-
-	// GroupID is the ID of the group to leave
-	GroupID string
-
-	// DisableNotification specifies whether to disable notifications for this action
-	DisableNotification bool `json:"disable_notification,omitempty" query:"disable_notification"`
-}
-
-// FindUserInfoRequest holds the data needed to find user information with flexible lookup
-type FindUserInfoRequest struct {
-
-	// UserId is the ID of the user to find (direct lookup)
-	UserId string `query:"user_id"`
-
-	// Email is the email address to search by
-	Email string `query:"email"`
-
-	// IncludeTeamMemberships indicates whether to include team membership data
-	IncludeTeamMemberships bool `query:"include_team_memberships"`
-
-	// IncludeGroupMemberships indicates whether to include all group membership data
-	IncludeGroupMemberships bool `query:"include_group_memberships"`
-}
-
-// BulkUpdateUserGroupMembershipsRequest holds the data for bulk membership updates
-type BulkUpdateUserGroupMembershipsRequest struct {
-
-	// UserId is the ID of the user making the request (must be admin)
-	UserId string
-
-	// TargetUserId is the ID of the user whose memberships are being updated
-	TargetUserId string
-
-	// Actions are the membership actions to perform
-	Actions []GroupMembershipAction `json:"actions"`
-
-	// DisableNotifications specifies whether to disable notifications for all actions
-	DisableNotifications bool `json:"disable_notifications,omitempty"`
-}
-
-// GetGroupsByTypeRequest holds the data needed to get groups filtered by type
-type GetGroupsByTypeRequest struct {
-
-	// UserId is the ID of the user making the request
-	UserId string
-
-	// GroupType is the type to filter by (TEAM, DEPARTMENT, ORGANIZATION, etc.)
-	GroupType string `query:"type"`
-
-	// Name filters groups by name (optional, partial match)
-	Name string `query:"name"`
-
-	// Status filters by status (optional: ACTIVE, INACTIVE, etc.)
-	Status string `query:"status"`
-
-	// OnlyUserMemberships returns only groups the user belongs to
-	OnlyUserMemberships bool `query:"only_user_memberships"`
-
-	// Page specifies the page results should be taken from. Default 1.
-	Page int `query:"page"`
-
-	// PerPage specifies the number of groups to return per page. Default 25. Max 100.
-	PerPage int `query:"per_page" validate:"max=100"`
-
-	// Meta indicates whether response should contain meta information
-	Meta bool `query:"meta"`
-
-	// Order defines how results should be sorted (e.g., "name_asc", "created_at_desc")
-	Order string `query:"order"`
-}
-
-// CreateGroupRequest holds the data needed for an admin to create a new group
+// CreateGroupRequest holds the data needed for a user to create a new group
 type CreateGroupRequest struct {
 
-	// AdminUserId is the ID of the admin making the request
-	AdminUserId string
+	// UserID is the ID of the user making the request
+	UserID string
 
-	// Name is the name of the group
-	Name string `json:"name" validate:"required"`
-
-	// Type is the type of group (TEAM, DEPARTMENT, etc.)
-	Type string `json:"type" validate:"required"`
-
-	// Description is the group description
-	Description string `json:"description,omitempty"`
-
-	// Email is the group contact email
-	Email string `json:"email,omitempty"`
-
-	// Icon is the group icon/emoji
-	Icon string `json:"icon,omitempty"`
-
-	// Visibility controls group visibility (PUBLIC, PRIVATE, etc.)
-	Visibility string `json:"visibility,omitempty"`
-
-	// Extensions are custom key-value pairs
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
-
-	// InitialMemberIDs are user IDs to add as initial members
-	InitialMemberIDs []string `json:"initial_member_ids,omitempty"`
-
-	// InitialMemberRole is the default role for initial members
-	InitialMemberRole string `json:"initial_member_role,omitempty"`
-
-	// OwnerID is the ID of the group owner
-	OwnerID string `json:"owner_id,omitempty"`
+	*group.CreateGroupRequest
 }
 
 // GetGroupDetailRequest holds the data needed to fetch a specific group's detail
@@ -299,54 +180,29 @@ type GetGroupStatsRequest struct {
 	GroupID string
 }
 
-// AdminGetGroupDetailRequest holds the data needed for an admin to fetch enriched group detail
-type AdminGetGroupDetailRequest struct {
+// AddGroupMemberRequest holds the data needed to add a user to a group
+type AddGroupMemberRequest struct {
 
-	// AdminUserId is the ID of the admin making the request
-	AdminUserId string
+	// UserID is the ID of the user making the request
+	UserID string
 
-	// GroupID is the ID of the group to fetch
-	GroupID string
+	*group.AddMemberRequest
 }
 
-// AdminAddGroupMemberRequest holds the data needed for an admin to add a user to a group
-type AdminAddGroupMemberRequest struct {
+// RemoveGroupMemberRequest holds the data needed to remove a user from a group
+type RemoveGroupMemberRequest struct {
 
-	// AdminUserId is the ID of the admin making the request
-	AdminUserId string
+	// UserID is the ID of the user making the request
+	UserID string
 
-	// GroupID is the ID of the group
-	GroupID string
-
-	// MemberID is the ID of the user to add
-	MemberID string `json:"member_id" validate:"required"`
-
-	// Role is the role to assign to the new member (optional)
-	Role string `json:"role,omitempty"`
+	*group.RemoveMemberRequest
 }
 
-// AdminRemoveGroupMemberRequest holds the data needed for an admin to remove a user from a group
-type AdminRemoveGroupMemberRequest struct {
+// UpdateGroupOwnerRequest holds the data needed to update group ownership
+type UpdateGroupOwnerRequest struct {
 
-	// AdminUserId is the ID of the admin making the request
-	AdminUserId string
+	// UserID is the ID of the making the request
+	UserID string
 
-	// GroupID is the ID of the group
-	GroupID string
-
-	// MemberID is the ID of the member to remove
-	MemberID string
-}
-
-// AdminUpdateGroupOwnerRequest holds the data needed for an admin to update group ownership
-type AdminUpdateGroupOwnerRequest struct {
-
-	// AdminUserId is the ID of the admin making the request
-	AdminUserId string
-
-	// GroupID is the ID of the group
-	GroupID string
-
-	// OwnerID is the new owner's user ID (nil = no change, empty string = clear)
-	OwnerID *string `json:"owner_id,omitempty"`
+	*group.UpdateOwnerRequest
 }

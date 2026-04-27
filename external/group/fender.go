@@ -176,6 +176,30 @@ func MapRequestToGetGroupsRequest(request *http.Request, validator GroupValidato
 	return parsedRequest, nil
 }
 
+// MapRequestToGetGroupsByUserIDRequest maps incoming GetGroupsByUserID request to correct struct
+func MapRequestToGetGroupsByUserIDRequest(request *http.Request, validator GroupValidator) (*GetGroupsByUserIDRequest, error) {
+	var err error
+	parsedRequest := &GetGroupsByUserIDRequest{}
+
+	parsedRequest.UserID, err = toolbox.GetVariableValueFromUri(request, "userID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	err = validator.Validate(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToAddMemberRequest maps incoming AddMember request to correct struct
 func MapRequestToAddMemberRequest(request *http.Request, validator GroupValidator) (*AddMemberRequest, error) {
 	var err error

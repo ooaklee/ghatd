@@ -37,6 +37,7 @@ const (
 	MemberRoleHead        = "HEAD"
 	MemberRoleLead        = "LEAD"
 	MemberRoleCoordinator = "COORDINATOR"
+	MemberRoleSuperUser   = "SUPERUSER"
 
 	// Visibility Keys
 
@@ -82,6 +83,7 @@ const (
 	ErrKeyInvalidGroupHierarchyTree    = "InvalidGroupHierarchyTree"
 	ErrKeyInvalidParentChildRelation   = "InvalidParentChildRelation"
 	ErrKeyGroupDependedOnByOtherGroups = "GroupDependedOnByOtherGroups"
+	ErrKeyInvalidUserIDProvided        = "InvalidUserIDProvided"
 )
 
 const (

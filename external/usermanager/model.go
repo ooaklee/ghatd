@@ -100,12 +100,6 @@ type UserGroupMembership struct {
 	// IsOwner indicates if the user owns the group
 	IsOwner bool `json:"is_owner"`
 
-	// IsLead indicates if the user leads the group
-	IsLead bool `json:"is_lead"`
-
-	// IsHead indicates if the user is the head of the group
-	IsHead bool `json:"is_head"`
-
 	// JoinedAt is when the user joined the group
 	JoinedAt string `json:"joined_at,omitempty"`
 }

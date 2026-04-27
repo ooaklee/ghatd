@@ -43,6 +43,7 @@ type GroupRepository interface {
 	GetTotalGroups(ctx context.Context, req *GetGroupsRequest) (int64, error)
 	GetGroupsByType(ctx context.Context, groupType string, page, pageSize int, order string) ([]UniversalGroup, error)
 	GetGroupsByStatus(ctx context.Context, status string, page, pageSize int, order string) ([]UniversalGroup, error)
+	GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error)
 	GetGroupsByMemberID(ctx context.Context, memberID string, memberType string, page, pageSize int) ([]UniversalGroup, error)
 	GetGroupsByLeaderID(ctx context.Context, leaderID string, page, pageSize int) ([]UniversalGroup, error)
 	SearchGroupsByExtension(ctx context.Context, key string, value interface{}, page, pageSize int) ([]UniversalGroup, error)
@@ -869,6 +870,149 @@ func (s *Service) GetGroups(ctx context.Context, req *GetGroupsRequest) (*GetGro
 	}, nil
 }
 
+// GetGroupsByUserID retrieves groups where the user is referenced as owner or member.
+func (s *Service) GetGroupsByUserID(ctx context.Context, req *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-groups-by-user-id")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	userID := strings.TrimSpace(req.UserID)
+	log.Debug("getting-groups-by-user-id", zap.String("user_id", userID), zap.Bool("include_descendants", req.IncludeDescendants))
+
+	if userID == "" {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	groups, err := s.GroupRepository.GetGroupsByReferencedUserID(ctx, userID)
+	if err != nil {
+		log.Error("failed-to-get-groups-by-user-id", zap.Error(err), zap.String("user_id", userID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	groupPointers := make([]*UniversalGroup, len(groups))
+	for i := range groups {
+		groups[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+		groupPointers[i] = &groups[i]
+	}
+
+	response := &GetGroupsByUserIDResponse{Groups: groupPointers, Descendants: map[string][][]GroupDescendantsNode{}}
+	if !req.IncludeDescendants {
+		return response, nil
+	}
+
+	// make sure there are no duplicate root groups in the list to avoid redundant descendant queries
+	rootGroupIDs := map[string]struct{}{}
+	for _, grp := range groupPointers {
+		if grp == nil {
+			continue
+		}
+
+		rootGroupID := grp.ID
+		if len(grp.Lineage) > 0 && strings.TrimSpace(grp.Lineage[0]) != "" {
+			rootGroupID = grp.Lineage[0]
+		}
+
+		if strings.TrimSpace(rootGroupID) == "" {
+			continue
+		}
+
+		rootGroupIDs[rootGroupID] = struct{}{}
+	}
+
+	descendants := make(map[string][][]GroupDescendantsNode)
+	for rootGroupID := range rootGroupIDs {
+		descendantsResp, descendantsErr := s.GetGroupDescendants(ctx, &GetGroupDescendantsRequest{
+			ID:          rootGroupID,
+			IncludeSelf: true,
+			AsUserID:    userID,
+		})
+		if descendantsErr != nil || descendantsResp == nil {
+			log.Warn(
+				"failed-to-get-root-group-descendants",
+				zap.String("root_group_id", rootGroupID),
+				zap.Error(descendantsErr),
+			)
+			continue
+		}
+
+		descendants[rootGroupID] = descendantsResp.Descendants
+	}
+
+	response.Descendants = descendants
+	return response, nil
+}
+
+// GetUserGroupAccessMap builds an effective group access map for the provided user.
+//
+// Admin privileges propagate from any directly-administered group down to all
+// descendants of that group.
+func (s *Service) GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]UserGroupAccessSummary, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-group-access-map")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	trimmedUserID := strings.TrimSpace(userID)
+	log.Debug("building-user-group-access-map", zap.String("user_id", trimmedUserID))
+
+	if trimmedUserID == "" {
+		return nil, errors.New(ErrKeyInvalidUserIDProvided)
+	}
+
+	userGroupsResp, err := s.GetGroupsByUserID(ctx, &GetGroupsByUserIDRequest{
+		UserID:             trimmedUserID,
+		IncludeDescendants: false,
+	})
+	if err != nil {
+		log.Error("failed-to-get-user-groups", zap.Error(err), zap.String("user_id", trimmedUserID))
+		return nil, err
+	}
+
+	if userGroupsResp == nil || len(userGroupsResp.Groups) == 0 {
+		return map[string]UserGroupAccessSummary{}, nil
+	}
+
+	accessByGroupID := map[string]UserGroupAccessSummary{}
+	adminSourceGroupIDs := map[string]struct{}{}
+
+	for _, grp := range userGroupsResp.Groups {
+		if grp == nil || strings.TrimSpace(grp.ID) == "" {
+			continue
+		}
+
+		effectiveRole, isAdmin := s.resolveUserRoleForGroup(grp, trimmedUserID)
+		accessByGroupID[grp.ID] = UserGroupAccessSummary{
+			MaxRole:      effectiveRole,
+			IsAccessible: true,
+			IsAdmin:      isAdmin,
+		}
+
+		if isAdmin {
+			adminSourceGroupIDs[grp.ID] = struct{}{}
+		}
+	}
+
+	for adminGroupID := range adminSourceGroupIDs {
+		descendants, descendantsErr := s.GroupRepository.GetGroupsByLineageAncestor(ctx, adminGroupID)
+		if descendantsErr != nil {
+			log.Warn(
+				"failed-to-get-admin-group-descendants",
+				zap.String("admin_group_id", adminGroupID),
+				zap.Error(descendantsErr),
+			)
+			continue
+		}
+
+		for i := range descendants {
+			descendant := descendants[i]
+			if strings.TrimSpace(descendant.ID) == "" {
+				continue
+			}
+
+			existing := accessByGroupID[descendant.ID]
+			existing.MaxRole = s.pickHigherRole(existing.MaxRole, MemberRoleAdmin)
+			existing.IsAccessible = true
+			existing.IsAdmin = true
+			accessByGroupID[descendant.ID] = existing
+		}
+	}
+
+	return accessByGroupID, nil
+}
+
 // AddMember adds a member to a group
 func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMemberResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "add-member")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
@@ -1218,6 +1362,80 @@ func (s *Service) getRootGroupID(lineage []string) (string, error) {
 	}
 
 	return lineage[0], nil
+}
+
+// resolveUserRoleForGroup resolves a user's strongest direct role for a group.
+// Ownership implies OWNER role and admin privileges.
+func (s *Service) resolveUserRoleForGroup(group *UniversalGroup, userID string) (string, bool) {
+	if group == nil || strings.TrimSpace(userID) == "" {
+		return "", false
+	}
+
+	maxRole := ""
+	if strings.TrimSpace(group.OwnerID) == userID {
+		maxRole = MemberRoleOwner
+	}
+
+	for i := range group.Members {
+		member := group.Members[i]
+		if member.ID != userID || member.Type != MemberTypeUser {
+			continue
+		}
+
+		role := strings.ToUpper(strings.TrimSpace(member.Role))
+		if role == "" {
+			role = MemberRoleMember
+		}
+
+		maxRole = s.pickHigherRole(maxRole, role)
+	}
+
+	if maxRole == "" {
+		return "", false
+	}
+
+	return maxRole, s.isAdminRole(maxRole)
+}
+
+func (s *Service) isAdminRole(role string) bool {
+	normalisedRole := strings.ToUpper(strings.TrimSpace(role))
+	return normalisedRole == MemberRoleOwner ||
+		normalisedRole == MemberRoleAdmin ||
+		normalisedRole == MemberRoleSuperUser
+}
+
+func (s *Service) pickHigherRole(currentRole, candidateRole string) string {
+	normalisedCurrent := strings.ToUpper(strings.TrimSpace(currentRole))
+	normalisedCandidate := strings.ToUpper(strings.TrimSpace(candidateRole))
+
+	if normalisedCurrent == "" {
+		return normalisedCandidate
+	}
+
+	if normalisedCandidate == "" {
+		return normalisedCurrent
+	}
+
+	rolePriority := map[string]int{
+		MemberRoleOwner:       100,
+		MemberRoleAdmin:       90,
+		MemberRoleSuperUser:   80,
+		MemberRoleHead:        70,
+		MemberRoleLead:        65,
+		MemberRoleCoordinator: 60,
+		MemberRoleModerator:   50,
+		MemberRoleMember:      40,
+		MemberRoleGuest:       10,
+	}
+
+	currentPriority := rolePriority[normalisedCurrent]
+	candidatePriority := rolePriority[normalisedCandidate]
+
+	if candidatePriority > currentPriority {
+		return normalisedCandidate
+	}
+
+	return normalisedCurrent
 }
 
 // isValidMemberRole validates if a role is allowed for a given group type

@@ -61,6 +61,9 @@ const (
 	// ErrKeyFailedToUpdateGroupOwner returned when updating group owner fails
 	ErrKeyFailedToUpdateGroupOwner = "FailedToUpdateGroupOwner"
 
+	// ErrKeyFailedToResolveGroupAccessMap returned when group access map resolution fails
+	ErrKeyFailedToResolveGroupAccessMap = "FailedToResolveGroupAccessMap"
+
 	// ErrKeyInvalidMemberID returned when the provided member ID is invalid or empty
 	ErrKeyInvalidMemberID = "InvalidMemberID"
 )

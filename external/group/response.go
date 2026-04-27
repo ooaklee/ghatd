@@ -11,6 +11,24 @@ type GetGroupsResponse struct {
 	PerPage    int               `json:"per_page"`
 }
 
+// GetGroupsByUserIDResponse defines the response for getting groups referenced by a user.
+type GetGroupsByUserIDResponse struct {
+	Groups      []*UniversalGroup                   `json:"groups"`
+	Descendants map[string][][]GroupDescendantsNode `json:"descendants"`
+}
+
+// UserGroupAccessSummary describes a user's effective access for a given group.
+type UserGroupAccessSummary struct {
+	// MaxRole is the highest role observed for the user in that group.
+	MaxRole string `json:"max_role"`
+
+	// IsAccessible is true when the user should be considered to have access to the group.
+	IsAccessible bool `json:"is_accessible"`
+
+	// IsAdmin is true when the user has effective admin privileges in that group.
+	IsAdmin bool `json:"is_admin"`
+}
+
 // GetMetaData returns metadata in reply.WithMeta format
 func (r *GetGroupsResponse) GetMetaData() map[string]interface{} {
 	return map[string]interface{}{

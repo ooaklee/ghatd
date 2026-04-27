@@ -23,7 +23,7 @@ The `usermanager` is designed to streamline complex user-related workflows into 
 -   **Expanded User Profiles**: Fetch a complete user profile, expanded with data from multiple sources. For example, a single request can return a user's core details alongside a list of all the groups they are a member of.
 -   **Simplified Group Management**: Provides intuitive endpoints for managing a user's membership in groups. This includes adding a user to a group, removing them, and listing their current groups, without needing to interact directly with the `group` service.
 -   **Communication Management**: Integrates with the `contacter` service to manage a user's communication preferences and history.
--   **Administrative Functions**: Offers secure, admin-only endpoints for performing privileged actions, such as creating a new group.
+-   **Group Management**: Offers secure endpoints for creating groups and managing members/ownership, with service-level authorisation checks.
 
 ## API Endpoints
 
@@ -33,7 +33,7 @@ The following are the primary API endpoints provided by the `usermanager` servic
 -   `GET /api/v1/ums/users/{userId}/groups`: Lists all groups that the specified user is a member of.
 -   `POST /api/v1/ums/users/{userId}/groups/{groupId}`: Adds a user to a specified group.
 -   `DELETE /api/v1/ums/users/{userId}/groups/{groupId}`: Removes a user from a specified group.
--   `POST /api/v1/ums/admin/groups`: An admin-only endpoint to create a new group.
+-   `POST /api/v1/ums/groups`: Creates a new group for an authorised requester.
 
 ## Configuration and Initialisation
 

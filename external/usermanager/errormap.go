@@ -24,4 +24,10 @@ var UsermanagerErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem
 	ErrKeyGroupServiceNotEnabled:      {Title: "Service Unavailable", Detail: "Group management features have not been enabled for this service.", StatusCode: 503, Code: "USM00-013"},
 	ErrKeyFailedToUpdateGroupOwner:    {Title: "Internal Error", Detail: "Failed to update group owner. Please try again.", StatusCode: 500, Code: "USM00-014"},
 	ErrKeyInvalidMemberID:             {Title: "Bad Request", Detail: "A valid member ID must be provided.", StatusCode: 400, Code: "USM00-015"},
+	ErrKeyFailedToResolveGroupAccessMap: {
+		Title:      "Internal Error",
+		Detail:     "Failed to resolve user access for the requested group. Please try again.",
+		StatusCode: 500,
+		Code:       "USM00-017",
+	},
 }

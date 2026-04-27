@@ -11,141 +11,84 @@ import (
 	"go.uber.org/zap"
 )
 
-// CreateGroup handles creating a new group (admin only)
+// CreateGroup handles creating a new group with the provided details. Only admins or users with
+// access to the parent group (if specified) can create groups.
 func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("admin-user-id", r.AdminUserId))
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	// Build the group creation request
-	createReq := &group.CreateGroupRequest{
-		Name:        r.Name,
-		Type:        r.Type,
-		Description: r.Description,
-		Email:       r.Email,
-		Icon:        r.Icon,
-		Visibility:  r.Visibility,
-		Extensions:  r.Extensions,
-		OwnerID:     r.OwnerID,
-	}
+	// Auth check: only allow if requester is admin or
+	// has access to parent group (if specified)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
 
-	// Add initial members if provided
-	if len(r.InitialMemberIDs) > 0 {
-		defaultRole := r.InitialMemberRole
-		if defaultRole == "" {
-			defaultRole = group.MemberRoleMember
+		if r.ParentGroupID == "" {
+			log.Error("non-user-attempting-to-create-group-without-parent", zap.String("user-id", r.UserID))
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 
-		createReq.InitialMembers = make([]group.CreateMemberRequest, len(r.InitialMemberIDs))
-		for i, memberID := range r.InitialMemberIDs {
-			createReq.InitialMembers[i] = group.CreateMemberRequest{
-				ID:   memberID,
-				Type: group.MemberTypeUser,
-				Role: defaultRole,
-			}
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.ParentGroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.ParentGroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
+
+		if !hasAccess {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
+
+		r.CreateGroupRequest.OwnerID = r.UserID
 	}
 
 	// Create the group via group service
-	groupResp, err := s.GroupService.CreateGroup(ctx, createReq)
+	groupResp, err := s.GroupService.CreateGroup(ctx, r.CreateGroupRequest)
 	if err != nil {
-		log.Error("failed-to-create-group", zap.String("name", r.Name), zap.String("type", r.Type), zap.Error(err))
+		log.Error("failed-to-create-group", zap.String("name", r.CreateGroupRequest.Name), zap.String("type", r.CreateGroupRequest.Type), zap.Error(err))
 		return nil, err
 	}
 
-	// Convert to group summary
-	groupSummary := &GroupSummary{
-		ID:          groupResp.Group.ID,
-		NanoID:      groupResp.Group.NanoID,
-		Name:        groupResp.Group.Name,
-		Type:        groupResp.Group.Type,
-		Description: groupResp.Group.DisplayInfo.Description,
-		MemberCount: groupResp.Group.GetMemberCount(),
-		Status:      groupResp.Group.Status,
-		CreatedAt:   groupResp.Group.Metadata.CreatedAt,
-	}
-
-	log.Info("group-created-successfully", zap.String("group-id", groupSummary.ID), zap.String("group-name", groupSummary.Name))
-
 	return &CreateGroupResponse{
-		Group: groupSummary,
+		Group: groupResp.Group,
 	}, nil
 }
 
-// GetAdminGroupDetail returns an enriched group view for admin use — members and owner
-// are resolved to user profiles in a single call, avoiding multiple round-trips from the client.
-func (s *Service) GetAdminGroupDetail(ctx context.Context, r *AdminGetGroupDetailRequest) (*GetAdminGroupDetailResponse, error) {
+// AddGroupMember adds a user to a group
+func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("admin-user-id", r.AdminUserId))
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
-	if err != nil || groupResp == nil || groupResp.Group == nil {
-		log.Warn("admin-get-group-detail-not-found", zap.String("group-id", r.GroupID), zap.Error(err))
-		return nil, errors.New(ErrKeyGroupNotFound)
-	}
+	// Auth check: only allow if requester is admin or
+	// has access to parent group (if specified)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
 
-	g := groupResp.Group
-
-	// Authoritative member source: load members via dedicated endpoint.
-	// Some group documents may not include an embedded members array in GetGroupByID.
-	membersSource := g.Members
-	membersResp, membersErr := s.GroupService.GetGroupMembers(ctx, &group.GetGroupMembersRequest{GroupID: r.GroupID})
-	if membersErr == nil && membersResp != nil {
-		membersSource = membersResp.Members
-	}
-
-	// Enrich members — resolve user profile for each USER-type member
-	enrichedMembers := make([]EnrichedMember, 0, len(membersSource))
-	for _, m := range membersSource {
-		em := EnrichedMember{
-			ID:       m.ID,
-			Type:     m.Type,
-			Role:     m.Role,
-			JoinedAt: m.JoinedAt,
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.GroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
-		if m.Type == group.MemberTypeUser {
-			if u := s.resolveUserToEnrichedMember(ctx, m.ID); u != nil {
-				em.FullName = u.FullName
-				em.Initials = u.Initials
-				em.Email = u.Email
-				em.Roles = u.Roles
-				em.Type = u.Type
-			}
+
+		if !hasAccess {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
-		enrichedMembers = append(enrichedMembers, em)
-	}
-
-	// Enrich owner details
-	var owner *EnrichedOwner
-	if g.OwnerID != "" {
-		owner = &EnrichedOwner{
-			Owner: s.resolveUserToEnrichedMember(ctx, g.OwnerID),
-		}
-	}
-
-	return &GetAdminGroupDetailResponse{
-		Detail: &AdminGroupDetail{
-			Group:   g,
-			Members: enrichedMembers,
-			Owner:   owner,
-		},
-	}, nil
-}
-
-// AdminAddGroupMember adds a user to a group as an admin operation
-func (s *Service) AdminAddGroupMember(ctx context.Context, r *AdminAddGroupMemberRequest) (*AdminAddGroupMemberResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("admin-user-id", r.AdminUserId))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
 	_, err := s.GroupService.AddMember(ctx, &group.AddMemberRequest{
@@ -155,7 +98,7 @@ func (s *Service) AdminAddGroupMember(ctx context.Context, r *AdminAddGroupMembe
 		Role:     r.Role,
 	})
 	if err != nil {
-		log.Error("admin-add-group-member-failed",
+		log.Error("add-group-member-failed",
 			zap.String("group-id", r.GroupID),
 			zap.String("member-id", r.MemberID),
 			zap.Error(err),
@@ -163,16 +106,37 @@ func (s *Service) AdminAddGroupMember(ctx context.Context, r *AdminAddGroupMembe
 		return nil, errors.New(ErrKeyFailedToAddUserToGroup)
 	}
 
-	return &AdminAddGroupMemberResponse{Success: true}, nil
+	return &AddGroupMemberResponse{Success: true}, nil
 }
 
-// AdminRemoveGroupMember removes a user from a group as an admin operation
-func (s *Service) AdminRemoveGroupMember(ctx context.Context, r *AdminRemoveGroupMemberRequest) (*AdminRemoveGroupMemberResponse, error) {
+// RemoveGroupMember removes a user from a group
+func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("admin-user-id", r.AdminUserId))
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	// Auth check: only allow if requester is admin or
+	// has access to parent group (if specified)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
+
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.GroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasAccess {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
 	}
 
 	_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
@@ -180,7 +144,7 @@ func (s *Service) AdminRemoveGroupMember(ctx context.Context, r *AdminRemoveGrou
 		MemberID: r.MemberID,
 	})
 	if err != nil {
-		log.Error("admin-remove-group-member-failed",
+		log.Error("remove-group-member-failed",
 			zap.String("group-id", r.GroupID),
 			zap.String("member-id", r.MemberID),
 			zap.Error(err),
@@ -188,16 +152,37 @@ func (s *Service) AdminRemoveGroupMember(ctx context.Context, r *AdminRemoveGrou
 		return nil, errors.New(ErrKeyFailedToRemoveUserFromGroup)
 	}
 
-	return &AdminRemoveGroupMemberResponse{Success: true}, nil
+	return &RemoveGroupMemberResponse{Success: true}, nil
 }
 
-// AdminUpdateGroupOwner updates the owner of a group as an admin operation
-func (s *Service) AdminUpdateGroupOwner(ctx context.Context, r *AdminUpdateGroupOwnerRequest) (*AdminUpdateGroupOwnerResponse, error) {
+// UpdateGroupOwner updates the owner of a group
+func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("admin-user-id", r.AdminUserId))
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	// Auth check: only allow if requester is admin or
+	// has access to parent group (if specified)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
+
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.GroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasAccess {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
 	}
 
 	_, err := s.GroupService.UpdateOwner(ctx, &group.UpdateOwnerRequest{
@@ -205,7 +190,7 @@ func (s *Service) AdminUpdateGroupOwner(ctx context.Context, r *AdminUpdateGroup
 		OwnerID: r.OwnerID,
 	})
 	if err != nil {
-		log.Error("admin-update-group-owner-failed",
+		log.Error("update-group-owner-failed",
 			zap.String("group-id", r.GroupID),
 			zap.Error(err),
 		)
@@ -215,14 +200,14 @@ func (s *Service) AdminUpdateGroupOwner(ctx context.Context, r *AdminUpdateGroup
 	// Re-fetch and resolve the updated owner to return enriched data
 	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
-		return &AdminUpdateGroupOwnerResponse{Owner: &EnrichedOwner{}}, nil
+		return &UpdateGroupOwnerResponse{Owner: &EnrichedOwner{}}, nil
 	}
 
 	owner := &EnrichedOwner{
 		Owner: s.resolveUserToEnrichedMember(ctx, groupResp.Group.OwnerID),
 	}
 
-	return &AdminUpdateGroupOwnerResponse{Owner: owner}, nil
+	return &UpdateGroupOwnerResponse{Owner: owner}, nil
 }
 
 // resolveUserToEnrichedMember looks up a user by ID and returns an EnrichedMember.

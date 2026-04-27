@@ -6,6 +6,15 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
+// GetUserGroupMembershipsResponse represents the response for fetching user group memberships
+type GetUserGroupMembershipsResponse struct {
+	// Memberships is a list of groups the user has access to (and directly or indirectly a member of)
+	Memberships []UserGroupMembership `json:"memberships"`
+
+	// UserID is the ID of the user these memberships belong to
+	UserID string `json:"user_id"`
+}
+
 // GetUserMicroProfileResponse holds response data for GetUserMicroProfile request
 type GetUserMicroProfileResponse struct {
 	*userv2.GetUserMicroProfileResponse
@@ -71,67 +80,14 @@ func (r *GetUserGroupsResponse) GetMetaData() map[string]interface{} {
 	}
 }
 
-// GetUserTeamMembershipsResponse holds the response for team memberships
-type GetUserTeamMembershipsResponse struct {
-	Memberships map[string]UserGroupMembership `json:"memberships"`
-	UserID      string                         `json:"user_id"`
-}
-
-// UpdateUserTeamMembershipResponse holds the response for updating team membership
-type UpdateUserTeamMembershipResponse struct {
-	Success             bool                `json:"success"`
-	Membership          UserGroupMembership `json:"membership"`
-	PreviousMemberships []GroupSummary      `json:"previous_memberships,omitempty"`
-}
-
-// RemoveUserFromGroupResponse holds the response for removing a user from a group
-type RemoveUserFromGroupResponse struct {
-	Success bool   `json:"success"`
-	GroupID string `json:"group_id"`
-	Message string `json:"message,omitempty"`
-}
-
-// FindUserInfoResponse holds the response for finding user information
-type FindUserInfoResponse struct {
-	User                  *userv2.UserProfile   `json:"user"`
-	TeamMemberships       []UserGroupMembership `json:"team_memberships,omitempty"`
-	GroupMemberships      []UserGroupMembership `json:"group_memberships,omitempty"`
-	MembershipDataFetched bool                  `json:"membership_data_fetched"`
-}
-
-// BulkUpdateUserGroupMembershipsResponse holds the response for bulk membership updates
-type BulkUpdateUserGroupMembershipsResponse struct {
-	Results      []GroupMembershipUpdateResult `json:"results"`
-	SuccessCount int                           `json:"success_count"`
-	FailureCount int                           `json:"failure_count"`
-	TotalActions int                           `json:"total_actions"`
-}
-
-// GetGroupsByTypeResponse holds the response for getting groups by type
-type GetGroupsByTypeResponse struct {
-	Groups []GroupSummary         `json:"groups"`
-	Total  int                    `json:"-"`
-	Meta   map[string]interface{} `json:"-"`
-}
-
-// GetMetaData returns formatted metadata for pagination
-func (r *GetGroupsByTypeResponse) GetMetaData() map[string]interface{} {
-	if r.Meta != nil {
-		return r.Meta
-	}
-	return map[string]interface{}{
-		"total_resources": r.Total,
-	}
-}
-
 // CreateGroupResponse holds the response for creating a new group
 type CreateGroupResponse struct {
-	Group *GroupSummary `json:"group"`
+	Group *group.UniversalGroup `json:"group"`
 }
 
-// GetGroupDetailResponse holds the response for group detail
+// GetGroupDetailResponse holds the enriched response for group detail
 type GetGroupDetailResponse struct {
-	Group *group.UniversalGroup `json:"group"`
+	Detail *GroupDetail `json:"detail"`
 }
 
 // GetGroupStatsResponse holds the response for group stats
@@ -171,8 +127,8 @@ type EnrichedOwner struct {
 	Owner *EnrichedMember `json:"owner,omitempty"`
 }
 
-// AdminGroupDetail holds the full enriched group view returned to the admin
-type AdminGroupDetail struct {
+// GroupDetail holds the full enriched group view returned to the admin
+type GroupDetail struct {
 	// Group is the raw group object
 	Group *group.UniversalGroup `json:"group"`
 
@@ -183,22 +139,17 @@ type AdminGroupDetail struct {
 	Owner *EnrichedOwner `json:"owner,omitempty"`
 }
 
-// GetAdminGroupDetailResponse holds the response for the admin get-group-detail endpoint
-type GetAdminGroupDetailResponse struct {
-	Detail *AdminGroupDetail `json:"detail"`
-}
-
-// AdminAddGroupMemberResponse holds the response for adding a member to a group
-type AdminAddGroupMemberResponse struct {
+// AddGroupMemberResponse holds the response for adding a member to a group
+type AddGroupMemberResponse struct {
 	Success bool `json:"success"`
 }
 
-// AdminRemoveGroupMemberResponse holds the response for removing a member from a group
-type AdminRemoveGroupMemberResponse struct {
+// RemoveGroupMemberResponse holds the response for removing a member from a group
+type RemoveGroupMemberResponse struct {
 	Success bool `json:"success"`
 }
 
-// AdminUpdateGroupOwnerResponse holds the response for updating group ownership
-type AdminUpdateGroupOwnerResponse struct {
+// UpdateGroupOwnerResponse holds the response for updating group ownership
+type UpdateGroupOwnerResponse struct {
 	Owner *EnrichedOwner `json:"owner"`
 }

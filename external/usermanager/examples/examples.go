@@ -3,6 +3,7 @@ package examples
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
@@ -40,79 +41,6 @@ func Example1_GetEnrichedUserProfile() {
 	}
 }
 
-// Example2_GetUserTeamMemberships demonstrates getting detailed team membership information
-func Example2_GetUserTeamMemberships() {
-	service := setupService()
-
-	ctx := context.Background()
-	resp, err := service.GetUserTeamMemberships(ctx, &usermanager.GetUserTeamMembershipsRequest{
-		UserId:          "user-123",
-		IncludeInactive: false,
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("User %s team memberships:\n", resp.UserID)
-	for teamName, membership := range resp.Memberships {
-		if membership.IsMember {
-			fmt.Printf("  - %s: %s", teamName, membership.Role)
-			if membership.IsOwner {
-				fmt.Print(" (Owner)")
-			}
-			if membership.IsLead {
-				fmt.Print(" (Lead)")
-			}
-			fmt.Println()
-		}
-	}
-}
-
-// Example3_UpdateUserTeamMembership demonstrates adding a user to a team
-func Example3_UpdateUserTeamMembership() {
-	service := setupService()
-
-	ctx := context.Background()
-	resp, err := service.UpdateUserTeamMembership(ctx, &usermanager.UpdateUserTeamMembershipRequest{
-		UserId:               "user-456",
-		GroupID:              "team-frontend",
-		Role:                 group.MemberRoleMember,
-		RemoveFromOtherTeams: false,
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	if resp.Success {
-		fmt.Printf("Successfully added user to team: %s\n", resp.Membership.Group.Name)
-		fmt.Printf("Role: %s\n", resp.Membership.Role)
-		if len(resp.PreviousMemberships) > 0 {
-			fmt.Printf("Removed from %d previous teams\n", len(resp.PreviousMemberships))
-		}
-	}
-}
-
-// Example4_RemoveUserFromGroup demonstrates removing a user from a group
-func Example4_RemoveUserFromGroup() {
-	service := setupService()
-
-	ctx := context.Background()
-	resp, err := service.RemoveUserFromGroup(ctx, &usermanager.RemoveUserFromGroupRequest{
-		UserId:  "user-456",
-		GroupID: "team-frontend",
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	if resp.Success {
-		fmt.Printf("Successfully removed user from group: %s\n", resp.GroupID)
-	}
-}
-
 // Example5_GetUserGroups demonstrates fetching groups for a user with filtering
 func Example5_GetUserGroups() {
 	service := setupService()
@@ -138,95 +66,6 @@ func Example5_GetUserGroups() {
 
 	if resp.Meta != nil {
 		fmt.Printf("Total: %d, Page: %d\n", resp.Total, resp.Meta["page"])
-	}
-}
-
-// Example6_GetGroupsByType demonstrates fetching groups filtered by type
-func Example6_GetGroupsByType() {
-	service := setupService()
-
-	ctx := context.Background()
-	resp, err := service.GetGroupsByType(ctx, &usermanager.GetGroupsByTypeRequest{
-		UserId:              "user-123",
-		GroupType:           group.GroupTypeDepartment,
-		Status:              group.GroupStatusActive,
-		OnlyUserMemberships: true,
-		Page:                1,
-		PerPage:             20,
-		Meta:                true,
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("Found %d departments:\n", len(resp.Groups))
-	for _, g := range resp.Groups {
-		fmt.Printf("  - %s (%d members)\n", g.Name, g.MemberCount)
-	}
-}
-
-// Example7_FindUserInfo demonstrates finding user information with group memberships
-func Example7_FindUserInfo() {
-	service := setupService()
-
-	ctx := context.Background()
-	resp, err := service.FindUserInfo(ctx, &usermanager.FindUserInfoRequest{
-		Email:                   "john.doe@company.com",
-		IncludeTeamMemberships:  true,
-		IncludeGroupMemberships: true,
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("Found user: %s (%s)\n", resp.User.FirstName+" "+resp.User.LastName, resp.User.Email)
-	if resp.MembershipDataFetched {
-		fmt.Printf("Team memberships: %d\n", len(resp.TeamMemberships))
-		fmt.Printf("All group memberships: %d\n", len(resp.GroupMemberships))
-	}
-}
-
-// Example8_BulkUpdateUserGroupMemberships demonstrates bulk membership operations
-func Example8_BulkUpdateUserGroupMemberships() {
-	service := setupService()
-
-	ctx := context.Background()
-	resp, err := service.BulkUpdateUserGroupMemberships(ctx, &usermanager.BulkUpdateUserGroupMembershipsRequest{
-		UserId:       "admin-user",
-		TargetUserId: "user-789",
-		Actions: []usermanager.GroupMembershipAction{
-			{
-				Action:  "ADD",
-				GroupID: "team-backend",
-				Role:    group.MemberRoleMember,
-			},
-			{
-				Action:  "ADD",
-				GroupID: "dept-engineering",
-				Role:    group.MemberRoleMember,
-			},
-			{
-				Action:  "REMOVE",
-				GroupID: "team-frontend",
-			},
-		},
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("Bulk update completed: %d success, %d failures\n",
-		resp.SuccessCount, resp.FailureCount)
-
-	for _, result := range resp.Results {
-		status := "SUCCESS"
-		if !result.Success {
-			status = "FAILED: " + result.Error
-		}
-		fmt.Printf("  %s %s: %s\n", result.Action, result.GroupID, status)
 	}
 }
 
@@ -307,76 +146,6 @@ func Example10_CommunicationManagement() {
 	fmt.Printf("Found %d communications\n", len(getResp.Comms))
 }
 
-// Example11_GroupManagementWorkflow demonstrates a complete group management workflow
-func Example11_GroupManagementWorkflow() {
-	service := setupService()
-
-	ctx := context.Background()
-	userID := "user-new-hire"
-
-	fmt.Println("=== Group Management Workflow ===")
-
-	// 1. Get user's current memberships
-	fmt.Println("1. Checking current memberships...")
-	currentResp, err := service.GetUserGroups(ctx, &usermanager.GetUserGroupsRequest{
-		UserId:  userID,
-		Page:    1,
-		PerPage: 50,
-	})
-	if err != nil {
-		fmt.Printf("Error getting current memberships: %v\n", err)
-		return
-	}
-	fmt.Printf("   Current groups: %d\n", len(currentResp.Groups))
-
-	// 2. Add to engineering department
-	fmt.Println("2. Adding to Engineering department...")
-	deptResp, err := service.UpdateUserTeamMembership(ctx, &usermanager.UpdateUserTeamMembershipRequest{
-		UserId:  userID,
-		GroupID: "dept-engineering",
-		Role:    group.MemberRoleMember,
-	})
-	if err != nil {
-		fmt.Printf("Error adding to department: %v\n", err)
-		return
-	}
-	fmt.Printf("   Added to: %s\n", deptResp.Membership.Group.Name)
-
-	// 3. Add to frontend team
-	fmt.Println("3. Adding to Frontend team...")
-	teamResp, err := service.UpdateUserTeamMembership(ctx, &usermanager.UpdateUserTeamMembershipRequest{
-		UserId:               userID,
-		GroupID:              "team-frontend",
-		Role:                 group.MemberRoleMember,
-		RemoveFromOtherTeams: true, // Remove from other teams
-	})
-	if err != nil {
-		fmt.Printf("Error adding to team: %v\n", err)
-		return
-	}
-	fmt.Printf("   Added to: %s\n", teamResp.Membership.Group.Name)
-	if len(teamResp.PreviousMemberships) > 0 {
-		fmt.Printf("   Removed from %d other teams\n", len(teamResp.PreviousMemberships))
-	}
-
-	// 4. Verify final memberships
-	fmt.Println("4. Verifying final memberships...")
-	finalResp, err := service.GetEnrichedUserProfile(ctx, &usermanager.GetEnrichedUserProfileRequest{
-		UserId:           userID,
-		IncludeAllGroups: true,
-	})
-	if err != nil {
-		fmt.Printf("Error verifying memberships: %v\n", err)
-		return
-	}
-
-	fmt.Printf("   Final teams: %d\n", len(finalResp.Profile.Teams))
-	fmt.Printf("   Final departments: %d\n", len(finalResp.Profile.Departments))
-	fmt.Printf("   Total groups: %d\n", len(finalResp.Profile.Groups))
-
-	fmt.Println("=== Workflow completed successfully ===")
-}
-
 // Example12_AdminCreateGroup demonstrates admin creating a new group
 func Example12_AdminCreateGroup() {
 	service := setupService()
@@ -387,20 +156,13 @@ func Example12_AdminCreateGroup() {
 
 	// Create a new engineering team
 	createResp, err := service.CreateGroup(ctx, &usermanager.CreateGroupRequest{
-		AdminUserId:       "admin-user-123",
-		Name:              "Machine Learning Team",
-		Type:              group.GroupTypeTeam,
-		Description:       "Team focused on ML/AI projects and research",
-		Email:             "ml-team@company.com",
-		Icon:              "🤖",
-		Visibility:        group.VisibilityPrivate,
-		InitialMemberIDs:  []string{"user-123", "user-456", "user-789"},
-		InitialMemberRole: group.MemberRoleMember,
-		OwnerID:           "user-123",
-		Extensions: map[string]interface{}{
-			"slack_channel": "#ml-team",
-			"cost_center":   "ENG-ML-001",
-			"budget":        150000,
+		UserID: "admin-user-123",
+		CreateGroupRequest: &group.CreateGroupRequest{
+			Name:        "Machine Learning Team",
+			Type:        group.GroupTypeTeam,
+			Description: "Team focused on ML/AI projects and research",
+			Visibility:  group.VisibilityPrivate,
+			OwnerID:     "user-123",
 		},
 	})
 	if err != nil {
@@ -410,9 +172,8 @@ func Example12_AdminCreateGroup() {
 
 	fmt.Printf("Created group: %s (ID: %s)\n", createResp.Group.Name, createResp.Group.ID)
 	fmt.Printf("  Type: %s\n", createResp.Group.Type)
-	fmt.Printf("  Members: %d\n", createResp.Group.MemberCount)
 	fmt.Printf("  Status: %s\n", createResp.Group.Status)
-	fmt.Printf("  Created: %s\n", createResp.Group.CreatedAt)
+	fmt.Printf("  Created: %s\n", createResp.Group.Metadata.CreatedAt)
 
 	fmt.Println("=== Group created successfully ===")
 }
@@ -847,6 +608,56 @@ func (m *MockGroupService) GetGroupDescendants(ctx context.Context, req *group.G
 	}, nil
 }
 
+func (m *MockGroupService) GetGroupsByUserID(ctx context.Context, req *group.GetGroupsByUserIDRequest) (*group.GetGroupsByUserIDResponse, error) {
+	groupsResp, err := m.GetGroups(ctx, &group.GetGroupsRequest{MemberID: req.UserID})
+	if err != nil {
+		return nil, err
+	}
+
+	return &group.GetGroupsByUserIDResponse{
+		Groups:      groupsResp.Groups,
+		Descendants: map[string][][]group.GroupDescendantsNode{},
+	}, nil
+}
+
+func (m *MockGroupService) GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]group.UserGroupAccessSummary, error) {
+	groupsResp, err := m.GetGroups(ctx, &group.GetGroupsRequest{MemberID: userID})
+	if err != nil {
+		return nil, err
+	}
+
+	accessMap := make(map[string]group.UserGroupAccessSummary, len(groupsResp.Groups))
+	for _, grp := range groupsResp.Groups {
+		if grp == nil || grp.ID == "" {
+			continue
+		}
+
+		summary := group.UserGroupAccessSummary{
+			IsAccessible: true,
+			MaxRole:      group.MemberRoleMember,
+		}
+
+		if grp.OwnerID == userID {
+			summary.MaxRole = group.MemberRoleOwner
+			summary.IsAdmin = true
+		}
+
+		member, memberErr := grp.GetMemberByID(userID)
+		if memberErr == nil {
+			if member.Role != "" {
+				summary.MaxRole = strings.ToUpper(member.Role)
+			}
+
+			if strings.EqualFold(member.Role, group.MemberRoleAdmin) || strings.EqualFold(member.Role, group.MemberRoleSuperUser) {
+				summary.IsAdmin = true
+			}
+		}
+
+		accessMap[grp.ID] = summary
+	}
+
+	return accessMap, nil
+}
 
 func createMockGroup(id, name, groupType string, memberCount int) *group.UniversalGroup {
 	config := group.DefaultGroupConfig()

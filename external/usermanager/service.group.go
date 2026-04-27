@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -165,11 +164,68 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
-	if !s.userHasGroupAccess(ctx, r.UserId, groupResp.Group, isAdmin) {
-		return nil, errors.New(ErrKeyGroupNotFound)
+	if !isAdmin {
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserId),
+				zap.String("group_id", r.GroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasAccess {
+			return nil, errors.New(ErrKeyGroupNotFound)
+		}
 	}
 
-	return &GetGroupDetailResponse{Group: groupResp.Group}, nil
+	g := groupResp.Group
+
+	// Authoritative member source: load members via dedicated endpoint.
+	membersSource := g.Members
+	membersResp, membersErr := s.GroupService.GetGroupMembers(ctx, &group.GetGroupMembersRequest{GroupID: r.GroupID})
+	if membersErr == nil && membersResp != nil {
+		membersSource = membersResp.Members
+	}
+
+	// Enrich members — resolve user profile for each USER-type member
+	enrichedMembers := make([]EnrichedMember, 0, len(membersSource))
+	for _, m := range membersSource {
+		em := EnrichedMember{
+			ID:       m.ID,
+			Type:     m.Type,
+			Role:     m.Role,
+			JoinedAt: m.JoinedAt,
+		}
+		if m.Type == group.MemberTypeUser {
+			if u := s.resolveUserToEnrichedMember(ctx, m.ID); u != nil {
+				em.FullName = u.FullName
+				em.Initials = u.Initials
+				em.Email = u.Email
+				em.Roles = u.Roles
+				em.Type = u.Type
+			}
+		}
+		enrichedMembers = append(enrichedMembers, em)
+	}
+
+	// Enrich owner details
+	var owner *EnrichedOwner
+	if g.OwnerID != "" {
+		owner = &EnrichedOwner{
+			Owner: s.resolveUserToEnrichedMember(ctx, g.OwnerID),
+		}
+	}
+
+	return &GetGroupDetailResponse{
+		Detail: &GroupDetail{
+			Group:   g,
+			Members: enrichedMembers,
+			Owner:   owner,
+		},
+	}, nil
 }
 
 // GetGroupStats handles fetching group stats for a requester with membership/owner checks
@@ -188,8 +244,21 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
-	if !s.userHasGroupAccess(ctx, r.UserId, groupResp.Group, isAdmin) {
-		return nil, errors.New(ErrKeyGroupNotFound)
+	if !isAdmin {
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserId),
+				zap.String("group_id", r.GroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasAccess {
+			return nil, errors.New(ErrKeyGroupNotFound)
+		}
 	}
 
 	totalUsers, roleBreakdown := s.calculateGroupSeatUsage(ctx, groupResp.Group, log)
@@ -247,499 +316,58 @@ func (s *Service) GetGroupMembers(ctx context.Context, r *group.GetGroupMembersR
 	return s.GroupService.GetGroupMembers(ctx, r)
 }
 
-// GetUserTeamMemberships handles fetching team memberships for a user
-func (s *Service) GetUserTeamMemberships(ctx context.Context, r *GetUserTeamMembershipsRequest) (*GetUserTeamMembershipsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
-	}
-
-	targetUserID := r.UserId
-	if r.TargetUserId != "" {
-		targetUserID = r.TargetUserId
-	}
-
-	// Get all teams
-	teamsReq := &group.GetGroupsRequest{
-		Types:   []string{group.GroupTypeTeam},
-		PerPage: 100, // Get all teams
-	}
-
-	if !r.IncludeInactive {
-		teamsReq.Statuses = []string{group.GroupStatusActive}
-	}
-
-	teamsResp, err := s.GroupService.GetGroups(ctx, teamsReq)
-	if err != nil {
-		log.Error("failed-to-get-teams", zap.Error(err))
-		return nil, err
-	}
-
-	memberships := make(map[string]UserGroupMembership)
-
-	for _, team := range teamsResp.Groups {
-		membership := UserGroupMembership{
-			Group: GroupSummary{
-				ID:          team.ID,
-				NanoID:      team.NanoID,
-				Name:        team.Name,
-				Type:        team.Type,
-				Description: team.DisplayInfo.Description,
-				MemberCount: team.GetMemberCount(),
-				Status:      team.Status,
-				CreatedAt:   team.Metadata.CreatedAt,
-			},
-			IsMember: team.HasMember(targetUserID),
-		}
-
-		if membership.IsMember {
-			// Find the member details
-			member, err := team.GetMemberByID(targetUserID)
-			if err == nil {
-				membership.Role = member.Role
-				membership.JoinedAt = member.JoinedAt
-			}
-		}
-
-		// Check owner role
-		membership.IsOwner = team.OwnerID == targetUserID
-
-		memberships[team.Name] = membership
-	}
-
-	return &GetUserTeamMembershipsResponse{
-		Memberships: memberships,
-		UserID:      targetUserID,
-	}, nil
-}
-
-// UpdateUserTeamMembership handles updating a user's team membership
-func (s *Service) UpdateUserTeamMembership(ctx context.Context, r *UpdateUserTeamMembershipRequest) (*UpdateUserTeamMembershipResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
-	}
-
-	// Get the target group
-	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{
-		ID: r.GroupID,
-	})
-	if err != nil {
-		log.Error("failed-to-get-group", zap.String("group-id", r.GroupID), zap.Error(err))
-		return nil, errors.New(ErrKeyGroupNotFound)
-	}
-
-	targetGroup := groupResp.Group
-
-	// Check if user is already a member
-	isMember := targetGroup.HasMember(r.UserId)
-	if isMember {
-		log.Warn("user-already-member-of-group", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID))
-		return nil, errors.New(ErrKeyUserAlreadyMemberOfGroup)
-	}
-
-	var previousMemberships []GroupSummary
-
-	// If removing from other teams, fetch and remove
-	if r.RemoveFromOtherTeams {
-		currentTeams, err := s.getUserGroupsByType(ctx, r.UserId, targetGroup.Type)
-		if err != nil {
-			log.Warn("failed-to-fetch-current-memberships", zap.String("user-id", r.UserId), zap.Error(err))
-		} else {
-			for _, membership := range currentTeams {
-				if membership.IsMember && membership.Group.ID != r.GroupID {
-					// Remove from this group
-					_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
-						GroupID:  membership.Group.ID,
-						MemberID: r.UserId,
-					})
-					if err != nil {
-						log.Warn("failed-to-remove-from-previous-group", zap.String("group-id", membership.Group.ID), zap.Error(err))
-					} else {
-						previousMemberships = append(previousMemberships, membership.Group)
-					}
-				}
-			}
-		}
-	}
-
-	// Add user to the new group
-	role := r.Role
-	if role == "" {
-		role = group.MemberRoleMember // Default role
-	}
-
-	_, err = s.GroupService.AddMember(ctx, &group.AddMemberRequest{
-		GroupID:  r.GroupID,
-		MemberID: r.UserId,
-		Type:     group.MemberTypeUser,
-		Role:     role,
-	})
-	if err != nil {
-		log.Error("failed-to-add-member-to-group", zap.String("group-id", r.GroupID), zap.String("user-id", r.UserId), zap.Error(err))
-		return nil, errors.New(ErrKeyFailedToAddUserToGroup)
-	}
-
-	// Fetch updated membership
-	updatedGroup, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{
-		ID: r.GroupID,
-	})
-	if err != nil {
-		log.Warn("failed-to-fetch-updated-group", zap.String("group-id", r.GroupID), zap.Error(err))
-	}
-
-	membership := UserGroupMembership{
-		Group: GroupSummary{
-			ID:          targetGroup.ID,
-			NanoID:      targetGroup.NanoID,
-			Name:        targetGroup.Name,
-			Type:        targetGroup.Type,
-			Description: targetGroup.DisplayInfo.Description,
-			Status:      targetGroup.Status,
-			CreatedAt:   targetGroup.Metadata.CreatedAt,
-		},
-		IsMember: true,
-		Role:     role,
-	}
-
-	if updatedGroup != nil {
-		membership.Group.MemberCount = updatedGroup.Group.GetMemberCount()
-		member, err := updatedGroup.Group.GetMemberByID(r.UserId)
-		if err == nil {
-			membership.JoinedAt = member.JoinedAt
-		}
-	}
-
-	return &UpdateUserTeamMembershipResponse{
-		Success:             true,
-		Membership:          membership,
-		PreviousMemberships: previousMemberships,
-	}, nil
-}
-
-// RemoveUserFromGroup handles removing a user from a group
-func (s *Service) RemoveUserFromGroup(ctx context.Context, r *RemoveUserFromGroupRequest) (*RemoveUserFromGroupResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
-	}
-
-	_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
-		GroupID:  r.GroupID,
-		MemberID: r.UserId,
-	})
-	if err != nil {
-		log.Error("failed-to-remove-user-from-group", zap.String("group-id", r.GroupID), zap.String("user-id", r.UserId), zap.Error(err))
-		return nil, errors.New(ErrKeyFailedToRemoveUserFromGroup)
-	}
-
-	return &RemoveUserFromGroupResponse{
-		Success: true,
-		GroupID: r.GroupID,
-		Message: "Successfully removed from group",
-	}, nil
-}
-
-// FindUserInfo handles finding user information with flexible lookup
-func (s *Service) FindUserInfo(ctx context.Context, r *FindUserInfoRequest) (*FindUserInfoResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled")
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
-	}
-
-	var userResp *userv2.GetUserProfileResponse
-	var err error
-
-	// Attempt to find user by ID or email
-	if r.UserId != "" {
-		userResp, err = s.UserService.GetUserProfile(ctx, &userv2.GetUserProfileRequest{
-			ID: r.UserId,
-		})
-	} else if r.Email != "" {
-		emailResp, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{
-			Email: r.Email,
-		})
-		if err == nil && emailResp != nil {
-			userResp, err = s.UserService.GetUserProfile(ctx, &userv2.GetUserProfileRequest{
-				ID: emailResp.User.ID,
-			})
-		}
-	}
-
-	if err != nil {
-		log.Error("failed-to-find-user", zap.String("user-id", r.UserId), zap.String("email", r.Email), zap.Error(err))
-		return nil, errors.New(ErrKeyUserNotFound)
-	}
-
-	response := &FindUserInfoResponse{
-		User:                  userResp.Profile,
-		MembershipDataFetched: false,
-	}
-
-	// Fetch team memberships if requested
-	if r.IncludeTeamMemberships {
-		teams, err := s.getUserGroupsByType(ctx, userResp.Profile.ID, group.GroupTypeTeam)
-		if err != nil {
-			log.Warn("failed-to-fetch-team-memberships", zap.String("user-id", userResp.Profile.ID), zap.Error(err))
-		} else {
-			response.TeamMemberships = teams
-			response.MembershipDataFetched = true
-		}
-	}
-
-	// Fetch all group memberships if requested
-	if r.IncludeGroupMemberships {
-		allGroups, err := s.getUserAllGroups(ctx, userResp.Profile.ID)
-		if err != nil {
-			log.Warn("failed-to-fetch-group-memberships", zap.String("user-id", userResp.Profile.ID), zap.Error(err))
-		} else {
-			response.GroupMemberships = allGroups
-			response.MembershipDataFetched = true
-		}
-	}
-
-	return response, nil
-}
-
-// BulkUpdateUserGroupMemberships handles bulk updates of group memberships
-func (s *Service) BulkUpdateUserGroupMemberships(ctx context.Context, r *BulkUpdateUserGroupMembershipsRequest) (*BulkUpdateUserGroupMembershipsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("requesting-user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
-	}
-
-	results := make([]GroupMembershipUpdateResult, 0, len(r.Actions))
-	successCount := 0
-	failureCount := 0
-
-	for _, action := range r.Actions {
-		result := GroupMembershipUpdateResult{
-			GroupID:   action.GroupID,
-			Action:    action.Action,
-			UpdatedAt: time.Now().UTC(),
-		}
-
-		switch action.Action {
-		case "ADD":
-			role := action.Role
-			if role == "" {
-				role = group.MemberRoleMember
-			}
-
-			_, err := s.GroupService.AddMember(ctx, &group.AddMemberRequest{
-				GroupID:  action.GroupID,
-				MemberID: r.TargetUserId,
-				Type:     group.MemberTypeUser,
-				Role:     role,
-			})
-			if err != nil {
-				result.Success = false
-				result.Error = err.Error()
-				failureCount++
-				log.Warn("bulk-add-failed", zap.String("group-id", action.GroupID), zap.Error(err))
-			} else {
-				result.Success = true
-				successCount++
-			}
-
-		case "REMOVE":
-			_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
-				GroupID:  action.GroupID,
-				MemberID: r.TargetUserId,
-			})
-			if err != nil {
-				result.Success = false
-				result.Error = err.Error()
-				failureCount++
-				log.Warn("bulk-remove-failed", zap.String("group-id", action.GroupID), zap.Error(err))
-			} else {
-				result.Success = true
-				successCount++
-			}
-
-		case "UPDATE_ROLE":
-			_, err := s.GroupService.UpdateMemberRole(ctx, &group.UpdateMemberRoleRequest{
-				GroupID:  action.GroupID,
-				MemberID: r.TargetUserId,
-				NewRole:  action.Role,
-			})
-			if err != nil {
-				result.Success = false
-				result.Error = err.Error()
-				failureCount++
-				log.Warn("bulk-update-role-failed", zap.String("group-id", action.GroupID), zap.Error(err))
-			} else {
-				result.Success = true
-				successCount++
-			}
-
-		default:
-			result.Success = false
-			result.Error = "unknown action"
-			failureCount++
-		}
-
-		results = append(results, result)
-	}
-
-	return &BulkUpdateUserGroupMembershipsResponse{
-		Results:      results,
-		SuccessCount: successCount,
-		FailureCount: failureCount,
-		TotalActions: len(r.Actions),
-	}, nil
-}
-
-// GetGroupsByType handles fetching groups filtered by type
-func (s *Service) GetGroupsByType(ctx context.Context, r *GetGroupsByTypeRequest) (*GetGroupsByTypeResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-
-	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId), zap.String("group-type", r.GroupType))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
-	}
-
-	groupReq := &group.GetGroupsRequest{
-		Page:       r.Page,
-		PerPage:    r.PerPage,
-		OrderBy:    r.Order,
-		Meta:       r.Meta,
-		NameSearch: r.Name,
-	}
-
-	if r.GroupType != "" {
-		parts := strings.Split(r.GroupType, ",")
-		types := make([]string, 0, len(parts))
-		for _, p := range parts {
-			if t := strings.TrimSpace(p); t != "" {
-				types = append(types, t)
-			}
-		}
-		if len(types) > 0 {
-			groupReq.Types = types
-		}
-	}
-
-	if r.Status != "" {
-		groupReq.Statuses = []string{r.Status}
-	}
-
-	if r.OnlyUserMemberships {
-		groupReq.MemberID = r.UserId
-		groupReq.MemberType = group.MemberTypeUser
-	}
-
-	groupsResp, err := s.GroupService.GetGroups(ctx, groupReq)
-	if err != nil {
-		log.Error("failed-to-get-groups-by-type", zap.String("type", r.GroupType), zap.Error(err))
-		return nil, err
-	}
-
-	groupSummaries := make([]GroupSummary, 0, len(groupsResp.Groups))
-	for _, g := range groupsResp.Groups {
-		groupSummaries = append(groupSummaries, GroupSummary{
-			ID:          g.ID,
-			NanoID:      g.NanoID,
-			Name:        g.Name,
-			Type:        g.Type,
-			Description: g.DisplayInfo.Description,
-			MemberCount: g.GetMemberCount(),
-			Status:      g.Status,
-			CreatedAt:   g.Metadata.CreatedAt,
-		})
-	}
-
-	response := &GetGroupsByTypeResponse{
-		Groups: groupSummaries,
-		Total:  groupsResp.Total,
-	}
-
-	if r.Meta {
-		response.Meta = map[string]interface{}{
-			"total_resources":    groupsResp.Total,
-			"total_pages":        groupsResp.TotalPages,
-			"resources_per_page": groupsResp.PerPage,
-			"page":               groupsResp.Page,
-		}
-	}
-
-	return response, nil
-}
-
 // Helper functions
 
 // getUserGroupsByType fetches groups of a specific type for a user
 func (s *Service) getUserGroupsByType(ctx context.Context, userID, groupType string) ([]UserGroupMembership, error) {
-	groupReq := &group.GetGroupsRequest{
-		Types:      []string{groupType},
-		MemberID:   userID,
-		MemberType: group.MemberTypeUser,
-		Statuses:   []string{group.GroupStatusActive},
-		PerPage:    100,
+	req := &GetUserGroupMembershipsRequest{
+		UserID:             userID,
+		GroupType:          groupType,
+		IncludeDescendants: true,
 	}
-
-	groupsResp, err := s.GroupService.GetGroups(ctx, groupReq)
+	resp, err := s.GetUserGroupMemberships(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
-	memberships := make([]UserGroupMembership, 0, len(groupsResp.Groups))
-	for _, g := range groupsResp.Groups {
-		member, err := g.GetMemberByID(userID)
-
-		membership := UserGroupMembership{
-			Group: GroupSummary{
-				ID:          g.ID,
-				NanoID:      g.NanoID,
-				Name:        g.Name,
-				Type:        g.Type,
-				Description: g.DisplayInfo.Description,
-				MemberCount: g.GetMemberCount(),
-				Status:      g.Status,
-				CreatedAt:   g.Metadata.CreatedAt,
-			},
-			IsMember: true,
-		}
-
-		if err == nil {
-			membership.Role = member.Role
-			membership.JoinedAt = member.JoinedAt
-		}
-
-		membership.IsOwner = g.OwnerID == userID
-
-		memberships = append(memberships, membership)
-	}
-
-	return memberships, nil
+	return resp.Memberships, nil
 }
 
 // getUserAllGroups fetches all groups for a user
 func (s *Service) getUserAllGroups(ctx context.Context, userID string) ([]UserGroupMembership, error) {
-	groupReq := &group.GetGroupsRequest{
-		MemberID:   userID,
-		MemberType: group.MemberTypeUser,
-		Statuses:   []string{group.GroupStatusActive},
-		PerPage:    100,
+
+	req := &GetUserGroupMembershipsRequest{
+		UserID:             userID,
+		GroupType:          "",
+		IncludeDescendants: false,
 	}
 
-	groupsResp, err := s.GroupService.GetGroups(ctx, groupReq)
+	resp, err := s.GetUserGroupMemberships(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	memberships := make([]UserGroupMembership, 0, len(groupsResp.Groups))
-	for _, g := range groupsResp.Groups {
+	return resp.Memberships, nil
+}
+
+// GetUserGroupMemberships fetches user-referenced groups and maps them to user-facing memberships.
+func (s *Service) GetUserGroupMemberships(ctx context.Context, req *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error) {
+
+	userID, groupType, includeDescendants := req.UserID, req.GroupType, req.IncludeDescendants
+
+	groupsWithDescendants, err := s.GroupService.GetGroupsByUserID(ctx, &group.GetGroupsByUserIDRequest{
+		UserID:             userID,
+		IncludeDescendants: includeDescendants,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	memberships := make([]UserGroupMembership, 0, len(groupsWithDescendants.Groups))
+	for _, g := range groupsWithDescendants.Groups {
+		if groupType != "" && g.Type != groupType {
+			continue
+		}
+
 		member, err := g.GetMemberByID(userID)
 
 		membership := UserGroupMembership{
@@ -766,7 +394,9 @@ func (s *Service) getUserAllGroups(ctx context.Context, userID string) ([]UserGr
 		memberships = append(memberships, membership)
 	}
 
-	return memberships, nil
+	return &GetUserGroupMembershipsResponse{
+		Memberships: memberships,
+	}, nil
 }
 
 // isRequesterAdmin safely checks if the requester has admin privileges
@@ -784,60 +414,18 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 	return userResp.User.IsAdmin()
 }
 
-// userHasGroupAccess verifies if a user has access to a group using descendant visibility filtering.
-// For root groups, checks direct membership/ownership. For subgroups, uses GetGroupDescendants with
-// user context to leverage existing visibility and access control logic from the group service.
-func (s *Service) userHasGroupAccess(ctx context.Context, userID string, grp *group.UniversalGroup, isAdmin bool) bool {
-	if grp == nil {
-		return false
-	}
-
-	if isAdmin {
-		return true
-	}
-
-	// If group has no lineage, it's a root group — check direct membership/ownership
-	if len(grp.Lineage) == 0 {
-		if grp.HasMember(userID) || grp.OwnerID == userID {
-			return true
-		}
-
-		// Check if user has admin or moderator role in the group members
-		for _, member := range grp.Members {
-			if member.ID == userID && (member.Role == "ADMIN") {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	// For subgroups, use GetGroupDescendants with user context for visibility filtering
-	// Get root group ID (first element in lineage)
-	rootGroupID := grp.Lineage[0]
-
-	descendantsResp, err := s.GroupService.GetGroupDescendants(ctx, &group.GetGroupDescendantsRequest{
-		ID:       rootGroupID,
-		AsUserID: userID,
-	})
+func (s *Service) hasRequesterGroupAccess(ctx context.Context, userID, groupID string) (bool, error) {
+	accessMap, err := s.GroupService.GetUserGroupAccessMap(ctx, userID)
 	if err != nil {
-		return false
+		return false, err
 	}
 
-	if descendantsResp == nil || len(descendantsResp.Descendants) == 0 {
-		return false
+	groupAccess, exists := accessMap[groupID]
+	if !exists {
+		return false, nil
 	}
 
-	// Check if requested group is in descendants at any level
-	for _, level := range descendantsResp.Descendants {
-		for _, node := range level {
-			if node.ID == grp.ID {
-				return true
-			}
-		}
-	}
-
-	return false
+	return groupAccess.IsAccessible, nil
 }
 
 // calculateGroupSeatUsage computes total unique users including nested group members and owner
