@@ -2,6 +2,7 @@ package usermanager
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
@@ -50,7 +51,11 @@ type GroupService interface {
 	AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error)
 	RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error)
 	UpdateMemberRole(ctx context.Context, req *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error)
+	UpdateOwner(ctx context.Context, req *group.UpdateOwnerRequest) (*group.UpdateOwnerResponse, error)
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
+	GetGroupDescendants(ctx context.Context, req *group.GetGroupDescendantsRequest) (*group.GetGroupDescendantsResponse, error)
+	GetGroupsByUserID(ctx context.Context, req *group.GetGroupsByUserIDRequest) (*group.GetGroupsByUserIDResponse, error)
+	GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]group.UserGroupAccessSummary, error)
 }
 
 // Service holds and manages usermanager business logic
@@ -125,14 +130,63 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfil
 	}, nil
 }
 
+// GetUserByID handles the business logic of fetching a user by ID.
+func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error) {
+
+	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	logger.Debug("fetching-user-by-id", zap.String("user-id", r.ID))
+
+	requestedUser, err := s.UserService.GetUserByID(ctx, r.GetUserByIDRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	if requestedUser.User.GetUserId() != r.UserId {
+		logger.Warn("user-attempting-to-access-another-user-by-id", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		if err != nil {
+			return nil, err
+		}
+
+		if !requestingUser.User.IsAdmin() {
+			logger.Warn("non-admin-user-attempting-to-access-another-user-by-id", zap.String("user-id", r.UserId))
+			return nil, errors.New(userv2.ErrKeyUnauthorisedAccess)
+		}
+	}
+
+	return &GetUserByIDResponse{
+		User: requestedUser.User,
+	}, nil
+}
+
 // GetUserProfile handles the business logic of fetching the requesting user's profile
 func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error) {
+
+	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	logger.Debug("fetching-user-profile", zap.String("user-id", r.UserId))
 
 	serviceResponse, err := s.UserService.GetUserProfile(ctx, &userv2.GetUserProfileRequest{
 		ID: r.UserId,
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if serviceResponse.Profile.ID != r.UserId {
+		logger.Warn("user-attempting-to-access-another-user-profile", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		if err != nil {
+			return nil, err
+		}
+
+		if !requestingUser.User.IsAdmin() {
+			logger.Warn("non-admin-user-attempting-to-access-another-user-profile", zap.String("user-id", r.UserId))
+			return nil, errors.New(userv2.ErrKeyUnauthorisedAccess)
+		}
 	}
 
 	return &GetUserProfileResponse{
@@ -144,26 +198,45 @@ func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) 
 // TODO: Add audit logs, add more resource types
 func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error {
 
-	var loggr = logger.AcquireFrom(ctx)
+	var logger = logger.AcquireFrom(ctx)
 	var err error
 
-	loggr.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", r.UserId))
+	logger.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", r.UserId))
 
-	loggr.Info("initiate-wiping-user-account", zap.String("user-id", r.UserId))
+	requestedUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.ID})
+	if err != nil {
+		return err
+	}
+
+	if requestedUser.User.GetUserId() != r.UserId {
+		logger.Warn("user-attempting-to-delete-another-user", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		if err != nil {
+			return err
+		}
+
+		if !requestingUser.User.IsAdmin() {
+			logger.Warn("non-admin-user-attempting-to-delete-another-user", zap.String("user-id", r.UserId))
+			return errors.New(userv2.ErrKeyUnauthorisedAccess)
+		}
+	}
+
+	logger.Info("initiate-wiping-user-account", zap.String("user-id", r.UserId))
 	err = s.UserService.DeleteUser(ctx, &userv2.DeleteUserRequest{ID: r.UserId})
 	if err != nil {
 		return err
 	}
-	loggr.Info("completed-wiping-user-account", zap.String("user-id", r.UserId))
+	logger.Info("completed-wiping-user-account", zap.String("user-id", r.UserId))
 
-	loggr.Info("initiate-wiping-user-owned-api-tokens", zap.String("user-id", r.UserId))
+	logger.Info("initiate-wiping-user-owned-api-tokens", zap.String("user-id", r.UserId))
 	err = s.ApiTokenService.DeleteApiTokensByOwnerId(ctx, r.UserId)
 	if err != nil {
 		return err
 	}
-	loggr.Info("completed-wiping-user-owned-api-tokens", zap.String("user-id", r.UserId))
+	logger.Info("completed-wiping-user-owned-api-tokens", zap.String("user-id", r.UserId))
 
-	loggr.Info("wiping-user-and-resources-from-platform-completed", zap.String("user-id", r.UserId))
+	logger.Info("wiping-user-and-resources-from-platform-completed", zap.String("user-id", r.UserId))
 
 	return nil
 }

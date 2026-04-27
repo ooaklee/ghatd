@@ -42,6 +42,54 @@ func MapRequestToGetGroupByIDRequest(request *http.Request, validator GroupValid
 	return parsedRequest, nil
 }
 
+// MapRequestToGetGroupLineageRequest maps incoming GetGroupLineage request to correct struct
+func MapRequestToGetGroupLineageRequest(request *http.Request, validator GroupValidator) (*GetGroupLineageRequest, error) {
+	var err error
+	parsedRequest := &GetGroupLineageRequest{}
+
+	// get group id from uri
+	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToGetGroupDescendantsRequest maps incoming GetGroupDescendants request to correct struct
+func MapRequestToGetGroupDescendantsRequest(request *http.Request, validator GroupValidator) (*GetGroupDescendantsRequest, error) {
+	var err error
+	parsedRequest := &GetGroupDescendantsRequest{}
+
+	// get group id from uri
+	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToGetGroupByNanoIDRequest maps incoming GetGroupByNanoID request to correct struct
 func MapRequestToGetGroupByNanoIDRequest(request *http.Request, validator GroupValidator) (*GetGroupByNanoIDRequest, error) {
 	var err error
@@ -55,28 +103,6 @@ func MapRequestToGetGroupByNanoIDRequest(request *http.Request, validator GroupV
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidNanoID)
-	}
-
-	return parsedRequest, nil
-}
-
-// MapRequestToGetGroupByNameRequest maps incoming GetGroupByName request to correct struct
-func MapRequestToGetGroupByNameRequest(request *http.Request, validator GroupValidator) (*GetGroupByNameRequest, error) {
-	parsedRequest := &GetGroupByNameRequest{}
-
-	// get query parameters
-	query := request.URL.Query()
-	err := querydecoder.New(query).Decode(parsedRequest)
-	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	if parsedRequest.Name == "" {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
-	}
-
-	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}
 
 	return parsedRequest, nil
@@ -150,6 +176,30 @@ func MapRequestToGetGroupsRequest(request *http.Request, validator GroupValidato
 	return parsedRequest, nil
 }
 
+// MapRequestToGetGroupsByUserIDRequest maps incoming GetGroupsByUserID request to correct struct
+func MapRequestToGetGroupsByUserIDRequest(request *http.Request, validator GroupValidator) (*GetGroupsByUserIDRequest, error) {
+	var err error
+	parsedRequest := &GetGroupsByUserIDRequest{}
+
+	parsedRequest.UserID, err = toolbox.GetVariableValueFromUri(request, "userID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	err = validator.Validate(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToAddMemberRequest maps incoming AddMember request to correct struct
 func MapRequestToAddMemberRequest(request *http.Request, validator GroupValidator) (*AddMemberRequest, error) {
 	var err error
@@ -177,6 +227,7 @@ func MapRequestToAddMemberRequest(request *http.Request, validator GroupValidato
 func MapRequestToRemoveMemberRequest(request *http.Request, validator GroupValidator) (*RemoveMemberRequest, error) {
 	var err error
 	parsedRequest := &RemoveMemberRequest{}
+	query := request.URL.Query()
 
 	// get group id from uri
 	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
@@ -192,6 +243,11 @@ func MapRequestToRemoveMemberRequest(request *http.Request, validator GroupValid
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidMemberID)
+	}
+
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}
 
 	return parsedRequest, nil
@@ -251,10 +307,10 @@ func MapRequestToGetGroupMembersRequest(request *http.Request, validator GroupVa
 	return parsedRequest, nil
 }
 
-// MapRequestToUpdateLeadershipRequest maps incoming UpdateLeadership request to correct struct
-func MapRequestToUpdateLeadershipRequest(request *http.Request, validator GroupValidator) (*UpdateLeadershipRequest, error) {
+// MapRequestToUpdateOwnerRequest maps incoming UpdateOwner request to correct struct
+func MapRequestToUpdateOwnerRequest(request *http.Request, validator GroupValidator) (*UpdateOwnerRequest, error) {
 	var err error
-	parsedRequest := &UpdateLeadershipRequest{}
+	parsedRequest := &UpdateOwnerRequest{}
 
 	// get group id from uri
 	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
@@ -323,6 +379,23 @@ func MapRequestToGetGroupStatsRequest(request *http.Request, validator GroupVali
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToValidateGroupNameRequest maps incoming ValidateGroupName request to correct struct
+func MapRequestToValidateGroupNameRequest(request *http.Request, validator GroupValidator) (*ValidateGroupNameRequest, error) {
+	parsedRequest := &ValidateGroupNameRequest{}
+
+	query := request.URL.Query()
+	err := querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
 	}
 
 	return parsedRequest, nil

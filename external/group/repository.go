@@ -140,6 +140,27 @@ func (r *Repository) GetGroupByName(ctx context.Context, name, groupType string,
 	return &result, nil
 }
 
+// GetGroupByNameAndParent retrieves a group by name under a specific parent.
+func (r *Repository) GetGroupByNameAndParent(ctx context.Context, name, parentGroupID string, logError bool) (*UniversalGroup, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"name":            normaliseGroupName(name),
+		"parent_group_id": parentGroupID,
+	}
+
+	var result UniversalGroup
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", logError, errors.New(ErrKeyUnableToFindGroupWithName))
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 // UpdateGroup updates an existing group
 func (r *Repository) UpdateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
@@ -153,6 +174,12 @@ func (r *Repository) UpdateGroup(ctx context.Context, group *UniversalGroup) (*U
 
 	update := bson.M{
 		"$set": group,
+	}
+
+	if len(group.Members) == 0 {
+		update["$unset"] = bson.M{
+			"members": "",
+		}
 	}
 
 	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "group")
@@ -322,6 +349,43 @@ func (r *Repository) GetGroupsByStatus(ctx context.Context, status string, page,
 	return results, nil
 }
 
+// GetGroupsByReferencedUserID retrieves groups where user is either owner or a member.
+func (r *Repository) GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"$or": []bson.M{
+			{"owner_id": userID},
+			{
+				"members": bson.M{
+					"$elemMatch": bson.M{
+						"id": userID,
+					},
+				},
+			},
+		},
+		"metadata.deleted_at": bson.M{"$exists": false},
+	}
+
+	options := options.Find().SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []UniversalGroup
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &results, "group")
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
 // GetGroupsByMemberID retrieves groups that contain a specific member
 func (r *Repository) GetGroupsByMemberID(ctx context.Context, memberID string, memberType string, page, pageSize int) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
@@ -363,7 +427,7 @@ func (r *Repository) GetGroupsByMemberID(ctx context.Context, memberID string, m
 	return results, nil
 }
 
-// GetGroupsByLeaderID retrieves groups where user is a leader (owner, head, or lead)
+// GetGroupsByLeaderID retrieves groups where the user is the owner.
 func (r *Repository) GetGroupsByLeaderID(ctx context.Context, leaderID string, page, pageSize int) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
 	if err != nil {
@@ -372,10 +436,7 @@ func (r *Repository) GetGroupsByLeaderID(ctx context.Context, leaderID string, p
 
 	queryFilter := bson.M{
 		"$or": []bson.M{
-			{"leadership.owner_id": leaderID},
-			{"leadership.head_id": leaderID},
-			{"leadership.lead_id": leaderID},
-			{"leadership.admin_ids": leaderID},
+			{"owner_id": leaderID},
 		},
 	}
 
@@ -388,6 +449,32 @@ func (r *Repository) GetGroupsByLeaderID(ctx context.Context, leaderID string, p
 		SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
 
 	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []UniversalGroup
+	err = r.Store.MapAllInCursorToResult(ctx, cursor, &results, "group")
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+// GetGroupsByLineageAncestor retrieves all groups that descend from the provided ancestor group ID.
+func (r *Repository) GetGroupsByLineageAncestor(ctx context.Context, ancestorGroupID string) ([]UniversalGroup, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"lineage":             ancestorGroupID,
+		"metadata.deleted_at": bson.M{"$exists": false},
+	}
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +582,8 @@ func (r *Repository) RemoveMemberFromGroup(ctx context.Context, groupID, memberI
 	}
 
 	queryFilter := bson.M{
-		"_id": groupID,
+		"_id":        groupID,
+		"members.id": memberID,
 	}
 
 	update := bson.M{
@@ -508,6 +596,99 @@ func (r *Repository) RemoveMemberFromGroup(ctx context.Context, groupID, memberI
 
 	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "group")
 	return err
+}
+
+// ClearOwnerFromGroup clears owner_id for a group when it currently matches the provided owner ID.
+func (r *Repository) ClearOwnerFromGroup(ctx context.Context, groupID, ownerID string) error {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	queryFilter := bson.M{
+		"_id":      groupID,
+		"owner_id": ownerID,
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"owner_id": "",
+		},
+	}
+
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "group")
+	return err
+}
+
+// GetGroupIDsWithInvalidMembers returns IDs of groups containing members with empty or null IDs.
+func (r *Repository) GetGroupIDsWithInvalidMembers(ctx context.Context) ([]string, error) {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := bson.M{
+		"members": bson.M{
+			"$elemMatch": bson.M{
+				"$or": bson.A{
+					bson.M{"id": ""},
+					bson.M{"id": nil},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options.Find().SetProjection(bson.M{"_id": 1}))
+	if err != nil {
+		return nil, err
+	}
+
+	type groupIDResult struct {
+		ID string `bson:"_id"`
+	}
+
+	results := []groupIDResult{}
+	if err := r.Store.MapAllInCursorToResult(ctx, cursor, &results, "groups"); err != nil {
+		return nil, err
+	}
+
+	groupIDs := make([]string, 0, len(results))
+	for _, result := range results {
+		groupIDs = append(groupIDs, result.ID)
+	}
+
+	return groupIDs, nil
+}
+
+// RepairInvalidMembers removes members with empty or null IDs from all affected groups.
+func (r *Repository) RepairInvalidMembers(ctx context.Context) error {
+	collection, err := r.GetGroupCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	queryFilter := bson.M{
+		"members": bson.M{
+			"$elemMatch": bson.M{
+				"$or": bson.A{
+					bson.M{"id": ""},
+					bson.M{"id": nil},
+				},
+			},
+		},
+	}
+
+	update := bson.M{
+		"$pull": bson.M{
+			"members": bson.M{
+				"id": bson.M{
+					"$in": bson.A{"", nil},
+				},
+			},
+		},
+	}
+
+	return r.Store.ExecuteUpdateManyCommand(ctx, collection, queryFilter, update, "groups")
 }
 
 // BulkUpdateGroupsStatus updates status for multiple groups
@@ -587,15 +768,9 @@ func (r *Repository) buildGroupQueryFilter(req *GetGroupsRequest) bson.M {
 		}
 	}
 
-	// Leadership filters
+	// Owner filter
 	if req.OwnerID != "" {
-		queryFilter["leadership.owner_id"] = req.OwnerID
-	}
-	if req.HeadID != "" {
-		queryFilter["leadership.head_id"] = req.HeadID
-	}
-	if req.LeadID != "" {
-		queryFilter["leadership.lead_id"] = req.LeadID
+		queryFilter["owner_id"] = req.OwnerID
 	}
 
 	// Settings filters
@@ -694,10 +869,8 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 			// Integrations
 			{Key: "with_slack", Value: countPipeline(bson.M{"integrations.slack": bson.M{"$exists": true, "$ne": nil}})},
 			{Key: "with_custom", Value: countPipeline(bson.M{"integrations.custom": bson.M{"$exists": true, "$ne": nil, "$gt": bson.M{}}})},
-			// Leadership
-			{Key: "with_owner", Value: countPipeline(bson.M{"leadership.owner_id": bson.M{"$exists": true, "$ne": ""}})},
-			{Key: "with_head", Value: countPipeline(bson.M{"leadership.head_id": bson.M{"$exists": true, "$ne": ""}})},
-			{Key: "with_lead", Value: countPipeline(bson.M{"leadership.lead_id": bson.M{"$exists": true, "$ne": ""}})},
+			// Ownership
+			{Key: "with_owner", Value: countPipeline(bson.M{"owner_id": bson.M{"$exists": true, "$ne": ""}})},
 			// Total members (sum of members array sizes)
 			{Key: "member_totals", Value: bson.A{
 				bson.D{{Key: "$project", Value: bson.M{"member_count": bson.M{"$size": bson.M{"$ifNull": bson.A{"$members", bson.A{}}}}}}},
@@ -735,8 +908,6 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 		WithSlack          []countDoc       `bson:"with_slack"`
 		WithCustom         []countDoc       `bson:"with_custom"`
 		WithOwner          []countDoc       `bson:"with_owner"`
-		WithHead           []countDoc       `bson:"with_head"`
-		WithLead           []countDoc       `bson:"with_lead"`
 		MemberTotals       []memberTotalDoc `bson:"member_totals"`
 	}
 
@@ -766,15 +937,6 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 	withCustom := extractCount(result.WithCustom)
 
 	withOwner := extractCount(result.WithOwner)
-	withHead := extractCount(result.WithHead)
-	withLead := extractCount(result.WithLead)
-	withAnyLeadership := withOwner
-	if withHead > withAnyLeadership {
-		withAnyLeadership = withHead
-	}
-	if withLead > withAnyLeadership {
-		withAnyLeadership = withLead
-	}
 
 	return &AllGroupsStats{
 		Total:        extractCount(result.Total),
@@ -799,9 +961,7 @@ func (r *Repository) GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats,
 		},
 		Leadership: GroupLeadershipStats{
 			WithOwner: withOwner,
-			WithHead:  withHead,
-			WithLead:  withLead,
-			WithAny:   withAnyLeadership,
+			WithAny:   withOwner,
 		},
 	}, nil
 }

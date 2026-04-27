@@ -11,11 +11,13 @@ import (
 type GroupService interface {
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
 	GetGroupByID(ctx context.Context, r *GetGroupByIDRequest) (*GetGroupByIDResponse, error)
+	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
+	GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error)
 	GetGroupByNanoID(ctx context.Context, r *GetGroupByNanoIDRequest) (*GetGroupByNanoIDResponse, error)
-	GetGroupByName(ctx context.Context, r *GetGroupByNameRequest) (*GetGroupByNameResponse, error)
 	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
 	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error)
 	GetGroups(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
+	GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error)
 	GetGroupsByMemberID(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	GetGroupsByLeaderID(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	SearchGroupsByExtension(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
@@ -23,12 +25,14 @@ type GroupService interface {
 	RemoveMember(ctx context.Context, r *RemoveMemberRequest) (*RemoveMemberResponse, error)
 	UpdateMemberRole(ctx context.Context, r *UpdateMemberRoleRequest) (*UpdateMemberRoleResponse, error)
 	GetGroupMembers(ctx context.Context, r *GetGroupMembersRequest) (*GetGroupMembersResponse, error)
-	UpdateLeadership(ctx context.Context, r *UpdateLeadershipRequest) (*UpdateLeadershipResponse, error)
+	UpdateOwner(ctx context.Context, r *UpdateOwnerRequest) (*UpdateOwnerResponse, error)
+	RepairInvalidMembers(ctx context.Context) (*RepairInvalidMembersResponse, error)
 	ArchiveGroup(ctx context.Context, r *ArchiveGroupRequest) (*ArchiveGroupResponse, error)
 	RestoreGroup(ctx context.Context, r *RestoreGroupRequest) (*RestoreGroupResponse, error)
 	GetGroupStats(ctx context.Context, groupID string) (*GetGroupStatsResponse, error)
 	GetGroupsStats(ctx context.Context, r *GetGroupsStatsRequest) (*GetGroupsStatsResponse, error)
 	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
+	ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error)
 }
 
 // GroupValidator interface defines expected methods of a valid validator
@@ -86,6 +90,40 @@ func (h *Handler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
 }
 
+// GetGroupLineage handles getting a group's root-first lineage
+func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupLineageRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupLineage(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Lineage)
+}
+
+// GetGroupDescendants handles getting a group's descendants grouped by depth level
+func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupDescendantsRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupDescendants(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Descendants)
+}
+
 // GetGroupByNanoID handles getting a group by nano ID
 func (h *Handler) GetGroupByNanoID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetGroupByNanoIDRequest(r, h.Validator)
@@ -95,23 +133,6 @@ func (h *Handler) GetGroupByNanoID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.GetGroupByNanoID(r.Context(), request)
-	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
-}
-
-// GetGroupByName handles getting a group by name
-func (h *Handler) GetGroupByName(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetGroupByNameRequest(r, h.Validator)
-	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.GetGroupByName(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
@@ -141,6 +162,23 @@ func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups)
+}
+
+// GetGroupsByUserID handles getting groups referenced by a user ID.
+func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupsByUserIDRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupsByUserID(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetGroupsByMemberID handles getting groups by member ID with pagination
@@ -314,21 +352,32 @@ func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Members)
 }
 
-// UpdateLeadership handles updating group leadership
-func (h *Handler) UpdateLeadership(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToUpdateLeadershipRequest(r, h.Validator)
+// UpdateOwner handles updating group owner
+func (h *Handler) UpdateOwner(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateOwnerRequest(r, h.Validator)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	response, err := h.Service.UpdateLeadership(r.Context(), request)
+	response, err := h.Service.UpdateOwner(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// RepairInvalidMembers handles repairing groups that contain members with empty or null IDs.
+func (h *Handler) RepairInvalidMembers(w http.ResponseWriter, r *http.Request) {
+	response, err := h.Service.RepairInvalidMembers(r.Context())
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // ArchiveGroup handles archiving a group
@@ -402,6 +451,24 @@ func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
+}
+
+// ValidateGroupName handles validating a proposed group name without persisting anything.
+// Front-end forms can call this to preview what RawName and Name will be stored.
+func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToValidateGroupNameRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ValidateGroupName(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // getBaseResponseHandler returns response handler configured with group error maps

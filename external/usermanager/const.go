@@ -9,6 +9,9 @@ const (
 
 	// UserManagerURIVariableGroupType is the URI variable for group type
 	UserManagerURIVariableGroupType = "groupType"
+
+	// UserManagerURIVariableMemberID is the URI variable for member ID
+	UserManagerURIVariableMemberID = "memberID"
 )
 
 const (
@@ -54,4 +57,13 @@ const (
 
 	// ErrKeyGroupServiceNotEnabled is returned when group features are requested but GroupService is not configured
 	ErrKeyGroupServiceNotEnabled = "GroupServiceNotEnabled"
+
+	// ErrKeyFailedToUpdateGroupOwner returned when updating group owner fails
+	ErrKeyFailedToUpdateGroupOwner = "FailedToUpdateGroupOwner"
+
+	// ErrKeyFailedToResolveGroupAccessMap returned when group access map resolution fails
+	ErrKeyFailedToResolveGroupAccessMap = "FailedToResolveGroupAccessMap"
+
+	// ErrKeyInvalidMemberID returned when the provided member ID is invalid or empty
+	ErrKeyInvalidMemberID = "InvalidMemberID"
 )

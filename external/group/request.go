@@ -13,10 +13,8 @@ type GetGroupsRequest struct {
 	MemberType     string              ` query:"member_type"`
 	MembersWithIDs map[string][]string ` query:"members_with_ids"`
 
-	// Leadership filters
+	// Owner filter
 	OwnerID string ` query:"owner_id"`
-	HeadID  string ` query:"head_id"`
-	LeadID  string ` query:"lead_id"`
 
 	// Settings filters
 	Visibility string `query:"visibility"`
@@ -36,6 +34,15 @@ type GetGroupsRequest struct {
 	ExtensionFilters map[string]interface{} `json:"extension_filters,omitempty" query:"extension_filters"`
 }
 
+// GetGroupsByUserIDRequest defines the request for getting groups referenced by a user.
+type GetGroupsByUserIDRequest struct {
+	UserID string `path:"userID"`
+
+	// IncludeDescendants if true, includes descendants per root group
+	// that the user can access.
+	IncludeDescendants bool `query:"include_descendants"`
+}
+
 // GetGroupByIDRequest defines the request for getting a single group
 type GetGroupByIDRequest struct {
 	ID string `path:"groupID"`
@@ -44,12 +51,6 @@ type GetGroupByIDRequest struct {
 // GetGroupByNanoIDRequest defines the request for getting a single group by nano ID
 type GetGroupByNanoIDRequest struct {
 	NanoID string `path:"groupNanoID"`
-}
-
-// GetGroupByNameRequest defines the request for getting a group by name
-type GetGroupByNameRequest struct {
-	Name string `query:"name"`
-	Type string `query:"type"` // Optional type filter
 }
 
 // CreateGroupRequest defines the request for creating a new group
@@ -66,10 +67,8 @@ type CreateGroupRequest struct {
 	// Initial members
 	InitialMembers []CreateMemberRequest `json:"initial_members,omitempty"`
 
-	// Initial leadership
+	// Initial owner
 	OwnerID string `json:"owner_id,omitempty"`
-	HeadID  string `json:"head_id,omitempty"`
-	LeadID  string `json:"lead_id,omitempty"`
 }
 
 // CreateMemberRequest defines member data for creation
@@ -103,8 +102,9 @@ type AddMemberRequest struct {
 
 // RemoveMemberRequest defines the request for removing a member
 type RemoveMemberRequest struct {
-	GroupID  string `path:"groupID"`
-	MemberID string `path:"memberID"`
+	GroupID             string `path:"groupID"`
+	MemberID            string `path:"memberID"`
+	ConfirmOwnerRemoval bool   `query:"confirm_owner_removal"`
 }
 
 // UpdateMemberRoleRequest defines the request for updating a member's role
@@ -121,12 +121,14 @@ type GetGroupMembersRequest struct {
 	Role       string `query:"role"`
 }
 
-// UpdateLeadershipRequest defines the request for updating leadership
-type UpdateLeadershipRequest struct {
-	GroupID string  `path:"groupID"`
+// UpdateOwnerRequest defines the request for updating ownership.
+type UpdateOwnerRequest struct {
+
+	// GroupID is the ID of the group
+	GroupID string `path:"groupID"`
+
+	// OwnerID is the new owner's user ID (nil = no change, empty string = clear)
 	OwnerID *string `json:"owner_id,omitempty"`
-	HeadID  *string `json:"head_id,omitempty"`
-	LeadID  *string `json:"lead_id,omitempty"`
 }
 
 // DeleteGroupRequest defines the request for deleting a group
@@ -151,8 +153,36 @@ type GetGroupStatsRequest struct {
 	ID string `path:"groupID"`
 }
 
+// GetGroupLineageRequest defines the request for getting a group's lineage
+type GetGroupLineageRequest struct {
+	ID string `path:"groupID"`
+
+	// AsUserID if provided, checks whether given ID is a direct member of
+	// each lineage group and includes this information in the response
+	AsUserID string `query:"as_user_id"`
+}
+
+// GetGroupDescendantsRequest defines the request for getting all descendants of a group.
+type GetGroupDescendantsRequest struct {
+	ID          string `path:"groupID"`
+	MaxDepth    int    `query:"max_depth"`
+	IncludeSelf bool   `query:"include_self"`
+
+	// AsUserID allows permission checks using the specified user ID when retrieving
+	// group descendants, ensuring that the response includes only the groups the
+	// user can access.
+	AsUserID string `query:"as_user_id"`
+}
+
 // GetGroupsStatsRequest defines the request for getting aggregate groups stats
 type GetGroupsStatsRequest struct{}
 
 // GetGroupsConfigRequest defines the request for getting the groups config
 type GetGroupsConfigRequest struct{}
+
+// ValidateGroupNameRequest defines the request for validating a proposed group name
+type ValidateGroupNameRequest struct {
+	Name          string `json:"name" query:"name" validate:"required"`
+	Type          string `json:"type" query:"type" validate:"required"`
+	ParentGroupID string `json:"parent_group_id,omitempty" query:"parent_group_id"`
+}

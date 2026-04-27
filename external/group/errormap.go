@@ -90,6 +90,11 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		Code:       "GRP0-015",
 		Detail:     "The specified member type is not valid",
 	},
+	ErrKeyInvalidMemberRole: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-028",
+		Detail:     "The specified member role is not valid",
+	},
 	ErrKeyMemberNotFound: {
 		StatusCode: http.StatusNotFound,
 		Code:       "GRP0-016",
@@ -109,6 +114,16 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		StatusCode: http.StatusBadRequest,
 		Code:       "GRP0-019",
 		Detail:     "The provided member ID is invalid",
+	},
+	ErrKeyOwnerRemovalRequiresConfirm: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-029",
+		Detail:     "Removing the current group owner requires explicit confirmation",
+	},
+	ErrKeyInvalidUserIDProvided: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-030",
+		Detail:     "The provided user ID is invalid",
 	},
 
 	// Hierarchy errors

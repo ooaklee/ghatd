@@ -11,21 +11,25 @@ import (
 type GroupHandler interface {
 	CreateGroup(w http.ResponseWriter, r *http.Request)
 	GetGroupByID(w http.ResponseWriter, r *http.Request)
+	GetGroupLineage(w http.ResponseWriter, r *http.Request)
+	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
 	GetGroupByNanoID(w http.ResponseWriter, r *http.Request)
-	GetGroupByName(w http.ResponseWriter, r *http.Request)
 	UpdateGroup(w http.ResponseWriter, r *http.Request)
 	DeleteGroup(w http.ResponseWriter, r *http.Request)
 	GetGroups(w http.ResponseWriter, r *http.Request)
+	GetGroupsByUserID(w http.ResponseWriter, r *http.Request)
 	AddMember(w http.ResponseWriter, r *http.Request)
 	RemoveMember(w http.ResponseWriter, r *http.Request)
 	UpdateMemberRole(w http.ResponseWriter, r *http.Request)
 	GetGroupMembers(w http.ResponseWriter, r *http.Request)
-	UpdateLeadership(w http.ResponseWriter, r *http.Request)
+	UpdateOwner(w http.ResponseWriter, r *http.Request)
+	RepairInvalidMembers(w http.ResponseWriter, r *http.Request)
 	ArchiveGroup(w http.ResponseWriter, r *http.Request)
 	RestoreGroup(w http.ResponseWriter, r *http.Request)
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
 	GetGroupsStats(w http.ResponseWriter, r *http.Request)
 	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
+	ValidateGroupName(w http.ResponseWriter, r *http.Request)
 }
 
 // APIGroupsV1Prefix base URI prefix for all v1 groups routes
@@ -54,13 +58,17 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes := httpRouter.PathPrefix(APIGroupsV1Prefix).Subrouter()
 	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.GetGroups).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/users/{userID}", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetGroupsStats).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/configs", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/validate-name", request.Handler.ValidateGroupName).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/repairs/members", request.Handler.RepairInvalidMembers).Methods(http.MethodPost, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.GetGroupByID).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/descendants", request.Handler.GetGroupDescendants).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/nano/{groupNanoID}", request.Handler.GetGroupByNanoID).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/search", request.Handler.GetGroupByName).Methods(http.MethodGet, http.MethodOptions)
 
 	// Group status operations
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/archive", request.Handler.ArchiveGroup).Methods(http.MethodPost, http.MethodOptions)
@@ -72,8 +80,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members/{memberID}", request.Handler.RemoveMember).Methods(http.MethodDelete, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members/{memberID}/role", request.Handler.UpdateMemberRole).Methods(http.MethodPut, http.MethodOptions)
 
-	// Leadership management
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/leadership", request.Handler.UpdateLeadership).Methods(http.MethodPut, http.MethodOptions)
+	// Ownership management
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/owner", request.Handler.UpdateOwner).Methods(http.MethodPut, http.MethodOptions)
 
 	// Statistics
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)

@@ -13,6 +13,7 @@ import (
 type UsermanagerService interface {
 	GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error)
 	GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error)
+	GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error)
 	UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error)
 	DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error
 	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
@@ -21,16 +22,15 @@ type UsermanagerService interface {
 	GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error)
 	// Group/Team management methods
 	GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error)
+	GetUserGroupMemberships(ctx context.Context, r *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error)
 	GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
-	GetUserTeamMemberships(ctx context.Context, r *GetUserTeamMembershipsRequest) (*GetUserTeamMembershipsResponse, error)
-	UpdateUserTeamMembership(ctx context.Context, r *UpdateUserTeamMembershipRequest) (*UpdateUserTeamMembershipResponse, error)
-	RemoveUserFromGroup(ctx context.Context, r *RemoveUserFromGroupRequest) (*RemoveUserFromGroupResponse, error)
-	FindUserInfo(ctx context.Context, r *FindUserInfoRequest) (*FindUserInfoResponse, error)
-	BulkUpdateUserGroupMemberships(ctx context.Context, r *BulkUpdateUserGroupMembershipsRequest) (*BulkUpdateUserGroupMembershipsResponse, error)
-	GetGroupsByType(ctx context.Context, r *GetGroupsByTypeRequest) (*GetGroupsByTypeResponse, error)
 	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
+	// Group management methods
+	AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error)
+	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
+	UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
@@ -147,6 +147,27 @@ func (h *Handler) GetUserMicroProfile(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
+}
+
+// GetUserByID returns response for request to get user by ID
+func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserByIDRequest(r, h.Validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetUserByID(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+
 }
 
 // GetUserProfile returns response for request to get user's
@@ -306,24 +327,21 @@ func (h *Handler) GetUserGroups(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups)
 }
 
-// GetUserTeamMemberships handles the request to get team membership status for a user
+// GetUserTeamMemberships handles the request to get a user's team memberships.
 func (h *Handler) GetUserTeamMemberships(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserTeamMembershipsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	response, err := h.Service.GetUserTeamMemberships(r.Context(), request)
+	response, err := h.Service.GetUserGroupMemberships(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Memberships)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetGroupDetail handles the request to fetch a group's details for the requester
@@ -343,7 +361,7 @@ func (h *Handler) GetGroupDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Detail)
 }
 
 // GetGroupStats handles the request to fetch a group's stats for the requester
@@ -366,119 +384,7 @@ func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Stats)
 }
 
-// UpdateUserTeamMembership handles the request to update a user's team membership
-func (h *Handler) UpdateUserTeamMembership(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToUpdateUserTeamMembershipRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.UpdateUserTeamMembership(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Membership)
-}
-
-// RemoveUserFromGroup handles the request to remove a user from a group
-func (h *Handler) RemoveUserFromGroup(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToRemoveUserFromGroupRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.RemoveUserFromGroup(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
-}
-
-// FindUserInfo handles the request to find user information with optional group membership data
-func (h *Handler) FindUserInfo(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToFindUserInfoRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.FindUserInfo(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
-}
-
-// BulkUpdateUserGroupMemberships handles the request to perform bulk group membership operations
-func (h *Handler) BulkUpdateUserGroupMemberships(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToBulkUpdateUserGroupMembershipsRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.BulkUpdateUserGroupMemberships(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	// Use 207 Multi-Status if there are failures, otherwise 200 OK
-	statusCode := http.StatusOK
-	if response.FailureCount > 0 {
-		statusCode = http.StatusMultiStatus
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, statusCode, response)
-}
-
-// GetGroupsByType handles the request to get groups filtered by type
-func (h *Handler) GetGroupsByType(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetGroupsByTypeRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.GetGroupsByType(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	if request.Meta {
-		//nolint will set up default fallback later
-		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups, reply.WithMeta(response.Meta))
-		return
-	}
-
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups)
-}
-
-// CreateGroup handles the admin request to create a new group
+// CreateGroup handles the request to create a new group
 func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToCreateGroupRequest(r, h.Validator)
 	if err != nil {
@@ -496,6 +402,57 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Group)
+}
+
+// AddGroupMember handles the request to add a member to a group
+func (h *Handler) AddGroupMember(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAddGroupMemberRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.AddGroupMember(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// RemoveGroupMember handles the request to remove a member from a group
+func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToRemoveGroupMemberRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.RemoveGroupMember(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// UpdateGroupOwner handles the request to update group ownership
+func (h *Handler) UpdateGroupOwner(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateGroupOwnerRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.UpdateGroupOwner(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetBaseResponseHandler returns response handler configured with auth error map

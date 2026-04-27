@@ -82,7 +82,7 @@ func (f *GroupFactory) CreateGroupWithMembers(name, groupType string, memberIDs 
 // CreateGroupWithOwner creates a group with an owner
 func (f *GroupFactory) CreateGroupWithOwner(name, groupType, ownerID string) *UniversalGroup {
 	group := f.CreateGroup(name, groupType)
-	group.Leadership.OwnerID = ownerID
+	group.OwnerID = ownerID
 	group.AddMember(ownerID, MemberTypeUser, MemberRoleOwner)
 	return group
 }

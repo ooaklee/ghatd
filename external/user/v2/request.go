@@ -34,7 +34,9 @@ type UpdateUserRequest struct {
 
 // GetUserByIDRequest holds data for retrieving a user by ID
 type GetUserByIDRequest struct {
-	ID string
+
+	// ID is the ID of the user being requested
+	ID string `required:"true"`
 }
 
 // GetUserByNanoIDRequest holds data for retrieving a user by nano ID
@@ -160,6 +162,7 @@ type RecordUserLoginRequest struct {
 
 // GetUserProfileRequest holds data for retrieving a user profile
 type GetUserProfileRequest struct {
+	// ID is the user ID for which to retrieve the profile
 	ID string
 }
 

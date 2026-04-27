@@ -144,6 +144,43 @@ func (c *GroupConfig) WithMultipleIdentifiers(allow bool) *GroupConfig {
 	return c
 }
 
+// toGroupConfigCapabilities converts GroupConfig to GroupConfigCapabilities response DTO.
+func (c *GroupConfig) toGroupConfigCapabilities() *GroupConfigCapabilities {
+	if c == nil {
+		c = DefaultGroupConfig()
+	}
+
+	// Compute valid statuses from transition keys.
+	validStatuses := make([]string, 0, len(c.StatusTransitions))
+	for status := range c.StatusTransitions {
+		validStatuses = append(validStatuses, status)
+	}
+	sort.Strings(validStatuses)
+
+	return &GroupConfigCapabilities{
+		RequiredFields:      c.RequiredFields,
+		MultipleIdentifiers: c.MultipleIdentifiers,
+		Statuses: Statuses{
+			Default:     c.DefaultStatus,
+			Valid:       validStatuses,
+			Transitions: c.StatusTransitions,
+		},
+		Types: Types{
+			Valid:            c.ValidTypes,
+			ValidMemberTypes: c.ValidMemberTypes,
+		},
+		GroupNesting: GroupNesting{
+			Allow:           c.AllowNestedGroups,
+			MaxNestingDepth: c.MaxNestingDepth,
+			Tree:            c.Tree,
+		},
+		Roles: Roles{
+			Default:       c.DefaultRoles,
+			TypeOverrides: c.TypeToRoleOverrides,
+		},
+	}
+}
+
 // IsValidType checks whether a group type is allowed by this config.
 // If no valid types are configured, any type is accepted.
 func (c *GroupConfig) IsValidType(groupType string) bool {
@@ -274,6 +311,35 @@ func (c *GroupConfig) CanHaveChildType(parentType, childType string) bool {
 	}
 
 	return false
+}
+
+// GetIndependentHierarchyTrees returns the root types of each independent hierarchy tree.
+// Root types are those that appear as parents in the tree but never appear as children,
+// meaning they have no parent types and represent the top of their respective hierarchies.
+func (c *GroupConfig) GetIndependentHierarchyTrees() []string {
+	if c == nil || len(c.Tree) == 0 {
+		return []string{}
+	}
+
+	// Track all types that appear as children
+	childTypes := make(map[string]struct{})
+	for _, children := range c.Tree {
+		for _, childType := range children {
+			childTypes[childType] = struct{}{}
+		}
+	}
+
+	// Find parent types that are never children (the roots)
+	var roots []string
+	for parentType := range c.Tree {
+		if _, isChild := childTypes[parentType]; !isChild {
+			roots = append(roots, parentType)
+		}
+	}
+
+	// Sort for consistent ordering
+	sort.Strings(roots)
+	return roots
 }
 
 // uniqueStrings returns input values with duplicates removed while preserving
