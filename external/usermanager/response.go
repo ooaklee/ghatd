@@ -6,6 +6,11 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
+// GetGroupsByUserIDResponse represents the response for fetching groups by user ID
+type GetGroupsByUserIDResponse struct {
+	*group.GetGroupsByUserIDResponse
+}
+
 // GetUserGroupMembershipsResponse represents the response for fetching user group memberships
 type GetUserGroupMembershipsResponse struct {
 	// Memberships is a list of groups the user has access to (and directly or indirectly a member of)

@@ -22,6 +22,9 @@ type GetGroupsRequest struct {
 	// Search
 	NameSearch string `query:"name_search"`
 
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
+
 	// Pagination
 	Page       int    ` query:"page"`
 	PageSize   int    ` query:"page_size"`
@@ -41,16 +44,25 @@ type GetGroupsByUserIDRequest struct {
 	// IncludeDescendants if true, includes descendants per root group
 	// that the user can access.
 	IncludeDescendants bool `query:"include_descendants"`
+
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetGroupByIDRequest defines the request for getting a single group
 type GetGroupByIDRequest struct {
 	ID string `path:"groupID"`
+
+	// PrefixName if true, prefixes child group name with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetGroupByNanoIDRequest defines the request for getting a single group by nano ID
 type GetGroupByNanoIDRequest struct {
 	NanoID string `path:"groupNanoID"`
+
+	// PrefixName if true, prefixes child group name with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // CreateGroupRequest defines the request for creating a new group
@@ -160,6 +172,9 @@ type GetGroupLineageRequest struct {
 	// AsUserID if provided, checks whether given ID is a direct member of
 	// each lineage group and includes this information in the response
 	AsUserID string `query:"as_user_id"`
+
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetGroupDescendantsRequest defines the request for getting all descendants of a group.
@@ -172,6 +187,9 @@ type GetGroupDescendantsRequest struct {
 	// group descendants, ensuring that the response includes only the groups the
 	// user can access.
 	AsUserID string `query:"as_user_id"`
+
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetGroupsStatsRequest defines the request for getting aggregate groups stats

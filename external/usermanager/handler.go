@@ -27,6 +27,7 @@ type UsermanagerService interface {
 	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
+	GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error)
 	// Group management methods
 	AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error)
 	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
@@ -72,6 +73,23 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 		Environment:              r.Environment,
 		CookieDomain:             r.CookieDomain,
 	}
+}
+
+// GetGroupsByUserID handles the request to get groups by user ID
+func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupsByUserIDRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupsByUserID(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // DeleteUserPermanently returns response for request to get user's
@@ -327,9 +345,9 @@ func (h *Handler) GetUserGroups(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups)
 }
 
-// GetUserTeamMemberships handles the request to get a user's team memberships.
-func (h *Handler) GetUserTeamMemberships(w http.ResponseWriter, r *http.Request) {
-	request, err := MapRequestToGetUserTeamMembershipsRequest(r, h.Validator)
+// GetUserGroupMembershipsRequest handles the request to get a user's team memberships.
+func (h *Handler) GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUserGroupMembershipsRequestRequest(r, h.Validator)
 	if err != nil {
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

@@ -272,6 +272,9 @@ func (s *Service) GetGroupByID(ctx context.Context, req *GetGroupByIDRequest) (*
 
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	if req.PrefixName {
+		group.Name = s.getPrefixName(ctx, group, map[string]string{})
+	}
 
 	return &GetGroupByIDResponse{Group: group}, nil
 }
@@ -292,6 +295,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 	lineageIDs = append(lineageIDs, group.ID)
 
 	lineage := make([]GroupLineageNode, 0, len(lineageIDs))
+	prefixNameByRootID := make(map[string]string)
 	for _, groupID := range lineageIDs {
 		lineageGroup, lineageErr := s.GroupRepository.GetGroupByID(ctx, groupID)
 		if lineageErr != nil {
@@ -299,14 +303,21 @@ func (s *Service) GetGroupLineage(ctx context.Context, req *GetGroupLineageReque
 			continue
 		}
 
+		_, isAdmin := s.resolveUserRoleForGroup(lineageGroup, asUserID)
+		lineageGroupName := lineageGroup.Name
+		if req.PrefixName {
+			lineageGroupName = s.getPrefixName(ctx, lineageGroup, prefixNameByRootID)
+		}
+
 		lineage = append(lineage, GroupLineageNode{
 			ID:            lineageGroup.ID,
 			ParentGroupID: lineageGroup.ParentGroupID,
-			Name:          lineageGroup.Name,
+			Name:          lineageGroupName,
 			RawName:       lineageGroup.RawName,
 			Type:          lineageGroup.Type,
 			IsMember:      asUserID != "" && lineageGroup.HasMember(asUserID),
 			IsOwner:       asUserID != "" && strings.TrimSpace(lineageGroup.OwnerID) == asUserID,
+			IsAdmin:       asUserID != "" && isAdmin,
 		})
 	}
 
@@ -349,16 +360,24 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 
 	levelsMap := map[int][]GroupDescendantsNode{}
 	maxLevel := -1
+	prefixNameByRootID := make(map[string]string)
 
 	if req.IncludeSelf && (asUserID == "" || canSeeRequestedGroup) {
+		_, isAdmin := s.resolveUserRoleForGroup(targetGroup, asUserID)
+		targetGroupName := targetGroup.Name
+		if req.PrefixName {
+			targetGroupName = s.getPrefixName(ctx, targetGroup, prefixNameByRootID)
+		}
+
 		levelsMap[0] = append(levelsMap[0], GroupDescendantsNode{
 			ID:            targetGroup.ID,
 			ParentGroupID: targetGroup.ParentGroupID,
-			Name:          targetGroup.Name,
+			Name:          targetGroupName,
 			RawName:       targetGroup.RawName,
 			Type:          targetGroup.Type,
 			IsMember:      asUserID != "" && targetGroup.HasMember(asUserID),
 			IsOwner:       asUserID != "" && strings.TrimSpace(targetGroup.OwnerID) == asUserID,
+			IsAdmin:       asUserID != "" && isAdmin,
 		})
 		maxLevel = 0
 	}
@@ -381,14 +400,21 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 			continue
 		}
 
+		_, isAdmin := s.resolveUserRoleForGroup(&group, asUserID)
+		groupName := group.Name
+		if req.PrefixName {
+			groupName = s.getPrefixName(ctx, &group, prefixNameByRootID)
+		}
+
 		levelsMap[depth] = append(levelsMap[depth], GroupDescendantsNode{
 			ID:            group.ID,
 			ParentGroupID: group.ParentGroupID,
-			Name:          group.Name,
+			Name:          groupName,
 			RawName:       group.RawName,
 			Type:          group.Type,
 			IsMember:      asUserID != "" && group.HasMember(asUserID),
 			IsOwner:       asUserID != "" && strings.TrimSpace(group.OwnerID) == asUserID,
+			IsAdmin:       asUserID != "" && isAdmin,
 		})
 
 		if depth > maxLevel {
@@ -563,6 +589,9 @@ func (s *Service) GetGroupByNanoID(ctx context.Context, req *GetGroupByNanoIDReq
 
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+	if req.PrefixName {
+		group.Name = s.getPrefixName(ctx, group, map[string]string{})
+	}
 
 	return &GetGroupByNanoIDResponse{Group: group}, nil
 }
@@ -861,6 +890,16 @@ func (s *Service) GetGroups(ctx context.Context, req *GetGroupsRequest) (*GetGro
 		return nil, err
 	}
 
+	if req.PrefixName {
+		prefixNameByRootID := make(map[string]string)
+		for _, grp := range paginatedResponse.Resources {
+			if grp == nil {
+				continue
+			}
+			grp.Name = s.getPrefixName(ctx, grp, prefixNameByRootID)
+		}
+	}
+
 	return &GetGroupsResponse{
 		Total:      paginatedResponse.Total,
 		TotalPages: paginatedResponse.TotalPages,
@@ -890,6 +929,16 @@ func (s *Service) GetGroupsByUserID(ctx context.Context, req *GetGroupsByUserIDR
 	for i := range groups {
 		groups[i].SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 		groupPointers[i] = &groups[i]
+	}
+
+	if req.PrefixName {
+		prefixNameByRootID := make(map[string]string)
+		for _, grp := range groupPointers {
+			if grp == nil {
+				continue
+			}
+			grp.Name = s.getPrefixName(ctx, grp, prefixNameByRootID)
+		}
 	}
 
 	response := &GetGroupsByUserIDResponse{Groups: groupPointers, Descendants: map[string][][]GroupDescendantsNode{}}
@@ -922,6 +971,7 @@ func (s *Service) GetGroupsByUserID(ctx context.Context, req *GetGroupsByUserIDR
 			ID:          rootGroupID,
 			IncludeSelf: true,
 			AsUserID:    userID,
+			PrefixName:  req.PrefixName,
 		})
 		if descendantsErr != nil || descendantsResp == nil {
 			log.Warn(
@@ -937,6 +987,51 @@ func (s *Service) GetGroupsByUserID(ctx context.Context, req *GetGroupsByUserIDR
 
 	response.Descendants = descendants
 	return response, nil
+}
+
+// getPrefixName prefixes a child group name with the root group's name.
+// Root group is derived from the first lineage element, with parent ID as a fallback.
+func (s *Service) getPrefixName(ctx context.Context, g *UniversalGroup, prefixNameByRootID map[string]string) string {
+	if g == nil {
+		return ""
+	}
+
+	if strings.TrimSpace(g.ParentGroupID) == "" {
+		return g.Name
+	}
+
+	rootID := ""
+	if len(g.Lineage) > 0 {
+		rootID = strings.TrimSpace(g.Lineage[0])
+	}
+	if rootID == "" {
+		rootID = strings.TrimSpace(g.ParentGroupID)
+	}
+
+	if rootID == "" || rootID == g.ID {
+		return g.Name
+	}
+
+	if prefixName, found := prefixNameByRootID[rootID]; found {
+		if prefixName == "" {
+			return g.Name
+		}
+		return prefixName + "/" + g.Name
+	}
+
+	rootGroup, err := s.GroupRepository.GetGroupByID(ctx, rootID)
+	if err != nil || rootGroup == nil {
+		prefixNameByRootID[rootID] = ""
+		return g.Name
+	}
+
+	prefixName := strings.TrimSpace(rootGroup.Name)
+	prefixNameByRootID[rootID] = prefixName
+	if prefixName == "" {
+		return g.Name
+	}
+
+	return prefixName + "/" + g.Name
 }
 
 // GetUserGroupAccessMap builds an effective group access map for the provided user.

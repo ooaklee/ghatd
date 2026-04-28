@@ -8,32 +8,65 @@ This guide gives an overview of the `usermanager` architecture, its key features
 
 The package follows a standard layered architecture, consistent with other services in this project. Its primary role is to orchestrate calls to other services rather than managing its own data directly.
 
-1.  **Routes (`routes.go`)**: Defines the HTTP API endpoints for user management, like `/api/v1/ums/users/{userId}/profile`, mapping incoming requests to the appropriate handlers.
+1.  **Routes (`routes.go`)**: Defines the HTTP API endpoints under the `/api/v1/ums` prefix, and organises them across four security tiers: open (rate-limited), authenticated, admin-only, and active-only.
 2.  **Handler (`handler.go`)**: Acts as the intermediary between the HTTP transport layer and the business logic. It's responsible for parsing requests, calling the service layer, and formatting responses.
-3.  **Service (`service.go`, `service.group.go`)**: Contains the core business logic. The service layer makes calls to other downstream services (e.g., `UserService`, `GroupService`, `ContacterService`) to gather and assemble the data needed to fulfil a request.
+3.  **Service (`service.go`, `service.group.go`, `service.group.admin.go`)**: Contains the core business logic. The service layer makes calls to other downstream services (e.g., `UserService`, `GroupService`, `ContacterService`) to gather and assemble the data needed to fulfil a request.
 4.  **Request/Response (`request.go`, `response.go`)**: Defines the data structures for API communication, ensuring a clear and consistent contract for clients.
-5.  **Fender (`fender.go`)**: An authorisation layer that can be used to secure endpoints, ensuring the authenticated user has the correct permissions for the requested action.
+5.  **Fender (`fender.go`)**: Maps incoming HTTP requests to the appropriate request structs, and applies authorisation checks where needed.
 
-Unlike other packages, the `usermanager` doesn't have its own repository or database collection, as it exclusively deals with orchestrating data from other services.
+Unlike other packages, the `usermanager` doesn't have its own repository or database collection — it exclusively orchestrates data from other services.
 
 ## Key Features
 
 The `usermanager` is designed to streamline complex user-related workflows into single API calls.
 
--   **Expanded User Profiles**: Fetch a complete user profile, expanded with data from multiple sources. For example, a single request can return a user's core details alongside a list of all the groups they are a member of.
--   **Simplified Group Management**: Provides intuitive endpoints for managing a user's membership in groups. This includes adding a user to a group, removing them, and listing their current groups, without needing to interact directly with the `group` service.
--   **Communication Management**: Integrates with the `contacter` service to manage a user's communication preferences and history.
--   **Group Management**: Offers secure endpoints for creating groups and managing members/ownership, with service-level authorisation checks.
+-   **Expanded User Profiles**: Fetch a complete user profile, including enriched data from multiple sources. A single request can return a user's core details alongside group memberships, team information, and more.
+-   **Group Memberships**: A dedicated `/me/memberships` endpoint lets the authenticated user retrieve their group memberships, with optional filtering by group type (e.g. `TEAM`, `ORGANISATION`, etc.), the ability to include descendant groups, and optional root-prefix naming (`prefix_name`).
+-   **Group Management**: Active users can create groups, add/remove members, and update group ownership — all through the `usermanager` surface. The service layer applies its own authorisation logic (admin flag or group access) on top of the route-level middleware.
+-   **Communication Management**: Integrates with the `contacter` service to manage communication preferences and history (admin-only).
 
 ## API Endpoints
 
-The following are the primary API endpoints provided by the `usermanager` service:
+All endpoints are prefixed with `/api/v1/ums`. They are split across four security tiers:
 
--   `GET /api/v1/ums/users/{userId}/profile`: Retrieves a user's expanded profile, including their group memberships.
--   `GET /api/v1/ums/users/{userId}/groups`: Lists all groups that the specified user is a member of.
--   `POST /api/v1/ums/users/{userId}/groups/{groupId}`: Adds a user to a specified group.
--   `DELETE /api/v1/ums/users/{userId}/groups/{groupId}`: Removes a user from a specified group.
--   `POST /api/v1/ums/groups`: Creates a new group for an authorised requester.
+### Open (rate-limited)
+-   `POST /api/v1/ums/comms`: Submit a new comms entry (e.g. a contact form submission).
+
+### Authenticated
+These require a valid JWT or API token.
+
+-   `GET /api/v1/ums/me`: Get the authenticated user's own profile.
+-   `DELETE /api/v1/ums/me`: Permanently delete the authenticated user's account.
+-   `GET /api/v1/ums/me/micro`: Get a lightweight micro-profile for the authenticated user.
+-   `GET /api/v1/ums/me/enriched`: Get an enriched profile, optionally including all group memberships. Supports `include_all_groups` and `prefix_name`.
+-   `GET /api/v1/ums/me/memberships`: Get the authenticated user's group memberships. Supports `group_type`, `include_descendants`, and `prefix_name`.
+-   `GET /api/v1/ums/me/groups`: Get a paginated list of groups the authenticated user belongs to. Supports `prefix_name`.
+-   `GET /api/v1/ums/users/{userId}`: Get a user by their ID.
+-   `GET /api/v1/ums/groups/{groupID}`: Get enriched detail for a specific group (members, owner, etc.). Supports `prefix_name`.
+-   `GET /api/v1/ums/groups/{groupID}/stats`: Get statistics for a specific group. Supports `prefix_name`.
+
+### Quick note on `prefix_name`
+
+When `prefix_name=true`, child group names are returned in a root-prefixed format (for example `school/year-10`).
+
+-   `name`: may be prefixed for readability.
+-   `raw_name`: remains the original, non-prefixed value.
+
+Think of it as breadcrumbs for group names, but without the crumbs in your keyboard.
+
+### Admin-only
+-   `GET /api/v1/ums/comms`: List all comms entries.
+-   `GET /api/v1/ums/comms/stats`: Get comms statistics.
+-   `PUT /api/v1/ums/comms/{id}`: Update a comms entry.
+
+### Active users only
+These require the user to be both authenticated and active.
+
+-   `PATCH /api/v1/ums/me`: Update the authenticated user's own profile.
+-   `POST /api/v1/ums/groups`: Create a new group.
+-   `PUT /api/v1/ums/groups/{groupID}/owner`: Update the owner of a group.
+-   `POST /api/v1/ums/groups/{groupID}/members`: Add a member to a group.
+-   `DELETE /api/v1/ums/groups/{groupID}/members/{memberID}`: Remove a member from a group.
 
 ## Configuration and Initialisation
 

@@ -431,6 +431,21 @@ func (g *UniversalGroup) GetMemberIDsByType(memberType string) []string {
 	return ids
 }
 
+// GetMemberTypeByID retrieves the member type by ID
+func (g *UniversalGroup) GetMemberTypeByID(memberID string) (string, error) {
+	for _, member := range g.Members {
+		if member.ID == memberID {
+
+			if memberID == g.OwnerID {
+				return MemberRoleOwner, nil
+			}
+
+			return member.Type, nil
+		}
+	}
+	return "", errors.New(ErrKeyMemberNotFound)
+}
+
 // GetUserMemberIDs retrieves all user member IDs
 func (g *UniversalGroup) GetUserMemberIDs() []string {
 	return g.GetMemberIDsByType(MemberTypeUser)

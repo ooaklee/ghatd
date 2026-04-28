@@ -58,6 +58,7 @@ type GroupLineageNode struct {
 	Type          string `json:"type"`
 	IsMember      bool   `json:"is_member,omitempty"`
 	IsOwner       bool   `json:"is_owner,omitempty"`
+	IsAdmin       bool   `json:"is_admin,omitempty"`
 }
 
 // GetGroupLineageResponse defines the response for getting a group's lineage.

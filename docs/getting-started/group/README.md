@@ -17,26 +17,35 @@ The package follows a standard layered architecture common throughout this proje
 
 ## MongoDB Setup & Migrations
 
-The `group` package relies on a MongoDB collection named `groups`. To ensure optimal query performance, a set of database indexes must be created.
+The `group` package relies on a MongoDB collection named `groups`. To ensure optimal query performance, a set of database indexes must be created. There are two migration scripts you will need to run.
 
-### Initial Indexes
+### Migration 1 — Core Indexes
 
-The initial migration script, located at `external/group/migrations/indexes_groups.go`, creates 19 indexes to support the various query patterns used by the repository. These include:
+The first migration script, located at `external/group/migrations/indexes_groups.go`, creates the core indexes for the `groups` collection. These cover all the common query patterns and include:
 
 -   **Unique Indexes**: To enforce uniqueness on `_id` and `_nano_id`.
 -   **Standard Indexes**: On individual fields like `name`, `type`, `status`, and `metadata.created_at` for efficient filtering and sorting.
 -   **Compound Indexes**: For common multi-field queries, such as filtering by type and status simultaneously.
--   **Member & Leadership Indexes**: To quickly find groups based on their members (`members.id`), owner (`leadership.owner_id`), or other leadership roles.
--   **Text Index**: A text index on `name` and `display_info.name_aliases` to enable full-text search capabilities.
+-   **Ownership Index**: To quickly find groups by their owner using the `owner_id` field.
+-   **Member Indexes**: To efficiently find groups a given user or sub-group belongs to (`members.id`, `members.id` + `members.type`).
+-   **Visibility Index**: On `settings.visibility` for fast visibility-based filtering.
+-   **Text Index**: On `name` to support text search capabilities.
+
+The migration exposes two functions:
+
+-   `InitGroupsIndexesUp(db *mongo.Database) error`: Creates all core indexes on the `groups` collection.
+-   `InitGroupsIndexesDown(db *mongo.Database) error`: Drops all indexes created by the `Up` function.
+
+### Migration 2 — Lineage Index
+
+The second migration script, located at `external/group/migrations/indexes_groups_lineage.go`, adds a dedicated index to support efficient hierarchy traversal (lineage and descendants queries). This migration should be run after the first one.
+
+-   `InitGroupsLineageIndexUp(db *mongo.Database) error`: Creates the `lineage` array index.
+-   `InitGroupsLineageIndexDown(db *mongo.Database) error`: Drops the `lineage` index.
 
 ### Running Migrations
 
 To apply these indexes, you must integrate the provided migration functions into your application's startup process using a migration tool like `mongo-migrate`.
-
-The migration provides two key functions:
-
--   `InitGroupsIndexesUp(db *mongo.Database) error`: Creates all 19 indexes on the `groups` collection.
--   `InitGroupsIndexesDown(db *mongo.Database) error`: Drops all indexes created by the `Up` function.
 
 **Example Integration:**
 
@@ -52,11 +61,16 @@ func main() {
     db := client.Database("your_db_name")
     migrate.SetDatabase(db)
 
-    // Add the group migrations
+    // Add the group migrations in order
     migrate.Add(migrate.NewMigration(
         "initial_groups_indexes",
         groupMigrations.InitGroupsIndexesUp,
         groupMigrations.InitGroupsIndexesDown,
+    ))
+    migrate.Add(migrate.NewMigration(
+        "groups_lineage_index",
+        groupMigrations.InitGroupsLineageIndexUp,
+        groupMigrations.InitGroupsLineageIndexDown,
     ))
 
     // Apply migrations
@@ -68,15 +82,54 @@ func main() {
 
 ## API Endpoints
 
-The following are the primary API endpoints provided by the `group` service.
+All group endpoints are admin-only and sit under the `/api/v1/groups` prefix. The table below covers the full surface area:
 
--   `POST /v1/groups`: Create a new group.
--   `GET /v1/groups`: Retrieve a paginated list of groups with filtering and sorting options.
--   `GET /v1/groups/{id}`: Get a single group by its ID.
--   `PUT /v1/groups/{id}`: Update a group's details.
--   `DELETE /v1/groups/{id}`: Delete a group.
--   `POST /v1/groups/{id}/members`: Add a member to a group.
--   `DELETE /v1/groups/{id}/members/{memberId}`: Remove a member from a group.
+**Group CRUD**
+-   `POST /api/v1/groups`: Create a new group.
+-   `GET /api/v1/groups`: Retrieve a paginated, filterable list of groups. Supports `prefix_name=true` to return child group names prefixed with their root name.
+-   `GET /api/v1/groups/{groupID}`: Get a single group by its ID. Supports `prefix_name=true`.
+-   `GET /api/v1/groups/nano/{groupNanoID}`: Get a single group by its NanoID. Supports `prefix_name=true`.
+-   `PATCH /api/v1/groups/{groupID}`: Update a group's details.
+-   `DELETE /api/v1/groups/{groupID}`: Delete a group.
+
+**Hierarchy**
+-   `GET /api/v1/groups/{groupID}/lineage`: Get the full lineage chain (ancestors) for a group. Supports optional `as_user_id` and `prefix_name` query params.
+-   `GET /api/v1/groups/{groupID}/descendants`: Get all descendants of a group, grouped by depth level. Supports `as_user_id` and `prefix_name`.
+
+**Member Management**
+-   `GET /api/v1/groups/{groupID}/members`: List all members of a group.
+-   `POST /api/v1/groups/{groupID}/members`: Add a member to a group.
+-   `DELETE /api/v1/groups/{groupID}/members/{memberID}`: Remove a member from a group.
+-   `PUT /api/v1/groups/{groupID}/members/{memberID}/role`: Update a member's role within a group.
+
+**Ownership**
+-   `PUT /api/v1/groups/{groupID}/owner`: Update the owner of a group.
+
+**Lifecycle**
+-   `POST /api/v1/groups/{groupID}/archive`: Archive a group.
+-   `POST /api/v1/groups/{groupID}/restore`: Restore an archived group.
+
+**Stats, Config & Utilities**
+-   `GET /api/v1/groups/stats`: Retrieve aggregate statistics across all groups.
+-   `GET /api/v1/groups/{groupID}/stats`: Retrieve statistics for a specific group.
+-   `GET /api/v1/groups/configs`: Retrieve the current group configuration capabilities (valid types, statuses, roles, nesting rules, etc.).
+-   `GET /api/v1/groups/validate-name`: Validate and preview a group name before creating it.
+-   `POST /api/v1/groups/repairs/members`: Repair groups with invalid member states (useful for recovering from data inconsistencies).
+-   `GET /api/v1/groups/users/{userID}`: Get all groups a specific user belongs to. Supports `include_descendants` and `prefix_name`.
+
+## Name Prefixing (`prefix_name`)
+
+If your hierarchy has children that share suspiciously similar names (because life is chaos), use `prefix_name=true`.
+
+-   Child groups are returned as `RootGroup/ChildGroup`.
+-   `raw_name` remains the original, un-prefixed value.
+-   This is a response formatting feature; it does not mutate stored group names.
+
+Example:
+
+-   Stored name: `science`
+-   Stored raw name: `Science`
+-   With `prefix_name=true` under root `Hogwarts`: name becomes `hogwarts/science`, raw name stays `Science`.
 
 ## Using the Model (`UniversalGroup`)
 
@@ -129,29 +182,50 @@ existingGroup.SetUpdatedAtNow()
 
 ### Key Model Features
 
--   **Hierarchical Nesting**: Add a group as a member of another group by using `MemberTypeGroup`. The model prevents circular references.
+-   **Hierarchical Nesting**: Add a group as a member of another group by using `MemberTypeGroup`. The model supports configurable nesting trees (e.g. `ORGANISATION` → `DEPARTMENT` → `TEAM` → `SQUAD`) and prevents circular references.
 
--   **Flexible Membership**: Members can be users (`MemberTypeUser`) or other groups (`MemberTypeGroup`). Each member is assigned a role, such as:
+-   **Lineage Tracking**: The `Lineage` field on `UniversalGroup` is a root-first ordered array of ancestor IDs (e.g. `["rootID", "parentID"]`). This makes hierarchy traversal efficient without needing recursive queries.
+
+-   **Flexible Membership**: Members can be users (`MemberTypeUser`) or other groups (`MemberTypeGroup`). Each member is assigned a role. The available roles are:
     -   `MemberRoleOwner`
     -   `MemberRoleAdmin`
     -   `MemberRoleMember`
     -   `MemberRoleModerator`
     -   `MemberRoleGuest`
+    -   `MemberRoleHead`
+    -   `MemberRoleLead`
+    -   `MemberRoleCoordinator`
+    -   `MemberRoleSuperUser`
 
--   **Custom Data**: Use `SetExtension(key, value)` to store any project-specific data on a group.
+    You can also restrict which roles are valid per group type by configuring `TypeToRoleOverrides` in your `GroupConfig`.
 
--   **Status Control**: Use `UpdateStatus(newStatus)` to safely transition between states. The model supports several built-in statuses:
+-   **Ownership at the Root**: The `OwnerID` field lives directly on `UniversalGroup` — there is no separate leadership structure. This simplifies queries and keeps ownership easy to reason about.
+
+-   **Custom Data**: Use `SetExtension(key, value)` to store any project-specific data on a group without polluting the core model.
+
+-   **Status Control**: Use `UpdateStatus(newStatus)` to safely transition between states. Valid transitions are defined in `GroupConfig`. The built-in statuses are:
     -   `GroupStatusActive`
     -   `GroupStatusInactive`
     -   `GroupStatusArchived`
     -   `GroupStatusSuspended`
     -   `GroupStatusProvisioned`
 
--   **Configuration**: Create a `CustomGroupConfig` to define your own valid group types, status transitions, and required fields. The package includes many default types:
+-   **Configuration**: Use `DefaultGroupConfig()` to get a sensible starting point, or build a custom `GroupConfig` to define your own valid types, status transitions, nesting rules, and role overrides. The full set of built-in group types is:
     -   `GroupTypeTeam`
+    -   `GroupTypeSquad`
+    -   `GroupTypeTribe`
     -   `GroupTypeDepartment`
-    -   `GroupTypeOrganization`
+    -   `GroupTypeOrganisation`
+    -   `GroupTypeCompany`
     -   `GroupTypeProject`
     -   `GroupTypeCommunity`
+    -   `GroupTypeFamily`
+    -   `GroupTypeFriends`
+    -   `GroupTypeCustom`
 
--   **Rich Metadata**: The model includes dedicated structures for `DisplayInfo` (description, avatar), `Leadership` (owner, head), `Settings` (visibility, max members), and `Integrations` (e.g., Slack).
+-   **Visibility**: Control who can see a group using `GroupSettings.Visibility`:
+    -   `VisibilityPublic` — visible to everyone.
+    -   `VisibilityPrivate` — visible to invited members only.
+    -   `VisibilityInternal` — visible to members and others within the same hierarchy.
+
+-   **Rich Metadata**: The model includes dedicated structures for `DisplayInfo` (description, icon, avatar, email, website), `Settings` (visibility, max members, approval requirements), and `Integrations` (e.g., Slack).

@@ -88,8 +88,7 @@ type GroupStats struct {
 
 // UserGroupMembership represents a user's membership in a specific group
 type UserGroupMembership struct {
-	// Group contains summary information about the group
-	Group GroupSummary `json:"group"`
+	*GroupSummary
 
 	// IsMember indicates if the user is a member
 	IsMember bool `json:"is_member"`
@@ -126,12 +125,6 @@ type EnrichedUserProfile struct {
 
 	// Roles are the user's platform roles
 	Roles []string `json:"roles,omitempty"`
-
-	// Teams are the teams the user belongs to
-	Teams []UserGroupMembership `json:"teams,omitempty"`
-
-	// Departments are the departments the user belongs to
-	Departments []UserGroupMembership `json:"departments,omitempty"`
 
 	// Groups are all groups the user belongs to
 	Groups []UserGroupMembership `json:"groups,omitempty"`

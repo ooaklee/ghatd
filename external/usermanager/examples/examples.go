@@ -21,10 +21,9 @@ func Example1_GetEnrichedUserProfile() {
 
 	ctx := context.Background()
 	resp, err := service.GetEnrichedUserProfile(ctx, &usermanager.GetEnrichedUserProfileRequest{
-		UserId:             "user-123",
-		IncludeTeams:       true,
-		IncludeDepartments: true,
-		IncludeAllGroups:   true,
+		UserId:           "user-123",
+		IncludeAllGroups: true,
+		PrefixName:       true,
 	})
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -33,11 +32,10 @@ func Example1_GetEnrichedUserProfile() {
 
 	profile := resp.Profile
 	fmt.Printf("User: %s (%s)\n", profile.FullName, profile.Email)
-	fmt.Printf("Teams: %d\n", len(profile.Teams))
-	fmt.Printf("Departments: %d\n", len(profile.Departments))
+	fmt.Printf("Groups: %d\n", len(profile.Groups))
 
-	for _, team := range profile.Teams {
-		fmt.Printf("  - %s (%s)\n", team.Group.Name, team.Role)
+	for _, g := range profile.Groups {
+		fmt.Printf("  - %s (%s)\n", g.Name, g.Role)
 	}
 }
 
@@ -47,12 +45,13 @@ func Example5_GetUserGroups() {
 
 	ctx := context.Background()
 	resp, err := service.GetUserGroups(ctx, &usermanager.GetUserGroupsRequest{
-		UserId:    "user-123",
-		GroupType: group.GroupTypeTeam,
-		Status:    group.GroupStatusActive,
-		Page:      1,
-		PerPage:   10,
-		Meta:      true,
+		UserId:     "user-123",
+		GroupType:  group.GroupTypeTeam,
+		Status:     group.GroupStatusActive,
+		Page:       1,
+		PerPage:    10,
+		Meta:       true,
+		PrefixName: true,
 	})
 	if err != nil {
 		fmt.Println("Error:", err)

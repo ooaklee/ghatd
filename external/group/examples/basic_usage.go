@@ -258,6 +258,37 @@ func ManageMembers() {
 	}
 }
 
+// Example 7: Prefix Name Request Options
+func DemonstratePrefixNameRequests() {
+	getGroupsReq := &group.GetGroupsRequest{
+		Types:      []string{group.GroupTypeTeam},
+		PrefixName: true,
+	}
+
+	getGroupByIDReq := &group.GetGroupByIDRequest{
+		ID:         "team-frontend",
+		PrefixName: true,
+	}
+
+	getLineageReq := &group.GetGroupLineageRequest{
+		ID:         "team-frontend",
+		PrefixName: true,
+	}
+
+	getDescendantsReq := &group.GetGroupDescendantsRequest{
+		ID:          "dept-engineering",
+		IncludeSelf: true,
+		PrefixName:  true,
+	}
+
+	fmt.Println("Prefix name options enabled on requests:")
+	fmt.Printf("  - GetGroups PrefixName: %t\n", getGroupsReq.PrefixName)
+	fmt.Printf("  - GetGroupByID PrefixName: %t\n", getGroupByIDReq.PrefixName)
+	fmt.Printf("  - GetGroupLineage PrefixName: %t\n", getLineageReq.PrefixName)
+	fmt.Printf("  - GetGroupDescendants PrefixName: %t\n", getDescendantsReq.PrefixName)
+	fmt.Println("  - Result: root-prefixed child names, without mutating stored raw names.")
+}
+
 func main() {
 	fmt.Println("=== Example 1: Simple Team ===")
 	CreateSimpleTeam()
@@ -281,4 +312,8 @@ func main() {
 
 	fmt.Println("=== Example 6: Member Management ===")
 	ManageMembers()
+	fmt.Println()
+
+	fmt.Println("=== Example 7: Prefix Name Request Options ===")
+	DemonstratePrefixNameRequests()
 }

@@ -20,7 +20,7 @@ type UsermanagerHandler interface {
 	GetCommsStats(w http.ResponseWriter, r *http.Request)
 	// Group/Team management methods
 	GetEnrichedUserProfile(w http.ResponseWriter, r *http.Request)
-	GetUserTeamMemberships(w http.ResponseWriter, r *http.Request)
+	GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.Request)
 	GetUserGroups(w http.ResponseWriter, r *http.Request)
 	GetGroupDetail(w http.ResponseWriter, r *http.Request)
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
@@ -29,6 +29,7 @@ type UsermanagerHandler interface {
 	AddGroupMember(w http.ResponseWriter, r *http.Request)
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request)
 	UpdateGroupOwner(w http.ResponseWriter, r *http.Request)
+	GetGroupsByUserID(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -80,9 +81,10 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/micro", request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/enriched", request.Handler.GetEnrichedUserProfile).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/memberships", request.Handler.GetUserTeamMemberships).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/memberships", request.Handler.GetUserGroupMembershipsRequest).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/groups", request.Handler.GetUserGroups).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}/groups", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}", request.Handler.GetGroupDetail).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)

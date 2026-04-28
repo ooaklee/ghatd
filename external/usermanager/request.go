@@ -6,6 +6,15 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
+// GetUserGroups handles fetching groups for a user with filtering
+type GetGroupsByUserIDRequest struct {
+
+	// ID is the ID of the making the request
+	ID string
+
+	*group.GetGroupsByUserIDRequest
+}
+
 // GetUserGroupMembershipsRequest represents the request for fetching user group memberships with filtering options
 type GetUserGroupMembershipsRequest struct {
 
@@ -17,6 +26,9 @@ type GetUserGroupMembershipsRequest struct {
 
 	// IncludeDescendants if true, includes descendant groups per root group that the user can access
 	IncludeDescendants bool `query:"include_descendants"`
+
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetUserMicroProfileRequest holds all the data needed to action request
@@ -119,14 +131,11 @@ type GetEnrichedUserProfileRequest struct {
 	// UserId is the ID of the user requesting their enriched profile
 	UserId string
 
-	// IncludeTeams indicates whether to include team memberships
-	IncludeTeams bool `query:"include_teams"`
-
-	// IncludeDepartments indicates whether to include department memberships
-	IncludeDepartments bool `query:"include_departments"`
-
 	// IncludeAllGroups indicates whether to include all group memberships
 	IncludeAllGroups bool `query:"include_all_groups"`
+
+	// PrefixName if true, and IncludeAllGroups is true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetUserGroupsRequest holds the data needed to get groups for a user
@@ -149,6 +158,9 @@ type GetUserGroupsRequest struct {
 
 	// Meta indicates whether response should contain meta information
 	Meta bool `query:"meta"`
+
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // CreateGroupRequest holds the data needed for a user to create a new group
@@ -168,6 +180,9 @@ type GetGroupDetailRequest struct {
 
 	// GroupID is the ID of the group to fetch
 	GroupID string
+
+	// PrefixName if true, prefixes child group name with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // GetGroupStatsRequest holds the data needed to fetch stats for a specific group
@@ -178,6 +193,9 @@ type GetGroupStatsRequest struct {
 
 	// GroupID is the ID of the group to fetch
 	GroupID string
+
+	// PrefixName if true, prefixes child group name with the root group's name
+	PrefixName bool `query:"prefix_name"`
 }
 
 // AddGroupMemberRequest holds the data needed to add a user to a group

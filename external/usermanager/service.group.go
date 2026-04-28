@@ -39,32 +39,12 @@ func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUser
 		Roles:       userResp.User.Roles,
 		CreatedAt:   userResp.User.Metadata.CreatedAt,
 		LastLoginAt: userResp.User.Metadata.LastLoginAt,
-		Teams:       []UserGroupMembership{},
-		Departments: []UserGroupMembership{},
 		Groups:      []UserGroupMembership{},
 	}
 
 	// Fetch group memberships if requested
-	if r.IncludeTeams || r.IncludeAllGroups {
-		teams, err := s.getUserGroupsByType(ctx, r.UserId, group.GroupTypeTeam)
-		if err != nil {
-			log.Warn("failed-to-fetch-team-memberships", zap.String("user-id", r.UserId), zap.Error(err))
-		} else {
-			enrichedProfile.Teams = teams
-		}
-	}
-
-	if r.IncludeDepartments || r.IncludeAllGroups {
-		departments, err := s.getUserGroupsByType(ctx, r.UserId, group.GroupTypeDepartment)
-		if err != nil {
-			log.Warn("failed-to-fetch-department-memberships", zap.String("user-id", r.UserId), zap.Error(err))
-		} else {
-			enrichedProfile.Departments = departments
-		}
-	}
-
 	if r.IncludeAllGroups {
-		allGroups, err := s.getUserAllGroups(ctx, r.UserId)
+		allGroups, err := s.getUserAllGroups(ctx, r.UserId, r.PrefixName)
 		if err != nil {
 			log.Warn("failed-to-fetch-all-group-memberships", zap.String("user-id", r.UserId), zap.Error(err))
 		} else {
@@ -74,6 +54,31 @@ func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUser
 
 	return &GetEnrichedUserProfileResponse{
 		Profile: enrichedProfile,
+	}, nil
+}
+
+// GetGroupsByUserID handles fetching groups for a user with filtering
+func (s *Service) GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error) {
+	if s.GroupService == nil {
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if r.ID != r.UserID {
+		isAdmin := s.isRequesterAdmin(ctx, r.ID, log)
+		if !isAdmin {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
+	}
+
+	resp, err := s.GroupService.GetGroupsByUserID(ctx, r.GetGroupsByUserIDRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetGroupsByUserIDResponse{
+		GetGroupsByUserIDResponse: resp,
 	}, nil
 }
 
@@ -92,6 +97,7 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 		Page:       r.Page,
 		PerPage:    r.PerPage,
 		Meta:       r.Meta,
+		PrefixName: r.PrefixName,
 	}
 
 	if r.GroupType != "" {
@@ -157,7 +163,7 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID, PrefixName: r.PrefixName})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
 		log.Warn("failed-to-get-group-detail", zap.String("group-id", r.GroupID), zap.Error(err))
 		return nil, errors.New(ErrKeyGroupNotFound)
@@ -237,7 +243,7 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
-	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID, PrefixName: r.PrefixName})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
 		log.Warn("failed-to-get-group-for-stats", zap.String("group-id", r.GroupID), zap.Error(err))
 		return nil, errors.New(ErrKeyGroupNotFound)
@@ -333,12 +339,13 @@ func (s *Service) getUserGroupsByType(ctx context.Context, userID, groupType str
 }
 
 // getUserAllGroups fetches all groups for a user
-func (s *Service) getUserAllGroups(ctx context.Context, userID string) ([]UserGroupMembership, error) {
+func (s *Service) getUserAllGroups(ctx context.Context, userID string, prefixName bool) ([]UserGroupMembership, error) {
 
 	req := &GetUserGroupMembershipsRequest{
 		UserID:             userID,
 		GroupType:          "",
 		IncludeDescendants: false,
+		PrefixName:         prefixName,
 	}
 
 	resp, err := s.GetUserGroupMemberships(ctx, req)
@@ -352,11 +359,12 @@ func (s *Service) getUserAllGroups(ctx context.Context, userID string) ([]UserGr
 // GetUserGroupMemberships fetches user-referenced groups and maps them to user-facing memberships.
 func (s *Service) GetUserGroupMemberships(ctx context.Context, req *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error) {
 
-	userID, groupType, includeDescendants := req.UserID, req.GroupType, req.IncludeDescendants
+	userID, groupType, includeDescendants, prefixName := req.UserID, req.GroupType, req.IncludeDescendants, req.PrefixName
 
 	groupsWithDescendants, err := s.GroupService.GetGroupsByUserID(ctx, &group.GetGroupsByUserIDRequest{
 		UserID:             userID,
 		IncludeDescendants: includeDescendants,
+		PrefixName:         prefixName,
 	})
 	if err != nil {
 		return nil, err
@@ -371,7 +379,7 @@ func (s *Service) GetUserGroupMemberships(ctx context.Context, req *GetUserGroup
 		member, err := g.GetMemberByID(userID)
 
 		membership := UserGroupMembership{
-			Group: GroupSummary{
+			GroupSummary: &GroupSummary{
 				ID:          g.ID,
 				NanoID:      g.NanoID,
 				Name:        g.Name,
