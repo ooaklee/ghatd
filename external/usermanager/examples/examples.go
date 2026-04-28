@@ -249,6 +249,30 @@ func (m *MockUserService) GetUserByID(ctx context.Context, r *user.GetUserByIDRe
 	}, nil
 }
 
+func (m *MockUserService) GetUsers(ctx context.Context, r *user.GetUsersRequest) (*user.GetUsersResponse, error) {
+	return &user.GetUsersResponse{
+		Users: []user.UniversalUser{
+			{
+				ID:    "user-123",
+				Email: "user@example.com",
+				PersonalInfo: &user.PersonalInfo{
+					FullName:  "John Doe",
+					FirstName: "John",
+					LastName:  "Doe",
+				},
+				Status: "ACTIVE",
+				Roles:  []string{"USER"},
+			},
+		},
+		Meta: &user.PaginationMetadata{
+			Page:           r.Page,
+			PerPage:        r.PerPage,
+			TotalResources: 1,
+			TotalPages:     1,
+		},
+	}, nil
+}
+
 func (m *MockUserService) GetUserByEmail(ctx context.Context, r *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error) {
 	return &user.GetUserByEmailResponse{
 		User: &user.UniversalUser{
@@ -656,6 +680,14 @@ func (m *MockGroupService) GetUserGroupAccessMap(ctx context.Context, userID str
 	}
 
 	return accessMap, nil
+}
+
+func (m *MockGroupService) GetGroupsConfig(_ context.Context, _ *group.GetGroupsConfigRequest) (*group.GetGroupsConfigResponse, error) {
+	return &group.GetGroupsConfigResponse{}, nil
+}
+
+func (m *MockGroupService) GetGroupLineage(_ context.Context, req *group.GetGroupLineageRequest) (*group.GetGroupLineageResponse, error) {
+	return &group.GetGroupLineageResponse{Lineage: []group.GroupLineageNode{}}, nil
 }
 
 func createMockGroup(id, name, groupType string, memberCount int) *group.UniversalGroup {

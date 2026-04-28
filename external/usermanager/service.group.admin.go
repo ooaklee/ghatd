@@ -11,6 +11,26 @@ import (
 	"go.uber.org/zap"
 )
 
+// GetGroupsConfig retrieves the group service configuration capabilities.
+func (s *Service) GetGroupsConfig(ctx context.Context, _ *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled")
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	resp, err := s.GroupService.GetGroupsConfig(ctx, &group.GetGroupsConfigRequest{})
+	if err != nil {
+		log.Error("failed-to-get-groups-config", zap.Error(err))
+		return nil, err
+	}
+
+	return &GetGroupsConfigResponse{
+		GetGroupsConfigResponse: resp,
+	}, nil
+}
+
 // CreateGroup handles creating a new group with the provided details. Only admins or users with
 // access to the parent group (if specified) can create groups.
 func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error) {
@@ -91,12 +111,8 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 		}
 	}
 
-	_, err := s.GroupService.AddMember(ctx, &group.AddMemberRequest{
-		GroupID:  r.GroupID,
-		MemberID: r.MemberID,
-		Type:     group.MemberTypeUser,
-		Role:     r.Role,
-	})
+	r.AddMemberRequest.Type = group.MemberTypeUser
+	_, err := s.GroupService.AddMember(ctx, r.AddMemberRequest)
 	if err != nil {
 		log.Error("add-group-member-failed",
 			zap.String("group-id", r.GroupID),
@@ -139,10 +155,7 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 		}
 	}
 
-	_, err := s.GroupService.RemoveMember(ctx, &group.RemoveMemberRequest{
-		GroupID:  r.GroupID,
-		MemberID: r.MemberID,
-	})
+	_, err := s.GroupService.RemoveMember(ctx, r.RemoveMemberRequest)
 	if err != nil {
 		log.Error("remove-group-member-failed",
 			zap.String("group-id", r.GroupID),

@@ -12,6 +12,7 @@ type UsermanagerHandler interface {
 	UpdateUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserByID(w http.ResponseWriter, r *http.Request)
+	GetUsers(w http.ResponseWriter, r *http.Request)
 	GetUserMicroProfile(w http.ResponseWriter, r *http.Request)
 	DeleteUserPermanently(w http.ResponseWriter, r *http.Request)
 	CreateComms(w http.ResponseWriter, r *http.Request)
@@ -30,6 +31,9 @@ type UsermanagerHandler interface {
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request)
 	UpdateGroupOwner(w http.ResponseWriter, r *http.Request)
 	GetGroupsByUserID(w http.ResponseWriter, r *http.Request)
+	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
+	GetGroupLineage(w http.ResponseWriter, r *http.Request)
+	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -76,6 +80,10 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
 	userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
 
+	usermanagerActiveOnlyRoutesPre := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
+	usermanagerActiveOnlyRoutesPre.HandleFunc("/groups/config", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerActiveOnlyRoutesPre.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+
 	usermanagerAuthenticatedRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
@@ -83,10 +91,13 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/enriched", request.Handler.GetEnrichedUserProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/memberships", request.Handler.GetUserGroupMembershipsRequest).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/groups", request.Handler.GetUserGroups).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}/groups", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}", request.Handler.GetGroupDetail).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/descendants", request.Handler.GetGroupDescendants).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)
 
 	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()

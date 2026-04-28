@@ -57,6 +57,87 @@ func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUser
 	}, nil
 }
 
+// GetGroupLineage handles fetching the lineage for a group, gated by group access for non-admin requesters.
+func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	if !isAdmin {
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupLineageRequest.ID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserId),
+				zap.String("group_id", r.GetGroupLineageRequest.ID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasAccess {
+			return nil, errors.New(ErrKeyGroupNotFound)
+		}
+	}
+
+	r.GetGroupLineageRequest.AsUserID = r.UserId
+
+	resp, err := s.GroupService.GetGroupLineage(ctx, r.GetGroupLineageRequest)
+	if err != nil {
+		log.Error("failed-to-get-group-lineage", zap.String("group-id", r.GetGroupLineageRequest.ID), zap.Error(err))
+		return nil, err
+	}
+
+	return &GetGroupLineageResponse{
+		GetGroupLineageResponse: resp,
+	}, nil
+}
+
+// GetGroupsByUserID handles fetching groups for a user with filtering
+// GetGroupDescendants handles fetching group descendants with permission checks
+func (s *Service) GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	if !isAdmin {
+		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupDescendantsRequest.ID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserId),
+				zap.String("group_id", r.GetGroupDescendantsRequest.ID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasAccess {
+			return nil, errors.New(ErrKeyGroupNotFound)
+		}
+	}
+
+	r.GetGroupDescendantsRequest.AsUserID = r.UserId
+
+	resp, err := s.GroupService.GetGroupDescendants(ctx, r.GetGroupDescendantsRequest)
+	if err != nil {
+		log.Error("failed-to-get-group-descendants", zap.String("group-id", r.GetGroupDescendantsRequest.ID), zap.Error(err))
+		return nil, err
+	}
+
+	return &GetGroupDescendantsResponse{
+		GetGroupDescendantsResponse: resp,
+	}, nil
+}
+
 // GetGroupsByUserID handles fetching groups for a user with filtering
 func (s *Service) GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error) {
 	if s.GroupService == nil {
@@ -358,6 +439,12 @@ func (s *Service) getUserAllGroups(ctx context.Context, userID string, prefixNam
 
 // GetUserGroupMemberships fetches user-referenced groups and maps them to user-facing memberships.
 func (s *Service) GetUserGroupMemberships(ctx context.Context, req *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error) {
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", req.UserID))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
 
 	userID, groupType, includeDescendants, prefixName := req.UserID, req.GroupType, req.IncludeDescendants, req.PrefixName
 
@@ -422,7 +509,16 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 	return userResp.User.IsAdmin()
 }
 
+// hasRequesterGroupAccess checks if the requester has access to the group either as a member or owner
 func (s *Service) hasRequesterGroupAccess(ctx context.Context, userID, groupID string) (bool, error) {
+
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", userID))
+		return false, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
 	accessMap, err := s.GroupService.GetUserGroupAccessMap(ctx, userID)
 	if err != nil {
 		return false, err

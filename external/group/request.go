@@ -179,9 +179,15 @@ type GetGroupLineageRequest struct {
 
 // GetGroupDescendantsRequest defines the request for getting all descendants of a group.
 type GetGroupDescendantsRequest struct {
-	ID          string `path:"groupID"`
-	MaxDepth    int    `query:"max_depth"`
-	IncludeSelf bool   `query:"include_self"`
+
+	// ID is the ID of the group to fetch descendants for
+	ID string `path:"groupID"`
+
+	// MaxDepth limits how many levels of descendants to fetch (0 or negative for unlimited)
+	MaxDepth int `query:"max_depth"`
+
+	// IncludeSelf if true, includes the root group itself in the response
+	IncludeSelf bool `query:"include_self"`
 
 	// AsUserID allows permission checks using the specified user ID when retrieving
 	// group descendants, ensuring that the response includes only the groups the

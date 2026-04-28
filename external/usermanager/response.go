@@ -32,6 +32,11 @@ type GetUserByIDResponse struct {
 	User *userv2.UniversalUser
 }
 
+// GetUsersResponse holds response data for GetUsers request
+type GetUsersResponse struct {
+	*userv2.GetUsersResponse
+}
+
 // GetUserProfileResponse holds response data for GetUserProfile request
 type GetUserProfileResponse struct {
 	*userv2.GetUserProfileResponse
@@ -98,6 +103,21 @@ type GetGroupDetailResponse struct {
 // GetGroupStatsResponse holds the response for group stats
 type GetGroupStatsResponse struct {
 	Stats GroupStats `json:"stats"`
+}
+
+// GetGroupsConfigResponse holds the response for the groups service config
+type GetGroupsConfigResponse struct {
+	*group.GetGroupsConfigResponse
+}
+
+// GetGroupLineageResponse holds the response for fetching a group's lineage
+type GetGroupLineageResponse struct {
+	*group.GetGroupLineageResponse
+}
+
+// GetGroupDescendantsResponse holds the response for fetching a group's descendants
+type GetGroupDescendantsResponse struct {
+	*group.GetGroupDescendantsResponse
 }
 
 // EnrichedMember holds a group member with their user profile details resolved

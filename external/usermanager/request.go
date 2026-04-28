@@ -57,6 +57,19 @@ type GetUserByIDRequest struct {
 	*userv2.GetUserByIDRequest
 }
 
+// GetUsersRequest holds all the data needed to action user list retrieval request
+type GetUsersRequest struct {
+
+	// UserId is the ID of the user making the request
+	UserId string
+
+	// GroupID if specified, filters users to those that are
+	// members of the root group of the specified group id
+	GroupID string `query:"group_id"`
+
+	*userv2.GetUsersRequest
+}
+
 // UpdateUserProfileRequest holds all the data needed to action user
 // profile update request
 type UpdateUserProfileRequest struct {
@@ -196,6 +209,31 @@ type GetGroupStatsRequest struct {
 
 	// PrefixName if true, prefixes child group name with the root group's name
 	PrefixName bool `query:"prefix_name"`
+}
+
+// GetGroupsConfigRequest holds the data needed to retrieve the group service config
+type GetGroupsConfigRequest struct {
+
+	// UserId is the ID of the requester
+	UserId string
+}
+
+// GetGroupLineageRequest holds the data needed to fetch a group's lineage
+type GetGroupLineageRequest struct {
+
+	// UserId is the ID of the requester
+	UserId string
+
+	*group.GetGroupLineageRequest
+}
+
+// GetGroupDescendantsRequest holds the data needed to fetch a group's descendants
+type GetGroupDescendantsRequest struct {
+
+	// UserId is the ID of the requester
+	UserId string
+
+	*group.GetGroupDescendantsRequest
 }
 
 // AddGroupMemberRequest holds the data needed to add a user to a group

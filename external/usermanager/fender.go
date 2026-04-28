@@ -125,6 +125,111 @@ func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValida
 	return &parsedRequest, nil
 }
 
+// MapRequestToGetUsersRequest maps incoming GetUsers request to correct struct.
+func MapRequestToGetUsersRequest(r *http.Request, validator UsermanagerValidator) (*GetUsersRequest, error) {
+	var parsedRequest GetUsersRequest = GetUsersRequest{
+		GetUsersRequest: &userv2.GetUsersRequest{},
+	}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	// get request queries
+	query := r.URL.Query()
+	err := querydecoder.New(query).Decode(&parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
+		log.Error("get-users-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetGroupLineageRequest maps incoming GetGroupLineage request to correct struct.
+func MapRequestToGetGroupLineageRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupLineageRequest, error) {
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	baseRequest := group.GetGroupLineageRequest{}
+	parsedRequest := GetGroupLineageRequest{
+		GetGroupLineageRequest: &baseRequest,
+	}
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.GetGroupLineageRequest.ID = groupID
+
+	query := r.URL.Query()
+	if err := querydecoder.New(query).Decode(parsedRequest.GetGroupLineageRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetGroupsConfigRequest maps incoming GetGroupsConfig request to correct struct.
+// MapRequestToGetGroupDescendantsRequest maps incoming GetGroupDescendants request to correct struct.
+func MapRequestToGetGroupDescendantsRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupDescendantsRequest, error) {
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	baseRequest := group.GetGroupDescendantsRequest{}
+	parsedRequest := GetGroupDescendantsRequest{
+		GetGroupDescendantsRequest: &baseRequest,
+	}
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.GetGroupDescendantsRequest.ID = groupID
+
+	query := r.URL.Query()
+	if err := querydecoder.New(query).Decode(parsedRequest.GetGroupDescendantsRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetGroupsConfigRequest maps incoming GetGroupsConfig request to correct struct.
+func MapRequestToGetGroupsConfigRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupsConfigRequest, error) {
+	var parsedRequest GetGroupsConfigRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToGetUserProfileRequest maps incoming GetUserProfile request to correct
 // struct.
 func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetUserProfileRequest, error) {
@@ -491,9 +596,7 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 
 // MapRequestToRemoveGroupMemberRequest maps a remove-member request to the correct struct
 func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*RemoveGroupMemberRequest, error) {
-	var parsedRequest RemoveGroupMemberRequest = RemoveGroupMemberRequest{
-		RemoveMemberRequest: &group.RemoveMemberRequest{},
-	}
+	var parsedRequest RemoveGroupMemberRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
@@ -502,19 +605,30 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 		return nil, errors.New(ErrKeyUnableToIdentifyUser)
 	}
 
+	baseRequest := group.RemoveMemberRequest{}
+
+	// get request queries
+	query := r.URL.Query()
+	err := querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
 		return nil, errors.New(ErrKeyRequestFailedValidation)
 	}
-	parsedRequest.GroupID = groupID
+	baseRequest.GroupID = groupID
 
 	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
 	if err != nil {
 		log.Error("unable-get-member-id-from-uri")
 		return nil, errors.New(ErrKeyInvalidMemberID)
 	}
-	parsedRequest.MemberID = memberID
+	baseRequest.MemberID = memberID
+
+	parsedRequest.RemoveMemberRequest = &baseRequest
 
 	return &parsedRequest, nil
 }

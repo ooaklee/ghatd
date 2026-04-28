@@ -18,6 +18,7 @@ type UserService interface {
 	GetUserMicroProfile(ctx context.Context, r *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error)
 	GetUserProfile(ctx context.Context, r *userv2.GetUserProfileRequest) (*userv2.GetUserProfileResponse, error)
 	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	GetUsers(ctx context.Context, r *userv2.GetUsersRequest) (*userv2.GetUsersResponse, error)
 	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
 	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, r *userv2.DeleteUserRequest) error
@@ -56,6 +57,8 @@ type GroupService interface {
 	GetGroupDescendants(ctx context.Context, req *group.GetGroupDescendantsRequest) (*group.GetGroupDescendantsResponse, error)
 	GetGroupsByUserID(ctx context.Context, req *group.GetGroupsByUserIDRequest) (*group.GetGroupsByUserIDResponse, error)
 	GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]group.UserGroupAccessSummary, error)
+	GetGroupsConfig(ctx context.Context, req *group.GetGroupsConfigRequest) (*group.GetGroupsConfigResponse, error)
+	GetGroupLineage(ctx context.Context, req *group.GetGroupLineageRequest) (*group.GetGroupLineageResponse, error)
 }
 
 // Service holds and manages usermanager business logic
@@ -158,6 +161,81 @@ func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetU
 
 	return &GetUserByIDResponse{
 		User: requestedUser.User,
+	}, nil
+}
+
+// GetUsers handles the business logic of fetching users.
+func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error) {
+
+	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	logger.Debug("fetching-users", zap.Any("filters", r.GetUsersRequest))
+	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+	if err != nil {
+		return nil, err
+	}
+
+	if !requestingUser.User.IsAdmin() {
+
+		// If the user is not an admin, we must make sure that a group id is provided,
+		// and that the user is a member of the group specified in the filter (directly or indirectly through group hierarchy)
+		// then we must pull all of the members from the root group of the specified group, get their user ids and pass it to the
+		// r.GetUsersRequest.IDsFilter to ensure that the user can only see users that are in the same group (or sub-group) as them.
+		// If these conditions are not met, we return an empty list to avoid unauthorised access, and log the attempt.
+		if r.GroupID == "" {
+			logger.Warn("non-admin-user-attempting-to-access-users-without-group-filter", zap.String("user-id", r.UserId))
+			return &GetUsersResponse{
+				GetUsersResponse: &userv2.GetUsersResponse{
+					Users: []userv2.UniversalUser{},
+				},
+			}, nil
+		}
+
+		userGroupAccessMap, err := s.GroupService.GetUserGroupAccessMap(ctx, r.UserId)
+		if err != nil {
+			return nil, err
+		}
+
+		userGroupAccess, ok := userGroupAccessMap[r.GroupID]
+		if !ok || !userGroupAccess.IsAccessible {
+			logger.Warn("non-admin-user-attempting-to-access-users-for-a-group-they-do-not-have-access-to", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID))
+			return &GetUsersResponse{
+				GetUsersResponse: &userv2.GetUsersResponse{
+					Users: []userv2.UniversalUser{},
+				},
+			}, nil
+		}
+
+		// User is not an admin but has access to the group specified in the filter, we will fetch the group details to get the root group id,
+		// then we will fetch all of the descendant groups of the root group to get all of the group ids that should be included in the filter, and add them to the IDsFilter of the request
+		groupDetails, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
+		if err != nil {
+			return nil, err
+		}
+
+		var rootGroupID string
+		if len(groupDetails.Group.Lineage) > 0 {
+			rootGroupID = groupDetails.Group.Lineage[0]
+		} else {
+			rootGroupID = groupDetails.Group.ID
+		}
+
+		rootGroup, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: rootGroupID})
+		if err != nil {
+			return nil, err
+		}
+
+		r.GetUsersRequest.IDsFilter = rootGroup.Group.GetUserMemberIDs()
+
+	}
+
+	serviceResponse, err := s.UserService.GetUsers(ctx, r.GetUsersRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetUsersResponse{
+		GetUsersResponse: serviceResponse,
 	}, nil
 }
 

@@ -14,6 +14,7 @@ type UsermanagerService interface {
 	GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error)
 	GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error)
 	GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error)
+	GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error)
 	UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error)
 	DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error
 	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
@@ -28,6 +29,9 @@ type UsermanagerService interface {
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
 	GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error)
+	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
+	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
+	GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error)
 	// Group management methods
 	AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error)
 	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
@@ -75,7 +79,41 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 	}
 }
 
+// GetGroupLineage handles the request to get a group's lineage
+func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupLineageRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupLineage(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Lineage)
+}
+
 // GetGroupsByUserID handles the request to get groups by user ID
+// GetGroupDescendants handles the request to get group descendants
+func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupDescendantsRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupDescendants(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Descendants)
+}
+
 func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetGroupsByUserIDRequest(r, h.Validator)
 	if err != nil {
@@ -90,6 +128,24 @@ func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetGroupsConfig handles the request to get the group service config
+func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupsConfigRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupsConfig(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
 }
 
 // DeleteUserPermanently returns response for request to get user's
@@ -186,6 +242,28 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 
+}
+
+// GetUsers returns response for request to get users
+func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetUsersRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetUsers(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if request.IncludeMeta {
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users)
 }
 
 // GetUserProfile returns response for request to get user's
