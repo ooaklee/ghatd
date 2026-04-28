@@ -457,6 +457,7 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 		LastNameFilter:  req.LastNameFilter,
 		StatusFilter:    req.StatusFilter,
 		RoleFilter:      req.RoleFilter,
+		IDsFilter:       req.IDsFilter,
 		RolesFilter:     req.RolesFilter,
 		OnlyAdmin:       req.OnlyAdmin,
 		EmailVerified:   req.EmailVerified,

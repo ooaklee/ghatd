@@ -184,7 +184,7 @@ func (r *Repository) GetUsers(ctx context.Context, req *GetUsersRequest) ([]Univ
 	}
 
 	// Build query filter
-	queryFilter := r.buildUserQueryFilter(req.EmailFilter, "", req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
+	queryFilter := r.buildUserQueryFilter(req.EmailFilter, "", req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.IDsFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
 
 	// Build sort options
 	sortOptions := r.buildSortOptions(req.Order)
@@ -219,7 +219,7 @@ func (r *Repository) GetTotalUsers(ctx context.Context, req *GetTotalUsersReques
 		return 0, err
 	}
 
-	queryFilter := r.buildUserQueryFilter(req.EmailFilter, req.EmailRegex, req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
+	queryFilter := r.buildUserQueryFilter(req.EmailFilter, req.EmailRegex, req.FirstNameFilter, req.LastNameFilter, req.StatusFilter, req.RoleFilter, req.IDsFilter, req.RolesFilter, req.OnlyAdmin, req.EmailVerified, req.PhoneVerified, req.ExtensionKey, req.ExtensionValue)
 
 	count, err := r.Store.ExecuteCountDocuments(ctx, collection, queryFilter)
 	if err != nil {
@@ -310,7 +310,7 @@ func (r *Repository) GetUserStatsCounts(ctx context.Context, req *GetUserStatsRe
 // Helper methods
 
 // buildUserQueryFilter builds a query filter for user searches
-func (r *Repository) buildUserQueryFilter(emailFilter, emailRegex, firstNameFilter, lastNameFilter, statusFilter, roleFilter string, rolesFilter []string, onlyAdmin bool, emailVerified, phoneVerified *bool, extensionKey string, extensionValue interface{}) bson.M {
+func (r *Repository) buildUserQueryFilter(emailFilter, emailRegex, firstNameFilter, lastNameFilter, statusFilter, roleFilter string, idsFilter, rolesFilter []string, onlyAdmin bool, emailVerified, phoneVerified *bool, extensionKey string, extensionValue interface{}) bson.M {
 	queryFilter := bson.M{}
 
 	if emailRegex != "" {
@@ -344,6 +344,10 @@ func (r *Repository) buildUserQueryFilter(emailFilter, emailRegex, firstNameFilt
 
 	if roleFilter != "" {
 		queryFilter["roles"] = roleFilter
+	}
+
+	if len(idsFilter) > 0 {
+		queryFilter["_id"] = bson.M{"$in": idsFilter}
 	}
 
 	if len(rolesFilter) > 0 {

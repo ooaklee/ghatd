@@ -72,6 +72,7 @@ type GetUsersRequest struct {
 	LastNameFilter  string      `query:"with_last_name"`
 	StatusFilter    string      `query:"with_status"`
 	RoleFilter      string      `query:"with_role"`
+	IDsFilter       []string    `query:"with_ids"`
 	RolesFilter     []string    `query:"with_roles"`
 	OnlyAdmin       bool        `query:"only_admin"`
 	EmailVerified   *bool       `query:"email_verified"`
@@ -87,6 +88,7 @@ type GetTotalUsersRequest struct {
 	LastNameFilter  string      `query:"with_last_name"`
 	StatusFilter    string      `query:"with_status"`
 	RoleFilter      string      `query:"with_role"`
+	IDsFilter       []string    `query:"with_ids"`
 	RolesFilter     []string    `query:"with_roles"`
 	OnlyAdmin       bool        `query:"only_admin"`
 	EmailVerified   *bool       `query:"email_verified"`
