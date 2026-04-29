@@ -103,11 +103,82 @@ type DisplayInfo struct {
 
 // Member represents a member (user or group) of the group
 type Member struct {
-	ID       string                 `json:"id" bson:"id" db:"id"`
-	Type     string                 `json:"type" bson:"type" db:"type"` // USER or GROUP
-	Role     string                 `json:"role,omitempty" bson:"role,omitempty" db:"role"`
-	JoinedAt string                 `json:"joined_at,omitempty" bson:"joined_at,omitempty" db:"joined_at"`
-	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty" db:"metadata"`
+	ID              string                 `json:"id" bson:"id" db:"id"`
+	Type            string                 `json:"type" bson:"type" db:"type"` // USER or GROUP
+	Role            string                 `json:"role,omitempty" bson:"role,omitempty" db:"role"`
+	JoinedAt        string                 `json:"joined_at,omitempty" bson:"joined_at,omitempty" db:"joined_at"`
+	InvitedAt       string                 `json:"invited_at,omitempty" bson:"invited_at,omitempty" db:"invited_at"`
+	InvitationState string                 `json:"invitation_state,omitempty" bson:"invitation_state,omitempty" db:"invitation_state"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty" db:"metadata"`
+}
+
+// SetInviter writes the inviter user ID into member metadata.
+// Returns true when metadata changed.
+func (m *Member) SetInviter(id string) bool {
+	if m == nil {
+		return false
+	}
+
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return false
+	}
+
+	return m.SetMemberMeta(MemberMetadataKeyInvitedByID, trimmedID)
+}
+
+// GetInviter retrieves inviter user ID from member metadata.
+func (m *Member) GetInviter() string {
+	if m == nil || m.Metadata == nil {
+		return ""
+	}
+
+	value, ok := m.Metadata[MemberMetadataKeyInvitedByID]
+	if !ok {
+		return ""
+	}
+
+	inviter, ok := value.(string)
+	if !ok {
+		return ""
+	}
+
+	return strings.TrimSpace(inviter)
+}
+
+// SetMemberMeta sets a metadata key/value for a member.
+// Returns true when metadata changed.
+func (m *Member) SetMemberMeta(key string, value interface{}) bool {
+	if m == nil {
+		return false
+	}
+
+	trimmedKey := strings.TrimSpace(key)
+	if trimmedKey == "" {
+		return false
+	}
+
+	if m.Metadata == nil {
+		m.Metadata = map[string]interface{}{}
+	}
+
+	m.Metadata[trimmedKey] = value
+	return true
+}
+
+// GetMemberMeta retrieves a metadata value for a member.
+func (m *Member) GetMemberMeta(key string) (interface{}, error) {
+	if m == nil || m.Metadata == nil {
+		return nil, errors.New(ErrKeyResourceNotFound)
+	}
+
+	trimmedKey := strings.TrimSpace(key)
+	value, exists := m.Metadata[trimmedKey]
+	if !exists {
+		return nil, errors.New(ErrKeyResourceNotFound)
+	}
+
+	return value, nil
 }
 
 // GroupSettings holds group configuration

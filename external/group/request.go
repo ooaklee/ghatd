@@ -49,6 +49,15 @@ type GetGroupsByUserIDRequest struct {
 	PrefixName bool `query:"prefix_name"`
 }
 
+// GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest defines the request
+// for getting groups with pending invitations for a specific member ID.
+type GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest struct {
+	MemberID string `path:"memberID"`
+
+	// PrefixName if true, prefixes child group names with the root group's name
+	PrefixName bool `query:"prefix_name"`
+}
+
 // GetGroupByIDRequest defines the request for getting a single group
 type GetGroupByIDRequest struct {
 	ID string `path:"groupID"`
@@ -110,6 +119,35 @@ type AddMemberRequest struct {
 	MemberID string `json:"member_id" validate:"required"`
 	Type     string `json:"type" validate:"required"`
 	Role     string `json:"role,omitempty"`
+}
+
+// InviteUserRequest defines the request for inviting a user by email
+type InviteUserRequest struct {
+	GroupID     string `path:"groupID"`
+	InviteEmail string `json:"invite_email" validate:"required,email"`
+	Role        string `json:"role,omitempty"`
+	InvitedByID string `json:"invited_by_id,omitempty"`
+}
+
+// UninviteUserRequest defines the request for removing an outstanding invitation
+type UninviteUserRequest struct {
+	GroupID       string `path:"groupID"`
+	InviteEmail   string `query:"invite_email" validate:"required,email"`
+	UninvitedByID string `query:"uninvited_by_id,omitempty"`
+}
+
+// AcceptInviteRequest defines the request for accepting an invitation
+type AcceptInviteRequest struct {
+	GroupID     string `path:"groupID"`
+	InviteEmail string `json:"invite_email" validate:"required,email"`
+	UserID      string `json:"user_id" validate:"required"`
+}
+
+// RejectInviteRequest defines the request for rejecting an invitation
+type RejectInviteRequest struct {
+	GroupID      string `path:"groupID"`
+	InviteEmail  string `json:"invite_email" validate:"required,email"`
+	RejectedByID string `json:"rejected_by_id,omitempty"`
 }
 
 // RemoveMemberRequest defines the request for removing a member

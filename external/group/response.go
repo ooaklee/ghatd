@@ -17,6 +17,12 @@ type GetGroupsByUserIDResponse struct {
 	Descendants map[string][][]GroupDescendantsNode `json:"descendants"`
 }
 
+// GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse defines the response
+// for groups with pending invitations matching a member ID.
+type GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse struct {
+	Groups []*UniversalGroup `json:"groups"`
+}
+
 // UserGroupAccessSummary describes a user's effective access for a given group.
 type UserGroupAccessSummary struct {
 	// MaxRole is the highest role observed for the user in that group.
@@ -101,6 +107,31 @@ type GetGroupMembersResponse struct {
 // AddMemberResponse defines the response for adding a member
 type AddMemberResponse struct {
 	Group *UniversalGroup `json:"group"`
+}
+
+// InviteUserResponse defines the response for inviting a user
+type InviteUserResponse struct {
+	Group       *UniversalGroup `json:"group"`
+	InviteEmail string          `json:"invite_email"`
+}
+
+// UninviteUserResponse defines the response for revoking an invitation
+type UninviteUserResponse struct {
+	Group       *UniversalGroup `json:"group"`
+	InviteEmail string          `json:"invite_email"`
+}
+
+// AcceptInviteResponse defines the response for accepting an invitation
+type AcceptInviteResponse struct {
+	Group       *UniversalGroup `json:"group"`
+	InviteEmail string          `json:"invite_email"`
+	UserID      string          `json:"user_id"`
+}
+
+// RejectInviteResponse defines the response for rejecting an invitation
+type RejectInviteResponse struct {
+	Group       *UniversalGroup `json:"group"`
+	InviteEmail string          `json:"invite_email"`
 }
 
 // RemoveMemberResponse defines the response for removing a member

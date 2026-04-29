@@ -168,7 +168,7 @@ func MapRequestToGetGroupsRequest(request *http.Request, validator GroupValidato
 		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}
 
-	err = validator.Validate(parsedRequest)
+	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
 		return nil, errors.New(ErrKeyInvalidQueryParam)
 	}
@@ -200,12 +200,126 @@ func MapRequestToGetGroupsByUserIDRequest(request *http.Request, validator Group
 	return parsedRequest, nil
 }
 
+// MapRequestToGetGroupsAwaitingAnswerForInvitationsByMemberIDRequest maps incoming
+// invitations-by-member request to correct struct.
+func MapRequestToGetGroupsAwaitingAnswerForInvitationsByMemberIDRequest(request *http.Request, validator GroupValidator) (*GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest, error) {
+	var err error
+	parsedRequest := &GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest{}
+
+	parsedRequest.MemberID, err = toolbox.GetVariableValueFromUri(request, "memberID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidMemberID)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	err = validator.Validate(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToAddMemberRequest maps incoming AddMember request to correct struct
 func MapRequestToAddMemberRequest(request *http.Request, validator GroupValidator) (*AddMemberRequest, error) {
 	var err error
 	parsedRequest := &AddMemberRequest{}
 
 	// get group id from uri
+	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	err = toolbox.DecodeRequestBody(request, parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToInviteUserRequest maps incoming InviteUser request to correct struct
+func MapRequestToInviteUserRequest(request *http.Request, validator GroupValidator) (*InviteUserRequest, error) {
+	var err error
+	parsedRequest := &InviteUserRequest{}
+
+	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	err = toolbox.DecodeRequestBody(request, parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToUninviteUserRequest maps incoming UninviteUser request to correct struct
+func MapRequestToUninviteUserRequest(request *http.Request, validator GroupValidator) (*UninviteUserRequest, error) {
+	var err error
+	parsedRequest := &UninviteUserRequest{}
+
+	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	query := request.URL.Query()
+	err = querydecoder.New(query).Decode(parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidQueryParam)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToAcceptInviteRequest maps incoming AcceptInvite request to correct struct
+func MapRequestToAcceptInviteRequest(request *http.Request, validator GroupValidator) (*AcceptInviteRequest, error) {
+	var err error
+	parsedRequest := &AcceptInviteRequest{}
+
+	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	err = toolbox.DecodeRequestBody(request, parsedRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToRejectInviteRequest maps incoming RejectInvite request to correct struct
+func MapRequestToRejectInviteRequest(request *http.Request, validator GroupValidator) (*RejectInviteRequest, error) {
+	var err error
+	parsedRequest := &RejectInviteRequest{}
+
 	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
 	if err != nil {
 		return nil, errors.New(ErrKeyInvalidGroupID)

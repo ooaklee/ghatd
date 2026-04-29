@@ -125,6 +125,31 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		Code:       "GRP0-030",
 		Detail:     "The provided user ID is invalid",
 	},
+	ErrKeyInvalidInviteEmail: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-031",
+		Detail:     "The provided invite email is invalid",
+	},
+	ErrKeyInvitationAlreadyExists: {
+		StatusCode: http.StatusConflict,
+		Code:       "GRP0-032",
+		Detail:     "An invitation for this email already exists",
+	},
+	ErrKeyInvitationNotFound: {
+		StatusCode: http.StatusNotFound,
+		Code:       "GRP0-033",
+		Detail:     "No invitation found for the provided email",
+	},
+	ErrKeyInvalidInvitationState: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-034",
+		Detail:     "The invitation state is invalid for this operation",
+	},
+	ErrKeyInviteRequiresTopLevelGroup: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-035",
+		Detail:     "Invite operations are only supported on top-level groups",
+	},
 
 	// Hierarchy errors
 	ErrKeyCircularReferenceDetected: {

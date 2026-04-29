@@ -39,6 +39,14 @@ const (
 	MemberRoleCoordinator = "COORDINATOR"
 	MemberRoleSuperUser   = "SUPERUSER"
 
+	// Invitation state keys for member lifecycle
+	MemberInvitationStateInvited = "INVITED"
+
+	// Member metadata keys
+	MemberMetadataKeyInvitedByID         = "invited_by_id"
+	MemberMetadataKeyInviteEmail         = "invite_email"
+	MemberMetadataKeyInviteTargetGroupID = "invite_target_group_id"
+
 	// Visibility Keys
 
 	// VisibilityPublic indicates that the group is visible to everyone.
@@ -84,6 +92,11 @@ const (
 	ErrKeyInvalidParentChildRelation   = "InvalidParentChildRelation"
 	ErrKeyGroupDependedOnByOtherGroups = "GroupDependedOnByOtherGroups"
 	ErrKeyInvalidUserIDProvided        = "InvalidUserIDProvided"
+	ErrKeyInvalidInviteEmail           = "InvalidInviteEmail"
+	ErrKeyInvitationAlreadyExists      = "InvitationAlreadyExists"
+	ErrKeyInvitationNotFound           = "InvitationNotFound"
+	ErrKeyInvalidInvitationState       = "InvalidInvitationState"
+	ErrKeyInviteRequiresTopLevelGroup  = "InviteRequiresTopLevelGroup"
 )
 
 const (

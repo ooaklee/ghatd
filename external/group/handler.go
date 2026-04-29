@@ -18,10 +18,15 @@ type GroupService interface {
 	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error)
 	GetGroups(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error)
+	GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Context, r *GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest) (*GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse, error)
 	GetGroupsByMemberID(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	GetGroupsByLeaderID(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	SearchGroupsByExtension(ctx context.Context, r *GetGroupsRequest) (*GetGroupsResponse, error)
 	AddMember(ctx context.Context, r *AddMemberRequest) (*AddMemberResponse, error)
+	InviteUser(ctx context.Context, r *InviteUserRequest) (*InviteUserResponse, error)
+	UninviteUser(ctx context.Context, r *UninviteUserRequest) (*UninviteUserResponse, error)
+	AcceptInvite(ctx context.Context, r *AcceptInviteRequest) (*AcceptInviteResponse, error)
+	RejectInvite(ctx context.Context, r *RejectInviteRequest) (*RejectInviteResponse, error)
 	RemoveMember(ctx context.Context, r *RemoveMemberRequest) (*RemoveMemberResponse, error)
 	UpdateMemberRole(ctx context.Context, r *UpdateMemberRoleRequest) (*UpdateMemberRoleResponse, error)
 	GetGroupMembers(ctx context.Context, r *GetGroupMembersRequest) (*GetGroupMembersResponse, error)
@@ -181,6 +186,24 @@ func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
+// GetGroupsAwaitingAnswerForInvitationsByMemberID handles getting groups
+// with pending invitations matching the provided member ID.
+func (h *Handler) GetGroupsAwaitingAnswerForInvitationsByMemberID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetGroupsAwaitingAnswerForInvitationsByMemberIDRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetGroupsAwaitingAnswerForInvitationsByMemberID(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups)
+}
+
 // GetGroupsByMemberID handles getting groups by member ID with pagination
 func (h *Handler) GetGroupsByMemberID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetGroupsRequest(r, h.Validator)
@@ -293,6 +316,74 @@ func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.AddMember(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// InviteUser handles inviting a user to a group
+func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToInviteUserRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.InviteUser(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// UninviteUser handles revoking a pending invite from a group
+func (h *Handler) UninviteUser(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUninviteUserRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.UninviteUser(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// AcceptInvite handles accepting a pending invite for a group
+func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAcceptInviteRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.AcceptInvite(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
+}
+
+// RejectInvite handles rejecting a pending invite for a group
+func (h *Handler) RejectInvite(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToRejectInviteRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.RejectInvite(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

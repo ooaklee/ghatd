@@ -44,6 +44,7 @@ type GroupRepository interface {
 	GetGroupsByType(ctx context.Context, groupType string, page, pageSize int, order string) ([]UniversalGroup, error)
 	GetGroupsByStatus(ctx context.Context, status string, page, pageSize int, order string) ([]UniversalGroup, error)
 	GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error)
+	GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Context, memberID string) ([]UniversalGroup, error)
 	GetGroupsByMemberID(ctx context.Context, memberID string, memberType string, page, pageSize int) ([]UniversalGroup, error)
 	GetGroupsByLeaderID(ctx context.Context, leaderID string, page, pageSize int) ([]UniversalGroup, error)
 	SearchGroupsByExtension(ctx context.Context, key string, value interface{}, page, pageSize int) ([]UniversalGroup, error)
@@ -1192,6 +1193,222 @@ func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMem
 	}, nil
 }
 
+// InviteUser adds a pending invitation for an email address to a top-level group.
+func (s *Service) InviteUser(ctx context.Context, req *InviteUserRequest) (*InviteUserResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "invite-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("inviting-user-to-group", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail))
+
+	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
+	if err != nil {
+		log.Error("failed-to-get-target-group-for-invite", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, err
+	}
+	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+	if s.isNonTopLevelGroup(targetGroup) {
+		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+	}
+
+	if req.Role != "" {
+		if roleErr := s.isValidMemberRole(targetGroup.Type, req.Role); roleErr != nil {
+			return nil, roleErr
+		}
+	}
+
+	targetAdded, err := s.addPendingInviteMember(targetGroup, inviteEmail, req.Role, req.InvitedByID)
+	if err != nil {
+		log.Error("failed-to-add-pending-invite-to-target-group", zap.Error(err), zap.String("group_id", req.GroupID), zap.String("invite_email", inviteEmail))
+		return nil, err
+	}
+	if !targetAdded {
+		return nil, errors.New(ErrKeyInvitationAlreadyExists)
+	}
+
+	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
+	if err != nil {
+		log.Error("failed-to-persist-target-group-invite", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.invited",
+			TargetId:   req.GroupID,
+			Details: map[string]interface{}{
+				"invite_email":         inviteEmail,
+				"invited_by_id":        req.InvitedByID,
+				"target_group_id":      req.GroupID,
+				"root_group_id":        req.GroupID,
+				"target_member_role":   req.Role,
+				"invitation_lifecycle": "sent",
+			},
+		})
+	}
+
+	return &InviteUserResponse{Group: updatedTargetGroup, InviteEmail: inviteEmail}, nil
+}
+
+// UninviteUser removes a pending invitation from a top-level group.
+func (s *Service) UninviteUser(ctx context.Context, req *UninviteUserRequest) (*UninviteUserResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "uninvite-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("uninviting-user-from-group", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail))
+
+	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
+	if err != nil {
+		log.Error("failed-to-get-target-group-for-uninvite", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, err
+	}
+	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+	if s.isNonTopLevelGroup(targetGroup) {
+		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+	}
+
+	if !removePendingInviteByEmail(targetGroup, inviteEmail) {
+		return nil, errors.New(ErrKeyInvitationNotFound)
+	}
+
+	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
+	if err != nil {
+		log.Error("failed-to-persist-target-group-uninvite", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.uninvited",
+			TargetId:   req.GroupID,
+			Details: map[string]interface{}{
+				"invite_email":         inviteEmail,
+				"uninvited_by_id":      req.UninvitedByID,
+				"invitation_lifecycle": "revoked",
+			},
+		})
+	}
+
+	return &UninviteUserResponse{Group: updatedTargetGroup, InviteEmail: inviteEmail}, nil
+}
+
+// AcceptInvite accepts a pending invitation for a user and materialises membership.
+func (s *Service) AcceptInvite(ctx context.Context, req *AcceptInviteRequest) (*AcceptInviteResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "accept-invite")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("accepting-group-invite", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail), zap.String("user_id", req.UserID))
+
+	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	userID := strings.TrimSpace(req.UserID)
+	if userID == "" {
+		return nil, errors.New(ErrKeyInvalidUserIDProvided)
+	}
+
+	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
+	if err != nil {
+		log.Error("failed-to-get-target-group-for-accept", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, err
+	}
+	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+	if s.isNonTopLevelGroup(targetGroup) {
+		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+	}
+
+	targetRole, targetChanged, acceptErr := s.acceptInviteInGroup(targetGroup, inviteEmail, userID)
+	if acceptErr != nil {
+		return nil, acceptErr
+	}
+	if !targetChanged {
+		return nil, errors.New(ErrKeyInvitationNotFound)
+	}
+
+	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
+	if err != nil {
+		log.Error("failed-to-persist-target-group-accept", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.invite.accepted",
+			TargetId:   req.GroupID,
+			Details: map[string]interface{}{
+				"invite_email":         inviteEmail,
+				"user_id":              userID,
+				"target_member_role":   targetRole,
+				"invitation_lifecycle": "accepted",
+			},
+		})
+	}
+
+	return &AcceptInviteResponse{Group: updatedTargetGroup, InviteEmail: inviteEmail, UserID: userID}, nil
+}
+
+// RejectInvite rejects a pending invitation from a top-level group.
+func (s *Service) RejectInvite(ctx context.Context, req *RejectInviteRequest) (*RejectInviteResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "reject-invite")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("rejecting-group-invite", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail))
+
+	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
+	if err != nil {
+		log.Error("failed-to-get-target-group-for-reject", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, err
+	}
+	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+	if s.isNonTopLevelGroup(targetGroup) {
+		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+	}
+
+	if !removePendingInviteByEmail(targetGroup, inviteEmail) {
+		return nil, errors.New(ErrKeyInvitationNotFound)
+	}
+
+	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
+	if err != nil {
+		log.Error("failed-to-persist-target-group-reject", zap.Error(err), zap.String("group_id", req.GroupID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.member.invite.rejected",
+			TargetId:   req.GroupID,
+			Details: map[string]interface{}{
+				"invite_email":         inviteEmail,
+				"rejected_by_id":       req.RejectedByID,
+				"invitation_lifecycle": "rejected",
+			},
+		})
+	}
+
+	return &RejectInviteResponse{Group: updatedTargetGroup, InviteEmail: inviteEmail}, nil
+}
+
 // RemoveMember removes a member from a group
 func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*RemoveMemberResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "remove-member")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
@@ -1298,6 +1515,168 @@ func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*
 	return &RemoveMemberResponse{
 		Group: updatedGroup,
 	}, nil
+}
+
+// pendingInviteEmail resolves the canonical invite email for a pending member entry.
+// It prefers metadata and falls back to the member ID for backward compatibility.
+func pendingInviteEmail(member Member) string {
+	if member.Metadata != nil {
+		if inviteEmailRaw, exists := member.Metadata[MemberMetadataKeyInviteEmail]; exists {
+			if inviteEmail, ok := inviteEmailRaw.(string); ok {
+				return strings.ToLower(strings.TrimSpace(inviteEmail))
+			}
+		}
+	}
+
+	return strings.ToLower(strings.TrimSpace(member.ID))
+}
+
+// isPendingInviteMember reports whether a member record represents an active invite.
+// Legacy records with invited_at but missing invitation_state are also treated as pending.
+func isPendingInviteMember(member Member) bool {
+	state := strings.ToUpper(strings.TrimSpace(member.InvitationState))
+	return state == MemberInvitationStateInvited || strings.TrimSpace(member.InvitedAt) != ""
+}
+
+// findPendingInviteIndexByEmail returns the index of a pending invite for the email.
+// It returns -1 when the group is nil, the email is empty, or no invite exists.
+func findPendingInviteIndexByEmail(group *UniversalGroup, inviteEmail string) int {
+	if group == nil {
+		return -1
+	}
+
+	normalisedInviteEmail := strings.ToLower(strings.TrimSpace(inviteEmail))
+	if normalisedInviteEmail == "" {
+		return -1
+	}
+
+	for i := range group.Members {
+		member := group.Members[i]
+		if member.Type != MemberTypeUser {
+			continue
+		}
+
+		if !isPendingInviteMember(member) {
+			continue
+		}
+
+		if pendingInviteEmail(member) == normalisedInviteEmail {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// hasPendingInviteByEmail checks whether the group has a pending invite for the email.
+func hasPendingInviteByEmail(group *UniversalGroup, inviteEmail string) bool {
+	return findPendingInviteIndexByEmail(group, inviteEmail) >= 0
+}
+
+// removePendingInviteByEmail removes the pending invite matching the email.
+// It returns true when a member was removed.
+func removePendingInviteByEmail(group *UniversalGroup, inviteEmail string) bool {
+	index := findPendingInviteIndexByEmail(group, inviteEmail)
+	if index < 0 {
+		return false
+	}
+
+	group.Members = append(group.Members[:index], group.Members[index+1:]...)
+	group.SetUpdatedAtNow()
+	return true
+}
+
+// addPendingInviteMember appends a pending invite member to the target top-level group.
+// It returns (false, nil) when the invite already exists.
+func (s *Service) addPendingInviteMember(group *UniversalGroup, inviteEmail, role, invitedByID string) (bool, error) {
+	if group == nil {
+		return false, errors.New(ErrKeyResourceNotFound)
+	}
+
+	if hasPendingInviteByEmail(group, inviteEmail) {
+		return false, nil
+	}
+
+	if group.HasMember(inviteEmail) {
+		return false, errors.New(ErrKeyMemberAlreadyExists)
+	}
+
+	member := Member{
+		ID:              inviteEmail,
+		Type:            MemberTypeUser,
+		Role:            role,
+		InvitedAt:       "",
+		InvitationState: MemberInvitationStateInvited,
+		Metadata: map[string]interface{}{
+			MemberMetadataKeyInviteEmail: inviteEmail,
+		},
+	}
+
+	if s.TimeProvider != nil {
+		member.InvitedAt = s.TimeProvider.NowUTC()
+	}
+
+	if invitedByID != "" {
+		member.SetInviter(invitedByID)
+	}
+
+	group.Members = append(group.Members, member)
+	group.SetUpdatedAtNow()
+	return true, nil
+}
+
+// acceptInviteInGroup converts a pending invite into an active user membership.
+// If the user already exists, their role is elevated to the highest applicable role.
+func (s *Service) acceptInviteInGroup(group *UniversalGroup, inviteEmail, userID string) (string, bool, error) {
+	if group == nil {
+		return "", false, errors.New(ErrKeyResourceNotFound)
+	}
+
+	index := findPendingInviteIndexByEmail(group, inviteEmail)
+	if index < 0 {
+		return "", false, errors.New(ErrKeyInvitationNotFound)
+	}
+
+	memberRole := strings.TrimSpace(group.Members[index].Role)
+	if memberRole == "" {
+		memberRole = MemberRoleMember
+	}
+
+	group.Members = append(group.Members[:index], group.Members[index+1:]...)
+
+	if group.HasMember(userID) {
+		for i := range group.Members {
+			if group.Members[i].ID != userID || group.Members[i].Type != MemberTypeUser {
+				continue
+			}
+
+			group.Members[i].Role = s.pickHigherRole(group.Members[i].Role, memberRole)
+			group.Members[i].InvitedAt = ""
+			group.Members[i].InvitationState = ""
+			break
+		}
+		group.SetUpdatedAtNow()
+		return memberRole, true, nil
+	}
+
+	acceptedMember := Member{ID: userID, Type: MemberTypeUser, Role: memberRole}
+	if s.TimeProvider != nil {
+		acceptedMember.JoinedAt = s.TimeProvider.NowUTC()
+	}
+
+	group.Members = append(group.Members, acceptedMember)
+	group.SetUpdatedAtNow()
+	return memberRole, true, nil
+}
+
+// isNonTopLevelGroup reports whether a group is nested under another group.
+// A non-empty parent_group_id or lineage indicates a non-top-level group.
+func (s *Service) isNonTopLevelGroup(group *UniversalGroup) bool {
+	if group == nil {
+		return true
+	}
+
+	return strings.TrimSpace(group.ParentGroupID) != "" || len(group.Lineage) > 0
 }
 
 // UpdateMemberRole updates a member's role in a group
@@ -1789,6 +2168,51 @@ func (s *Service) RestoreGroup(ctx context.Context, req *RestoreGroupRequest) (*
 	}
 
 	return &RestoreGroupResponse{Group: updatedGroup}, nil
+}
+
+// GetGroupsAwaitingAnswerForInvitationsByMemberID retrieves all groups with
+// pending invitations for the provided member ID.
+func (s *Service) GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Context, req *GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest) (*GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-groups-awaiting-answer-for-invitations-by-member-id")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	memberID := strings.TrimSpace(req.MemberID)
+	log.Debug("getting-groups-awaiting-answer-for-invitations-by-member-id", zap.String("member_id", memberID))
+
+	if memberID == "" {
+		return nil, errors.New(ErrKeyInvalidMemberID)
+	}
+
+	groups, err := s.GroupRepository.GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx, memberID)
+	if err != nil {
+		log.Error("failed-to-get-groups-awaiting-answer-for-invitations-by-member-id", zap.Error(err), zap.String("member_id", memberID))
+		return nil, errors.New(ErrKeyDatabaseError)
+	}
+
+	filtered := make([]*UniversalGroup, 0, len(groups))
+	for i := range groups {
+		group := &groups[i]
+		group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+		if !group.HasMember(memberID) {
+			continue
+		}
+
+		member, err := group.GetMemberByID(memberID)
+		if err != nil {
+			continue
+		}
+
+		if !isPendingInviteMember(*member) {
+			continue
+		}
+
+		if req.PrefixName {
+			group.Name = s.getPrefixName(ctx, group, map[string]string{})
+		}
+
+		filtered = append(filtered, group)
+	}
+
+	return &GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse{Groups: filtered}, nil
 }
 
 // GetGroupsByMemberID retrieves groups that contain a specific member

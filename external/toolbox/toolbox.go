@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/mail"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -24,6 +25,9 @@ import (
 const (
 	// ErrKeyMissingUriVariable is the error returned when a URI variable is missing
 	ErrKeyMissingUriVariable = "MissingUriVariable"
+
+	// ErrKeyInvalidEmail is the error returned when an email is invalid
+	ErrKeyInvalidEmail = "InvalidEmail"
 )
 
 type (
@@ -80,6 +84,27 @@ func OutputBasicLogString(level, message string) string {
 	}
 
 	return string(marshalledJson)
+}
+
+// NormaliseEmail attempts to normalise email by trimming spaces and converting to lowercase. On failure an error is returned
+func NormaliseEmail(email string) (string, error) {
+
+	normalised := strings.ToLower(strings.TrimSpace(email))
+	if normalised == "" {
+		return "", errors.New(ErrKeyInvalidEmail)
+	}
+
+	parsedAddress, err := mail.ParseAddress(normalised)
+	if err != nil || parsedAddress == nil {
+		return "", errors.New(ErrKeyInvalidEmail)
+	}
+
+	address := strings.ToLower(strings.TrimSpace(parsedAddress.Address))
+	if address == "" {
+		return "", errors.New(ErrKeyInvalidEmail)
+	}
+
+	return address, nil
 }
 
 // StringRemoveMultiSpace subsitutes all multispace with single space
