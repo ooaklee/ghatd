@@ -176,6 +176,24 @@ type GetUserGroupsRequest struct {
 	PrefixName bool `query:"prefix_name"`
 }
 
+// UpdateGroupRequest holds the data needed to update a group
+type UpdateGroupRequest struct {
+
+	// UserId is the ID of the user making the request
+	UserId string
+
+	*group.UpdateGroupRequest
+}
+
+// ValidateGroupNameRequest holds the data needed to validate a group name
+type ValidateGroupNameRequest struct {
+
+	// UserID is the ID of the user making the request
+	UserID string
+
+	*group.ValidateGroupNameRequest
+}
+
 // CreateGroupRequest holds the data needed for a user to create a new group
 type CreateGroupRequest struct {
 

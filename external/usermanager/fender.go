@@ -562,6 +562,37 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 	return &parsedRequest, nil
 }
 
+// MapRequestToUpdateGroupRequest maps incoming UpdateGroup request to correct struct
+func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValidator) (*UpdateGroupRequest, error) {
+	var parsedRequest UpdateGroupRequest = UpdateGroupRequest{
+		UpdateGroupRequest: &group.UpdateGroupRequest{},
+	}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.UpdateGroupRequest.ID = groupID
+
+	if err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateGroupRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToDeleteGroupRequest maps incoming DeleteGroup request to correct struct
 func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValidator) (*DeleteGroupRequest, error) {
 	var parsedRequest DeleteGroupRequest
@@ -689,6 +720,36 @@ func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerV
 	parsedRequest.GroupID = groupID
 
 	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToValidateGroupNameRequest maps incoming ValidateGroupName request to correct struct
+func MapRequestToValidateGroupNameRequest(r *http.Request, validator UsermanagerValidator) (*ValidateGroupNameRequest, error) {
+	var parsedRequest ValidateGroupNameRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	baseRequest := group.ValidateGroupNameRequest{}
+
+	// get request queries
+	query := r.URL.Query()
+	err := querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.ValidateGroupNameRequest = &baseRequest
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("validate-group-name-request-validation-failed", zap.Error(err))
 		return nil, errors.New(ErrKeyRequestFailedValidation)
 	}
 

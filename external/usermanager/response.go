@@ -95,6 +95,11 @@ type CreateGroupResponse struct {
 	Group *group.UniversalGroup `json:"group"`
 }
 
+// UpdateGroupResponse holds the response for updating an existing group
+type UpdateGroupResponse struct {
+	*group.UpdateGroupResponse
+}
+
 // DeleteGroupResponse holds the response for deleting a group
 type DeleteGroupResponse struct {
 	*group.DeleteGroupResponse
@@ -123,6 +128,11 @@ type GetGroupLineageResponse struct {
 // GetGroupDescendantsResponse holds the response for fetching a group's descendants
 type GetGroupDescendantsResponse struct {
 	*group.GetGroupDescendantsResponse
+}
+
+// ValidateGroupNameResponse holds the response for validating a proposed group name
+type ValidateGroupNameResponse struct {
+	*group.ValidateGroupNameResponse
 }
 
 // EnrichedMember holds a group member with their user profile details resolved

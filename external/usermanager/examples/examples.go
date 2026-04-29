@@ -613,6 +613,36 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 	}, nil
 }
 
+func (m *MockGroupService) UpdateGroup(ctx context.Context, req *group.UpdateGroupRequest) (*group.UpdateGroupResponse, error) {
+	if req == nil || req.ID == "" {
+		return nil, errors.New(group.ErrKeyInvalidGroupID)
+	}
+
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.ID})
+	if err != nil {
+		return nil, err
+	}
+
+	g := groupResp.Group
+	if req.Name != nil {
+		g.Name = *req.Name
+	}
+	if req.Description != nil {
+		g.DisplayInfo.Description = *req.Description
+	}
+	if req.Email != nil {
+		g.DisplayInfo.Email = *req.Email
+	}
+	if req.Visibility != nil {
+		g.Settings.Visibility = *req.Visibility
+	}
+	if req.Status != nil {
+		g.Status = *req.Status
+	}
+
+	return &group.UpdateGroupResponse{Group: g}, nil
+}
+
 func (m *MockGroupService) DeleteGroup(ctx context.Context, req *group.DeleteGroupRequest) (*group.DeleteGroupResponse, error) {
 	if req == nil || req.ID == "" {
 		return nil, errors.New(group.ErrKeyInvalidGroupID)
@@ -700,6 +730,21 @@ func (m *MockGroupService) GetGroupsConfig(_ context.Context, _ *group.GetGroups
 
 func (m *MockGroupService) GetGroupLineage(_ context.Context, req *group.GetGroupLineageRequest) (*group.GetGroupLineageResponse, error) {
 	return &group.GetGroupLineageResponse{Lineage: []group.GroupLineageNode{}}, nil
+}
+
+func (m *MockGroupService) ValidateGroupName(_ context.Context, req *group.ValidateGroupNameRequest) (*group.ValidateGroupNameResponse, error) {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, errors.New(group.ErrKeyValidationFailed)
+	}
+
+	return &group.ValidateGroupNameResponse{
+		RawName:    name,
+		Name:       strings.ToLower(strings.ReplaceAll(name, " ", "-")),
+		Adjusted:   false,
+		Available:  true,
+		IsRootType: false,
+	}, nil
 }
 
 func createMockGroup(id, name, groupType string, memberCount int) *group.UniversalGroup {

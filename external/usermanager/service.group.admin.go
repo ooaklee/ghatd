@@ -31,6 +31,51 @@ func (s *Service) GetGroupsConfig(ctx context.Context, _ *GetGroupsConfigRequest
 	}, nil
 }
 
+// ValidateGroupName validates a proposed group name through the group service.
+// Admin requesters can validate directly. Non-admin requesters must have
+// access to the provided parent_group_id (when supplied).
+func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	if r.ValidateGroupNameRequest == nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
+		parentGroupID := strings.TrimSpace(r.ParentGroupID)
+		if parentGroupID != "" {
+			hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, parentGroupID)
+			if accessErr != nil {
+				log.Error(
+					"failed-to-resolve-requester-group-access-map",
+					zap.String("requester_user_id", r.UserID),
+					zap.String("group_id", parentGroupID),
+					zap.Error(accessErr),
+				)
+				return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			}
+
+			if !hasAccess {
+				return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			}
+		}
+	}
+
+	resp, err := s.GroupService.ValidateGroupName(ctx, r.ValidateGroupNameRequest)
+	if err != nil {
+		log.Error("failed-to-validate-group-name", zap.Error(err))
+		return nil, err
+	}
+
+	return &ValidateGroupNameResponse{ValidateGroupNameResponse: resp}, nil
+}
+
 // CreateGroup handles creating a new group with the provided details. Only admins or users with
 // access to the parent group (if specified) can create groups.
 func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error) {
@@ -84,6 +129,49 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 	return &CreateGroupResponse{
 		Group: groupResp.Group,
 	}, nil
+}
+
+// UpdateGroup handles updating an existing group. Admin users can update any group.
+// Non-admin users must have effective admin-level access to the target group,
+// which also covers admin/owner permissions inherited from parent groups.
+func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	if r.UpdateGroupRequest == nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	if !isAdmin {
+		accessMap, accessErr := s.GroupService.GetUserGroupAccessMap(ctx, r.UserId)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserId),
+				zap.String("group_id", r.UpdateGroupRequest.ID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		groupAccess, ok := accessMap[r.UpdateGroupRequest.ID]
+		if !ok || !groupAccess.IsAccessible || !groupAccess.IsAdmin {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
+	}
+
+	resp, err := s.GroupService.UpdateGroup(ctx, r.UpdateGroupRequest)
+	if err != nil {
+		log.Error("failed-to-update-group", zap.String("group_id", r.UpdateGroupRequest.ID), zap.Error(err))
+		return nil, err
+	}
+
+	return &UpdateGroupResponse{UpdateGroupResponse: resp}, nil
 }
 
 // DeleteGroup handles deleting a group. Admin users may request hard/soft delete;

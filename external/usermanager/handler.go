@@ -28,11 +28,13 @@ type UsermanagerService interface {
 	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
+	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
 	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error)
 	GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error)
 	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
 	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
 	GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error)
+	ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error)
 	// Group management methods
 	AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error)
 	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
@@ -481,6 +483,23 @@ func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Stats)
 }
 
+// ValidateGroupName handles the request to validate a proposed group name
+func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToValidateGroupNameRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ValidateGroupName(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.ValidateGroupNameResponse)
+}
+
 // CreateGroup handles the request to create a new group
 func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToCreateGroupRequest(r, h.Validator)
@@ -499,6 +518,23 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Group)
+}
+
+// UpdateGroup handles the request to update an existing group
+func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateGroupRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.UpdateGroup(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Group)
 }
 
 // DeleteGroup handles the request to delete a group

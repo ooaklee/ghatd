@@ -26,6 +26,7 @@ type UsermanagerHandler interface {
 	GetGroupDetail(w http.ResponseWriter, r *http.Request)
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
 	CreateGroup(w http.ResponseWriter, r *http.Request)
+	UpdateGroup(w http.ResponseWriter, r *http.Request)
 	DeleteGroup(w http.ResponseWriter, r *http.Request)
 	// Group management methods
 	AddGroupMember(w http.ResponseWriter, r *http.Request)
@@ -35,6 +36,7 @@ type UsermanagerHandler interface {
 	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
 	GetGroupLineage(w http.ResponseWriter, r *http.Request)
 	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
+	ValidateGroupName(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -95,6 +97,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}/groups", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/groups/validate-name", request.Handler.ValidateGroupName).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}", request.Handler.GetGroupDetail).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
@@ -109,6 +112,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/owner", request.Handler.UpdateGroupOwner).Methods(http.MethodPut, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members", request.Handler.AddGroupMember).Methods(http.MethodPost, http.MethodOptions)
