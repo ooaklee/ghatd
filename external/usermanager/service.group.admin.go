@@ -66,7 +66,12 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 
-		r.CreateGroupRequest.OwnerID = r.UserID
+		// For non-admins, they should be able to set the owner to themselves or anyone else
+		// explicitly (the search endpoint should allow them to find users they have access
+		// to), if they leave it blank (which will default to themselves).
+		if r.CreateGroupRequest.OwnerID == "" {
+			r.CreateGroupRequest.OwnerID = r.UserID
+		}
 	}
 
 	// Create the group via group service
