@@ -460,10 +460,8 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 }
 
 // filterVisibleDescendantsForUser applies visibility constraints for descendant queries when
-// a request is made as a specific user. PRIVATE ("secret") and INTERNAL groups are only
-// visible when the user has a membership connection to that branch of the hierarchy.
-// INTERNAL groups follow the same membership rules as PRIVATE but do not hide the
-// group's existence from hierarchy members who discover it via a visible ancestor.
+// a request is made as a specific user. PRIVATE ("secret") groups remain membership-
+// restricted, while INTERNAL groups stay discoverable through a visible hierarchy.
 func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asUserID string, descendants []UniversalGroup) ([]UniversalGroup, bool) {
 	if asUserID == "" {
 		return descendants, true
@@ -474,11 +472,10 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 		groupsByID[descendants[i].ID] = &descendants[i]
 	}
 
-	// requiresMembership returns true for any visibility mode that restricts access
-	// to group members only (PRIVATE and INTERNAL both require membership when
-	// filtering on behalf of a specific user).
+	// requiresMembership returns true for visibility modes that should stay hidden
+	// unless the requester has a direct membership connection to that branch.
 	requiresMembership := func(vis string) bool {
-		return vis == VisibilityPrivate || vis == VisibilityInternal
+		return vis == VisibilityPrivate
 	}
 
 	visibleRestrictedGroupIDs := make(map[string]struct{})
@@ -787,50 +784,75 @@ func (s *Service) DeleteGroup(ctx context.Context, req *DeleteGroupRequest) (*De
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "delete-group")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("deleting-group", zap.String("id", req.ID), zap.Bool("hard_delete", req.HardDelete))
 
-	// Verify group exists
-	_, err := s.GroupRepository.GetGroupByID(ctx, req.ID)
+	// Verify group exists and capture the root snapshot.
+	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.ID)
 	if err != nil {
 		log.Error("group-not-found-for-deletion", zap.Error(err), zap.String("id", req.ID))
 		return nil, err
 	}
 
-	// Block deletion when other groups depend on this group.
-	hasDependents, err := s.GroupRepository.HasGroupDependents(ctx, req.ID)
+	// Cascade includes all active descendants for the target group.
+	descendants, err := s.GroupRepository.GetGroupsByLineageAncestor(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-check-group-dependencies", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyDatabaseError)
-	}
-	if hasDependents {
-		log.Warn("group-deletion-blocked-due-to-dependencies", zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyGroupDependedOnByOtherGroups)
-	}
-
-	if req.HardDelete {
-		// Hard delete - permanently remove
-		err = s.GroupRepository.DeleteGroupByID(ctx, req.ID)
-	} else {
-		// Soft delete - mark as deleted
-		deletedAt := s.TimeProvider.NowUTC()
-		err = s.GroupRepository.SoftDeleteGroup(ctx, req.ID, req.DeletedByID, deletedAt)
-	}
-
-	if err != nil {
-		log.Error("failed-to-delete-group", zap.Error(err))
+		log.Error("failed-to-get-groups-by-lineage-ancestor", zap.Error(err), zap.String("id", req.ID))
 		return nil, errors.New(ErrKeyDatabaseError)
 	}
 
-	// Audit log
-	if s.AuditService != nil {
-		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			TargetType: "group",
-			Domain:     "group",
-			Action:     "group.deleted",
-			TargetId:   req.ID,
-			Details: map[string]interface{}{
-				"hard_delete":   req.HardDelete,
-				"deleted_by_id": req.DeletedByID,
-			},
-		})
+	groupsToDelete := make([]*UniversalGroup, 0, len(descendants)+1)
+	groupsToDelete = append(groupsToDelete, targetGroup)
+	for i := range descendants {
+		groupSnapshot := descendants[i]
+		groupsToDelete = append(groupsToDelete, &groupSnapshot)
+	}
+
+	// Delete deepest descendants first, root group last.
+	sort.Slice(groupsToDelete, func(i, j int) bool {
+		return len(groupsToDelete[i].Lineage) > len(groupsToDelete[j].Lineage)
+	})
+
+	deletedAt := ""
+	if s.TimeProvider != nil {
+		deletedAt = s.TimeProvider.NowUTC()
+	}
+
+	for _, groupSnapshot := range groupsToDelete {
+		if groupSnapshot == nil {
+			continue
+		}
+
+		if req.HardDelete {
+			err = s.GroupRepository.DeleteGroupByID(ctx, groupSnapshot.ID)
+		} else {
+			err = s.GroupRepository.SoftDeleteGroup(ctx, groupSnapshot.ID, req.DeletedByID, deletedAt)
+		}
+
+		if err != nil {
+			log.Error("failed-to-delete-group", zap.String("group_id", groupSnapshot.ID), zap.Error(err))
+			return nil, errors.New(ErrKeyDatabaseError)
+		}
+
+		if s.AuditService != nil {
+			s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+				TargetType: "group",
+				Domain:     "group",
+				Action: func() audit.AuditAction {
+					if req.HardDelete {
+						return "group.hard_deleted"
+					} else {
+						return "group.soft_deleted"
+					}
+				}(),
+				TargetId: groupSnapshot.ID,
+				Details: map[string]interface{}{
+					"hard_delete":       req.HardDelete,
+					"deleted_by_id":     req.DeletedByID,
+					"deleted_at":        deletedAt,
+					"cascade_root_id":   req.ID,
+					"is_cascade_target": groupSnapshot.ID != req.ID,
+					"final_snapshot":    groupSnapshot,
+				},
+			})
+		}
 	}
 
 	return &DeleteGroupResponse{

@@ -185,6 +185,15 @@ type CreateGroupRequest struct {
 	*group.CreateGroupRequest
 }
 
+// DeleteGroupRequest holds the data needed for a user to delete a group
+type DeleteGroupRequest struct {
+
+	// UserID is the ID of the user making the request
+	UserID string
+
+	*group.DeleteGroupRequest
+}
+
 // GetGroupDetailRequest holds the data needed to fetch a specific group's detail
 type GetGroupDetailRequest struct {
 

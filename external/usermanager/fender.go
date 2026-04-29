@@ -562,6 +562,41 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 	return &parsedRequest, nil
 }
 
+// MapRequestToDeleteGroupRequest maps incoming DeleteGroup request to correct struct
+func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValidator) (*DeleteGroupRequest, error) {
+	var parsedRequest DeleteGroupRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	baseRequest := group.DeleteGroupRequest{}
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	baseRequest.ID = groupID
+
+	query := r.URL.Query()
+	err = querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.DeleteGroupRequest = &baseRequest
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToAddGroupMemberRequest maps an add-member request to the correct struct
 func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*AddGroupMemberRequest, error) {
 	var parsedRequest AddGroupMemberRequest = AddGroupMemberRequest{

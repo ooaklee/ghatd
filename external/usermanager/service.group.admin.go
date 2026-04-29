@@ -86,6 +86,51 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 	}, nil
 }
 
+// DeleteGroup handles deleting a group. Admin users may request hard/soft delete;
+// non-admin users must have effective admin access to the target group and are
+// forced to hard-delete.
+func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
+		accessMap, accessErr := s.GroupService.GetUserGroupAccessMap(ctx, r.UserID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.DeleteGroupRequest.ID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		groupAccess, ok := accessMap[r.DeleteGroupRequest.ID]
+		if !ok || !groupAccess.IsAccessible || !groupAccess.IsAdmin {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
+
+		// Non-admin users are restricted to hard delete.
+		r.DeleteGroupRequest.HardDelete = true
+	}
+
+	// Always attribute deletion to the requester at the usermanager boundary.
+	r.DeleteGroupRequest.DeletedByID = r.UserID
+
+	groupResp, err := s.GroupService.DeleteGroup(ctx, r.DeleteGroupRequest)
+	if err != nil {
+		log.Error("failed-to-delete-group", zap.String("group_id", r.DeleteGroupRequest.ID), zap.Error(err))
+		return nil, err
+	}
+
+	return &DeleteGroupResponse{DeleteGroupResponse: groupResp}, nil
+}
+
 // AddGroupMember adds a user to a group
 func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))

@@ -2,6 +2,7 @@ package examples
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -609,6 +610,17 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 
 	return &group.CreateGroupResponse{
 		Group: newGroup,
+	}, nil
+}
+
+func (m *MockGroupService) DeleteGroup(ctx context.Context, req *group.DeleteGroupRequest) (*group.DeleteGroupResponse, error) {
+	if req == nil || req.ID == "" {
+		return nil, errors.New(group.ErrKeyInvalidGroupID)
+	}
+
+	return &group.DeleteGroupResponse{
+		Success: true,
+		Message: "Group deleted successfully",
 	}, nil
 }
 

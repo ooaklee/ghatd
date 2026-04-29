@@ -95,6 +95,11 @@ type CreateGroupResponse struct {
 	Group *group.UniversalGroup `json:"group"`
 }
 
+// DeleteGroupResponse holds the response for deleting a group
+type DeleteGroupResponse struct {
+	*group.DeleteGroupResponse
+}
+
 // GetGroupDetailResponse holds the enriched response for group detail
 type GetGroupDetailResponse struct {
 	Detail *GroupDetail `json:"detail"`

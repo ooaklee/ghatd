@@ -26,6 +26,7 @@ type UsermanagerHandler interface {
 	GetGroupDetail(w http.ResponseWriter, r *http.Request)
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
 	CreateGroup(w http.ResponseWriter, r *http.Request)
+	DeleteGroup(w http.ResponseWriter, r *http.Request)
 	// Group management methods
 	AddGroupMember(w http.ResponseWriter, r *http.Request)
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request)
@@ -108,6 +109,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/owner", request.Handler.UpdateGroupOwner).Methods(http.MethodPut, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members", request.Handler.AddGroupMember).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members/{memberID}", request.Handler.RemoveGroupMember).Methods(http.MethodDelete, http.MethodOptions)
