@@ -133,7 +133,7 @@ type InviteUserRequest struct {
 type UninviteUserRequest struct {
 	GroupID       string `path:"groupID"`
 	InviteEmail   string `query:"invite_email" validate:"required,email"`
-	UninvitedByID string `query:"uninvited_by_id,omitempty"`
+	UninvitedByID string
 }
 
 // AcceptInviteRequest defines the request for accepting an invitation

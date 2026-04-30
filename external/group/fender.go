@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ritwickdey/querydecoder"
 )
@@ -274,6 +275,11 @@ func MapRequestToInviteUserRequest(request *http.Request, validator GroupValidat
 func MapRequestToUninviteUserRequest(request *http.Request, validator GroupValidator) (*UninviteUserRequest, error) {
 	var err error
 	parsedRequest := &UninviteUserRequest{}
+
+	parsedRequest.UninvitedByID = accessmanagerhelpers.AcquireFrom(request.Context())
+	if parsedRequest.UninvitedByID == "" {
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
 
 	parsedRequest.GroupID, err = toolbox.GetVariableValueFromUri(request, "groupID")
 	if err != nil {

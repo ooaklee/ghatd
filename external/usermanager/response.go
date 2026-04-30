@@ -1,6 +1,7 @@
 package usermanager
 
 import (
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
@@ -78,6 +79,65 @@ type GetUserGroupsResponse struct {
 	Groups []GroupSummary         `json:"groups"`
 	Total  int                    `json:"-"`
 	Meta   map[string]interface{} `json:"-"`
+}
+
+// GetLatestNotificationOverviewsResponse holds the response for fetching the latest notification overviews
+type GetLatestNotificationOverviewsResponse struct {
+	*common.GetLatestNotificationOverviewsResponse
+}
+
+// PendingGroupInvitation holds the response for a pending group invitation
+type PendingGroupInvitation struct {
+
+	// GroupID is the ID of the group the user has been invited to
+	GroupID string `json:"group_id"`
+
+	// GroupName is the name of the group the user has been invited to
+	GroupName string `json:"group_name"`
+
+	// GroupRawName is the raw name of the group (without any formatting) the user has been invited to
+	GroupRawName string `json:"group_raw_name,omitempty"`
+
+	// GroupType is the type of the group the user has been invited to
+	GroupType string `json:"group_type"`
+
+	// GroupStatus is the status of the group the user has been invited to
+	GroupStatus string `json:"group_status,omitempty"`
+
+	// GroupVisibility is the visibility of the group the user has been invited to
+	GroupVisibility string `json:"group_visibility,omitempty"`
+
+	// GroupDescription is the description of the group the user has been invited to
+	GroupDescription string `json:"group_description,omitempty"`
+
+	// InvitedAt is when the user was invited to the group
+	InviteEmail string `json:"invite_email"`
+
+	// Role is the role the user has been invited to within the group
+	Role string `json:"role,omitempty"`
+
+	// InvitedAt is when the user was invited to the group
+	InvitedAt string `json:"invited_at,omitempty"`
+
+	// InvitationState is the state of the user's invitation to the group
+	InvitationState string `json:"invitation_state,omitempty"`
+}
+
+// GetMyGroupInvitationsResponse holds the response for fetching a user's pending group invitations
+type GetMyGroupInvitationsResponse struct {
+
+	// Invitations is a list of the user's pending group invitations
+	Invitations []PendingGroupInvitation `json:"invitations"`
+}
+
+// AcceptMyGroupInvitationResponse holds the response for accepting a group invitation
+type AcceptMyGroupInvitationResponse struct {
+	*group.AcceptInviteResponse
+}
+
+// RejectMyGroupInvitationResponse holds the response for rejecting a group invitation
+type RejectMyGroupInvitationResponse struct {
+	*group.RejectInviteResponse
 }
 
 // GetMetaData returns formatted metadata for pagination

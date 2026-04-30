@@ -6,6 +6,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -57,11 +58,15 @@ type GroupService interface {
 	CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error)
 	GetGroupDescendants(ctx context.Context, req *group.GetGroupDescendantsRequest) (*group.GetGroupDescendantsResponse, error)
 	GetGroupsByUserID(ctx context.Context, req *group.GetGroupsByUserIDRequest) (*group.GetGroupsByUserIDResponse, error)
+	GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Context, req *group.GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest) (*group.GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse, error)
 	GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]group.UserGroupAccessSummary, error)
 	GetGroupsConfig(ctx context.Context, req *group.GetGroupsConfigRequest) (*group.GetGroupsConfigResponse, error)
 	GetGroupLineage(ctx context.Context, req *group.GetGroupLineageRequest) (*group.GetGroupLineageResponse, error)
 	DeleteGroup(ctx context.Context, req *group.DeleteGroupRequest) (*group.DeleteGroupResponse, error)
 	ValidateGroupName(ctx context.Context, req *group.ValidateGroupNameRequest) (*group.ValidateGroupNameResponse, error)
+	GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error)
+	AcceptInvite(ctx context.Context, req *group.AcceptInviteRequest) (*group.AcceptInviteResponse, error)
+	RejectInvite(ctx context.Context, req *group.RejectInviteRequest) (*group.RejectInviteResponse, error)
 }
 
 // Service holds and manages usermanager business logic

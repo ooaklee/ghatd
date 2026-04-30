@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
@@ -561,6 +562,7 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 	return filtered, canSeeRootGroup
 }
 
+// groupVisibility returns the normalised visibility for a group.
 func (s *Service) groupVisibility(group *UniversalGroup) string {
 	if group == nil || group.Settings == nil {
 		return VisibilityPublic
@@ -574,7 +576,7 @@ func (s *Service) groupVisibility(group *UniversalGroup) string {
 	return visibility
 }
 
-// GetGroupByName retrieves a group by its name
+// GetGroupByNanoID retrieves a group by nano ID.
 func (s *Service) GetGroupByNanoID(ctx context.Context, req *GetGroupByNanoIDRequest) (*GetGroupByNanoIDResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-group-by-nano-id")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("getting-group-by-nano-id", zap.String("nano_id", req.NanoID))
@@ -1893,6 +1895,7 @@ func (s *Service) resolveUserRoleForGroup(group *UniversalGroup, userID string) 
 	return maxRole, s.isAdminRole(maxRole)
 }
 
+// isAdminRole reports whether a role grants admin-level access.
 func (s *Service) isAdminRole(role string) bool {
 	normalisedRole := strings.ToUpper(strings.TrimSpace(role))
 	return normalisedRole == MemberRoleOwner ||
@@ -1900,6 +1903,10 @@ func (s *Service) isAdminRole(role string) bool {
 		normalisedRole == MemberRoleSuperUser
 }
 
+// pickHigherRole returns the higher-privilege role between current and candidate.
+//
+// This is a candidate from moving to the config so that when using ghatd, it can
+// be costumised to meet different needs.
 func (s *Service) pickHigherRole(currentRole, candidateRole string) string {
 	normalisedCurrent := strings.ToUpper(strings.TrimSpace(currentRole))
 	normalisedCandidate := strings.ToUpper(strings.TrimSpace(candidateRole))
@@ -2213,6 +2220,83 @@ func (s *Service) GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Co
 	}
 
 	return &GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse{Groups: filtered}, nil
+}
+
+// GetLatestNotificationOverviews returns latest invite notifications for the request user.
+func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-latest-notification-overviews")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	inviteEmail := strings.TrimSpace(req.UserEmail)
+	if inviteEmail == "" {
+		return &common.GetLatestNotificationOverviewsResponse{Overviews: []common.NotificationOverview{}}, nil
+	}
+
+	kinds := toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.Kinds)
+	if len(kinds) == 0 {
+		kinds = []string{string(common.NotificationKindGroupInviteOutstanding)}
+	}
+
+	includePendingInvites := false
+	for _, kind := range kinds {
+		if common.NotificationKind(strings.ToLower(strings.TrimSpace(kind))) == common.NotificationKindGroupInviteOutstanding {
+			includePendingInvites = true
+			break
+		}
+	}
+
+	if !includePendingInvites {
+		return &common.GetLatestNotificationOverviewsResponse{Overviews: []common.NotificationOverview{}}, nil
+	}
+
+	groupsResponse, err := s.GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx, &GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest{
+		MemberID:   inviteEmail,
+		PrefixName: true,
+	})
+	if err != nil {
+		log.Error("failed-to-get-groups-awaiting-invite-answer-for-notifications", zap.Error(err), zap.String("invite_email", inviteEmail))
+		return nil, err
+	}
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+
+	overviews := make([]common.NotificationOverview, 0, len(groupsResponse.Groups))
+	for i := range groupsResponse.Groups {
+		groupItem := groupsResponse.Groups[i]
+		member, memberErr := groupItem.GetMemberByID(inviteEmail)
+		if memberErr != nil || !isPendingInviteMember(*member) {
+			continue
+		}
+
+		overviews = append(overviews, common.NotificationOverview{
+			ID:                groupItem.ID,
+			Source:            common.NotificationSourceGroup,
+			Kind:              common.NotificationKindGroupInviteOutstanding,
+			Title:             groupItem.Name,
+			NotificationTitle: "Outstanding group invitation",
+			OccurredAt:        member.InvitedAt,
+			UpdatedAt:         member.InvitedAt,
+			// We can hardcode the URL path for now
+			Href:         "/settings#invitations",
+			RevisionHash: fmt.Sprintf("group-invite:%s:%s", groupItem.ID, pendingInviteEmail(*member)),
+			Metadata: map[string]interface{}{
+				"group_id":         groupItem.ID,
+				"group_name":       groupItem.Name,
+				"group_type":       groupItem.Type,
+				"invite_email":     pendingInviteEmail(*member),
+				"invitation_state": member.InvitationState,
+				"invited_at":       member.InvitedAt,
+				"member_role":      member.Role,
+			},
+		})
+
+		if len(overviews) >= limit {
+			break
+		}
+	}
+
+	return &common.GetLatestNotificationOverviewsResponse{Overviews: overviews}, nil
 }
 
 // GetGroupsByMemberID retrieves groups that contain a specific member

@@ -1,6 +1,9 @@
 package contentmanager
 
-import "github.com/ooaklee/ghatd/external/post"
+import (
+	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/post"
+)
 
 // CreatePostRequest represents the request payload for creating a post
 // with given attributes
@@ -89,4 +92,12 @@ type GetLatestPostsByTypeRequest struct {
 	UserId string
 
 	*post.GetLatestPostsByTypeRequest
+}
+
+// GetLatestNotificationOverviewsRequest represents the request payload for getting
+// the latest notification overviews for the user
+type GetLatestNotificationOverviewsRequest struct {
+
+	// GetLatestNotificationOverviewsRequest is embedded to allow for future expansion of the request without breaking changes
+	*common.GetLatestNotificationOverviewsRequest
 }

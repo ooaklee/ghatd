@@ -24,6 +24,7 @@ type contentManagerHandler interface {
 	GetArticleItemByUrlFriendlyId(w http.ResponseWriter, r *http.Request)
 
 	GetLatestPostsByType(w http.ResponseWriter, r *http.Request)
+	GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request)
 }
 
 // AttachRoutesRequest holds everything needed to attach contentManager
@@ -66,6 +67,6 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	contentManagerOpenRoutes.HandleFunc("/faq", request.Handler.GetFaqItems).Methods(http.MethodGet, http.MethodOptions)
 	contentManagerOpenRoutes.HandleFunc("/articles", request.Handler.GetArticles).Methods(http.MethodGet, http.MethodOptions)
 	contentManagerOpenRoutes.HandleFunc("/articles/{urlFriendlyId}", request.Handler.GetArticleItemByUrlFriendlyId).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/latest", request.Handler.GetLatestPostsByType).Methods(http.MethodGet, http.MethodOptions)
+	contentManagerOpenRoutes.HandleFunc("/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
 	contentManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
 }

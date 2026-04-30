@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/reply"
 )
@@ -25,6 +26,7 @@ type contentManagerService interface {
 	GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArticleItemByUrlFriendlyIdRequest) (*post.Post, error)
 
 	GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error)
+	GetLatestNotificationOverviews(ctx context.Context, req *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error)
 }
 
 // contentManagerValidator expected methods of a valid
@@ -298,6 +300,28 @@ func (h *Handler) GetLatestPostsByType(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, posts.Overviews)
+}
+
+// GetLatestNotificationOverviews handles the request for getting the latest notification overviews for the user
+func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request) {
+	request, err := mapRequestToGetLatestNotificationOverviewsRequest(r, h.validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	overviews, err := h.service.GetLatestNotificationOverviews(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if overviews == nil || overviews.GetLatestNotificationOverviewsResponse == nil {
+		h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, []common.NotificationOverview{})
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, overviews.Overviews)
 }
 
 // getBaseResponseHandler returns response handler configured with auth error map

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
@@ -233,6 +234,168 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 	}
 
 	return response, nil
+}
+
+// GetLatestNotificationOverviews fetches latest group notification overviews for the requester.
+func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	userEmail := strings.TrimSpace(r.UserEmail)
+	if userEmail == "" {
+		userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		if err != nil {
+			log.Error("failed-to-resolve-user-email-for-notifications", zap.String("user-id", r.UserId), zap.Error(err))
+			return nil, err
+		}
+
+		userEmail = strings.TrimSpace(userResponse.User.Email)
+	}
+
+	overviews, err := s.GroupService.GetLatestNotificationOverviews(ctx, &common.GetLatestNotificationOverviewsRequest{
+		UserID:    r.UserId,
+		UserEmail: userEmail,
+		Kinds:     r.Kinds,
+		Limit:     r.Limit,
+	})
+	if err != nil {
+		log.Error("failed-to-get-group-notification-overviews", zap.String("user-id", r.UserId), zap.Error(err))
+		return nil, err
+	}
+
+	return &GetLatestNotificationOverviewsResponse{GetLatestNotificationOverviewsResponse: overviews}, nil
+}
+
+// GetMyGroupInvitations fetches outstanding group invitations for the requester.
+func (s *Service) GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvitationsRequest) (*GetMyGroupInvitationsResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+	if err != nil {
+		log.Error("failed-to-resolve-user-for-group-invitations", zap.String("user-id", r.UserId), zap.Error(err))
+		return nil, err
+	}
+
+	inviteEmail := strings.TrimSpace(userResponse.User.Email)
+	if inviteEmail == "" {
+		return &GetMyGroupInvitationsResponse{Invitations: []PendingGroupInvitation{}}, nil
+	}
+
+	groupsResponse, err := s.GroupService.GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx, &group.GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest{
+		MemberID:   inviteEmail,
+		PrefixName: r.PrefixName,
+	})
+	if err != nil {
+		log.Error("failed-to-get-my-group-invitations", zap.String("user-id", r.UserId), zap.Error(err))
+		return nil, err
+	}
+
+	invitations := make([]PendingGroupInvitation, 0, len(groupsResponse.Groups))
+	for i := range groupsResponse.Groups {
+		invitationGroup := groupsResponse.Groups[i]
+		member, memberErr := invitationGroup.GetMemberByID(inviteEmail)
+		if memberErr != nil {
+			continue
+		}
+
+		groupVisibility := ""
+		if invitationGroup.Settings != nil {
+			groupVisibility = invitationGroup.Settings.Visibility
+		}
+
+		groupDescription := ""
+		if invitationGroup.DisplayInfo != nil {
+			groupDescription = invitationGroup.DisplayInfo.Description
+		}
+
+		resolvedInviteEmail := inviteEmail
+		if metaValue, metaErr := member.GetMemberMeta(group.MemberMetadataKeyInviteEmail); metaErr == nil {
+			if metaEmail, ok := metaValue.(string); ok && strings.TrimSpace(metaEmail) != "" {
+				resolvedInviteEmail = strings.TrimSpace(metaEmail)
+			}
+		}
+
+		invitations = append(invitations, PendingGroupInvitation{
+			GroupID:          invitationGroup.ID,
+			GroupName:        invitationGroup.Name,
+			GroupRawName:     invitationGroup.RawName,
+			GroupType:        invitationGroup.Type,
+			GroupStatus:      invitationGroup.Status,
+			GroupVisibility:  groupVisibility,
+			GroupDescription: groupDescription,
+			InviteEmail:      resolvedInviteEmail,
+			Role:             member.Role,
+			InvitedAt:        member.InvitedAt,
+			InvitationState:  member.InvitationState,
+		})
+	}
+
+	return &GetMyGroupInvitationsResponse{Invitations: invitations}, nil
+}
+
+// AcceptMyGroupInvitation accepts a pending group invitation for the requester.
+func (s *Service) AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupInvitationRequest) (*AcceptMyGroupInvitationResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+	if err != nil {
+		log.Error("failed-to-resolve-user-for-accept-group-invitation", zap.String("user-id", r.UserId), zap.Error(err))
+		return nil, err
+	}
+
+	resp, err := s.GroupService.AcceptInvite(ctx, &group.AcceptInviteRequest{
+		GroupID:     r.GroupID,
+		InviteEmail: strings.TrimSpace(userResponse.User.Email),
+		UserID:      r.UserId,
+	})
+	if err != nil {
+		log.Error("failed-to-accept-my-group-invitation", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID), zap.Error(err))
+		return nil, err
+	}
+
+	return &AcceptMyGroupInvitationResponse{AcceptInviteResponse: resp}, nil
+}
+
+// RejectMyGroupInvitation rejects a pending group invitation for the requester.
+func (s *Service) RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupInvitationRequest) (*RejectMyGroupInvitationResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+	if err != nil {
+		log.Error("failed-to-resolve-user-for-reject-group-invitation", zap.String("user-id", r.UserId), zap.Error(err))
+		return nil, err
+	}
+
+	resp, err := s.GroupService.RejectInvite(ctx, &group.RejectInviteRequest{
+		GroupID:      r.GroupID,
+		InviteEmail:  strings.TrimSpace(userResponse.User.Email),
+		RejectedByID: r.UserId,
+	})
+	if err != nil {
+		log.Error("failed-to-reject-my-group-invitation", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID), zap.Error(err))
+		return nil, err
+	}
+
+	return &RejectMyGroupInvitationResponse{RejectInviteResponse: resp}, nil
 }
 
 // GetGroupDetail handles fetching a single group for a requester with membership/owner checks

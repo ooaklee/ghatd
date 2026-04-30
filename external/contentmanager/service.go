@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/post"
 	userV2 "github.com/ooaklee/ghatd/external/user/v2"
@@ -43,6 +44,7 @@ type postService interface {
 
 	GetPostByUrlFriendlyId(ctx context.Context, urlFriendlyId string) (*post.Post, error)
 	GetLatestPostsByType(ctx context.Context, req *post.GetLatestPostsByTypeRequest) (*post.GetLatestPostsByTypeResponse, error)
+	GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error)
 }
 
 // Service represents the vehicle tax manager service
@@ -221,6 +223,18 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 
 	return &GetLatestPostsByTypeResponse{
 		GetLatestPostsByTypeResponse: matchingPostOverviewsResp,
+	}, nil
+}
+
+// GetLatestNotificationOverviews handles logic associated with getting the latest notification overviews for the user
+func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error) {
+	overviews, err := s.postService.GetLatestNotificationOverviews(ctx, req.GetLatestNotificationOverviewsRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetLatestNotificationOverviewsResponse{
+		GetLatestNotificationOverviewsResponse: overviews,
 	}, nil
 }
 

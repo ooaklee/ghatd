@@ -196,4 +196,9 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		Code:       "GRP0-027",
 		Detail:     "The group is depended on by other group(s)",
 	},
+	ErrKeyUnableToIdentifyUser: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-036",
+		Detail:     "Unable to identify the user making the request",
+	},
 }

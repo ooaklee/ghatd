@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -406,6 +407,39 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
 		log.Warn("validation-failed-for-get-latest-posts-by-type-request", zap.Error(err))
+		return nil, errors.New(post.ErrKeyPostBadRequest)
+	}
+
+	return &parsedRequest, nil
+}
+
+// mapRequestToGetLatestNotificationOverviewsRequest maps the http request to the get latest notification overviews request
+func mapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validator contentManagerValidator) (*GetLatestNotificationOverviewsRequest, error) {
+	var (
+		err error
+		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+
+		parsedRequest = GetLatestNotificationOverviewsRequest{
+			GetLatestNotificationOverviewsRequest: &common.GetLatestNotificationOverviewsRequest{},
+		}
+	)
+
+	baseRequest := common.GetLatestNotificationOverviewsRequest{}
+	query := r.URL.Query()
+	err = querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		log.Warn("failed-to-decode-query-for-get-latest-notification-overviews-request", zap.Error(err))
+		return nil, errors.New(post.ErrKeyInvalidPostQueryParam)
+	}
+
+	baseRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
+
+	err = validateParsedRequest(parsedRequest, validator)
+	if err != nil {
+		log.Warn("validation-failed-for-get-latest-notification-overviews-request", zap.Error(err))
 		return nil, errors.New(post.ErrKeyPostBadRequest)
 	}
 

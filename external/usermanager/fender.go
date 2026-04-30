@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -443,6 +444,107 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 	return &parsedRequest, nil
 }
 
+// MapRequestToGetLatestNotificationOverviewsRequest maps incoming latest notifications request to the correct struct.
+func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validator UsermanagerValidator) (*GetLatestNotificationOverviewsRequest, error) {
+	var parsedRequest GetLatestNotificationOverviewsRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	baseRequest := common.GetLatestNotificationOverviewsRequest{}
+	query := r.URL.Query()
+	err := querydecoder.New(query).Decode(&baseRequest)
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("get-latest-notification-overviews-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetMyGroupInvitationsRequest maps incoming my-group-invitations request to the correct struct.
+func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator UsermanagerValidator) (*GetMyGroupInvitationsRequest, error) {
+	var parsedRequest GetMyGroupInvitationsRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("get-my-group-invitations-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToAcceptMyGroupInvitationRequest maps incoming accept-my-group-invitation request to the correct struct.
+func MapRequestToAcceptMyGroupInvitationRequest(r *http.Request, validator UsermanagerValidator) (*AcceptMyGroupInvitationRequest, error) {
+	var parsedRequest AcceptMyGroupInvitationRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("accept-my-group-invitation-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToRejectMyGroupInvitationRequest maps incoming reject-my-group-invitation request to the correct struct.
+func MapRequestToRejectMyGroupInvitationRequest(r *http.Request, validator UsermanagerValidator) (*RejectMyGroupInvitationRequest, error) {
+	var parsedRequest RejectMyGroupInvitationRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, "groupID")
+	if err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("reject-my-group-invitation-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToGetUserGroupMembershipsRequestRequest maps incoming memberships request to correct struct.
 func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validator UsermanagerValidator) (*GetUserGroupMembershipsRequest, error) {
 	parsedRequest := GetUserGroupMembershipsRequest{
@@ -593,7 +695,7 @@ func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValida
 	return &parsedRequest, nil
 }
 
-// MapRequestToDeleteGroupRequest maps incoming DeleteGroup request to correct struct
+// MapRequestToDeleteGroupRequest  maps incoming DeleteGroup request to correct struct
 func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValidator) (*DeleteGroupRequest, error) {
 	var parsedRequest DeleteGroupRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))

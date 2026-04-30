@@ -97,6 +97,7 @@ const (
 	ErrKeyInvitationNotFound           = "InvitationNotFound"
 	ErrKeyInvalidInvitationState       = "InvalidInvitationState"
 	ErrKeyInviteRequiresTopLevelGroup  = "InviteRequiresTopLevelGroup"
+	ErrKeyUnableToIdentifyUser         = "UnableToIdentifyUser"
 )
 
 const (

@@ -1,6 +1,7 @@
 package usermanager
 
 import (
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
@@ -12,6 +13,7 @@ type GetGroupsByUserIDRequest struct {
 	// ID is the ID of the making the request
 	ID string
 
+	// GetGroupsByUserIDRequest carries the underlying group lookup parameters.
 	*group.GetGroupsByUserIDRequest
 }
 
@@ -45,6 +47,7 @@ type GetUserProfileRequest struct {
 	// UserId the ID of the user requesting their profile
 	UserId string
 
+	// GetUserProfileRequest carries the underlying profile lookup parameters.
 	*userv2.GetUserProfileRequest
 }
 
@@ -54,6 +57,7 @@ type GetUserByIDRequest struct {
 	// UserId the ID of the user making the request
 	UserId string
 
+	// GetUserByIDRequest carries the underlying target-user lookup parameters.
 	*userv2.GetUserByIDRequest
 }
 
@@ -67,6 +71,7 @@ type GetUsersRequest struct {
 	// members of the root group of the specified group id
 	GroupID string `query:"group_id"`
 
+	// GetUsersRequest carries the underlying user search and pagination parameters.
 	*userv2.GetUsersRequest
 }
 
@@ -77,6 +82,7 @@ type UpdateUserProfileRequest struct {
 	// UserId the ID of the user requesting their profile
 	UserId string
 
+	// UpdateUserRequest carries the underlying user profile updates.
 	*userv2.UpdateUserRequest
 }
 
@@ -105,6 +111,7 @@ type GetUserInsightsUsageRequest struct {
 // CreateCommsRequest holds everything needed to make
 // the request to create a comms
 type CreateCommsRequest struct {
+	// CreateCommsRequest carries the underlying comms creation payload.
 	*contacter.CreateCommsRequest
 }
 
@@ -115,6 +122,7 @@ type GetCommsRequest struct {
 	// UserId is the id of the user making the request
 	UserId string
 
+	// GetCommsRequest carries the underlying comms query parameters.
 	*contacter.GetCommsRequest
 }
 
@@ -125,6 +133,7 @@ type UpdateCommsRequest struct {
 	// UserId is the id of the user making the request
 	UserId string
 
+	// UpdateCommsRequest carries the underlying comms update payload.
 	*contacter.UpdateCommsRequest
 }
 
@@ -135,6 +144,7 @@ type GetCommsStatsRequest struct {
 	// UserId is the id of the user making the request
 	UserId string
 
+	// GetCommsStatsRequest carries the underlying comms stats query parameters.
 	*contacter.GetCommsStatsRequest
 }
 
@@ -176,12 +186,47 @@ type GetUserGroupsRequest struct {
 	PrefixName bool `query:"prefix_name"`
 }
 
+// GetLatestNotificationOverviewsRequest holds the data needed to fetch latest notification overviews.
+type GetLatestNotificationOverviewsRequest struct {
+	// UserId is the ID of the requester.
+	UserId string
+
+	// GetLatestNotificationOverviewsRequest carries the underlying notification query parameters.
+	*common.GetLatestNotificationOverviewsRequest
+}
+
+// GetMyGroupInvitationsRequest holds the data needed to fetch the current user's group invitations.
+type GetMyGroupInvitationsRequest struct {
+	// UserId is the ID of the requester.
+	UserId string
+
+	// PrefixName if true, prefixes child group names with the root group's name.
+	PrefixName bool `query:"prefix_name"`
+}
+
+// AcceptMyGroupInvitationRequest holds the data needed to accept one of the current user's group invitations.
+type AcceptMyGroupInvitationRequest struct {
+	// UserId is the ID of the requester.
+	UserId string
+	// GroupID is the ID of the group invitation to accept.
+	GroupID string `path:"groupID"`
+}
+
+// RejectMyGroupInvitationRequest holds the data needed to reject one of the current user's group invitations.
+type RejectMyGroupInvitationRequest struct {
+	// UserId is the ID of the requester.
+	UserId string
+	// GroupID is the ID of the group invitation to reject.
+	GroupID string `path:"groupID"`
+}
+
 // UpdateGroupRequest holds the data needed to update a group
 type UpdateGroupRequest struct {
 
 	// UserId is the ID of the user making the request
 	UserId string
 
+	// UpdateGroupRequest carries the underlying group update payload.
 	*group.UpdateGroupRequest
 }
 
@@ -191,6 +236,7 @@ type ValidateGroupNameRequest struct {
 	// UserID is the ID of the user making the request
 	UserID string
 
+	// ValidateGroupNameRequest carries the underlying group-name validation parameters.
 	*group.ValidateGroupNameRequest
 }
 
@@ -200,6 +246,7 @@ type CreateGroupRequest struct {
 	// UserID is the ID of the user making the request
 	UserID string
 
+	// CreateGroupRequest carries the underlying group creation payload.
 	*group.CreateGroupRequest
 }
 
@@ -209,6 +256,7 @@ type DeleteGroupRequest struct {
 	// UserID is the ID of the user making the request
 	UserID string
 
+	// DeleteGroupRequest carries the underlying group deletion parameters.
 	*group.DeleteGroupRequest
 }
 
@@ -251,6 +299,7 @@ type GetGroupLineageRequest struct {
 	// UserId is the ID of the requester
 	UserId string
 
+	// GetGroupLineageRequest carries the underlying lineage query parameters.
 	*group.GetGroupLineageRequest
 }
 
@@ -260,6 +309,7 @@ type GetGroupDescendantsRequest struct {
 	// UserId is the ID of the requester
 	UserId string
 
+	// GetGroupDescendantsRequest carries the underlying descendants query parameters.
 	*group.GetGroupDescendantsRequest
 }
 
@@ -269,6 +319,7 @@ type AddGroupMemberRequest struct {
 	// UserID is the ID of the user making the request
 	UserID string
 
+	// AddMemberRequest carries the underlying member-addition payload.
 	*group.AddMemberRequest
 }
 
@@ -278,6 +329,7 @@ type RemoveGroupMemberRequest struct {
 	// UserID is the ID of the user making the request
 	UserID string
 
+	// RemoveMemberRequest carries the underlying member-removal parameters.
 	*group.RemoveMemberRequest
 }
 
@@ -287,5 +339,6 @@ type UpdateGroupOwnerRequest struct {
 	// UserID is the ID of the making the request
 	UserID string
 
+	// UpdateOwnerRequest carries the underlying group-owner update payload.
 	*group.UpdateOwnerRequest
 }

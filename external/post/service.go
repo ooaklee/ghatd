@@ -707,6 +707,82 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	}, nil
 }
 
+// GetLatestNotificationOverviews returns the latest notification overviews for the given notification kinds
+func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error) {
+	var (
+		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+			zap.AddStacktrace(zap.DPanicLevel),
+		)
+	)
+
+	logger.Debug("handling-get-latest-notification-overviews-request", zap.Any("request", req))
+
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+
+	kinds := toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(req.Kinds)
+	if len(kinds) == 0 {
+		kinds = []string{string(common.NotificationKindPostArticle), string(common.NotificationKindPostChangelog)}
+	}
+
+	postTypes := make([]string, 0, len(kinds))
+	seenTypes := make(map[string]struct{}, len(kinds))
+	for _, kind := range kinds {
+		var postType string
+		switch common.NotificationKind(strings.ToLower(strings.TrimSpace(kind))) {
+		case common.NotificationKindPostArticle:
+			postType = string(PostTypeArticle)
+		case common.NotificationKindPostChangelog:
+			postType = string(PostTypeChangelog)
+		case common.NotificationKindPostFaq:
+			postType = string(PostTypeFaq)
+		case common.NotificationKindPostGlossary:
+			postType = string(PostTypeGlossary)
+		default:
+			continue
+		}
+
+		if _, exists := seenTypes[postType]; exists {
+			continue
+		}
+
+		seenTypes[postType] = struct{}{}
+		postTypes = append(postTypes, postType)
+	}
+
+	if len(postTypes) == 0 {
+		return &common.GetLatestNotificationOverviewsResponse{Overviews: []common.NotificationOverview{}}, nil
+	}
+
+	retrievedPosts, err := s.GetPosts(ctx, &GetPostsRequest{
+		WithTypes:         strings.Join(postTypes, ","),
+		IsPublished:       true,
+		IsNotDeleted:      true,
+		Order:             "published_at_desc",
+		PerPage:           limit,
+		Page:              1,
+		EnforceUniqueType: true,
+	})
+	if err != nil {
+		logger.Error("failed-to-get-latest-notification-overviews-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		return nil, err
+	}
+
+	overviews := make([]common.NotificationOverview, 0, len(retrievedPosts.Posts))
+	for _, post := range retrievedPosts.Posts {
+		overview := post.ToNotificationOverview()
+		if overview == nil {
+			continue
+		}
+
+		overviews = append(overviews, *overview)
+	}
+
+	return &common.GetLatestNotificationOverviewsResponse{Overviews: overviews}, nil
+}
+
 // DeletePostById deletes a post by its ID
 func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest) (*DeletePostByIdResponse, error) {
 

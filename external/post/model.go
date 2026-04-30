@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
@@ -269,6 +270,46 @@ func (p *Post) ToOverview() *PostOverview {
 	overview.RevisionHash = GenerateSha256Hash(revisionHashSource)
 
 	return overview
+}
+
+// ToNotificationOverview converts a Post to a NotificationOverview representation
+func (p *Post) ToNotificationOverview() *common.NotificationOverview {
+	overview := p.ToOverview()
+	if overview == nil {
+		return nil
+	}
+
+	return &common.NotificationOverview{
+		ID:                overview.Id,
+		Source:            common.NotificationSourcePost,
+		Kind:              notificationKindForPostType(overview.Type),
+		Title:             overview.Title,
+		NotificationTitle: overview.NotificationTitle,
+		OccurredAt:        overview.PublishedAt,
+		UpdatedAt:         overview.UpdatedAt,
+		Href:              overview.Href,
+		RevisionHash:      overview.RevisionHash,
+		Metadata: map[string]interface{}{
+			"type":            overview.Type,
+			"url_friendly_id": overview.UrlFriendlyId,
+		},
+	}
+}
+
+// notificationKindForPostType maps a PostType to a common.NotificationKind for use in notifications related to posts
+func notificationKindForPostType(postType PostType) common.NotificationKind {
+	switch postType {
+	case PostTypeArticle:
+		return common.NotificationKindPostArticle
+	case PostTypeChangelog:
+		return common.NotificationKindPostChangelog
+	case PostTypeFaq:
+		return common.NotificationKindPostFaq
+	case PostTypeGlossary:
+		return common.NotificationKindPostGlossary
+	default:
+		return common.NotificationKind("post_" + strings.ToLower(string(postType)))
+	}
 }
 
 // SetPostTextFormat takes string,sanitise, and set correct post item text format

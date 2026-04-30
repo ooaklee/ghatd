@@ -1,6 +1,9 @@
 package contentmanager
 
-import "github.com/ooaklee/ghatd/external/post"
+import (
+	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/post"
+)
 
 // CreatePostResponse represents the response payload for the CreatePost method
 type CreatePostResponse struct {
@@ -50,4 +53,10 @@ type GetArticlesResponse struct {
 // the latest posts by type
 type GetLatestPostsByTypeResponse struct {
 	*post.GetLatestPostsByTypeResponse
+}
+
+// GetLatestNotificationOverviewsResponse represents the response payload for getting
+// the latest notification overviews for the user
+type GetLatestNotificationOverviewsResponse struct {
+	*common.GetLatestNotificationOverviewsResponse
 }

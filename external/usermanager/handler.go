@@ -25,6 +25,10 @@ type UsermanagerService interface {
 	GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error)
 	GetUserGroupMemberships(ctx context.Context, r *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error)
 	GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
+	GetLatestNotificationOverviews(ctx context.Context, r *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error)
+	GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvitationsRequest) (*GetMyGroupInvitationsResponse, error)
+	AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupInvitationRequest) (*AcceptMyGroupInvitationResponse, error)
+	RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupInvitationRequest) (*RejectMyGroupInvitationResponse, error)
 	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
@@ -117,6 +121,7 @@ func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Descendants)
 }
 
+// GetGroupsByUserID handles the request to get groups by user ID.
 func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetGroupsByUserIDRequest(r, h.Validator)
 	if err != nil {
@@ -441,6 +446,79 @@ func (h *Handler) GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.
 	}
 
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetLatestNotificationOverviews handles the request to get latest notification overviews.
+func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetLatestNotificationOverviewsRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetLatestNotificationOverviews(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if response == nil || response.GetLatestNotificationOverviewsResponse == nil {
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, []common.NotificationOverview{})
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Overviews)
+}
+
+// GetMyGroupInvitations handles the request to get the current user's outstanding group invitations.
+func (h *Handler) GetMyGroupInvitations(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetMyGroupInvitationsRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetMyGroupInvitations(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Invitations)
+}
+
+// AcceptMyGroupInvitation handles the request to accept one of the current user's group invitations.
+func (h *Handler) AcceptMyGroupInvitation(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToAcceptMyGroupInvitationRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.AcceptMyGroupInvitation(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.AcceptInviteResponse)
+}
+
+// RejectMyGroupInvitation handles the request to reject one of the current user's group invitations.
+func (h *Handler) RejectMyGroupInvitation(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToRejectMyGroupInvitationRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.RejectMyGroupInvitation(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.RejectInviteResponse)
 }
 
 // GetGroupDetail handles the request to fetch a group's details for the requester
