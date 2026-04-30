@@ -69,7 +69,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
 	if !isAdmin {
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupLineageRequest.ID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupLineageRequest.ID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -80,7 +80,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAccessible {
 			return nil, errors.New(ErrKeyGroupNotFound)
 		}
 	}
@@ -110,7 +110,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, r *GetGroupDescendant
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
 	if !isAdmin {
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupDescendantsRequest.ID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupDescendantsRequest.ID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -121,7 +121,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, r *GetGroupDescendant
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAccessible {
 			return nil, errors.New(ErrKeyGroupNotFound)
 		}
 	}
@@ -415,7 +415,7 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
 	if !isAdmin {
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -426,7 +426,7 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAccessible {
 			return nil, errors.New(ErrKeyGroupNotFound)
 		}
 	}
@@ -495,7 +495,7 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
 	if !isAdmin {
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -506,7 +506,7 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAccessible {
 			return nil, errors.New(ErrKeyGroupNotFound)
 		}
 	}
@@ -672,27 +672,27 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 	return userResp.User.IsAdmin()
 }
 
-// hasRequesterGroupAccess checks if the requester has access to the group either as a member or owner
-func (s *Service) hasRequesterGroupAccess(ctx context.Context, userID, groupID string) (bool, error) {
+// hasRequesterGroupAccess checks if the requester has access to the group either as a member, admin or owner
+func (s *Service) hasRequesterGroupAccess(ctx context.Context, userID, groupID string) (*group.UserGroupAccessSummary, error) {
 
 	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", userID))
-		return false, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
 	}
 
 	accessMap, err := s.GroupService.GetUserGroupAccessMap(ctx, userID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	groupAccess, exists := accessMap[groupID]
 	if !exists {
-		return false, nil
+		return nil, errors.New(group.ErrKeyInsufficientPermissions)
 	}
 
-	return groupAccess.IsAccessible, nil
+	return &groupAccess, nil
 }
 
 // calculateGroupSeatUsage computes total unique users including nested group members and owner

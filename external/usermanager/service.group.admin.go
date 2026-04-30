@@ -61,7 +61,7 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 				return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 			}
 
-			if !hasAccess {
+			if !hasAccess.IsAccessible {
 				return nil, errors.New(group.ErrKeyInsufficientPermissions)
 			}
 		}
@@ -96,7 +96,7 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.ParentGroupID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.ParentGroupID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -107,7 +107,7 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAdmin {
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 
@@ -247,7 +247,7 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
 	if !isAdmin {
 
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -258,7 +258,7 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAdmin {
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 	}
@@ -291,7 +291,7 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
 	if !isAdmin {
 
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -302,7 +302,7 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAdmin {
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 	}
@@ -334,7 +334,7 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
 	if !isAdmin {
 
-		hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
 			log.Error(
 				"failed-to-resolve-requester-group-access-map",
@@ -345,7 +345,7 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
 		}
 
-		if !hasAccess {
+		if !hasGroupAccess.IsAdmin {
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 	}
