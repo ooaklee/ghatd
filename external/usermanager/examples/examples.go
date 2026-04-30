@@ -685,6 +685,18 @@ func (m *MockGroupService) GetGroupsByUserID(ctx context.Context, req *group.Get
 	}, nil
 }
 
+func (m *MockGroupService) GetGroupsAwaitingAnswerForInvitationsByMemberID(
+	ctx context.Context,
+	req *group.GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest,
+) (*group.GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse, error) {
+	groupsResp, err := m.GetGroups(ctx, &group.GetGroupsRequest{MemberID: req.MemberID})
+	if err != nil {
+		return nil, err
+	}
+
+	return &group.GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse{Groups: groupsResp.Groups}, nil
+}
+
 func (m *MockGroupService) GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]group.UserGroupAccessSummary, error) {
 	groupsResp, err := m.GetGroups(ctx, &group.GetGroupsRequest{MemberID: userID})
 	if err != nil {
@@ -744,6 +756,59 @@ func (m *MockGroupService) ValidateGroupName(_ context.Context, req *group.Valid
 		Adjusted:   false,
 		Available:  true,
 		IsRootType: false,
+	}, nil
+}
+
+func (m *MockGroupService) GetLatestNotificationOverviews(
+	_ context.Context,
+	req *common.GetLatestNotificationOverviewsRequest,
+) (*common.GetLatestNotificationOverviewsResponse, error) {
+	userID := strings.TrimSpace(req.UserID)
+	if userID == "" {
+		userID = "user-123"
+	}
+
+	return &common.GetLatestNotificationOverviewsResponse{
+		Overviews: []common.NotificationOverview{
+			{
+				ID:                "mock-group-invite-1",
+				Source:            common.NotificationSourceGroup,
+				Kind:              common.NotificationKindGroupInviteOutstanding,
+				Title:             "Workspace invite",
+				NotificationTitle: "Outstanding invitation",
+				OccurredAt:        time.Now().Add(-30 * time.Minute).Format(time.RFC3339),
+				Href:              "/settings?section=invitations",
+				RevisionHash:      "mock-group-invite-1",
+				Metadata: map[string]interface{}{
+					"user_id": userID,
+				},
+			},
+		},
+	}, nil
+}
+
+func (m *MockGroupService) AcceptInvite(ctx context.Context, req *group.AcceptInviteRequest) (*group.AcceptInviteResponse, error) {
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.GroupID})
+	if err != nil {
+		return nil, err
+	}
+
+	return &group.AcceptInviteResponse{
+		Group:       groupResp.Group,
+		InviteEmail: req.InviteEmail,
+		UserID:      req.UserID,
+	}, nil
+}
+
+func (m *MockGroupService) RejectInvite(ctx context.Context, req *group.RejectInviteRequest) (*group.RejectInviteResponse, error) {
+	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.GroupID})
+	if err != nil {
+		return nil, err
+	}
+
+	return &group.RejectInviteResponse{
+		Group:       groupResp.Group,
+		InviteEmail: req.InviteEmail,
 	}, nil
 }
 

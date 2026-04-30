@@ -20,6 +20,7 @@ require (
 
 require (
 	github.com/go-git/go-git/v5 v5.14.0
+	github.com/go-playground/assert/v2 v2.2.0
 	github.com/mergestat/timediff v0.0.3
 	github.com/otiai10/copy v1.14.0
 )
@@ -88,7 +89,6 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/matoous/go-nanoid/v2 v2.0.0
-	github.com/newrelic/go-agent/v3 v3.30.0
 	github.com/ooaklee/reply v1.1.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.10.0
