@@ -175,8 +175,7 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 }
 
 // DeleteGroup handles deleting a group. Admin users may request hard/soft delete;
-// non-admin users must have effective admin access to the target group and are
-// forced to hard-delete.
+// non-admin users must be the owner of the target group and are forced to hard-delete.
 func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
@@ -200,6 +199,21 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 
 		groupAccess, ok := accessMap[r.DeleteGroupRequest.ID]
 		if !ok || !groupAccess.IsAccessible || !groupAccess.IsAdmin {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
+
+		groupResp, groupErr := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.DeleteGroupRequest.ID})
+		if groupErr != nil {
+			log.Error(
+				"failed-to-resolve-group-for-delete-ownership-check",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.DeleteGroupRequest.ID),
+				zap.Error(groupErr),
+			)
+			return nil, groupErr
+		}
+
+		if strings.TrimSpace(groupResp.Group.OwnerID) != strings.TrimSpace(r.UserID) {
 			return nil, errors.New(group.ErrKeyInsufficientPermissions)
 		}
 
