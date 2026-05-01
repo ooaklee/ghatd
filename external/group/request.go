@@ -248,3 +248,37 @@ type ValidateGroupNameRequest struct {
 	Type          string `json:"type" query:"type" validate:"required"`
 	ParentGroupID string `json:"parent_group_id,omitempty" query:"parent_group_id"`
 }
+
+// GetParentGroupsWithAutoJoinForEmailRequest defines the request for querying groups
+// with auto-join or auto-invite enabled for a given email domain.
+type GetParentGroupsWithAutoJoinForEmailRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+// EnableGroupAutoJoinByEmailDomainRequest defines the request for enabling auto-join
+// for a group with specified email domains.
+type EnableGroupAutoJoinByEmailDomainRequest struct {
+	GroupID                     string   `path:"groupID"`
+	AutoActionEmailDomains      []string `json:"auto_action_email_domains" validate:"required,min=1"`
+	AutoActionDefaultMemberRole string   `json:"auto_action_default_member_role,omitempty"`
+}
+
+// DisableGroupAutoJoinByEmailDomainRequest defines the request for disabling auto-join
+// for a group.
+type DisableGroupAutoJoinByEmailDomainRequest struct {
+	GroupID string `path:"groupID"`
+}
+
+// EnableGroupAutoInviteByEmailDomainRequest defines the request for enabling auto-invite
+// for a group with specified email domains.
+type EnableGroupAutoInviteByEmailDomainRequest struct {
+	GroupID                     string   `path:"groupID"`
+	AutoActionEmailDomains      []string `json:"auto_action_email_domains" validate:"required,min=1"`
+	AutoActionDefaultMemberRole string   `json:"auto_action_default_member_role,omitempty"`
+}
+
+// DisableGroupAutoInviteByEmailDomainRequest defines the request for disabling auto-invite
+// for a group.
+type DisableGroupAutoInviteByEmailDomainRequest struct {
+	GroupID string `path:"groupID"`
+}

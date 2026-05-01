@@ -313,3 +313,29 @@ type ValidateGroupNameResponse struct {
 	// field, explaining any adjustments or naming rules that apply.
 	Hint string `json:"hint,omitempty"`
 }
+
+// GetParentGroupsWithAutoJoinForEmailResponse defines the response for querying groups
+// with auto-join or auto-invite enabled for a given email domain.
+type GetParentGroupsWithAutoJoinForEmailResponse struct {
+	Groups []*UniversalGroup `json:"groups"`
+}
+
+// EnableGroupAutoJoinByEmailDomainResponse defines the response for enabling auto-join.
+type EnableGroupAutoJoinByEmailDomainResponse struct {
+	Group *UniversalGroup `json:"group"`
+}
+
+// DisableGroupAutoJoinByEmailDomainResponse defines the response for disabling auto-join.
+type DisableGroupAutoJoinByEmailDomainResponse struct {
+	Group *UniversalGroup `json:"group"`
+}
+
+// EnableGroupAutoInviteByEmailDomainResponse defines the response for enabling auto-invite.
+type EnableGroupAutoInviteByEmailDomainResponse struct {
+	Group *UniversalGroup `json:"group"`
+}
+
+// DisableGroupAutoInviteByEmailDomainResponse defines the response for disabling auto-invite.
+type DisableGroupAutoInviteByEmailDomainResponse struct {
+	Group *UniversalGroup `json:"group"`
+}

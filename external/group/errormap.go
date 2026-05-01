@@ -201,4 +201,14 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		Code:       "GRP0-036",
 		Detail:     "Unable to identify the user making the request",
 	},
+	ErrKeyGroupInvalidEmailFormat: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-037",
+		Detail:     "The provided email format is invalid",
+	},
+	ErrKeyGroupEmailIsRequired: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-038",
+		Detail:     "An email is required to process this request",
+	},
 }

@@ -188,6 +188,71 @@ type GroupSettings struct {
 	RequireApproval    bool     `json:"require_approval,omitempty" bson:"require_approval,omitempty" db:"require_approval"`
 	MaxMembers         int      `json:"max_members,omitempty" bson:"max_members,omitempty" db:"max_members"`
 	AllowedMemberTypes []string `json:"allowed_member_types,omitempty" bson:"allowed_member_types,omitempty" db:"allowed_member_types"`
+	// Auto-join/auto-invite configuration by email domain
+	AutoJoinByEmailDomainEnabled   bool     `json:"auto_join_by_email_domain_enabled,omitempty" bson:"auto_join_by_email_domain_enabled,omitempty" db:"auto_join_by_email_domain_enabled"`
+	AutoInviteByEmailDomainEnabled bool     `json:"auto_invite_by_email_domain_enabled,omitempty" bson:"auto_invite_by_email_domain_enabled,omitempty" db:"auto_invite_by_email_domain_enabled"`
+	AutoActionEmailDomains         []string `json:"auto_action_email_domains,omitempty" bson:"auto_action_email_domains,omitempty" db:"auto_action_email_domains"`
+	AutoActionDefaultMemberRole    string   `json:"auto_action_default_member_role,omitempty" bson:"auto_action_default_member_role,omitempty" db:"auto_action_default_member_role"`
+}
+
+// ValidateAutoActionConfig validates that auto-join and auto-invite settings are mutually exclusive,
+// domains are normalized, and role is valid if specified.
+func (gs *GroupSettings) ValidateAutoActionConfig() error {
+	if gs == nil {
+		return nil
+	}
+
+	// Check mutual exclusivity
+	if gs.AutoJoinByEmailDomainEnabled && gs.AutoInviteByEmailDomainEnabled {
+		return errors.New(ErrKeyBothAutoJoinAndAutoInviteEnabled)
+	}
+
+	// If neither is enabled, no further validation needed
+	if !gs.AutoJoinByEmailDomainEnabled && !gs.AutoInviteByEmailDomainEnabled {
+		return nil
+	}
+
+	// If enabled, must have at least one domain configured
+	if len(gs.AutoActionEmailDomains) == 0 {
+		return errors.New("auto-action enabled but no email domains configured")
+	}
+
+	// Validate each domain
+	for _, domain := range gs.AutoActionEmailDomains {
+		if strings.TrimSpace(domain) == "" {
+			return errors.New(ErrKeyInvalidEmailDomain)
+		}
+	}
+
+	return nil
+}
+
+// NormalizeAutoActionConfig normalizes domains (lowercase, trim, dedupe) and returns a copy.
+func (gs *GroupSettings) NormalizeAutoActionConfig() *GroupSettings {
+	if gs == nil {
+		return nil
+	}
+
+	normalized := *gs
+
+	if len(normalized.AutoActionEmailDomains) > 0 {
+		seen := make(map[string]bool)
+		dedupedDomains := []string{}
+		for _, domain := range normalized.AutoActionEmailDomains {
+			trimmedLower := strings.ToLower(strings.TrimSpace(domain))
+			if trimmedLower != "" && !seen[trimmedLower] {
+				dedupedDomains = append(dedupedDomains, trimmedLower)
+				seen[trimmedLower] = true
+			}
+		}
+		normalized.AutoActionEmailDomains = dedupedDomains
+	}
+
+	if normalized.AutoActionDefaultMemberRole != "" {
+		normalized.AutoActionDefaultMemberRole = strings.TrimSpace(normalized.AutoActionDefaultMemberRole)
+	}
+
+	return &normalized
 }
 
 // Integrations holds external integration data

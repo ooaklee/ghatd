@@ -35,6 +35,10 @@ type GroupHandler interface {
 	GetGroupsStats(w http.ResponseWriter, r *http.Request)
 	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
 	ValidateGroupName(w http.ResponseWriter, r *http.Request)
+	EnableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request)
+	DisableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request)
+	EnableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request)
+	DisableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request)
 }
 
 // APIGroupsV1Prefix base URI prefix for all v1 groups routes
@@ -92,6 +96,12 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	// Ownership management
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/owner", request.Handler.UpdateOwner).Methods(http.MethodPut, http.MethodOptions)
+
+	// Auto-join/auto-invite configuration
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-join/enable", request.Handler.EnableGroupAutoJoinByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-join/disable", request.Handler.DisableGroupAutoJoinByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-invite/enable", request.Handler.EnableGroupAutoInviteByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-invite/disable", request.Handler.DisableGroupAutoInviteByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
 
 	// Statistics
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)

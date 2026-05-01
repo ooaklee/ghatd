@@ -1,9 +1,11 @@
 package group
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ritwickdey/querydecoder"
@@ -528,4 +530,70 @@ func validateParsedRequest(request interface{}, validator GroupValidator) error 
 	}
 
 	return validator.Validate(request)
+}
+
+// MapRequestToEnableGroupAutoJoinByEmailDomainRequest maps HTTP request to EnableGroupAutoJoinByEmailDomainRequest
+func MapRequestToEnableGroupAutoJoinByEmailDomainRequest(r *http.Request, validator GroupValidator) (*EnableGroupAutoJoinByEmailDomainRequest, error) {
+	parsedRequest := &EnableGroupAutoJoinByEmailDomainRequest{}
+	parsedRequest.GroupID = mux.Vars(r)["groupID"]
+
+	if r.Body == nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(parsedRequest); err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToDisableGroupAutoJoinByEmailDomainRequest maps HTTP request to DisableGroupAutoJoinByEmailDomainRequest
+func MapRequestToDisableGroupAutoJoinByEmailDomainRequest(r *http.Request, validator GroupValidator) (*DisableGroupAutoJoinByEmailDomainRequest, error) {
+	parsedRequest := &DisableGroupAutoJoinByEmailDomainRequest{}
+	parsedRequest.GroupID = mux.Vars(r)["groupID"]
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToEnableGroupAutoInviteByEmailDomainRequest maps HTTP request to EnableGroupAutoInviteByEmailDomainRequest
+func MapRequestToEnableGroupAutoInviteByEmailDomainRequest(r *http.Request, validator GroupValidator) (*EnableGroupAutoInviteByEmailDomainRequest, error) {
+	parsedRequest := &EnableGroupAutoInviteByEmailDomainRequest{}
+	parsedRequest.GroupID = mux.Vars(r)["groupID"]
+
+	if r.Body == nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(parsedRequest); err != nil {
+		return nil, errors.New(ErrKeyInvalidGroupBody)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
+}
+
+// MapRequestToDisableGroupAutoInviteByEmailDomainRequest maps HTTP request to DisableGroupAutoInviteByEmailDomainRequest
+func MapRequestToDisableGroupAutoInviteByEmailDomainRequest(r *http.Request, validator GroupValidator) (*DisableGroupAutoInviteByEmailDomainRequest, error) {
+	parsedRequest := &DisableGroupAutoInviteByEmailDomainRequest{}
+	parsedRequest.GroupID = mux.Vars(r)["groupID"]
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyValidationFailed)
+	}
+
+	return parsedRequest, nil
 }

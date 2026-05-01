@@ -20,6 +20,7 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/emailmanager"
 	"github.com/ooaklee/ghatd/external/ephemeral"
+	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -100,12 +101,20 @@ type BillingService interface {
 	GetUnassociatedBillingEvents(ctx context.Context, req *billing.GetUnassociatedBillingEventsRequest) (*billing.GetUnassociatedBillingEventsResponse, error)
 }
 
+// GroupService expected methods of a valid group service
+type GroupService interface {
+	GetParentGroupsWithAutoJoinForEmail(ctx context.Context, email string) (*group.GetParentGroupsWithAutoJoinForEmailResponse, error)
+	AddMember(ctx context.Context, req *group.AddMemberRequest) (*group.AddMemberResponse, error)
+	InviteUser(ctx context.Context, req *group.InviteUserRequest) (*group.InviteUserResponse, error)
+}
+
 // Service holds and manages accessmanager service business logic
 type Service struct {
 	EphemeralStore        EphemeralStore
 	AuditService          AuditService
 	EmailManager          EmailManager
 	BillingService        BillingService
+	GroupService          GroupService
 	AuthService           AuthService
 	UserService           UserService
 	ApitokenService       ApitokenService
@@ -158,6 +167,12 @@ func NewService(r *NewServiceRequest) *Service {
 // WithBillingService sets the billing service dependency and returns the updated service
 func (s *Service) WithBillingService(billingService BillingService) *Service {
 	s.BillingService = billingService
+	return s
+}
+
+// WithGroupService sets the group service dependency and returns the updated service
+func (s *Service) WithGroupService(groupService GroupService) *Service {
+	s.GroupService = groupService
 	return s
 }
 
@@ -1549,6 +1564,92 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 				}
 			} else {
 				log.Info("no-pre-registered-billing-events-found", zap.String("user-id", newUser.User.ID))
+			}
+		}
+	}
+
+	// handle auto-join/auto-invite group membership if group service is available
+	if s.GroupService != nil {
+		log.Info("checking-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		autoJoinGroupsResp, err := s.GroupService.GetParentGroupsWithAutoJoinForEmail(ctx, newUser.User.Email)
+		if err != nil {
+			log.Error("failed-to-check-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.Error(err))
+		} else {
+			if autoJoinGroupsResp != nil && len(autoJoinGroupsResp.Groups) > 0 {
+				log.Info("found-groups-with-auto-join", zap.String("user-id", newUser.User.ID), zap.Int("group-count", len(autoJoinGroupsResp.Groups)))
+
+				for _, autoJoinGroup := range autoJoinGroupsResp.Groups {
+					if autoJoinGroup == nil || autoJoinGroup.Settings == nil {
+						continue
+					}
+
+					// Determine which action to take based on group settings
+					if autoJoinGroup.Settings.AutoJoinByEmailDomainEnabled {
+						// Auto-join: add user directly as member
+						memberRole := autoJoinGroup.Settings.AutoActionDefaultMemberRole
+						if memberRole == "" {
+							memberRole = group.MemberRoleMember
+						}
+
+						_, memberErr := s.GroupService.AddMember(ctx, &group.AddMemberRequest{
+							GroupID:  autoJoinGroup.ID,
+							MemberID: newUser.User.ID,
+							Type:     group.MemberTypeUser,
+							Role:     memberRole,
+						})
+						if memberErr != nil {
+							log.Error("failed-to-auto-join-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(memberErr))
+						} else {
+							log.Info("successfully-auto-joined-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
+							// Audit log the auto-join
+							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+								ActorId:    audit.AuditActorIdSystem,
+								Action:     "group.member.auto_joined",
+								TargetId:   autoJoinGroup.ID,
+								TargetType: "group",
+								Domain:     "accessmanager",
+								Details: map[string]interface{}{
+									"user_id":            newUser.User.ID,
+									"user_email":         newUser.User.Email,
+									"auto_action_source": "signup",
+								},
+							})
+						}
+					} else if autoJoinGroup.Settings.AutoInviteByEmailDomainEnabled {
+						// Auto-invite: create pending invitation for user's email
+						memberRole := autoJoinGroup.Settings.AutoActionDefaultMemberRole
+						if memberRole == "" {
+							memberRole = group.MemberRoleMember
+						}
+
+						_, inviteErr := s.GroupService.InviteUser(ctx, &group.InviteUserRequest{
+							GroupID:     autoJoinGroup.ID,
+							InviteEmail: newUser.User.Email,
+							Role:        memberRole,
+							InvitedByID: audit.AuditActorIdSystem,
+						})
+						if inviteErr != nil {
+							log.Error("failed-to-auto-invite-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(inviteErr))
+						} else {
+							log.Info("successfully-auto-invited-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
+							// Audit log the auto-invite
+							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+								ActorId:    audit.AuditActorIdSystem,
+								Action:     "group.member.auto_invited",
+								TargetId:   autoJoinGroup.ID,
+								TargetType: "group",
+								Domain:     "accessmanager",
+								Details: map[string]interface{}{
+									"user_id":            newUser.User.ID,
+									"user_email":         newUser.User.Email,
+									"auto_action_source": "signup",
+								},
+							})
+						}
+					}
+				}
+			} else {
+				log.Info("no-groups-with-auto-join-found", zap.String("user-id", newUser.User.ID))
 			}
 		}
 	}

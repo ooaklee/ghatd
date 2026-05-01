@@ -2736,3 +2736,368 @@ func (s *Service) BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string,
 
 	return nil
 }
+
+// GetParentGroupsWithAutoJoinForEmail retrieves all parent groups that have
+// auto-join or auto-invite enabled for the email domain matching the provided email.
+func (s *Service) GetParentGroupsWithAutoJoinForEmail(ctx context.Context, email string) (*GetParentGroupsWithAutoJoinForEmailResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-parent-groups-with-auto-join-for-email")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	trimmedEmail := strings.TrimSpace(email)
+	if trimmedEmail == "" {
+		log.Error("email-is-required")
+		return nil, errors.New(ErrKeyGroupEmailIsRequired)
+	}
+
+	// Extract domain from email
+	emailDomain := extractEmailDomain(trimmedEmail)
+	if emailDomain == "" {
+		log.Error("invalid-email-format", zap.String("email", trimmedEmail))
+		return nil, errors.New(ErrKeyGroupInvalidEmailFormat)
+	}
+
+	log.Debug("querying-groups-with-auto-join", zap.String("email_domain", emailDomain))
+
+	// Get all groups (this is a broad query; in production you might optimize this)
+	// by adding repository support for filtered queries on auto-join settings
+	allGroups, err := s.GroupRepository.GetGroups(ctx, &GetGroupsRequest{
+		Statuses: []string{GroupStatusActive},
+	})
+	if err != nil {
+		log.Error("failed-to-retrieve-groups", zap.Error(err))
+		return nil, err
+	}
+
+	var matchedGroups []*UniversalGroup
+
+	for i := range allGroups {
+		group := &allGroups[i]
+
+		// Skip if no settings
+		if group.Settings == nil {
+			continue
+		}
+
+		// Check if auto-join or auto-invite is enabled
+		if !group.Settings.AutoJoinByEmailDomainEnabled && !group.Settings.AutoInviteByEmailDomainEnabled {
+			continue
+		}
+
+		// Check if email domain matches any of the configured domains
+		if matchesAnyDomain(emailDomain, group.Settings.AutoActionEmailDomains) {
+			matchedGroups = append(matchedGroups, group)
+		}
+	}
+
+	log.Debug("found-matching-groups-with-auto-join", zap.Int("count", len(matchedGroups)))
+
+	return &GetParentGroupsWithAutoJoinForEmailResponse{
+		Groups: matchedGroups,
+	}, nil
+}
+
+// EnableGroupAutoJoinByEmailDomain enables auto-join for a group with specified email domains.
+func (s *Service) EnableGroupAutoJoinByEmailDomain(ctx context.Context, req *EnableGroupAutoJoinByEmailDomainRequest) (*EnableGroupAutoJoinByEmailDomainResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "enable-group-auto-join-by-email-domain")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if req == nil || strings.TrimSpace(req.GroupID) == "" {
+		log.Error("group-id-is-required")
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	groupID := strings.TrimSpace(req.GroupID)
+
+	// Retrieve the group
+	group, err := s.GroupRepository.GetGroupByID(ctx, groupID)
+	if err != nil {
+		log.Error("failed-to-retrieve-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	if group == nil {
+		log.Error("group-not-found", zap.String("group_id", groupID))
+		return nil, errors.New(ErrKeyResourceNotFound)
+	}
+
+	// Ensure settings exist
+	if group.Settings == nil {
+		group.Settings = &GroupSettings{}
+	}
+
+	// Set the auto-join settings
+	group.Settings.AutoActionEmailDomains = req.AutoActionEmailDomains
+	group.Settings.AutoJoinByEmailDomainEnabled = true
+	group.Settings.AutoInviteByEmailDomainEnabled = false // Enforce mutual exclusivity
+
+	if req.AutoActionDefaultMemberRole != "" {
+		group.Settings.AutoActionDefaultMemberRole = strings.TrimSpace(req.AutoActionDefaultMemberRole)
+	} else {
+		// Set to default role if not specified
+		group.Settings.AutoActionDefaultMemberRole = MemberRoleMember
+	}
+
+	// Normalize settings
+	normalizedSettings := group.Settings.NormalizeAutoActionConfig()
+	if normalizedSettings != nil {
+		group.Settings = normalizedSettings
+	}
+
+	// Validate settings
+	if err := group.Settings.ValidateAutoActionConfig(); err != nil {
+		log.Error("validation-failed", zap.Error(err))
+		return nil, err
+	}
+
+	// Update the group
+	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
+	if err != nil {
+		log.Error("failed-to-update-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	// Audit log
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetId:   groupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.auto_join_enabled",
+			Details: map[string]interface{}{
+				"auto_action_email_domains":       req.AutoActionEmailDomains,
+				"auto_action_default_member_role": req.AutoActionDefaultMemberRole,
+			},
+		})
+	}
+
+	log.Debug("successfully-enabled-auto-join", zap.String("group_id", groupID))
+
+	return &EnableGroupAutoJoinByEmailDomainResponse{
+		Group: updatedGroup,
+	}, nil
+}
+
+// DisableGroupAutoJoinByEmailDomain disables auto-join for a group.
+func (s *Service) DisableGroupAutoJoinByEmailDomain(ctx context.Context, req *DisableGroupAutoJoinByEmailDomainRequest) (*DisableGroupAutoJoinByEmailDomainResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "disable-group-auto-join-by-email-domain")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if req == nil || strings.TrimSpace(req.GroupID) == "" {
+		log.Error("group-id-is-required")
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	groupID := strings.TrimSpace(req.GroupID)
+
+	// Retrieve the group
+	group, err := s.GroupRepository.GetGroupByID(ctx, groupID)
+	if err != nil {
+		log.Error("failed-to-retrieve-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	if group == nil {
+		log.Error("group-not-found", zap.String("group_id", groupID))
+		return nil, errors.New(ErrKeyResourceNotFound)
+	}
+
+	// Ensure settings exist
+	if group.Settings == nil {
+		group.Settings = &GroupSettings{}
+	}
+
+	// Disable auto-join
+	group.Settings.AutoJoinByEmailDomainEnabled = false
+	group.Settings.AutoActionEmailDomains = []string{}
+	group.Settings.AutoActionDefaultMemberRole = ""
+
+	// Update the group
+	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
+	if err != nil {
+		log.Error("failed-to-update-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	// Audit log
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetId:   groupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.auto_join_disabled",
+		})
+	}
+
+	log.Debug("successfully-disabled-auto-join", zap.String("group_id", groupID))
+
+	return &DisableGroupAutoJoinByEmailDomainResponse{
+		Group: updatedGroup,
+	}, nil
+}
+
+// EnableGroupAutoInviteByEmailDomain enables auto-invite for a group with specified email domains.
+func (s *Service) EnableGroupAutoInviteByEmailDomain(ctx context.Context, req *EnableGroupAutoInviteByEmailDomainRequest) (*EnableGroupAutoInviteByEmailDomainResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "enable-group-auto-invite-by-email-domain")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if req == nil || strings.TrimSpace(req.GroupID) == "" {
+		log.Error("group-id-is-required")
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	groupID := strings.TrimSpace(req.GroupID)
+
+	// Retrieve the group
+	group, err := s.GroupRepository.GetGroupByID(ctx, groupID)
+	if err != nil {
+		log.Error("failed-to-retrieve-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	if group == nil {
+		log.Error("group-not-found", zap.String("group_id", groupID))
+		return nil, errors.New(ErrKeyResourceNotFound)
+	}
+
+	// Ensure settings exist
+	if group.Settings == nil {
+		group.Settings = &GroupSettings{}
+	}
+
+	// Set the auto-invite settings
+	group.Settings.AutoInviteByEmailDomainEnabled = true
+	group.Settings.AutoJoinByEmailDomainEnabled = false // Enforce mutual exclusivity
+	group.Settings.AutoActionEmailDomains = req.AutoActionEmailDomains
+
+	if req.AutoActionDefaultMemberRole != "" {
+		group.Settings.AutoActionDefaultMemberRole = strings.TrimSpace(req.AutoActionDefaultMemberRole)
+	} else {
+		// Set to default role if not specified
+		group.Settings.AutoActionDefaultMemberRole = MemberRoleMember
+	}
+
+	// Normalize settings
+	normalizedSettings := group.Settings.NormalizeAutoActionConfig()
+	if normalizedSettings != nil {
+		group.Settings = normalizedSettings
+	}
+
+	// Validate settings
+	if err := group.Settings.ValidateAutoActionConfig(); err != nil {
+		log.Error("validation-failed", zap.Error(err))
+		return nil, err
+	}
+
+	// Update the group
+	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
+	if err != nil {
+		log.Error("failed-to-update-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	// Audit log
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetId:   groupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.auto_invite_enabled",
+			Details: map[string]interface{}{
+				"auto_action_email_domains":       req.AutoActionEmailDomains,
+				"auto_action_default_member_role": req.AutoActionDefaultMemberRole,
+			},
+		})
+	}
+
+	log.Debug("successfully-enabled-auto-invite", zap.String("group_id", groupID))
+
+	return &EnableGroupAutoInviteByEmailDomainResponse{
+		Group: updatedGroup,
+	}, nil
+}
+
+// DisableGroupAutoInviteByEmailDomain disables auto-invite for a group.
+func (s *Service) DisableGroupAutoInviteByEmailDomain(ctx context.Context, req *DisableGroupAutoInviteByEmailDomainRequest) (*DisableGroupAutoInviteByEmailDomainResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "disable-group-auto-invite-by-email-domain")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if req == nil || strings.TrimSpace(req.GroupID) == "" {
+		log.Error("group-id-is-required")
+		return nil, errors.New(ErrKeyInvalidGroupID)
+	}
+
+	groupID := strings.TrimSpace(req.GroupID)
+
+	// Retrieve the group
+	group, err := s.GroupRepository.GetGroupByID(ctx, groupID)
+	if err != nil {
+		log.Error("failed-to-retrieve-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	if group == nil {
+		log.Error("group-not-found", zap.String("group_id", groupID))
+		return nil, errors.New(ErrKeyResourceNotFound)
+	}
+
+	// Ensure settings exist
+	if group.Settings == nil {
+		group.Settings = &GroupSettings{}
+	}
+
+	// Disable auto-invite
+	group.Settings.AutoInviteByEmailDomainEnabled = false
+	group.Settings.AutoActionEmailDomains = []string{}
+	group.Settings.AutoActionDefaultMemberRole = ""
+
+	// Update the group
+	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
+	if err != nil {
+		log.Error("failed-to-update-group", zap.String("group_id", groupID), zap.Error(err))
+		return nil, err
+	}
+
+	// Audit log
+	if s.AuditService != nil {
+		s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			TargetId:   groupID,
+			TargetType: "group",
+			Domain:     "group",
+			Action:     "group.auto_invite_disabled",
+		})
+	}
+
+	log.Debug("successfully-disabled-auto-invite", zap.String("group_id", groupID))
+
+	return &DisableGroupAutoInviteByEmailDomainResponse{
+		Group: updatedGroup,
+	}, nil
+}
+
+// extractEmailDomain extracts the domain from an email address.
+// Returns empty string if email is invalid.
+func extractEmailDomain(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return ""
+	}
+
+	domain := strings.TrimSpace(parts[1])
+	if domain == "" {
+		return ""
+	}
+
+	return domain
+}
+
+// matchesAnyDomain checks if the given email domain matches any of the configured domains (exact match, case-insensitive).
+func matchesAnyDomain(emailDomain string, configuredDomains []string) bool {
+	if emailDomain == "" || len(configuredDomains) == 0 {
+		return false
+	}
+
+	lowerEmailDomain := strings.ToLower(emailDomain)
+	for _, configuredDomain := range configuredDomains {
+		if strings.ToLower(strings.TrimSpace(configuredDomain)) == lowerEmailDomain {
+			return true
+		}
+	}
+
+	return false
+}

@@ -38,6 +38,11 @@ type GroupService interface {
 	GetGroupsStats(ctx context.Context, r *GetGroupsStatsRequest) (*GetGroupsStatsResponse, error)
 	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
 	ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error)
+	GetParentGroupsWithAutoJoinForEmail(ctx context.Context, email string) (*GetParentGroupsWithAutoJoinForEmailResponse, error)
+	EnableGroupAutoJoinByEmailDomain(ctx context.Context, r *EnableGroupAutoJoinByEmailDomainRequest) (*EnableGroupAutoJoinByEmailDomainResponse, error)
+	DisableGroupAutoJoinByEmailDomain(ctx context.Context, r *DisableGroupAutoJoinByEmailDomainRequest) (*DisableGroupAutoJoinByEmailDomainResponse, error)
+	EnableGroupAutoInviteByEmailDomain(ctx context.Context, r *EnableGroupAutoInviteByEmailDomainRequest) (*EnableGroupAutoInviteByEmailDomainResponse, error)
+	DisableGroupAutoInviteByEmailDomain(ctx context.Context, r *DisableGroupAutoInviteByEmailDomainRequest) (*DisableGroupAutoInviteByEmailDomainResponse, error)
 }
 
 // GroupValidator interface defines expected methods of a valid validator
@@ -554,6 +559,74 @@ func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.ValidateGroupName(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// EnableGroupAutoJoinByEmailDomain enables auto-join for a group
+func (h *Handler) EnableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToEnableGroupAutoJoinByEmailDomainRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.EnableGroupAutoJoinByEmailDomain(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// DisableGroupAutoJoinByEmailDomain disables auto-join for a group
+func (h *Handler) DisableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToDisableGroupAutoJoinByEmailDomainRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.DisableGroupAutoJoinByEmailDomain(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// EnableGroupAutoInviteByEmailDomain enables auto-invite for a group
+func (h *Handler) EnableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToEnableGroupAutoInviteByEmailDomainRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.EnableGroupAutoInviteByEmailDomain(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// DisableGroupAutoInviteByEmailDomain disables auto-invite for a group
+func (h *Handler) DisableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToDisableGroupAutoInviteByEmailDomainRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.DisableGroupAutoInviteByEmailDomain(r.Context(), request)
 	if err != nil {
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
