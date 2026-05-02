@@ -565,7 +565,7 @@ func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.R
 	toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, revisions.AccessTokenExpiresAt, revisions.RefreshTokenExpiresAt)
 
 	// get next step query param from request if available
-	if nextStepQueryParam := r.URL.Query()[common.WebNextStepsHttpQueryParam]; nextStepQueryParam[0] != "" {
+	if nextStepQueryParam := r.URL.Query()[common.WebNextStepsHttpQueryParam]; len(nextStepQueryParam) > 0 && nextStepQueryParam[0] != "" {
 		http.Redirect(w, r, nextStepQueryParam[0], http.StatusTemporaryRedirect)
 		return
 	}
