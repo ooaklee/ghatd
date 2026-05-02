@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/common"
@@ -21,24 +22,17 @@ func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl,
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		var nextStepParam = fmt.Sprintf("&%s=", common.WebNextStepsHttpQueryParam)
-		var nextStepParamValue string
+		nextStepParam := fmt.Sprintf("&%s=", common.WebNextStepsHttpQueryParam)
 
 		authVerifyRequest := getAuthVerifyRequest(r.URL.RawQuery)
 
-		if authVerifyRequest.VerificationToken == "" {
+		if authVerifyRequest.VerificationToken == "" || authVerifyRequest.VerificationEmailType == "" {
 			http.Redirect(w, r, frontendLoginUrl, http.StatusTemporaryRedirect)
 			return
 		}
 
-		if authVerifyRequest.VerificationEmailType == "" {
-			http.Redirect(w, r, frontendLoginUrl, http.StatusTemporaryRedirect)
-			return
-		}
-
-		if authVerifyRequest.RequestedUrl != "" {
-			nextStepParamValue = authVerifyRequest.RequestedUrl
-		} else {
+		nextStepParamValue := authVerifyRequest.RequestedUrl
+		if nextStepParamValue == "" {
 			nextStepParamValue = frontendAppUrl
 		}
 
@@ -50,13 +44,13 @@ func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl,
 
 		// emailVerification
 		case "2":
-
 			http.Redirect(w, r, fmt.Sprintf(apiVerifyEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+nextStepParamValue, http.StatusTemporaryRedirect)
 			return
 
 		default:
-			w.WriteHeader(http.StatusTemporaryRedirect)
-			w.Header().Add("Location", frontendLoginUrl)
+			// Fix: previously called WriteHeader before setting the Location
+			// header, causing the redirect target to be silently dropped.
+			http.Redirect(w, r, frontendLoginUrl, http.StatusTemporaryRedirect)
 			return
 		}
 	}
@@ -78,33 +72,24 @@ type authVerifyRequest struct {
 // getAuthVerifyRequest parses the URL query string and extracts the parameters
 // required for an authentication verification request. It returns a pointer to
 // an authVerifyRequest struct containing the parsed parameters.
+//
+// HTML-escaped query separators ("&amp;") are normalised to "&" before parsing.
+// Values are URL-decoded by net/url, so encoded characters such as "%2F" are
+// returned in their decoded form. Values containing "=" are preserved in full.
 func getAuthVerifyRequest(urlRawQuery string) *authVerifyRequest {
-	var parsedVerifyParams authVerifyRequest
-	var requestParms []string
+	var parsed authVerifyRequest
 
-	if strings.Contains(urlRawQuery, "&amp;") {
-		requestParms = strings.Split(urlRawQuery, "&amp;")
-	} else if strings.Contains(urlRawQuery, "&") {
-		requestParms = strings.Split(urlRawQuery, "&")
+	// Normalise any HTML-escaped separators so url.ParseQuery can split correctly.
+	normalised := strings.ReplaceAll(urlRawQuery, "&amp;", "&")
+
+	values, err := url.ParseQuery(normalised)
+	if err != nil {
+		return &parsed
 	}
 
-	for _, param := range requestParms {
+	parsed.VerificationToken = values.Get("__t")
+	parsed.VerificationEmailType = values.Get("type")
+	parsed.RequestedUrl = values.Get("request_url")
 
-		if strings.HasPrefix(param, "type=") {
-			parsedVerifyParams.VerificationEmailType = strings.Split(param, "=")[1]
-			continue
-		}
-
-		if strings.HasPrefix(param, "__t=") {
-			parsedVerifyParams.VerificationToken = strings.Split(param, "=")[1]
-			continue
-		}
-
-		if strings.HasPrefix(param, "request_url=") {
-			parsedVerifyParams.RequestedUrl = strings.Split(param, "=")[1]
-			continue
-		}
-	}
-
-	return &parsedVerifyParams
+	return &parsed
 }
