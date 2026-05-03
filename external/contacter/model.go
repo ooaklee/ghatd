@@ -26,6 +26,9 @@ const (
 	// CommsTypeFeedback represents a feedback comms
 	CommsTypeFeedback CommsType = "feedback"
 
+	// CommsTypeFeedbackCompanion represents a feedback comms specifically about/from the companion app
+	CommsTypeFeedbackCompanion CommsType = "feedback-companion"
+
 	// CommsTypeProductInformation represents a product information comms
 	CommsTypeProductInformation CommsType = "product-information"
 
@@ -142,6 +145,7 @@ func (c *Comms) SetCommsType(providedType string) *Comms {
 		commType != CommsTypeTechnicalSupport &&
 		commType != CommsTypeFeatureRequest &&
 		commType != CommsTypeFeedback &&
+		commType != CommsTypeFeedbackCompanion &&
 		commType != CommsTypeProductInformation &&
 		commType != CommsTypePressInquiry &&
 		commType != CommsTypePartnershipOpportunities &&
@@ -252,6 +256,7 @@ type CommsTypeStats struct {
 	TechnicalSupport              int64 `json:"technical_support"`
 	FeatureRequest                int64 `json:"feature_request"`
 	Feedback                      int64 `json:"feedback"`
+	FeedbackCompanion             int64 `json:"feedback_companion"`
 	ProductInformation            int64 `json:"product_information"`
 	PressInquiry                  int64 `json:"press_inquiry"`
 	PartnershipOpportunities      int64 `json:"partnership_opportunities"`

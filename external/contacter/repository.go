@@ -523,6 +523,8 @@ func (r *Repository) GetCommsStatsCounts(ctx context.Context, req *GetCommsStats
 			typeStats.FeatureRequest = typeCount.Count
 		case "feedback":
 			typeStats.Feedback = typeCount.Count
+		case "feedback-companion":
+			typeStats.FeedbackCompanion = typeCount.Count
 		case "product-information":
 			typeStats.ProductInformation = typeCount.Count
 		case "press-inquiry":
