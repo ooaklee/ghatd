@@ -18,7 +18,7 @@ type GetUserGroupMembershipsResponse struct {
 	Memberships []UserGroupMembership `json:"memberships"`
 
 	// UserID is the ID of the user these memberships belong to
-	UserID string `json:"user_id"`
+	UserID string `json:"user_id,omitempty"`
 }
 
 // GetUserMicroProfileResponse holds response data for GetUserMicroProfile request

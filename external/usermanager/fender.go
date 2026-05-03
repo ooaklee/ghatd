@@ -548,7 +548,7 @@ func MapRequestToRejectMyGroupInvitationRequest(r *http.Request, validator Userm
 // MapRequestToGetUserGroupMembershipsRequestRequest maps incoming memberships request to correct struct.
 func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validator UsermanagerValidator) (*GetUserGroupMembershipsRequest, error) {
 	parsedRequest := GetUserGroupMembershipsRequest{
-		GroupType:          group.GroupTypeTeam,
+		GroupType:          "",
 		IncludeDescendants: true,
 	}
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))

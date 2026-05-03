@@ -469,6 +469,12 @@ func (s *Service) filterVisibleDescendantsForUser(rootGroup *UniversalGroup, asU
 		return descendants, true
 	}
 
+	// Root-level OWNER/ADMIN access should unlock full visibility across that
+	// requested hierarchy tree, including PRIVATE descendants.
+	if rootRole, rootIsAdmin := s.resolveUserRoleForGroup(rootGroup, asUserID); rootRole == MemberRoleOwner || rootIsAdmin {
+		return descendants, true
+	}
+
 	groupsByID := make(map[string]*UniversalGroup, len(descendants))
 	for i := range descendants {
 		groupsByID[descendants[i].ID] = &descendants[i]
