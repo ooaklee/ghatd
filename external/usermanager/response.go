@@ -249,6 +249,11 @@ type RemoveGroupMemberResponse struct {
 	Success bool `json:"success"`
 }
 
+// UpdateGroupMemberResponse holds the response for updating a member's role in a group
+type UpdateGroupMemberResponse struct {
+	Success bool `json:"success"`
+}
+
 // UpdateGroupOwnerResponse holds the response for updating group ownership
 type UpdateGroupOwnerResponse struct {
 	Owner *EnrichedOwner `json:"owner"`

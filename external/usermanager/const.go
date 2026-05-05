@@ -46,6 +46,9 @@ const (
 	// ErrKeyFailedToRemoveUserFromGroup returned when removing user from group fails
 	ErrKeyFailedToRemoveUserFromGroup = "FailedToRemoveUserFromGroup"
 
+	// ErrKeyFailedToUpdateGroupMember returned when updating a group member fails
+	ErrKeyFailedToUpdateGroupMember = "FailedToUpdateGroupMember"
+
 	// ErrKeyInvalidGroupType returned when an invalid group type is provided
 	ErrKeyInvalidGroupType = "InvalidGroupType"
 

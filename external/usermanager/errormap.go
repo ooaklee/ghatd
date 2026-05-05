@@ -18,6 +18,7 @@ var UsermanagerErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem
 	ErrKeyUserAlreadyMemberOfGroup:    {Title: "Conflict", Detail: "User is already a member of this group.", StatusCode: 409, Code: "USM00-007"},
 	ErrKeyFailedToAddUserToGroup:      {Title: "Internal Error", Detail: "Failed to add user to the group. Please try again.", StatusCode: 500, Code: "USM00-008"},
 	ErrKeyFailedToRemoveUserFromGroup: {Title: "Internal Error", Detail: "Failed to remove user from the group. Please try again.", StatusCode: 500, Code: "USM00-009"},
+	ErrKeyFailedToUpdateGroupMember:   {Title: "Internal Error", Detail: "Failed to update group member. Please try again.", StatusCode: 500, Code: "USM00-016"},
 	ErrKeyInvalidGroupType:            {Title: "Bad Request", Detail: "The provided group type is invalid.", StatusCode: 400, Code: "USM00-010"},
 	ErrKeyNoGroupsFound:               {Title: "Not Found", Detail: "No groups match the search criteria.", StatusCode: 404, Code: "USM00-011"},
 	ErrKeyBulkOperationPartialFailure: {Title: "Partial Success", Detail: "Some operations in the bulk update failed. Check response details.", StatusCode: 207, Code: "USM00-012"},

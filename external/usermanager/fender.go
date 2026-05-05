@@ -812,6 +812,45 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 	return &parsedRequest, nil
 }
 
+// MapRequestToUpdateGroupMemberRequest maps an update-member request to the correct struct
+func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*UpdateGroupMemberRequest, error) {
+	var parsedRequest UpdateGroupMemberRequest = UpdateGroupMemberRequest{
+		UpdateMemberRoleRequest: &group.UpdateMemberRoleRequest{},
+	}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+	}
+
+	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
+	if err != nil {
+		log.Error("unable-get-group-id-from-uri")
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+	parsedRequest.GroupID = groupID
+
+	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
+	if err != nil {
+		log.Error("unable-get-member-id-from-uri")
+		return nil, errors.New(ErrKeyInvalidMemberID)
+	}
+	parsedRequest.MemberID = memberID
+
+	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("update-group-member-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToUpdateGroupOwnerRequest maps an update-ownership request to the correct struct
 func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerValidator) (*UpdateGroupOwnerRequest, error) {
 	var parsedRequest UpdateGroupOwnerRequest = UpdateGroupOwnerRequest{

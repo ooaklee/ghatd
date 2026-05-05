@@ -336,6 +336,16 @@ type RemoveGroupMemberRequest struct {
 	*group.RemoveMemberRequest
 }
 
+// UpdateGroupMemberRequest holds the data needed to update a user's role in a group
+type UpdateGroupMemberRequest struct {
+
+	// UserID is the ID of the user making the request
+	UserID string
+
+	// UpdateMemberRoleRequest carries the underlying member-role update payload.
+	*group.UpdateMemberRoleRequest
+}
+
 // UpdateGroupOwnerRequest holds the data needed to update group ownership
 type UpdateGroupOwnerRequest struct {
 

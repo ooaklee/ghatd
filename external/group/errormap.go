@@ -93,7 +93,7 @@ var GroupErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 	ErrKeyInvalidMemberRole: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "GRP0-028",
-		Detail:     "The specified member role is not valid",
+		Detail:     "The requested member role is not supported by this group type",
 	},
 	ErrKeyMemberNotFound: {
 		StatusCode: http.StatusNotFound,

@@ -320,6 +320,48 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 	return &RemoveGroupMemberResponse{Success: true}, nil
 }
 
+// UpdateGroupMember updates a user's role in a group
+func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberRequest) (*UpdateGroupMemberResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.GroupService == nil {
+		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	if !isAdmin {
+
+		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
+		if accessErr != nil {
+			log.Error(
+				"failed-to-resolve-requester-group-access-map",
+				zap.String("requester_user_id", r.UserID),
+				zap.String("group_id", r.GroupID),
+				zap.Error(accessErr),
+			)
+			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+		}
+
+		if !hasGroupAccess.IsAdmin {
+			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+		}
+	}
+
+	_, err := s.GroupService.UpdateMemberRole(ctx, r.UpdateMemberRoleRequest)
+	if err != nil {
+		log.Error("update-group-member-failed",
+			zap.String("group-id", r.GroupID),
+			zap.String("member-id", r.MemberID),
+			zap.String("new-role", r.NewRole),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	return &UpdateGroupMemberResponse{Success: true}, nil
+}
+
 // UpdateGroupOwner updates the owner of a group
 func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))

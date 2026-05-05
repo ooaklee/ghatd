@@ -95,7 +95,7 @@ func NewService(
 		config.DefaultRoles = DefaultRoles
 	}
 
-	if config.TypeToRoleOverrides == nil || len(config.TypeToRoleOverrides) == 0 {
+	if len(config.TypeToRoleOverrides) == 0 {
 		config.TypeToRoleOverrides = map[string][]string{}
 	}
 
@@ -1781,6 +1781,8 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 
 	// Reinject dependencies
 	group.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
+
+	req.NewRole = strings.TrimSpace(req.NewRole)
 
 	// Validate new role against group type configuration
 	if err := s.isValidMemberRole(group.Type, req.NewRole); err != nil {

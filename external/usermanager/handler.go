@@ -42,6 +42,7 @@ type UsermanagerService interface {
 	// Group management methods
 	AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error)
 	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
+	UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberRequest) (*UpdateGroupMemberResponse, error)
 	UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error)
 }
 
@@ -658,6 +659,23 @@ func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.RemoveGroupMember(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// UpdateGroupMember handles the request to update a member role in a group
+func (h *Handler) UpdateGroupMember(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateGroupMemberRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.UpdateGroupMember(r.Context(), request)
 	if err != nil {
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
