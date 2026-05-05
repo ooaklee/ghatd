@@ -18,17 +18,20 @@ func stringPtr(s string) *string {
 
 // mockGroupRepository implements group.GroupRepository for service tests
 type mockGroupRepository struct {
-	createGroupFunc                func(ctx context.Context, grp *group.UniversalGroup) (*group.UniversalGroup, error)
-	getGroupByIDFunc               func(ctx context.Context, id string) (*group.UniversalGroup, error)
-	getGroupByNanoIDFunc           func(ctx context.Context, nanoID string) (*group.UniversalGroup, error)
-	getGroupByNameFunc             func(ctx context.Context, name, groupType string, logError bool) (*group.UniversalGroup, error)
-	getGroupByNameAndParentFunc    func(ctx context.Context, name, parentGroupID string, logError bool) (*group.UniversalGroup, error)
-	getGroupsByLineageAncestorFunc func(ctx context.Context, ancestorGroupID string) ([]group.UniversalGroup, error)
-	updateGroupFunc                func(ctx context.Context, group *group.UniversalGroup) (*group.UniversalGroup, error)
-	deleteGroupByIDFunc            func(ctx context.Context, id string) error
-	softDeleteGroupFunc            func(ctx context.Context, id, deletedByID string, deletedAt string) error
-	getGroupsFunc                  func(ctx context.Context, req *group.GetGroupsRequest) ([]group.UniversalGroup, error)
-	getTotalGroupsFunc             func(ctx context.Context, req *group.GetGroupsRequest) (int64, error)
+	createGroupFunc                 func(ctx context.Context, grp *group.UniversalGroup) (*group.UniversalGroup, error)
+	getGroupByIDFunc                func(ctx context.Context, id string) (*group.UniversalGroup, error)
+	getGroupByNanoIDFunc            func(ctx context.Context, nanoID string) (*group.UniversalGroup, error)
+	getGroupByNameFunc              func(ctx context.Context, name, groupType string, logError bool) (*group.UniversalGroup, error)
+	getGroupByNameAndParentFunc     func(ctx context.Context, name, parentGroupID string, logError bool) (*group.UniversalGroup, error)
+	getGroupsByLineageAncestorFunc  func(ctx context.Context, ancestorGroupID string) ([]group.UniversalGroup, error)
+	updateGroupFunc                 func(ctx context.Context, group *group.UniversalGroup) (*group.UniversalGroup, error)
+	deleteGroupByIDFunc             func(ctx context.Context, id string) error
+	softDeleteGroupFunc             func(ctx context.Context, id, deletedByID string, deletedAt string) error
+	getGroupsFunc                   func(ctx context.Context, req *group.GetGroupsRequest) ([]group.UniversalGroup, error)
+	getTotalGroupsFunc              func(ctx context.Context, req *group.GetGroupsRequest) (int64, error)
+	getGroupsByReferencedUserIDFunc func(ctx context.Context, userID string) ([]group.UniversalGroup, error)
+	removeMemberFromGroupFunc       func(ctx context.Context, groupID, memberID string) error
+	clearOwnerFromGroupFunc         func(ctx context.Context, groupID, ownerID string) error
 }
 
 func (m *mockGroupRepository) CreateGroup(ctx context.Context, grp *group.UniversalGroup) (*group.UniversalGroup, error) {
@@ -118,6 +121,9 @@ func (m *mockGroupRepository) GetGroupsByStatus(ctx context.Context, status stri
 }
 
 func (m *mockGroupRepository) GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]group.UniversalGroup, error) {
+	if m.getGroupsByReferencedUserIDFunc != nil {
+		return m.getGroupsByReferencedUserIDFunc(ctx, userID)
+	}
 	return nil, errors.New("not implemented")
 }
 
@@ -146,10 +152,16 @@ func (m *mockGroupRepository) AddMemberToGroup(ctx context.Context, groupID stri
 }
 
 func (m *mockGroupRepository) RemoveMemberFromGroup(ctx context.Context, groupID, memberID string) error {
+	if m.removeMemberFromGroupFunc != nil {
+		return m.removeMemberFromGroupFunc(ctx, groupID, memberID)
+	}
 	return errors.New("not implemented")
 }
 
 func (m *mockGroupRepository) ClearOwnerFromGroup(ctx context.Context, groupID, ownerID string) error {
+	if m.clearOwnerFromGroupFunc != nil {
+		return m.clearOwnerFromGroupFunc(ctx, groupID, ownerID)
+	}
 	return errors.New("not implemented")
 }
 
@@ -546,4 +558,156 @@ func TestService_ValidateGroupName(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestService_RemoveUserFromAllGroups(t *testing.T) {
+	t.Parallel()
+
+	const (
+		rootGroupAlphaID  = "root-alpha"
+		childGroupAlphaID = "child-alpha"
+		rootGroupBetaID   = "root-beta"
+		childGroupBetaID  = "child-beta"
+	)
+
+	cloneGroup := func(src *group.UniversalGroup) *group.UniversalGroup {
+		if src == nil {
+			return nil
+		}
+
+		clone := *src
+		clone.Lineage = append([]string(nil), src.Lineage...)
+		clone.Members = append([]group.Member(nil), src.Members...)
+		return &clone
+	}
+
+	groupsByID := map[string]*group.UniversalGroup{
+		rootGroupAlphaID: {
+			ID:      rootGroupAlphaID,
+			Name:    "alpha",
+			Type:    group.GroupTypeTeam,
+			Status:  group.GroupStatusActive,
+			OwnerID: testUserID,
+			Members: []group.Member{{
+				ID:   testUserID,
+				Type: group.MemberTypeUser,
+				Role: group.MemberRoleAdmin,
+			}},
+		},
+		childGroupAlphaID: {
+			ID:            childGroupAlphaID,
+			Name:          "alpha-child",
+			Type:          group.GroupTypeTeam,
+			Status:        group.GroupStatusActive,
+			ParentGroupID: rootGroupAlphaID,
+			Lineage:       []string{rootGroupAlphaID},
+			Members: []group.Member{{
+				ID:   testUserID,
+				Type: group.MemberTypeUser,
+				Role: group.MemberRoleMember,
+			}},
+		},
+		rootGroupBetaID: {
+			ID:     rootGroupBetaID,
+			Name:   "beta",
+			Type:   group.GroupTypeTeam,
+			Status: group.GroupStatusActive,
+			Members: []group.Member{{
+				ID:   testUserID,
+				Type: group.MemberTypeUser,
+				Role: group.MemberRoleMember,
+			}},
+		},
+		childGroupBetaID: {
+			ID:            childGroupBetaID,
+			Name:          "beta-child",
+			Type:          group.GroupTypeTeam,
+			Status:        group.GroupStatusActive,
+			ParentGroupID: rootGroupBetaID,
+			Lineage:       []string{rootGroupBetaID},
+			Members: []group.Member{{
+				ID:   testUserID,
+				Type: group.MemberTypeUser,
+				Role: group.MemberRoleMember,
+			}},
+		},
+	}
+
+	cascadeQueryRootIDs := make([]string, 0, 2)
+	removedMemberships := make([]string, 0, 4)
+	clearedOwners := make([]string, 0, 1)
+
+	repo := &mockGroupRepository{
+		getGroupsByReferencedUserIDFunc: func(ctx context.Context, userID string) ([]group.UniversalGroup, error) {
+			require.Equal(t, testUserID, userID)
+
+			return []group.UniversalGroup{
+				*cloneGroup(groupsByID[rootGroupAlphaID]),
+				*cloneGroup(groupsByID[childGroupAlphaID]),
+				*cloneGroup(groupsByID[childGroupBetaID]),
+			}, nil
+		},
+		getGroupByIDFunc: func(ctx context.Context, id string) (*group.UniversalGroup, error) {
+			grp, ok := groupsByID[id]
+			if !ok {
+				return nil, errors.New(group.ErrKeyResourceNotFound)
+			}
+			return cloneGroup(grp), nil
+		},
+		getGroupsByLineageAncestorFunc: func(ctx context.Context, ancestorGroupID string) ([]group.UniversalGroup, error) {
+			cascadeQueryRootIDs = append(cascadeQueryRootIDs, ancestorGroupID)
+
+			switch ancestorGroupID {
+			case rootGroupAlphaID:
+				return []group.UniversalGroup{*cloneGroup(groupsByID[childGroupAlphaID])}, nil
+			case rootGroupBetaID:
+				return []group.UniversalGroup{*cloneGroup(groupsByID[childGroupBetaID])}, nil
+			default:
+				return []group.UniversalGroup{}, nil
+			}
+		},
+		removeMemberFromGroupFunc: func(ctx context.Context, groupID, memberID string) error {
+			require.Equal(t, testUserID, memberID)
+			grp := groupsByID[groupID]
+			require.NotNil(t, grp)
+
+			filtered := grp.Members[:0]
+			for _, member := range grp.Members {
+				if member.ID != memberID {
+					filtered = append(filtered, member)
+				}
+			}
+			grp.Members = append([]group.Member(nil), filtered...)
+			removedMemberships = append(removedMemberships, groupID)
+			return nil
+		},
+		clearOwnerFromGroupFunc: func(ctx context.Context, groupID, ownerID string) error {
+			require.Equal(t, testUserID, ownerID)
+			grp := groupsByID[groupID]
+			require.NotNil(t, grp)
+			grp.OwnerID = ""
+			clearedOwners = append(clearedOwners, groupID)
+			return nil
+		},
+	}
+
+	svc := newTestService(repo, &mockAuditService{})
+
+	response, err := svc.RemoveUserFromAllGroups(context.Background(), &group.RemoveUserFromAllGroupsRequest{
+		UserID: testUserID,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	assert.True(t, response.Success)
+	assert.Equal(t, 2, response.TotalRootGroupsAffected)
+	assert.Equal(t, "User removed from all groups successfully", response.Message)
+	assert.ElementsMatch(t, []string{rootGroupAlphaID, rootGroupBetaID}, cascadeQueryRootIDs)
+	assert.Contains(t, clearedOwners, rootGroupAlphaID)
+	assert.Empty(t, groupsByID[rootGroupAlphaID].OwnerID)
+	assert.False(t, groupsByID[rootGroupAlphaID].HasMember(testUserID))
+	assert.False(t, groupsByID[childGroupAlphaID].HasMember(testUserID))
+	assert.False(t, groupsByID[rootGroupBetaID].HasMember(testUserID))
+	assert.False(t, groupsByID[childGroupBetaID].HasMember(testUserID))
+	assert.ElementsMatch(t, []string{rootGroupAlphaID, childGroupAlphaID, rootGroupBetaID, childGroupBetaID}, removedMemberships)
 }

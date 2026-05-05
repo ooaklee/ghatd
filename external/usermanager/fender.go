@@ -275,6 +275,17 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 
 	parsedRequest.ID = parsedRequest.UserId
 
+	err := toolbox.DecodeRequestBody(r, &parsedRequest)
+	if err != nil {
+		log.Error("unable-decode-request-body", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
+	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
+		log.Error("delete-user-permanently-request-validation-failed", zap.Error(err))
+		return nil, errors.New(ErrKeyRequestFailedValidation)
+	}
+
 	return &parsedRequest, nil
 }
 

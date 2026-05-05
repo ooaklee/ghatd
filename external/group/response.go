@@ -2,6 +2,19 @@ package group
 
 import "github.com/ooaklee/ghatd/external/toolbox"
 
+// RemoveUserFromAllGroupsResponse represents the response after attempting to remove a user from all groups
+type RemoveUserFromAllGroupsResponse struct {
+
+	// Success indicates whether the user was successfully removed from all groups
+	Success bool `json:"success"`
+
+	// TotalRootGroupsAffected indicates the total number of root groups from which the user was removed (including cascades)
+	TotalRootGroupsAffected int `json:"total_root_groups_affected"`
+
+	// Message provides additional information about the result of the operation
+	Message string `json:"message"`
+}
+
 // GetGroupsResponse defines the response structure for getting groups
 type GetGroupsResponse struct {
 	Total      int               `json:"total"`

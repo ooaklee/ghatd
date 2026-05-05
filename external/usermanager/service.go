@@ -3,6 +3,7 @@ package usermanager
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
@@ -33,6 +34,7 @@ type ApiTokenService interface {
 
 // AuditService expected methods of a valid audit service
 type AuditService interface {
+	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 	GetTotalAuditLogEvents(ctx context.Context, r *audit.GetTotalAuditLogEventsRequest) (int64, error)
 }
 
@@ -63,6 +65,7 @@ type GroupService interface {
 	GetGroupsConfig(ctx context.Context, req *group.GetGroupsConfigRequest) (*group.GetGroupsConfigResponse, error)
 	GetGroupLineage(ctx context.Context, req *group.GetGroupLineageRequest) (*group.GetGroupLineageResponse, error)
 	DeleteGroup(ctx context.Context, req *group.DeleteGroupRequest) (*group.DeleteGroupResponse, error)
+	RemoveUserFromAllGroups(ctx context.Context, req *group.RemoveUserFromAllGroupsRequest) (*group.RemoveUserFromAllGroupsResponse, error)
 	ValidateGroupName(ctx context.Context, req *group.ValidateGroupNameRequest) (*group.ValidateGroupNameResponse, error)
 	GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error)
 	AcceptInvite(ctx context.Context, req *group.AcceptInviteRequest) (*group.AcceptInviteResponse, error)
@@ -286,16 +289,23 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 
 	var logger = logger.AcquireFrom(ctx)
 	var err error
+	targetUserID := strings.TrimSpace(r.ID)
+	if targetUserID == "" {
+		logger.Warn("delete-user-permanently-request-with-empty-user-id", zap.String("requesting-user-id", r.UserId))
+		return errors.New(errors.New(userv2.ErrKeyInvalidUserID).Error())
+	}
 
-	logger.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", r.UserId))
+	logger.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", targetUserID))
 
-	requestedUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.ID})
+	requestedUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: targetUserID})
 	if err != nil {
 		return err
 	}
 
+	requestingUserEmail := ""
+
 	if requestedUser.User.GetUserId() != r.UserId {
-		logger.Warn("user-attempting-to-delete-another-user", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+		logger.Warn("user-attempting-to-delete-another-user", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", targetUserID))
 
 		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
 		if err != nil {
@@ -306,23 +316,86 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 			logger.Warn("non-admin-user-attempting-to-delete-another-user", zap.String("user-id", r.UserId))
 			return errors.New(userv2.ErrKeyUnauthorisedAccess)
 		}
+
+		requestingUserEmail = strings.TrimSpace(requestingUser.User.GetUserEmail())
 	}
 
-	logger.Info("initiate-wiping-user-account", zap.String("user-id", r.UserId))
-	err = s.UserService.DeleteUser(ctx, &userv2.DeleteUserRequest{ID: r.UserId})
+	if s.AuditService != nil {
+		reason := strings.TrimSpace(r.Reason)
+		targetUserEmail := strings.TrimSpace(requestedUser.User.GetUserEmail())
+		requestedBySelf := strings.TrimSpace(r.UserId) == targetUserID
+		if requestingUserEmail == "" && requestedBySelf {
+			requestingUserEmail = targetUserEmail
+		}
+
+		auditDetails := map[string]interface{}{
+			"requesting_user_id": r.UserId,
+			"target_user_id":     targetUserID,
+			"requested_by_self":  requestedBySelf,
+		}
+		if targetUserEmail != "" {
+			auditDetails["target_user_email"] = targetUserEmail
+		}
+		if requestingUserEmail != "" {
+			auditDetails["requesting_user_email"] = requestingUserEmail
+		}
+		if reason != "" {
+			auditDetails["reason"] = reason
+		}
+
+		auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+			ActorId:    r.UserId,
+			Action:     "user.account.delete.requested",
+			TargetId:   targetUserID,
+			TargetType: audit.TargetTypeUser,
+			Domain:     "usermanager",
+			Details:    auditDetails,
+		})
+		if auditErr != nil {
+			logger.Warn(
+				"failed-to-log-delete-user-permanently-audit-event",
+				zap.Error(auditErr),
+				zap.String("requesting-user-id", r.UserId),
+				zap.String("requested-user-id", targetUserID),
+			)
+		}
+	}
+
+	if s.GroupService != nil {
+		logger.Info("initiate-wiping-user-membership-from-root-groups", zap.String("user-id", targetUserID))
+
+		removeResp, removeErr := s.GroupService.RemoveUserFromAllGroups(ctx, &group.RemoveUserFromAllGroupsRequest{UserID: targetUserID})
+		if removeErr != nil {
+			return removeErr
+		}
+
+		affectedRootGroups := 0
+		if removeResp != nil {
+			affectedRootGroups = removeResp.TotalRootGroupsAffected
+		}
+
+		logger.Info(
+			"completed-wiping-user-membership-from-root-groups",
+			zap.String("user-id", targetUserID),
+			zap.Int("root-groups-count", affectedRootGroups),
+		)
+	}
+
+	logger.Info("initiate-wiping-user-account", zap.String("user-id", targetUserID))
+	err = s.UserService.DeleteUser(ctx, &userv2.DeleteUserRequest{ID: targetUserID})
 	if err != nil {
 		return err
 	}
-	logger.Info("completed-wiping-user-account", zap.String("user-id", r.UserId))
+	logger.Info("completed-wiping-user-account", zap.String("user-id", targetUserID))
 
-	logger.Info("initiate-wiping-user-owned-api-tokens", zap.String("user-id", r.UserId))
-	err = s.ApiTokenService.DeleteApiTokensByOwnerId(ctx, r.UserId)
+	logger.Info("initiate-wiping-user-owned-api-tokens", zap.String("user-id", targetUserID))
+	err = s.ApiTokenService.DeleteApiTokensByOwnerId(ctx, targetUserID)
 	if err != nil {
 		return err
 	}
-	logger.Info("completed-wiping-user-owned-api-tokens", zap.String("user-id", r.UserId))
+	logger.Info("completed-wiping-user-owned-api-tokens", zap.String("user-id", targetUserID))
 
-	logger.Info("wiping-user-and-resources-from-platform-completed", zap.String("user-id", r.UserId))
+	logger.Info("wiping-user-and-resources-from-platform-completed", zap.String("user-id", targetUserID))
 
 	return nil
 }

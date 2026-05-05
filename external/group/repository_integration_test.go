@@ -474,4 +474,44 @@ func TestIntegration_GroupService_GetGroupsByUserID_WithSampleDataset(t *testing
 
 		require.Contains(t, resp.Descendants, "e4cd2ebe-c979-4814-a526-19d33cf47811")
 	})
+
+	t.Run("RemoveUserFromAllGroups removes persisted memberships and clears descendant ownership", func(t *testing.T) {
+		resp, removeErr := svc.RemoveUserFromAllGroups(ctx, &group.RemoveUserFromAllGroupsRequest{
+			UserID: secondaryUserID,
+		})
+		require.NoError(t, removeErr)
+		require.NotNil(t, resp)
+		assert.True(t, resp.Success)
+		assert.Equal(t, 1, resp.TotalRootGroupsAffected)
+
+		rootGroup, err := repo.GetGroupByID(ctx, "e4cd2ebe-c979-4814-a526-19d33cf47811")
+		require.NoError(t, err)
+		assert.True(t, rootGroup.HasMember(primaryUserID))
+		assert.False(t, rootGroup.HasMember(secondaryUserID))
+		assert.Equal(t, primaryUserID, rootGroup.OwnerID)
+
+		departmentGroup, err := repo.GetGroupByID(ctx, "560a256d-c70c-4a8a-97c2-291a3c35a1cb")
+		require.NoError(t, err)
+		assert.False(t, departmentGroup.HasMember(secondaryUserID))
+		assert.Empty(t, departmentGroup.OwnerID)
+
+		teamGroup, err := repo.GetGroupByID(ctx, "9abea3aa-0b80-42f9-8cb4-33d6da2e1304")
+		require.NoError(t, err)
+		assert.False(t, teamGroup.HasMember(secondaryUserID))
+		assert.Empty(t, teamGroup.OwnerID)
+
+		squadGroup, err := repo.GetGroupByID(ctx, "0b697f3f-879d-490a-b232-e2de43a9c097")
+		require.NoError(t, err)
+		assert.False(t, squadGroup.HasMember(secondaryUserID))
+		assert.Empty(t, squadGroup.OwnerID)
+
+		postRemovalResp, err := svc.GetGroupsByUserID(ctx, &group.GetGroupsByUserIDRequest{
+			UserID:             secondaryUserID,
+			IncludeDescendants: true,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, postRemovalResp)
+		assert.Empty(t, postRemovalResp.Groups)
+		assert.Empty(t, postRemovalResp.Descendants)
+	})
 }

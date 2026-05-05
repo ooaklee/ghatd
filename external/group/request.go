@@ -1,5 +1,12 @@
 package group
 
+// RemoveUserFromAllGroupsRequest represents the request to remove a user from all groups
+type RemoveUserFromAllGroupsRequest struct {
+
+	// UserID is the ID of the user to be removed from all groups
+	UserID string
+}
+
 // GetGroupsRequest defines the request structure for getting groups
 type GetGroupsRequest struct {
 	// Type filters (flexible - any type string)

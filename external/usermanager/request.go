@@ -94,6 +94,9 @@ type DeleteUserPermanentlyRequest struct {
 
 	// ID is the ID of the user to be deleted
 	ID string `path:"userID"`
+
+	// Reason optionally captures why account deletion was requested.
+	Reason string `json:"reason,omitempty"`
 }
 
 // GetUserInsightsUsageRequest holds all the data needed to get basic user insights

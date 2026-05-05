@@ -1417,6 +1417,86 @@ func (s *Service) RejectInvite(ctx context.Context, req *RejectInviteRequest) (*
 	return &RejectInviteResponse{Group: updatedTargetGroup, InviteEmail: inviteEmail}, nil
 }
 
+// RemoveUserFromAllGroups removes a user from all groups they are a member/owner of.
+func (s *Service) RemoveUserFromAllGroups(ctx context.Context, req *RemoveUserFromAllGroupsRequest) (*RemoveUserFromAllGroupsResponse, error) {
+	log := logger.AcquireFrom(ctx).With(zap.String("method", "remove-user-from-all-groups")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	userID := strings.TrimSpace(req.UserID)
+	log.Debug("removing-user-from-all-groups", zap.String("user_id", userID))
+
+	if userID == "" {
+		return nil, errors.New(ErrKeyInvalidUserIDProvided)
+	}
+
+	groupsResp, groupsErr := s.GetGroupsByUserID(ctx, &GetGroupsByUserIDRequest{
+		UserID:             userID,
+		IncludeDescendants: false,
+	})
+	if groupsErr != nil {
+		return &RemoveUserFromAllGroupsResponse{
+			Success:                 false,
+			TotalRootGroupsAffected: 0,
+			Message:                 "Failed to retrieve groups for user",
+		}, groupsErr
+	}
+
+	rootGroupIDSet := map[string]struct{}{}
+	if groupsResp != nil {
+		for _, grp := range groupsResp.Groups {
+			if grp == nil {
+				continue
+			}
+
+			rootGroupID := strings.TrimSpace(grp.ID)
+			if len(grp.Lineage) > 0 {
+				candidateRootID := strings.TrimSpace(grp.Lineage[0])
+				if candidateRootID != "" {
+					rootGroupID = candidateRootID
+				}
+			}
+
+			if rootGroupID == "" {
+				continue
+			}
+
+			rootGroupIDSet[rootGroupID] = struct{}{}
+		}
+	}
+
+	rootGroupIDs := make([]string, 0, len(rootGroupIDSet))
+	for rootGroupID := range rootGroupIDSet {
+		rootGroupIDs = append(rootGroupIDs, rootGroupID)
+	}
+	sort.Strings(rootGroupIDs)
+
+	for _, rootGroupID := range rootGroupIDs {
+		_, removeErr := s.RemoveMember(ctx, &RemoveMemberRequest{
+			GroupID:             rootGroupID,
+			MemberID:            userID,
+			ConfirmOwnerRemoval: true,
+		})
+		if removeErr != nil {
+			return &RemoveUserFromAllGroupsResponse{
+				Success:                 false,
+				TotalRootGroupsAffected: len(rootGroupIDSet),
+				Message:                 "Failed to remove user from all groups",
+			}, removeErr
+		}
+	}
+
+	logger.Info(ctx,
+		"completed-removing-user-from-all-groups",
+		zap.String("user-id", userID),
+		zap.Int("root-groups-count", len(rootGroupIDs)),
+	)
+
+	return &RemoveUserFromAllGroupsResponse{
+		Success:                 true,
+		TotalRootGroupsAffected: len(rootGroupIDSet),
+		Message:                 "User removed from all groups successfully",
+	}, nil
+
+}
+
 // RemoveMember removes a member from a group
 func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*RemoveMemberResponse, error) {
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "remove-member")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))

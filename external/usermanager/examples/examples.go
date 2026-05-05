@@ -320,6 +320,10 @@ func (m *MockApiTokenService) GetTotalApiTokens(ctx context.Context, r *apitoken
 
 type MockAuditService struct{}
 
+func (m *MockAuditService) LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error {
+	return nil
+}
+
 func (m *MockAuditService) GetTotalAuditLogEvents(ctx context.Context, r *audit.GetTotalAuditLogEventsRequest) (int64, error) {
 	return 25, nil
 }
@@ -682,6 +686,37 @@ func (m *MockGroupService) GetGroupsByUserID(ctx context.Context, req *group.Get
 	return &group.GetGroupsByUserIDResponse{
 		Groups:      groupsResp.Groups,
 		Descendants: map[string][][]group.GroupDescendantsNode{},
+	}, nil
+}
+
+func (m *MockGroupService) RemoveUserFromAllGroups(ctx context.Context, req *group.RemoveUserFromAllGroupsRequest) (*group.RemoveUserFromAllGroupsResponse, error) {
+	groupsResp, err := m.GetGroupsByUserID(ctx, &group.GetGroupsByUserIDRequest{UserID: req.UserID})
+	if err != nil {
+		return nil, err
+	}
+
+	rootSet := map[string]struct{}{}
+	for _, grp := range groupsResp.Groups {
+		if grp == nil {
+			continue
+		}
+
+		rootID := strings.TrimSpace(grp.ID)
+		if len(grp.Lineage) > 0 && strings.TrimSpace(grp.Lineage[0]) != "" {
+			rootID = strings.TrimSpace(grp.Lineage[0])
+		}
+
+		if rootID == "" {
+			continue
+		}
+
+		rootSet[rootID] = struct{}{}
+	}
+
+	return &group.RemoveUserFromAllGroupsResponse{
+		Success:                 true,
+		TotalRootGroupsAffected: len(rootSet),
+		Message:                 "User removed from all groups successfully",
 	}, nil
 }
 
