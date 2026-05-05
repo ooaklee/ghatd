@@ -97,6 +97,7 @@ func (t *EmailTemplater) GenerateVerificationEmail(ctx context.Context, req *Gen
 		req.FirstName,
 		req.LastName,
 		req.Token,
+		req.Code,
 		req.IsDashboardRequest,
 		req.RequestUrl,
 	)
@@ -133,6 +134,7 @@ func (t *EmailTemplater) GenerateLoginEmail(ctx context.Context, req *GenerateLo
 	// Generate substitutes
 	substitutes := t.generateLoginEmailSubstitutes(
 		req.Token,
+		req.Code,
 		req.IsDashboardRequest,
 		req.RequestUrl,
 	)
@@ -169,7 +171,7 @@ func (t *EmailTemplater) renderTemplate(templateStr string, substitutes interfac
 }
 
 // generateVerificationEmailSubstitutes prepares substitutes for verification email
-func (t *EmailTemplater) generateVerificationEmailSubstitutes(firstName, lastName, token string, isDashboardRequest bool, requestUrl string) *verificationEmailSubstitutes {
+func (t *EmailTemplater) generateVerificationEmailSubstitutes(firstName, lastName, token, code string, isDashboardRequest bool, requestUrl string) *verificationEmailSubstitutes {
 	const requestUrlPrefix string = "&request_url="
 
 	var loginUrl string
@@ -185,14 +187,16 @@ func (t *EmailTemplater) generateVerificationEmailSubstitutes(firstName, lastNam
 
 	return &verificationEmailSubstitutes{
 		FullName:        strings.Title(fmt.Sprintf("%v %v", firstName, lastName)),
+		Code:            code,
 		VerificationURL: t.generateEmailVerificationURL(token, isDashboardRequest, requestUrl),
 		LoginURL:        loginUrl,
 	}
 }
 
 // generateLoginEmailSubstitutes prepares substitutes for login email
-func (t *EmailTemplater) generateLoginEmailSubstitutes(token string, isDashboardRequest bool, requestUrl string) *loginEmailSubstitutes {
+func (t *EmailTemplater) generateLoginEmailSubstitutes(token, code string, isDashboardRequest bool, requestUrl string) *loginEmailSubstitutes {
 	return &loginEmailSubstitutes{
+		Code:     code,
 		LoginURL: t.generateLoginURL(token, isDashboardRequest, requestUrl),
 	}
 }

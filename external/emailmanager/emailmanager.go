@@ -71,6 +71,7 @@ func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerif
 		LastName:           req.LastName,
 		Email:              req.Email,
 		Token:              req.Token,
+		Code:               req.Code,
 		IsDashboardRequest: req.IsDashboardRequest,
 		RequestUrl:         req.RequestUrl,
 	}
@@ -99,6 +100,7 @@ func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRe
 	templateReq := &emailtemplater.GenerateLoginEmailRequest{
 		Email:              req.Email,
 		Token:              req.Token,
+		Code:               req.Code,
 		IsDashboardRequest: req.IsDashboardRequest,
 		RequestUrl:         req.RequestUrl,
 	}

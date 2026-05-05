@@ -32,6 +32,9 @@ type verificationEmailSubstitutes struct {
 	// FullName holds the combination of the user's first and last name
 	FullName string `handlebars:"FullName"`
 
+	// Code holds the 8-character alphanumeric code for manual entry
+	Code string `handlebars:"Code"`
+
 	// VerificationURL holds the FE URL (containing verification) for verifying email
 	VerificationURL string `handlebars:"VerificationURL"`
 
@@ -41,6 +44,9 @@ type verificationEmailSubstitutes struct {
 
 // loginEmailSubstitutes holds the variables to replace in login email templates
 type loginEmailSubstitutes struct {
+	// Code holds the 8-character alphanumeric code for manual entry
+	Code string `handlebars:"Code"`
+
 	// LoginURL holds the FE URL (containing login token) for signing user in
 	LoginURL string `handlebars:"LoginURL"`
 }

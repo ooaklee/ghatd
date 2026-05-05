@@ -80,15 +80,45 @@ err := manager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailReq
     LastName:           "Doe",
     Email:              "john@example.com",
     Token:              "verification-token-xyz",
+    Code:               "ABC123DE", // 8-character alphanumeric code for manual entry
     IsDashboardRequest: false,
     RequestUrl:         "https://app.example.com/dashboard",
     UserId:             "user-123",
 })
-
-if err != nil {
-    // Handle error, e.g., errors.New(emailmanager.ErrKeyEmailMailerSendFailed) or errors.New(emailmanager.ErrKeyEmailMailerTemplateGenerationFailed)
-}
 ```
+
+```go
+// 5. Send a login email
+ctx := context.Background()
+err := manager.SendLoginEmail(ctx, &emailmanager.SendLoginEmailRequest{
+    Email:              "john@example.com",
+    Token:              "login-token-xyz",
+    Code:               "XYZ789AB", // 8-character alphanumeric code for manual entry
+    IsDashboardRequest: false,
+    RequestUrl:         "https://app.example.com/dashboard",
+    UserId:             "user-123",
+})
+```
+
+> **Dual Verification Flow**: Both login and verification emails now include a magic link (token) AND an 8-character alphanumeric code. The code is displayed prominently below the main button with the note: _"Alternatively, enter this code in the app or web by clicking "I already have a session code""_. This allows users who open the email on a different device to manually enter the code instead of clicking the link.
+
+### Template Substitution
+
+The email templates use Handlebars (`{{FieldName}}`) for variable substitution. Available fields:
+
+**Verification email:**
+| Variable | Description |
+|---|---|
+| `{{FullName}}` | User's full name |
+| `{{Code}}` | 8-character alphanumeric code |
+| `{{VerificationURL}}` | Magic link with embedded token |
+| `{{LoginURL}}` | Link to request a new verification email |
+
+**Login email:**
+| Variable | Description |
+|---|---|
+| `{{Code}}` | 8-character alphanumeric code |
+| `{{LoginURL}}` | Magic link with embedded token |
 
 ### 3. Development Environment Setup
 
@@ -264,6 +294,9 @@ Here's a list of areas for improvement in future iterations of `emailmanager`, `
 - [ ] SMTP provider
 
 ### Advanced Features
+- [x] Dual-channel verification (magic link + 8-character code)
+- [x] Hardened rate limiting for code verification endpoints
+- [x] Brute-force IP blocking on repeated failed attempts
 - [ ] Email templating with layouts
 - [ ] Multi-language support
 - [ ] Email preview generation
@@ -273,6 +306,8 @@ Here's a list of areas for improvement in future iterations of `emailmanager`, `
 - [ ] Email queueing
 
 ### Testing
+- [x] Unit tests for unique code generation (`GenerateUniqueCode`)
+- [x] Unit tests for hardened rate limit middleware
 - [ ] Unit tests for templater
 - [ ] Unit tests for emailprovider
 - [ ] Unit tests for emailmanager

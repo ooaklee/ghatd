@@ -129,6 +129,9 @@ type AttachRoutesRequest struct {
 	// ActiveValidApiTokenOrJWTMiddleware is middleware that is used to lock
 	// down endpoints to either tokens or JWT
 	ActiveValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
+
+	// HardenedRateLimitMiddleware protects code verification endpoints from brute-force attacks
+	HardenedRateLimitMiddleware mux.MiddlewareFunc
 }
 
 // AttachRoutes attaches accessmanager handler to corresponding
@@ -139,12 +142,17 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserSignUp, request.Handler.CreateUser).Methods(http.MethodPost, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.CreateInitalLoginOrVerificationTokenEmail).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogout, request.Handler.LogoutUser).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerUserEmail, request.Handler.ValidateEmailVerificationCode).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserRefreshToken, request.Handler.RefreshToken).Methods(http.MethodPost, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleCallback, request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleLogin, request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+
+	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
+	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)
+	codeVerifyRoutes.HandleFunc(APIAccessManagerUserEmail, request.Handler.ValidateEmailVerificationCode).Methods(http.MethodGet, http.MethodOptions)
+	if request.HardenedRateLimitMiddleware != nil {
+		codeVerifyRoutes.Use(request.HardenedRateLimitMiddleware)
+	}
 
 	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.CreateUserAPIToken).Methods(http.MethodPost, http.MethodOptions)

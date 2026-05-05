@@ -38,6 +38,9 @@ type SendVerificationEmailRequest struct {
 	// Token is the verification token
 	Token string
 
+	// Code is the 8-character alphanumeric code
+	Code string
+
 	// IsDashboardRequest indicates if this is for dashboard access
 	IsDashboardRequest bool
 
@@ -55,6 +58,9 @@ type SendLoginEmailRequest struct {
 
 	// Token is the login token
 	Token string
+
+	// Code is the 8-character alphanumeric code
+	Code string
 
 	// IsDashboardRequest indicates if this is for dashboard access
 	IsDashboardRequest bool

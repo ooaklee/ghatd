@@ -66,7 +66,10 @@ type CreateEmailVerificationTokenRequest struct {
 // email
 type ValidateEmailVerificationCodeRequest struct {
 	// Token the token sent embedded in the email to verify user's email
-	Token string `query:"t" validate:"min=128"`
+	Token string `query:"t" validate:"omitempty,min=128"`
+
+	// Code the 8-character alphanumeric code provided instead of the token
+	Code string `query:"c" validate:"omitempty,len=8,alphanum"`
 }
 
 // TokenAsStringValidatorRequest holds the data used to validate the token as
@@ -107,7 +110,10 @@ type CreateInitalLoginOrVerificationTokenEmailRequest struct {
 // LoginUserRequest holds the data required for login in a user
 type LoginUserRequest struct {
 	// Token the token sent embedded in the email to give user authorisation on to platform
-	Token string `query:"t" validate:"min=128"`
+	Token string `query:"t" validate:"omitempty,min=128"`
+
+	// Code the 8-character alphanumeric code provided instead of the token
+	Code string `query:"c" validate:"omitempty,len=8,alphanum"`
 }
 
 // CreateUserAPITokenRequest holds the data required for creating an api token

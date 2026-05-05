@@ -38,6 +38,8 @@ func TestMapRequestToValidateEmailVerificationCodeRequest(t *testing.T) {
 		query       string
 		expectError bool
 		expectToken string
+		expectCode  string
+		expectKey   string
 	}{
 		{
 			name:        "Success - valid token in query string",
@@ -55,11 +57,38 @@ func TestMapRequestToValidateEmailVerificationCodeRequest(t *testing.T) {
 			name:        "Failure - token below min length",
 			query:       "?t=" + testShortToken,
 			expectError: true,
+			expectKey:   accessmanager.ErrKeyInvalidVerificationToken,
 		},
 		{
-			name:        "Failure - token query param missing entirely",
+			name:        "Failure - token query param missing, code also missing",
 			query:       "",
 			expectError: true,
+			expectKey:   accessmanager.ErrKeyMissingVerificationCredentials,
+		},
+		{
+			name:        "Success - valid 8-character code provided",
+			query:       "?c=ABC123DE",
+			expectError: false,
+			expectCode:  "ABC123DE",
+		},
+		{
+			name:        "Failure - code below minimum length (7 chars)",
+			query:       "?c=ABC123D",
+			expectError: true,
+			expectKey:   accessmanager.ErrKeyInvalidVerificationToken,
+		},
+		{
+			name:        "Failure - code above maximum length (9 chars)",
+			query:       "?c=ABC123DEF",
+			expectError: true,
+			expectKey:   accessmanager.ErrKeyInvalidVerificationToken,
+		},
+		{
+			name:        "Success - both token and code provided (token takes precedence via service)",
+			query:       "?t=" + testValidToken128 + "&c=ABC123DE",
+			expectError: false,
+			expectToken: testValidToken128,
+			expectCode:  "ABC123DE",
 		},
 	}
 
@@ -73,7 +102,7 @@ func TestMapRequestToValidateEmailVerificationCodeRequest(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err)
-				assert.Equal(t, accessmanager.ErrKeyInvalidVerificationToken, err.Error())
+				assert.Equal(t, tt.expectKey, err.Error())
 				assert.Nil(t, parsed)
 				return
 			}
@@ -81,6 +110,7 @@ func TestMapRequestToValidateEmailVerificationCodeRequest(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, parsed)
 			assert.Equal(t, tt.expectToken, parsed.Token)
+			assert.Equal(t, tt.expectCode, parsed.Code)
 		})
 	}
 }
@@ -93,6 +123,8 @@ func TestMapRequestToLoginUserRequest(t *testing.T) {
 		query       string
 		expectError bool
 		expectToken string
+		expectCode  string
+		expectKey   string
 	}{
 		{
 			name:        "Success - valid login token in query string",
@@ -104,11 +136,32 @@ func TestMapRequestToLoginUserRequest(t *testing.T) {
 			name:        "Failure - token below min length",
 			query:       "?t=" + testShortToken,
 			expectError: true,
+			expectKey:   accessmanager.ErrKeyInvalidVerificationToken,
 		},
 		{
-			name:        "Failure - token query param missing entirely",
+			name:        "Failure - token query param missing, code also missing",
 			query:       "",
 			expectError: true,
+			expectKey:   accessmanager.ErrKeyMissingVerificationCredentials,
+		},
+		{
+			name:        "Success - valid 8-character code provided",
+			query:       "?c=XYZ789AB",
+			expectError: false,
+			expectCode:  "XYZ789AB",
+		},
+		{
+			name:        "Failure - code below minimum length",
+			query:       "?c=SHORT",
+			expectError: true,
+			expectKey:   accessmanager.ErrKeyInvalidVerificationToken,
+		},
+		{
+			name:        "Success - both token and code provided",
+			query:       "?t=" + testValidToken128 + "&c=XYZ789AB",
+			expectError: false,
+			expectToken: testValidToken128,
+			expectCode:  "XYZ789AB",
 		},
 	}
 
@@ -122,7 +175,7 @@ func TestMapRequestToLoginUserRequest(t *testing.T) {
 
 			if tt.expectError {
 				require.Error(t, err)
-				assert.Equal(t, accessmanager.ErrKeyInvalidVerificationToken, err.Error())
+				assert.Equal(t, tt.expectKey, err.Error())
 				assert.Nil(t, parsed)
 				return
 			}
@@ -130,6 +183,7 @@ func TestMapRequestToLoginUserRequest(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, parsed)
 			assert.Equal(t, tt.expectToken, parsed.Token)
+			assert.Equal(t, tt.expectCode, parsed.Code)
 		})
 	}
 }

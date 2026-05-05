@@ -25,6 +25,16 @@ This will be an exciting experience, and I look forward to building out this pro
 
 GHAT(D) offers modular packages that can be used both together and independently. Our goal is for each package to adhere to clean architecture principles, featuring comprehensive documentation and examples. We are committed to implementing these practices on both new and legacy package, especially those that are less extensible for other projects.
 
+### Authentication & Verification
+A dual-channel verification system providing both magic link and human-readable code entry.
+
+- **[Access Manager](./external/accessmanager/)** - Complete authentication and authorisation with email-based verification and login
+  - `accessmanager` - User creation, login, registration, email verification, OAuth, API token management
+  - `accessmanager/middleware` - JWT, API token, rate-limiting, and hardened code-verification middleware
+  - `accessmanager/helpers` - Context-transmission utilities and unique code generation
+  - `auth` - JWT creation, validation, and metadata extraction
+  - `apitoken` - API token lifecycle management
+
 ### Email System
 A complete email solution split into three composable packages for maximum flexibility and testability.
 
@@ -49,6 +59,30 @@ A complete billing solution split into three composable packages for maximum fle
 
 
 **Note on Core Packages:** This Core Package and sub-sections will be updated as more core packages are added and the refactoring work is completed on legacy packages. The goal is to ensure that each package includes a getting-started guide accompanied by working examples to help you integrate them into your projects.
+
+## Dual-Channel Verification
+
+GHAT(D) supports a dual-channel verification flow for login and email verification — users receive both a **magic link** (with a JWT token) and an **8-character alphanumeric code** in the same email.
+
+### How It Works
+
+1. **Email delivery**: Both login and verification emails contain a clickable magic link AND a human-readable 8-character code displayed in large monospaced font.
+2. **Link flow** (`?t=<jwt-token>`): User clicks the magic link → token is validated → user is authenticated.
+3. **Code flow** (`?c=ABCD1234`): User enters the code in the app or web interface ("I already have a session code") → code is resolved to its corresponding token via ephemeral storage → token is validated → user is authenticated.
+4. **Code generation**: Each code is globally unique (A-Z, 0-9), crypto-random, stored in ephemeral storage with a TTL matching the token expiry, and regenerated on collision.
+
+### Security Measures
+
+| Layer | Mechanism |
+|---|---|
+| **Code entropy** | 8-character A-Z/0-9 = ~2.8 trillion combinations |
+| **Collision resistance** | Ephemeral storage check with up to 5 retry attempts |
+| **Brute-force protection** | `HardenedRateLimitProtection` middleware tracks attempts per IP and per code within a configurable window (default: 5/hr per IP, 5/hr per code) |
+| **Auto-blocking** | IPs exceeding the threshold are temporarily blocked (default: 1 hour) |
+| **One-time use** | Codes and tokens are invalidated after successful verification |
+| **Time-bounded** | All codes and tokens have TTLs (default: 10 minutes for login/verification) |
+| **Audit logging** | All verification attempts (pass and fail) and rate-limit blocks are logged for monitoring |
+| **Rate-limit response** | Blocked IPs receive HTTP 429 with `EPH0-002` — no information leakage |
 
 
 ## Starting locally
