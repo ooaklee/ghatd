@@ -1270,6 +1270,14 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
+	if r.Code != "" {
+		resolvedToken, err := s.resolveTokenFromCode(ctx, r.Code)
+		if err != nil {
+			return nil, err
+		}
+		r.Token = resolvedToken
+	}
+
 	initiateLoginTokenDetails, err := s.TokenAsStringValidator(ctx, &TokenAsStringValidatorRequest{
 		Token: r.Token})
 	if err != nil {
@@ -1381,6 +1389,14 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 // ValidateEmailVerificationCode handles updating the system to illustrate a successful email verification
 // TODO: Create tests
 func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *ValidateEmailVerificationCodeRequest) (*ValidateEmailVerificationCodeResponse, error) {
+
+	if r.Code != "" {
+		resolvedToken, err := s.resolveTokenFromCode(ctx, r.Code)
+		if err != nil {
+			return nil, err
+		}
+		r.Token = resolvedToken
+	}
 
 	verifiedTokenDetails, err := s.TokenAsStringValidator(ctx, &TokenAsStringValidatorRequest{
 		Token: r.Token})
@@ -1810,4 +1826,28 @@ func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) (*u
 	}
 
 	return nil, false
+}
+
+// resolveTokenFromCode looks up the given code in ephemeral storage and returns the
+// associated token. It returns an error if the code is not found or has expired.
+func (s *Service) resolveTokenFromCode(ctx context.Context, code string) (string, error) {
+
+	log := logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
+
+	token, err := s.EphemeralStore.GetCodeMapping(ctx, code)
+	if err != nil {
+		log.Warn("ams/code-to-token-mapping-not-found", zap.String("code", code), zap.Error(err))
+		return "", errors.New(ErrKeyInvalidVerificationCode)
+	}
+
+	if token == "" {
+		log.Warn("ams/code-to-token-mapping-returned-empty-token", zap.String("code", code))
+		return "", errors.New(ErrKeyInvalidVerificationCode)
+	}
+
+	log.Info("ams/successfully-resolved-code-to-token", zap.String("code", code))
+
+	return token, nil
 }

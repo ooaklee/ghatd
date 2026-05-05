@@ -511,6 +511,10 @@ func MapRequestToValidateEmailVerificationCodeRequest(request *http.Request, val
 		return nil, errors.New(ErrKeyInvalidVerificationToken)
 	}
 
+	if parsedRequest.Token == "" && parsedRequest.Code == "" {
+		return nil, errors.New(ErrKeyMissingVerificationCredentials)
+	}
+
 	return &parsedRequest, nil
 }
 
@@ -530,6 +534,10 @@ func MapRequestToLoginUserRequest(request *http.Request, validator Accessmanager
 	err = validator.Validate(parsedRequest)
 	if err != nil {
 		return nil, errors.New(ErrKeyInvalidVerificationToken)
+	}
+
+	if parsedRequest.Token == "" && parsedRequest.Code == "" {
+		return nil, errors.New(ErrKeyMissingVerificationCredentials)
 	}
 
 	return &parsedRequest, nil

@@ -42,4 +42,6 @@ var AccessmanagerErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestIt
 	ErrKeyInvalidAuthToken:                                    {Title: "Invalid authorization", StatusCode: 401, Code: "AM00-025"},
 	ErrKeyInvalidResultQueryParam:                             {Title: "Invalid result query param", StatusCode: 400, Code: "AM00-026"},
 	ErrKeyEmptyRefreshToken:                                   {Title: "Unauthorized", StatusCode: 401, Code: "AM00-027"},
+	ErrKeyMissingVerificationCredentials:                      {Title: "Bad Request", Detail: "Either a token or code must be provided", StatusCode: 400, Code: "AM00-028"},
+	ErrKeyInvalidVerificationCode:                             {Title: "Bad Request", Detail: "The provided verification code is invalid or has expired", StatusCode: 400, Code: "AM00-029"},
 }

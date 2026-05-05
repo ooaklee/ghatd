@@ -90,6 +90,12 @@ const (
 
 	// ErrKeyEmptyRefreshToken error when a user makes a request with empty refresh token
 	ErrKeyEmptyRefreshToken string = "EmptyRefreshToken"
+
+	// ErrKeyMissingVerificationCredentials error when neither a token nor a code is provided for verification
+	ErrKeyMissingVerificationCredentials string = "MissingVerificationCredentials"
+
+	// ErrKeyInvalidVerificationCode error when the provided verification code is invalid, expired, or not found
+	ErrKeyInvalidVerificationCode string = "InvalidVerificationCode"
 )
 
 const (
