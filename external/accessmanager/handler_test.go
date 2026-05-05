@@ -212,6 +212,13 @@ func TestHandler_ValidateEmailVerificationCode(t *testing.T) {
 			expectAuthCookie: true,
 		},
 		{
+			name:             "Success - using 8-character code",
+			query:            "?c=ABC123DE",
+			mockResponse:     successResponse,
+			expectStatus:     http.StatusOK,
+			expectAuthCookie: true,
+		},
+		{
 			name:             "Success - redirects when next_step query param is provided",
 			query:            "?t=" + testValidToken128 + "&next_step=/dashboard",
 			mockResponse:     successResponse,
@@ -232,9 +239,20 @@ func TestHandler_ValidateEmailVerificationCode(t *testing.T) {
 			expectStatus: http.StatusBadRequest,
 		},
 		{
+			name:         "Failure - missing both token and code",
+			query:        "",
+			expectStatus: http.StatusBadRequest,
+		},
+		{
 			name:         "Failure - service returns error",
 			query:        "?t=" + testValidToken128,
 			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationToken),
+			expectStatus: http.StatusBadRequest,
+		},
+		{
+			name:         "Failure - invalid verification code",
+			query:        "?c=ABC123DE",
+			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationCode),
 			expectStatus: http.StatusBadRequest,
 		},
 	}
@@ -301,6 +319,13 @@ func TestHandler_LoginUser(t *testing.T) {
 			expectAuthCookie: true,
 		},
 		{
+			name:             "Success - using 8-character code",
+			query:            "?c=LOG123CD",
+			mockResponse:     successResponse,
+			expectStatus:     http.StatusOK,
+			expectAuthCookie: true,
+		},
+		{
 			name:             "Success - redirects when next_step provided",
 			query:            "?t=" + testValidToken128 + "&next_step=/home",
 			mockResponse:     successResponse,
@@ -314,9 +339,20 @@ func TestHandler_LoginUser(t *testing.T) {
 			expectStatus: http.StatusBadRequest,
 		},
 		{
+			name:         "Failure - missing both token and code",
+			query:        "",
+			expectStatus: http.StatusBadRequest,
+		},
+		{
 			name:         "Failure - service returns error",
 			query:        "?t=" + testValidToken128,
 			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationToken),
+			expectStatus: http.StatusBadRequest,
+		},
+		{
+			name:         "Failure - invalid verification code",
+			query:        "?c=LOG123CD",
+			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationCode),
 			expectStatus: http.StatusBadRequest,
 		},
 	}
