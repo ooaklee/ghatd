@@ -270,3 +270,63 @@ func (c *Client) GetCodeMapping(ctx context.Context, code string) (string, error
 
 	return c.client.Get(completeKey).Result()
 }
+
+// TrackHardenedAttempt increments rate-limit counters for the given IP and optional code,
+// checking against the maximum allowed attempts within the configured time window.
+// It returns an error if the limit has been exceeded for either the IP or the code.
+func (c *Client) TrackHardenedAttempt(ctx context.Context, ip, code string, maxAttempts int, window time.Duration) error {
+	ipKey := c.keyPrefix + "hrl_ip:" + ip
+	if err := c.incrementAndCheckHardened(ctx, ipKey, maxAttempts, window); err != nil {
+		return err
+	}
+
+	if code != "" {
+		codeKey := c.keyPrefix + "hrl_code:" + code
+		if err := c.incrementAndCheckHardened(ctx, codeKey, maxAttempts, window); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// BlockIP stores a temporary block entry for the given IP address with the specified duration.
+func (c *Client) BlockIP(ctx context.Context, ip string, duration time.Duration) error {
+	blockKey := c.keyPrefix + "hrl_block:" + ip
+
+	return c.client.Set(blockKey, "1", duration).Err()
+}
+
+// IsIPBlocked checks whether the given IP address is currently under a temporary block.
+func (c *Client) IsIPBlocked(ctx context.Context, ip string) (bool, error) {
+	blockKey := c.keyPrefix + "hrl_block:" + ip
+
+	_, err := c.client.Get(blockKey).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// incrementAndCheckHardened increments a rate-limit counter key, sets the TTL on first
+// increment, and returns an error if the counter exceeds maxAttempts.
+func (c *Client) incrementAndCheckHardened(ctx context.Context, key string, maxAttempts int, window time.Duration) error {
+	val, err := c.client.Incr(key).Result()
+	if err != nil {
+		return err
+	}
+
+	if val == 1 {
+		_ = c.client.Set(key, val, window)
+	}
+
+	if int(val) > maxAttempts {
+		return errors.New(ErrKeyHardenedRateLimitExceeded)
+	}
+
+	return nil
+}
