@@ -255,3 +255,18 @@ func (c *Client) StoreCode(ctx context.Context, code string, ttl time.Duration) 
 
 	return c.client.Set(completeKey, 1, ttl).Err()
 }
+
+// StoreCodeMapping saves a code→token mapping to persistent storage with the given TTL.
+func (c *Client) StoreCodeMapping(ctx context.Context, code, token string, ttl time.Duration) error {
+	completeKey := c.keyPrefix + "codetoken:" + code
+
+	return c.client.Set(completeKey, token, ttl).Err()
+}
+
+// GetCodeMapping retrieves the token associated with the given code.
+// Returns an error if the mapping does not exist.
+func (c *Client) GetCodeMapping(ctx context.Context, code string) (string, error) {
+	completeKey := c.keyPrefix + "codetoken:" + code
+
+	return c.client.Get(completeKey).Result()
+}

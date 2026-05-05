@@ -25,6 +25,8 @@ import (
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
+
+	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 )
 
 // AuditService expected methods of a valid audit service
@@ -50,6 +52,10 @@ type EphemeralStore interface {
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 	AddRequestCountEntry(ctx context.Context, clientIp string) error
 	DeleteAllTokenExceptedSpecified(ctx context.Context, userId string, exemptionTokenIds []string) error
+	CodeExists(ctx context.Context, code string) (bool, error)
+	StoreCode(ctx context.Context, code string, ttl time.Duration) error
+	StoreCodeMapping(ctx context.Context, code, token string, ttl time.Duration) error
+	GetCodeMapping(ctx context.Context, code string) (string, error)
 }
 
 // EmailManager expected methods of a valid email manager
@@ -1694,10 +1700,23 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 		return "", err
 	}
 
+	loginCode, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, tokenDetails.EtTTL)
+	if err != nil {
+		log.Error("unable-to-generate-login-code:", zap.String("user-id", user.ID), zap.Error(err))
+		return "", err
+	}
+
+	err = s.EphemeralStore.StoreCodeMapping(ctx, loginCode, tokenDetails.EphemeralToken, tokenDetails.EtTTL)
+	if err != nil {
+		log.Error("unable-to-store-login-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
+		return "", err
+	}
+
 	// Beging email sending process
 	err = s.EmailManager.SendLoginEmail(ctx, &emailmanager.SendLoginEmailRequest{
 		Email:              user.Email,
 		Token:              tokenDetails.EphemeralToken,
+		Code:               loginCode,
 		IsDashboardRequest: isDashboardRequest,
 		RequestUrl:         requestUrl,
 		UserId:             user.ID,
@@ -1730,12 +1749,25 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 		return "", err
 	}
 
+	verificationCode, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, tokenDetails.EvTTL)
+	if err != nil {
+		log.Error("unable-to-generate-verification-code:", zap.String("user-id", user.ID), zap.Error(err))
+		return "", err
+	}
+
+	err = s.EphemeralStore.StoreCodeMapping(ctx, verificationCode, tokenDetails.EmailVerificationToken, tokenDetails.EvTTL)
+	if err != nil {
+		log.Error("unable-to-store-verification-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
+		return "", err
+	}
+
 	// Beging email sending process
 	err = s.EmailManager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailRequest{
 		FirstName:          user.PersonalInfo.FirstName,
 		LastName:           user.PersonalInfo.LastName,
 		Email:              user.Email,
 		Token:              tokenDetails.EmailVerificationToken,
+		Code:               verificationCode,
 		IsDashboardRequest: r.IsDashboardRequest,
 		RequestUrl:         r.RequestUrl,
 		UserId:             user.ID,

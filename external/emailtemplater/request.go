@@ -108,6 +108,9 @@ type GenerateVerificationEmailRequest struct {
 	// Token the token that will be used to authorise email verification when clicked
 	Token string
 
+	// Code the 8-character alphanumeric code to include in the email body
+	Code string
+
 	// IsDashboardRequest whether the request originates from the dashboard portal
 	IsDashboardRequest bool
 
@@ -141,6 +144,9 @@ type GenerateLoginEmailRequest struct {
 
 	// Token the token that will be used to confirm user is authorised when clicked
 	Token string
+
+	// Code the 8-character alphanumeric code to include in the email body
+	Code string
 
 	// IsDashboardRequest whether the request originates from the dashboard portal
 	IsDashboardRequest bool
