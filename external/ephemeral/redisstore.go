@@ -232,3 +232,26 @@ func (c *Client) fetchRequestCountEntry(ctx context.Context, requestorID string)
 func createRateLimitRequestorID(clientIp string) string {
 	return fmt.Sprintf("r_%v", clientIp)
 }
+
+// CodeExists checks whether a verification or login code already exists in persistent storage.
+// It returns true if the code is found, false if the code does not exist.
+func (c *Client) CodeExists(ctx context.Context, code string) (bool, error) {
+	completeKey := c.keyPrefix + "code:" + code
+
+	_, err := c.client.Get(completeKey).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// StoreCode saves a verification or login code to persistent storage with the given TTL.
+func (c *Client) StoreCode(ctx context.Context, code string, ttl time.Duration) error {
+	completeKey := c.keyPrefix + "code:" + code
+
+	return c.client.Set(completeKey, 1, ttl).Err()
+}
