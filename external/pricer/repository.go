@@ -56,6 +56,7 @@ type PricePlanRepository interface {
 type PriceFeatureRepository interface {
 	CreateFeature(ctx context.Context, feature *PriceFeature) (*PriceFeature, error)
 	UpdateFeature(ctx context.Context, feature *PriceFeature) (*PriceFeature, error)
+	GetFeatureByID(ctx context.Context, id string) (*PriceFeature, error)
 	GetFeatures(ctx context.Context, req *GetFeaturesRequest) ([]PriceFeature, error)
 	GetTotalFeatures(ctx context.Context, req *GetFeaturesRequest) (int64, error)
 	SoftDeleteFeature(ctx context.Context, id, deletedByID, deletedAt string) error
@@ -382,6 +383,30 @@ func (r *Repository) UpdateFeature(ctx context.Context, feature *PriceFeature) (
 	}
 
 	return feature, nil
+}
+
+// GetFeatureByID retrieves a feature catalog item by ID.
+func (r *Repository) GetFeatureByID(ctx context.Context, id string) (*PriceFeature, error) {
+	collection, err := r.GetPriceFeaturesCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result PriceFeature
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, bson.M{"_id": id}, options.Find().SetLimit(1))
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.Store.MapOneInCursorToResult(ctx, cursor, &result, "price_feature")
+	if err != nil {
+		if errors.Is(err, repository.NewRepositoryError(repository.ErrKeyResourceNotFound, "")) {
+			return nil, errors.New(ErrKeyPriceFeatureNotFound)
+		}
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 // GetFeatures retrieves feature catalog items with filters and pagination.

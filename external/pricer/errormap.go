@@ -18,4 +18,19 @@ var PricerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrKeyMissingPlanFeatureRef:      {Title: "Bad Request", Detail: "Missing plan feature reference", StatusCode: 400, Code: "PRC0-12"},
 	ErrKeyPricePlanNotFound:          {Title: "Not Found", Detail: "Price plan not found", StatusCode: 404, Code: "PRC0-13"},
 	ErrKeyPriceFeatureNotFound:       {Title: "Not Found", Detail: "Price feature not found", StatusCode: 404, Code: "PRC0-14"},
+	ErrKeyPriceUserIDRequired:        {Title: "Forbidden", Detail: "User ID is required", StatusCode: 403, Code: "PRC0-15"},
+	ErrKeyPricePlanIDRequired:        {Title: "Bad Request", Detail: "Price plan ID is required", StatusCode: 400, Code: "PRC0-16"},
+	ErrKeyPriceFeatureIDRequired:     {Title: "Bad Request", Detail: "Price feature ID is required", StatusCode: 400, Code: "PRC0-17"},
+	ErrKeyPricePlanPublishRequiresCost: {
+		Title:      "Bad Request",
+		Detail:     "Published price plans require at least one valid cost",
+		StatusCode: 400,
+		Code:       "PRC0-18",
+	},
+	ErrKeyPricePlanPublishRequiresProvider: {
+		Title:      "Bad Request",
+		Detail:     "Published price plans require at least one provider reference",
+		StatusCode: 400,
+		Code:       "PRC0-19",
+	},
 }

@@ -43,6 +43,21 @@ const (
 
 	// ErrKeyPriceFeatureNotFound is returned when a feature cannot be found.
 	ErrKeyPriceFeatureNotFound = "PriceFeatureNotFound"
+
+	// ErrKeyPriceUserIDRequired is returned when an operation requires a user ID.
+	ErrKeyPriceUserIDRequired = "PriceUserIDRequired"
+
+	// ErrKeyPricePlanIDRequired is returned when an operation requires a price plan ID.
+	ErrKeyPricePlanIDRequired = "PricePlanIDRequired"
+
+	// ErrKeyPriceFeatureIDRequired is returned when an operation requires a feature ID.
+	ErrKeyPriceFeatureIDRequired = "PriceFeatureIDRequired"
+
+	// ErrKeyPricePlanPublishRequiresCost is returned when publishing a plan without a valid cost.
+	ErrKeyPricePlanPublishRequiresCost = "PricePlanPublishRequiresCost"
+
+	// ErrKeyPricePlanPublishRequiresProvider is returned when publishing a plan without provider references.
+	ErrKeyPricePlanPublishRequiresProvider = "PricePlanPublishRequiresProvider"
 )
 
 const (
