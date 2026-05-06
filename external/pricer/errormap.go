@@ -16,4 +16,6 @@ var PricerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrKeyInvalidPriceCurrency:       {Title: "Bad Request", Detail: "Invalid price currency", StatusCode: 400, Code: "PRC0-10"},
 	ErrKeyDuplicatePlanFeatureRef:    {Title: "Bad Request", Detail: "Duplicate plan feature reference", StatusCode: 400, Code: "PRC0-11"},
 	ErrKeyMissingPlanFeatureRef:      {Title: "Bad Request", Detail: "Missing plan feature reference", StatusCode: 400, Code: "PRC0-12"},
+	ErrKeyPricePlanNotFound:          {Title: "Not Found", Detail: "Price plan not found", StatusCode: 404, Code: "PRC0-13"},
+	ErrKeyPriceFeatureNotFound:       {Title: "Not Found", Detail: "Price feature not found", StatusCode: 404, Code: "PRC0-14"},
 }

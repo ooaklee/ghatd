@@ -37,6 +37,12 @@ const (
 
 	// ErrKeyMissingPlanFeatureRef is returned when a feature reference has no feature identifier.
 	ErrKeyMissingPlanFeatureRef = "MissingPlanFeatureRef"
+
+	// ErrKeyPricePlanNotFound is returned when a price plan cannot be found.
+	ErrKeyPricePlanNotFound = "PricePlanNotFound"
+
+	// ErrKeyPriceFeatureNotFound is returned when a feature cannot be found.
+	ErrKeyPriceFeatureNotFound = "PriceFeatureNotFound"
 )
 
 const (
