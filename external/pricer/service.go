@@ -3,8 +3,11 @@ package pricer
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
@@ -56,6 +59,11 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		return nil, errors.New(ErrKeyPriceUserIDRequired)
 	}
 
+	publishedAt, err := normaliseDateParam(req.PublishAtUtc)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+	}
+
 	pricePlan := &PricePlan{
 		Slug:          req.Slug,
 		Name:          strings.TrimSpace(req.Name),
@@ -67,7 +75,7 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		Metadata:      req.Metadata,
 		CreatedByID:   req.UserID,
 		UpdatedByID:   req.UserID,
-		PublishedAt:   strings.TrimSpace(req.PublishAtUtc),
+		PublishedAt:   publishedAt,
 		PublishedByID: "",
 	}
 
@@ -235,6 +243,9 @@ func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) 
 	if req == nil {
 		req = &GetPricePlansRequest{}
 	}
+	if err := normalisePricePlanDateRanges(req); err != nil {
+		return nil, err
+	}
 	defaultPricePlanListRequest(req)
 
 	total, err := s.PricerRepository.GetTotalPricePlans(ctx, req)
@@ -278,6 +289,11 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 		return nil, errors.New(ErrKeyPriceUserIDRequired)
 	}
 
+	publishedAt, err := normaliseDateParam(req.PublishAtUtc)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+	}
+
 	pricePlan, err := s.PricerRepository.GetPricePlanByID(ctx, req.ID, &GetPricePlanByIDRequest{
 		IncludeFeatures:  true,
 		IncludeCosts:     true,
@@ -289,8 +305,8 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 	}
 
 	pricePlan.Status = PricePlanStatusPublished
-	if publishAt := strings.TrimSpace(req.PublishAtUtc); publishAt != "" {
-		pricePlan.PublishedAt = publishAt
+	if publishedAt != "" {
+		pricePlan.PublishedAt = publishedAt
 	} else {
 		pricePlan.PublishedAt = toolbox.TimeNowUTC()
 	}
@@ -385,6 +401,11 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 		return nil, errors.New(ErrKeyPriceUserIDRequired)
 	}
 
+	publishedAt, err := normaliseDateParam(req.PublishAtUtc)
+	if err != nil {
+		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+	}
+
 	feature := &PriceFeature{
 		Slug:          req.Slug,
 		Name:          strings.TrimSpace(req.Name),
@@ -395,7 +416,7 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 		Metadata:      req.Metadata,
 		CreatedByID:   req.UserID,
 		UpdatedByID:   req.UserID,
-		PublishedAt:   strings.TrimSpace(req.PublishAtUtc),
+		PublishedAt:   publishedAt,
 		PublishedByID: "",
 	}
 
@@ -505,6 +526,9 @@ func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*Ge
 	if req == nil {
 		req = &GetFeaturesRequest{}
 	}
+	if err := normaliseFeatureDateRanges(req); err != nil {
+		return nil, err
+	}
 	defaultFeatureListRequest(req)
 
 	total, err := s.PricerRepository.GetTotalFeatures(ctx, req)
@@ -559,6 +583,9 @@ func (s *Service) DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) 
 	return &DeleteFeatureResponse{Feature: feature}, nil
 }
 
+// validatePricePlanCanPublish validates that a price plan is ready for publishing.
+// It checks that the plan is not nil, has at least one cost, all costs are valid,
+// and has at least one valid provider reference at the plan or cost level.
 func validatePricePlanCanPublish(pricePlan *PricePlan) error {
 	if pricePlan == nil {
 		return errors.New(ErrKeyInvalidPricePlanPayload)
@@ -576,6 +603,9 @@ func validatePricePlanCanPublish(pricePlan *PricePlan) error {
 	return nil
 }
 
+// pricePlanHasProviderRef checks if a price plan has at least one valid provider reference.
+// It returns true if the plan itself has valid provider references or if any of its costs
+// have valid provider references.
 func pricePlanHasProviderRef(pricePlan *PricePlan) bool {
 	if len(pricePlan.ProviderRefs) > 0 && ValidatePriceProviderRefs(pricePlan.ProviderRefs) == nil {
 		return true
@@ -590,6 +620,9 @@ func pricePlanHasProviderRef(pricePlan *PricePlan) bool {
 	return false
 }
 
+// defaultPricePlanListRequest applies default values to a price plan list request.
+// Sets default ordering to "created_at_desc", per-page limit to 25, and page number to 1
+// if not already specified.
 func defaultPricePlanListRequest(req *GetPricePlansRequest) {
 	if req.Order == "" {
 		req.Order = "created_at_desc"
@@ -602,6 +635,42 @@ func defaultPricePlanListRequest(req *GetPricePlansRequest) {
 	}
 }
 
+// normalisePricePlanDateRanges parses and validates all date range fields in a price plan
+// list request, converting them to RFC3339 nano UTC format. Returns an error if any date
+// cannot be parsed.
+func normalisePricePlanDateRanges(req *GetPricePlansRequest) error {
+	var err error
+	req.CreatedAtFrom, err = normaliseDateParam(req.CreatedAtFrom)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.CreatedAtTo, err = normaliseDateParam(req.CreatedAtTo)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.PublishedAtFrom, err = normaliseDateParam(req.PublishedAtFrom)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.PublishedAtTo, err = normaliseDateParam(req.PublishedAtTo)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.DeletedAtFrom, err = normaliseDateParam(req.DeletedAtFrom)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.DeletedAtTo, err = normaliseDateParam(req.DeletedAtTo)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+
+	return nil
+}
+
+// defaultFeatureListRequest applies default values to a feature list request.
+// Sets default ordering to "created_at_desc", per-page limit to 25, and page number to 1
+// if not already specified.
 func defaultFeatureListRequest(req *GetFeaturesRequest) {
 	if req.Order == "" {
 		req.Order = "created_at_desc"
@@ -612,4 +681,68 @@ func defaultFeatureListRequest(req *GetFeaturesRequest) {
 	if req.Page == 0 {
 		req.Page = 1
 	}
+}
+
+// normaliseFeatureDateRanges parses and validates all date range fields in a feature
+// list request, converting them to RFC3339 nano UTC format. Returns an error if any date
+// cannot be parsed.
+func normaliseFeatureDateRanges(req *GetFeaturesRequest) error {
+	var err error
+	req.CreatedAtFrom, err = normaliseDateParam(req.CreatedAtFrom)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.CreatedAtTo, err = normaliseDateParam(req.CreatedAtTo)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.PublishedAtFrom, err = normaliseDateParam(req.PublishedAtFrom)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.PublishedAtTo, err = normaliseDateParam(req.PublishedAtTo)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.DeletedAtFrom, err = normaliseDateParam(req.DeletedAtFrom)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+	req.DeletedAtTo, err = normaliseDateParam(req.DeletedAtTo)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDate)
+	}
+
+	return nil
+}
+
+// normaliseDateParam parses a date string and returns it in RFC3339 nano UTC format.
+// Accepts Unix timestamps (as integers), RFC3339 formats, and common date formats like
+// "2006-01-02". Returns an error if the date cannot be parsed.
+func normaliseDateParam(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+
+	if unixTimestamp, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return time.Unix(unixTimestamp, 0).UTC().Format(common.RFC3339NanoUTC), nil
+	}
+
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		common.RFC3339NanoUTC,
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+
+	for _, format := range formats {
+		parsed, err := time.Parse(format, value)
+		if err == nil {
+			return parsed.UTC().Format(common.RFC3339NanoUTC), nil
+		}
+	}
+
+	return "", errors.New(ErrKeyInvalidPriceDate)
 }

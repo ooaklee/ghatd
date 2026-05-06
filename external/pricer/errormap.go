@@ -33,4 +33,6 @@ var PricerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 		StatusCode: 400,
 		Code:       "PRC0-19",
 	},
+	ErrKeyInvalidPriceQueryParam: {Title: "Bad Request", Detail: "Invalid price query parameter", StatusCode: 400, Code: "PRC0-20"},
+	ErrKeyInvalidPriceDate:       {Title: "Bad Request", Detail: "Invalid price date value", StatusCode: 400, Code: "PRC0-21"},
 }

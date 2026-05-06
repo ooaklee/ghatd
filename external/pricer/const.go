@@ -58,6 +58,12 @@ const (
 
 	// ErrKeyPricePlanPublishRequiresProvider is returned when publishing a plan without provider references.
 	ErrKeyPricePlanPublishRequiresProvider = "PricePlanPublishRequiresProvider"
+
+	// ErrKeyInvalidPriceQueryParam is returned when a price query parameter is invalid.
+	ErrKeyInvalidPriceQueryParam = "InvalidPriceQueryParam"
+
+	// ErrKeyInvalidPriceDate is returned when a price date value cannot be parsed.
+	ErrKeyInvalidPriceDate = "InvalidPriceDate"
 )
 
 const (
