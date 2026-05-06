@@ -13,6 +13,9 @@ type billingmanagerHandler interface {
 	GetUserBillingEvents(w http.ResponseWriter, r *http.Request)
 	GetUserSubscriptionStatus(w http.ResponseWriter, r *http.Request)
 	GetUserBillingDetail(w http.ResponseWriter, r *http.Request)
+	GetPricingPlans(w http.ResponseWriter, r *http.Request)
+	GetPricePlanBySlug(w http.ResponseWriter, r *http.Request)
+	GetPricingFeatures(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -44,6 +47,11 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	billingmanagerOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
 	billingmanagerOpenRoutes.HandleFunc("/billings/{providerName}/webhooks", request.Handler.ProcessBillingProviderWebhooks).Methods(http.MethodPost, http.MethodOptions)
+
+	billingmanagerPricingOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix + "/pricing").Subrouter()
+	billingmanagerPricingOpenRoutes.HandleFunc("/plans", request.Handler.GetPricingPlans).Methods(http.MethodGet, http.MethodOptions)
+	billingmanagerPricingOpenRoutes.HandleFunc("/plans/{slug}", request.Handler.GetPricePlanBySlug).Methods(http.MethodGet, http.MethodOptions)
+	billingmanagerPricingOpenRoutes.HandleFunc("/features", request.Handler.GetPricingFeatures).Methods(http.MethodGet, http.MethodOptions)
 
 	billingmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
 	billingmanagerActiveOnlyRoutes.HandleFunc("/billings/users/{userId}/events", request.Handler.GetUserBillingEvents).Methods(http.MethodGet, http.MethodOptions)

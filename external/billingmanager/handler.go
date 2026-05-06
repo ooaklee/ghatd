@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/reply"
 )
 
@@ -13,6 +14,9 @@ type BillingManagerService interface {
 	GetUserSubscriptionStatus(ctx context.Context, r *GetUserSubscriptionStatusRequest) (*GetUserSubscriptionStatusResponse, error)
 	GetUserBillingDetail(ctx context.Context, r *GetUserBillingDetailRequest) (*GetUserBillingDetailResponse, error)
 	GetUserBillingEvents(ctx context.Context, r *GetUserBillingEventsRequest) (*GetUserBillingEventsResponse, error)
+	GetPricingPlans(ctx context.Context, r *GetPricingPlansRequest) (*GetPricingPlansResponse, error)
+	GetPricePlanBySlug(ctx context.Context, r *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
+	GetPricingFeatures(ctx context.Context, r *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error)
 }
 
 // BillingManagerValidator expected methods of a valid
@@ -124,7 +128,71 @@ func (h *Handler) GetUserBillingDetail(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.BillingDetail)
 }
 
+// GetPricingPlans handles request to get pricing plans.
+func (h *Handler) GetPricingPlans(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetPricingPlansRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetPricingPlans(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if request.Meta {
+		h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.PricePlans, reply.WithMeta(response.GetMetaData()))
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.PricePlans)
+}
+
+// GetPricePlanBySlug handles request to get a pricing plan by slug.
+func (h *Handler) GetPricePlanBySlug(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetPricePlanBySlugRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetPricePlanBySlug(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.PricePlan)
+}
+
+// GetPricingFeatures handles request to get pricing feature catalog items.
+func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetPriceFeaturesRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetPricingFeatures(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if request.Meta {
+		h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Features, reply.WithMeta(response.GetMetaData()))
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Features)
+}
+
 // getBaseResponseHandler returns response handler configured with auth error map
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(h.ErrorMaps)
+	errorMaps := []reply.ErrorManifest{BillingManagerErrorMap, pricer.PricerErrorMap}
+	errorMaps = append(errorMaps, h.ErrorMaps...)
+
+	return reply.NewReplier(errorMaps)
 }

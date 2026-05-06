@@ -19,4 +19,5 @@ var BillingManagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrKeyBillingManagerRequiresUserIdIsMissing:               {Title: "Bad Request", Detail: "User ID is required", StatusCode: 400, Code: "BM00-010"},
 	ErrKeyBillingManagerUserUnauthorisedToCarryOutOperation:   {Title: "Forbidden", Detail: "User not authorised to carry out operation", StatusCode: 403, Code: "BM00-011"},
 	ErrKeyBillingManagerNoUserIdentifyingInformationInPayload: {Title: "Bad Request", Detail: "No user identifying information present in payload", StatusCode: 400, Code: "BM00-012"},
+	ErrKeyBillingManagerPricerServiceNotSet:                   {Title: "Internal Server Error", Detail: "Pricing service is not configured", StatusCode: 500, Code: "BM00-013"},
 }

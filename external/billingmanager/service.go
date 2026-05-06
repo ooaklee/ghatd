@@ -11,6 +11,7 @@ import (
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
@@ -43,6 +44,13 @@ type BillingService interface {
 	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
 }
 
+// PricerService defines the pricing operations exposed through billing manager.
+type PricerService interface {
+	GetPricePlans(ctx context.Context, req *pricer.GetPricePlansRequest) (*pricer.GetPricePlansResponse, error)
+	GetPricePlanBySlug(ctx context.Context, req *pricer.GetPricePlanBySlugRequest) (*pricer.GetPricePlanBySlugResponse, error)
+	GetFeatures(ctx context.Context, req *pricer.GetFeaturesRequest) (*pricer.GetFeaturesResponse, error)
+}
+
 // Service orchestrates webhook processing and billing operations
 // It uses paymentprovider for webhook verification and billingstore for persistence
 type Service struct {
@@ -50,6 +58,7 @@ type Service struct {
 	BillingService   BillingService
 	AuditService     AuditService // Optional audit logging
 	UserService      UserService  // Optional user service integration
+	PricerService    PricerService
 }
 
 // NewService creates a new billing manager service
@@ -69,6 +78,12 @@ func (s *Service) WithAuditService(audit AuditService) *Service {
 // WithUserService adds user service integration
 func (s *Service) WithUserService(userSvc UserService) *Service {
 	s.UserService = userSvc
+	return s
+}
+
+// WithPricerService adds pricing catalog read capability.
+func (s *Service) WithPricerService(pricerSvc PricerService) *Service {
+	s.PricerService = pricerSvc
 	return s
 }
 
@@ -152,6 +167,48 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 	}
 
 	return nil
+}
+
+// GetPricingPlans retrieves pricing plans for external BMS clients.
+func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansRequest) (*GetPricingPlansResponse, error) {
+	if s.PricerService == nil {
+		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+	}
+
+	response, err := s.PricerService.GetPricePlans(ctx, req.GetPricePlansRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPricingPlansResponse{GetPricePlansResponse: response}, nil
+}
+
+// GetPricePlanBySlug retrieves a pricing plan by slug for external BMS clients.
+func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error) {
+	if s.PricerService == nil {
+		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+	}
+
+	response, err := s.PricerService.GetPricePlanBySlug(ctx, req.GetPricePlanBySlugRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPricePlanBySlugResponse{GetPricePlanBySlugResponse: response}, nil
+}
+
+// GetPricingFeatures retrieves pricing feature catalog items for external BMS clients.
+func (s *Service) GetPricingFeatures(ctx context.Context, req *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error) {
+	if s.PricerService == nil {
+		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+	}
+
+	response, err := s.PricerService.GetFeatures(ctx, req.GetFeaturesRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPriceFeaturesResponse{GetFeaturesResponse: response}, nil
 }
 
 // GetUserSubscriptionStatus retrieves a user's subscription status

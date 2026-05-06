@@ -1,6 +1,10 @@
 package billingmanager
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/ooaklee/ghatd/external/pricer"
+)
 
 // ProcessBillingProviderWebhooksRequest represents a request to process webhooks
 type ProcessBillingProviderWebhooksRequest struct {
@@ -60,4 +64,28 @@ type GetUserBillingDetailRequest struct {
 	// RequestingUserID is the ID of the user making the
 	// request (for permission checks)
 	RequestingUserID string
+}
+
+// GetPricingPlansRequest wraps the pricer request used to list price plans through BMS.
+type GetPricingPlansRequest struct {
+	// UserID is the user making the request (for permission checks)
+	UserID string
+
+	*pricer.GetPricePlansRequest
+}
+
+// GetPricePlanBySlugRequest wraps the pricer request used to get a price plan by slug through BMS.
+type GetPricePlanBySlugRequest struct {
+	// UserID is the user making the request (for permission checks)
+	UserID string
+
+	*pricer.GetPricePlanBySlugRequest
+}
+
+// GetPriceFeaturesRequest wraps the pricer request used to list price features through BMS.
+type GetPriceFeaturesRequest struct {
+	// UserID is the user making the request (for permission checks)
+	UserID string
+
+	*pricer.GetFeaturesRequest
 }

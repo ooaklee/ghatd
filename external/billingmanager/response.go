@@ -1,6 +1,9 @@
 package billingmanager
 
-import "github.com/ooaklee/ghatd/external/toolbox"
+import (
+	"github.com/ooaklee/ghatd/external/pricer"
+	"github.com/ooaklee/ghatd/external/toolbox"
+)
 
 // GetUserBillingDetailResponse represents the response containing billing information for a user
 type GetUserBillingDetailResponse struct {
@@ -50,4 +53,37 @@ type GetUserSubscriptionStatusResponse struct {
 
 	// SubscriptionStatus holds the user's subscription status details
 	SubscriptionStatus *SubscriptionStatus `json:"subscription_status,omitempty"`
+}
+
+// GetPricingPlansResponse wraps the pricer response used to list price plans through BMS.
+type GetPricingPlansResponse struct {
+	*pricer.GetPricePlansResponse
+}
+
+// GetMetaData returns response pagination metadata.
+func (g *GetPricingPlansResponse) GetMetaData() map[string]interface{} {
+	if g == nil || g.GetPricePlansResponse == nil {
+		return map[string]interface{}{}
+	}
+
+	return g.GetPricePlansResponse.GetMetaData()
+}
+
+// GetPricePlanBySlugResponse wraps the pricer response used to get a price plan by slug through BMS.
+type GetPricePlanBySlugResponse struct {
+	*pricer.GetPricePlanBySlugResponse
+}
+
+// GetPriceFeaturesResponse wraps the pricer response used to list price features through BMS.
+type GetPriceFeaturesResponse struct {
+	*pricer.GetFeaturesResponse
+}
+
+// GetMetaData returns response pagination metadata.
+func (g *GetPriceFeaturesResponse) GetMetaData() map[string]interface{} {
+	if g == nil || g.GetFeaturesResponse == nil {
+		return map[string]interface{}{}
+	}
+
+	return g.GetFeaturesResponse.GetMetaData()
 }
