@@ -379,25 +379,22 @@ func AddNonSecureCookie(w http.ResponseWriter, environment, cookieName, cookieVa
 // RemoveCookiesWithName is handling removing the passed cookie from the client
 func RemoveCookiesWithName(w http.ResponseWriter, environment, cookieName, cookieDomain string) {
 
-	expirationNow := time.Now()
+	var epoch = time.Unix(0, 0)
 
 	removeReferencedCookie := http.Cookie{
 		Name:    cookieName,
 		Domain:  cookieDomain,
 		Path:    "/",
-		Expires: expirationNow,
+		Expires: epoch,
 		MaxAge:  -1,
 		Secure: func(env string) bool {
 			return env != "local"
 		}(environment),
-		HttpOnly: true,
 		SameSite: func(env string) http.SameSite {
-
 			if env != "local" {
 				return http.SameSiteStrictMode
 			}
 			return http.SameSiteLaxMode
-
 		}(environment),
 	}
 
@@ -454,25 +451,23 @@ func AddAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessToke
 // RemoveAuthCookies is handling removing the auth token cookies (access & refresh) from the client
 func RemoveAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessTokenCookiePrefix, refressTokenExpiresAt string) {
 
-	expirationNow := time.Now()
+	var epoch = time.Unix(0, 0)
 
 	removeAccessAuthcookie := http.Cookie{
 		Name:    accessTokenCookiePrefix,
 		Domain:  cookieDomain,
 		Path:    "/",
-		Expires: expirationNow,
+		Expires: epoch,
 		MaxAge:  -1,
 		Secure: func(env string) bool {
 			return env != "local"
 		}(environment),
 		HttpOnly: true,
 		SameSite: func(env string) http.SameSite {
-
 			if env != "local" {
 				return http.SameSiteStrictMode
 			}
 			return http.SameSiteLaxMode
-
 		}(environment),
 	}
 
@@ -481,19 +476,17 @@ func RemoveAuthCookies(w http.ResponseWriter, environment, cookieDomain, accessT
 		Name:    refressTokenExpiresAt,
 		Domain:  cookieDomain,
 		Path:    "/",
-		Expires: expirationNow,
+		Expires: epoch,
 		MaxAge:  -1,
 		Secure: func(env string) bool {
 			return env != "local"
 		}(environment),
 		HttpOnly: true,
 		SameSite: func(env string) http.SameSite {
-
 			if env != "local" {
 				return http.SameSiteStrictMode
 			}
 			return http.SameSiteLaxMode
-
 		}(environment),
 	}
 

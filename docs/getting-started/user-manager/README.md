@@ -45,6 +45,18 @@ These require a valid JWT or API token.
 -   `GET /api/v1/ums/groups/{groupID}`: Get enriched detail for a specific group (members, owner, etc.). Supports `prefix_name`.
 -   `GET /api/v1/ums/groups/{groupID}/stats`: Get statistics for a specific group. Supports `prefix_name`.
 
+### Optional custom middleware for `GET /me`
+
+`AttachRoutesRequest` supports an optional middleware field named
+`CustomMeEndpointValidApiTokenOrJWTMiddleware`.
+
+-   If provided, it is used only for `GET /api/v1/ums/me`.
+-   If omitted (`nil`), route setup falls back to `ValidApiTokenOrJWTMiddleware` for that endpoint.
+
+This is useful when `/me` needs endpoint-specific auth error response handling while the rest of authenticated routes continue to use the standard middleware.
+
+For implementation details and usage examples, see [`external/accessmanager/middleware/custom_middleware.go`](../../external/accessmanager/middleware/custom_middleware.go).
+
 ### Quick note on `prefix_name`
 
 When `prefix_name=true`, child group names are returned in a root-prefixed format (for example `school/year-10`).
@@ -134,6 +146,8 @@ func main() {
 		AdminOnlyMiddleware:                mockMiddleware,
 		ActiveValidApiTokenOrJWTMiddleware: mockMiddleware,
 		ValidApiTokenOrJWTMiddleware:       mockMiddleware,
+		// Optional: custom middleware for GET /api/v1/ums/me only.
+		CustomMeEndpointValidApiTokenOrJWTMiddleware: mockMiddleware,
 		RateLimitOrActiveMiddleware:        mockMiddleware,
 	})
 

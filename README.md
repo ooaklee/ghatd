@@ -28,7 +28,7 @@ GHAT(D) offers modular packages that can be used both together and independently
 ### Authentication & Verification
 A dual-channel verification system providing both magic link and human-readable code entry.
 
-- **[Access Manager](./external/accessmanager/)** - Complete authentication and authorisation with email-based verification and login
+- **[Access Manager](./docs/getting-started/access-manager/)** - Complete authentication and authorisation with email-based verification, login, OAuth, and API token management
   - `accessmanager` - User creation, login, registration, email verification, OAuth, API token management
   - `accessmanager/middleware` - JWT, API token, rate-limiting, and hardened code-verification middleware
   - `accessmanager/helpers` - Context-transmission utilities and unique code generation

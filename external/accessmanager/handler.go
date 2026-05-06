@@ -10,6 +10,7 @@ import (
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply"
+	"go.uber.org/zap"
 )
 
 // AccessmanagerService manages business logic around accessmanager request
@@ -371,7 +372,10 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 	if refreshTokenCookie != nil {
 
 		log.Info("refresh-token-cookie-found-while-logging-out-will-be-removed")
-		_, _, _ = h.Service.RemoveRefreshTokenWithCookieValue(r.Context(), refreshTokenCookie.Value)
+		_, _, err := h.Service.RemoveRefreshTokenWithCookieValue(r.Context(), refreshTokenCookie.Value)
+		if err != nil {
+			log.Warn("failed-to-remove-refresh-token-from-store-during-logout", zap.Error(err))
+		}
 	}
 
 	accessTokenCookie, err := r.Cookie(h.CookiePrefixAuthToken)
@@ -410,10 +414,6 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 
 	err = h.Service.LogoutUser(r.Context(), r)
 	if err != nil {
-		if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
-			return
-		}
-
 		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

@@ -77,6 +77,12 @@ type AttachRoutesRequest struct {
 
 	// RateLimitOrActiveMiddleware middleware used to open endpoints up (with rate limite) or active users only
 	RateLimitOrActiveMiddleware mux.MiddlewareFunc
+
+	// CustomMeEndpointValidApiTokenOrJWTMiddleware is middleware exclusively
+	// for the /me endpoint. Initially this exception was created  to stop the
+	// return of soft-4XX (401) status, which was stopping Google from indexing
+	// pages on their search engine
+	CustomMeEndpointValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
 }
 
 // AttachRoutes attaches usermanager handler to corresponding
@@ -92,8 +98,18 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerActiveOnlyRoutesPre.HandleFunc("/groups/config", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerActiveOnlyRoutesPre.Use(request.ActiveValidApiTokenOrJWTMiddleware)
 
+	// Special case route for /me endpoint to allow user to handle situations such
+	// as avoiding 401s being returned to Google when it tries to index the page
+	// without credentials
+	userMeEndpointRoute := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
+	userMeEndpointRoute.HandleFunc("/me", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
+	if request.CustomMeEndpointValidApiTokenOrJWTMiddleware != nil {
+		userMeEndpointRoute.Use(request.CustomMeEndpointValidApiTokenOrJWTMiddleware)
+	} else {
+		userMeEndpointRoute.Use(request.ValidApiTokenOrJWTMiddleware)
+	}
+
 	usermanagerAuthenticatedRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/micro", request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/enriched", request.Handler.GetEnrichedUserProfile).Methods(http.MethodGet, http.MethodOptions)
