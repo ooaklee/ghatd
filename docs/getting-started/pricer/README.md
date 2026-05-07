@@ -18,7 +18,7 @@ The pricer package is self-contained, but integrates with other packages in the 
 A price plan is a named tier or product offering. It has a lifecycle, one or more costs, optional feature references, and optional provider refs.
 
 | Field | Type | Description |
-|---|---|---|
+|---|---|---|---|
 | `id` | `string` | Unique identifier (UUID v4) |
 | `slug` | `string` | URL-safe kebab-case identifier |
 | `name` | `string` | Display name |
@@ -26,7 +26,10 @@ A price plan is a named tier or product offering. It has a lifecycle, one or mor
 | `status` | `string` | Lifecycle state (see [Lifecycle](#lifecycle)) |
 | `features` | `[]PlanFeatureRef` | Ordered feature catalog references |
 | `costs` | `[]PriceCost` | Monetary costs attached to this plan |
+| `discounts` | `[]PriceDiscount` | Optional typed discount rules (amount or percent) |
+| `payment_terms` | `PricePaymentTerms` | Optional payment terms (collection method, due days) |
 | `provider_refs` | `[]PriceProviderRef` | Links to provider-side identifiers |
+| `display_order` | `int` | Optional visual sort position for public listings |
 | `metadata` | `map[string]interface{}` | Optional project-specific data |
 | `published_at` / `published_by_id` | `string` | Publication metadata |
 | `created_at` / `created_by_id` | `string` | Creation metadata |
@@ -73,6 +76,34 @@ A monetary cost for a plan, with billing cadence and optional trial/setup fees.
 | `trial_period_days` | `int` | Optional trial days before charge |
 | `setup_fee_amount` | `int64` | Optional one-off setup fee in lowest currency unit |
 | `provider_refs` | `[]PriceProviderRef` | Optional provider-side price identifiers |
+| `metadata` | `map[string]interface{}` | Optional project-specific data |
+
+### Price Discount
+
+A typed discount rule that can be attached to a plan. Discounts can reduce a fixed amount or a percentage of the cost.
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | `string` | Admin-facing display label |
+| `type` | `string` | Discount type: `amount` or `percent` (see [Discount Types](#discount-types)) |
+| `amount` | `int64` | Fixed discount in lowest currency unit (for amount discounts) |
+| `currency` | `string` | ISO 4217 currency code (required for amount discounts) |
+| `percent_bps` | `int64` | Percentage discount in basis points, 0–10000 (for percent discounts) |
+| `starts_at` | `string` | Optional date the discount becomes active |
+| `ends_at` | `string` | Optional date the discount stops being active |
+| `provider_refs` | `[]PriceProviderRef` | Optional provider-side coupon or promotion identifiers |
+| `metadata` | `map[string]interface{}` | Optional project-specific data |
+
+### Price Payment Terms
+
+Defines how and when payment should be collected for a plan.
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | `string` | Admin-facing display label (e.g. "Net 30") |
+| `due_days` | `int` | Number of days before payment is due |
+| `collection_method` | `string` | See [Collection Methods](#collection-methods) |
+| `notes` | `string` | Admin-facing payment instructions or context |
 | `metadata` | `map[string]interface{}` | Optional project-specific data |
 
 ### Price Provider Reference
@@ -132,6 +163,21 @@ Links internal plan or cost records to provider-side identifiers.
 | `stripe` | Stripe |
 | `paddle` | Paddle |
 | `kofi` | Ko-fi |
+
+#### Discount Types
+
+| Value | Description |
+|---|---|
+| `amount` | Fixed monetary discount (requires `amount` and `currency`) |
+| `percent` | Percentage discount in basis points (requires `percent_bps`, 0–10000) |
+
+#### Collection Methods
+
+| Value | Description |
+|---|---|
+| `manual` | Payment is collected manually (offline) |
+| `automatic` | Payment is collected automatically via the payment provider |
+| `invoice` | Payment is invoice-based with specified due terms |
 
 ## Lifecycle
 
@@ -252,9 +298,8 @@ GET /api/v1/bms/pricing/plans?with_status=published&include_costs=true&include_f
                     ]
                 }
             ],
-            "metadata": {
-                "display_order": 2
-            },
+            "display_order": 2,
+            "metadata": {},
             "published_at": "2025-01-15T10:00:00.000000000Z",
             "published_by_id": "admin-user-id",
             "created_at": "2025-01-10T08:00:00.000000000Z",
@@ -394,6 +439,58 @@ GET /api/v1/bms/pricing/features?with_types=boolean,quantity&per_page=25&page=1
 }
 ```
 
+### GET `/api/v1/pricing/validate-slug`
+
+Validates a proposed slug for a pricing resource (plan or feature) without persisting anything. Returns the normalised slug, availability, and a human-readable hint.
+
+#### Query Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `name` | `string` | Display name used to derive a slug when `slug` is not provided |
+| `slug` | `string` | Explicit slug candidate to validate |
+| `resource_type` | `string` | Pricing resource type: `plan`, `feature`, or `plan_feature_ref` (default: `plan`) |
+| `exclude_id` | `string` | Existing resource ID to ignore during edit validation |
+
+#### Example Request
+
+```
+GET /api/v1/pricing/validate-slug?name=Pro%20Plan&resource_type=plan
+```
+
+#### Example Response
+
+```json
+{
+    "data": {
+        "raw_name": "Pro Plan",
+        "raw_slug": "",
+        "slug": "pro-plan",
+        "resource_type": "plan",
+        "adjusted": true,
+        "available": true,
+        "hint": "pro-plan will be the stored plan slug, adjusted to comply with slug rules."
+    }
+}
+```
+
+If the slug is already taken:
+
+```json
+{
+    "data": {
+        "slug": "pro-plan",
+        "resource_type": "plan",
+        "adjusted": false,
+        "available": false,
+        "existing_id": "existing-plan-uuid",
+        "hint": "The slug \"pro-plan\" is already used by another plan."
+    }
+}
+```
+
+For `plan_feature_ref`, the endpoint checks whether a feature with the given slug exists. `available` is `true` only when a matching feature is found, making it useful for real-time validation when adding feature references to a plan.
+
 ## Quick Start: Setting Up Pricer
 
 ### 1. Import the Package
@@ -457,13 +554,25 @@ plan, err := pricerService.CreatePricePlan(ctx, &pricer.CreatePricePlanRequest{
             BillingCadence: pricer.PriceBillingCadenceMonthly,
         },
     },
+    Discounts: []pricer.PriceDiscount{
+        {
+            Type:       pricer.PriceDiscountTypePercent,
+            PercentBps: 2000, // 20% off
+        },
+    },
+    PaymentTerms: &pricer.PricePaymentTerms{
+        Label:            "Net 30",
+        DueDays:          30,
+        CollectionMethod: pricer.PricePaymentCollectionMethodInvoice,
+    },
     ProviderRefs: []pricer.PriceProviderRef{
         {
             Provider:         pricer.PriceProviderStripe,
             ProviderPriceID:  "price_stripe_pro_monthly",
         },
     },
-    PublishNow: true,
+    DisplayOrder: intPtr(2),
+    PublishNow:   true,
 })
 ```
 
@@ -641,7 +750,6 @@ Here's a list of areas for improvement in future iterations of `pricer`. These s
 - [ ] Usage-based / metered pricing
 - [ ] Tiered pricing (volume discounts)
 - [ ] Per-unit add-on pricing
-- [ ] Coupon and discount support
 - [ ] Multi-currency cost entries per plan
 
 ### Integrations

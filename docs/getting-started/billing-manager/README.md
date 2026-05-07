@@ -1,6 +1,8 @@
 # Billing Manager
 
-The recommended billing functionality comes in three independent, composable packages: `paymentprovider`, `billing`, and `billingmanager`. For most application features, you should use the high-level `billingmanager` package, which handles webhook processing, subscription management, and billing event tracking with integrated audit logging.
+The recommended billing functionality comes in three independent, composable packages: `paymentprovider`, `billing`, and `billingmanager`. For most application features, you should use the high-level `billingmanager` package, which handles webhook processing, subscription management, billing event tracking, and **read-only pricing catalog endpoints** — all with integrated audit logging.
+
+The billing manager can also expose the pricer package's read-only pricing endpoints through `WithPricerService()`, making plans and features available to frontend and client applications at `/api/v1/bms/pricing/plans`, `/api/v1/bms/pricing/plans/{slug}`, and `/api/v1/bms/pricing/features`.
 
 ## Core Packages Overview
 
@@ -450,6 +452,9 @@ This sets up the following routes automatically:
 
 **Open Routes (No Authentication):**
 - `POST /api/v1/bms/billings/{providerName}/webhooks` - Process payment provider webhooks
+- `GET /api/v1/bms/pricing/plans` - List published price plans (when wired via `WithPricerService`)
+- `GET /api/v1/bms/pricing/plans/{slug}` - Get a single published price plan by slug
+- `GET /api/v1/bms/pricing/features` - List published feature catalog items
 
 **Authenticated User Routes:**
 - `GET /api/v1/bms/billings/users/{userId}/events` - Get a user's billing events.
