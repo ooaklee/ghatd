@@ -156,7 +156,7 @@ A price plan moves through three lifecycle states:
 
 Features do not have a formal lifecycle — they are always available once created, and are removed via soft delete.
 
-## BMS Read Endpoints for Companion App
+## BMS Read Endpoints for Client integration
 
 The billing manager service exposes **read-only** pricing endpoints designed for frontend and Companion app consumption. These endpoints require no authentication.
 
@@ -467,7 +467,7 @@ plan, err := pricerService.CreatePricePlan(ctx, &pricer.CreatePricePlanRequest{
 })
 ```
 
-### 5. Expose via BMS for Companion App
+### 5. Expose via BMS for Client integration
 
 ```go
 import "github.com/ooaklee/ghatd/external/billingmanager"
@@ -567,9 +567,65 @@ migrate.Register(
     pricerMigrations.InitPricingIndexesUp,
     pricerMigrations.InitPricingIndexesDown,
 )
+
+migrate.Register(
+    pricerMigrations.InitPricingSeedUp,
+    pricerMigrations.InitPricingSeedDown,
+)
+
+migrate.Register(
+    pricerMigrations.InitTestPlansSeedUp,
+    pricerMigrations.InitTestPlansSeedDown,
+)
 ```
 
-A seed migration is also provided with example feature catalog entries and a starter plan. See `external/pricer/migrations/seed_pricing.go` for details.
+Seed migrations are also provided:
+
+- `external/pricer/migrations/seed_pricing.go` inserts a starter feature catalog and starter plan.
+- `external/pricer/migrations/seed_test_plans.go` inserts Fireflies-style comparison plans (`free`, `pro`, `enterprise`) for pricing-card E2E verification.
+
+## Local E2E Testing
+
+The pricer migration test suite includes a golden-card regression test and a rollback test under `external/pricer/migrations/e2e_pricing_cards_test.go`.
+
+- `TestE2E_PricingCardsGolden` exercises the public pricing HTTP endpoints and compares the response projection to `external/pricer/migrations/testdata/pricing_cards.golden.json`.
+- `TestE2E_PricingTestPlansSeedDownRollsBackCleanly` verifies that the Fireflies-style test seed rolls back cleanly without deleting the starter seed.
+
+By default these tests try to start [memongo](https://github.com/benweissmann/memongo). On ARM Macs, or anywhere memongo cannot download a local `mongod`, set `PRICER_E2E_MONGO_URI` to a real MongoDB instance.
+
+### Start local Mongo with Docker
+
+The repo includes a dedicated compose file for this under `ghatd/docker/compose/docker-compose.test.yaml`:
+
+```sh
+docker compose -f docker/compose/docker-compose.test.yaml up -d
+```
+
+This exposes MongoDB on `mongodb://localhost:47027`.
+
+### Run the pricer E2E tests locally
+
+```sh
+export PRICER_E2E_MONGO_URI=mongodb://localhost:47027
+go test -count=1 -v -run 'TestE2E_Pricing' ./external/pricer/migrations/...
+```
+
+### Update the pricing-card golden fixture
+
+If you intentionally change the Fireflies-style seed data or the card projection, regenerate the golden fixture with:
+
+```sh
+export PRICER_E2E_MONGO_URI=mongodb://localhost:47027
+go test -count=1 -run TestE2E_PricingCardsGolden ./external/pricer/migrations/... -update
+```
+
+Then rerun the same test without `-update` to confirm the new fixture matches runtime output.
+
+### Test caveats
+
+- The `PRICER_E2E_MONGO_URI` database does not need to be empty. Each run creates a random database name and drops it during cleanup.
+- The pricing-card golden test requests `include_costs=true`, `include_features=true`, and `include_providers=true` on the single-plan endpoint so the response matches what a frontend pricing-card view needs.
+- To skip the E2E tests in fast local runs, use `go test -short ./external/pricer/...`.
 
 ## Potential Future Improvements
 
@@ -592,6 +648,7 @@ Here's a list of areas for improvement in future iterations of `pricer`. These s
 - [ ] Stripe product/price sync (bidirectional)
 - [ ] Paddle product/price sync
 - [ ] Provider webhook reconciliation
+- [ ] Kofi membership/sponsorship sync
 
 ### Developer Experience
 - [ ] Admin console UI for plan management

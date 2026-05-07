@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "description": "Stable card-projection for the Fireflies-style E2E pricing seed. Golden fixture for /api/v1/pricing/plans/{slug} responses. Update via -update flag on TestE2E_PricingCardsGolden.",
+  "plans": [
+    {
+      "slug": "free",
+      "name": "Free",
+      "description": "Get started with core meeting transcription for individuals.",
+      "status": "published",
+      "ui": {
+        "type": "PERSONAL",
+        "is_popular": false,
+        "cta_label": "Get started",
+        "priority": 1
+      },
+      "costs": [
+        {"amount": 0, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": false}
+      ],
+      "features": [
+        {"slug": "transcription-credits", "included": true, "quantity": 800, "label": "800 minutes per month"},
+        {"slug": "storage-limit", "included": true, "quantity": 5, "label": "5 GB storage"},
+        {"slug": "team-seats", "included": true, "quantity": 1, "label": "1 seat"},
+        {"slug": "integrations", "included": false, "quantity": 0, "label": "Integrations"},
+        {"slug": "developer-api-access", "included": false, "quantity": 0, "label": "API access"},
+        {"slug": "priority-support-tier", "included": false, "quantity": 0, "label": "Priority support"},
+        {"slug": "custom-branding", "included": false, "quantity": 0, "label": "Custom branding"},
+        {"slug": "sso", "included": false, "quantity": 0, "label": "SSO & SCIM"}
+      ]
+    },
+    {
+      "slug": "pro",
+      "name": "Pro",
+      "description": "For growing teams that need unlimited transcription and integrations.",
+      "status": "published",
+      "ui": {
+        "type": "TEAM",
+        "is_popular": true,
+        "cta_label": "Start free trial",
+        "priority": 2
+      },
+      "costs": [
+        {"amount": 1800, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": true},
+        {"amount": 12000, "currency": "USD", "billing_cadence": "year", "discount_percentage": 44, "per_seat": true}
+      ],
+      "features": [
+        {"slug": "transcription-credits", "included": true, "quantity": 8000, "label": "8,000 minutes per month"},
+        {"slug": "storage-limit", "included": true, "quantity": 50, "label": "50 GB storage"},
+        {"slug": "team-seats", "included": true, "quantity": 10, "label": "Up to 10 seats"},
+        {"slug": "integrations", "included": true, "quantity": 0, "label": "Integrations"},
+        {"slug": "developer-api-access", "included": true, "quantity": 0, "label": "API access"},
+        {"slug": "priority-support-tier", "included": true, "quantity": 0, "label": "Priority support"},
+        {"slug": "custom-branding", "included": false, "quantity": 0, "label": "Custom branding"},
+        {"slug": "sso", "included": false, "quantity": 0, "label": "SSO & SCIM"}
+      ]
+    },
+    {
+      "slug": "enterprise",
+      "name": "Enterprise",
+      "description": "Advanced security, branding and dedicated support for organisations.",
+      "status": "published",
+      "ui": {
+        "type": "ENTERPRISE",
+        "is_popular": false,
+        "cta_label": "Contact sales",
+        "priority": 3
+      },
+      "costs": [
+        {"amount": 3900, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": true},
+        {"amount": 39000, "currency": "USD", "billing_cadence": "year", "discount_percentage": 17, "per_seat": true}
+      ],
+      "features": [
+        {"slug": "transcription-credits", "included": true, "quantity": 0, "label": "Unlimited transcription"},
+        {"slug": "storage-limit", "included": true, "quantity": 0, "label": "Unlimited storage"},
+        {"slug": "team-seats", "included": true, "quantity": 0, "label": "Unlimited seats"},
+        {"slug": "integrations", "included": true, "quantity": 0, "label": "Integrations"},
+        {"slug": "developer-api-access", "included": true, "quantity": 0, "label": "API access"},
+        {"slug": "priority-support-tier", "included": true, "quantity": 0, "label": "Priority support"},
+        {"slug": "custom-branding", "included": true, "quantity": 0, "label": "Custom branding"},
+        {"slug": "sso", "included": true, "quantity": 0, "label": "SSO & SCIM"}
+      ]
+    }
+  ]
+}

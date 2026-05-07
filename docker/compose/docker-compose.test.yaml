@@ -1,0 +1,5 @@
+services:
+  mongo-test:
+    image: mongo:4.2.21-bionic
+    ports:
+      - 47027:27017
