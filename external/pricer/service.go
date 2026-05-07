@@ -257,6 +257,9 @@ func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) 
 		return nil, err
 	}
 	defaultPricePlanListRequest(req)
+	if err := validatePricePlanListRequest(req); err != nil {
+		return nil, err
+	}
 
 	total, err := s.PricerRepository.GetTotalPricePlans(ctx, req)
 	if err != nil {
@@ -633,6 +636,9 @@ func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*Ge
 		return nil, err
 	}
 	defaultFeatureListRequest(req)
+	if err := validateFeatureListRequest(req); err != nil {
+		return nil, err
+	}
 
 	total, err := s.PricerRepository.GetTotalFeatures(ctx, req)
 	if err != nil {
@@ -736,6 +742,42 @@ func defaultPricePlanListRequest(req *GetPricePlansRequest) {
 	if req.Page == 0 {
 		req.Page = 1
 	}
+}
+
+var validPriceSortOrders = map[string]struct{}{
+	"created_at_asc":      {},
+	"created_at_desc":     {},
+	"updated_at_asc":      {},
+	"updated_at_desc":     {},
+	"deleted_at_asc":      {},
+	"deleted_at_desc":     {},
+	"published_at_asc":    {},
+	"published_at_desc":   {},
+	"name_asc":            {},
+	"name_desc":           {},
+	"slug_asc":            {},
+	"slug_desc":           {},
+	"display_order_asc":   {},
+	"display_order_desc":  {},
+}
+
+func isValidPriceSortOrder(order string) bool {
+	_, ok := validPriceSortOrders[order]
+	return ok
+}
+
+func validatePricePlanListRequest(req *GetPricePlansRequest) error {
+	if !isValidPriceSortOrder(req.Order) {
+		return errors.New(ErrKeyInvalidPriceQueryParam)
+	}
+	return nil
+}
+
+func validateFeatureListRequest(req *GetFeaturesRequest) error {
+	if !isValidPriceSortOrder(req.Order) {
+		return errors.New(ErrKeyInvalidPriceQueryParam)
+	}
+	return nil
 }
 
 // normalisePricePlanDateRanges parses and validates all date range fields in a price plan

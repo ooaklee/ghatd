@@ -168,7 +168,7 @@ Returns a paginated list of published price plans.
 
 | Parameter | Type | Description |
 |---|---|---|
-| `order` | `string` | Sort order: `created_at_asc`, `created_at_desc` (default), `updated_at_asc`, `updated_at_desc`, `published_at_asc`, `published_at_desc`, `name_asc`, `name_desc`, `slug_asc`, `slug_desc`, `display_priority_asc`, `display_priority_dsc` |
+| `order` | `string` | Sort order: `created_at_asc`, `created_at_desc` (default), `updated_at_asc`, `updated_at_desc`, `published_at_asc`, `published_at_desc`, `name_asc`, `name_desc`, `slug_asc`, `slug_desc`, `display_order_asc`, `display_order_desc` |
 | `page` | `int` | Page number (default: `1`) |
 | `per_page` | `int` | Results per page (default: `25`) |
 | `meta` | `bool` | Include pagination metadata in response |

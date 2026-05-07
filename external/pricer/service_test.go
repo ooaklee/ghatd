@@ -759,11 +759,63 @@ func TestService_GetPricePlans(t *testing.T) {
 		name        string
 		req         *pricer.GetPricePlansRequest
 		mockErr     error
+		expectError bool
 		expectMeta  bool
 	}{
 		{
 			name: "Success - returns plans with defaults",
 			req:  &pricer.GetPricePlansRequest{},
+		},
+		{
+			name: "Success - with display_order_asc",
+			req: &pricer.GetPricePlansRequest{
+				Order: "display_order_asc",
+			},
+		},
+		{
+			name: "Success - with display_order_desc",
+			req: &pricer.GetPricePlansRequest{
+				Order: "display_order_desc",
+			},
+		},
+		{
+			name: "Success - with created_at_asc",
+			req: &pricer.GetPricePlansRequest{
+				Order: "created_at_asc",
+			},
+		},
+		{
+			name: "Success - with published_at_desc",
+			req: &pricer.GetPricePlansRequest{
+				Order: "published_at_desc",
+			},
+		},
+		{
+			name: "Success - with name_asc",
+			req: &pricer.GetPricePlansRequest{
+				Order: "name_asc",
+			},
+		},
+		{
+			name: "Failure - legacy display_priority_asc rejected",
+			req: &pricer.GetPricePlansRequest{
+				Order: "display_priority_asc",
+			},
+			expectError: true,
+		},
+		{
+			name: "Failure - legacy display_priority_dsc rejected",
+			req: &pricer.GetPricePlansRequest{
+				Order: "display_priority_dsc",
+			},
+			expectError: true,
+		},
+		{
+			name: "Failure - unknown order value rejected",
+			req: &pricer.GetPricePlansRequest{
+				Order: "bogus_sort",
+			},
+			expectError: true,
 		},
 		{
 			name: "Success - with custom pagination",
@@ -802,6 +854,12 @@ func TestService_GetPricePlans(t *testing.T) {
 
 			svc := newTestService(repo)
 			response, err := svc.GetPricePlans(context.Background(), tt.req)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), pricer.ErrKeyInvalidPriceQueryParam)
+				return
+			}
 
 			require.NoError(t, err)
 			require.NotNil(t, response)
@@ -1031,13 +1089,40 @@ func TestService_GetFeatures(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		req     *pricer.GetFeaturesRequest
-		mockErr error
+		name        string
+		req         *pricer.GetFeaturesRequest
+		mockErr     error
+		expectError bool
 	}{
 		{
 			name: "Success - returns features with defaults",
 			req:  &pricer.GetFeaturesRequest{},
+		},
+		{
+			name: "Success - with display_order_asc",
+			req: &pricer.GetFeaturesRequest{
+				Order: "display_order_asc",
+			},
+		},
+		{
+			name: "Success - with display_order_desc",
+			req: &pricer.GetFeaturesRequest{
+				Order: "display_order_desc",
+			},
+		},
+		{
+			name: "Failure - legacy display_priority_asc rejected",
+			req: &pricer.GetFeaturesRequest{
+				Order: "display_priority_asc",
+			},
+			expectError: true,
+		},
+		{
+			name: "Failure - unknown order value rejected",
+			req: &pricer.GetFeaturesRequest{
+				Order: "bogus_sort",
+			},
+			expectError: true,
 		},
 		{
 			name: "Success - with custom pagination",
@@ -1067,6 +1152,12 @@ func TestService_GetFeatures(t *testing.T) {
 
 			svc := newTestService(repo)
 			response, err := svc.GetFeatures(context.Background(), tt.req)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), pricer.ErrKeyInvalidPriceQueryParam)
+				return
+			}
 
 			require.NoError(t, err)
 			require.NotNil(t, response)

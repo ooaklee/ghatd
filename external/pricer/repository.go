@@ -606,9 +606,9 @@ func buildPricerSortOptions(order string) bson.D {
 		return bson.D{{Key: "slug", Value: 1}}
 	case "slug_desc":
 		return bson.D{{Key: "slug", Value: -1}}
-	case "display_priority_asc":
+	case "display_order_asc":
 		return bson.D{{Key: "display_order", Value: 1}}
-	case "display_priority_dsc":
+	case "display_order_desc":
 		return bson.D{{Key: "display_order", Value: -1}}
 	default:
 		return bson.D{{Key: "created_at", Value: -1}}
