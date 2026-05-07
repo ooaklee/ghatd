@@ -142,6 +142,17 @@ const (
 	PriceProviderKofi PriceProvider = "kofi"
 )
 
+const (
+	// PriceSlugResourcePlan validates slugs in the price plan namespace.
+	PriceSlugResourcePlan = "plan"
+
+	// PriceSlugResourceFeature validates slugs in the price feature namespace.
+	PriceSlugResourceFeature = "feature"
+
+	// PriceSlugResourcePlanFeatureRef validates plan feature reference slugs.
+	PriceSlugResourcePlanFeatureRef = "plan_feature_ref"
+)
+
 // PriceDiscountType represents how a discount should be interpreted.
 type PriceDiscountType string
 

@@ -294,11 +294,8 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
 	}
 
-	resourceType := strings.TrimSpace(strings.ToLower(req.ResourceType))
-	if resourceType == "" {
-		resourceType = "plan"
-	}
-	if resourceType != "plan" && resourceType != "feature" {
+	resourceType, lookupResourceType, err := normalisePriceSlugResourceType(req.ResourceType)
+	if err != nil {
 		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
 	}
 
@@ -315,16 +312,16 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 
 	excludeID := strings.TrimSpace(req.ExcludeID)
 	existingID := ""
-	switch resourceType {
-	case "plan":
+	switch lookupResourceType {
+	case PriceSlugResourcePlan:
 		existing, err := s.PricerRepository.GetPricePlanBySlug(ctx, slug, &GetPricePlanBySlugRequest{})
-		if err != nil && !strings.Contains(err.Error(), ErrKeyPricePlanNotFound) {
+		if err != nil && err.Error() != ErrKeyPricePlanNotFound {
 			return nil, err
 		}
 		if existing != nil {
 			existingID = existing.ID
 		}
-	case "feature":
+	case PriceSlugResourceFeature:
 		features, err := s.PricerRepository.GetFeatures(ctx, &GetFeaturesRequest{
 			Slugs:   slug,
 			PerPage: 1,
@@ -339,9 +336,16 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 	}
 
 	available := existingID == "" || (excludeID != "" && existingID == excludeID)
+	if resourceType == PriceSlugResourcePlanFeatureRef {
+		available = existingID != ""
+	}
 	adjusted := slug != sourceValue
 	hint := fmt.Sprintf("%s will be the stored %s slug.", slug, resourceType)
-	if !available {
+	if resourceType == PriceSlugResourcePlanFeatureRef && available {
+		hint = fmt.Sprintf("The slug %q matches an existing feature.", slug)
+	} else if resourceType == PriceSlugResourcePlanFeatureRef {
+		hint = fmt.Sprintf("No feature exists with the slug %q.", slug)
+	} else if !available {
 		hint = fmt.Sprintf("The slug %q is already used by another %s.", slug, resourceType)
 	} else if adjusted {
 		hint = fmt.Sprintf("%s will be the stored %s slug, adjusted to comply with slug rules.", slug, resourceType)
@@ -357,6 +361,24 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 		ExistingID:   existingID,
 		Hint:         hint,
 	}, nil
+}
+
+func normalisePriceSlugResourceType(value string) (string, string, error) {
+	resourceType := strings.TrimSpace(strings.ToLower(value))
+	if resourceType == "" {
+		resourceType = PriceSlugResourcePlan
+	}
+
+	switch resourceType {
+	case PriceSlugResourcePlan, "price_plan":
+		return PriceSlugResourcePlan, PriceSlugResourcePlan, nil
+	case PriceSlugResourceFeature, "price_feature":
+		return PriceSlugResourceFeature, PriceSlugResourceFeature, nil
+	case PriceSlugResourcePlanFeatureRef, "plan-feature-ref", "feature_ref", "feature-reference":
+		return PriceSlugResourcePlanFeatureRef, PriceSlugResourceFeature, nil
+	default:
+		return "", "", errors.New(ErrKeyInvalidPriceQueryParam)
+	}
 }
 
 // PublishPricePlan publishes a price plan.

@@ -244,4 +244,25 @@ func TestService_ValidatePriceSlug(t *testing.T) {
 		assert.True(t, response.Available)
 		assert.Equal(t, "feature", response.ResourceType)
 	})
+
+	t.Run("Success - plan feature ref checks feature namespace", func(t *testing.T) {
+		t.Parallel()
+
+		svc := newTestService(&mockPricerRepository{
+			getFeaturesFunc: func(ctx context.Context, req *pricer.GetFeaturesRequest) ([]pricer.PriceFeature, error) {
+				assert.Equal(t, testFeatureSlug, req.Slugs)
+				return []pricer.PriceFeature{{ID: testFeatureID, Slug: testFeatureSlug}}, nil
+			},
+		})
+		response, err := svc.ValidatePriceSlug(context.Background(), &pricer.ValidatePriceSlugRequest{
+			Slug:         testFeatureSlug,
+			ResourceType: pricer.PriceSlugResourcePlanFeatureRef,
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		assert.True(t, response.Available)
+		assert.Equal(t, pricer.PriceSlugResourcePlanFeatureRef, response.ResourceType)
+		assert.Equal(t, testFeatureID, response.ExistingID)
+	})
 }
