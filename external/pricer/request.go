@@ -194,6 +194,9 @@ type CreatePricePlanRequest struct {
 	// Metadata stores additional project-specific data.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 
+	// DisplayOrder controls the visual sort position of this plan in public listings.
+	DisplayOrder *int `json:"display_order,omitempty"`
+
 	// PublishNow is whether the price plan should be published immediately.
 	PublishNow bool `json:"publish_now,omitempty"`
 
@@ -241,6 +244,9 @@ type UpdatePricePlanRequest struct {
 
 	// Metadata stores updated project-specific data.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+
+	// DisplayOrder controls the updated visual sort position.
+	DisplayOrder *int `json:"display_order,omitempty"`
 }
 
 // PublishPricePlanRequest holds everything needed to publish a price plan.

@@ -26,5 +26,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	// Admin-only routes for comms management
 	commsAdminOnlyRoutes := httpRouter.PathPrefix("/api/v1/ums/comms").Subrouter()
 	commsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
-	commsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	if request.AdminOnlyMiddleware != nil {
+		commsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	}
 }

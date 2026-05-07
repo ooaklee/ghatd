@@ -47,9 +47,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}/publish", request.Handler.PublishPricePlan).Methods(http.MethodPost, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}/archive", request.Handler.ArchivePricePlan).Methods(http.MethodPost, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/plans/{id:[0-9a-fA-F-]{36}}", request.Handler.GetPricePlanByID).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.HandleFunc("/plans/{slug:[A-Za-z0-9][A-Za-z0-9_-]*}", request.Handler.GetPricePlanBySlug).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}", request.Handler.UpdatePricePlan).Methods(http.MethodPut, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}", request.Handler.DeletePricePlan).Methods(http.MethodDelete, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{slug:[A-Za-z0-9][A-Za-z0-9_-]*}", request.Handler.GetPricePlanBySlug).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/plans", request.Handler.GetPricePlans).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/plans", request.Handler.CreatePricePlan).Methods(http.MethodPost, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/validate-slug", request.Handler.ValidatePriceSlug).Methods(http.MethodGet, http.MethodOptions)
@@ -58,6 +58,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	groupsAdminOnlyRoutes.HandleFunc("/features", request.Handler.GetFeatures).Methods(http.MethodGet, http.MethodOptions)
 	groupsAdminOnlyRoutes.HandleFunc("/features", request.Handler.CreateFeature).Methods(http.MethodPost, http.MethodOptions)
 
-	groupsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	if request.AdminOnlyMiddleware != nil {
+		groupsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	}
 
 }

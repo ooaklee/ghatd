@@ -61,6 +61,9 @@ type PricePlan struct {
 	// Metadata stores additional project-specific data.
 	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 
+	// DisplayOrder controls the visual sort position of this plan in public listings.
+	DisplayOrder *int `json:"display_order,omitempty" bson:"display_order,omitempty"`
+
 	// PublishedAt is the date and time the price plan was published.
 	PublishedAt string `json:"published_at,omitempty" bson:"published_at,omitempty"`
 

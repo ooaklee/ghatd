@@ -78,5 +78,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/extensions/{extensionKey}", request.Handler.GetUserExtension).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/personal-info", request.Handler.UpdateUserPersonalInfo).Methods(http.MethodPatch, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc("/{userID}/validate", request.Handler.ValidateUser).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	if request.AdminOnlyMiddleware != nil {
+		usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	}
 }

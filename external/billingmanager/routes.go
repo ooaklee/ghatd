@@ -45,18 +45,19 @@ type AttachRoutesRequest struct {
 func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter := request.Router.GetRouter()
 
-	billingmanagerOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
-	billingmanagerOpenRoutes.HandleFunc("/billings/{providerName}/webhooks", request.Handler.ProcessBillingProviderWebhooks).Methods(http.MethodPost, http.MethodOptions)
-
 	billingmanagerPricingOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix + "/pricing").Subrouter()
 	billingmanagerPricingOpenRoutes.HandleFunc("/plans", request.Handler.GetPricingPlans).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerPricingOpenRoutes.HandleFunc("/plans/{slug}", request.Handler.GetPricePlanBySlug).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerPricingOpenRoutes.HandleFunc("/features", request.Handler.GetPricingFeatures).Methods(http.MethodGet, http.MethodOptions)
 
+	billingmanagerOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
+	billingmanagerOpenRoutes.HandleFunc("/billings/{providerName}/webhooks", request.Handler.ProcessBillingProviderWebhooks).Methods(http.MethodPost, http.MethodOptions)
+
 	billingmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
 	billingmanagerActiveOnlyRoutes.HandleFunc("/billings/users/{userId}/events", request.Handler.GetUserBillingEvents).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/subscription", request.Handler.GetUserSubscriptionStatus).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/billing", request.Handler.GetUserBillingDetail).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerActiveOnlyRoutes.Use(request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
-
+	if request.MiddlewareActiveValidApiTokenOrJWTMiddleware != nil {
+		billingmanagerActiveOnlyRoutes.Use(request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
+	}
 }

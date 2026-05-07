@@ -10,8 +10,7 @@
       "ui": {
         "type": "PERSONAL",
         "is_popular": false,
-        "cta_label": "Get started",
-        "priority": 1
+        "cta_label": "Get started"
       },
       "costs": [
         {"amount": 0, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": false}
@@ -35,8 +34,7 @@
       "ui": {
         "type": "TEAM",
         "is_popular": true,
-        "cta_label": "Start free trial",
-        "priority": 2
+        "cta_label": "Start free trial"
       },
       "costs": [
         {"amount": 1800, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": true},
@@ -61,8 +59,7 @@
       "ui": {
         "type": "ENTERPRISE",
         "is_popular": false,
-        "cta_label": "Contact sales",
-        "priority": 3
+        "cta_label": "Contact sales"
       },
       "costs": [
         {"amount": 3900, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": true},

@@ -62,5 +62,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usersAdminOnlyRoutes.HandleFunc(APIUsersIDVariable, request.Handler.DeleteUser).Methods(http.MethodDelete, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc(APIUserProfile, request.Handler.GetProfile).Methods(http.MethodGet, http.MethodOptions)
 	usersAdminOnlyRoutes.HandleFunc(APIUserMicroProfile, request.Handler.GetMicroProfile).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	if request.AdminOnlyMiddleware != nil {
+		usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	}
 }

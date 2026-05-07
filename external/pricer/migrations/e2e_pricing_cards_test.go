@@ -51,7 +51,6 @@ type cardUI struct {
 	Type      string `json:"type"`
 	IsPopular bool   `json:"is_popular"`
 	CTALabel  string `json:"cta_label"`
-	Priority  int    `json:"priority"`
 }
 
 type cardCost struct {
@@ -279,9 +278,6 @@ func readUIBlock(metadata map[string]interface{}) cardUI {
 	}
 	if v, ok := rawUI["cta_label"].(string); ok {
 		out.CTALabel = v
-	}
-	if v, ok := readInt(rawUI["priority"]); ok {
-		out.Priority = v
 	}
 	return out
 }
