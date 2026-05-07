@@ -29,6 +29,12 @@ const (
 	// ErrKeyInvalidPriceCost is returned when a cost is invalid.
 	ErrKeyInvalidPriceCost = "InvalidPriceCost"
 
+	// ErrKeyInvalidPriceDiscount is returned when a discount is invalid.
+	ErrKeyInvalidPriceDiscount = "InvalidPriceDiscount"
+
+	// ErrKeyInvalidPricePaymentTerms is returned when payment terms are invalid.
+	ErrKeyInvalidPricePaymentTerms = "InvalidPricePaymentTerms"
+
 	// ErrKeyInvalidPriceCurrency is returned when a currency is invalid.
 	ErrKeyInvalidPriceCurrency = "InvalidPriceCurrency"
 
@@ -134,4 +140,29 @@ const (
 
 	// PriceProviderKofi represents kofi provider references.
 	PriceProviderKofi PriceProvider = "kofi"
+)
+
+// PriceDiscountType represents how a discount should be interpreted.
+type PriceDiscountType string
+
+const (
+	// PriceDiscountTypeAmount represents a fixed monetary discount.
+	PriceDiscountTypeAmount PriceDiscountType = "amount"
+
+	// PriceDiscountTypePercent represents a percentage discount in basis points.
+	PriceDiscountTypePercent PriceDiscountType = "percent"
+)
+
+// PricePaymentCollectionMethod represents how payment should be collected.
+type PricePaymentCollectionMethod string
+
+const (
+	// PricePaymentCollectionMethodManual represents manually collected payment.
+	PricePaymentCollectionMethodManual PricePaymentCollectionMethod = "manual"
+
+	// PricePaymentCollectionMethodAutomatic represents automatically collected payment.
+	PricePaymentCollectionMethodAutomatic PricePaymentCollectionMethod = "automatic"
+
+	// PricePaymentCollectionMethodInvoice represents invoice-based collection.
+	PricePaymentCollectionMethodInvoice PricePaymentCollectionMethod = "invoice"
 )

@@ -3,6 +3,7 @@ package pricer
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
@@ -47,6 +48,12 @@ type PricePlan struct {
 
 	// Costs are the prices attached to this plan.
 	Costs []PriceCost `json:"costs,omitempty" bson:"costs,omitempty"`
+
+	// Discounts are the typed discount rules attached to this plan.
+	Discounts []PriceDiscount `json:"discounts,omitempty" bson:"discounts,omitempty"`
+
+	// PaymentTerms defines how this plan should be paid for.
+	PaymentTerms *PricePaymentTerms `json:"payment_terms,omitempty" bson:"payment_terms,omitempty"`
 
 	// ProviderRefs links this plan to provider-side plan or product identifiers.
 	ProviderRefs []PriceProviderRef `json:"provider_refs,omitempty" bson:"provider_refs,omitempty"`
@@ -184,6 +191,57 @@ type PriceCost struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 }
 
+// PriceDiscount represents a typed discount rule for a price plan.
+type PriceDiscount struct {
+	// ID is the unique identifier for the discount.
+	ID string `json:"id,omitempty" bson:"_id,omitempty"`
+
+	// Label is the admin-facing display label for the discount.
+	Label string `json:"label,omitempty" bson:"label,omitempty"`
+
+	// Type indicates whether the discount is fixed amount or percent based.
+	Type PriceDiscountType `json:"type" bson:"type"`
+
+	// Amount is the fixed discount in the lowest currency unit.
+	Amount int64 `json:"amount,omitempty" bson:"amount,omitempty"`
+
+	// Currency is the ISO 4217 currency code for amount discounts.
+	Currency string `json:"currency,omitempty" bson:"currency,omitempty"`
+
+	// PercentBps is the percentage discount in basis points.
+	PercentBps int64 `json:"percent_bps,omitempty" bson:"percent_bps,omitempty"`
+
+	// StartsAt is the date and time the discount becomes active.
+	StartsAt string `json:"starts_at,omitempty" bson:"starts_at,omitempty"`
+
+	// EndsAt is the date and time the discount stops being active.
+	EndsAt string `json:"ends_at,omitempty" bson:"ends_at,omitempty"`
+
+	// ProviderRefs links this discount to provider-side coupon or promotion identifiers.
+	ProviderRefs []PriceProviderRef `json:"provider_refs,omitempty" bson:"provider_refs,omitempty"`
+
+	// Metadata stores additional discount-specific data.
+	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+}
+
+// PricePaymentTerms describes how payment should be collected for a plan.
+type PricePaymentTerms struct {
+	// Label is the admin-facing display label for the terms.
+	Label string `json:"label,omitempty" bson:"label,omitempty"`
+
+	// DueDays is the number of days before payment is due.
+	DueDays int `json:"due_days,omitempty" bson:"due_days,omitempty"`
+
+	// CollectionMethod indicates how payment should be collected.
+	CollectionMethod PricePaymentCollectionMethod `json:"collection_method,omitempty" bson:"collection_method,omitempty"`
+
+	// Notes stores admin-facing payment instructions or context.
+	Notes string `json:"notes,omitempty" bson:"notes,omitempty"`
+
+	// Metadata stores additional payment-term-specific data.
+	Metadata map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
+}
+
 // PriceProviderRef links internal pricing records to provider-side identifiers.
 type PriceProviderRef struct {
 	// Provider identifies the payment provider.
@@ -250,6 +308,12 @@ func (p *PricePlan) Validate() error {
 	if err := ValidatePriceCosts(p.Costs); err != nil {
 		return err
 	}
+	if err := ValidatePriceDiscounts(p.Discounts); err != nil {
+		return err
+	}
+	if err := ValidatePricePaymentTerms(p.PaymentTerms); err != nil {
+		return err
+	}
 
 	return ValidatePriceProviderRefs(p.ProviderRefs)
 }
@@ -296,6 +360,58 @@ func (c *PriceCost) Validate() error {
 	return ValidatePriceProviderRefs(c.ProviderRefs)
 }
 
+// Validate checks whether the discount uses valid v1 values.
+func (d *PriceDiscount) Validate() error {
+	if d == nil {
+		return errors.New(ErrKeyInvalidPriceDiscount)
+	}
+
+	switch d.Type {
+	case PriceDiscountTypeAmount:
+		if d.Amount < 0 {
+			return errors.New(ErrKeyInvalidPriceDiscount)
+		}
+		if !IsValidPriceCurrency(d.Currency) {
+			return errors.New(ErrKeyInvalidPriceCurrency)
+		}
+	case PriceDiscountTypePercent:
+		if d.PercentBps < 0 || d.PercentBps > 10000 {
+			return errors.New(ErrKeyInvalidPriceDiscount)
+		}
+	default:
+		return errors.New(ErrKeyInvalidPriceDiscount)
+	}
+
+	startsAt, err := parseOptionalPriceDate(d.StartsAt)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDiscount)
+	}
+	endsAt, err := parseOptionalPriceDate(d.EndsAt)
+	if err != nil {
+		return errors.New(ErrKeyInvalidPriceDiscount)
+	}
+	if !startsAt.IsZero() && !endsAt.IsZero() && endsAt.Before(startsAt) {
+		return errors.New(ErrKeyInvalidPriceDiscount)
+	}
+
+	return ValidatePriceProviderRefs(d.ProviderRefs)
+}
+
+// Validate checks whether the payment terms use valid v1 values.
+func (p *PricePaymentTerms) Validate() error {
+	if p == nil {
+		return nil
+	}
+	if p.DueDays < 0 {
+		return errors.New(ErrKeyInvalidPricePaymentTerms)
+	}
+	if p.CollectionMethod != "" && !IsValidPricePaymentCollectionMethod(string(p.CollectionMethod)) {
+		return errors.New(ErrKeyInvalidPricePaymentTerms)
+	}
+
+	return nil
+}
+
 // ValidatePriceCosts checks a set of costs.
 func ValidatePriceCosts(costs []PriceCost) error {
 	for i := range costs {
@@ -305,6 +421,22 @@ func ValidatePriceCosts(costs []PriceCost) error {
 	}
 
 	return nil
+}
+
+// ValidatePriceDiscounts checks a set of discounts.
+func ValidatePriceDiscounts(discounts []PriceDiscount) error {
+	for i := range discounts {
+		if err := discounts[i].Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidatePricePaymentTerms checks payment terms.
+func ValidatePricePaymentTerms(terms *PricePaymentTerms) error {
+	return terms.Validate()
 }
 
 // ValidatePriceCost checks a single cost.
@@ -435,6 +567,26 @@ func IsValidPriceProvider(provider string) bool {
 	}
 }
 
+// IsValidPriceDiscountType returns true when discount type is supported.
+func IsValidPriceDiscountType(discountType string) bool {
+	switch PriceDiscountType(discountType) {
+	case PriceDiscountTypeAmount, PriceDiscountTypePercent:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsValidPricePaymentCollectionMethod returns true when collection method is supported.
+func IsValidPricePaymentCollectionMethod(collectionMethod string) bool {
+	switch PricePaymentCollectionMethod(collectionMethod) {
+	case PricePaymentCollectionMethodManual, PricePaymentCollectionMethodAutomatic, PricePaymentCollectionMethodInvoice:
+		return true
+	default:
+		return false
+	}
+}
+
 func (r PlanFeatureRef) refKey() string {
 	if id := strings.TrimSpace(r.FeatureID); id != "" {
 		return "id:" + id
@@ -445,4 +597,26 @@ func (r PlanFeatureRef) refKey() string {
 	}
 
 	return ""
+}
+
+func parseOptionalPriceDate(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+
+	formats := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+	for _, format := range formats {
+		parsed, err := time.Parse(format, value)
+		if err == nil {
+			return parsed.UTC(), nil
+		}
+	}
+
+	return time.Time{}, errors.New(ErrKeyInvalidPriceDate)
 }

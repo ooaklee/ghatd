@@ -118,6 +118,20 @@ func MapRequestToGetPricePlansRequest(request *http.Request, validator PricerVal
 	return parsedRequest, nil
 }
 
+// MapRequestToValidatePriceSlugRequest maps incoming ValidatePriceSlug request to correct struct.
+func MapRequestToValidatePriceSlugRequest(request *http.Request, validator PricerValidator) (*ValidatePriceSlugRequest, error) {
+	parsedRequest := &ValidatePriceSlugRequest{}
+	if err := decodeQuery(request, parsedRequest); err != nil {
+		return nil, err
+	}
+
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+	}
+
+	return parsedRequest, nil
+}
+
 // MapRequestToPublishPricePlanRequest maps incoming PublishPricePlan request to correct struct.
 func MapRequestToPublishPricePlanRequest(request *http.Request, validator PricerValidator) (*PublishPricePlanRequest, error) {
 	parsedRequest := &PublishPricePlanRequest{}

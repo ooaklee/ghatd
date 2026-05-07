@@ -14,6 +14,7 @@ type PriceService interface {
 	GetPricePlanByID(ctx context.Context, r *GetPricePlanByIDRequest) (*GetPricePlanByIDResponse, error)
 	GetPricePlanBySlug(ctx context.Context, r *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
 	GetPricePlans(ctx context.Context, r *GetPricePlansRequest) (*GetPricePlansResponse, error)
+	ValidatePriceSlug(ctx context.Context, r *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error)
 	PublishPricePlan(ctx context.Context, r *PublishPricePlanRequest) (*PublishPricePlanResponse, error)
 	ArchivePricePlan(ctx context.Context, r *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error)
 	DeletePricePlan(ctx context.Context, r *DeletePricePlanRequest) (*DeletePricePlanResponse, error)
@@ -127,6 +128,23 @@ func (h *Handler) GetPricePlans(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.PricePlans)
+}
+
+// ValidatePriceSlug handles pricing slug validation without persisting anything.
+func (h *Handler) ValidatePriceSlug(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToValidatePriceSlugRequest(r, h.Validator)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ValidatePriceSlug(r.Context(), request)
+	if err != nil {
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // PublishPricePlan handles price plan publishing.

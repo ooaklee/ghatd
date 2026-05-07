@@ -70,6 +70,33 @@ type GetPricePlansResponse struct {
 	Page int
 }
 
+// ValidatePriceSlugResponse describes the outcome of a pricing slug validation check.
+type ValidatePriceSlugResponse struct {
+	// RawName is the provided display name after leading/trailing whitespace is removed.
+	RawName string `json:"raw_name,omitempty"`
+
+	// RawSlug is the provided explicit slug after leading/trailing whitespace is removed.
+	RawSlug string `json:"raw_slug,omitempty"`
+
+	// Slug is the normalized slug candidate.
+	Slug string `json:"slug"`
+
+	// ResourceType is the pricing resource collection checked.
+	ResourceType string `json:"resource_type"`
+
+	// Adjusted is true when the normalized slug differs from the provided slug/name.
+	Adjusted bool `json:"adjusted"`
+
+	// Available is true when no other resource of this type uses the slug.
+	Available bool `json:"available"`
+
+	// ExistingID is the conflicting resource ID when the slug is unavailable.
+	ExistingID string `json:"existing_id,omitempty"`
+
+	// Hint is a human-readable message suitable for display below a slug input field.
+	Hint string `json:"hint,omitempty"`
+}
+
 // GetMetaData returns a map containing metadata about the GetPricePlansResponse.
 func (g *GetPricePlansResponse) GetMetaData() map[string]interface{} {
 	var responseMap = make(map[string]interface{})

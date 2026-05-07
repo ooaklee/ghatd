@@ -132,6 +132,21 @@ type GetPricePlansRequest struct {
 	IsNotPublished bool `query:"is_not_published"`
 }
 
+// ValidatePriceSlugRequest holds everything needed to validate a proposed pricing slug.
+type ValidatePriceSlugRequest struct {
+	// Name is the display name used to derive a slug when Slug is not provided.
+	Name string `json:"name,omitempty" query:"name"`
+
+	// Slug is an explicit slug candidate to validate.
+	Slug string `json:"slug,omitempty" query:"slug"`
+
+	// ResourceType determines which pricing collection should be checked.
+	ResourceType string `json:"resource_type,omitempty" query:"resource_type"`
+
+	// ExcludeID is an existing resource ID to ignore during edit validation.
+	ExcludeID string `json:"exclude_id,omitempty" query:"exclude_id"`
+}
+
 // GetMetaData returns a map of metadata about the GetPricePlansRequest.
 func (g *GetPricePlansRequest) GetMetaData() map[string]interface{} {
 	var responseMap = make(map[string]interface{})
@@ -166,6 +181,12 @@ type CreatePricePlanRequest struct {
 
 	// Costs are the costs attached to the price plan.
 	Costs []PriceCost `json:"costs,omitempty"`
+
+	// Discounts are the typed discount rules attached to the price plan.
+	Discounts []PriceDiscount `json:"discounts,omitempty"`
+
+	// PaymentTerms defines how this plan should be paid for.
+	PaymentTerms *PricePaymentTerms `json:"payment_terms,omitempty"`
 
 	// ProviderRefs are provider-side plan or product references.
 	ProviderRefs []PriceProviderRef `json:"provider_refs,omitempty"`
@@ -208,6 +229,12 @@ type UpdatePricePlanRequest struct {
 
 	// Costs are the updated costs attached to the price plan.
 	Costs []PriceCost `json:"costs,omitempty"`
+
+	// Discounts are the updated discount rules attached to the price plan.
+	Discounts []PriceDiscount `json:"discounts,omitempty"`
+
+	// PaymentTerms defines updated payment terms for the price plan.
+	PaymentTerms *PricePaymentTerms `json:"payment_terms,omitempty"`
 
 	// ProviderRefs are the updated provider-side plan or product references.
 	ProviderRefs []PriceProviderRef `json:"provider_refs,omitempty"`

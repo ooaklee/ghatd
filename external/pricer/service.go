@@ -3,6 +3,7 @@ package pricer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type PricerService interface {
 	GetPricePlanByID(ctx context.Context, req *GetPricePlanByIDRequest) (*GetPricePlanByIDResponse, error)
 	GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
 	GetPricePlans(ctx context.Context, req *GetPricePlansRequest) (*GetPricePlansResponse, error)
+	ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error)
 	PublishPricePlan(ctx context.Context, req *PublishPricePlanRequest) (*PublishPricePlanResponse, error)
 	ArchivePricePlan(ctx context.Context, req *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error)
 	DeletePricePlan(ctx context.Context, req *DeletePricePlanRequest) (*DeletePricePlanResponse, error)
@@ -71,6 +73,8 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		Status:        req.Status,
 		Features:      req.Features,
 		Costs:         req.Costs,
+		Discounts:     req.Discounts,
+		PaymentTerms:  req.PaymentTerms,
 		ProviderRefs:  req.ProviderRefs,
 		Metadata:      req.Metadata,
 		CreatedByID:   req.UserID,
@@ -161,6 +165,12 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 		}
 		if req.Costs != nil {
 			pricePlanToUpdate.Costs = req.Costs
+		}
+		if req.Discounts != nil {
+			pricePlanToUpdate.Discounts = req.Discounts
+		}
+		if req.PaymentTerms != nil {
+			pricePlanToUpdate.PaymentTerms = req.PaymentTerms
 		}
 		if req.ProviderRefs != nil {
 			pricePlanToUpdate.ProviderRefs = req.ProviderRefs
@@ -275,6 +285,77 @@ func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) 
 		PricePlans: paginatedResponse.Resources,
 		Page:       paginatedResponse.Page,
 		PerPage:    paginatedResponse.ResourcePerPage,
+	}, nil
+}
+
+// ValidatePriceSlug returns the normalized slug and availability for a pricing resource.
+func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error) {
+	if req == nil {
+		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+	}
+
+	resourceType := strings.TrimSpace(strings.ToLower(req.ResourceType))
+	if resourceType == "" {
+		resourceType = "plan"
+	}
+	if resourceType != "plan" && resourceType != "feature" {
+		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+	}
+
+	rawName := strings.TrimSpace(req.Name)
+	rawSlug := strings.TrimSpace(req.Slug)
+	sourceValue := rawSlug
+	if sourceValue == "" {
+		sourceValue = rawName
+	}
+	slug := NormalisePriceSlug(sourceValue)
+	if slug == "" {
+		return nil, errors.New(ErrKeyInvalidPriceSlug)
+	}
+
+	excludeID := strings.TrimSpace(req.ExcludeID)
+	existingID := ""
+	switch resourceType {
+	case "plan":
+		existing, err := s.PricerRepository.GetPricePlanBySlug(ctx, slug, &GetPricePlanBySlugRequest{})
+		if err != nil && !strings.Contains(err.Error(), ErrKeyPricePlanNotFound) {
+			return nil, err
+		}
+		if existing != nil {
+			existingID = existing.ID
+		}
+	case "feature":
+		features, err := s.PricerRepository.GetFeatures(ctx, &GetFeaturesRequest{
+			Slugs:   slug,
+			PerPage: 1,
+			Page:    1,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(features) > 0 {
+			existingID = features[0].ID
+		}
+	}
+
+	available := existingID == "" || (excludeID != "" && existingID == excludeID)
+	adjusted := slug != sourceValue
+	hint := fmt.Sprintf("%s will be the stored %s slug.", slug, resourceType)
+	if !available {
+		hint = fmt.Sprintf("The slug %q is already used by another %s.", slug, resourceType)
+	} else if adjusted {
+		hint = fmt.Sprintf("%s will be the stored %s slug, adjusted to comply with slug rules.", slug, resourceType)
+	}
+
+	return &ValidatePriceSlugResponse{
+		RawName:      rawName,
+		RawSlug:      rawSlug,
+		Slug:         slug,
+		ResourceType: resourceType,
+		Adjusted:     adjusted,
+		Available:    available,
+		ExistingID:   existingID,
+		Hint:         hint,
 	}, nil
 }
 
