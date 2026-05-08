@@ -2,7 +2,6 @@ package paymentprovider
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
 )
@@ -65,7 +64,7 @@ func (m *MockProvider) GetProviderName() string {
 // VerifyWebhook always succeeds unless configured to fail
 func (m *MockProvider) VerifyWebhook(ctx context.Context, req *http.Request) error {
 	if m.shouldFail {
-		return errors.New(ErrKeyPaymentProviderInvalidWebhookSignature)
+		return ErrPaymentProviderInvalidWebhookSignature
 	}
 	return nil
 }
@@ -73,7 +72,7 @@ func (m *MockProvider) VerifyWebhook(ctx context.Context, req *http.Request) err
 // ParsePayload returns the mock payload
 func (m *MockProvider) ParsePayload(ctx context.Context, req *http.Request) (*WebhookPayload, error) {
 	if m.shouldFail {
-		return nil, errors.New(ErrKeyPaymentProviderPayloadParsing)
+		return nil, ErrPaymentProviderPayloadParsing
 	}
 
 	// Read body for raw payload
@@ -88,7 +87,7 @@ func (m *MockProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 // GetSubscriptionInfo returns the mock subscription info
 func (m *MockProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error) {
 	if m.shouldFail {
-		return nil, errors.New(ErrKeyPaymentProviderSubscriptionNotFound)
+		return nil, ErrPaymentProviderSubscriptionNotFound
 	}
 
 	info := *m.mockInfo

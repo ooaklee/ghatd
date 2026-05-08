@@ -222,7 +222,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 
 		if !requestingUser.IsAdmin() {
 			log.Warn("ams/non-admin-user-attempted-to-update-another-user-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-			return signUserOutOfPlatform, errors.New(ErrKeyForbiddenUnableToAction)
+			return signUserOutOfPlatform, ErrForbiddenUnableToAction
 		}
 	}
 
@@ -243,20 +243,20 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	standardiseNewEmail := toolbox.StringStandardisedToLower(r.Email)
 	if standardiseExistingEmail == standardiseNewEmail {
 		log.Warn("ams/user-attempted-to-update-email-to-same-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-		return signUserOutOfPlatform, errors.New(ErrKeyConflictingUserState)
+		return signUserOutOfPlatform, ErrConflictingUserState
 	}
 
 	// check if the new email is already in use
 	userByEmailResponse, newEmailInUseErr := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{
 		Email: r.Email,
 	})
-	if newEmailInUseErr != nil && newEmailInUseErr.Error() != userv2.ErrKeyUserNotFound {
+	if newEmailInUseErr != nil && !errors.Is(newEmailInUseErr, userv2.ErrUserNotFound) {
 		log.Error("ams/failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
 		return signUserOutOfPlatform, newEmailInUseErr
 	}
 	if newEmailInUseErr == nil {
 		log.Warn("ams/new-email-already-in-use", zap.String("existing-user-id", userByEmailResponse.User.ID), zap.String("target-user-id", r.TargetUserId), zap.String("user-id", r.UserId))
-		return signUserOutOfPlatform, errors.New(ErrKeyConflictingUserState)
+		return signUserOutOfPlatform, ErrConflictingUserState
 	}
 
 	// if here, then the new email is not in use
@@ -283,7 +283,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	_, err = targetUser.UpdateStatus(userv2.AccountStatusValidOriginKeyEmailChange)
 	if err != nil {
 		log.Warn("ams/unable-to-update-status-of-user-to-provisioned-after-email-change", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
-		return signUserOutOfPlatform, errors.New(ErrKeyConflictingUserState)
+		return signUserOutOfPlatform, ErrConflictingUserState
 	}
 
 	// set the new email
@@ -399,7 +399,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 
 	if len(s.OauthServices) == 0 {
 		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-callback-requested", zap.String("requested-provider", r.Provider))
-		return nil, errors.New("ErrKeyNoOauthProvidersDetected")
+		return nil, ErrNoOauthProvidersDetected
 	}
 
 	for _, provider := range s.OauthServices {
@@ -425,7 +425,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		}
 
 		if fetchedProtectionStateTokenCookie == nil {
-			return nil, errors.New("ErrKeyProviderCookieNotFound")
+			return nil, ErrProviderCookieNotFound
 		}
 
 		// Compare the protection token (state) from cookie with the one passed in
@@ -435,7 +435,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		if !providerRequestAuthenticated {
 			return &OauthCallbackResponse{
 				ProviderStateCookieKey: providerCookieKey,
-			}, errors.New("ErrKeyProviderInvalidProtectionStateToken")
+			}, ErrProviderInvalidProtectionStateToken
 		}
 
 		// check if redirect url passed
@@ -463,7 +463,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		// Manage flow with user information
 		persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
 		// Check if there is an error outside of user not being found
-		if persistentUserResponse == nil && err.Error() != userv2.ErrKeyUserNotFound {
+		if persistentUserResponse == nil && !errors.Is(err, userv2.ErrUserNotFound) {
 			return &OauthCallbackResponse{
 				ProviderStateCookieKey: providerCookieKey,
 			}, err
@@ -621,7 +621,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		}
 	}
 
-	return nil, errors.New("ErrKeyProvidersPassedNotFound")
+	return nil, ErrProvidersPassedNotFound
 }
 
 // OauthLogin handles logic of managing the initialisation of provider url
@@ -633,7 +633,7 @@ func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthL
 
 	if len(s.OauthServices) == 0 {
 		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-login-requested", zap.String("requested-provider", r.Provider))
-		return nil, errors.New("ErrKeyNoOauthProvidersDetected")
+		return nil, ErrNoOauthProvidersDetected
 	}
 
 	for _, provider := range s.OauthServices {
@@ -669,7 +669,7 @@ func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthL
 
 	}
 
-	return nil, errors.New("ErrKeyProvidersPassedNotFound")
+	return nil, ErrProvidersPassedNotFound
 }
 
 // GetSpecificUserAPITokens retrieves API token for a specific user
@@ -778,7 +778,7 @@ func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenR
 
 	}
 
-	return errors.New(ErrKeyAPITokenNotAssociatedWithUser)
+	return ErrAPITokenNotAssociatedWithUser
 }
 
 // CreateUserAPIToken generates API token for user
@@ -813,11 +813,11 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 
 	// Make sure user doesn't have more than allowed tokens already
 	if r.Ttl == 0 && (int64(userPermanentTokenCount) >= getUserRoleThresholdAllocation.LongLivedUserTokenLimit) {
-		return nil, errors.New(ErrKeyPermanentAPITokenLimitReached)
+		return nil, ErrPermanentAPITokenLimitReached
 	}
 
 	if r.Ttl > 0 && (int64(userEphemeralTokenCount) >= getUserRoleThresholdAllocation.ShortLivedUserTokenLimit) {
-		return nil, errors.New(ErrKeyEphemeralAPITokenLimitReached)
+		return nil, ErrEphemeralAPITokenLimitReached
 	}
 
 	// TODO: Make sure request honor role's increments etc.
@@ -856,17 +856,17 @@ func (s *Service) verifyRequestIsWithinUserRoleTokenConstraints(ctx context.Cont
 
 	if tokenTtl < userRoleThresholds.ShortLivedMinimumAllowedTime {
 		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-short"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
-		return errors.New(ErrKeyCreateUserAPITokenRequestTtlTooShort)
+		return ErrCreateUserAPITokenRequestTtlTooShort
 	}
 
 	if tokenTtl > userRoleThresholds.ShortLivedMaximumAllowedTime {
 		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-long"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
-		return errors.New(ErrKeyCreateUserAPITokenRequestTtlTooLong)
+		return ErrCreateUserAPITokenRequestTtlTooLong
 	}
 
 	if tokenTtl%userRoleThresholds.ShortLivedMinimumIncrements != 0 {
 		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-outside-allowed-increment"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
-		return errors.New(ErrKeyCreateUserAPITokenRequestTtlOutsideAllowedIncrement)
+		return ErrCreateUserAPITokenRequestTtlOutsideAllowedIncrement
 	}
 
 	return nil
@@ -929,11 +929,11 @@ func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (*MiddlewareA
 	tokenRequester.UserID = persistentUserResponse.User.ID
 
 	if !persistentUserResponse.User.IsAdmin() {
-		return nil, errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
+		return nil, ErrUnauthorizedAdminAccessAttempted
 	}
 
 	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
-		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, ErrUnauthorizedNonActiveStatus
 	}
 
 	_ = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
@@ -967,7 +967,7 @@ func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (*MiddlewareA
 	tokenRequester.UserID = persistentUserResponse.User.ID
 
 	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
-		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, ErrUnauthorizedNonActiveStatus
 	}
 
 	_ = s.ApitokenService.UpdateAPITokenLastUsedAt(ctx, &apitoken.UpdateAPITokenLastUsedAtRequest{
@@ -992,7 +992,7 @@ func (s *Service) MiddlewareJWTRequired(r *http.Request) (*MiddlewareAuthedUserR
 	}
 
 	if _, err = s.EphemeralStore.FetchAuth(ctx, tokenAuth); err != nil {
-		return nil, errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+		return nil, ErrUnauthorizedTokenNotFoundInStore
 	}
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: tokenAuth.UserID})
@@ -1028,15 +1028,15 @@ func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthed
 	}
 
 	if !tokenAuth.IsAdmin {
-		return nil, errors.New(ErrKeyUnauthorizedAdminAccessAttempted)
+		return nil, ErrUnauthorizedAdminAccessAttempted
 	}
 
 	if !tokenAuth.IsAuthorized {
-		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, ErrUnauthorizedNonActiveStatus
 	}
 
 	if _, err = s.EphemeralStore.FetchAuth(ctx, tokenAuth); err != nil {
-		return nil, errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+		return nil, ErrUnauthorizedTokenNotFoundInStore
 	}
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: tokenAuth.UserID})
@@ -1055,7 +1055,7 @@ func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthed
 // a placeholder user ID and tracked by IP address. Returns the user ID or placeholder.
 func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
-	if err != nil && err.Error() == auth.ErrKeyNoBearerHeaderFound {
+	if err != nil && errors.Is(err, auth.ErrNoBearerHeaderFound) {
 		if ephErr := s.EphemeralStore.AddRequestCountEntry(r.Context(), getValidRequestorIP(r)); ephErr != nil {
 			return nil, ephErr
 		}
@@ -1080,7 +1080,7 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*Midd
 func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (*MiddlewareAuthedUserResponse, error) {
 	user, isActiveUser := s.isUserLiveStatusActive(ctx, tokenAuth.UserID)
 	if !isActiveUser {
-		return nil, errors.New(ErrKeyUnauthorizedNonActiveStatus)
+		return nil, ErrUnauthorizedNonActiveStatus
 	}
 
 	return &MiddlewareAuthedUserResponse{
@@ -1110,7 +1110,7 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 
 	if deleted == 0 {
 		log.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID))
-		return errors.New(ErrKeyUnauthorizedAccessTokenCacheDeletionFailure)
+		return ErrUnauthorizedAccessTokenCacheDeletionFailure
 	}
 
 	auditEvent := audit.UserLogout
@@ -1254,7 +1254,7 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, refreshTokenDetails.RefreshUUID))
 	if err != nil || deleted == 0 {
 		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userId), zap.Error(err))
-		return nil, refreshTokenUuid, errors.New(ErrKeyUnauthorizedRefreshTokenCacheDeletionFailure)
+		return nil, refreshTokenUuid, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
 	log.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
@@ -1380,7 +1380,7 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 		}
 	default:
 		log.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID), zap.String("user-status", persistentUserResponse.User.Status))
-		return errors.New(ErrKeyUserStatusUncaught)
+		return ErrUserStatusUncaught
 	}
 
 	return nil
@@ -1492,7 +1492,7 @@ func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringVa
 	_, err = s.EphemeralStore.FetchAuth(ctx, td)
 	if err != nil {
 		log.Warn("unauthorized-token-not-found", zap.String("user-id", td.UserID))
-		return nil, errors.New(ErrKeyUnauthorizedTokenNotFoundInStore)
+		return nil, ErrUnauthorizedTokenNotFoundInStore
 	}
 
 	return &TokenAsStringValidatorResponse{
@@ -1839,12 +1839,12 @@ func (s *Service) resolveTokenFromCode(ctx context.Context, code string) (string
 	token, err := s.EphemeralStore.GetCodeMapping(ctx, code)
 	if err != nil {
 		log.Warn("ams/code-to-token-mapping-not-found", zap.String("code", code), zap.Error(err))
-		return "", errors.New(ErrKeyInvalidVerificationCode)
+		return "", ErrInvalidVerificationCode
 	}
 
 	if token == "" {
 		log.Warn("ams/code-to-token-mapping-returned-empty-token", zap.String("code", code))
-		return "", errors.New(ErrKeyInvalidVerificationCode)
+		return "", ErrInvalidVerificationCode
 	}
 
 	log.Info("ams/successfully-resolved-code-to-token", zap.String("code", code))

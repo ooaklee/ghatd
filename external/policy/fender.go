@@ -1,7 +1,6 @@
 package policy
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -15,7 +14,7 @@ func MapRequestToGetPoliciesRequest(request *http.Request, validator policyValid
 	parsedRequest := &GetPoliciesRequest{}
 
 	if err := ValidateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidpolicyName)
+		return nil, ErrInvalidpolicyName
 	}
 
 	return parsedRequest, nil
@@ -40,7 +39,7 @@ func MapRequestToGetPolicyByNameRequest(request *http.Request, validator policyV
 	parsedRequest.PolicyName = standardisePolicyName
 
 	if err := ValidateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidpolicyName)
+		return nil, ErrInvalidpolicyName
 	}
 
 	return parsedRequest, nil
@@ -57,7 +56,7 @@ func GetpolicyNameFromUri(request *http.Request) (string, error) {
 	var policyName string
 
 	if policyName = mux.Vars(request)["policyName"]; policyName == "" {
-		return "", errors.New(ErrKeyInvalidpolicyName)
+		return "", ErrInvalidpolicyName
 	}
 
 	return policyName, nil

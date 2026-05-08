@@ -109,7 +109,7 @@ func TestRepository_GetStreakCollectionReturnsAfterMaxAttempts(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, collection)
 	assert.Equal(t, defaultCollectionInitMaxAttemptsLimit, initialiseAttempts)
-	assert.Contains(t, err.Error(), ErrKeyDatabaseError)
+	assert.ErrorIs(t, err, ErrDatabaseError)
 }
 
 func TestRepository_WithCollectionInitMaxAttemptsLimitOverridesDefault(t *testing.T) {

@@ -1,7 +1,6 @@
 package streaker
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -132,7 +131,7 @@ func NormaliseScope(scope StreakScope) StreakScope {
 // ParseStreakTime parses the package's preferred UTC timestamp format.
 func ParseStreakTime(value string) (time.Time, error) {
 	if strings.TrimSpace(value) == "" {
-		return time.Time{}, errors.New(ErrKeyInvalidOccurredAt)
+		return time.Time{}, ErrInvalidOccurredAt
 	}
 
 	parsed, err := time.Parse(common.RFC3339NanoUTC, strings.TrimSpace(value))
@@ -145,7 +144,7 @@ func ParseStreakTime(value string) (time.Time, error) {
 		return parsed.UTC(), nil
 	}
 
-	return time.Time{}, errors.New(ErrKeyInvalidOccurredAt)
+	return time.Time{}, ErrInvalidOccurredAt
 }
 
 // FormatStreakTime formats time using the platform UTC timestamp format.
@@ -161,7 +160,7 @@ func NormalisePeriodType(periodType StreakPeriodType) (StreakPeriodType, error) 
 	case StreakPeriodTypeDaily, StreakPeriodTypeWeekly, StreakPeriodTypeMonthly, StreakPeriodTypeCustom:
 		return periodType, nil
 	default:
-		return "", errors.New(ErrKeyInvalidPeriodType)
+		return "", ErrInvalidPeriodType
 	}
 }
 
@@ -179,11 +178,11 @@ func BuildPeriodKey(value time.Time, periodType StreakPeriodType, providedPeriod
 		return value.Format("2006-01"), nil
 	case StreakPeriodTypeCustom:
 		if providedPeriodKey == "" {
-			return "", errors.New(ErrKeyPeriodKeyIsRequired)
+			return "", ErrPeriodKeyIsRequired
 		}
 		return providedPeriodKey, nil
 	default:
-		return "", errors.New(ErrKeyInvalidPeriodType)
+		return "", ErrInvalidPeriodType
 	}
 }
 

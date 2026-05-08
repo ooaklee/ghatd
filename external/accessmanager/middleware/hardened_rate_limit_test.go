@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/external/ephemeral"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // mockHardenedRateLimitStore implements hardenedRateLimitEphemeralStore for testing
@@ -211,7 +211,7 @@ func TestHardenedRateLimitProtection_RateLimitExceeded(t *testing.T) {
 			return false, nil
 		},
 		trackHardenedAttemptFunc: func(ctx context.Context, ip, code string, maxAttempts int, window time.Duration) error {
-			return errors.New(ephemeral.ErrKeyHardenedRateLimitExceeded)
+			return ephemeral.ErrHardenedRateLimitExceeded
 		},
 		blockIPFunc: func(ctx context.Context, ip string, duration time.Duration) error {
 			blockIPCalled = true
@@ -253,7 +253,7 @@ func TestHardenedRateLimitProtection_BlockIPErrorNonFatal(t *testing.T) {
 			return false, nil
 		},
 		trackHardenedAttemptFunc: func(ctx context.Context, ip, code string, maxAttempts int, window time.Duration) error {
-			return errors.New(ephemeral.ErrKeyHardenedRateLimitExceeded)
+			return ephemeral.ErrHardenedRateLimitExceeded
 		},
 		blockIPFunc: func(ctx context.Context, ip string, duration time.Duration) error {
 			return errors.New("block failed")

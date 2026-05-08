@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -95,7 +94,7 @@ func (r *Repository) GetUserCollection(ctx context.Context) (*mongo.Collection, 
 		return r.collection, nil
 	}
 
-	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, UserCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, UserCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // CreateUser creates a new user in the repository
@@ -125,7 +124,7 @@ func (r *Repository) GetUserByID(ctx context.Context, id string) (*UniversalUser
 	}
 
 	var result UniversalUser
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "user", true, errors.New(ErrKeyUserNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "user", true, ErrUserNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +144,7 @@ func (r *Repository) GetUserByNanoID(ctx context.Context, nanoID string) (*Unive
 	}
 
 	var result UniversalUser
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "user", true, errors.New(ErrKeyUserNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "user", true, ErrUserNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +164,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string, logError 
 	}
 
 	var result UniversalUser
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "user", logError, errors.New(ErrKeyUserNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "user", logError, ErrUserNotFound)
 	if err != nil {
 		return nil, err
 	}

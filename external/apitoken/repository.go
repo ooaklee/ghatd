@@ -2,7 +2,6 @@ package apitoken
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -254,7 +253,7 @@ func (r *Repository) GetAPITokenByID(ctx context.Context, apiTokenID string) (*U
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_id": apiTokenID}, &result, "ApiToken", true, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_id": apiTokenID}, &result, "ApiToken", true, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,6 @@ package billingmanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -177,7 +176,7 @@ func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansReque
 
 	if s.PricerService == nil {
 		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
-		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
@@ -207,7 +206,7 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 
 	if s.PricerService == nil {
 		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
-		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
 	response, err := s.PricerService.GetPricePlanBySlug(ctx, req.GetPricePlanBySlugRequest)
@@ -221,7 +220,7 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 		// we should override any queries to ensure they can only see active pricing plans
 		if response.PricePlan.DeletedAt != "" || !isPricePlanPubliclyVisible(response.PricePlan.PublishedAt) {
 			log.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
-			return nil, errors.New(pricer.ErrKeyPricePlanNotFound)
+			return nil, pricer.ErrPricePlanNotFound
 		}
 	}
 
@@ -234,7 +233,7 @@ func (s *Service) GetPricingFeatures(ctx context.Context, req *GetPriceFeaturesR
 
 	if s.PricerService == nil {
 		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
-		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
@@ -494,7 +493,7 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 
 	if targetUserId == "" {
 		log.Warn("failed-to-get-billing-detail-user-id-is-missing", logFields...)
-		return errors.New(ErrKeyBillingManagerRequiresUserIdIsMissing)
+		return ErrBillingManagerRequiresUserIdIsMissing
 	}
 
 	if requestingUserId != "" && requestingUserId != targetUserId {
@@ -502,11 +501,11 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: requestingUserId})
 		if err != nil {
 			log.Warn("failed-to-get-billing-detail-requesting-user-not-found", append(logFields, zap.Error(err))...)
-			return errors.New(ErrKeyBillingManagerRequiresUserIdIsMissing)
+			return ErrBillingManagerRequiresUserIdIsMissing
 		}
 		if !userResp.User.IsAdmin() {
 			log.Warn("failed-to-get-billing-detail-requesting-user-not-admin", logFields...)
-			return errors.New(ErrKeyBillingManagerUserUnauthorisedToCarryOutOperation)
+			return ErrBillingManagerUserUnauthorisedToCarryOutOperation
 		}
 
 		log.Info("admin-user-requesting-billing-detail-for-another-user", logFields...)
@@ -546,7 +545,7 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 	// if email is missing we need to error out as we have no way to identify the user
 	if payload.CustomerEmail == "" {
 		log.Warn("unable-to-identify-user-no-email-in-payload", zap.String("subscription-id", payload.SubscriptionID), zap.String("customer-id", payload.CustomerID))
-		return "", errors.New(ErrKeyBillingManagerNoUserIdentifyingInformationInPayload)
+		return "", ErrBillingManagerNoUserIdentifyingInformationInPayload
 	}
 
 	log.Info("no-user-found-will-store-subscription-with-email-only", zap.String("email", payload.CustomerEmail))

@@ -1,0 +1,30 @@
+package pricer
+
+import "errors"
+
+var (
+	ErrDatabaseError                    = errors.New(ErrKeyDatabaseError)
+	ErrDuplicatePlanFeatureRef          = errors.New(ErrKeyDuplicatePlanFeatureRef)
+	ErrInvalidPriceBillingCadence       = errors.New(ErrKeyInvalidPriceBillingCadence)
+	ErrInvalidPriceCost                 = errors.New(ErrKeyInvalidPriceCost)
+	ErrInvalidPriceCurrency             = errors.New(ErrKeyInvalidPriceCurrency)
+	ErrInvalidPriceDate                 = errors.New(ErrKeyInvalidPriceDate)
+	ErrInvalidPriceDiscount             = errors.New(ErrKeyInvalidPriceDiscount)
+	ErrInvalidPriceFeaturePayload       = errors.New(ErrKeyInvalidPriceFeaturePayload)
+	ErrInvalidPriceFeatureType          = errors.New(ErrKeyInvalidPriceFeatureType)
+	ErrInvalidPriceFeatureUnit          = errors.New(ErrKeyInvalidPriceFeatureUnit)
+	ErrInvalidPricePaymentTerms         = errors.New(ErrKeyInvalidPricePaymentTerms)
+	ErrInvalidPricePlanPayload          = errors.New(ErrKeyInvalidPricePlanPayload)
+	ErrInvalidPricePlanStatus           = errors.New(ErrKeyInvalidPricePlanStatus)
+	ErrInvalidPriceProvider             = errors.New(ErrKeyInvalidPriceProvider)
+	ErrInvalidPriceQueryParam           = errors.New(ErrKeyInvalidPriceQueryParam)
+	ErrInvalidPriceSlug                 = errors.New(ErrKeyInvalidPriceSlug)
+	ErrMissingPlanFeatureRef            = errors.New(ErrKeyMissingPlanFeatureRef)
+	ErrPriceFeatureIDRequired           = errors.New(ErrKeyPriceFeatureIDRequired)
+	ErrPriceFeatureNotFound             = errors.New(ErrKeyPriceFeatureNotFound)
+	ErrPricePlanIDRequired              = errors.New(ErrKeyPricePlanIDRequired)
+	ErrPricePlanNotFound                = errors.New(ErrKeyPricePlanNotFound)
+	ErrPricePlanPublishRequiresCost     = errors.New(ErrKeyPricePlanPublishRequiresCost)
+	ErrPricePlanPublishRequiresProvider = errors.New(ErrKeyPricePlanPublishRequiresProvider)
+	ErrPriceUserIDRequired              = errors.New(ErrKeyPriceUserIDRequired)
+)

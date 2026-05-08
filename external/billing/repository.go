@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -347,7 +346,7 @@ func (r *Repository) GetSubscriptionByID(ctx context.Context, subscriptionID str
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "subscription", true, errors.New(ErrKeyBillingSubscriptionNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "subscription", true, ErrBillingSubscriptionNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +367,7 @@ func (r *Repository) GetSubscriptionByIntegratorID(ctx context.Context, integrat
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "subscription", true, errors.New(ErrKeyBillingSubscriptionNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "subscription", true, ErrBillingSubscriptionNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -609,7 +608,7 @@ func (r *Repository) GetBillingEventByID(ctx context.Context, eventID string) (*
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "billing_event", true, errors.New(ErrKeyBillingEventNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "billing_event", true, ErrBillingEventNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -653,7 +652,7 @@ func (r *Repository) GetFirstSuccessfulBillingEventWithPlanNameBySubscriptionId(
 	}
 
 	if len(result) == 0 {
-		return nil, errors.New(ErrKeyBillingEventNotFound)
+		return nil, ErrBillingEventNotFound
 	}
 
 	return &result[0], nil

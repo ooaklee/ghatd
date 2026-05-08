@@ -2,7 +2,6 @@ package post
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -115,17 +114,17 @@ func (r *Repository) CreateRawPosts(ctx context.Context, newPost *Post) (*Post, 
 
 	// verify the id is preset
 	if newPost.Id == "" {
-		return nil, errors.New(ErrKeyIdIsRequired)
+		return nil, ErrIdIsRequired
 	}
 
 	// verify the nano id is preset
 	if newPost.NanoId == "" {
-		return nil, errors.New(ErrKeyNanoIdIsRequired)
+		return nil, ErrNanoIdIsRequired
 	}
 
 	// verify url friendly id is preset
 	if newPost.UrlFriendlyId == "" {
-		return nil, errors.New(ErrKeyUrlFriendlyIdIsRequired)
+		return nil, ErrUrlFriendlyIdIsRequired
 	}
 
 	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, newPost, "post")
@@ -177,7 +176,7 @@ func (r *Repository) GetPostByNanoId(ctx context.Context, postNanoId string) (*P
 	}
 
 	if err != nil && err.Error() == noDocumentMessage {
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	return &foundPost, nil
@@ -203,7 +202,7 @@ func (r *Repository) GetPostByUrlFriendlyId(ctx context.Context, postUrlFriendly
 	}
 
 	if err != nil && err.Error() == noDocumentMessage {
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	return &foundPost, nil
@@ -309,7 +308,7 @@ func (r *Repository) CreatePost(ctx context.Context, newPost *Post) (*Post, erro
 
 	// verify url friendly id is preset
 	if newPost.UrlFriendlyId == "" {
-		return nil, errors.New(ErrKeyUrlFriendlyIdIsRequired)
+		return nil, ErrUrlFriendlyIdIsRequired
 	}
 
 	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, newPost, "post")

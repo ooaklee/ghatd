@@ -166,7 +166,7 @@ func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetU
 
 		if !requestingUser.User.IsAdmin() {
 			logger.Warn("non-admin-user-attempting-to-access-another-user-by-id", zap.String("user-id", r.UserId))
-			return nil, errors.New(userv2.ErrKeyUnauthorisedAccess)
+			return nil, userv2.ErrUnauthorisedAccess
 		}
 	}
 
@@ -274,7 +274,7 @@ func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) 
 
 		if !requestingUser.User.IsAdmin() {
 			logger.Warn("non-admin-user-attempting-to-access-another-user-profile", zap.String("user-id", r.UserId))
-			return nil, errors.New(userv2.ErrKeyUnauthorisedAccess)
+			return nil, userv2.ErrUnauthorisedAccess
 		}
 	}
 
@@ -292,7 +292,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 	targetUserID := strings.TrimSpace(r.ID)
 	if targetUserID == "" {
 		logger.Warn("delete-user-permanently-request-with-empty-user-id", zap.String("requesting-user-id", r.UserId))
-		return errors.New(errors.New(userv2.ErrKeyInvalidUserID).Error())
+		return errors.New(userv2.ErrInvalidUserID.Error())
 	}
 
 	logger.Warn("wiping-user-and-resources-from-platform-started", zap.String("user-id", targetUserID))
@@ -314,7 +314,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 
 		if !requestingUser.User.IsAdmin() {
 			logger.Warn("non-admin-user-attempting-to-delete-another-user", zap.String("user-id", r.UserId))
-			return errors.New(userv2.ErrKeyUnauthorisedAccess)
+			return userv2.ErrUnauthorisedAccess
 		}
 
 		requestingUserEmail = strings.TrimSpace(requestingUser.User.GetUserEmail())

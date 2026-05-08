@@ -44,6 +44,9 @@ const (
 
 	// ErrKeyResourceNotFound is returned when requested ApiToken resource is not found in repository
 	ErrKeyResourceNotFound string = "ResourceNotFound"
+
+	// ErrKeyErrorCreatingShortLivedAccessToken is returned when a short lived token expiry cannot be computed.
+	ErrKeyErrorCreatingShortLivedAccessToken = "ErrorCreatingShortLivedAccessToken"
 )
 
 const (

@@ -8,7 +8,6 @@ package policy
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/logger"
@@ -71,7 +70,7 @@ func (s *Service) GetPolicyByName(ctx context.Context, r *GetPolicyByNameRequest
 		}
 	}
 
-	return nil, errors.New(ErrKeyPolicyNotFound)
+	return nil, ErrPolicyNotFound
 }
 
 // standardisePolicyName normalizes a policy name to lowercase with spaces

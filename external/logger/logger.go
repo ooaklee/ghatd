@@ -19,7 +19,7 @@ type contextKey string
 const loggerKey contextKey = "ContextLogger"
 
 // NewLogger creates a structured logger with the specified level and configuration.
-// 
+//
 // For local environments, it creates a development logger with human-readable output.
 // For all other environments, it creates a production logger with JSON output.
 func NewLogger(logLevel string, environment string, component string) (*zap.Logger, error) {

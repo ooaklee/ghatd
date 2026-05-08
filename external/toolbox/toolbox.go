@@ -2,7 +2,6 @@ package toolbox
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -91,17 +90,17 @@ func NormaliseEmail(email string) (string, error) {
 
 	normalised := strings.ToLower(strings.TrimSpace(email))
 	if normalised == "" {
-		return "", errors.New(ErrKeyInvalidEmail)
+		return "", ErrInvalidEmail
 	}
 
 	parsedAddress, err := mail.ParseAddress(normalised)
 	if err != nil || parsedAddress == nil {
-		return "", errors.New(ErrKeyInvalidEmail)
+		return "", ErrInvalidEmail
 	}
 
 	address := strings.ToLower(strings.TrimSpace(parsedAddress.Address))
 	if address == "" {
-		return "", errors.New(ErrKeyInvalidEmail)
+		return "", ErrInvalidEmail
 	}
 
 	return address, nil
@@ -511,7 +510,7 @@ func GetVariableValueFromUri(request *http.Request, variableID string) (string, 
 	var variableValue string
 
 	if variableValue = mux.Vars(request)[variableID]; variableValue == "" {
-		return "", errors.New(ErrKeyMissingUriVariable)
+		return "", ErrMissingUriVariable
 	}
 
 	return variableValue, nil

@@ -7,7 +7,6 @@ package user
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -218,7 +217,7 @@ func (u *User) UpdateStatus(desiredStatus string) (*User, error) {
 	// Get history of valid status that can migrate to desired status
 	err := u.validateSourceStatus(desiredStatus)
 	if err != nil {
-		return u, errors.New(ErrKeyInvalidUserOriginStatus)
+		return u, ErrInvalidUserOriginStatus
 	}
 
 	// Check if current user status permitts the requested change
@@ -227,7 +226,7 @@ func (u *User) UpdateStatus(desiredStatus string) (*User, error) {
 		// Make sure user was previously ACTIVE before REACTIVATE
 		if desiredStatus == AccountStatusValidOriginKeyReactivate {
 			if u.Meta.ActivatedAt == "" {
-				return nil, errors.New(ErrKeyUserNeverActivated)
+				return nil, ErrUserNeverActivated
 			}
 			return u.setStatus(AccountStatusKeyActive), nil
 		}
@@ -251,18 +250,18 @@ func (u *User) UpdateStatus(desiredStatus string) (*User, error) {
 		return u, nil
 	}
 
-	return u, errors.New(ErrKeyInvalidUserOriginStatus)
+	return u, ErrInvalidUserOriginStatus
 }
 
 // validateSourceStatus returns valid status, or errors if status empty
 func (u *User) validateSourceStatus(desiredStatus string) error {
 	viableSourceStatus := StatusValidOrigins[desiredStatus]
 	if len(viableSourceStatus) == 0 {
-		return errors.New(ErrKeyInvalidUserOriginStatus)
+		return ErrInvalidUserOriginStatus
 	}
 
 	if !toolbox.StringInSlice(u.Status, viableSourceStatus) {
-		return errors.New(ErrKeyInvalidUserOriginStatus)
+		return ErrInvalidUserOriginStatus
 	}
 
 	return nil

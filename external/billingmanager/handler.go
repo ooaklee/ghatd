@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/pricer"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // BillingManagerService manages business logic around billingmanager request

@@ -9,7 +9,6 @@ package group
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -87,7 +86,7 @@ func NewService(
 
 	if len(config.Tree) > 0 {
 		if err := config.ValidateHierarchy(); err != nil {
-			return nil, errors.New(ErrKeyInvalidGroupHierarchyTree)
+			return nil, ErrInvalidGroupHierarchyTree
 		}
 	}
 
@@ -119,7 +118,7 @@ func (s *Service) validateHierarchyTreeConfig(log *zap.Logger) error {
 
 	if err := s.Config.ValidateHierarchy(); err != nil {
 		log.Error("group-hierarchy-tree-validation-failed", zap.Error(err))
-		return errors.New(ErrKeyInvalidGroupHierarchyTree)
+		return ErrInvalidGroupHierarchyTree
 	}
 
 	return nil
@@ -155,7 +154,7 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 	}
 	if !nameValidation.Available && nameValidation.IsRootType {
 		log.Debug("group-with-name-already-exists", zap.String("name", nameValidation.Name))
-		return nil, errors.New(ErrKeyNameAlreadyExists)
+		return nil, ErrNameAlreadyExists
 	}
 
 	// Create new group with dependencies
@@ -233,7 +232,7 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 				zap.String("parent_group_type", parentGroup.Type),
 				zap.String("child_group_type", group.Type),
 			)
-			return nil, errors.New(ErrKeyInvalidParentChildRelation)
+			return nil, ErrInvalidParentChildRelation
 		}
 	}
 
@@ -241,7 +240,7 @@ func (s *Service) CreateGroup(ctx context.Context, req *CreateGroupRequest) (*Cr
 	createdGroup, err := s.GroupRepository.CreateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-create-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -340,7 +339,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, req *GetGroupDescenda
 	)
 
 	if req.MaxDepth < 0 {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.ID)
@@ -652,7 +651,7 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 					return nil, nameValidationErr
 				}
 				if !nameValidation.Available && nameValidation.IsRootType {
-					return nil, errors.New(ErrKeyNameAlreadyExists)
+					return nil, ErrNameAlreadyExists
 				}
 				groupWithProvidedData.RawName = nameValidation.RawName
 				groupWithProvidedData.Name = nameValidation.Name
@@ -698,7 +697,7 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 					return nil, nameValidationErr
 				}
 				if !nameValidation.Available && nameValidation.IsRootType {
-					return nil, errors.New(ErrKeyNameAlreadyExists)
+					return nil, ErrNameAlreadyExists
 				}
 				if nameValidation.Name != group.Name || nameValidation.RawName != group.RawName {
 					group.Name = nameValidation.Name
@@ -767,7 +766,7 @@ func (s *Service) UpdateGroup(ctx context.Context, req *UpdateGroupRequest) (*Up
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -804,7 +803,7 @@ func (s *Service) DeleteGroup(ctx context.Context, req *DeleteGroupRequest) (*De
 	descendants, err := s.GroupRepository.GetGroupsByLineageAncestor(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-groups-by-lineage-ancestor", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	groupsToDelete := make([]*UniversalGroup, 0, len(descendants)+1)
@@ -837,7 +836,7 @@ func (s *Service) DeleteGroup(ctx context.Context, req *DeleteGroupRequest) (*De
 
 		if err != nil {
 			log.Error("failed-to-delete-group", zap.String("group_id", groupSnapshot.ID), zap.Error(err))
-			return nil, errors.New(ErrKeyDatabaseError)
+			return nil, ErrDatabaseError
 		}
 
 		if s.AuditService != nil {
@@ -892,7 +891,7 @@ func (s *Service) GetGroups(ctx context.Context, req *GetGroupsRequest) (*GetGro
 	totalGroups, err := s.GroupRepository.GetTotalGroups(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-total-groups-count", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	req.TotalCount = int(totalGroups)
@@ -902,7 +901,7 @@ func (s *Service) GetGroups(ctx context.Context, req *GetGroupsRequest) (*GetGro
 	groups, err := s.GroupRepository.GetGroups(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-groups", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Reinject dependencies for all groups
@@ -947,13 +946,13 @@ func (s *Service) GetGroupsByUserID(ctx context.Context, req *GetGroupsByUserIDR
 	log.Debug("getting-groups-by-user-id", zap.String("user_id", userID), zap.Bool("include_descendants", req.IncludeDescendants))
 
 	if userID == "" {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	groups, err := s.GroupRepository.GetGroupsByReferencedUserID(ctx, userID)
 	if err != nil {
 		log.Error("failed-to-get-groups-by-user-id", zap.Error(err), zap.String("user_id", userID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	groupPointers := make([]*UniversalGroup, len(groups))
@@ -1075,7 +1074,7 @@ func (s *Service) GetUserGroupAccessMap(ctx context.Context, userID string) (map
 	log.Debug("building-user-group-access-map", zap.String("user_id", trimmedUserID))
 
 	if trimmedUserID == "" {
-		return nil, errors.New(ErrKeyInvalidUserIDProvided)
+		return nil, ErrInvalidUserIDProvided
 	}
 
 	userGroupsResp, err := s.GetGroupsByUserID(ctx, &GetGroupsByUserIDRequest{
@@ -1177,7 +1176,7 @@ func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMem
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Get the added member
@@ -1219,7 +1218,7 @@ func (s *Service) InviteUser(ctx context.Context, req *InviteUserRequest) (*Invi
 	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	if s.isNonTopLevelGroup(targetGroup) {
-		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+		return nil, ErrInviteRequiresTopLevelGroup
 	}
 
 	if req.Role != "" {
@@ -1234,13 +1233,13 @@ func (s *Service) InviteUser(ctx context.Context, req *InviteUserRequest) (*Invi
 		return nil, err
 	}
 	if !targetAdded {
-		return nil, errors.New(ErrKeyInvitationAlreadyExists)
+		return nil, ErrInvitationAlreadyExists
 	}
 
 	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
 	if err != nil {
 		log.Error("failed-to-persist-target-group-invite", zap.Error(err), zap.String("group_id", req.GroupID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	if s.AuditService != nil {
@@ -1281,17 +1280,17 @@ func (s *Service) UninviteUser(ctx context.Context, req *UninviteUserRequest) (*
 	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	if s.isNonTopLevelGroup(targetGroup) {
-		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+		return nil, ErrInviteRequiresTopLevelGroup
 	}
 
 	if !removePendingInviteByEmail(targetGroup, inviteEmail) {
-		return nil, errors.New(ErrKeyInvitationNotFound)
+		return nil, ErrInvitationNotFound
 	}
 
 	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
 	if err != nil {
 		log.Error("failed-to-persist-target-group-uninvite", zap.Error(err), zap.String("group_id", req.GroupID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	if s.AuditService != nil {
@@ -1323,7 +1322,7 @@ func (s *Service) AcceptInvite(ctx context.Context, req *AcceptInviteRequest) (*
 
 	userID := strings.TrimSpace(req.UserID)
 	if userID == "" {
-		return nil, errors.New(ErrKeyInvalidUserIDProvided)
+		return nil, ErrInvalidUserIDProvided
 	}
 
 	targetGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
@@ -1334,7 +1333,7 @@ func (s *Service) AcceptInvite(ctx context.Context, req *AcceptInviteRequest) (*
 	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	if s.isNonTopLevelGroup(targetGroup) {
-		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+		return nil, ErrInviteRequiresTopLevelGroup
 	}
 
 	targetRole, targetChanged, acceptErr := s.acceptInviteInGroup(targetGroup, inviteEmail, userID)
@@ -1342,13 +1341,13 @@ func (s *Service) AcceptInvite(ctx context.Context, req *AcceptInviteRequest) (*
 		return nil, acceptErr
 	}
 	if !targetChanged {
-		return nil, errors.New(ErrKeyInvitationNotFound)
+		return nil, ErrInvitationNotFound
 	}
 
 	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
 	if err != nil {
 		log.Error("failed-to-persist-target-group-accept", zap.Error(err), zap.String("group_id", req.GroupID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	if s.AuditService != nil {
@@ -1387,17 +1386,17 @@ func (s *Service) RejectInvite(ctx context.Context, req *RejectInviteRequest) (*
 	targetGroup.SetDependencies(s.Config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 
 	if s.isNonTopLevelGroup(targetGroup) {
-		return nil, errors.New(ErrKeyInviteRequiresTopLevelGroup)
+		return nil, ErrInviteRequiresTopLevelGroup
 	}
 
 	if !removePendingInviteByEmail(targetGroup, inviteEmail) {
-		return nil, errors.New(ErrKeyInvitationNotFound)
+		return nil, ErrInvitationNotFound
 	}
 
 	updatedTargetGroup, err := s.GroupRepository.UpdateGroup(ctx, targetGroup)
 	if err != nil {
 		log.Error("failed-to-persist-target-group-reject", zap.Error(err), zap.String("group_id", req.GroupID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	if s.AuditService != nil {
@@ -1424,7 +1423,7 @@ func (s *Service) RemoveUserFromAllGroups(ctx context.Context, req *RemoveUserFr
 	log.Debug("removing-user-from-all-groups", zap.String("user_id", userID))
 
 	if userID == "" {
-		return nil, errors.New(ErrKeyInvalidUserIDProvided)
+		return nil, ErrInvalidUserIDProvided
 	}
 
 	groupsResp, groupsErr := s.GetGroupsByUserID(ctx, &GetGroupsByUserIDRequest{
@@ -1518,7 +1517,7 @@ func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*
 			zap.String("group_id", req.GroupID),
 			zap.String("member_id", req.MemberID),
 		)
-		return nil, errors.New(ErrKeyOwnerRemovalRequiresConfirm)
+		return nil, ErrOwnerRemovalRequiresConfirm
 	}
 
 	// Remove member
@@ -1533,7 +1532,7 @@ func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*
 		err = s.GroupRepository.ClearOwnerFromGroup(ctx, req.GroupID, req.MemberID)
 		if err != nil {
 			log.Error("failed-to-clear-owner-from-group-in-repository", zap.Error(err))
-			return nil, errors.New(ErrKeyDatabaseError)
+			return nil, ErrDatabaseError
 		}
 	}
 
@@ -1541,7 +1540,7 @@ func (s *Service) RemoveMember(ctx context.Context, req *RemoveMemberRequest) (*
 	err = s.GroupRepository.RemoveMemberFromGroup(ctx, req.GroupID, req.MemberID)
 	if err != nil {
 		log.Error("failed-to-remove-member-from-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	updatedGroup, err := s.GroupRepository.GetGroupByID(ctx, req.GroupID)
@@ -1678,7 +1677,7 @@ func removePendingInviteByEmail(group *UniversalGroup, inviteEmail string) bool 
 // It returns (false, nil) when the invite already exists.
 func (s *Service) addPendingInviteMember(group *UniversalGroup, inviteEmail, role, invitedByID string) (bool, error) {
 	if group == nil {
-		return false, errors.New(ErrKeyResourceNotFound)
+		return false, ErrResourceNotFound
 	}
 
 	if hasPendingInviteByEmail(group, inviteEmail) {
@@ -1686,7 +1685,7 @@ func (s *Service) addPendingInviteMember(group *UniversalGroup, inviteEmail, rol
 	}
 
 	if group.HasMember(inviteEmail) {
-		return false, errors.New(ErrKeyMemberAlreadyExists)
+		return false, ErrMemberAlreadyExists
 	}
 
 	member := Member{
@@ -1717,12 +1716,12 @@ func (s *Service) addPendingInviteMember(group *UniversalGroup, inviteEmail, rol
 // If the user already exists, their role is elevated to the highest applicable role.
 func (s *Service) acceptInviteInGroup(group *UniversalGroup, inviteEmail, userID string) (string, bool, error) {
 	if group == nil {
-		return "", false, errors.New(ErrKeyResourceNotFound)
+		return "", false, ErrResourceNotFound
 	}
 
 	index := findPendingInviteIndexByEmail(group, inviteEmail)
 	if index < 0 {
-		return "", false, errors.New(ErrKeyInvitationNotFound)
+		return "", false, ErrInvitationNotFound
 	}
 
 	memberRole := strings.TrimSpace(group.Members[index].Role)
@@ -1800,7 +1799,7 @@ func (s *Service) UpdateMemberRole(ctx context.Context, req *UpdateMemberRoleReq
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	memberInfo, _ := group.GetMemberByID(req.MemberID)
@@ -1880,7 +1879,7 @@ func (s *Service) ensureRootMembership(ctx context.Context, group *UniversalGrou
 	}
 
 	if _, err := s.GroupRepository.UpdateGroup(ctx, rootGroup); err != nil {
-		return errors.New(ErrKeyDatabaseError)
+		return ErrDatabaseError
 	}
 
 	if s.AuditService != nil {
@@ -1944,7 +1943,7 @@ func (s *Service) cascadeRemoveMemberFromDescendants(ctx context.Context, rootGr
 // getRootGroupID extracts the root group ID from a root-first lineage slice.
 func (s *Service) getRootGroupID(lineage []string) (string, error) {
 	if len(lineage) == 0 || strings.TrimSpace(lineage[0]) == "" {
-		return "", errors.New(ErrKeyInvalidGroupID)
+		return "", ErrInvalidGroupID
 	}
 
 	return lineage[0], nil
@@ -2044,7 +2043,7 @@ func (s *Service) isValidMemberRole(groupType, role string) error {
 				return nil // Role is valid
 			}
 		}
-		return errors.New(ErrKeyInvalidMemberRole)
+		return ErrInvalidMemberRole
 	}
 
 	// If no override for group type, check DefaultRoles
@@ -2054,7 +2053,7 @@ func (s *Service) isValidMemberRole(groupType, role string) error {
 				return nil // Role is valid
 			}
 		}
-		return errors.New(ErrKeyInvalidMemberRole)
+		return ErrInvalidMemberRole
 	}
 
 	// If no default roles defined, allow any role (backward compatibility)
@@ -2155,7 +2154,7 @@ func (s *Service) UpdateOwner(ctx context.Context, req *UpdateOwnerRequest) (*Up
 	}
 
 	if !hasChanges {
-		return nil, errors.New(ErrKeyNoChangesDetected)
+		return nil, ErrNoChangesDetected
 	}
 
 	// Update timestamps
@@ -2165,7 +2164,7 @@ func (s *Service) UpdateOwner(ctx context.Context, req *UpdateOwnerRequest) (*Up
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -2207,7 +2206,7 @@ func (s *Service) ArchiveGroup(ctx context.Context, req *ArchiveGroupRequest) (*
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -2249,7 +2248,7 @@ func (s *Service) RestoreGroup(ctx context.Context, req *RestoreGroupRequest) (*
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -2273,13 +2272,13 @@ func (s *Service) GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Co
 	log.Debug("getting-groups-awaiting-answer-for-invitations-by-member-id", zap.String("member_id", memberID))
 
 	if memberID == "" {
-		return nil, errors.New(ErrKeyInvalidMemberID)
+		return nil, ErrInvalidMemberID
 	}
 
 	groups, err := s.GroupRepository.GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx, memberID)
 	if err != nil {
 		log.Error("failed-to-get-groups-awaiting-answer-for-invitations-by-member-id", zap.Error(err), zap.String("member_id", memberID))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	filtered := make([]*UniversalGroup, 0, len(groups))
@@ -2409,7 +2408,7 @@ func (s *Service) GetGroupsByMemberID(ctx context.Context, req *GetGroupsRequest
 	totalGroups, err := s.GroupRepository.GetTotalGroups(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-total-groups-count-by-member-id", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	req.TotalCount = int(totalGroups)
@@ -2418,7 +2417,7 @@ func (s *Service) GetGroupsByMemberID(ctx context.Context, req *GetGroupsRequest
 	groups, err := s.GroupRepository.GetGroupsByMemberID(ctx, req.MemberID, req.MemberType, req.Page, req.PageSize)
 	if err != nil {
 		log.Error("failed-to-get-groups-by-member-id", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Reinject dependencies
@@ -2468,7 +2467,7 @@ func (s *Service) GetGroupsByLeaderID(ctx context.Context, req *GetGroupsRequest
 	totalGroups, err := s.GroupRepository.GetTotalGroups(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-total-groups-count-by-leader-id", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	req.TotalCount = int(totalGroups)
@@ -2479,7 +2478,7 @@ func (s *Service) GetGroupsByLeaderID(ctx context.Context, req *GetGroupsRequest
 	groups, err := s.GroupRepository.GetGroupsByLeaderID(ctx, leaderID, req.Page, req.PageSize)
 	if err != nil {
 		log.Error("failed-to-get-groups-by-leader-id", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Reinject dependencies
@@ -2542,7 +2541,7 @@ func (s *Service) GetGroupsStats(ctx context.Context, _ *GetGroupsStatsRequest) 
 	stats, err := s.GroupRepository.GetGroupsStatsCounts(ctx)
 	if err != nil {
 		log.Error("failed-to-get-groups-stats-counts", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	response := &GetGroupsStatsResponse{AllGroupsStats: stats}
@@ -2559,7 +2558,7 @@ func (s *Service) ValidateGroupName(ctx context.Context, req *ValidateGroupNameR
 	trimmedParentGroupID := strings.TrimSpace(req.ParentGroupID)
 	baseName, err := toolbox.StringConvertToKebabCase(trimmedRawName)
 	if err != nil {
-		return nil, errors.New(ErrKeyValidationFailed)
+		return nil, ErrValidationFailed
 	}
 
 	// Determine whether this type is a hierarchy root.
@@ -2653,18 +2652,18 @@ func (s *Service) RepairInvalidMembers(ctx context.Context) (*RepairInvalidMembe
 	beforeAffectedGroupIDs, err := s.GroupRepository.GetGroupIDsWithInvalidMembers(ctx)
 	if err != nil {
 		log.Error("failed-to-get-groups-with-invalid-members-before-repair", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	if err := s.GroupRepository.RepairInvalidMembers(ctx); err != nil {
 		log.Error("failed-to-repair-invalid-members", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	afterAffectedGroupIDs, err := s.GroupRepository.GetGroupIDsWithInvalidMembers(ctx)
 	if err != nil {
 		log.Error("failed-to-get-groups-with-invalid-members-after-repair", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	afterSet := make(map[string]struct{}, len(afterAffectedGroupIDs))
@@ -2724,7 +2723,7 @@ func (s *Service) SetGroupExtension(ctx context.Context, groupID, key string, va
 	updatedGroup, err := s.GroupRepository.UpdateGroup(ctx, group)
 	if err != nil {
 		log.Error("failed-to-update-group-in-repository", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	return &UpdateGroupResponse{Group: updatedGroup}, nil
@@ -2752,7 +2751,7 @@ func (s *Service) SearchGroupsByExtension(ctx context.Context, req *GetGroupsReq
 	totalGroups, err := s.GroupRepository.GetTotalGroups(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-total-groups-count-by-extension", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	req.TotalCount = int(totalGroups)
@@ -2770,7 +2769,7 @@ func (s *Service) SearchGroupsByExtension(ctx context.Context, req *GetGroupsReq
 	groups, err := s.GroupRepository.SearchGroupsByExtension(ctx, key, value, req.Page, req.PageSize)
 	if err != nil {
 		log.Error("failed-to-search-groups-by-extension", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Reinject dependencies
@@ -2806,7 +2805,7 @@ func (s *Service) BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string,
 	err := s.GroupRepository.BulkUpdateGroupsStatus(ctx, groupIDs, status)
 	if err != nil {
 		log.Error("failed-to-bulk-update-groups-status", zap.Error(err))
-		return errors.New(ErrKeyDatabaseError)
+		return ErrDatabaseError
 	}
 
 	// Audit log
@@ -2833,14 +2832,14 @@ func (s *Service) GetParentGroupsWithAutoJoinForEmail(ctx context.Context, email
 	trimmedEmail := strings.TrimSpace(email)
 	if trimmedEmail == "" {
 		log.Error("email-is-required")
-		return nil, errors.New(ErrKeyGroupEmailIsRequired)
+		return nil, ErrGroupEmailIsRequired
 	}
 
 	// Extract domain from email
 	emailDomain := extractEmailDomain(trimmedEmail)
 	if emailDomain == "" {
 		log.Error("invalid-email-format", zap.String("email", trimmedEmail))
-		return nil, errors.New(ErrKeyGroupInvalidEmailFormat)
+		return nil, ErrGroupInvalidEmailFormat
 	}
 
 	log.Debug("querying-groups-with-auto-join", zap.String("email_domain", emailDomain))
@@ -2889,7 +2888,7 @@ func (s *Service) EnableGroupAutoJoinByEmailDomain(ctx context.Context, req *Ena
 
 	if req == nil || strings.TrimSpace(req.GroupID) == "" {
 		log.Error("group-id-is-required")
-		return nil, errors.New(ErrKeyInvalidGroupID)
+		return nil, ErrInvalidGroupID
 	}
 
 	groupID := strings.TrimSpace(req.GroupID)
@@ -2903,7 +2902,7 @@ func (s *Service) EnableGroupAutoJoinByEmailDomain(ctx context.Context, req *Ena
 
 	if group == nil {
 		log.Error("group-not-found", zap.String("group_id", groupID))
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	// Ensure settings exist
@@ -2969,7 +2968,7 @@ func (s *Service) DisableGroupAutoJoinByEmailDomain(ctx context.Context, req *Di
 
 	if req == nil || strings.TrimSpace(req.GroupID) == "" {
 		log.Error("group-id-is-required")
-		return nil, errors.New(ErrKeyInvalidGroupID)
+		return nil, ErrInvalidGroupID
 	}
 
 	groupID := strings.TrimSpace(req.GroupID)
@@ -2983,7 +2982,7 @@ func (s *Service) DisableGroupAutoJoinByEmailDomain(ctx context.Context, req *Di
 
 	if group == nil {
 		log.Error("group-not-found", zap.String("group_id", groupID))
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	// Ensure settings exist
@@ -3026,7 +3025,7 @@ func (s *Service) EnableGroupAutoInviteByEmailDomain(ctx context.Context, req *E
 
 	if req == nil || strings.TrimSpace(req.GroupID) == "" {
 		log.Error("group-id-is-required")
-		return nil, errors.New(ErrKeyInvalidGroupID)
+		return nil, ErrInvalidGroupID
 	}
 
 	groupID := strings.TrimSpace(req.GroupID)
@@ -3040,7 +3039,7 @@ func (s *Service) EnableGroupAutoInviteByEmailDomain(ctx context.Context, req *E
 
 	if group == nil {
 		log.Error("group-not-found", zap.String("group_id", groupID))
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	// Ensure settings exist
@@ -3106,7 +3105,7 @@ func (s *Service) DisableGroupAutoInviteByEmailDomain(ctx context.Context, req *
 
 	if req == nil || strings.TrimSpace(req.GroupID) == "" {
 		log.Error("group-id-is-required")
-		return nil, errors.New(ErrKeyInvalidGroupID)
+		return nil, ErrInvalidGroupID
 	}
 
 	groupID := strings.TrimSpace(req.GroupID)
@@ -3120,7 +3119,7 @@ func (s *Service) DisableGroupAutoInviteByEmailDomain(ctx context.Context, req *
 
 	if group == nil {
 		log.Error("group-not-found", zap.String("group_id", groupID))
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	// Ensure settings exist

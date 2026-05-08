@@ -2,7 +2,6 @@ package post
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -68,7 +67,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	if req.UserId == "" {
 		logger.Warn("a-user-id-must-be-given-to-create-a-post")
-		return nil, errors.New(ErrKeyUserIdMustBeProvided)
+		return nil, ErrUserIdMustBeProvided
 	}
 
 	if req.PublishAtUtc != "" {
@@ -85,7 +84,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	if standardiseTitle == "" {
 		logger.Warn("attempt-made-to-create-post-without-title", zap.Any("request", req))
-		return nil, errors.New(ErrKeyRequiredPostTitleIsMissing)
+		return nil, ErrRequiredPostTitleIsMissing
 	}
 
 	if req.Text != "" {
@@ -94,7 +93,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	if standardisedText == "" {
 		logger.Warn("attempt-made-to-create-post-without-text", zap.Any("request", req))
-		return nil, errors.New(ErrKeyRequiredPostTextIsMissing)
+		return nil, ErrRequiredPostTextIsMissing
 	}
 
 	if req.PublishAs != "" {
@@ -135,7 +134,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	// if blog does not have one provided, bad request
 	if newPost.Type == PostTypeArticle && newPost.HeaderImage == "" {
 		logger.Warn("attempt-made-to-create-post-without-header-image", zap.Any("request", req))
-		return nil, errors.New(ErrKeyHeaderImageMissing)
+		return nil, ErrHeaderImageMissing
 	}
 
 	if newPost.Type != PostTypeArticle {
@@ -157,7 +156,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	// announcement, bug-fix, product-news, exciting-news
 	if newPost.Type == PostTypeChangelog && len(s.validChangelogTags) > 0 && len(newPost.Tags) == 0 {
 		logger.Warn("attempt-made-to-create-changelog-post-without-tags", zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
-		return nil, errors.New(ErrKeyChangelogPostMustHaveValidTagsSet)
+		return nil, ErrChangelogPostMustHaveValidTagsSet
 	}
 
 	if newPost.Type == PostTypeChangelog && len(s.validChangelogTags) > 0 && len(newPost.Tags) > 0 {
@@ -171,7 +170,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 		if len(invalidTags) > 0 {
 			logger.Warn("attempt-made-to-create-changelog-post-with-invalid-tags", zap.Strings("invalid-tags", invalidTags), zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
-			return nil, errors.New(ErrKeyChangelogPostMustHaveValidTagsSet)
+			return nil, ErrChangelogPostMustHaveValidTagsSet
 		}
 	}
 
@@ -182,7 +181,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	_, err = s.contenterRepository.GetPostByUrlFriendlyId(ctx, newPost.UrlFriendlyId)
 	if err == nil {
 		logger.Warn("attempt-made-to-create-post-with-existing-url-friendly-id", zap.Any("new-post", newPost))
-		return nil, errors.New(ErrKeyPostAlreadyExistsWithGivenUrlFriendlyId)
+		return nil, ErrPostAlreadyExistsWithGivenUrlFriendlyId
 	}
 
 	createdPost, err := s.contenterRepository.CreatePost(ctx, newPost)
@@ -429,7 +428,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 
 	if req.UserId == "" {
 		logger.Warn("a-user-id-must-be-given-to-update-a-post")
-		return nil, errors.New(ErrKeyUserIdMustBeProvided)
+		return nil, ErrUserIdMustBeProvided
 	}
 
 	// If a complete Post object is provided, use it
@@ -440,32 +439,32 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 		existingPost, err := s.contenterRepository.GetPostById(ctx, postToUpdate.Id)
 		if err != nil {
 			logger.Warn("attempt-made-to-update-non-existent-post", zap.String("post-id", postToUpdate.Id), zap.Error(err))
-			return nil, errors.New(ErrKeyPostNotFoundForUpdate)
+			return nil, ErrPostNotFoundForUpdate
 		}
 
 		// Prevent updating deleted posts
 		if existingPost.DeletedAt != "" {
 			logger.Warn("attempt-made-to-update-deleted-post", zap.String("post-id", postToUpdate.Id))
-			return nil, errors.New(ErrKeyPostUpdateAttemptOnDeletedPost)
+			return nil, ErrPostUpdateAttemptOnDeletedPost
 		}
 
 	} else {
 		// Otherwise, fetch the post by ID and apply individual field updates
 		if req.PostId == "" {
 			logger.Warn("attempt-made-to-update-post-without-post-id-or-post-object")
-			return nil, errors.New(ErrKeyIdIsRequired)
+			return nil, ErrIdIsRequired
 		}
 
 		postToUpdate, err = s.contenterRepository.GetPostById(ctx, req.PostId)
 		if err != nil {
 			logger.Warn("attempt-made-to-update-non-existent-post", zap.String("post-id", req.PostId), zap.Error(err))
-			return nil, errors.New(ErrKeyPostNotFoundForUpdate)
+			return nil, ErrPostNotFoundForUpdate
 		}
 
 		// Prevent updating deleted posts
 		if postToUpdate.DeletedAt != "" {
 			logger.Warn("attempt-made-to-update-deleted-post", zap.String("post-id", req.PostId))
-			return nil, errors.New(ErrKeyPostUpdateAttemptOnDeletedPost)
+			return nil, ErrPostUpdateAttemptOnDeletedPost
 		}
 
 		originalTitle := postToUpdate.Title
@@ -530,19 +529,19 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 	// Validate title is not empty
 	if strings.TrimSpace(postToUpdate.Title) == "" {
 		logger.Warn("attempt-made-to-update-post-with-empty-title", zap.Any("request", req))
-		return nil, errors.New(ErrKeyRequiredPostTitleIsMissing)
+		return nil, ErrRequiredPostTitleIsMissing
 	}
 
 	// Validate text is not empty
 	if strings.TrimSpace(postToUpdate.Text) == "" {
 		logger.Warn("attempt-made-to-update-post-with-empty-text", zap.Any("request", req))
-		return nil, errors.New(ErrKeyRequiredPostTextIsMissing)
+		return nil, ErrRequiredPostTextIsMissing
 	}
 
 	// Validate header image requirements for articles
 	if postToUpdate.Type == PostTypeArticle && postToUpdate.HeaderImage == "" {
 		logger.Warn("attempt-made-to-update-article-post-without-header-image", zap.Any("request", req))
-		return nil, errors.New(ErrKeyHeaderImageMissing)
+		return nil, ErrHeaderImageMissing
 	}
 
 	if postToUpdate.Type != PostTypeArticle {
@@ -566,7 +565,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 	// Verify changelog tags if applicable
 	if postToUpdate.Type == PostTypeChangelog && len(s.validChangelogTags) > 0 && len(postToUpdate.Tags) == 0 {
 		logger.Warn("attempt-made-to-update-changelog-post-without-tags", zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
-		return nil, errors.New(ErrKeyChangelogPostMustHaveValidTagsSet)
+		return nil, ErrChangelogPostMustHaveValidTagsSet
 	}
 
 	if postToUpdate.Type == PostTypeChangelog && len(s.validChangelogTags) > 0 && len(postToUpdate.Tags) > 0 {
@@ -580,7 +579,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 
 		if len(invalidTags) > 0 {
 			logger.Warn("attempt-made-to-update-changelog-post-with-invalid-tags", zap.Strings("invalid-tags", invalidTags), zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
-			return nil, errors.New(ErrKeyChangelogPostMustHaveValidTagsSet)
+			return nil, ErrChangelogPostMustHaveValidTagsSet
 		}
 	}
 
@@ -594,7 +593,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 			_, err = s.contenterRepository.GetPostByUrlFriendlyId(ctx, postToUpdate.UrlFriendlyId)
 			if err == nil {
 				logger.Warn("attempt-made-to-update-post-with-existing-url-friendly-id", zap.String("new-url-friendly-id", postToUpdate.UrlFriendlyId))
-				return nil, errors.New(ErrKeyPostAlreadyExistsWithGivenUrlFriendlyId)
+				return nil, ErrPostAlreadyExistsWithGivenUrlFriendlyId
 			}
 		}
 	}
@@ -622,7 +621,7 @@ func (s *Service) parsePostPublishTime(publishAtUtc string, logger *zap.Logger) 
 	parsedPublishAtTime, err := time.Parse("2006-01-02T15:04:05", publishAtUtc)
 	if err != nil {
 		logger.Warn("invalid-publish-at-format-provided", zap.String("raw-publish-at", publishAtUtc))
-		return "", errors.New(ErrKeyInvalidPostPublishedAtProvided)
+		return "", ErrInvalidPostPublishedAtProvided
 	}
 
 	publishedAt := parsedPublishAtTime.UTC().Format(common.RFC3339NanoUTC)
@@ -665,7 +664,7 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	typesList := toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(types)
 	if len(typesList) == 0 {
 		logger.Warn("no-valid-types-provided-after-parsing")
-		return nil, errors.New(ErrKeyRequiredPostTypeIsMissing)
+		return nil, ErrRequiredPostTypeIsMissing
 	}
 
 	// Create request to get posts with unique type enforcement
@@ -796,19 +795,19 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 
 	if req.Id == "" {
 		logger.Warn("attempt-made-to-delete-post-without-post-id")
-		return nil, errors.New(ErrKeyIdIsRequired)
+		return nil, ErrIdIsRequired
 	}
 
 	if req.UserId == "" {
 		logger.Warn("a-user-id-must-be-given-to-delete-a-post")
-		return nil, errors.New(ErrKeyUserIdMustBeProvided)
+		return nil, ErrUserIdMustBeProvided
 	}
 
 	// Perform soft delete
 	postToDelete, err := s.contenterRepository.GetPostById(ctx, req.Id)
 	if err != nil {
 		logger.Warn("attempt-made-to-delete-non-existent-post", zap.String("post-id", req.Id), zap.Error(err))
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	if req.HardDelete {
@@ -823,7 +822,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 		// Prevent soft deleting an already deleted post
 		if postToDelete.DeletedAt != "" {
 			logger.Warn("attempt-made-to-soft-delete-already-deleted-post", zap.String("post-id", postToDelete.Id))
-			return nil, errors.New(ErrKeyPostAlreadySoftDeleted)
+			return nil, ErrPostAlreadySoftDeleted
 		}
 
 		err = s.contenterRepository.SoftDeletePost(ctx, postToDelete, req.UserId)
@@ -851,18 +850,18 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 
 	if req.Id == "" {
 		logger.Warn("attempt-made-to-restore-post-without-post-id")
-		return nil, errors.New(ErrKeyIdIsRequired)
+		return nil, ErrIdIsRequired
 	}
 
 	if req.UserId == "" {
 		logger.Warn("a-user-id-must-be-given-to-restore-a-post")
-		return nil, errors.New(ErrKeyUserIdMustBeProvided)
+		return nil, ErrUserIdMustBeProvided
 	}
 
 	postToRestore, err := s.contenterRepository.GetPostById(ctx, req.Id)
 	if err != nil {
 		logger.Warn("attempt-made-to-restore-non-existent-post", zap.String("post-id", req.Id), zap.Error(err))
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	if postToRestore.DeletedAt == "" {

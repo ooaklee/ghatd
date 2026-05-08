@@ -1,0 +1,32 @@
+package billing
+
+import "errors"
+
+var (
+	ErrBillingAssociationFailed                = errors.New(ErrKeyBillingAssociationFailed)
+	ErrBillingDuplicateIntegratorID            = errors.New(ErrKeyBillingDuplicateIntegratorID)
+	ErrBillingEventAlreadyProcessed            = errors.New(ErrKeyBillingEventAlreadyProcessed)
+	ErrBillingEventNotFound                    = errors.New(ErrKeyBillingEventNotFound)
+	ErrBillingFailedToCreateEvent              = errors.New(ErrKeyBillingFailedToCreateEvent)
+	ErrBillingFailedToCreateSubscription       = errors.New(ErrKeyBillingFailedToCreateSubscription)
+	ErrBillingFailedToDeleteSubscription       = errors.New(ErrKeyBillingFailedToDeleteSubscription)
+	ErrBillingFailedToGetEvents                = errors.New(ErrKeyBillingFailedToGetEvents)
+	ErrBillingFailedToGetSubscriptions         = errors.New(ErrKeyBillingFailedToGetSubscriptions)
+	ErrBillingFailedToUpdateSubscription       = errors.New(ErrKeyBillingFailedToUpdateSubscription)
+	ErrBillingForbiddenOperation               = errors.New(ErrKeyBillingForbiddenOperation)
+	ErrBillingInvalidAmount                    = errors.New(ErrKeyBillingInvalidAmount)
+	ErrBillingInvalidCurrency                  = errors.New(ErrKeyBillingInvalidCurrency)
+	ErrBillingInvalidEmail                     = errors.New(ErrKeyBillingInvalidEmail)
+	ErrBillingInvalidIntegrator                = errors.New(ErrKeyBillingInvalidIntegrator)
+	ErrBillingInvalidStatus                    = errors.New(ErrKeyBillingInvalidStatus)
+	ErrBillingInvalidSubscriptionID            = errors.New(ErrKeyBillingInvalidSubscriptionID)
+	ErrBillingInvalidUserID                    = errors.New(ErrKeyBillingInvalidUserID)
+	ErrBillingMissingRequiredField             = errors.New(ErrKeyBillingMissingRequiredField)
+	ErrBillingNoEventsFoundForEmail            = errors.New(ErrKeyBillingNoEventsFoundForEmail)
+	ErrBillingNoSubscriptionsFoundForEmail     = errors.New(ErrKeyBillingNoSubscriptionsFoundForEmail)
+	ErrBillingNoUnassociatedSubscriptionsFound = errors.New(ErrKeyBillingNoUnassociatedSubscriptionsFound)
+	ErrBillingSubscriptionAlreadyExists        = errors.New(ErrKeyBillingSubscriptionAlreadyExists)
+	ErrBillingSubscriptionNotFound             = errors.New(ErrKeyBillingSubscriptionNotFound)
+	ErrBillingUnauthorisedAccess               = errors.New(ErrKeyBillingUnauthorisedAccess)
+	ErrBillingUpdateUserIDFailed               = errors.New(ErrKeyBillingUpdateUserIDFailed)
+)

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -246,13 +246,13 @@ func TestHandler_ValidateEmailVerificationCode(t *testing.T) {
 		{
 			name:         "Failure - service returns error",
 			query:        "?t=" + testValidToken128,
-			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationToken),
+			mockErr:      accessmanager.ErrInvalidVerificationToken,
 			expectStatus: http.StatusBadRequest,
 		},
 		{
 			name:         "Failure - invalid verification code",
 			query:        "?c=ABC123DE",
-			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationCode),
+			mockErr:      accessmanager.ErrInvalidVerificationCode,
 			expectStatus: http.StatusBadRequest,
 		},
 	}
@@ -346,13 +346,13 @@ func TestHandler_LoginUser(t *testing.T) {
 		{
 			name:         "Failure - service returns error",
 			query:        "?t=" + testValidToken128,
-			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationToken),
+			mockErr:      accessmanager.ErrInvalidVerificationToken,
 			expectStatus: http.StatusBadRequest,
 		},
 		{
 			name:         "Failure - invalid verification code",
 			query:        "?c=LOG123CD",
-			mockErr:      errors.New(accessmanager.ErrKeyInvalidVerificationCode),
+			mockErr:      accessmanager.ErrInvalidVerificationCode,
 			expectStatus: http.StatusBadRequest,
 		},
 	}
@@ -420,7 +420,7 @@ func TestHandler_CreateUser(t *testing.T) {
 		{
 			name:         "Failure - service returns conflicting state",
 			body:         `{"first_name":"Ada","last_name":"Lovelace","email":"ada@example.com"}`,
-			mockErr:      errors.New(accessmanager.ErrKeyConflictingUserState),
+			mockErr:      accessmanager.ErrConflictingUserState,
 			expectStatus: http.StatusConflict,
 		},
 	}
@@ -536,7 +536,7 @@ func TestHandler_RefreshToken(t *testing.T) {
 		{
 			name:          "Failure - service error wipes auth cookies and returns mapped status",
 			refreshCookie: testValidToken128,
-			mockErr:       errors.New(accessmanager.ErrKeyEmptyRefreshToken),
+			mockErr:       accessmanager.ErrEmptyRefreshToken,
 			expectStatus:  http.StatusUnauthorized,
 		},
 	}

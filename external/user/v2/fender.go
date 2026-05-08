@@ -1,7 +1,6 @@
 package user
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -14,11 +13,11 @@ func MapRequestToCreateUserRequest(request *http.Request, validator UserValidato
 
 	err := toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -32,11 +31,11 @@ func MapRequestToGetUserByIDRequest(request *http.Request, validator UserValidat
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -50,11 +49,11 @@ func MapRequestToGetUserByNanoIDRequest(request *http.Request, validator UserVal
 	// get nano id from uri
 	parsedRequest.NanoID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableNanoID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidNanoID)
+		return nil, ErrInvalidNanoID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidNanoID)
+		return nil, ErrInvalidNanoID
 	}
 
 	return parsedRequest, nil
@@ -67,13 +66,13 @@ func MapRequestToGetUserByEmailRequest(request *http.Request, validator UserVali
 	// get email from query parameter
 	email := request.URL.Query().Get("email")
 	if email == "" {
-		return nil, errors.New(ErrKeyInvalidEmail)
+		return nil, ErrInvalidEmail
 	}
 
 	parsedRequest.Email = email
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidEmail)
+		return nil, ErrInvalidEmail
 	}
 
 	return parsedRequest, nil
@@ -87,16 +86,16 @@ func MapRequestToUpdateUserRequest(request *http.Request, validator UserValidato
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -110,11 +109,11 @@ func MapRequestToDeleteUserRequest(request *http.Request, validator UserValidato
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -129,12 +128,12 @@ func MapRequestToGetUsersRequest(request *http.Request, validator UserValidator)
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	return parsedRequest, nil
@@ -148,16 +147,16 @@ func MapRequestToUpdateUserStatusRequest(request *http.Request, validator UserVa
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -171,16 +170,16 @@ func MapRequestToAddUserRoleRequest(request *http.Request, validator UserValidat
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -194,16 +193,16 @@ func MapRequestToRemoveUserRoleRequest(request *http.Request, validator UserVali
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -217,11 +216,11 @@ func MapRequestToVerifyUserEmailRequest(request *http.Request, validator UserVal
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -235,11 +234,11 @@ func MapRequestToUnverifyUserEmailRequest(request *http.Request, validator UserV
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -253,11 +252,11 @@ func MapRequestToVerifyUserPhoneRequest(request *http.Request, validator UserVal
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -271,11 +270,11 @@ func MapRequestToRecordUserLoginRequest(request *http.Request, validator UserVal
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -289,11 +288,11 @@ func MapRequestToGetUserProfileRequest(request *http.Request, validator UserVali
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -307,11 +306,11 @@ func MapRequestToGetUserMicroProfileRequest(request *http.Request, validator Use
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -325,16 +324,16 @@ func MapRequestToSetUserExtensionRequest(request *http.Request, validator UserVa
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -348,17 +347,17 @@ func MapRequestToGetUserExtensionRequest(request *http.Request, validator UserVa
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	// get extension key from uri
 	parsedRequest.Key, err = toolbox.GetVariableValueFromUri(request, UserURIVariableExtensionKey)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	return parsedRequest, nil
@@ -372,16 +371,16 @@ func MapRequestToUpdateUserPersonalInfoRequest(request *http.Request, validator 
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -395,11 +394,11 @@ func MapRequestToValidateUserRequest(request *http.Request, validator UserValida
 	// get user id from uri
 	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	return parsedRequest, nil
@@ -411,11 +410,11 @@ func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator U
 
 	err := toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return parsedRequest, nil
@@ -430,12 +429,12 @@ func MapRequestToGetUserStatsRequest(request *http.Request, validator UserValida
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	return parsedRequest, nil
@@ -447,7 +446,7 @@ func MapRequestToGetUserConfigsRequest(_ *http.Request, validator UserValidator)
 
 	err := validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidQueryParam)
+		return nil, ErrInvalidQueryParam
 	}
 
 	return parsedRequest, nil

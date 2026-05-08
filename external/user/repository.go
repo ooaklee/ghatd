@@ -180,7 +180,7 @@ func (r *Repository) GetUserByNanoId(ctx context.Context, nanoId string) (*User,
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_nano_id": nanoId}, &result, "User", true, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_nano_id": nanoId}, &result, "User", true, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func (r *Repository) GetUserByID(ctx context.Context, id string) (*User, error) 
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_id": id}, &result, "User", true, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_id": id}, &result, "User", true, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -331,8 +331,8 @@ func (r *Repository) CreateUser(ctx context.Context, newUser *User) (*User, erro
 	// Check user's email is new
 	_, err = r.GetUserByEmail(ctx, newUser.Email, false)
 	if err == nil {
-		return nil, errors.New(ErrKeyResourceConflict)
-	} else if err.Error() != ErrKeyResourceNotFound {
+		return nil, ErrResourceConflict
+	} else if !errors.Is(err, ErrResourceNotFound) {
 		return nil, err
 	}
 
@@ -355,7 +355,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string, logError 
 		return nil, err
 	}
 
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"email": email}, &result, "User", logError, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"email": email}, &result, "User", logError, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}

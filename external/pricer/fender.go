@@ -20,16 +20,16 @@ type PricerValidator interface {
 func MapRequestToCreatePricePlanRequest(request *http.Request, validator PricerValidator) (*CreatePricePlanRequest, error) {
 	parsedRequest := &CreatePricePlanRequest{}
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	return parsedRequest, nil
@@ -41,22 +41,22 @@ func MapRequestToUpdatePricePlanRequest(request *http.Request, validator PricerV
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	parsedRequest.ID = id
 
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 	parsedRequest.ID = id
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	return parsedRequest, nil
@@ -68,7 +68,7 @@ func MapRequestToGetPricePlanByIDRequest(request *http.Request, validator Pricer
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	parsedRequest.ID = id
 
@@ -77,7 +77,7 @@ func MapRequestToGetPricePlanByIDRequest(request *http.Request, validator Pricer
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 
 	return parsedRequest, nil
@@ -89,7 +89,7 @@ func MapRequestToGetPricePlanBySlugRequest(request *http.Request, validator Pric
 
 	slug, err := toolbox.GetVariableValueFromUri(request, "slug")
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceSlug)
+		return nil, ErrInvalidPriceSlug
 	}
 	parsedRequest.Slug = slug
 
@@ -98,7 +98,7 @@ func MapRequestToGetPricePlanBySlugRequest(request *http.Request, validator Pric
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceSlug)
+		return nil, ErrInvalidPriceSlug
 	}
 
 	return parsedRequest, nil
@@ -112,7 +112,7 @@ func MapRequestToGetPricePlansRequest(request *http.Request, validator PricerVal
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+		return nil, ErrInvalidPriceQueryParam
 	}
 
 	return parsedRequest, nil
@@ -126,7 +126,7 @@ func MapRequestToValidatePriceSlugRequest(request *http.Request, validator Price
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+		return nil, ErrInvalidPriceQueryParam
 	}
 
 	return parsedRequest, nil
@@ -138,22 +138,22 @@ func MapRequestToPublishPricePlanRequest(request *http.Request, validator Pricer
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	parsedRequest.ID = id
 
 	if err := decodeOptionalBody(request, parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 	parsedRequest.ID = id
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	return parsedRequest, nil
@@ -165,17 +165,17 @@ func MapRequestToArchivePricePlanRequest(request *http.Request, validator Pricer
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	parsedRequest.ID = id
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	return parsedRequest, nil
@@ -187,17 +187,17 @@ func MapRequestToDeletePricePlanRequest(request *http.Request, validator PricerV
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	parsedRequest.ID = id
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	return parsedRequest, nil
@@ -207,16 +207,16 @@ func MapRequestToDeletePricePlanRequest(request *http.Request, validator PricerV
 func MapRequestToCreateFeatureRequest(request *http.Request, validator PricerValidator) (*CreateFeatureRequest, error) {
 	parsedRequest := &CreateFeatureRequest{}
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 
 	return parsedRequest, nil
@@ -228,22 +228,22 @@ func MapRequestToUpdateFeatureRequest(request *http.Request, validator PricerVal
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPriceFeatureIDRequired)
+		return nil, ErrPriceFeatureIDRequired
 	}
 	parsedRequest.ID = id
 
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 	parsedRequest.ID = id
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 
 	return parsedRequest, nil
@@ -257,7 +257,7 @@ func MapRequestToGetFeaturesRequest(request *http.Request, validator PricerValid
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+		return nil, ErrInvalidPriceQueryParam
 	}
 
 	return parsedRequest, nil
@@ -269,17 +269,17 @@ func MapRequestToDeleteFeatureRequest(request *http.Request, validator PricerVal
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
-		return nil, errors.New(ErrKeyPriceFeatureIDRequired)
+		return nil, ErrPriceFeatureIDRequired
 	}
 	parsedRequest.ID = id
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserID == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 
 	return parsedRequest, nil
@@ -295,7 +295,7 @@ func validateParsedRequest(request interface{}, validator PricerValidator) error
 
 func decodeQuery(request *http.Request, parsedRequest interface{}) error {
 	if err := querydecoder.New(request.URL.Query()).Decode(parsedRequest); err != nil {
-		return errors.New(ErrKeyInvalidPriceQueryParam)
+		return ErrInvalidPriceQueryParam
 	}
 
 	return nil

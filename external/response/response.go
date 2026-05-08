@@ -1,19 +1,18 @@
 package response
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 const (
 	ErrKeyResourceNotFound = "DefaultResourceNotFound"
 )
 
-var defaultErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
-	ErrKeyResourceNotFound: {Title: "Resource not found.", StatusCode: 404},
+var defaultErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrResourceNotFound: {Title: "Resource not found.", StatusCode: 404},
 }
 
 // GetResourceNotFoundError returns default 404 response
@@ -22,7 +21,7 @@ func GetResourceNotFoundError(w http.ResponseWriter, r *http.Request) {
 
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		//nolint will set up default fallback later
-		replier.NewHTTPErrorResponse(w, errors.New(ErrKeyResourceNotFound))
+		replier.NewHTTPErrorResponse(w, ErrResourceNotFound)
 		return
 	}
 

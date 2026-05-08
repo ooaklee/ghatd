@@ -2,7 +2,6 @@ package group
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -94,7 +93,7 @@ func (r *Repository) GetGroupCollection(ctx context.Context) (*mongo.Collection,
 		return r.collection, nil
 	}
 
-	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, GroupCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, GroupCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // CreateGroup creates a new group in the repository
@@ -124,7 +123,7 @@ func (r *Repository) GetGroupByID(ctx context.Context, id string) (*UniversalGro
 	}
 
 	var result UniversalGroup
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", true, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", true, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +143,7 @@ func (r *Repository) GetGroupByNanoID(ctx context.Context, nanoID string) (*Univ
 	}
 
 	var result UniversalGroup
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", true, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", true, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +167,7 @@ func (r *Repository) GetGroupByName(ctx context.Context, name, groupType string,
 	}
 
 	var result UniversalGroup
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", logError, errors.New(ErrKeyUnableToFindGroupWithName))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", logError, ErrUnableToFindGroupWithName)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +188,7 @@ func (r *Repository) GetGroupByNameAndParent(ctx context.Context, name, parentGr
 	}
 
 	var result UniversalGroup
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", logError, errors.New(ErrKeyUnableToFindGroupWithName))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "group", logError, ErrUnableToFindGroupWithName)
 	if err != nil {
 		return nil, err
 	}

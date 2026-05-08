@@ -39,7 +39,7 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 	log.Debug("initiating-record-streak-request", zap.Any("request", req))
 
 	if req == nil {
-		return nil, errors.New(ErrKeyStreakTypeIsRequired)
+		return nil, ErrStreakTypeIsRequired
 	}
 
 	scope := NormaliseScope(StreakScope{
@@ -55,7 +55,7 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 
 	createdByUserId := strings.TrimSpace(req.CreatedByUserId)
 	if createdByUserId == "" {
-		return nil, errors.New(ErrKeyCreatedByUserIdIsRequired)
+		return nil, ErrCreatedByUserIdIsRequired
 	}
 
 	periodType, err := NormalisePeriodType(req.PeriodType)
@@ -91,7 +91,7 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 	if err == nil && existing != nil {
 		return &RecordStreakResponse{Streak: existing}, nil
 	}
-	if err != nil && err.Error() != ErrKeyResourceNotFound {
+	if err != nil && !errors.Is(err, ErrResourceNotFound) {
 		log.Error("failed-to-record-streak-error-checking-period", zap.Any("request", req), zap.Error(err))
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 	previous, err = s.StreakRepository.GetLatestStreak(ctx, &GetLatestStreakRequest{
 		StreakStatsRequest: statsReq,
 	})
-	if err != nil && err.Error() != ErrKeyResourceNotFound {
+	if err != nil && !errors.Is(err, ErrResourceNotFound) {
 		log.Error("failed-to-record-streak-error-getting-latest-streak", zap.Any("request", req), zap.Error(err))
 		return nil, err
 	}
@@ -141,18 +141,18 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 // CreateRawStreak creates a precomputed streak entry.
 func (s *Service) CreateRawStreak(ctx context.Context, req *CreateRawStreakRequest) (*RecordStreakResponse, error) {
 	if req == nil || req.Streak == nil {
-		return nil, errors.New(ErrKeyStreakTypeIsRequired)
+		return nil, ErrStreakTypeIsRequired
 	}
 
 	streak := req.Streak
 	if streak.Id == "" {
-		return nil, errors.New(ErrKeyIdIsRequired)
+		return nil, ErrIdIsRequired
 	}
 	if streak.NanoId == "" {
-		return nil, errors.New(ErrKeyNanoIdIsRequired)
+		return nil, ErrNanoIdIsRequired
 	}
 	if streak.CurrentCount <= 0 {
-		return nil, errors.New(ErrKeyCurrentCountCannotBeZero)
+		return nil, ErrCurrentCountCannotBeZero
 	}
 	if err := validateRequiredScope(NormaliseScope(streak.ToScope())); err != nil {
 		return nil, err
@@ -179,7 +179,7 @@ func (s *Service) GetLongestStreak(ctx context.Context, req *GetLongestStreakReq
 	}
 
 	streak, err := s.StreakRepository.GetLongestStreak(ctx, &GetLongestStreakRequest{StreakStatsRequest: *statsReq})
-	if err != nil && err.Error() == ErrKeyResourceNotFound {
+	if err != nil && errors.Is(err, ErrResourceNotFound) {
 		return &GetLongestStreakResponse{LongestCount: 0}, nil
 	}
 	if err != nil {
@@ -210,7 +210,7 @@ func (s *Service) GetCurrentCount(ctx context.Context, req *GetCurrentCountReque
 	}
 
 	streak, err := s.StreakRepository.GetLatestStreak(ctx, &GetLatestStreakRequest{StreakStatsRequest: *statsReq})
-	if err != nil && err.Error() == ErrKeyResourceNotFound {
+	if err != nil && errors.Is(err, ErrResourceNotFound) {
 		return &GetCurrentCountResponse{CurrentCount: 0}, nil
 	}
 	if err != nil {
@@ -255,7 +255,7 @@ func (s *Service) GetNumberOfStreaksByStreakTypeAndUserID(ctx context.Context, r
 
 func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error) {
 	if req == nil {
-		return nil, errors.New(ErrKeyStreakTypeIsRequired)
+		return nil, ErrStreakTypeIsRequired
 	}
 
 	scope := NormaliseScope(StreakScope{
@@ -266,15 +266,15 @@ func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error)
 	})
 
 	if scope.StreakType == "" {
-		return nil, errors.New(ErrKeyStreakTypeIsRequired)
+		return nil, ErrStreakTypeIsRequired
 	}
 
 	if scope.OwnerId == "" {
-		return nil, errors.New(ErrKeyOwnerIdIsRequired)
+		return nil, ErrOwnerIdIsRequired
 	}
 
 	if req.PeriodType == "" {
-		return nil, errors.New(ErrKeyPeriodTypeIsRequired)
+		return nil, ErrPeriodTypeIsRequired
 	}
 
 	periodType := req.PeriodType
@@ -297,16 +297,16 @@ func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error)
 
 func validateRequiredScope(scope StreakScope) error {
 	if scope.StreakType == "" {
-		return errors.New(ErrKeyStreakTypeIsRequired)
+		return ErrStreakTypeIsRequired
 	}
 	if scope.OwnerId == "" {
-		return errors.New(ErrKeyOwnerIdIsRequired)
+		return ErrOwnerIdIsRequired
 	}
 	if scope.TargetType == "" {
-		return errors.New(ErrKeyTargetTypeIsRequired)
+		return ErrTargetTypeIsRequired
 	}
 	if scope.TargetId == "" {
-		return errors.New(ErrKeyTargetIdIsRequired)
+		return ErrTargetIdIsRequired
 	}
 
 	return nil

@@ -1,14 +1,13 @@
 package spa
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // Handler manages request for spa
@@ -48,7 +47,7 @@ func (h *Handler) GetResourceNotFoundError(w http.ResponseWriter, r *http.Reques
 
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		//nolint will set up default fallback later
-		replier.NewHTTPErrorResponse(w, errors.New(ErrKeyResourceNotFound))
+		replier.NewHTTPErrorResponse(w, ErrResourceNotFound)
 		return
 	}
 
@@ -71,7 +70,7 @@ const (
 	ErrKeyResourceNotFound = "DefaultResourceNotFound"
 )
 
-var defaultErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
+var defaultErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	// DefaultResourceNotFound is the default resource not found error
-	ErrKeyResourceNotFound: {Title: "Not Found", StatusCode: 404, Detail: "The requested resource could not be found", Code: "SPA0-001"},
+	ErrResourceNotFound: {Title: "Not Found", StatusCode: 404, Detail: "The requested resource could not be found", Code: "SPA0-001"},
 }

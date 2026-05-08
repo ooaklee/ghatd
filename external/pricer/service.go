@@ -55,15 +55,15 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 	log.Debug("initiating-create-price-plan-request", zap.Any("request", req))
 
 	if req == nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	publishedAt, err := normaliseDateParam(req.PublishAtUtc)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	pricePlan := &PricePlan{
@@ -125,16 +125,16 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 	log.Debug("initiating-update-price-plan-request", zap.Any("request", req))
 
 	if req == nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	pricePlanToUpdate := req.PricePlan
 	if pricePlanToUpdate == nil {
 		if strings.TrimSpace(req.ID) == "" {
-			return nil, errors.New(ErrKeyPricePlanIDRequired)
+			return nil, ErrPricePlanIDRequired
 		}
 
 		var err error
@@ -179,7 +179,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 			pricePlanToUpdate.Metadata = req.Metadata
 		}
 	} else if strings.TrimSpace(pricePlanToUpdate.ID) == "" {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	} else {
 		if _, err := s.PricerRepository.GetPricePlanByID(ctx, pricePlanToUpdate.ID, &GetPricePlanByIDRequest{}); err != nil {
 			log.Warn("attempt-made-to-update-missing-price-plan", zap.String("price_plan_id", pricePlanToUpdate.ID), zap.Error(err))
@@ -216,7 +216,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 // GetPricePlanByID returns a price plan by ID.
 func (s *Service) GetPricePlanByID(ctx context.Context, req *GetPricePlanByIDRequest) (*GetPricePlanByIDResponse, error) {
 	if req == nil || strings.TrimSpace(req.ID) == "" {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 
 	pricePlan, err := s.PricerRepository.GetPricePlanByID(ctx, req.ID, req)
@@ -232,7 +232,7 @@ func (s *Service) GetPricePlanByID(ctx context.Context, req *GetPricePlanByIDReq
 // GetPricePlanBySlug returns a price plan by slug.
 func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error) {
 	if req == nil || strings.TrimSpace(req.Slug) == "" {
-		return nil, errors.New(ErrKeyInvalidPriceSlug)
+		return nil, ErrInvalidPriceSlug
 	}
 
 	req.Slug = NormalisePriceSlug(req.Slug)
@@ -294,12 +294,12 @@ func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) 
 // ValidatePriceSlug returns the normalized slug and availability for a pricing resource.
 func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error) {
 	if req == nil {
-		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+		return nil, ErrInvalidPriceQueryParam
 	}
 
 	resourceType, lookupResourceType, err := normalisePriceSlugResourceType(req.ResourceType)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceQueryParam)
+		return nil, ErrInvalidPriceQueryParam
 	}
 
 	rawName := strings.TrimSpace(req.Name)
@@ -310,7 +310,7 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 	}
 	slug := NormalisePriceSlug(sourceValue)
 	if slug == "" {
-		return nil, errors.New(ErrKeyInvalidPriceSlug)
+		return nil, ErrInvalidPriceSlug
 	}
 
 	excludeID := strings.TrimSpace(req.ExcludeID)
@@ -318,7 +318,7 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 	switch lookupResourceType {
 	case PriceSlugResourcePlan:
 		existing, err := s.PricerRepository.GetPricePlanBySlug(ctx, slug, &GetPricePlanBySlugRequest{})
-		if err != nil && err.Error() != ErrKeyPricePlanNotFound {
+		if err != nil && !errors.Is(err, ErrPricePlanNotFound) {
 			return nil, err
 		}
 		if existing != nil {
@@ -380,7 +380,7 @@ func normalisePriceSlugResourceType(value string) (string, string, error) {
 	case PriceSlugResourcePlanFeatureRef, "plan-feature-ref", "feature_ref", "feature-reference":
 		return PriceSlugResourcePlanFeatureRef, PriceSlugResourceFeature, nil
 	default:
-		return "", "", errors.New(ErrKeyInvalidPriceQueryParam)
+		return "", "", ErrInvalidPriceQueryParam
 	}
 }
 
@@ -389,15 +389,15 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if req == nil || strings.TrimSpace(req.ID) == "" {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	publishedAt, err := normaliseDateParam(req.PublishAtUtc)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidPricePlanPayload)
+		return nil, ErrInvalidPricePlanPayload
 	}
 
 	pricePlan, err := s.PricerRepository.GetPricePlanByID(ctx, req.ID, &GetPricePlanByIDRequest{
@@ -447,10 +447,10 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 // ArchivePricePlan archives a price plan.
 func (s *Service) ArchivePricePlan(ctx context.Context, req *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error) {
 	if req == nil || strings.TrimSpace(req.ID) == "" {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	updatedAt := toolbox.TimeNowUTC()
@@ -473,10 +473,10 @@ func (s *Service) ArchivePricePlan(ctx context.Context, req *ArchivePricePlanReq
 // DeletePricePlan soft-deletes a price plan.
 func (s *Service) DeletePricePlan(ctx context.Context, req *DeletePricePlanRequest) (*DeletePricePlanResponse, error) {
 	if req == nil || strings.TrimSpace(req.ID) == "" {
-		return nil, errors.New(ErrKeyPricePlanIDRequired)
+		return nil, ErrPricePlanIDRequired
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	deletedAt := toolbox.TimeNowUTC()
@@ -501,15 +501,15 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if req == nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	publishedAt, err := normaliseDateParam(req.PublishAtUtc)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 
 	feature := &PriceFeature{
@@ -556,16 +556,16 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if req == nil {
-		return nil, errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return nil, ErrInvalidPriceFeaturePayload
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	featureToUpdate := req.Feature
 	if featureToUpdate == nil {
 		if strings.TrimSpace(req.ID) == "" {
-			return nil, errors.New(ErrKeyPriceFeatureIDRequired)
+			return nil, ErrPriceFeatureIDRequired
 		}
 
 		var err error
@@ -597,7 +597,7 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 			featureToUpdate.Metadata = req.Metadata
 		}
 	} else if strings.TrimSpace(featureToUpdate.ID) == "" {
-		return nil, errors.New(ErrKeyPriceFeatureIDRequired)
+		return nil, ErrPriceFeatureIDRequired
 	} else {
 		if _, err := s.PricerRepository.GetFeatureByID(ctx, featureToUpdate.ID); err != nil {
 			log.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature_id", featureToUpdate.ID), zap.Error(err))
@@ -673,10 +673,10 @@ func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*Ge
 // DeleteFeature soft-deletes a feature catalog item.
 func (s *Service) DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) (*DeleteFeatureResponse, error) {
 	if req == nil || strings.TrimSpace(req.ID) == "" {
-		return nil, errors.New(ErrKeyPriceFeatureIDRequired)
+		return nil, ErrPriceFeatureIDRequired
 	}
 	if strings.TrimSpace(req.UserID) == "" {
-		return nil, errors.New(ErrKeyPriceUserIDRequired)
+		return nil, ErrPriceUserIDRequired
 	}
 
 	deletedAt := toolbox.TimeNowUTC()
@@ -697,16 +697,16 @@ func (s *Service) DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) 
 // and has at least one valid provider reference at the plan or cost level.
 func validatePricePlanCanPublish(pricePlan *PricePlan) error {
 	if pricePlan == nil {
-		return errors.New(ErrKeyInvalidPricePlanPayload)
+		return ErrInvalidPricePlanPayload
 	}
 	if len(pricePlan.Costs) == 0 {
-		return errors.New(ErrKeyPricePlanPublishRequiresCost)
+		return ErrPricePlanPublishRequiresCost
 	}
 	if err := ValidatePriceCosts(pricePlan.Costs); err != nil {
 		return err
 	}
 	if !pricePlanHasProviderRef(pricePlan) {
-		return errors.New(ErrKeyPricePlanPublishRequiresProvider)
+		return ErrPricePlanPublishRequiresProvider
 	}
 
 	return nil
@@ -745,20 +745,20 @@ func defaultPricePlanListRequest(req *GetPricePlansRequest) {
 }
 
 var validPriceSortOrders = map[string]struct{}{
-	"created_at_asc":      {},
-	"created_at_desc":     {},
-	"updated_at_asc":      {},
-	"updated_at_desc":     {},
-	"deleted_at_asc":      {},
-	"deleted_at_desc":     {},
-	"published_at_asc":    {},
-	"published_at_desc":   {},
-	"name_asc":            {},
-	"name_desc":           {},
-	"slug_asc":            {},
-	"slug_desc":           {},
-	"display_order_asc":   {},
-	"display_order_desc":  {},
+	"created_at_asc":     {},
+	"created_at_desc":    {},
+	"updated_at_asc":     {},
+	"updated_at_desc":    {},
+	"deleted_at_asc":     {},
+	"deleted_at_desc":    {},
+	"published_at_asc":   {},
+	"published_at_desc":  {},
+	"name_asc":           {},
+	"name_desc":          {},
+	"slug_asc":           {},
+	"slug_desc":          {},
+	"display_order_asc":  {},
+	"display_order_desc": {},
 }
 
 func isValidPriceSortOrder(order string) bool {
@@ -768,14 +768,14 @@ func isValidPriceSortOrder(order string) bool {
 
 func validatePricePlanListRequest(req *GetPricePlansRequest) error {
 	if !isValidPriceSortOrder(req.Order) {
-		return errors.New(ErrKeyInvalidPriceQueryParam)
+		return ErrInvalidPriceQueryParam
 	}
 	return nil
 }
 
 func validateFeatureListRequest(req *GetFeaturesRequest) error {
 	if !isValidPriceSortOrder(req.Order) {
-		return errors.New(ErrKeyInvalidPriceQueryParam)
+		return ErrInvalidPriceQueryParam
 	}
 	return nil
 }
@@ -787,27 +787,27 @@ func normalisePricePlanDateRanges(req *GetPricePlansRequest) error {
 	var err error
 	req.CreatedAtFrom, err = normaliseDateParam(req.CreatedAtFrom)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.CreatedAtTo, err = normaliseDateParam(req.CreatedAtTo)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.PublishedAtFrom, err = normaliseDateParam(req.PublishedAtFrom)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.PublishedAtTo, err = normaliseDateParam(req.PublishedAtTo)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.DeletedAtFrom, err = normaliseDateParam(req.DeletedAtFrom)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.DeletedAtTo, err = normaliseDateParam(req.DeletedAtTo)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 
 	return nil
@@ -835,27 +835,27 @@ func normaliseFeatureDateRanges(req *GetFeaturesRequest) error {
 	var err error
 	req.CreatedAtFrom, err = normaliseDateParam(req.CreatedAtFrom)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.CreatedAtTo, err = normaliseDateParam(req.CreatedAtTo)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.PublishedAtFrom, err = normaliseDateParam(req.PublishedAtFrom)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.PublishedAtTo, err = normaliseDateParam(req.PublishedAtTo)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.DeletedAtFrom, err = normaliseDateParam(req.DeletedAtFrom)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 	req.DeletedAtTo, err = normaliseDateParam(req.DeletedAtTo)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDate)
+		return ErrInvalidPriceDate
 	}
 
 	return nil
@@ -889,5 +889,5 @@ func normaliseDateParam(value string) (string, error) {
 		}
 	}
 
-	return "", errors.New(ErrKeyInvalidPriceDate)
+	return "", ErrInvalidPriceDate
 }

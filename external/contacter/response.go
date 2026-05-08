@@ -2,7 +2,7 @@ package contacter
 
 import (
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // CreateCommsResponse holds everything needed to return

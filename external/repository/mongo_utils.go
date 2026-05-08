@@ -177,7 +177,7 @@ func (r *MongoRepositoryHelper) MapAllToResult(ctx context.Context, cursor *mong
 			Field{Key: "operation", Value: "map_all_to_result"},
 			Field{Key: "object_name", Value: objectName},
 		)
-		return NewRepositoryError(ErrKeyUnableToDecodeQueriedDocuments, "cursor is nil")
+		return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, "cursor is nil")
 	}
 
 	if err := cursor.All(ctx, result); err != nil {
@@ -185,7 +185,7 @@ func (r *MongoRepositoryHelper) MapAllToResult(ctx context.Context, cursor *mong
 			Field{Key: "operation", Value: "map_all_to_result"},
 			Field{Key: "object_name", Value: objectName},
 		)
-		return NewRepositoryError(ErrKeyUnableToDecodeQueriedDocuments, err.Error())
+		return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, err.Error())
 	}
 
 	r.LogDebug(ctx, fmt.Sprintf("successfully-decoded-%s", objectName), nil,
@@ -204,7 +204,7 @@ func (r *MongoRepositoryHelper) MapOneToResult(ctx context.Context, cursor *mong
 			Field{Key: "operation", Value: "map_one_to_result"},
 			Field{Key: "object_name", Value: objectName},
 		)
-		return NewRepositoryError(ErrKeyUnableToDecodeQueriedDocuments, "cursor is nil")
+		return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, "cursor is nil")
 	}
 
 	if cursor.Next(ctx) {
@@ -213,7 +213,7 @@ func (r *MongoRepositoryHelper) MapOneToResult(ctx context.Context, cursor *mong
 				Field{Key: "operation", Value: "map_one_to_result"},
 				Field{Key: "object_name", Value: objectName},
 			)
-			return NewRepositoryError(ErrKeyUnableToDecodeQueriedDocuments, err.Error())
+			return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, err.Error())
 		}
 
 		r.LogDebug(ctx, fmt.Sprintf("successfully-decoded-%s", objectName), nil,
@@ -229,7 +229,7 @@ func (r *MongoRepositoryHelper) MapOneToResult(ctx context.Context, cursor *mong
 		Field{Key: "operation", Value: "map_one_to_result"},
 		Field{Key: "object_name", Value: objectName},
 	)
-	return NewRepositoryError(ErrKeyResourceNotFound, "no-documents-found")
+	return NewRepositoryError(ErrResourceNotFound, "no-documents-found")
 }
 
 // ExecuteCountDocuments returns a int64 count if successful, otherwise an error is returned
@@ -242,7 +242,7 @@ func (r *MongoRepositoryHelper) ExecuteCountDocuments(ctx context.Context, colle
 			Field{Key: "collection", Value: collection.Name()},
 			Field{Key: "query_filter", Value: filter},
 		)
-		return 0, NewRepositoryError(ErrKeyUnableToCountDocuments, err.Error())
+		return 0, NewRepositoryError(ErrUnableToCountDocuments, err.Error())
 	}
 
 	return count, nil
@@ -371,7 +371,7 @@ func (r *MongoRepositoryHelper) ExecuteFindCommand(ctx context.Context, collecti
 			Field{Key: "collection", Value: collection.Name()},
 			Field{Key: "query_filter", Value: filter},
 		)
-		return nil, NewRepositoryError(ErrKeyUnableToGenerateCollectionCursor, err.Error())
+		return nil, NewRepositoryError(ErrUnableToGenerateCollectionCursor, err.Error())
 	}
 
 	return c, nil
@@ -387,7 +387,7 @@ func (r *MongoRepositoryHelper) ExecuteAggregateCommand(ctx context.Context, col
 			Field{Key: "collection", Value: collection.Name()},
 			Field{Key: "pipeline", Value: mongoPipeline},
 		)
-		return nil, NewRepositoryError(ErrKeyUnableToGenerateCollectionCursor, err.Error())
+		return nil, NewRepositoryError(ErrUnableToGenerateCollectionCursor, err.Error())
 	}
 
 	return c, nil

@@ -1,0 +1,32 @@
+package user
+
+import "errors"
+
+var (
+	ErrDatabaseError                     = errors.New(ErrKeyDatabaseError)
+	ErrEmailAlreadyExists                = errors.New(ErrKeyEmailAlreadyExists)
+	ErrExtensionNotFound                 = errors.New(ErrKeyExtensionNotFound)
+	ErrInvalidEmail                      = errors.New(ErrKeyInvalidEmail)
+	ErrInvalidNanoID                     = errors.New(ErrKeyInvalidNanoID)
+	ErrInvalidQueryParam                 = errors.New(ErrKeyInvalidQueryParam)
+	ErrInvalidUserBody                   = errors.New(ErrKeyInvalidUserBody)
+	ErrInvalidUserConfigType             = errors.New(ErrKeyInvalidUserConfigType)
+	ErrInvalidUserID                     = errors.New(ErrKeyInvalidUserID)
+	ErrInvalidUserOriginStatus           = errors.New(ErrKeyInvalidUserOriginStatus)
+	ErrNoChangesDetected                 = errors.New(ErrKeyNoChangesDetected)
+	ErrPageOutOfRange                    = errors.New(ErrKeyPageOutOfRange)
+	ErrResourceConflict                  = errors.New(ErrKeyResourceConflict)
+	ErrResourceNotFound                  = errors.New(ErrKeyResourceNotFound)
+	ErrUnauthorisedAccess                = errors.New(ErrKeyUnauthorisedAccess)
+	ErrUserConfigNotSet                  = errors.New(ErrKeyUserConfigNotSet)
+	ErrUserInvalidRole                   = errors.New(ErrKeyUserInvalidRole)
+	ErrUserInvalidStatus                 = errors.New(ErrKeyUserInvalidStatus)
+	ErrUserInvalidStatusTransition       = errors.New(ErrKeyUserInvalidStatusTransition)
+	ErrUserInvalidTargetStatus           = errors.New(ErrKeyUserInvalidTargetStatus)
+	ErrUserNeverActivated                = errors.New(ErrKeyUserNeverActivated)
+	ErrUserNotFound                      = errors.New(ErrKeyUserNotFound)
+	ErrUserRequiredFieldMissingEmail     = errors.New(ErrKeyUserRequiredFieldMissingEmail)
+	ErrUserRequiredFieldMissingFirstName = errors.New(ErrKeyUserRequiredFieldMissingFirstName)
+	ErrUserRequiredFieldMissingLastName  = errors.New(ErrKeyUserRequiredFieldMissingLastName)
+	ErrValidationFailed                  = errors.New(ErrKeyValidationFailed)
+)

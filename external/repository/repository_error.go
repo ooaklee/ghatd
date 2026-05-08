@@ -1,18 +1,19 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 )
 
 // RepositoryError represents a repository-level error with error codes
 type RepositoryError struct {
-	Code    string
+	Code    error
 	Message string
 	Cause   error
 }
 
 // NewRepositoryError creates a new repository error
-func NewRepositoryError(code, message string) *RepositoryError {
+func NewRepositoryError(code error, message string) *RepositoryError {
 	return &RepositoryError{
 		Code:    code,
 		Message: message,
@@ -20,7 +21,7 @@ func NewRepositoryError(code, message string) *RepositoryError {
 }
 
 // NewRepositoryErrorWithCause creates a new repository error with a cause
-func NewRepositoryErrorWithCause(code, message string, cause error) *RepositoryError {
+func NewRepositoryErrorWithCause(code error, message string, cause error) *RepositoryError {
 	return &RepositoryError{
 		Code:    code,
 		Message: message,
@@ -30,10 +31,15 @@ func NewRepositoryErrorWithCause(code, message string, cause error) *RepositoryE
 
 // Error implements the error interface
 func (e *RepositoryError) Error() string {
-	if e.Cause != nil {
-		return fmt.Sprintf("[%s] %s: %v", e.Code, e.Message, e.Cause)
+	code := ""
+	if e.Code != nil {
+		code = e.Code.Error()
 	}
-	return fmt.Sprintf("[%s] %s", e.Code, e.Message)
+
+	if e.Cause != nil {
+		return fmt.Sprintf("[%s] %s: %v", code, e.Message, e.Cause)
+	}
+	return fmt.Sprintf("[%s] %s", code, e.Message)
 }
 
 // Unwrap returns the underlying cause
@@ -44,7 +50,7 @@ func (e *RepositoryError) Unwrap() error {
 // Is checks if the error matches a specific error code
 func (e *RepositoryError) Is(target error) bool {
 	if re, ok := target.(*RepositoryError); ok {
-		return e.Code == re.Code
+		return errors.Is(e.Code, re.Code)
 	}
-	return false
+	return errors.Is(e.Code, target)
 }

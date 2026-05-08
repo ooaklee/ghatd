@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // policyService manages business logic around policy request

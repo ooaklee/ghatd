@@ -8,7 +8,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -155,7 +154,7 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 func (s *Service) ExtractToken(ctx context.Context, r *http.Request) (string, error) {
 	authorization := r.Header.Get(httpHeaderKeyAuthorization)
 	if authorization == "" {
-		return "", errors.New(ErrKeyNoBearerHeaderFound)
+		return "", ErrNoBearerHeaderFound
 	}
 
 	return getTokenFromHeaderBearerToken(authorization), nil
@@ -183,20 +182,20 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			log.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
-			return nil, errors.New(ErrKeyUnauthorizedTokenUnexpectedSigningMethod)
+			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.accessTokenSecret), nil
 	})
 
 	if err != nil {
-		 switch err.Error() {
+		switch err.Error() {
 		case "Token is expired":
-			return nil, errors.New(ErrKeyUnauthorizedParsedStringTokenExpired)
+			return nil, ErrUnauthorizedParsedStringTokenExpired
 		case "token contains an invalid number of segments":
-			return nil, errors.New(ErrKeyUnauthorizedMalformattedToken)
+			return nil, ErrUnauthorizedMalformattedToken
 		default:
 			log.Error("token-parsing-error", zap.Error(err))
-			return nil, errors.New(ErrKeyUnauthorizedParsedStringUnknown)
+			return nil, ErrUnauthorizedParsedStringUnknown
 		}
 	}
 
@@ -212,7 +211,7 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			log.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
-			return nil, errors.New(ErrKeyUnauthorizedTokenUnexpectedSigningMethod)
+			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.refreshTokenSecret), nil
 	})
@@ -220,12 +219,12 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 	if err != nil {
 		switch err.Error() {
 		case "Token is expired":
-			return nil, errors.New(ErrKeyUnauthorizedParsedStringTokenExpired)
+			return nil, ErrUnauthorizedParsedStringTokenExpired
 		case "token contains an invalid number of segments":
-			return nil, errors.New(ErrKeyUnauthorizedMalformattedToken)
+			return nil, ErrUnauthorizedMalformattedToken
 		default:
 			log.Error("token-parsing-error", zap.Error(err))
-			return nil, errors.New(ErrKeyUnauthorizedParsedStringUnknown)
+			return nil, ErrUnauthorizedParsedStringUnknown
 		}
 	}
 
@@ -240,7 +239,7 @@ func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error 
 	}
 
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
-		return errors.New(ErrKeyUnauthorized)
+		return ErrUnauthorized
 	}
 
 	return nil
@@ -286,23 +285,23 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 	if ok && token.Valid {
 		accessUUID, ok := claims[tokenClaimKeyAccessUUID].(string)
 		if !ok {
-			return nil, errors.New(ErrKeyUnauthorizedNoTokenUUID)
+			return nil, ErrUnauthorizedNoTokenUUID
 		}
 
 		userID, ok := claims[tokenClaimKeySub].(string)
 		if !ok {
-			return nil, errors.New(ErrKeyUnauthorizedNoUserIDFound)
+			return nil, ErrUnauthorizedNoUserIDFound
 		}
 
 		isAdmin, ok := claims[tokenClaimKeyAdmin].(bool)
 		if !ok {
-			return nil, errors.New(ErrKeyUnauthorizedNoAdminInfoFound)
+			return nil, ErrUnauthorizedNoAdminInfoFound
 		}
 
 		// Check user if active
 		isActive, ok := claims[tokenClaimKeyAuthorized].(bool)
 		if !ok {
-			return nil, errors.New(ErrKeyUnauthorizedNoAuthorizationInfoFound)
+			return nil, ErrUnauthorizedNoAuthorizationInfoFound
 		}
 
 		return &TokenAccessDetails{
@@ -312,7 +311,7 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 			IsAuthorized: isActive,
 		}, nil
 	}
-	return nil, errors.New(ErrKeyUnauthorized)
+	return nil, ErrUnauthorized
 
 }
 
@@ -328,7 +327,7 @@ func (s *Service) VerifyRefreshToken(ctx context.Context, t string) (*jwt.Token,
 		return []byte(s.refreshTokenSecret), nil
 	})
 	if err != nil {
-		return nil, errors.New(ErrKeyUnauthorizedRefreshTokenExpired)
+		return nil, ErrUnauthorizedRefreshTokenExpired
 	}
 	return token, nil
 }
@@ -358,11 +357,11 @@ func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*T
 	if ok && token.Valid {
 		refreshDetails.RefreshUUID, ok = claims[tokenClaimKeyRefreshUUID].(string)
 		if !ok {
-			return nil, errors.New(ErrKeyUnauthorizedNoTokenUUID)
+			return nil, ErrUnauthorizedNoTokenUUID
 		}
 		refreshDetails.UserID, ok = claims[tokenClaimKeySub].(string)
 		if !ok {
-			return nil, errors.New(ErrKeyUnauthorizedNoUserIDFound)
+			return nil, ErrUnauthorizedNoUserIDFound
 		}
 	}
 

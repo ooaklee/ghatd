@@ -1,7 +1,5 @@
 package paymentprovider
 
-import "errors"
-
 // Config holds configuration for a payment provider
 type Config struct {
 	// ProviderName is the unique identifier for this provider
@@ -29,11 +27,11 @@ type Config struct {
 // Validate checks if the configuration has the required fields
 func (c *Config) Validate() error {
 	if c.ProviderName == "" {
-		return errors.New(ErrKeyPaymentProviderMissingRequiredField)
+		return ErrPaymentProviderMissingRequiredField
 	}
 
 	if c.WebhookSecret == "" {
-		return errors.New(ErrKeyPaymentProviderRequiredWebhookSecretIsMissing)
+		return ErrPaymentProviderRequiredWebhookSecretIsMissing
 	}
 
 	return nil

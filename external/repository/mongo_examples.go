@@ -133,7 +133,7 @@ func (r *UserRepository) FindUsers(ctx context.Context) ([]User, error) {
 			Field{Key: "collection", Value: "users"},
 			Field{Key: "operation", Value: "find"},
 		)
-		return nil, NewRepositoryError(ErrKeyUnableToGenerateCollectionCursor, "failed to create cursor")
+		return nil, NewRepositoryError(ErrUnableToGenerateCollectionCursor, "failed to create cursor")
 	}
 	defer cursor.Close(ctx)
 

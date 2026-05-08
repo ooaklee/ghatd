@@ -2,7 +2,6 @@ package streaker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -84,7 +83,7 @@ func (r *Repository) GetStreakCollection(ctx context.Context) (*mongo.Collection
 		return r.collection, nil
 	}
 
-	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, StreakCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, StreakCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 func (r *Repository) insertStreak(ctx context.Context, streak *Streak) (*Streak, error) {
@@ -134,7 +133,7 @@ func (r *Repository) GetStreakByScopeAndPeriod(ctx context.Context, req *GetLate
 	queryFilter["period_key"] = req.PeriodKey
 
 	var result Streak
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "streak", false, errors.New(ErrKeyResourceNotFound))
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &result, "streak", false, ErrResourceNotFound)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +164,7 @@ func (r *Repository) GetLatestStreak(ctx context.Context, req *GetLatestStreakRe
 	var streak Streak
 	if err = r.Store.MapOneInCursorToResult(ctx, cursor, &streak, "streak"); err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no-documents-found") {
-			return nil, errors.New(ErrKeyResourceNotFound)
+			return nil, ErrResourceNotFound
 		}
 		return nil, err
 	}
@@ -197,7 +196,7 @@ func (r *Repository) GetLongestStreak(ctx context.Context, req *GetLongestStreak
 	var streak Streak
 	if err = r.Store.MapOneInCursorToResult(ctx, cursor, &streak, "streak"); err != nil {
 		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no-documents-found") {
-			return nil, errors.New(ErrKeyResourceNotFound)
+			return nil, ErrResourceNotFound
 		}
 		return nil, err
 	}

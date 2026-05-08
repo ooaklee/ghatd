@@ -1,7 +1,5 @@
 package emailtemplater
 
-import "errors"
-
 // GenerateFromBaseTemplateRequest holds information for generating a custom email from base template
 type GenerateFromBaseTemplateRequest struct {
 	// EmailSubject the email subject
@@ -83,13 +81,13 @@ func (r *GenerateFromBaseTemplateRequest) GetEmailTo() string {
 // Validate implements TemplateRequest
 func (r *GenerateFromBaseTemplateRequest) Validate() error {
 	if r.EmailTo == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingRecipient)
+		return ErrEmailTemplaterMissingRecipient
 	}
 	if r.EmailSubject == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingSubject)
+		return ErrEmailTemplaterMissingSubject
 	}
 	if r.EmailBody == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingBody)
+		return ErrEmailTemplaterMissingBody
 	}
 	return nil
 }
@@ -126,13 +124,13 @@ func (r *GenerateVerificationEmailRequest) GetEmailTo() string {
 // Validate implements TemplateRequest
 func (r *GenerateVerificationEmailRequest) Validate() error {
 	if r.Email == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingRecipient)
+		return ErrEmailTemplaterMissingRecipient
 	}
 	if r.Token == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingToken)
+		return ErrEmailTemplaterMissingToken
 	}
 	if r.FirstName == "" || r.LastName == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingPersonalInfo)
+		return ErrEmailTemplaterMissingPersonalInfo
 	}
 	return nil
 }
@@ -163,10 +161,10 @@ func (r *GenerateLoginEmailRequest) GetEmailTo() string {
 // Validate implements TemplateRequest
 func (r *GenerateLoginEmailRequest) Validate() error {
 	if r.Email == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingRecipient)
+		return ErrEmailTemplaterMissingRecipient
 	}
 	if r.Token == "" {
-		return errors.New(ErrKeyEmailTemplaterMissingToken)
+		return ErrEmailTemplaterMissingToken
 	}
 	return nil
 }

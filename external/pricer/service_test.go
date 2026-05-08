@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	testUserID         = "test-user-id-456"
-	testPlanID         = "test-plan-id-123"
-	testFeatureID      = "test-feature-id-789"
-	testPlanSlug       = "pro-plan"
-	testPlanName       = "Pro Plan"
-	testFeatureSlug    = "api-access"
-	testFeatureName    = "API Access"
+	testUserID      = "test-user-id-456"
+	testPlanID      = "test-plan-id-123"
+	testFeatureID   = "test-feature-id-789"
+	testPlanSlug    = "pro-plan"
+	testPlanName    = "Pro Plan"
+	testFeatureSlug = "api-access"
+	testFeatureName = "API Access"
 )
 
 func stringPtr(s string) *string {
@@ -61,14 +61,14 @@ func (m *mockPricerRepository) GetPricePlanByID(ctx context.Context, id string, 
 	if m.getPricePlanByIDFunc != nil {
 		return m.getPricePlanByIDFunc(ctx, id, req)
 	}
-	return nil, errors.New(pricer.ErrKeyPricePlanNotFound)
+	return nil, pricer.ErrPricePlanNotFound
 }
 
 func (m *mockPricerRepository) GetPricePlanBySlug(ctx context.Context, slug string, req *pricer.GetPricePlanBySlugRequest) (*pricer.PricePlan, error) {
 	if m.getPricePlanBySlugFunc != nil {
 		return m.getPricePlanBySlugFunc(ctx, slug, req)
 	}
-	return nil, errors.New(pricer.ErrKeyPricePlanNotFound)
+	return nil, pricer.ErrPricePlanNotFound
 }
 
 func (m *mockPricerRepository) GetPricePlans(ctx context.Context, req *pricer.GetPricePlansRequest) ([]pricer.PricePlan, error) {
@@ -124,7 +124,7 @@ func (m *mockPricerRepository) GetFeatureByID(ctx context.Context, id string) (*
 	if m.getFeatureByIDFunc != nil {
 		return m.getFeatureByIDFunc(ctx, id)
 	}
-	return nil, errors.New(pricer.ErrKeyPriceFeatureNotFound)
+	return nil, pricer.ErrPriceFeatureNotFound
 }
 
 func (m *mockPricerRepository) GetFeatures(ctx context.Context, req *pricer.GetFeaturesRequest) ([]pricer.PriceFeature, error) {
@@ -208,8 +208,8 @@ func TestService_CreatePricePlan(t *testing.T) {
 			expectPublished: true,
 		},
 		{
-			name: "Failure - nil request",
-			req:  nil,
+			name:        "Failure - nil request",
+			req:         nil,
 			expectError: true,
 		},
 		{
@@ -231,8 +231,8 @@ func TestService_CreatePricePlan(t *testing.T) {
 		{
 			name: "Failure - PublishNow without cost",
 			req: &pricer.CreatePricePlanRequest{
-				UserID: testUserID,
-				Name:   testPlanName,
+				UserID:     testUserID,
+				Name:       testPlanName,
 				PublishNow: true,
 			},
 			expectError: true,
@@ -296,11 +296,11 @@ func TestService_UpdatePricePlan(t *testing.T) {
 	existingPlan := makeValidPlan()
 
 	tests := []struct {
-		name              string
-		req               *pricer.UpdatePricePlanRequest
-		mockGetErr        error
-		mockUpdateErr     error
-		expectError       bool
+		name          string
+		req           *pricer.UpdatePricePlanRequest
+		mockGetErr    error
+		mockUpdateErr error
+		expectError   bool
 	}{
 		{
 			name: "Success - update plan name",
@@ -317,7 +317,7 @@ func TestService_UpdatePricePlan(t *testing.T) {
 				UserID: testUserID,
 				Name:   stringPtr("Updated Plan"),
 			},
-			mockGetErr:  errors.New(pricer.ErrKeyPricePlanNotFound),
+			mockGetErr:  pricer.ErrPricePlanNotFound,
 			expectError: true,
 		},
 		{
@@ -336,8 +336,8 @@ func TestService_UpdatePricePlan(t *testing.T) {
 			},
 		},
 		{
-			name: "Failure - nil request",
-			req:  nil,
+			name:        "Failure - nil request",
+			req:         nil,
 			expectError: true,
 		},
 	}
@@ -400,7 +400,7 @@ func TestService_GetPricePlanByID(t *testing.T) {
 			req: &pricer.GetPricePlanByIDRequest{
 				ID: testPlanID,
 			},
-			mockGetErr:  errors.New(pricer.ErrKeyPricePlanNotFound),
+			mockGetErr:  pricer.ErrPricePlanNotFound,
 			expectError: true,
 		},
 		{
@@ -462,7 +462,7 @@ func TestService_GetPricePlanBySlug(t *testing.T) {
 			req: &pricer.GetPricePlanBySlugRequest{
 				Slug: testPlanSlug,
 			},
-			mockGetErr:  errors.New(pricer.ErrKeyPricePlanNotFound),
+			mockGetErr:  pricer.ErrPricePlanNotFound,
 			expectError: true,
 		},
 		{
@@ -527,7 +527,7 @@ func TestService_PublishPricePlan(t *testing.T) {
 				ID:     testPlanID,
 				UserID: testUserID,
 			},
-			mockGetErr:  errors.New(pricer.ErrKeyPricePlanNotFound),
+			mockGetErr:  pricer.ErrPricePlanNotFound,
 			expectError: true,
 		},
 		{
@@ -538,8 +538,8 @@ func TestService_PublishPricePlan(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "Failure - nil request",
-			req:  nil,
+			name:        "Failure - nil request",
+			req:         nil,
 			expectError: true,
 		},
 	}
@@ -642,10 +642,10 @@ func TestService_ArchivePricePlan(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		req           *pricer.ArchivePricePlanRequest
-		mockErr       error
-		expectError   bool
+		name        string
+		req         *pricer.ArchivePricePlanRequest
+		mockErr     error
+		expectError bool
 	}{
 		{
 			name: "Success - archives plan",
@@ -886,8 +886,8 @@ func TestService_CreateFeature(t *testing.T) {
 			},
 		},
 		{
-			name: "Failure - nil request",
-			req:  nil,
+			name:        "Failure - nil request",
+			req:         nil,
 			expectError: true,
 		},
 		{
@@ -969,12 +969,12 @@ func TestService_UpdateFeature(t *testing.T) {
 				UserID: testUserID,
 				Name:   stringPtr("Updated Feature"),
 			},
-			mockGetErr:  errors.New(pricer.ErrKeyPriceFeatureNotFound),
+			mockGetErr:  pricer.ErrPriceFeatureNotFound,
 			expectError: true,
 		},
 		{
-			name: "Failure - nil request",
-			req:  nil,
+			name:        "Failure - nil request",
+			req:         nil,
 			expectError: true,
 		},
 	}

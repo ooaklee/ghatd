@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // GroupService interface defines expected methods of a valid group service

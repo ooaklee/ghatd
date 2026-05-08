@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"regexp"
 	"strings"
 
@@ -134,7 +133,7 @@ func (s *Service) UpdateUser(ctx context.Context, r *UpdateUserRequest) (*Update
 
 	// check
 	if r.User == nil && r.FirstName == "" && r.LastName == "" || r.User == nil && r.FirstName != "" && len(r.FirstName) == 2 || r.User == nil && r.LastName != "" && len(r.LastName) == 2 {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	switch r.User {
@@ -307,7 +306,7 @@ func updateUserWithRequest(user *User, request *UpdateUserRequest) (*User, error
 	newLastName := normaliseUserNames(request.LastName)
 
 	if user.FirstName == newFirstName && user.LastName == newLastName || user.FirstName == newFirstName && newLastName == "" || user.LastName == newLastName && newFirstName == "" {
-		return user, errors.New(ErrKeyNoChangesDetected)
+		return user, ErrNoChangesDetected
 	}
 
 	if newFirstName != "" {

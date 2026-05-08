@@ -1,7 +1,6 @@
 package billingmanager
 
 import (
-	"errors"
 	"net/http"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
@@ -21,7 +20,7 @@ func mapRequestToProcessBillingProviderWebhooksRequest(request *http.Request, va
 	providerName, err := toolbox.GetVariableValueFromUri(request, "providerName")
 	if err != nil {
 		log.Error("unable-get-provider-name-from-uri", zap.Any("request", request), zap.Error(err))
-		return nil, errors.New(ErrKeyBillingManagerUnableToGetProviderNameFromURI)
+		return nil, ErrBillingManagerUnableToGetProviderNameFromURI
 	}
 
 	parsedRequest.ProviderName = providerName
@@ -39,20 +38,20 @@ func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator Bi
 
 	if requestingUserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyBillingManagerUnableToIdentifyUser)
+		return nil, ErrBillingManagerUnableToIdentifyUser
 	}
 
 	userId, err := toolbox.GetVariableValueFromUri(request, "userId")
 	if err != nil {
 		log.Error("unable-get-user-id-from-uri", zap.Any("request", request), zap.Error(err))
-		return nil, errors.New(ErrKeyBillingManagerUnableToGetUserIdFromURI)
+		return nil, ErrBillingManagerUnableToGetUserIdFromURI
 	}
 
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
 		log.Error("unable-to-decode-query-to-billing-events-request", zap.Any("request", request), zap.Error(err))
-		return nil, errors.New(ErrKeyInvalidBillingManagerRequestPayload)
+		return nil, ErrInvalidBillingManagerRequestPayload
 	}
 
 	parsedRequest.UserID = userId
@@ -70,13 +69,13 @@ func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validat
 
 	if requestingUserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyBillingManagerUnableToIdentifyUser)
+		return nil, ErrBillingManagerUnableToIdentifyUser
 	}
 
 	userId, err := toolbox.GetVariableValueFromUri(request, "userId")
 	if err != nil {
 		log.Error("unable-get-user-id-from-uri", zap.Any("request", request), zap.Error(err))
-		return nil, errors.New(ErrKeyBillingManagerUnableToGetUserIdFromURI)
+		return nil, ErrBillingManagerUnableToGetUserIdFromURI
 	}
 
 	parsedRequest.UserID = userId
@@ -94,13 +93,13 @@ func mapRequestToGetUserBillingDetailRequest(request *http.Request, validator Bi
 
 	if requestingUserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyBillingManagerUnableToIdentifyUser)
+		return nil, ErrBillingManagerUnableToIdentifyUser
 	}
 
 	userId, err := toolbox.GetVariableValueFromUri(request, "userId")
 	if err != nil {
 		log.Error("unable-get-user-id-from-uri", zap.Any("request", request), zap.Error(err))
-		return nil, errors.New(ErrKeyBillingManagerUnableToGetUserIdFromURI)
+		return nil, ErrBillingManagerUnableToGetUserIdFromURI
 	}
 
 	parsedRequest.UserID = userId

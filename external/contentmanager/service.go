@@ -2,7 +2,6 @@ package contentmanager
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 
@@ -81,7 +80,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	if !requestingUser.User.IsAdmin() {
 		log.Warn("non-admin-user-attempting-to-create-post", zap.String("user-id", req.UserId), zap.Any("request", req))
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	newPost, err := s.postService.CreatePost(ctx, req.CreatePostRequest)
@@ -111,7 +110,7 @@ func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest
 
 	if !requestingUser.User.IsAdmin() {
 		log.Warn("non-admin-user-attempting-to-update-post", zap.String("user-id", req.UserId), zap.Any("request", req))
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	updatedPost, err := s.postService.UpdatePost(ctx, req.UpdatePostRequest)
@@ -141,7 +140,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 
 	if !requestingUser.User.IsAdmin() {
 		log.Warn("non-admin-user-attempting-to-delete-post", zap.String("user-id", req.UserId), zap.Any("request", req))
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	deletedPostResponse, err := s.postService.DeletePostById(ctx, req.DeletePostByIdRequest)
@@ -171,7 +170,7 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 
 	if !requestingUser.User.IsAdmin() {
 		log.Warn("non-admin-user-attempting-to-restore-post", zap.String("user-id", req.UserId), zap.Any("request", req))
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	restoredPostResponse, err := s.postService.RestorePostById(ctx, req.RestorePostByIdRequest)
@@ -252,7 +251,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 
 	if !strings.HasPrefix(req.UrlFriendlyId, "changelog-") {
 		// make sure only changelogs are returned
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	if req.UserId != "" {
@@ -278,7 +277,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 
 	if (requestingUser == nil || !requestingUser.IsAdmin()) && matchingPost.PublishedAt == "" {
 		// make sure unauthed/ non-admon users can only see published content
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	postsResponse := GetChangelogItemsResponse{
@@ -308,7 +307,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 
 	if !strings.HasPrefix(req.UrlFriendlyId, "article-") {
 		// make sure only articles are returned
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	if req.UserId != "" {
@@ -334,7 +333,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 
 	if (requestingUser == nil || !requestingUser.IsAdmin()) && matchingPost.PublishedAt == "" {
 		// make sure unauthed/ non-admon users can only see published content
-		return nil, errors.New(ErrKeyUnauthorisedCMUser)
+		return nil, ErrUnauthorisedCMUser
 	}
 
 	postsResponse := GetArticlesResponse{

@@ -1,7 +1,6 @@
 package pricer
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -293,15 +292,15 @@ func (f *PriceFeature) NormaliseSlug() *PriceFeature {
 // Validate checks whether the plan uses valid v1 enum values and references.
 func (p *PricePlan) Validate() error {
 	if p == nil {
-		return errors.New(ErrKeyInvalidPricePlanPayload)
+		return ErrInvalidPricePlanPayload
 	}
 
 	if !IsValidPricePlanStatus(string(p.Status)) {
-		return errors.New(ErrKeyInvalidPricePlanStatus)
+		return ErrInvalidPricePlanStatus
 	}
 
 	if strings.TrimSpace(p.Slug) != "" && NormalisePriceSlug(p.Slug) == "" {
-		return errors.New(ErrKeyInvalidPriceSlug)
+		return ErrInvalidPriceSlug
 	}
 
 	if err := ValidatePlanFeatureRefs(p.Features); err != nil {
@@ -324,19 +323,19 @@ func (p *PricePlan) Validate() error {
 // Validate checks whether the feature uses valid v1 enum values.
 func (f *PriceFeature) Validate() error {
 	if f == nil {
-		return errors.New(ErrKeyInvalidPriceFeaturePayload)
+		return ErrInvalidPriceFeaturePayload
 	}
 
 	if strings.TrimSpace(f.Slug) != "" && NormalisePriceSlug(f.Slug) == "" {
-		return errors.New(ErrKeyInvalidPriceSlug)
+		return ErrInvalidPriceSlug
 	}
 
 	if !IsValidPriceFeatureType(string(f.Type)) {
-		return errors.New(ErrKeyInvalidPriceFeatureType)
+		return ErrInvalidPriceFeatureType
 	}
 
 	if f.Unit != "" && !IsValidPriceFeatureUnit(string(f.Unit)) {
-		return errors.New(ErrKeyInvalidPriceFeatureUnit)
+		return ErrInvalidPriceFeatureUnit
 	}
 
 	return nil
@@ -345,19 +344,19 @@ func (f *PriceFeature) Validate() error {
 // Validate checks whether the cost uses valid v1 values.
 func (c *PriceCost) Validate() error {
 	if c == nil {
-		return errors.New(ErrKeyInvalidPriceCost)
+		return ErrInvalidPriceCost
 	}
 
 	if c.Amount < 0 || c.SetupFeeAmount < 0 || c.TrialPeriodDays < 0 {
-		return errors.New(ErrKeyInvalidPriceCost)
+		return ErrInvalidPriceCost
 	}
 
 	if !IsValidPriceCurrency(c.Currency) {
-		return errors.New(ErrKeyInvalidPriceCurrency)
+		return ErrInvalidPriceCurrency
 	}
 
 	if !IsValidPriceBillingCadence(string(c.BillingCadence)) {
-		return errors.New(ErrKeyInvalidPriceBillingCadence)
+		return ErrInvalidPriceBillingCadence
 	}
 
 	return ValidatePriceProviderRefs(c.ProviderRefs)
@@ -366,35 +365,35 @@ func (c *PriceCost) Validate() error {
 // Validate checks whether the discount uses valid v1 values.
 func (d *PriceDiscount) Validate() error {
 	if d == nil {
-		return errors.New(ErrKeyInvalidPriceDiscount)
+		return ErrInvalidPriceDiscount
 	}
 
 	switch d.Type {
 	case PriceDiscountTypeAmount:
 		if d.Amount < 0 {
-			return errors.New(ErrKeyInvalidPriceDiscount)
+			return ErrInvalidPriceDiscount
 		}
 		if !IsValidPriceCurrency(d.Currency) {
-			return errors.New(ErrKeyInvalidPriceCurrency)
+			return ErrInvalidPriceCurrency
 		}
 	case PriceDiscountTypePercent:
 		if d.PercentBps < 0 || d.PercentBps > 10000 {
-			return errors.New(ErrKeyInvalidPriceDiscount)
+			return ErrInvalidPriceDiscount
 		}
 	default:
-		return errors.New(ErrKeyInvalidPriceDiscount)
+		return ErrInvalidPriceDiscount
 	}
 
 	startsAt, err := parseOptionalPriceDate(d.StartsAt)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDiscount)
+		return ErrInvalidPriceDiscount
 	}
 	endsAt, err := parseOptionalPriceDate(d.EndsAt)
 	if err != nil {
-		return errors.New(ErrKeyInvalidPriceDiscount)
+		return ErrInvalidPriceDiscount
 	}
 	if !startsAt.IsZero() && !endsAt.IsZero() && endsAt.Before(startsAt) {
-		return errors.New(ErrKeyInvalidPriceDiscount)
+		return ErrInvalidPriceDiscount
 	}
 
 	return ValidatePriceProviderRefs(d.ProviderRefs)
@@ -406,10 +405,10 @@ func (p *PricePaymentTerms) Validate() error {
 		return nil
 	}
 	if p.DueDays < 0 {
-		return errors.New(ErrKeyInvalidPricePaymentTerms)
+		return ErrInvalidPricePaymentTerms
 	}
 	if p.CollectionMethod != "" && !IsValidPricePaymentCollectionMethod(string(p.CollectionMethod)) {
-		return errors.New(ErrKeyInvalidPricePaymentTerms)
+		return ErrInvalidPricePaymentTerms
 	}
 
 	return nil
@@ -450,20 +449,20 @@ func ValidatePriceCost(cost PriceCost) error {
 // ValidatePlanFeatureRefs checks references for missing identifiers, duplicate references, and valid units.
 func ValidatePlanFeatureRefs(refs []PlanFeatureRef) error {
 	if HasDuplicatePlanFeatureRefs(refs) {
-		return errors.New(ErrKeyDuplicatePlanFeatureRef)
+		return ErrDuplicatePlanFeatureRef
 	}
 
 	for _, ref := range refs {
 		if ref.refKey() == "" {
-			return errors.New(ErrKeyMissingPlanFeatureRef)
+			return ErrMissingPlanFeatureRef
 		}
 
 		if ref.Quantity < 0 {
-			return errors.New(ErrKeyInvalidPriceFeaturePayload)
+			return ErrInvalidPriceFeaturePayload
 		}
 
 		if ref.Unit != "" && !IsValidPriceFeatureUnit(string(ref.Unit)) {
-			return errors.New(ErrKeyInvalidPriceFeatureUnit)
+			return ErrInvalidPriceFeatureUnit
 		}
 	}
 
@@ -492,7 +491,7 @@ func HasDuplicatePlanFeatureRefs(refs []PlanFeatureRef) bool {
 func ValidatePriceProviderRefs(refs []PriceProviderRef) error {
 	for _, ref := range refs {
 		if !IsValidPriceProvider(string(ref.Provider)) {
-			return errors.New(ErrKeyInvalidPriceProvider)
+			return ErrInvalidPriceProvider
 		}
 	}
 
@@ -621,5 +620,5 @@ func parseOptionalPriceDate(value string) (time.Time, error) {
 		}
 	}
 
-	return time.Time{}, errors.New(ErrKeyInvalidPriceDate)
+	return time.Time{}, ErrInvalidPriceDate
 }

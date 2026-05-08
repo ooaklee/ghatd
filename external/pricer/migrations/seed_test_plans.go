@@ -238,7 +238,7 @@ func InitTestPlansSeedUp(db *mongo.Database) error { //Up
 		},
 		"metadata": bson.M{
 			"ui": bson.M{
-				"type":      "PERSONAL",
+				"type":       "PERSONAL",
 				"is_popular": false,
 				"cta_label":  "Get started",
 			},

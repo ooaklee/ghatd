@@ -112,8 +112,8 @@ func TestGenerateUniqueCode_MaxRetriesExceeded(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when max retries exceeded, got nil")
 	}
-	if err.Error() != accessmanagerhelpers.ErrKeyCodeGenerationFailure {
-		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrKeyCodeGenerationFailure, err.Error())
+	if !errors.Is(err, accessmanagerhelpers.ErrCodeGenerationFailure) {
+		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrCodeGenerationFailure, err.Error())
 	}
 	if code != "" {
 		t.Errorf("expected empty code on failure, got %q", code)
@@ -134,8 +134,8 @@ func TestGenerateUniqueCode_CodeExistsError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when CodeExists fails, got nil")
 	}
-	if err.Error() != accessmanagerhelpers.ErrKeyCodeGenerationFailure {
-		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrKeyCodeGenerationFailure, err.Error())
+	if !errors.Is(err, accessmanagerhelpers.ErrCodeGenerationFailure) {
+		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrCodeGenerationFailure, err.Error())
 	}
 	if code != "" {
 		t.Errorf("expected empty code on failure, got %q", code)
@@ -159,8 +159,8 @@ func TestGenerateUniqueCode_StoreCodeError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when StoreCode fails, got nil")
 	}
-	if err.Error() != accessmanagerhelpers.ErrKeyCodeGenerationFailure {
-		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrKeyCodeGenerationFailure, err.Error())
+	if !errors.Is(err, accessmanagerhelpers.ErrCodeGenerationFailure) {
+		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrCodeGenerationFailure, err.Error())
 	}
 	if code != "" {
 		t.Errorf("expected empty code on failure, got %q", code)

@@ -1,7 +1,7 @@
 package user
 
 import (
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // CreateUserResponse holds the response for creating a user

@@ -2,7 +2,6 @@ package usermanager
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/group"
@@ -17,7 +16,7 @@ func (s *Service) GetGroupsConfig(ctx context.Context, _ *GetGroupsConfigRequest
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled")
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	resp, err := s.GroupService.GetGroupsConfig(ctx, &group.GetGroupsConfigRequest{})
@@ -39,11 +38,11 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	if r.ValidateGroupNameRequest == nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
@@ -58,11 +57,11 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 					zap.String("group_id", parentGroupID),
 					zap.Error(accessErr),
 				)
-				return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+				return nil, ErrFailedToResolveGroupAccessMap
 			}
 
 			if !hasAccess.IsAccessible {
-				return nil, errors.New(group.ErrKeyInsufficientPermissions)
+				return nil, group.ErrInsufficientPermissions
 			}
 		}
 	}
@@ -83,7 +82,7 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
@@ -93,7 +92,7 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 
 		if r.ParentGroupID == "" {
 			log.Error("non-user-attempting-to-create-group-without-parent", zap.String("user-id", r.UserID))
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.ParentGroupID)
@@ -104,11 +103,11 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 				zap.String("group_id", r.ParentGroupID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		if !hasGroupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 
 		// For non-admins, they should be able to set the owner to themselves or anyone else
@@ -139,11 +138,11 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	if r.UpdateGroupRequest == nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
@@ -156,12 +155,12 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 				zap.String("group_id", r.UpdateGroupRequest.ID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		groupAccess, ok := accessMap[r.UpdateGroupRequest.ID]
 		if !ok || !groupAccess.IsAccessible || !groupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 	}
 
@@ -181,7 +180,7 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
@@ -194,12 +193,12 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 				zap.String("group_id", r.DeleteGroupRequest.ID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		groupAccess, ok := accessMap[r.DeleteGroupRequest.ID]
 		if !ok || !groupAccess.IsAccessible || !groupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 
 		groupResp, groupErr := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.DeleteGroupRequest.ID})
@@ -214,7 +213,7 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 		}
 
 		if strings.TrimSpace(groupResp.Group.OwnerID) != strings.TrimSpace(r.UserID) {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 
 		// Non-admin users are restricted to hard delete.
@@ -239,7 +238,7 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
@@ -255,11 +254,11 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 				zap.String("group_id", r.GroupID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		if !hasGroupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 	}
 
@@ -271,7 +270,7 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 			zap.String("member-id", r.MemberID),
 			zap.Error(err),
 		)
-		return nil, errors.New(ErrKeyFailedToAddUserToGroup)
+		return nil, ErrFailedToAddUserToGroup
 	}
 
 	return &AddGroupMemberResponse{Success: true}, nil
@@ -283,7 +282,7 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
@@ -299,11 +298,11 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 				zap.String("group_id", r.GroupID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		if !hasGroupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 	}
 
@@ -314,7 +313,7 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 			zap.String("member-id", r.MemberID),
 			zap.Error(err),
 		)
-		return nil, errors.New(ErrKeyFailedToRemoveUserFromGroup)
+		return nil, ErrFailedToRemoveUserFromGroup
 	}
 
 	return &RemoveGroupMemberResponse{Success: true}, nil
@@ -326,7 +325,7 @@ func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberReq
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
@@ -340,11 +339,11 @@ func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberReq
 				zap.String("group_id", r.GroupID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		if !hasGroupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 	}
 
@@ -368,7 +367,7 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 
 	if s.GroupService == nil {
 		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
-		return nil, errors.New(ErrKeyGroupServiceNotEnabled)
+		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
@@ -384,11 +383,11 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 				zap.String("group_id", r.GroupID),
 				zap.Error(accessErr),
 			)
-			return nil, errors.New(ErrKeyFailedToResolveGroupAccessMap)
+			return nil, ErrFailedToResolveGroupAccessMap
 		}
 
 		if !hasGroupAccess.IsAdmin {
-			return nil, errors.New(group.ErrKeyInsufficientPermissions)
+			return nil, group.ErrInsufficientPermissions
 		}
 	}
 
@@ -401,7 +400,7 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 			zap.String("group-id", r.GroupID),
 			zap.Error(err),
 		)
-		return nil, errors.New(ErrKeyFailedToUpdateGroupOwner)
+		return nil, ErrFailedToUpdateGroupOwner
 	}
 
 	// Re-fetch and resolve the updated owner to return enriched data

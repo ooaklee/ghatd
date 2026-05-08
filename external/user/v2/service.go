@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"regexp"
 
 	"github.com/ooaklee/ghatd/external/audit"
@@ -89,7 +88,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
 	if existingUser != nil {
 		log.Error("user-with-email-already-exists", zap.String("email", req.Email))
-		return nil, errors.New(ErrKeyEmailAlreadyExists)
+		return nil, ErrEmailAlreadyExists
 	}
 
 	// Create new user with dependencies
@@ -159,14 +158,14 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	// Validate user
 	if err := user.Validate(); err != nil {
 		log.Error("user-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyValidationFailed)
+		return nil, ErrValidationFailed
 	}
 
 	// Create user in repository
 	createdUser, err := s.UserRepository.CreateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-create-user", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -189,13 +188,13 @@ func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*Ge
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if req.ID == "" {
-		return nil, errors.New(ErrKeyInvalidUserID)
+		return nil, ErrInvalidUserID
 	}
 
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed to get user by ID", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -209,13 +208,13 @@ func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDReque
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if req.NanoID == "" {
-		return nil, errors.New(ErrKeyInvalidNanoID)
+		return nil, ErrInvalidNanoID
 	}
 
 	user, err := s.UserRepository.GetUserByNanoID(ctx, req.NanoID)
 	if err != nil {
 		log.Error("failed to get user by nano ID", zap.Error(err), zap.String("nano_id", req.NanoID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -229,13 +228,13 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-by-email")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
 	if req.Email == "" {
-		return nil, errors.New(ErrKeyInvalidEmail)
+		return nil, ErrInvalidEmail
 	}
 
 	user, err := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), true)
 	if err != nil {
 		log.Error("failed to get user by email", zap.Error(err), zap.String("email", req.Email))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -257,7 +256,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	user, err := s.UserRepository.GetUserByID(ctx, targetUserId)
 	if err != nil {
 		log.Error("failed-to-get-user-for-update", zap.Error(err), zap.String("id", targetUserId))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	if req.User != nil {
@@ -280,7 +279,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 			// Check if new email already exists
 			existingUser, _ := s.UserRepository.GetUserByEmail(ctx, userWithProvidedData.Email, false)
 			if existingUser != nil && existingUser.ID != user.ID {
-				return nil, errors.New(ErrKeyEmailAlreadyExists)
+				return nil, ErrEmailAlreadyExists
 			}
 			user.Email = normaliseUserEmail(userWithProvidedData.Email)
 		}
@@ -313,7 +312,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 			// Check if new email already exists
 			existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
 			if existingUser != nil && existingUser.ID != user.ID {
-				return nil, errors.New(ErrKeyEmailAlreadyExists)
+				return nil, ErrEmailAlreadyExists
 			}
 			user.Email = normaliseUserEmail(req.Email)
 			hasChanges = true
@@ -375,7 +374,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	// Validate user
 	if err := user.Validate(); err != nil {
 		log.Error("user-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyValidationFailed)
+		return nil, ErrValidationFailed
 	}
 
 	// Ensure version is set to 2 for migrated users
@@ -387,7 +386,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-update-user", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -413,14 +412,14 @@ func (s *Service) DeleteUser(ctx context.Context, req *DeleteUserRequest) error 
 	_, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("user-not-found", zap.Error(err), zap.String("id", req.ID))
-		return errors.New(ErrKeyUserNotFound)
+		return ErrUserNotFound
 	}
 
 	// Delete user
 	err = s.UserRepository.DeleteUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-delete-user", zap.Error(err), zap.String("id", req.ID))
-		return errors.New(ErrKeyDatabaseError)
+		return ErrDatabaseError
 	}
 
 	// Audit log
@@ -469,14 +468,14 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
 	if err != nil {
 		log.Error("failed-to-get-total-users", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Get users
 	users, err := s.UserRepository.GetUsers(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-users", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Reinject dependencies for all users
@@ -508,7 +507,7 @@ func (s *Service) GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) 
 	total, err := s.UserRepository.GetTotalUsers(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-total-users", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	return &GetTotalUsersResponse{Total: total}, nil
@@ -522,7 +521,7 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-status-update", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -539,7 +538,7 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	updatedUser, err = s.UserRepository.UpdateUser(ctx, updatedUser)
 	if err != nil {
 		log.Error("failed-to-save-user-after-status-update", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -565,7 +564,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-adding-role", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -578,7 +577,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-adding-role", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -604,7 +603,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-removing-role", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -617,7 +616,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-removing-role", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -643,7 +642,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-email-verification", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -656,7 +655,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-email-verification", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -682,7 +681,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-email-unverification", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -695,7 +694,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-email-unverification", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -721,7 +720,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-phone-verification", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -734,7 +733,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-phone-verification", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -760,7 +759,7 @@ func (s *Service) RecordUserLogin(ctx context.Context, req *RecordUserLoginReque
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-login-recording", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -774,7 +773,7 @@ func (s *Service) RecordUserLogin(ctx context.Context, req *RecordUserLoginReque
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-login-recording", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	log.Info("user-login-recorded-successfully", zap.String("user-id", updatedUser.ID))
@@ -820,7 +819,7 @@ func (s *Service) SetUserExtension(ctx context.Context, req *SetUserExtensionReq
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-setting-extension", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -837,7 +836,7 @@ func (s *Service) SetUserExtension(ctx context.Context, req *SetUserExtensionReq
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-setting-extension", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	log.Info("user-extension-set-successfully", zap.String("user-id", updatedUser.ID), zap.String("key", req.Key))
@@ -853,13 +852,13 @@ func (s *Service) GetUserExtension(ctx context.Context, req *GetUserExtensionReq
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-getting-extension", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Get extension value
 	value, exists := user.Extensions[req.Key]
 	if !exists {
-		return nil, errors.New(ErrKeyExtensionNotFound)
+		return nil, ErrExtensionNotFound
 	}
 
 	return &GetUserExtensionResponse{Key: req.Key, Value: value}, nil
@@ -873,7 +872,7 @@ func (s *Service) UpdateUserPersonalInfo(ctx context.Context, req *UpdateUserPer
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-updating-personal-info", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -920,7 +919,7 @@ func (s *Service) UpdateUserPersonalInfo(ctx context.Context, req *UpdateUserPer
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
 		log.Error("failed-to-save-user-after-updating-personal-info", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	// Audit log
@@ -946,7 +945,7 @@ func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
 		log.Error("failed-to-get-user-for-validation", zap.Error(err), zap.String("id", req.ID))
-		return nil, errors.New(ErrKeyUserNotFound)
+		return nil, ErrUserNotFound
 	}
 
 	// Reinject dependencies
@@ -1005,7 +1004,7 @@ func (s *Service) GetUserStats(ctx context.Context, req *GetUserStatsRequest) (*
 	stats, err := s.UserRepository.GetUserStatsCounts(ctx, req)
 	if err != nil {
 		log.Error("failed-to-get-user-stats-counts", zap.Error(err))
-		return nil, errors.New(ErrKeyDatabaseError)
+		return nil, ErrDatabaseError
 	}
 
 	return &GetUserStatsResponse{UserStats: stats}, nil
@@ -1059,7 +1058,7 @@ func (s *Service) resolveRequestedConfig(configType string) (*UserConfig, error)
 		}
 	}
 
-	return nil, errors.New(ErrKeyInvalidUserConfigType)
+	return nil, ErrInvalidUserConfigType
 }
 
 func (s *Service) resolveStoredConfig(configType string) *UserConfig {

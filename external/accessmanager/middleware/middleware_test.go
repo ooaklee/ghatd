@@ -11,7 +11,7 @@ import (
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // mockAccessManagerService is a mock implementation of accessManagerService for testing

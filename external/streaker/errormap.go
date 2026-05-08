@@ -3,92 +3,92 @@ package streaker
 import (
 	"net/http"
 
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // StreakErrorMap holds error keys, human-friendly messages, and response status codes.
-var StreakErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
-	ErrKeyStreakTypeIsRequired: {
+var StreakErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrStreakTypeIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-001",
 		Detail:     "Please provide a streak type",
 	},
-	ErrKeyOwnerIdIsRequired: {
+	ErrOwnerIdIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-002",
 		Detail:     "Please provide the streak owner",
 	},
-	ErrKeyTargetTypeIsRequired: {
+	ErrTargetTypeIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-003",
 		Detail:     "Please provide the streak target type",
 	},
-	ErrKeyTargetIdIsRequired: {
+	ErrTargetIdIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-004",
 		Detail:     "Please provide the streak target",
 	},
-	ErrKeyCreatedByUserIdIsRequired: {
+	ErrCreatedByUserIdIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-005",
 		Detail:     "Please provide the user creating the streak entry",
 	},
-	ErrKeyInvalidPeriodType: {
+	ErrInvalidPeriodType: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-006",
 		Detail:     "The specified streak period type is not supported",
 	},
-	ErrKeyInvalidOccurredAt: {
+	ErrInvalidOccurredAt: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-007",
 		Detail:     "The provided occurred_at value is invalid",
 	},
-	ErrKeyPeriodKeyIsRequired: {
+	ErrPeriodKeyIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-008",
 		Detail:     "Please provide a period key for custom streak periods",
 	},
-	ErrKeyResourceNotFound: {
+	ErrResourceNotFound: {
 		StatusCode: http.StatusNotFound,
 		Code:       "STR0-009",
 		Detail:     "The requested streak entry could not be found",
 	},
-	ErrKeyResourceConflict: {
+	ErrResourceConflict: {
 		StatusCode: http.StatusConflict,
 		Code:       "STR0-010",
 		Detail:     "A streak entry already exists for this period",
 	},
-	ErrKeyDatabaseError: {
+	ErrDatabaseError: {
 		StatusCode: http.StatusInternalServerError,
 		Code:       "STR0-011",
 		Detail:     "Unable to complete the streak operation at this time",
 	},
-	ErrKeyIdIsRequired: {
+	ErrIdIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-012",
 		Detail:     "Please provide a streak entry ID",
 	},
-	ErrKeyNanoIdIsRequired: {
+	ErrNanoIdIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-013",
 		Detail:     "Please provide a streak entry nano ID",
 	},
-	ErrKeyCurrentCountCannotBeZero: {
+	ErrCurrentCountCannotBeZero: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-014",
 		Detail:     "The streak current count must be greater than zero",
 	},
-	ErrKeyInvalidCurrentCount: {
+	ErrInvalidCurrentCount: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-015",
 		Detail:     "The streak current count is invalid",
 	},
-	ErrKeyPreviousEntryMustBeRelated: {
+	ErrPreviousEntryMustBeRelated: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-016",
 		Detail:     "The previous streak entry must belong to the same streak scope",
 	},
-	ErrKeyPeriodTypeIsRequired: {
+	ErrPeriodTypeIsRequired: {
 		StatusCode: http.StatusBadRequest,
 		Code:       "STR0-017",
 		Detail:     "Please provide the streak period type",

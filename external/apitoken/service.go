@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -61,7 +60,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 	log := logger.AcquireFrom(ctx)
 
 	if r.UserID == "" {
-		return nil, errors.New(ErrKeyRequiredUserIDMissing)
+		return nil, ErrRequiredUserIDMissing
 	}
 
 	if r.Description != "" {
@@ -89,8 +88,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 		if err != nil {
 			log.Error("unable-to-set-ttl-for-short-lived-user-api-token", zap.String("token-created-at", apiToken.CreatedAt), zap.String("user-id", r.UserID), zap.Error(err))
 
-			// TODO: create proper error map entry
-			return nil, errors.New("ErrKeyErrorCreatingShortLivedAccessToken")
+			return nil, ErrErrorCreatingShortLivedAccessToken
 		}
 
 		if err == nil {
@@ -133,7 +131,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 
 	if len(splittedToken) != 2 {
 		log.Error("user-api-token-passed-does-not-contain-expected-two-segments", zap.Int("number-of-segments", len(splittedToken)))
-		return nil, errors.New(ErrKeyInvalidAPIFormatDetected)
+		return nil, ErrInvalidAPIFormatDetected
 	}
 
 	if splittedToken[0] == "" || splittedToken[1] == "" {
@@ -148,7 +146,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 		}
 
 		log.Error("user-api-token-passed-does-not-contain-two-non-empty-segments", zap.String("non-empty-segments", nonEmptySegment))
-		return nil, errors.New(ErrKeyInvalidAPIFormatDetected)
+		return nil, ErrInvalidAPIFormatDetected
 	}
 
 	requester.UserAPIToken = splittedToken[1]
@@ -179,7 +177,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 		}
 	}
 
-	return nil, errors.New(ErrKeyUnableToValidateUserAPIToken)
+	return nil, ErrUnableToValidateUserAPIToken
 }
 
 // UpdateAPITokenLastUsedAt updates the API Token's last used at time to now if the token matches the ID passed
@@ -204,7 +202,7 @@ func (s *Service) UpdateAPITokenLastUsedAt(ctx context.Context, r *UpdateAPIToke
 	}
 
 	if targetTokenID == "" {
-		return errors.New(ErrKeyNoMatchingUserAPITokenFound)
+		return ErrNoMatchingUserAPITokenFound
 	}
 
 	token, err := s.ApitokenRespository.GetAPITokenByID(ctx, targetTokenID)
@@ -344,7 +342,7 @@ func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetA
 	})
 
 	if len(apitokens) < 1 {
-		return nil, errors.New(ErrKeyNoMatchingUserAPITokenFound)
+		return nil, ErrNoMatchingUserAPITokenFound
 	}
 
 	// generate human readable
@@ -507,7 +505,7 @@ func (s *Service) updateAPIToken(ctx context.Context, r *updateAPITokenRequest) 
 		if toolbox.StringInSlice(r.Status, validTokenStatuses) {
 			apiToken.Status = r.Status
 		} else {
-			return nil, errors.New(ErrKeyTokenStatusInvalid)
+			return nil, ErrTokenStatusInvalid
 		}
 	}
 

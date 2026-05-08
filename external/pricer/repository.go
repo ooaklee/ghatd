@@ -125,7 +125,7 @@ func (r *Repository) GetPricePlansCollection(ctx context.Context) (*mongo.Collec
 		return r.pricePlansCollection, nil
 	}
 
-	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, PricePlansCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, PricePlansCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // GetPriceFeaturesCollection returns collection used for pricing features.
@@ -159,7 +159,7 @@ func (r *Repository) GetPriceFeaturesCollection(ctx context.Context) (*mongo.Col
 		return r.priceFeaturesCollection, nil
 	}
 
-	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, PriceFeaturesCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, PriceFeaturesCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // CreatePricePlan creates a price plan in repository.
@@ -235,8 +235,8 @@ func (r *Repository) GetPricePlanByID(ctx context.Context, id string, req *GetPr
 
 	err = r.Store.MapOneInCursorToResult(ctx, cursor, &result, "price_plan")
 	if err != nil {
-		if errors.Is(err, repository.NewRepositoryError(repository.ErrKeyResourceNotFound, "")) {
-			return nil, errors.New(ErrKeyPricePlanNotFound)
+		if errors.Is(err, repository.NewRepositoryError(repository.ErrResourceNotFound, "")) {
+			return nil, ErrPricePlanNotFound
 		}
 		return nil, err
 	}
@@ -266,8 +266,8 @@ func (r *Repository) GetPricePlanBySlug(ctx context.Context, slug string, req *G
 
 	err = r.Store.MapOneInCursorToResult(ctx, cursor, &result, "price_plan")
 	if err != nil {
-		if errors.Is(err, repository.NewRepositoryError(repository.ErrKeyResourceNotFound, "")) {
-			return nil, errors.New(ErrKeyPricePlanNotFound)
+		if errors.Is(err, repository.NewRepositoryError(repository.ErrResourceNotFound, "")) {
+			return nil, ErrPricePlanNotFound
 		}
 		return nil, err
 	}
@@ -458,8 +458,8 @@ func (r *Repository) GetFeatureByID(ctx context.Context, id string) (*PriceFeatu
 
 	err = r.Store.MapOneInCursorToResult(ctx, cursor, &result, "price_feature")
 	if err != nil {
-		if errors.Is(err, repository.NewRepositoryError(repository.ErrKeyResourceNotFound, "")) {
-			return nil, errors.New(ErrKeyPriceFeatureNotFound)
+		if errors.Is(err, repository.NewRepositoryError(repository.ErrResourceNotFound, "")) {
+			return nil, ErrPriceFeatureNotFound
 		}
 		return nil, err
 	}

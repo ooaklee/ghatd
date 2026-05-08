@@ -57,10 +57,10 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 	if req.UserId == "" {
 		var err error = nil
 		if req.FullName == "" {
-			err = errors.Join(err, errors.New(ErrKeyFullNameRequired))
+			err = errors.Join(err, ErrFullNameRequired)
 		}
 		if req.Email == "" {
-			err = errors.Join(err, errors.New(ErrKeyEmailRequired))
+			err = errors.Join(err, ErrEmailRequired)
 		}
 		if err != nil {
 			return nil, err
@@ -173,7 +173,7 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 	logger.Debug("initiating-update-comms-request", zap.Any("request", req))
 
 	if req.CommsId == "" {
-		return nil, errors.New(ErrKeyCommsIdRequired)
+		return nil, ErrCommsIdRequired
 	}
 
 	// Fetch existing comms to preserve existing data
@@ -184,7 +184,7 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 	}
 
 	if len(existingCommsSlice) == 0 {
-		return nil, errors.New(ErrKeyCommsNotFound)
+		return nil, ErrCommsNotFound
 	}
 
 	comms := existingCommsSlice[0]

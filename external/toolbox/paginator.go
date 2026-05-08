@@ -2,7 +2,6 @@ package toolbox
 
 import (
 	"context"
-	"errors"
 	"math"
 
 	"github.com/ettle/strcase"
@@ -94,7 +93,7 @@ func Paginate[T any](
 			zap.Int(string(ResponseMetaKeyPage), page),
 			zap.Int(strcase.ToKebab(string(ResponseMetaKeyTotalPages)), totalPages),
 		)
-		return nil, errors.New(ErrKeyPageOutOfRange)
+		return nil, ErrPageOutOfRange
 	}
 
 	return &PaginationResponse[T]{

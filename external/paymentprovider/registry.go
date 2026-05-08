@@ -3,7 +3,6 @@ package paymentprovider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 )
 
@@ -28,7 +27,7 @@ func (r *ProviderRegistry) Register(provider Provider) {
 func (r *ProviderRegistry) Get(name string) (Provider, error) {
 	provider, ok := r.providers[name]
 	if !ok {
-		return nil, errors.New(ErrKeyPaymentProviderNotFound)
+		return nil, ErrPaymentProviderNotFound
 	}
 	return provider, nil
 }
@@ -79,7 +78,7 @@ func CreateProviderFromConfig(config *Config) (Provider, error) {
 	case "kofi":
 		return NewKofiProvider(config)
 	default:
-		return nil, errors.New(ErrKeyPaymentProviderUnsupportedProvider)
+		return nil, ErrPaymentProviderUnsupportedProvider
 	}
 }
 

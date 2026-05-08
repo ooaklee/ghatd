@@ -2,7 +2,6 @@ package emailtemplater
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -19,7 +18,7 @@ type EmailTemplater struct {
 // NewEmailTemplater creates a new EmailTemplater with the given configuration
 func NewEmailTemplater(config *Config) (*EmailTemplater, error) {
 	if config == nil {
-		return nil, errors.New(ErrKeyEmailTemplaterNoConfigProvided)
+		return nil, ErrEmailTemplaterNoConfigProvided
 	}
 
 	templater := &EmailTemplater{
@@ -44,7 +43,7 @@ func (t *EmailTemplater) GenerateFromBaseTemplate(ctx context.Context, req *Gene
 	}
 
 	if t.dynamicTemplates == nil || t.dynamicTemplates[EmailTemplateTypeBase] == nil {
-		return nil, errors.New(ErrKeyEmailTemplaterDynamicTemplateNotFound)
+		return nil, ErrEmailTemplaterDynamicTemplateNotFound
 	}
 
 	// Determine email addresses
@@ -89,7 +88,7 @@ func (t *EmailTemplater) GenerateVerificationEmail(ctx context.Context, req *Gen
 	}
 
 	if t.templates == nil || t.templates[EmailTemplateTypeVerification] == "" {
-		return nil, errors.New(ErrKeyEmailTemplaterTemplateNotFound)
+		return nil, ErrEmailTemplaterTemplateNotFound
 	}
 
 	// Generate substitutes
@@ -105,7 +104,7 @@ func (t *EmailTemplater) GenerateVerificationEmail(ctx context.Context, req *Gen
 	// Render template with substitutes
 	renderedHTML, err := t.renderTemplate(t.templates[EmailTemplateTypeVerification], substitutes)
 	if err != nil {
-		return nil, errors.New(ErrKeyEmailTemplaterTemplateRenderingFailed)
+		return nil, ErrEmailTemplaterTemplateRenderingFailed
 	}
 
 	// Adjust subject for environment
@@ -128,7 +127,7 @@ func (t *EmailTemplater) GenerateLoginEmail(ctx context.Context, req *GenerateLo
 	}
 
 	if t.templates == nil || t.templates[EmailTemplateTypeLogin] == "" {
-		return nil, errors.New(ErrKeyEmailTemplaterTemplateNotFound)
+		return nil, ErrEmailTemplaterTemplateNotFound
 	}
 
 	// Generate substitutes
@@ -142,7 +141,7 @@ func (t *EmailTemplater) GenerateLoginEmail(ctx context.Context, req *GenerateLo
 	// Render template with substitutes
 	renderedHTML, err := t.renderTemplate(t.templates[EmailTemplateTypeLogin], substitutes)
 	if err != nil {
-		return nil, errors.New(ErrKeyEmailTemplaterTemplateRenderingFailed)
+		return nil, ErrEmailTemplaterTemplateRenderingFailed
 	}
 
 	// Adjust subject for environment

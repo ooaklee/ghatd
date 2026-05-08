@@ -69,7 +69,7 @@ func TestHandler_GetCommsStats(t *testing.T) {
 		{
 			name:                "Failure - validator rejects payload",
 			query:               "?with_email_regex=[",
-			validatorErr:        errors.New(contacter.ErrKeyInvalidCommsPayload),
+			validatorErr:        contacter.ErrInvalidCommsPayload,
 			expectStatus:        http.StatusBadRequest,
 			expectServiceCalled: false,
 		},

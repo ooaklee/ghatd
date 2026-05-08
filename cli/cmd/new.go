@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -199,7 +198,7 @@ func runCmdNewHolder(flags *CommandNewFlags) error {
 		default:
 			log.Default().Printf("\nunsupported type provided in the detail repo (%s): %s\n", detailsRepo, detailConfig.Type)
 			_ = cleanUpDirectories([]string{detailOutput, pathToDirectoryOfBaseFiles})
-			return errors.New(common.ErrKeyDetailTypeInvalidError)
+			return common.ErrDetailTypeInvalidError
 		}
 	}
 
@@ -261,7 +260,7 @@ func inspectNewCmdFlags(appName, appModuleName string, detailUrls []string, outp
 	// Validate
 	if appName == "" {
 		log.Default().Println("app name not provided")
-		return "", "", []string{}, errors.New(common.ErrKeyAppNameInvalidError)
+		return "", "", []string{}, common.ErrAppNameInvalidError
 	}
 
 	appName = strings.ReplaceAll(toolbox.StringStandardisedToLower(appName), " ", "-")
@@ -278,14 +277,14 @@ func inspectNewCmdFlags(appName, appModuleName string, detailUrls []string, outp
 		// Check if module has a valid github name
 		if !strings.HasPrefix(appModuleName, deafultGithubDomain) {
 			log.Default().Println("app module name not in expected format")
-			return "", "", []string{}, errors.New(common.ErrKeyAppModuleNameInvalidError)
+			return "", "", []string{}, common.ErrAppModuleNameInvalidError
 		}
 
 		// Check to make sure module isn't the same name as the ghatd
 		// repo
 		if appModuleName == defaultGhatdModule {
 			log.Default().Println("generated app module name will clash with base ghatd module name")
-			return "", "", []string{}, errors.New(common.ErrKeyAppModuleNameInvalidError)
+			return "", "", []string{}, common.ErrAppModuleNameInvalidError
 		}
 
 	}
@@ -315,7 +314,7 @@ func inspectNewCmdFlags(appName, appModuleName string, detailUrls []string, outp
 
 	if len(invalidDetailUrls) > 0 {
 		log.Default().Println("invalid detail url(s) provided")
-		return "", "", []string{}, errors.New(common.ErrKeyDetailUrlInvalidError)
+		return "", "", []string{}, common.ErrDetailUrlInvalidError
 	}
 
 	return appName, appModuleName, validDetailUrls, nil

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // BuildCustomMeEndpointErrorMap prepends a specialised error entry to baseErrorMaps
@@ -20,7 +20,7 @@ import (
 //	middleware := amiddleware.NewMiddleware(...).CustomMeEndpointValidApiTokenOrJWTMiddleware(errorMap)
 func BuildCustomMeEndpointErrorMap(baseErrorMaps []reply.ErrorManifest) []reply.ErrorManifest {
 	errorMap := append(baseErrorMaps, []reply.ErrorManifest{reply.ErrorManifest{
-		accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID: {Title: "Unauthorized", StatusCode: http.StatusAccepted, Code: "AM00-013"},
+		accessmanager.ErrUnauthorizedUnableToAttainRequestorID: {Title: "Unauthorized", StatusCode: http.StatusAccepted, Code: "AM00-013"},
 	}}...)
 
 	return errorMap

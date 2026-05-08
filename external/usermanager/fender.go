@@ -1,7 +1,6 @@
 package usermanager
 
 import (
-	"errors"
 	"net/http"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
@@ -26,17 +25,17 @@ func MapRequestToUpdateUserProfileRequest(r *http.Request, validator Usermanager
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateUserRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyInvalidUserBody)
+		return nil, ErrInvalidUserBody
 	}
 
 	return &parsedRequest, nil
@@ -51,7 +50,7 @@ func MapRequestToGetUserMicroProfileRequest(r *http.Request, validator Usermanag
 
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	return &parsedRequest, nil
@@ -65,13 +64,13 @@ func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator Usermanager
 	parsedRequest.ID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.ID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	targetUserId, err := toolbox.GetVariableValueFromUri(r, "userId")
 	if err != nil {
 		log.Error("unable-get-user-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	baseRequest := group.GetGroupsByUserIDRequest{
@@ -82,14 +81,14 @@ func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator Usermanager
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GetGroupsByUserIDRequest = &baseRequest
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
 		log.Error("get-groups-by-user-id-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -105,14 +104,14 @@ func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValida
 
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	// Extract target user ID from URL path
 	targetUserId, err := toolbox.GetVariableValueFromUri(r, "userId")
 	if err != nil {
 		log.Error("unable-get-user-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	baseRequest.ID = targetUserId
@@ -120,7 +119,7 @@ func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValida
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
 		log.Error("get-user-by-id-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -136,19 +135,19 @@ func MapRequestToGetUsersRequest(r *http.Request, validator UsermanagerValidator
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	// get request queries
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
 		log.Error("get-users-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -166,20 +165,20 @@ func MapRequestToGetGroupLineageRequest(r *http.Request, validator UsermanagerVa
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GetGroupLineageRequest.ID = groupID
 
 	query := r.URL.Query()
 	if err := querydecoder.New(query).Decode(parsedRequest.GetGroupLineageRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -198,20 +197,20 @@ func MapRequestToGetGroupDescendantsRequest(r *http.Request, validator Usermanag
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GetGroupDescendantsRequest.ID = groupID
 
 	query := r.URL.Query()
 	if err := querydecoder.New(query).Decode(parsedRequest.GetGroupDescendantsRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -225,7 +224,7 @@ func MapRequestToGetGroupsConfigRequest(r *http.Request, validator UsermanagerVa
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	return &parsedRequest, nil
@@ -248,14 +247,14 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GetUserProfileRequest = &baseRequest
 
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	return &parsedRequest, nil
@@ -270,7 +269,7 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	parsedRequest.ID = parsedRequest.UserId
@@ -278,12 +277,12 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 	err := toolbox.DecodeRequestBody(r, &parsedRequest)
 	if err != nil {
 		log.Error("unable-decode-request-body", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
 		log.Error("delete-user-permanently-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -304,14 +303,14 @@ func MapRequestToCreateCommsRequest(r *http.Request, validator UsermanagerValida
 
 	err := toolbox.DecodeRequestBody(r, &baseRequest)
 	if err != nil {
-		return nil, errors.New(contacter.ErrKeyInvalidCommsPayload)
+		return nil, contacter.ErrInvalidCommsPayload
 	}
 
 	parsedRequest.CreateCommsRequest = &baseRequest
 
 	if err := validateParsedRequest(&baseRequest, validator); err != nil {
 		log.Error("create-comms-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return parsedRequest, nil
@@ -331,13 +330,13 @@ func mapGetCommsRequest(r *http.Request, validator UsermanagerValidator) (*GetCo
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(contacter.ErrKeyInvalidCommsPayload)
+		return nil, contacter.ErrInvalidCommsPayload
 	}
 
 	parsedRequest.GetCommsRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -357,13 +356,13 @@ func mapGetCommsStatsRequest(r *http.Request, validator UsermanagerValidator) (*
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(contacter.ErrKeyInvalidCommsPayload)
+		return nil, contacter.ErrInvalidCommsPayload
 	}
 
 	parsedRequest.GetCommsStatsRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -384,7 +383,7 @@ func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValida
 	commsId, err := toolbox.GetVariableValueFromUri(r, "id")
 	if err != nil {
 		log.Error("unable-get-comms-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	baseRequest := contacter.UpdateCommsRequest{
@@ -393,14 +392,14 @@ func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValida
 
 	err = toolbox.DecodeRequestBody(r, &baseRequest)
 	if err != nil {
-		return nil, errors.New(contacter.ErrKeyInvalidCommsPayload)
+		return nil, contacter.ErrInvalidCommsPayload
 	}
 
 	parsedRequest.UpdateCommsRequest = &baseRequest
 
 	if err := validateParsedRequest(&baseRequest, validator); err != nil {
 		log.Error("update-comms-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -414,17 +413,17 @@ func MapRequestToGetEnrichedUserProfileRequest(r *http.Request, validator Userma
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -438,18 +437,18 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("get-user-groups-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -463,21 +462,21 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	baseRequest := common.GetLatestNotificationOverviewsRequest{}
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("get-latest-notification-overviews-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -491,16 +490,16 @@ func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator Userman
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("get-my-group-invitations-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -514,18 +513,18 @@ func MapRequestToAcceptMyGroupInvitationRequest(r *http.Request, validator Userm
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, "groupID")
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("accept-my-group-invitation-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -539,18 +538,18 @@ func MapRequestToRejectMyGroupInvitationRequest(r *http.Request, validator Userm
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, "groupID")
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("reject-my-group-invitation-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -567,18 +566,18 @@ func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validato
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("get-user-team-memberships-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -592,13 +591,13 @@ func MapRequestToGetGroupDetailRequest(r *http.Request, validator UsermanagerVal
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GroupID = groupID
@@ -606,11 +605,11 @@ func MapRequestToGetGroupDetailRequest(r *http.Request, validator UsermanagerVal
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -624,13 +623,13 @@ func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerVali
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.GroupID = groupID
@@ -638,11 +637,11 @@ func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerVali
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -658,18 +657,18 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	parsedRequest.CreateGroupRequest = &baseRequest
 
 	err := toolbox.DecodeRequestBody(r, &parsedRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -685,22 +684,22 @@ func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.UpdateGroupRequest.ID = groupID
 
 	if err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateGroupRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -716,26 +715,26 @@ func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	baseRequest.ID = groupID
 
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.DeleteGroupRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -751,23 +750,23 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
 
 	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("add-group-member-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -781,7 +780,7 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	baseRequest := group.RemoveMemberRequest{}
@@ -790,20 +789,20 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	baseRequest.GroupID = groupID
 
 	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
 	if err != nil {
 		log.Error("unable-get-member-id-from-uri")
-		return nil, errors.New(ErrKeyInvalidMemberID)
+		return nil, ErrInvalidMemberID
 	}
 	baseRequest.MemberID = memberID
 
@@ -822,30 +821,30 @@ func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator Usermanager
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
 
 	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
 	if err != nil {
 		log.Error("unable-get-member-id-from-uri")
-		return nil, errors.New(ErrKeyInvalidMemberID)
+		return nil, ErrInvalidMemberID
 	}
 	parsedRequest.MemberID = memberID
 
 	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("update-group-member-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -861,18 +860,18 @@ func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerV
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
 		log.Error("unable-get-group-id-from-uri")
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
 
 	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil
@@ -886,7 +885,7 @@ func MapRequestToValidateGroupNameRequest(r *http.Request, validator Usermanager
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		log.Error("unable-get-user-id")
-		return nil, errors.New(ErrKeyUnableToIdentifyUser)
+		return nil, ErrUnableToIdentifyUser
 	}
 
 	baseRequest := group.ValidateGroupNameRequest{}
@@ -895,14 +894,14 @@ func MapRequestToValidateGroupNameRequest(r *http.Request, validator Usermanager
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	parsedRequest.ValidateGroupNameRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("validate-group-name-request-validation-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyRequestFailedValidation)
+		return nil, ErrRequestFailedValidation
 	}
 
 	return &parsedRequest, nil

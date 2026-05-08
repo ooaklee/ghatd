@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 
@@ -89,7 +88,7 @@ func (m *InMemoryRepository) GetSubscriptionByID(ctx context.Context, subscripti
 
 	sub, ok := m.store.Subscriptions[subscriptionID]
 	if !ok {
-		return nil, errors.New(ErrKeyBillingSubscriptionNotFound)
+		return nil, ErrBillingSubscriptionNotFound
 	}
 
 	return sub, nil
@@ -106,7 +105,7 @@ func (m *InMemoryRepository) GetSubscriptionByIntegratorID(ctx context.Context, 
 		}
 	}
 
-	return nil, errors.New(ErrKeyBillingSubscriptionNotFound)
+	return nil, ErrBillingSubscriptionNotFound
 }
 
 // UpdateSubscription updates a subscription
@@ -115,7 +114,7 @@ func (m *InMemoryRepository) UpdateSubscription(ctx context.Context, subscriptio
 	defer m.mu.Unlock()
 
 	if _, exists := m.store.Subscriptions[subscription.ID]; !exists {
-		return nil, errors.New(ErrKeyBillingSubscriptionNotFound)
+		return nil, ErrBillingSubscriptionNotFound
 	}
 
 	m.store.Subscriptions[subscription.ID] = subscription
@@ -128,7 +127,7 @@ func (m *InMemoryRepository) DeleteSubscription(ctx context.Context, id string) 
 	defer m.mu.Unlock()
 
 	if _, exists := m.store.Subscriptions[id]; !exists {
-		return errors.New(ErrKeyBillingSubscriptionNotFound)
+		return ErrBillingSubscriptionNotFound
 	}
 
 	delete(m.store.Subscriptions, id)
@@ -176,7 +175,7 @@ func (m *InMemoryRepository) CreateBillingEvent(ctx context.Context, newEvent *B
 	// Check if event already processed (to prevent duplicates)
 	for _, event := range m.store.Events {
 		if event.IntegratorEventID == newEvent.IntegratorEventID && event.Integrator == newEvent.Integrator {
-			return nil, errors.New(ErrKeyBillingEventAlreadyProcessed)
+			return nil, ErrBillingEventAlreadyProcessed
 		}
 	}
 
@@ -191,7 +190,7 @@ func (m *InMemoryRepository) GetBillingEventByID(ctx context.Context, id string)
 
 	event, ok := m.store.Events[id]
 	if !ok {
-		return nil, errors.New(ErrKeyBillingEventNotFound)
+		return nil, ErrBillingEventNotFound
 	}
 
 	return event, nil
@@ -216,7 +215,7 @@ func (m *InMemoryRepository) GetFirstSuccessfulBillingEventWithPlanNameBySubscri
 	}
 
 	if len(matchingEvents) == 0 {
-		return nil, errors.New(ErrKeyBillingEventNotFound)
+		return nil, ErrBillingEventNotFound
 	}
 
 	// Find the first one by created_at (earliest)
@@ -336,7 +335,7 @@ func (m *InMemoryRepository) UpdateSubscriptionUserID(ctx context.Context, subsc
 
 	sub, ok := m.store.Subscriptions[subscriptionID]
 	if !ok {
-		return nil, nil, errors.New(ErrKeyBillingSubscriptionNotFound)
+		return nil, nil, ErrBillingSubscriptionNotFound
 	}
 
 	// Update the user_id and updated_at

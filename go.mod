@@ -19,9 +19,11 @@ require (
 )
 
 require (
+	github.com/benweissmann/memongo v0.1.1
 	github.com/go-git/go-git/v5 v5.14.0
 	github.com/go-playground/assert/v2 v2.2.0
 	github.com/mergestat/timediff v0.0.3
+	github.com/ooaklee/reply/v2 v2.0.0
 	github.com/otiai10/copy v1.14.0
 )
 
@@ -33,7 +35,6 @@ require (
 	github.com/PaesslerAG/gval v1.0.0 // indirect
 	github.com/ProtonMail/go-crypto v1.1.5 // indirect
 	github.com/acobaugh/osrelease v0.0.0-20181218015638-a93a0a55a249 // indirect
-	github.com/benweissmann/memongo v0.1.1 // indirect
 	github.com/cloudflare/circl v1.6.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -92,7 +93,6 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailgun/raymond/v2 v2.0.48
 	github.com/matoous/go-nanoid/v2 v2.0.0
-	github.com/ooaklee/reply v1.1.0
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.10.0
 	github.com/tdewolff/minify v2.3.6+incompatible

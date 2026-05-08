@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,7 +45,7 @@ type KofiProvider struct {
 // NewKofiProvider creates a new Ko-fi payment provider
 func NewKofiProvider(config *Config) (*KofiProvider, error) {
 	if config.WebhookSecret == "" {
-		return nil, errors.New(ErrKeyPaymentProviderMissingConfiguration)
+		return nil, ErrPaymentProviderMissingConfiguration
 	}
 
 	return &KofiProvider{
@@ -80,12 +79,12 @@ func (k *KofiProvider) VerifyWebhook(ctx context.Context, req *http.Request) err
 
 	if err := json.Unmarshal([]byte(dataField), &payload); err != nil {
 		log.Error("failed-to-parse-json-payload", zap.Error(err))
-		return errors.New(ErrKeyPaymentProviderInvalidPayload)
+		return ErrPaymentProviderInvalidPayload
 	}
 
 	if payload.VerificationToken != k.config.WebhookSecret {
 		log.Error("invalid-verification-token", zap.String("received", payload.VerificationToken))
-		return errors.New(ErrKeyPaymentProviderInvalidWebhookSignature)
+		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	log.Debug("kofi-webhook-verified-successfully")
@@ -117,7 +116,7 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 
 	if err := json.Unmarshal([]byte(dataField), &payload); err != nil {
 		log.Warn("failed-to-parse-json-payload", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderPayloadParsing)
+		return nil, ErrPaymentProviderPayloadParsing
 	}
 
 	// Parse amount (Ko-fi sends it as a string like "3.00")
@@ -252,7 +251,7 @@ func (k *KofiProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID s
 
 	log.Warn("kofi-get-subscription-info-not-supported-there-is-no-subscription-api")
 
-	return nil, errors.New(ErrKeyPaymentProviderKofiNoSubscriptionAPI)
+	return nil, ErrPaymentProviderKofiNoSubscriptionAPI
 }
 
 // getFormData extracts the 'data' field from the form-encoded request
@@ -260,14 +259,14 @@ func (k *KofiProvider) getFormData(req *http.Request, log *zap.Logger) (string, 
 
 	if err := req.ParseForm(); err != nil {
 		log.Warn("failed-to-parse-form", zap.Error(err))
-		return "", errors.New(ErrKeyPaymentProviderInvalidPayload)
+		return "", ErrPaymentProviderInvalidPayload
 	}
 
 	// Ko-fi sends data as form-encoded with a 'data' field containing JSON
 	dataField := req.FormValue("data")
 	if dataField == "" {
 		log.Warn("missing-data-field-in-form")
-		return "", errors.New(ErrKeyPaymentProviderInvalidPayload)
+		return "", ErrPaymentProviderInvalidPayload
 	}
 
 	return dataField, nil

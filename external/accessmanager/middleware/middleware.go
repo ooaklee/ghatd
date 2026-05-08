@@ -2,14 +2,13 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // jwtValidationType defines the type of JWT validation to perform
@@ -172,7 +171,7 @@ func (m *Middleware) getCookies(req *http.Request) (authCookie, refreshCookie *h
 	}
 
 	if refreshCookie == nil {
-		return nil, nil, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID)
+		return nil, nil, accessmanager.ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	return authCookie, refreshCookie, nil
@@ -186,7 +185,7 @@ func (m *Middleware) attemptTokenRefresh(
 	validateFunc func(*http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error),
 ) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 	if refreshCookie.Value == "" {
-		return nil, errors.New(accessmanager.ErrKeyEmptyRefreshToken)
+		return nil, accessmanager.ErrEmptyRefreshToken
 	}
 
 	// Refresh the tokens
@@ -290,7 +289,7 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 		// Otherwise handle JWT authentication with refresh capability
 		if refreshCookie == nil {
 			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(accessmanager.ErrKeyUnauthorizedUnableToAttainRequestorID))
+			m.getBaseResponseHandler().NewHTTPErrorResponse(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
 			return
 		}
 

@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"slices"
@@ -27,7 +26,7 @@ type StripeProvider struct {
 // NewStripeProvider creates a new Stripe payment provider
 func NewStripeProvider(config *Config) (*StripeProvider, error) {
 	if config.WebhookSecret == "" {
-		return nil, errors.New(ErrKeyPaymentProviderInvalidConfigWebhookSecret)
+		return nil, ErrPaymentProviderInvalidConfigWebhookSecret
 	}
 
 	return &StripeProvider{
@@ -50,13 +49,13 @@ func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) e
 	signature := req.Header.Get("Stripe-Signature")
 	if signature == "" {
 		log.Error("missing-signature-from-webhook")
-		return errors.New(ErrKeyPaymentProviderMissingSignature)
+		return ErrPaymentProviderMissingSignature
 	}
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Error("failed-to-read-webhook-body", zap.Error(err))
-		return errors.New(ErrKeyPaymentProviderInvalidPayload)
+		return ErrPaymentProviderInvalidPayload
 	}
 
 	// Parse the signature header
@@ -80,20 +79,20 @@ func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) e
 
 	if timestamp == "" || v1Signature == "" {
 		log.Error("missing-timestamp-or-signature-from-webhook")
-		return errors.New(ErrKeyPaymentProviderInvalidWebhookSignature)
+		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	// Verify the timestamp is recent (within 5 minutes)
 	timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
 		log.Error("invalid-timestamp-in-signature", zap.Error(err))
-		return errors.New(ErrKeyPaymentProviderInvalidWebhookSignature)
+		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	var maxAge int64 = 300 // 5 minutes
 	if time.Now().Unix()-timestampInt > maxAge {
 		log.Error("timestamp-too-old", zap.Int64("timestamp", timestampInt), zap.Int64("allowed-age-in-seconds", maxAge))
-		return errors.New(ErrKeyPaymentProviderWebhookTimestampTooOld)
+		return ErrPaymentProviderWebhookTimestampTooOld
 	}
 
 	signedPayload := timestamp + "." + string(body)
@@ -103,7 +102,7 @@ func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) e
 
 	if !hmac.Equal([]byte(expectedSignature), []byte(v1Signature)) {
 		log.Error("invalid-signature", zap.String("expected", expectedSignature), zap.String("received", v1Signature))
-		return errors.New(ErrKeyPaymentProviderInvalidWebhookSignature)
+		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	log.Debug("stripe-webhook-verified-successfully")
@@ -121,7 +120,7 @@ func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Error("failed-to-parse-webhook-payload", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderInvalidPayload)
+		return nil, ErrPaymentProviderInvalidPayload
 	}
 
 	// Parse the JSON
@@ -136,7 +135,7 @@ func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*
 
 	if err := json.Unmarshal(body, &event); err != nil {
 		log.Error("failed-to-parse-webhook-payload", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderPayloadParsing)
+		return nil, ErrPaymentProviderPayloadParsing
 	}
 
 	obj := event.Data.Object
@@ -230,7 +229,7 @@ func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
 		log.Error("failed-to-parse-api-response", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
 	// Extract subscription info
@@ -294,7 +293,7 @@ func (s *StripeProvider) getProductDetailsByProductID(ctx context.Context, produ
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
 		log.Error("failed-to-parse-api-response", zap.Error(err))
-		return "", errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return "", ErrPaymentProviderAPIResponseInvalid
 	}
 
 	log.Info("successfully-retrieved-product-details")
@@ -323,7 +322,7 @@ func (s *StripeProvider) getPlanDetailsByPlanID(ctx context.Context, planID stri
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
 		log.Error("failed-to-parse-api-response", zap.Error(err))
-		return "", errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return "", ErrPaymentProviderAPIResponseInvalid
 	}
 
 	log.Info("successfully-retrieved-plan-details")
@@ -352,14 +351,14 @@ func (s *StripeProvider) getCustomerDetailsByCustomerID(ctx context.Context, cus
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
 		log.Error("failed-to-parse-api-response", zap.Error(err))
-		return "", errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return "", ErrPaymentProviderAPIResponseInvalid
 	}
 
 	log.Info("successfully-retrieved-customer-details")
 
 	var customerEmail = getStringField(obj, "email")
 	if customerEmail == "" {
-		return "", errors.New(ErrKeyPaymentProviderMissingPayloadCustomerEmail)
+		return "", ErrPaymentProviderMissingPayloadCustomerEmail
 	}
 
 	return customerEmail, nil
@@ -372,7 +371,7 @@ func (s *StripeProvider) callStripeEndpoint(log *zap.Logger, method, endpoint st
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
 		log.Error("failed-to-create-http-request", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIRequestFailed)
+		return nil, ErrPaymentProviderAPIRequestFailed
 	}
 
 	req.Header.Set("Authorization", "Bearer "+s.config.APIKey)
@@ -382,19 +381,19 @@ func (s *StripeProvider) callStripeEndpoint(log *zap.Logger, method, endpoint st
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Error("http-request-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIRequestFailed)
+		return nil, ErrPaymentProviderAPIRequestFailed
 	}
 	defer resp.Body.Close()
 
 	if !slices.Contains(validHttpStatusCodes, resp.StatusCode) {
 		log.Error("http-request-returned-invalid-status", zap.Int("status-code", resp.StatusCode), zap.Ints("valid-status-codes", validHttpStatusCodes))
-		return nil, errors.New(ErrKeyPaymentProviderSubscriptionNotFound)
+		return nil, ErrPaymentProviderSubscriptionNotFound
 	}
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("failed-to-read-http-response-body", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
 	log.Info("successfully-called-lemon-squeezy-endpoint")

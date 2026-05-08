@@ -45,7 +45,7 @@ func (m *mockGroupRepository) GetGroupByID(ctx context.Context, id string) (*gro
 	if m.getGroupByIDFunc != nil {
 		return m.getGroupByIDFunc(ctx, id)
 	}
-	return nil, errors.New(group.ErrKeyResourceNotFound)
+	return nil, group.ErrResourceNotFound
 }
 
 func (m *mockGroupRepository) GetGroupByName(ctx context.Context, name, groupType string, logError bool) (*group.UniversalGroup, error) {
@@ -88,7 +88,7 @@ func (m *mockGroupRepository) GetGroupByNanoID(ctx context.Context, nanoID strin
 	if m.getGroupByNanoIDFunc != nil {
 		return m.getGroupByNanoIDFunc(ctx, nanoID)
 	}
-	return nil, errors.New(group.ErrKeyResourceNotFound)
+	return nil, group.ErrResourceNotFound
 }
 
 func (m *mockGroupRepository) GetGroupByNameAndParent(ctx context.Context, name, parentGroupID string, logError bool) (*group.UniversalGroup, error) {
@@ -235,7 +235,7 @@ func TestService_CreateGroup(t *testing.T) {
 				Type:    group.GroupTypeTeam,
 				OwnerID: testUserID,
 			},
-			mockRepositoryErr: errors.New(group.ErrKeyDatabaseError),
+			mockRepositoryErr: group.ErrDatabaseError,
 			expectError:       true,
 		},
 		{
@@ -310,7 +310,7 @@ func TestService_GetGroupByID(t *testing.T) {
 		{
 			name:              "Failure - group not found",
 			groupID:           testGroupID,
-			mockRepositoryErr: errors.New(group.ErrKeyResourceNotFound),
+			mockRepositoryErr: group.ErrResourceNotFound,
 			expectError:       true,
 		},
 	}
@@ -387,7 +387,7 @@ func TestService_UpdateGroup(t *testing.T) {
 				ID:   testGroupID,
 				Name: stringPtr("Updated Team Name"),
 			},
-			mockRepositoryErr: errors.New(group.ErrKeyResourceNotFound),
+			mockRepositoryErr: group.ErrResourceNotFound,
 			expectError:       true,
 		},
 	}
@@ -451,7 +451,7 @@ func TestService_DeleteGroup(t *testing.T) {
 		{
 			name:              "Failure - database error during deletion",
 			groupID:           testGroupID,
-			mockRepositoryErr: errors.New(group.ErrKeyDatabaseError),
+			mockRepositoryErr: group.ErrDatabaseError,
 			expectError:       true,
 		},
 	}
@@ -650,7 +650,7 @@ func TestService_RemoveUserFromAllGroups(t *testing.T) {
 		getGroupByIDFunc: func(ctx context.Context, id string) (*group.UniversalGroup, error) {
 			grp, ok := groupsByID[id]
 			if !ok {
-				return nil, errors.New(group.ErrKeyResourceNotFound)
+				return nil, group.ErrResourceNotFound
 			}
 			return cloneGroup(grp), nil
 		},

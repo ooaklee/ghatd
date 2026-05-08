@@ -2,7 +2,6 @@ package ephemeral
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -197,7 +196,7 @@ func (c *Client) countRequestCountEntry(ctx context.Context, requestorID string,
 
 	if i >= requestLimit {
 		// Return rate limit error
-		return errors.New(ErrKeyRequestorLimitExceeded)
+		return ErrRequestorLimitExceeded
 	}
 
 	return nil
@@ -325,7 +324,7 @@ func (c *Client) incrementAndCheckHardened(ctx context.Context, key string, maxA
 	}
 
 	if int(val) > maxAttempts {
-		return errors.New(ErrKeyHardenedRateLimitExceeded)
+		return ErrHardenedRateLimitExceeded
 	}
 
 	return nil

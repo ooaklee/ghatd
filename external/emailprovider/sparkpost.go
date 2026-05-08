@@ -2,7 +2,6 @@ package emailprovider
 
 import (
 	"context"
-	"errors"
 
 	sp "github.com/SparkPost/gosparkpost"
 )
@@ -54,8 +53,8 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 		return &SendResult{
 			Provider: p.Name(),
 			Success:  false,
-			Error:    errors.New(ErrKeyEmailProviderSendFailed),
-		}, errors.New(ErrKeyEmailProviderSendFailed)
+			Error:    ErrEmailProviderSendFailed,
+		}, ErrEmailProviderSendFailed
 	}
 
 	return &SendResult{
@@ -80,16 +79,16 @@ func (p *SparkPostEmailProvider) IsHealthy(ctx context.Context) bool {
 // validateEmail validates that an email has all required fields
 func validateEmail(email *Email) error {
 	if email.To == "" {
-		return errors.New(ErrKeyEmailProviderMissingRecipient)
+		return ErrEmailProviderMissingRecipient
 	}
 	if email.From == "" {
-		return errors.New(ErrKeyEmailProviderMissingFrom)
+		return ErrEmailProviderMissingFrom
 	}
 	if email.Subject == "" {
-		return errors.New(ErrKeyEmailProviderMissingSubject)
+		return ErrEmailProviderMissingSubject
 	}
 	if email.HTMLBody == "" && email.TextBody == "" {
-		return errors.New(ErrKeyEmailProviderMissingBody)
+		return ErrEmailProviderMissingBody
 	}
 	return nil
 }

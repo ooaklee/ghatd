@@ -3,12 +3,11 @@ package accessmanagerhelpers
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"math/big"
 	"time"
 
 	"github.com/ooaklee/ghatd/external/logger"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +21,7 @@ const (
 
 // CodeManagementErrorMap holds error keys and their corresponding messages for code management operations
 var CodeManagementErrorMap = reply.ErrorManifest{
-	ErrKeyCodeGenerationFailure: {
+	ErrCodeGenerationFailure: {
 		Title:      "Internal Error",
 		Detail:     "Failed to generate a unique code. Please try again.",
 		StatusCode: 500,
@@ -55,14 +54,14 @@ func GenerateUniqueCode(ctx context.Context, store CodeStore, ttl time.Duration)
 		exists, err := store.CodeExists(ctx, code)
 		if err != nil {
 			log.Error("amh/failed-to-check-code-existence", zap.String("code", code), zap.Error(err))
-			return "", errors.New(ErrKeyCodeGenerationFailure)
+			return "", ErrCodeGenerationFailure
 		}
 
 		if !exists {
 			err = store.StoreCode(ctx, code, ttl)
 			if err != nil {
 				log.Error("amh/failed-to-store-code", zap.String("code", code), zap.Error(err))
-				return "", errors.New(ErrKeyCodeGenerationFailure)
+				return "", ErrCodeGenerationFailure
 			}
 
 			return code, nil
@@ -72,7 +71,7 @@ func GenerateUniqueCode(ctx context.Context, store CodeStore, ttl time.Duration)
 	}
 
 	log.Error("amh/exceeded-max-code-generation-retries", zap.Int("max-retries", maxRetries))
-	return "", errors.New(ErrKeyCodeGenerationFailure)
+	return "", ErrCodeGenerationFailure
 }
 
 func generateRandomCode() (string, error) {

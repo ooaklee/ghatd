@@ -2,7 +2,6 @@ package user
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -416,20 +415,20 @@ func (u *UniversalUser) SetCustomTimestamp(key string) *UniversalUser {
 func (u *UniversalUser) UpdateStatus(desiredStatus string) (*UniversalUser, error) {
 	if u.config == nil {
 		fmt.Println("user-configuration-not-set")
-		return u, errors.New(ErrKeyUserConfigNotSet)
+		return u, ErrUserConfigNotSet
 	}
 
 	// Check if transition is valid
 	validSources, exists := u.config.StatusTransitions[desiredStatus]
 	if !exists {
 		fmt.Printf("invalid-target-status: %s\n", desiredStatus)
-		return u, errors.New(ErrKeyUserInvalidTargetStatus)
+		return u, ErrUserInvalidTargetStatus
 	}
 
 	// Check if current status allows transition
 	if u.stringUtils != nil && !u.stringUtils.InSlice(u.Status, validSources) {
 		fmt.Printf("cannot-transition-from-%s-to-%s\n", u.Status, desiredStatus)
-		return u, errors.New(ErrKeyUserInvalidStatusTransition)
+		return u, ErrUserInvalidStatusTransition
 	}
 
 	// Handle email change special case
@@ -570,7 +569,7 @@ func (u *UniversalUser) GetExtension(key string) (interface{}, bool) {
 func (u *UniversalUser) Validate() error {
 	if u.config == nil {
 		fmt.Println("user-configuration-not-set")
-		return errors.New(ErrKeyUserConfigNotSet)
+		return ErrUserConfigNotSet
 	}
 
 	// Check required fields
@@ -579,17 +578,17 @@ func (u *UniversalUser) Validate() error {
 		case "email":
 			if u.Email == "" {
 				fmt.Printf("required-field-missing: %s\n", field)
-				return errors.New(ErrKeyUserRequiredFieldMissingEmail)
+				return ErrUserRequiredFieldMissingEmail
 			}
 		case "first_name":
 			if u.PersonalInfo == nil || u.PersonalInfo.FirstName == "" {
 				fmt.Printf("required-field-missing: %s\n", field)
-				return errors.New(ErrKeyUserRequiredFieldMissingFirstName)
+				return ErrUserRequiredFieldMissingFirstName
 			}
 		case "last_name":
 			if u.PersonalInfo == nil || u.PersonalInfo.LastName == "" {
 				fmt.Printf("required-field-missing: %s\n", field)
-				return errors.New(ErrKeyUserRequiredFieldMissingLastName)
+				return ErrUserRequiredFieldMissingLastName
 			}
 		}
 	}
@@ -597,14 +596,14 @@ func (u *UniversalUser) Validate() error {
 	// Validate status
 	if !u.IsValidStatus(u.Status) {
 		fmt.Printf("invalid-status: %s\n", u.Status)
-		return errors.New(ErrKeyUserInvalidStatus)
+		return ErrUserInvalidStatus
 	}
 
 	// Validate roles
 	for _, role := range u.Roles {
 		if !u.isValidRole(role) {
 			fmt.Printf("invalid-role: %s\n", role)
-			return errors.New(ErrKeyUserInvalidRole)
+			return ErrUserInvalidRole
 		}
 	}
 

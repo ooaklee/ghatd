@@ -2,7 +2,6 @@ package examples
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -619,7 +618,7 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 
 func (m *MockGroupService) UpdateGroup(ctx context.Context, req *group.UpdateGroupRequest) (*group.UpdateGroupResponse, error) {
 	if req == nil || req.ID == "" {
-		return nil, errors.New(group.ErrKeyInvalidGroupID)
+		return nil, group.ErrInvalidGroupID
 	}
 
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.ID})
@@ -649,7 +648,7 @@ func (m *MockGroupService) UpdateGroup(ctx context.Context, req *group.UpdateGro
 
 func (m *MockGroupService) DeleteGroup(ctx context.Context, req *group.DeleteGroupRequest) (*group.DeleteGroupResponse, error) {
 	if req == nil || req.ID == "" {
-		return nil, errors.New(group.ErrKeyInvalidGroupID)
+		return nil, group.ErrInvalidGroupID
 	}
 
 	return &group.DeleteGroupResponse{
@@ -782,7 +781,7 @@ func (m *MockGroupService) GetGroupLineage(_ context.Context, req *group.GetGrou
 func (m *MockGroupService) ValidateGroupName(_ context.Context, req *group.ValidateGroupNameRequest) (*group.ValidateGroupNameResponse, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		return nil, errors.New(group.ErrKeyValidationFailed)
+		return nil, group.ErrValidationFailed
 	}
 
 	return &group.ValidateGroupNameResponse{

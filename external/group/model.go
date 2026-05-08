@@ -169,13 +169,13 @@ func (m *Member) SetMemberMeta(key string, value interface{}) bool {
 // GetMemberMeta retrieves a metadata value for a member.
 func (m *Member) GetMemberMeta(key string) (interface{}, error) {
 	if m == nil || m.Metadata == nil {
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	trimmedKey := strings.TrimSpace(key)
 	value, exists := m.Metadata[trimmedKey]
 	if !exists {
-		return nil, errors.New(ErrKeyResourceNotFound)
+		return nil, ErrResourceNotFound
 	}
 
 	return value, nil
@@ -204,7 +204,7 @@ func (gs *GroupSettings) ValidateAutoActionConfig() error {
 
 	// Check mutual exclusivity
 	if gs.AutoJoinByEmailDomainEnabled && gs.AutoInviteByEmailDomainEnabled {
-		return errors.New(ErrKeyBothAutoJoinAndAutoInviteEnabled)
+		return ErrBothAutoJoinAndAutoInviteEnabled
 	}
 
 	// If neither is enabled, no further validation needed
@@ -220,7 +220,7 @@ func (gs *GroupSettings) ValidateAutoActionConfig() error {
 	// Validate each domain
 	for _, domain := range gs.AutoActionEmailDomains {
 		if strings.TrimSpace(domain) == "" {
-			return errors.New(ErrKeyInvalidEmailDomain)
+			return ErrInvalidEmailDomain
 		}
 	}
 
@@ -438,18 +438,18 @@ func (g *UniversalGroup) SetCustomTimestamp(key string) *UniversalGroup {
 // UpdateStatus updates group status with validation
 func (g *UniversalGroup) UpdateStatus(desiredStatus string) (*UniversalGroup, error) {
 	if g.config == nil {
-		return g, errors.New(ErrKeyGroupConfigNotSet)
+		return g, ErrGroupConfigNotSet
 	}
 
 	// Check if transition is valid
 	validSources, exists := g.config.StatusTransitions[desiredStatus]
 	if !exists {
-		return g, errors.New(ErrKeyInvalidGroupStatus)
+		return g, ErrInvalidGroupStatus
 	}
 
 	// Check if current status allows transition
 	if g.stringUtils != nil && !g.stringUtils.InSlice(g.Status, validSources) {
-		return g, errors.New(ErrKeyInvalidStatusTransition)
+		return g, ErrInvalidStatusTransition
 	}
 
 	// Update status
@@ -479,17 +479,17 @@ func (g *UniversalGroup) IsValidStatus(status string) bool {
 func (g *UniversalGroup) AddMember(memberID, memberType, role string) (*UniversalGroup, error) {
 	memberID = strings.TrimSpace(memberID)
 	if memberID == "" {
-		return g, errors.New(ErrKeyInvalidMemberID)
+		return g, ErrInvalidMemberID
 	}
 
 	// Validate member type
 	if !g.isValidMemberType(memberType) {
-		return g, errors.New(ErrKeyInvalidMemberType)
+		return g, ErrInvalidMemberType
 	}
 
 	// Check if member already exists
 	if g.HasMember(memberID) {
-		return g, errors.New(ErrKeyMemberAlreadyExists)
+		return g, ErrMemberAlreadyExists
 	}
 
 	// Check max members limit
@@ -522,7 +522,7 @@ func (g *UniversalGroup) RemoveMember(memberID string) (*UniversalGroup, error) 
 			return g, nil
 		}
 	}
-	return g, errors.New(ErrKeyMemberNotFound)
+	return g, ErrMemberNotFound
 }
 
 // HasMember checks if a member exists in the group
@@ -542,7 +542,7 @@ func (g *UniversalGroup) GetMemberByID(memberID string) (*Member, error) {
 			return &member, nil
 		}
 	}
-	return nil, errors.New(ErrKeyMemberNotFound)
+	return nil, ErrMemberNotFound
 }
 
 // GetMembersByType retrieves all members of a specific type
@@ -579,7 +579,7 @@ func (g *UniversalGroup) GetMemberTypeByID(memberID string) (string, error) {
 			return member.Type, nil
 		}
 	}
-	return "", errors.New(ErrKeyMemberNotFound)
+	return "", ErrMemberNotFound
 }
 
 // GetUserMemberIDs retrieves all user member IDs
@@ -601,7 +601,7 @@ func (g *UniversalGroup) UpdateMemberRole(memberID, newRole string) (*UniversalG
 			return g, nil
 		}
 	}
-	return g, errors.New(ErrKeyMemberNotFound)
+	return g, ErrMemberNotFound
 }
 
 // GetMemberCount returns the total number of members
@@ -647,7 +647,7 @@ func (g *UniversalGroup) GetExtension(key string) (interface{}, bool) {
 // Validate checks if group meets configured requirements
 func (g *UniversalGroup) Validate() error {
 	if g.config == nil {
-		return errors.New(ErrKeyGroupConfigNotSet)
+		return ErrGroupConfigNotSet
 	}
 
 	// Check required fields
@@ -655,23 +655,23 @@ func (g *UniversalGroup) Validate() error {
 		switch field {
 		case "name":
 			if g.Name == "" {
-				return errors.New(ErrKeyRequiredFieldMissingName)
+				return ErrRequiredFieldMissingName
 			}
 		case "type":
 			if g.Type == "" {
-				return errors.New(ErrKeyRequiredFieldMissingType)
+				return ErrRequiredFieldMissingType
 			}
 		}
 	}
 
 	// Validate type
 	if !g.isValidType(g.Type) {
-		return errors.New(ErrKeyInvalidGroupType)
+		return ErrInvalidGroupType
 	}
 
 	// Validate status
 	if !g.IsValidStatus(g.Status) {
-		return errors.New(ErrKeyInvalidGroupStatus)
+		return ErrInvalidGroupStatus
 	}
 
 	return nil

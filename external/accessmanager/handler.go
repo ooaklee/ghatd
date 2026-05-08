@@ -9,7 +9,7 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
 

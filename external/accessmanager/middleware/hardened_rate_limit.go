@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -11,7 +10,7 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/logger"
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
 
@@ -27,11 +26,11 @@ type hardenedRateLimitEphemeralStore interface {
 // by tracking attempts per IP address and per code within a configurable time window.
 // When the threshold is exceeded, the IP is temporarily blocked.
 type HardenedRateLimitProtection struct {
-	ephemeralStore  hardenedRateLimitEphemeralStore
-	errorMaps       []reply.ErrorManifest
-	maxAttempts     int
-	windowDuration  time.Duration
-	blockDuration   time.Duration
+	ephemeralStore hardenedRateLimitEphemeralStore
+	errorMaps      []reply.ErrorManifest
+	maxAttempts    int
+	windowDuration time.Duration
+	blockDuration  time.Duration
 }
 
 // NewHardenedRateLimitProtectionRequest holds configuration for creating a hardened rate limit middleware.
@@ -103,7 +102,7 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 					zap.String("client-ip", clientIP),
 				)
 
-				h.getBaseResponseHandler().NewHTTPErrorResponse(w, errors.New(ephemeral.ErrKeyHardenedRateLimitExceeded))
+				h.getBaseResponseHandler().NewHTTPErrorResponse(w, ephemeral.ErrHardenedRateLimitExceeded)
 				return
 			}
 

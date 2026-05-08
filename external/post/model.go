@@ -2,7 +2,6 @@ package post
 
 import (
 	"encoding/xml"
-	"errors"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/common"
@@ -400,7 +399,7 @@ func (c *Post) SetHeaderImageType() (*Post, error) {
 		return c, nil
 	}
 
-	return c, errors.New(ErrKeyPostInvalidHeaderImageFailedTypeAssigment)
+	return c, ErrPostInvalidHeaderImageFailedTypeAssigment
 }
 
 // ValidateHeaderImageHasRequiredAltTextAlternativeElementsForInlineSvg validates that the header image (if SVG) has required
@@ -423,15 +422,15 @@ func (c *Post) ValidateHeaderImageHasRequiredAltTextAlternativeElementsForInline
 	var svgContent SVG
 	err := xml.Unmarshal([]byte(c.HeaderImage), &svgContent)
 	if err != nil {
-		return errors.New(ErrKeyPostInvalidHeaderImageFailedSvgUnmarshal)
+		return ErrPostInvalidHeaderImageFailedSvgUnmarshal
 	}
 
 	if svgContent.Role != "img" {
-		return errors.New(ErrKeyPostInvalidHeaderImageMissingRoleImgAttribute)
+		return ErrPostInvalidHeaderImageMissingRoleImgAttribute
 	}
 
 	if strings.TrimSpace(svgContent.Title) == "" {
-		return errors.New(ErrKeyPostInvalidHeaderImageMissingTitleElement)
+		return ErrPostInvalidHeaderImageMissingTitleElement
 	}
 
 	return nil

@@ -7,7 +7,6 @@ package emailmanager
 
 import (
 	"context"
-	"errors"
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/emailprovider"
@@ -78,7 +77,7 @@ func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerif
 
 	rendered, err := m.templater.GenerateVerificationEmail(ctx, templateReq)
 	if err != nil {
-		return errors.New(ErrKeyEmailMailerTemplateGenerationFailed)
+		return ErrEmailMailerTemplateGenerationFailed
 	}
 
 	// Send email
@@ -107,7 +106,7 @@ func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRe
 
 	rendered, err := m.templater.GenerateLoginEmail(ctx, templateReq)
 	if err != nil {
-		return errors.New(ErrKeyEmailMailerTemplateGenerationFailed)
+		return ErrEmailMailerTemplateGenerationFailed
 	}
 
 	// Send email
@@ -138,7 +137,7 @@ func (m *EmailManager) SendCustomEmail(ctx context.Context, req *SendCustomEmail
 
 	rendered, err := m.templater.GenerateFromBaseTemplate(ctx, templateReq)
 	if err != nil {
-		return errors.New(ErrKeyEmailMailerTemplateGenerationFailed)
+		return ErrEmailMailerTemplateGenerationFailed
 	}
 
 	// Send email
@@ -168,7 +167,7 @@ func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) err
 	// Send via provider
 	result, err := m.provider.Send(ctx, email)
 	if err != nil {
-		return errors.New(ErrKeyEmailMailerSendFailed)
+		return ErrEmailMailerSendFailed
 	}
 
 	// Log audit event if enabled
@@ -213,7 +212,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 		log.Error("email-provider-is-not-healthy",
 			zap.String("provider", m.provider.Name()),
 		)
-		return errors.New(ErrKeyEmailMailerProviderUnavailable)
+		return ErrEmailMailerProviderUnavailable
 	}
 
 	// Create email object
@@ -233,7 +232,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 			zap.String("to", rendered.To),
 			zap.Error(err),
 		)
-		return errors.New(ErrKeyEmailMailerSendFailed)
+		return ErrEmailMailerSendFailed
 	}
 
 	log.Info("email-sent-successfully",

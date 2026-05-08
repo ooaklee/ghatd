@@ -96,6 +96,18 @@ const (
 
 	// ErrKeyInvalidVerificationCode error when the provided verification code is invalid, expired, or not found
 	ErrKeyInvalidVerificationCode string = "InvalidVerificationCode"
+
+	// ErrKeyNoOauthProvidersDetected is returned when OAuth is requested but no providers are configured.
+	ErrKeyNoOauthProvidersDetected = "NoOauthProvidersDetected"
+
+	// ErrKeyProviderCookieNotFound is returned when the expected OAuth state cookie is missing.
+	ErrKeyProviderCookieNotFound = "ProviderCookieNotFound"
+
+	// ErrKeyProviderInvalidProtectionStateToken is returned when the OAuth state token is invalid.
+	ErrKeyProviderInvalidProtectionStateToken = "ProviderInvalidProtectionStateToken"
+
+	// ErrKeyProvidersPassedNotFound is returned when the requested OAuth provider is not configured.
+	ErrKeyProvidersPassedNotFound = "ProvidersPassedNotFound"
 )
 
 const (

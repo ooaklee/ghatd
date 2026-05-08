@@ -280,7 +280,7 @@ func TestHandler_CreateGroup(t *testing.T) {
 		{
 			name:         "Failure - service returns error",
 			body:         `{"name":"` + testGroupName + `","type":"` + testGroupType + `","parent_group_id":"` + testParentGroupID + `"}`,
-			mockErr:      errors.New(group.ErrKeyValidationFailed),
+			mockErr:      group.ErrValidationFailed,
 			expectStatus: http.StatusBadRequest,
 		},
 	}
@@ -360,7 +360,7 @@ func TestHandler_GetGroupByID(t *testing.T) {
 		{
 			name:         "Failure - group not found",
 			groupID:      testGroupID,
-			mockErr:      errors.New(group.ErrKeyResourceNotFound),
+			mockErr:      group.ErrResourceNotFound,
 			expectStatus: http.StatusNotFound,
 		},
 	}
@@ -413,7 +413,7 @@ func TestHandler_GetGroupsConfig(t *testing.T) {
 		},
 		{
 			name:         "Failure - config error",
-			mockErr:      errors.New(group.ErrKeyGroupConfigNotSet),
+			mockErr:      group.ErrGroupConfigNotSet,
 			expectStatus: http.StatusInternalServerError,
 		},
 	}
@@ -554,7 +554,7 @@ func TestHandler_GetGroupByNanoID(t *testing.T) {
 		{
 			name:         "Failure - group not found",
 			nanoID:       testNanoID,
-			mockErr:      errors.New(group.ErrKeyResourceNotFound),
+			mockErr:      group.ErrResourceNotFound,
 			expectStatus: http.StatusNotFound,
 		},
 	}

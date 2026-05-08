@@ -1,7 +1,7 @@
 package blueprint
 
 import (
-	"github.com/ooaklee/reply"
+	"github.com/ooaklee/reply/v2"
 )
 
 // blueprintService manages business logic around blueprint request

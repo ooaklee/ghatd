@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,7 +24,7 @@ type LemonSqueezyProvider struct {
 // NewLemonSqueezyProvider creates a new Lemon Squeezy payment provider
 func NewLemonSqueezyProvider(config *Config) (*LemonSqueezyProvider, error) {
 	if config.WebhookSecret == "" {
-		return nil, errors.New(ErrKeyPaymentProviderMissingConfiguration)
+		return nil, ErrPaymentProviderMissingConfiguration
 	}
 
 	return &LemonSqueezyProvider{
@@ -57,7 +56,7 @@ func (l *LemonSqueezyProvider) VerifyWebhook(ctx context.Context, req *http.Requ
 	// Compare signatures
 	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
 		log.Error("invalid-webhook-signature", zap.String("received", signature))
-		return errors.New(ErrKeyPaymentProviderInvalidWebhookSignature)
+		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	log.Debug("lemonsqueezy-webhook-verified-successfully")
@@ -80,7 +79,7 @@ func (l *LemonSqueezyProvider) ParsePayload(ctx context.Context, req *http.Reque
 
 	if err := json.Unmarshal(body, &webhook); err != nil {
 		log.Error("failed-to-parse-webhook-payload", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderPayloadParsing)
+		return nil, ErrPaymentProviderPayloadParsing
 	}
 
 	// Extract relevant fields
@@ -107,7 +106,7 @@ func (l *LemonSqueezyProvider) ParsePayload(ctx context.Context, req *http.Reque
 	priceInfo, err := l.getPriceByOrderItemID(ctx, attrs.OrderItemID)
 	if err != nil {
 		log.Error("failed-to-get-price-info", zap.Int64("order-item-id", attrs.OrderItemID), zap.String("event-type", eventType), zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
 	log.Debug("parsed-lemonsqueezy-webhook-payload", zap.String("event-type", eventType), zap.String("email", webhook.Data.Attributes.UserEmail))
@@ -169,7 +168,7 @@ func (l *LemonSqueezyProvider) GetSubscriptionInfo(ctx context.Context, subscrip
 
 	if err := json.Unmarshal(body, &apiResp); err != nil {
 		log.Error("failed-to-parse-api-response", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
 	attrs := apiResp.Data.Attributes
@@ -212,7 +211,7 @@ func (l *LemonSqueezyProvider) getPriceByPriceID(ctx context.Context, priceID st
 
 	if err := json.Unmarshal(body, &apiResp); err != nil {
 		log.Error("failed-to-parse-api-response-for-price-info", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
 	unitPrice := calculateLemonSqueezyUnitPrice(&apiResp, quantity)
@@ -261,7 +260,7 @@ func (l *LemonSqueezyProvider) getPriceByOrderItemID(ctx context.Context, orderI
 
 	if err := json.Unmarshal(body, &apiResp); err != nil {
 		log.Error("failed-to-parse-api-response-for-order-item-info", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 	log.Info("retrived-order-item-info", zap.Int64("price", apiResp.Data.Attributes.Price), zap.Int64("quantity", apiResp.Data.Attributes.Quantity))
 	return &PriceInfo{
@@ -277,7 +276,7 @@ func (l *LemonSqueezyProvider) callLemonSqueezyEndpoint(log *zap.Logger, method,
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
 		log.Error("failed-to-create-http-request", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIRequestFailed)
+		return nil, ErrPaymentProviderAPIRequestFailed
 	}
 
 	req.Header.Set("Authorization", "Bearer "+l.config.APIKey)
@@ -287,19 +286,19 @@ func (l *LemonSqueezyProvider) callLemonSqueezyEndpoint(log *zap.Logger, method,
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Error("http-request-failed", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIRequestFailed)
+		return nil, ErrPaymentProviderAPIRequestFailed
 	}
 	defer resp.Body.Close()
 
 	if !slices.Contains(validHttpStatusCodes, resp.StatusCode) {
 		log.Error("http-request-returned-invalid-status", zap.Int("status-code", resp.StatusCode), zap.Ints("valid-status-codes", validHttpStatusCodes))
-		return nil, errors.New(ErrKeyPaymentProviderSubscriptionNotFound)
+		return nil, ErrPaymentProviderSubscriptionNotFound
 	}
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Error("failed-to-read-http-response-body", zap.Error(err))
-		return nil, errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
 	log.Info("successfully-called-lemon-squeezy-endpoint")
@@ -315,7 +314,7 @@ func (l *LemonSqueezyProvider) getRequestBodyAndSignature(req *http.Request, get
 		signature = req.Header.Get("X-Signature")
 		if signature == "" {
 			log.Error("missing-signature-header")
-			return nil, "", errors.New(ErrKeyPaymentProviderMissingSignature)
+			return nil, "", ErrPaymentProviderMissingSignature
 		}
 	}
 
@@ -323,7 +322,7 @@ func (l *LemonSqueezyProvider) getRequestBodyAndSignature(req *http.Request, get
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		log.Error("failed-to-read-request-body", zap.Error(err))
-		return nil, "", errors.New(ErrKeyPaymentProviderInvalidPayload)
+		return nil, "", ErrPaymentProviderInvalidPayload
 	}
 
 	return body, signature, nil

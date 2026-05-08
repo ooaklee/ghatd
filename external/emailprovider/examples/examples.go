@@ -2,7 +2,6 @@ package examples
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
@@ -138,8 +137,8 @@ func (p *CustomEmailProvider) Send(ctx context.Context, email *emailprovider.Ema
 		return &emailprovider.SendResult{
 			Provider: p.Name(),
 			Success:  false,
-			Error:    errors.New(emailprovider.ErrKeyEmailProviderMissingRecipient),
-		}, errors.New(emailprovider.ErrKeyEmailProviderMissingRecipient)
+			Error:    emailprovider.ErrEmailProviderMissingRecipient,
+		}, emailprovider.ErrEmailProviderMissingRecipient
 	}
 
 	// Your custom sending logic here

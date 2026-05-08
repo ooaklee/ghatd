@@ -2,7 +2,6 @@ package streaker_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,21 +37,21 @@ func (m *mockStreakRepository) GetStreakByScopeAndPeriod(ctx context.Context, re
 	if m.getStreakByScopeAndPeriodFunc != nil {
 		return m.getStreakByScopeAndPeriodFunc(ctx, req)
 	}
-	return nil, errors.New(streaker.ErrKeyResourceNotFound)
+	return nil, streaker.ErrResourceNotFound
 }
 
 func (m *mockStreakRepository) GetLatestStreak(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
 	if m.getLatestStreakFunc != nil {
 		return m.getLatestStreakFunc(ctx, req)
 	}
-	return nil, errors.New(streaker.ErrKeyResourceNotFound)
+	return nil, streaker.ErrResourceNotFound
 }
 
 func (m *mockStreakRepository) GetLongestStreak(ctx context.Context, req *streaker.GetLongestStreakRequest) (*streaker.Streak, error) {
 	if m.getLongestStreakFunc != nil {
 		return m.getLongestStreakFunc(ctx, req)
 	}
-	return nil, errors.New(streaker.ErrKeyResourceNotFound)
+	return nil, streaker.ErrResourceNotFound
 }
 
 func (m *mockStreakRepository) GetTotalStreaks(ctx context.Context, req *streaker.GetNumberOfStreaksRequest) (int64, error) {
@@ -414,5 +413,5 @@ func TestService_GetStatsRequiresPeriodType(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, streaker.ErrKeyPeriodTypeIsRequired, err.Error())
+	assert.ErrorIs(t, err, streaker.ErrPeriodTypeIsRequired)
 }

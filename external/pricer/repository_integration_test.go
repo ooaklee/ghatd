@@ -53,11 +53,11 @@ func TestIntegration_PricePlanRepository_FullLifecycle(t *testing.T) {
 	defer cleanup()
 
 	testPlan := &pricer.PricePlan{
-		Slug:          "integration-test-plan",
-		Name:          "Integration Test Plan",
-		Description:   "A plan created during integration test",
-		Status:        pricer.PricePlanStatusDraft,
-		CreatedByID:   testUserID,
+		Slug:        "integration-test-plan",
+		Name:        "Integration Test Plan",
+		Description: "A plan created during integration test",
+		Status:      pricer.PricePlanStatusDraft,
+		CreatedByID: testUserID,
 		Costs: []pricer.PriceCost{
 			{Amount: 1999, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 		},
@@ -181,7 +181,7 @@ func TestIntegration_PricePlanRepository_QueryFilters(t *testing.T) {
 		Costs: []pricer.PriceCost{
 			{Amount: 1000, Currency: "GBP", BillingCadence: pricer.PriceBillingCadenceYearly},
 		},
-		DeletedAt: "2025-01-01T00:00:00.000000000Z",
+		DeletedAt:   "2025-01-01T00:00:00.000000000Z",
 		DeletedByID: testUserID,
 	}
 
@@ -232,10 +232,10 @@ func TestIntegration_PricePlanRepository_QueryFilters(t *testing.T) {
 
 	t.Run("Filter by currency", func(t *testing.T) {
 		req := &pricer.GetPricePlansRequest{
-			WithCurrency:      "USD",
-			IncludeCosts:      true,
-			PerPage:           25,
-			Page:              1,
+			WithCurrency: "USD",
+			IncludeCosts: true,
+			PerPage:      25,
+			Page:         1,
 		}
 		results, err := repo.GetPricePlans(ctx, req)
 		require.NoError(t, err)

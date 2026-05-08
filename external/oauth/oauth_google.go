@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -80,19 +79,19 @@ func (p *GoogleProvider) ProviderGetUserData(ctx context.Context, requestUriEntr
 
 	if providerOauthCode == "" {
 		loggr.Error("provider-oauth-code-not-detected")
-		return nil, errors.New("ErrKeyProviderCodeNotDetected")
+		return nil, ErrProviderCodeNotDetected
 	}
 
 	providerToken, err := p.config.Exchange(ctx, providerOauthCode)
 	if err != nil {
 		loggr.Error(fmt.Sprintf("provider-oauth-code-exchange-incorrect: %s", err.Error()))
-		return nil, errors.New("ErrKeyProviderCodeExchangeIncorrect")
+		return nil, ErrProviderCodeExchangeIncorrect
 	}
 
 	userInfoResponse, err := http.Get(p.providerUserInfoEndpoint + providerToken.AccessToken)
 	if err != nil {
 		loggr.Error(fmt.Sprintf("provider-failed-getting-user-info: %s", err.Error()))
-		return nil, errors.New("ErrKeyProviderFailedGettingUserInfo")
+		return nil, ErrProviderFailedGettingUserInfo
 	}
 
 	defer userInfoResponse.Body.Close()
@@ -100,7 +99,7 @@ func (p *GoogleProvider) ProviderGetUserData(ctx context.Context, requestUriEntr
 	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
 	if err != nil {
 		loggr.Error(fmt.Sprintf("provider-failed-to-marshall-user-info: %s", err.Error()))
-		return nil, errors.New("ErrKeyProviderFailedToMarshallUserInfo")
+		return nil, ErrProviderFailedToMarshallUserInfo
 	}
 
 	return &userInfo, nil
