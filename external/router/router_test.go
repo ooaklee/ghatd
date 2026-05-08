@@ -3,6 +3,7 @@ package router_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -163,31 +164,31 @@ func TestNewAuthVerifyHandler(t *testing.T) {
 			name:           "Redirect to login API endpoint when type is 1 (loginVerification) - no requested url",
 			rawQuery:       "__t=login-token-value&type=1",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/login?t=login-token-value&next_step=" + testFrontendAppUrl,
+			expectLocation: "/v1/ams/login?t=login-token-value&next_step=" + url.QueryEscape(testFrontendAppUrl),
 		},
 		{
 			name:           "Redirect to verify API endpoint when type is 2 (emailVerification) - no requested url",
 			rawQuery:       "__t=verify-token-value&type=2",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=" + testFrontendAppUrl,
+			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=" + url.QueryEscape(testFrontendAppUrl),
 		},
 		{
 			name:           "Redirect to login API endpoint with requested url as next_step",
 			rawQuery:       "__t=login-token-value&type=1&request_url=/dashboard",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/login?t=login-token-value&next_step=/dashboard",
+			expectLocation: "/v1/ams/login?t=login-token-value&next_step=" + url.QueryEscape("https://app.example.com/dashboard"),
 		},
 		{
 			name:           "Redirect to verify API endpoint with requested url as next_step",
 			rawQuery:       "__t=verify-token-value&type=2&request_url=/onboarding",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=/onboarding",
+			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=" + url.QueryEscape("https://app.example.com/onboarding"),
 		},
 		{
 			name:           "Supports HTML-escaped &amp; query separator",
 			rawQuery:       "__t=verify-token-value&amp;type=2&amp;request_url=/onboarding",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=/onboarding",
+			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=" + url.QueryEscape("https://app.example.com/onboarding"),
 		},
 		{
 			name:           "Single-param query with only token still parses (no &) and redirects to login due to missing type",
@@ -199,13 +200,25 @@ func TestNewAuthVerifyHandler(t *testing.T) {
 			name:           "URL-encoded request_url is decoded before being used as next_step",
 			rawQuery:       "__t=verify-token-value&type=2&request_url=%2Fdashboard",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=/dashboard",
+			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=" + url.QueryEscape("https://app.example.com/dashboard"),
 		},
 		{
 			name:           "request_url containing '=' is preserved in full",
 			rawQuery:       "__t=verify-token-value&type=2&request_url=/path?foo=bar",
 			expectStatus:   http.StatusTemporaryRedirect,
-			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=/path?foo=bar",
+			expectLocation: "/v1/ams/verify?t=verify-token-value&next_step=" + url.QueryEscape("https://app.example.com/path?foo=bar"),
+		},
+		{
+			name:           "URL-encoded request_url with nested query is resolved against frontend app",
+			rawQuery:       "__t=login-token-value&type=1&request_url=%2Fapp%2Fplan%3Fslug%3Dpro",
+			expectStatus:   http.StatusTemporaryRedirect,
+			expectLocation: "/v1/ams/login?t=login-token-value&next_step=" + url.QueryEscape("https://app.example.com/app/plan?slug=pro"),
+		},
+		{
+			name:           "External request_url falls back to frontend app url",
+			rawQuery:       "__t=login-token-value&type=1&request_url=https%3A%2F%2Fexample-tunnel.trycloudflare.com%2Fapp%2Fplan",
+			expectStatus:   http.StatusTemporaryRedirect,
+			expectLocation: "/v1/ams/login?t=login-token-value&next_step=" + url.QueryEscape(testFrontendAppUrl),
 		},
 		{
 			name:           "Unsupported type falls through to default branch and sets Location header",
@@ -254,5 +267,29 @@ func TestNewAuthVerifyHandler_RegisteredOnRouter(t *testing.T) {
 	r.GetRouter().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusTemporaryRedirect, rec.Code)
-	assert.Equal(t, "/v1/ams/verify?t=token-abc&next_step=/welcome", rec.Header().Get("Location"))
+	assert.Equal(t, "/v1/ams/verify?t=token-abc&next_step="+url.QueryEscape("https://app.example.com/welcome"), rec.Header().Get("Location"))
+}
+
+func TestNewAuthVerifyHandler_LocalDevLocationHeaderCarriesFrontendNextStep(t *testing.T) {
+	t.Parallel()
+
+	handler := router.NewAuthVerifyHandler(
+		"http://localhost:4000/api/v1/ams/verify/email?t=%s",
+		"http://localhost:4000/api/v1/ams/login?t=%s",
+		"http://localhost:5173/auth/login",
+		"http://localhost:5173/",
+	)
+
+	req := httptest.NewRequest(http.MethodGet, router.AuthVerifyEndpoint, nil)
+	req.URL.RawQuery = "__t=token-abc&type=1&request_url=%2Fapp%2Fplan%3Fslug%3Dpro"
+	rec := httptest.NewRecorder()
+
+	handler(rec, req)
+
+	assert.Equal(t, http.StatusTemporaryRedirect, rec.Code)
+	assert.Equal(
+		t,
+		"http://localhost:4000/api/v1/ams/login?t=token-abc&next_step="+url.QueryEscape("http://localhost:5173/app/plan?slug=pro"),
+		rec.Header().Get("Location"),
+	)
 }

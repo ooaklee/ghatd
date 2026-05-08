@@ -31,20 +31,18 @@ func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl,
 			return
 		}
 
-		nextStepParamValue := authVerifyRequest.RequestedUrl
-		if nextStepParamValue == "" {
-			nextStepParamValue = frontendAppUrl
-		}
+		nextStepParamValue := resolveFrontendNextStep(authVerifyRequest.RequestedUrl, frontendAppUrl)
+		encodedNextStepParamValue := url.QueryEscape(nextStepParamValue)
 
 		switch authVerifyRequest.VerificationEmailType {
 		// loginVerification
 		case "1":
-			http.Redirect(w, r, fmt.Sprintf(apiLoginEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+nextStepParamValue, http.StatusTemporaryRedirect)
+			http.Redirect(w, r, fmt.Sprintf(apiLoginEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+encodedNextStepParamValue, http.StatusTemporaryRedirect)
 			return
 
 		// emailVerification
 		case "2":
-			http.Redirect(w, r, fmt.Sprintf(apiVerifyEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+nextStepParamValue, http.StatusTemporaryRedirect)
+			http.Redirect(w, r, fmt.Sprintf(apiVerifyEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+encodedNextStepParamValue, http.StatusTemporaryRedirect)
 			return
 
 		default:
@@ -54,6 +52,48 @@ func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl,
 			return
 		}
 	}
+}
+
+// resolveFrontendNextStep normalises the optional request_url carried by an auth
+// verification link into an absolute frontend URL for the downstream next_step
+// redirect. This keeps magic-link redirects on the web app host in local dev,
+// where /v0/auth/verify may be served from a separate backend origin, and avoids
+// forwarding malformed or external redirect targets.
+func resolveFrontendNextStep(requestedUrl string, frontendAppUrl string) string {
+	requestedUrl = strings.TrimSpace(requestedUrl)
+	if requestedUrl == "" {
+		return frontendAppUrl
+	}
+
+	frontendURL, err := url.Parse(frontendAppUrl)
+	if err != nil || frontendURL.Scheme == "" || frontendURL.Host == "" {
+		return frontendAppUrl
+	}
+
+	frontendOrigin := &url.URL{
+		Scheme: frontendURL.Scheme,
+		Host:   frontendURL.Host,
+	}
+
+	if strings.HasPrefix(requestedUrl, "/") && !strings.HasPrefix(requestedUrl, "//") {
+		requestURL, err := url.Parse(requestedUrl)
+		if err != nil {
+			return frontendAppUrl
+		}
+
+		return frontendOrigin.ResolveReference(requestURL).String()
+	}
+
+	requestURL, err := url.Parse(requestedUrl)
+	if err != nil || requestURL.Scheme == "" || requestURL.Host == "" {
+		return frontendAppUrl
+	}
+
+	if requestURL.Scheme != frontendURL.Scheme || requestURL.Host != frontendURL.Host {
+		return frontendAppUrl
+	}
+
+	return requestURL.String()
 }
 
 // authVerifyRequest represents the parameters extracted from the URL query string

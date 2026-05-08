@@ -3,6 +3,7 @@ package emailtemplater
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/mailgun/raymond/v2"
@@ -171,8 +172,6 @@ func (t *EmailTemplater) renderTemplate(templateStr string, substitutes interfac
 
 // generateVerificationEmailSubstitutes prepares substitutes for verification email
 func (t *EmailTemplater) generateVerificationEmailSubstitutes(firstName, lastName, token, code string, isDashboardRequest bool, requestUrl string) *verificationEmailSubstitutes {
-	const requestUrlPrefix string = "&request_url="
-
 	var loginUrl string
 	if isDashboardRequest {
 		loginUrl = fmt.Sprintf("%s/auth/login", t.config.DashboardDomainName)
@@ -180,9 +179,7 @@ func (t *EmailTemplater) generateVerificationEmailSubstitutes(firstName, lastNam
 		loginUrl = fmt.Sprintf("%s/auth/login", t.config.FrontEndDomainName)
 	}
 
-	if requestUrl != "" {
-		loginUrl += (requestUrlPrefix + requestUrl)
-	}
+	loginUrl = appendRequestURL(loginUrl, t.allowedRedirectURL(requestUrl, isDashboardRequest))
 
 	return &verificationEmailSubstitutes{
 		FullName:        strings.Title(fmt.Sprintf("%v %v", firstName, lastName)),
@@ -202,36 +199,72 @@ func (t *EmailTemplater) generateLoginEmailSubstitutes(token, code string, isDas
 
 // generateEmailVerificationURL generates a URL used for email verification
 func (t *EmailTemplater) generateEmailVerificationURL(token string, isDashboardRequest bool, requestUrl string) string {
-	const requestUrlPrefix string = "&request_url="
-
 	verificationUrl := fmt.Sprintf(t.generateActionPath(2, isDashboardRequest), token)
-
-	if requestUrl != "" {
-		if isDashboardRequest && strings.Contains(requestUrl, t.config.DashboardDomainName) {
-			verificationUrl += (requestUrlPrefix + requestUrl)
-		} else if !isDashboardRequest && strings.Contains(requestUrl, t.config.FrontEndDomainName) {
-			verificationUrl += (requestUrlPrefix + requestUrl)
-		}
-	}
-
-	return verificationUrl
+	return appendRequestURL(verificationUrl, t.allowedRedirectURL(requestUrl, isDashboardRequest))
 }
 
 // generateLoginURL generates a URL used for logging into platform
 func (t *EmailTemplater) generateLoginURL(token string, isDashboardRequest bool, requestUrl string) string {
-	const requestUrlPrefix string = "&request_url="
-
 	loginUrl := fmt.Sprintf(t.generateActionPath(1, isDashboardRequest), token)
+	return appendRequestURL(loginUrl, t.allowedRedirectURL(requestUrl, isDashboardRequest))
+}
 
-	if requestUrl != "" {
-		if isDashboardRequest && strings.Contains(requestUrl, t.config.DashboardDomainName) {
-			loginUrl += (requestUrlPrefix + requestUrl)
-		} else if !isDashboardRequest && strings.Contains(requestUrl, t.config.FrontEndDomainName) {
-			loginUrl += (requestUrlPrefix + requestUrl)
-		}
+// allowedRedirectURL normalises the optional request URL that is embedded in
+// login and verification emails. We allow relative frontend paths because the
+// web app commonly sends destinations like /app/plan?slug=pro, while rejecting
+// malformed values and absolute URLs that do not match the configured frontend
+// or dashboard origin to avoid open redirect links.
+func (t *EmailTemplater) allowedRedirectURL(requestUrl string, isDashboardRequest bool) string {
+	requestUrl = strings.TrimSpace(requestUrl)
+	if requestUrl == "" {
+		return ""
 	}
 
-	return loginUrl
+	if strings.HasPrefix(requestUrl, "/") && !strings.HasPrefix(requestUrl, "//") {
+		return requestUrl
+	}
+
+	expectedBase := t.config.FrontEndDomainName
+	if isDashboardRequest {
+		expectedBase = t.config.DashboardDomainName
+	}
+
+	requestURI, err := url.Parse(requestUrl)
+	if err != nil || !requestURI.IsAbs() {
+		return ""
+	}
+
+	expectedURI, err := url.Parse(expectedBase)
+	if err != nil {
+		return ""
+	}
+
+	if requestURI.Scheme != expectedURI.Scheme || requestURI.Host != expectedURI.Host {
+		return ""
+	}
+
+	target := requestURI.RequestURI()
+	if target == "" {
+		return "/"
+	}
+
+	return target
+}
+
+// appendRequestURL adds a request_url query parameter to an email action URL.
+// The value is query-escaped so nested destination query strings survive when a
+// browser follows the magic link, rather than being parsed as auth-link params.
+func appendRequestURL(actionURL string, requestUrl string) string {
+	if requestUrl == "" {
+		return actionURL
+	}
+
+	separator := "?"
+	if strings.Contains(actionURL, "?") {
+		separator = "&"
+	}
+
+	return actionURL + separator + "request_url=" + url.QueryEscape(requestUrl)
 }
 
 // generateActionPath returns the correctly formatted front end path that will deal with passing
