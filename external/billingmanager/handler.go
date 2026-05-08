@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -189,10 +188,7 @@ func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Features)
 }
 
-// getBaseResponseHandler returns response handler configured with auth error map
+// getBaseResponseHandler returns response handler configured with billing manager error maps
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	errorMaps := []reply.ErrorManifest{BillingManagerErrorMap, pricer.PricerErrorMap}
-	errorMaps = append(errorMaps, h.ErrorMaps...)
-
-	return reply.NewReplier(errorMaps)
+	return reply.NewReplier(h.ErrorMaps)
 }
