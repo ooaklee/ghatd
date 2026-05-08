@@ -4,13 +4,20 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
 )
 
-// BuildCustomMeEndpointErrorMap prepends a specialised error entry to baseErrorMaps
-// for the /me endpoint. The specialised entry returns HTTP 202 (Accepted) instead of
-// 401 (Unauthorized) for unauthenticated requests, allowing search engines to index
-// the endpoint without treating missing credentials as a hard error.
+// BuildCustomMeEndpointErrorMap builds a final []reply.ErrorManifest from
+// baseErrorMaps with a specialised override appended as the final layer for
+// the /me endpoint. The override returns HTTP 202 (Accepted) instead of
+// 401 (Unauthorized) for unauthenticated requests, allowing search engines to
+// index the endpoint without treating missing credentials as a hard error.
+//
+// The override is applied via errormanifest.Composer.AddOverrides, placing it
+// after all base maps so that last-wins semantics guarantee the endpoint-
+// specific status code takes precedence over any prior entry for the same
+// error key.
 //
 // Use this to generate the errorMap argument for CustomMeEndpointValidApiTokenOrJWTMiddleware.
 //
@@ -19,11 +26,12 @@ import (
 //	errorMap := BuildCustomMeEndpointErrorMap(middlewareErrorMaps)
 //	middleware := amiddleware.NewMiddleware(...).CustomMeEndpointValidApiTokenOrJWTMiddleware(errorMap)
 func BuildCustomMeEndpointErrorMap(baseErrorMaps []reply.ErrorManifest) []reply.ErrorManifest {
-	errorMap := append(baseErrorMaps, []reply.ErrorManifest{reply.ErrorManifest{
-		accessmanager.ErrUnauthorizedUnableToAttainRequestorID: {Title: "Unauthorized", StatusCode: http.StatusAccepted, Code: "AM00-013"},
-	}}...)
-
-	return errorMap
+	return errormanifest.NewComposer().
+		Add(baseErrorMaps...).
+		AddOverrides(reply.ErrorManifest{
+			accessmanager.ErrUnauthorizedUnableToAttainRequestorID: {Title: "Unauthorized", StatusCode: http.StatusAccepted, Code: "AM00-013"},
+		}).
+		Build()
 }
 
 // CustomMeEndpointValidApiTokenOrJWTMiddleware returns a middleware function
