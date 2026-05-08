@@ -3,6 +3,8 @@ package streaker
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -25,6 +27,10 @@ type MongoDbStore interface {
 // Repository represents the datastore to hold streak data.
 type Repository struct {
 	Store MongoDbStore
+
+	collection *mongo.Collection
+	initOnce   sync.Once
+	initErr    error
 }
 
 // NewRepository initiates a new instance of repository.
@@ -36,21 +42,26 @@ func NewRepository(store MongoDbStore) *Repository {
 
 // GetStreakCollection returns collection used for streaker domain.
 func (r *Repository) GetStreakCollection(ctx context.Context) (*mongo.Collection, error) {
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
-	}
+	r.initOnce.Do(func() {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			r.initErr = err
+			return
+		}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
-	}
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			r.initErr = err
+			return
+		}
 
-	return db.Collection(StreakCollection), nil
+		r.collection = db.Collection(StreakCollection)
+	})
+
+	return r.collection, r.initErr
 }
 
-// CreateRawStreak creates a precomputed streak entry.
-func (r *Repository) CreateRawStreak(ctx context.Context, streak *Streak) (*Streak, error) {
+func (r *Repository) insertStreak(ctx context.Context, streak *Streak) (*Streak, error) {
 	collection, err := r.GetStreakCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -68,17 +79,13 @@ func (r *Repository) CreateRawStreak(ctx context.Context, streak *Streak) (*Stre
 	return streak, nil
 }
 
+// CreateRawStreak creates a precomputed streak entry.
+func (r *Repository) CreateRawStreak(ctx context.Context, streak *Streak) (*Streak, error) {
+	return r.insertStreak(ctx, streak)
+}
+
 // CreateStreak creates a streak entry.
 func (r *Repository) CreateStreak(ctx context.Context, streak *Streak) (*Streak, error) {
-	collection, err := r.GetStreakCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if streak.CreatedAt == "" {
-		streak.SetCreatedAtTimeToNow()
-	}
-
 	if streak.Id == "" {
 		streak.GenerateId()
 	}
@@ -87,12 +94,7 @@ func (r *Repository) CreateStreak(ctx context.Context, streak *Streak) (*Streak,
 		streak.GenerateNanoId()
 	}
 
-	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, streak, "streak")
-	if err != nil {
-		return nil, err
-	}
-
-	return streak, nil
+	return r.insertStreak(ctx, streak)
 }
 
 // GetStreakByScopeAndPeriod retrieves a streak entry by its counter scope and period key.
@@ -134,16 +136,15 @@ func (r *Repository) GetLatestStreak(ctx context.Context, req *GetLatestStreakRe
 		return nil, err
 	}
 
-	var streaks []Streak
-	if err = r.Store.MapAllInCursorToResult(ctx, cursor, &streaks, "streaks"); err != nil {
+	var streak Streak
+	if err = r.Store.MapOneInCursorToResult(ctx, cursor, &streak, "streak"); err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no-documents-found") {
+			return nil, errors.New(ErrKeyResourceNotFound)
+		}
 		return nil, err
 	}
 
-	if len(streaks) == 0 {
-		return nil, errors.New(ErrKeyResourceNotFound)
-	}
-
-	return &streaks[0], nil
+	return &streak, nil
 }
 
 // GetLongestStreak retrieves the streak entry with the highest current count.
@@ -167,16 +168,15 @@ func (r *Repository) GetLongestStreak(ctx context.Context, req *GetLongestStreak
 		return nil, err
 	}
 
-	var streaks []Streak
-	if err = r.Store.MapAllInCursorToResult(ctx, cursor, &streaks, "streaks"); err != nil {
+	var streak Streak
+	if err = r.Store.MapOneInCursorToResult(ctx, cursor, &streak, "streak"); err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no-documents-found") {
+			return nil, errors.New(ErrKeyResourceNotFound)
+		}
 		return nil, err
 	}
 
-	if len(streaks) == 0 {
-		return nil, errors.New(ErrKeyResourceNotFound)
-	}
-
-	return &streaks[0], nil
+	return &streak, nil
 }
 
 // GetTotalStreaks counts the streak entries matching the provided filters.

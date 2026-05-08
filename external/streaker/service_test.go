@@ -223,6 +223,139 @@ func TestService_RecordStreakReturnsExistingPeriodEntry(t *testing.T) {
 	assert.Equal(t, existing, res.Streak)
 }
 
+func TestService_RecordStreakPeriodExamples(t *testing.T) {
+	t.Parallel()
+
+	t.Run("same daily period returns the existing streak entry", func(t *testing.T) {
+		t.Parallel()
+
+		existing := &streaker.Streak{
+			Id:           "existing-period-entry",
+			StreakType:   "app-streak",
+			OwnerId:      "user-1",
+			TargetType:   "app",
+			TargetId:     "platform",
+			PeriodType:   streaker.StreakPeriodTypeDaily,
+			PeriodKey:    "2026-05-08",
+			CurrentCount: 2,
+		}
+		createCalled := false
+
+		repo := &mockStreakRepository{
+			getStreakByScopeAndPeriodFunc: func(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
+				assert.Equal(t, "2026-05-08", req.PeriodKey)
+				return existing, nil
+			},
+			createStreakFunc: func(ctx context.Context, st *streaker.Streak) (*streaker.Streak, error) {
+				createCalled = true
+				return st, nil
+			},
+		}
+		svc := streaker.NewService(repo)
+
+		res, err := svc.RecordStreak(context.Background(), &streaker.RecordStreakRequest{
+			StreakType:      "app-streak",
+			OwnerId:         "user-1",
+			TargetType:      "app",
+			TargetId:        "platform",
+			OccurredAt:      "2026-05-08T18:00:00",
+			CreatedByUserId: "user-1",
+		})
+
+		require.NoError(t, err)
+		assert.False(t, createCalled)
+		assert.Equal(t, existing.Id, res.Streak.Id)
+		assert.Equal(t, 2, res.Streak.CurrentCount)
+	})
+
+	t.Run("next daily period increments from previous current count", func(t *testing.T) {
+		t.Parallel()
+
+		previous := &streaker.Streak{
+			Id:           "entry-from-2026-05-07",
+			NanoId:       "nano-from-2026-05-07",
+			StreakType:   "app-streak",
+			OwnerId:      "user-1",
+			TargetType:   "app",
+			TargetId:     "platform",
+			PeriodType:   streaker.StreakPeriodTypeDaily,
+			PeriodKey:    "2026-05-07",
+			OccurredAt:   "2026-05-07T18:00:00",
+			CurrentCount: 2,
+			CreatedAt:    "2026-05-07T18:00:00",
+		}
+
+		repo := &mockStreakRepository{
+			getLatestStreakFunc: func(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
+				return previous, nil
+			},
+			createStreakFunc: func(ctx context.Context, st *streaker.Streak) (*streaker.Streak, error) {
+				return st, nil
+			},
+		}
+		svc := streaker.NewService(repo)
+
+		res, err := svc.RecordStreak(context.Background(), &streaker.RecordStreakRequest{
+			StreakType:      "app-streak",
+			OwnerId:         "user-1",
+			TargetType:      "app",
+			TargetId:        "platform",
+			OccurredAt:      "2026-05-08T18:00:00",
+			CreatedByUserId: "user-1",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "2026-05-08", res.Streak.PeriodKey)
+		assert.Equal(t, 3, res.Streak.CurrentCount)
+		require.NotNil(t, res.Streak.Previous)
+		assert.Equal(t, previous.Id, res.Streak.Previous.Id)
+	})
+
+	t.Run("gap in daily period resets count while retaining previous entry metadata", func(t *testing.T) {
+		t.Parallel()
+
+		previous := &streaker.Streak{
+			Id:           "entry-from-2026-05-06",
+			NanoId:       "nano-from-2026-05-06",
+			StreakType:   "app-streak",
+			OwnerId:      "user-1",
+			TargetType:   "app",
+			TargetId:     "platform",
+			PeriodType:   streaker.StreakPeriodTypeDaily,
+			PeriodKey:    "2026-05-06",
+			OccurredAt:   "2026-05-06T18:00:00",
+			CurrentCount: 8,
+			CreatedAt:    "2026-05-06T18:00:00",
+		}
+
+		repo := &mockStreakRepository{
+			getLatestStreakFunc: func(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
+				return previous, nil
+			},
+			createStreakFunc: func(ctx context.Context, st *streaker.Streak) (*streaker.Streak, error) {
+				return st, nil
+			},
+		}
+		svc := streaker.NewService(repo)
+
+		res, err := svc.RecordStreak(context.Background(), &streaker.RecordStreakRequest{
+			StreakType:      "app-streak",
+			OwnerId:         "user-1",
+			TargetType:      "app",
+			TargetId:        "platform",
+			OccurredAt:      "2026-05-08T18:00:00",
+			CreatedByUserId: "user-1",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "2026-05-08", res.Streak.PeriodKey)
+		assert.Equal(t, 1, res.Streak.CurrentCount)
+		require.NotNil(t, res.Streak.Previous)
+		assert.Equal(t, previous.Id, res.Streak.Previous.Id)
+		assert.Equal(t, 8, res.Streak.Previous.CurrentCount)
+	})
+}
+
 func TestService_GetStats(t *testing.T) {
 	t.Parallel()
 

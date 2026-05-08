@@ -17,6 +17,36 @@ The package computes `current_count` from the latest previous entry in the same 
 
 Mongo indexes include a unique compound index across the scope and period fields. That makes `RecordStreak` idempotent for the same user, target, streak type, and period.
 
+### How the "Period" System Works (aka How to keep your streak alive)
+
+Think of the `Period` fields like keeping a Snapchat or Duolingo streak alive. A streak isn't just "you clicked a button"—it's "you clicked a button *today*." The period fields tell the system what the rules are for your streak.
+
+- **`PeriodType` (The Rule):** How often do you need to do the thing?
+  - `daily`: You have to do it once a day.
+  - `weekly`: You have to do it once a week.
+  - `monthly`: You have to do it once a month.
+  - `custom`: You make up the rules! (Like beating specific levels in a game).
+
+- **`PeriodKey` (The Bucket):** Which exact day, week, or level did you just finish?
+  - daily: `2026-05-08` (Today's bucket)
+  - weekly: `2026-w19` (This week's bucket)
+  - custom: `level-4`, `boss-fight-3` (A specific challenge bucket)
+
+- **`OccurredAt` (The Exact Time):** The exact second you actually did the task. For daily, weekly, or monthly streaks, the code will look at this exact time and automatically figure out what your `PeriodKey` (Bucket) should be. 
+
+Because of this system, you can build streaks for *anything*. A "daily app open" streak. A "weekly math homework" streak. A custom "completed a game world" streak. 
+
+#### Examples of how it behaves:
+
+**1. You can't double-dip (Anti-cheat)**
+If you are on a daily streak, and you do the task 5 times on Tuesday, your streak only goes up by 1. The system sees you already filled the "Tuesday" bucket and ignores the extra attempts. Your streak count stays exactly the same.
+
+**2. Keeping it alive (Consecutive)**
+If you log in on Monday, your streak is 1. If you log in on Tuesday, your streak becomes 2! 
+
+**3. Dropping the ball (Gaps)**
+If you log in on Monday (streak = 1), skip Tuesday, and log in on Wednesday... oh no! Your streak resets back to 1. But don't worry, the system keeps a hidden memory of your past streak so you never lose your history.
+
 ## Basic Usage
 
 ```go
