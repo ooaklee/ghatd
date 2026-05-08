@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -188,7 +189,14 @@ func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Features)
 }
 
-// getBaseResponseHandler returns response handler configured with billing manager error maps
+// getBaseResponseHandler returns response handler with BillingManagerErrorMap
+// as the final override layer so package-local errors take precedence over
+// caller-supplied definitions.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(h.ErrorMaps)
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(h.ErrorMaps...).
+			AddOverrides(BillingManagerErrorMap).
+			Build(),
+	)
 }
