@@ -190,13 +190,12 @@ func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
 }
 
 // getBaseResponseHandler returns response handler with BillingManagerErrorMap
-// as the final override layer so package-local errors take precedence over
-// caller-supplied definitions.
+// as the base layer and caller-supplied maps as overrides.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(
 		errormanifest.NewComposer().
-			Add(h.ErrorMaps...).
-			AddOverrides(BillingManagerErrorMap).
+			Add(BillingManagerErrorMap).
+			AddOverrides(h.ErrorMaps...).
 			Build(),
 	)
 }

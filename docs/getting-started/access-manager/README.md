@@ -91,7 +91,7 @@ func main() {
 }
 ```
 
-> **Error maps:** The `NewHandler` and `NewMiddleware` constructors accept `ErrorMaps []reply.ErrorManifest` to translate domain errors into HTTP responses. Build them with the shared composer from `github.com/ooaklee/ghatd/external/errormanifest`:
+> **Error maps:** The `NewHandler` and `NewMiddleware` constructors accept `ErrorMaps []reply.ErrorManifest` to translate domain errors into HTTP responses. Handlers auto-include their own domain error maps as a base layer; callers pass only cross-package/shared maps (e.g. `user`, `auth`) as overrides. Build them with the shared composer:
 >
 > ```go
 > import "github.com/ooaklee/ghatd/external/errormanifest"
@@ -100,7 +100,6 @@ func main() {
 >     Add(
 >         user.UserErrorMap,
 >         auth.AuthErrorMap,
->         accessmanager.AccessmanagerErrorMap,
 >     ).
 >     Build()
 > ```

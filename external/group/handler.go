@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -637,5 +638,10 @@ func (h *Handler) DisableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *
 
 // getBaseResponseHandler returns response handler configured with group error maps
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(h.ErrorMaps)
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(GroupErrorMap).
+			AddOverrides(h.ErrorMaps...).
+			Build(),
+	)
 }

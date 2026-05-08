@@ -31,19 +31,20 @@
 // Override manifests are placed after all base manifests in the output
 // slice, guaranteeing they win on key conflicts.
 //
-// 3. Caller-owned composition
+// 3. Handler-owned base, caller-owned overrides
 //
-// Handlers receive []reply.ErrorManifest and pass it to reply.NewReplier.
-// They do not auto-append cross-package maps — the caller (app wiring
-// layer) owns the full composition. Handlers may append their own
-// package-local ErrorManifest as a final .AddOverrides() layer so their
-// domain errors always take precedence:
+// Each handler auto-includes its package-local ErrorManifest as the base
+// layer via Composer.Add(). Caller-supplied maps received via the Handler
+// struct are applied as overrides via Composer.AddOverrides(), so they
+// can supplement or override the package defaults on a per-key basis.
+// Callers pass only cross-package/shared maps; domain-specific maps
+// belong to the handler:
 //
 //	func (h *Handler) getBaseResponseHandler() *reply.Replier {
 //	    return reply.NewReplier(
 //	        errormanifest.NewComposer().
-//	            Add(h.ErrorMaps...).
-//	            AddOverrides(MyPackageErrorMap).
+//	            Add(MyPackageErrorMap).
+//	            AddOverrides(h.ErrorMaps...).
 //	            Build(),
 //	    )
 //	}

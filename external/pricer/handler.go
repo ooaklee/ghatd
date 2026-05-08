@@ -275,8 +275,8 @@ func (h *Handler) DeleteFeature(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(
 		errormanifest.NewComposer().
-			Add(h.ErrorMaps...).
-			AddOverrides(PricerErrorMap).
+			Add(PricerErrorMap).
+			AddOverrides(h.ErrorMaps...).
 			Build(),
 	)
 }

@@ -326,13 +326,12 @@ func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.
 }
 
 // getBaseResponseHandler returns response handler with ContentManagerErrorMap
-// as the final override layer so package-local errors take precedence over
-// caller-supplied definitions.
+// as the base layer and caller-supplied maps as overrides.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(
 		errormanifest.NewComposer().
-			Add(h.errorMaps...).
-			AddOverrides(ContentManagerErrorMap).
+			Add(ContentManagerErrorMap).
+			AddOverrides(h.errorMaps...).
 			Build(),
 	)
 }
