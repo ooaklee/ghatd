@@ -273,9 +273,17 @@ func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error)
 		return nil, errors.New(ErrKeyOwnerIdIsRequired)
 	}
 
-	periodType, err := NormalisePeriodType(req.PeriodType)
-	if err != nil {
-		return nil, err
+	if req.PeriodType == "" {
+		return nil, errors.New(ErrKeyPeriodTypeIsRequired)
+	}
+
+	periodType := req.PeriodType
+	if periodType != "" {
+		var err error
+		periodType, err = NormalisePeriodType(periodType)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &StreakStatsRequest{

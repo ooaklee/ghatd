@@ -3,6 +3,7 @@ package streaker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -10,6 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+const collectionInitMaxAttempts = 3
 
 // MongoDbStore represents the datastore methods needed by streaker.
 type MongoDbStore interface {
@@ -28,9 +31,8 @@ type MongoDbStore interface {
 type Repository struct {
 	Store MongoDbStore
 
-	collection *mongo.Collection
-	initOnce   sync.Once
-	initErr    error
+	collection      *mongo.Collection
+	collectionMutex sync.Mutex
 }
 
 // NewRepository initiates a new instance of repository.
@@ -42,23 +44,36 @@ func NewRepository(store MongoDbStore) *Repository {
 
 // GetStreakCollection returns collection used for streaker domain.
 func (r *Repository) GetStreakCollection(ctx context.Context) (*mongo.Collection, error) {
-	r.initOnce.Do(func() {
+	if r.collection != nil {
+		return r.collection, nil
+	}
+
+	r.collectionMutex.Lock()
+	defer r.collectionMutex.Unlock()
+
+	if r.collection != nil {
+		return r.collection, nil
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= collectionInitMaxAttempts; attempt++ {
 		_, err := r.Store.InitialiseClient(ctx)
 		if err != nil {
-			r.initErr = err
-			return
+			lastErr = err
+			continue
 		}
 
 		db, err := r.Store.GetDatabase(ctx, "")
 		if err != nil {
-			r.initErr = err
-			return
+			lastErr = err
+			continue
 		}
 
 		r.collection = db.Collection(StreakCollection)
-	})
+		return r.collection, nil
+	}
 
-	return r.collection, r.initErr
+	return nil, fmt.Errorf("%s: unable to initialise streak collection after %d attempts: %w", ErrKeyDatabaseError, collectionInitMaxAttempts, lastErr)
 }
 
 func (r *Repository) insertStreak(ctx context.Context, streak *Streak) (*Streak, error) {

@@ -29,6 +29,7 @@ const (
 	ErrKeyTargetIdIsRequired         = "StreakTargetIdIsRequired"
 	ErrKeyTargetTypeIsRequired       = "StreakTargetTypeIsRequired"
 	ErrKeyCreatedByUserIdIsRequired  = "StreakCreatedByUserIdIsRequired"
+	ErrKeyPeriodTypeIsRequired       = "StreakPeriodTypeIsRequired"
 	ErrKeyInvalidPeriodType          = "StreakInvalidPeriodType"
 	ErrKeyInvalidOccurredAt          = "StreakInvalidOccurredAt"
 	ErrKeyPeriodKeyIsRequired        = "StreakPeriodKeyIsRequired"

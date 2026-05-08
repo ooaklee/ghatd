@@ -27,6 +27,7 @@ func GetAppStreakStats(ctx context.Context, service *streaker.Service, userID st
 		StreakStatsRequest: streaker.StreakStatsRequest{
 			StreakType: "app-streak",
 			OwnerId:    userID,
+			PeriodType: streaker.StreakPeriodTypeDaily,
 		},
 	})
 	if err != nil {
@@ -37,6 +38,7 @@ func GetAppStreakStats(ctx context.Context, service *streaker.Service, userID st
 		StreakStatsRequest: streaker.StreakStatsRequest{
 			StreakType: "app-streak",
 			OwnerId:    userID,
+			PeriodType: streaker.StreakPeriodTypeDaily,
 		},
 	})
 	if err != nil {
@@ -47,6 +49,7 @@ func GetAppStreakStats(ctx context.Context, service *streaker.Service, userID st
 		StreakStatsRequest: streaker.StreakStatsRequest{
 			StreakType: "app-streak",
 			OwnerId:    userID,
+			PeriodType: streaker.StreakPeriodTypeDaily,
 		},
 	})
 	if err != nil {

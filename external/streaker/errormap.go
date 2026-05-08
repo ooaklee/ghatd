@@ -88,4 +88,9 @@ var StreakErrorMap reply.ErrorManifest = map[string]reply.ErrorManifestItem{
 		Code:       "STR0-016",
 		Detail:     "The previous streak entry must belong to the same streak scope",
 	},
+	ErrKeyPeriodTypeIsRequired: {
+		StatusCode: http.StatusBadRequest,
+		Code:       "STR0-017",
+		Detail:     "Please provide the streak period type",
+	},
 }

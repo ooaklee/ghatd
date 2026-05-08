@@ -70,25 +70,30 @@ currentCount := recorded.Streak.CurrentCount
 
 ## Stats
 
+Stats requests require `PeriodType`, because current, longest, and total counts are only meaningful inside a specific rhythm. For example, a user's daily app streak and weekly app streak can both be valid, but they answer different product questions.
+
 ```go
 current, err := service.GetCurrentCountByStreakTypeAndUserID(ctx, &streaker.GetCurrentCountRequest{
     StreakStatsRequest: streaker.StreakStatsRequest{
-        StreakType: "app-streak",
-        OwnerId:    userID,
+        StreakType:  "app-streak",
+        OwnerId:     userID,
+        PeriodType:  streaker.StreakPeriodTypeDaily,
     },
 })
 
 longest, err := service.GetLongestStreakByStreakTypeAndUserID(ctx, &streaker.GetLongestStreakRequest{
     StreakStatsRequest: streaker.StreakStatsRequest{
-        StreakType: "app-streak",
-        OwnerId:    userID,
+        StreakType:  "app-streak",
+        OwnerId:     userID,
+        PeriodType:  streaker.StreakPeriodTypeDaily,
     },
 })
 
 total, err := service.GetNumberOfStreaksByStreakTypeAndUserID(ctx, &streaker.GetNumberOfStreaksRequest{
     StreakStatsRequest: streaker.StreakStatsRequest{
-        StreakType: "app-streak",
-        OwnerId:    userID,
+        StreakType:  "app-streak",
+        OwnerId:     userID,
+        PeriodType:  streaker.StreakPeriodTypeDaily,
     },
 })
 ```

@@ -356,6 +356,14 @@ func TestService_RecordStreakPeriodExamples(t *testing.T) {
 	})
 }
 
+func TestIsConsecutivePeriod(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, streaker.IsConsecutivePeriod("2026-05-08", "2026-05-08", streaker.StreakPeriodTypeDaily))
+	assert.True(t, streaker.IsConsecutivePeriod("2026-05-07", "2026-05-08", streaker.StreakPeriodTypeDaily))
+	assert.False(t, streaker.IsConsecutivePeriod("2026-05-06", "2026-05-08", streaker.StreakPeriodTypeDaily))
+}
+
 func TestService_GetStats(t *testing.T) {
 	t.Parallel()
 
@@ -365,6 +373,7 @@ func TestService_GetStats(t *testing.T) {
 		getLongestStreakFunc: func(ctx context.Context, req *streaker.GetLongestStreakRequest) (*streaker.Streak, error) {
 			assert.Equal(t, "app-streak", req.StreakType)
 			assert.Equal(t, "user-1", req.OwnerId)
+			assert.Equal(t, streaker.StreakPeriodTypeDaily, req.PeriodType)
 			return longest, nil
 		},
 		getLatestStreakFunc: func(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
@@ -377,20 +386,33 @@ func TestService_GetStats(t *testing.T) {
 	svc := streaker.NewService(repo)
 
 	longestRes, err := svc.GetLongestStreakByStreakTypeAndUserID(context.Background(), &streaker.GetLongestStreakRequest{
-		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1"},
+		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1", PeriodType: streaker.StreakPeriodTypeDaily},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 12, longestRes.LongestCount)
 
 	currentRes, err := svc.GetCurrentCountByStreakTypeAndUserID(context.Background(), &streaker.GetCurrentCountRequest{
-		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1"},
+		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1", PeriodType: streaker.StreakPeriodTypeDaily},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 3, currentRes.CurrentCount)
 
 	totalRes, err := svc.GetNumberOfStreaksByStreakTypeAndUserID(context.Background(), &streaker.GetNumberOfStreaksRequest{
-		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1"},
+		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1", PeriodType: streaker.StreakPeriodTypeDaily},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(44), totalRes.Total)
+}
+
+func TestService_GetStatsRequiresPeriodType(t *testing.T) {
+	t.Parallel()
+
+	svc := streaker.NewService(&mockStreakRepository{})
+
+	_, err := svc.GetCurrentCountByStreakTypeAndUserID(context.Background(), &streaker.GetCurrentCountRequest{
+		StreakStatsRequest: streaker.StreakStatsRequest{StreakType: "App Streak", OwnerId: "user-1"},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, streaker.ErrKeyPeriodTypeIsRequired, err.Error())
 }

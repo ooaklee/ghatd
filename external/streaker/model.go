@@ -197,7 +197,7 @@ func IsConsecutivePeriod(previousPeriodKey, currentPeriodKey string, periodType 
 	}
 
 	if previousPeriodKey == currentPeriodKey {
-		return true
+		return false
 	}
 
 	previous, ok := parsePeriodKey(previousPeriodKey, periodType)
