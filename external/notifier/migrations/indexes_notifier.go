@@ -1,3 +1,29 @@
+// Package migrations contains MongoDB index setup for the notifier package.
+//
+// These functions are called by the migrator tool (cmd/migrator) during
+// deployment to create the database indexes that the notifier repository
+// depends on.
+//
+// # Indexes
+//
+// The notification_addresses collection has three indexes:
+//
+//  1. A unique compound index on (channel, address_hash) that prevents
+//     the same browser or device from creating duplicate address records.
+//     When the same Push subscription registers again (for example after
+//     a different user signs in), the existing document is updated rather
+//     than a duplicate being created.
+//
+//  2. A compound index on (user_id, status) that speeds up the "find all
+//     active addresses for a user" query used by the NotifyUser flow.
+//
+//  3. A descending index on metadata.updated_at for efficient sorting
+//     when listing a user's registered devices (most recent first).
+//
+// The notification_preferences collection has one index:
+//
+//  1. An index on the enabled field for queries that need to find users
+//     who have opted in or out of notifications.
 package migrations
 
 import (
@@ -11,7 +37,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// InitNotifierIndexesUp creates notifier indexes.
+// InitNotifierIndexesUp creates all the indexes the notifier package needs.
+// It is called during migrations to set up the notification_addresses and
+// notification_preferences collections when deploying to a fresh database
+// or upgrading an existing one.
 func InitNotifierIndexesUp(db *mongo.Database) error { //Up
 	log.SetFlags(0)
 	log.Default().Println(toolbox.OutputBasicLogString("info", "starting-task-to-notifier-indexes"))
@@ -58,7 +87,9 @@ func InitNotifierIndexesUp(db *mongo.Database) error { //Up
 	return nil
 }
 
-// InitNotifierIndexesDown drops notifier indexes.
+// InitNotifierIndexesDown drops all notifier indexes in reverse order.
+// This is called during migration rollback to undo the changes made by
+// InitNotifierIndexesUp.
 func InitNotifierIndexesDown(db *mongo.Database) error { //Down
 	log.SetFlags(0)
 	log.Default().Println(toolbox.OutputBasicLogString("info", "rolling-back-task-to-notifier-indexes"))

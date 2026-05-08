@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// fakeRepository is a test double that records calls and returns
+// canned responses, letting us test the Service without a real MongoDB.
 type fakeRepository struct {
 	addresses   []NotificationAddress
 	preferences *NotificationPreferences
@@ -50,6 +52,8 @@ func (r *fakeRepository) DeletePreferencesByUserID(ctx context.Context, userID s
 	return nil
 }
 
+// fakeSender is a test double for ChannelSender that records how many
+// addresses the service attempted to send to.
 type fakeSender struct {
 	channel  NotificationChannel
 	enabled  bool
@@ -63,6 +67,9 @@ func (s *fakeSender) Send(ctx context.Context, subject, message string, addresse
 	return nil
 }
 
+// TestRegisterAddress_WebPushUpsertsActiveAddress verifies that
+// registering a valid Web Push address creates an ACTIVE address
+// record with the correct channel, user ID, and a computed address hash.
 func TestRegisterAddress_WebPushUpsertsActiveAddress(t *testing.T) {
 	repository := &fakeRepository{}
 	service := NewService(&NewServiceRequest{Repository: repository})
@@ -104,6 +111,9 @@ func TestRegisterAddress_WebPushUpsertsActiveAddress(t *testing.T) {
 	}
 }
 
+// TestRegisterAddress_RejectsInvalidChannelPayload checks that the
+// service rejects a Web Push registration that is missing endpoint
+// and key data.
 func TestRegisterAddress_RejectsInvalidChannelPayload(t *testing.T) {
 	service := NewService(&NewServiceRequest{Repository: &fakeRepository{}})
 
@@ -116,6 +126,9 @@ func TestRegisterAddress_RejectsInvalidChannelPayload(t *testing.T) {
 	}
 }
 
+// TestNotifyUser_SendsOnlyWhenPreferencesAllowChannel verifies that
+// NotifyUser respects per-channel preferences and only attempts to
+// send on channels that are enabled.
 func TestNotifyUser_SendsOnlyWhenPreferencesAllowChannel(t *testing.T) {
 	sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
 	repository := &fakeRepository{
@@ -158,6 +171,9 @@ func TestNotifyUser_SendsOnlyWhenPreferencesAllowChannel(t *testing.T) {
 	}
 }
 
+// TestNotifyUser_SkipsWhenPreferencesDisabled checks that NotifyUser
+// does not attempt any sends when the user has globally disabled
+// notifications, even when active addresses exist.
 func TestNotifyUser_SkipsWhenPreferencesDisabled(t *testing.T) {
 	sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
 	repository := &fakeRepository{

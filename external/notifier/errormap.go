@@ -6,7 +6,20 @@ import (
 	"github.com/ooaklee/reply/v2"
 )
 
-// NotifierErrorMap holds user-facing API error metadata for notifier errors.
+// NotifierErrorMap is the public error manifest that allows GHATD's API
+// layer how to turn notifier errors into clean HTTP responses.
+//
+// Each entry maps a sentinel error (from errors.go) to:
+//
+//   - Title – a short human-readable label for the problem.
+//   - Detail – a sentence explaining what happened, safe to show to the user.
+//   - StatusCode – the HTTP status code (400, 404, 500, 503, etc.).
+//   - Code – a stable error code (NTF00-XXX) that clients and support teams
+//     can rely on even when the error message text changes.
+//
+// The error manifest is plugged into the GHATD error middleware at startup
+// , so any notifier error returned from a handler is automatically converted
+// to the right API response.
 var NotifierErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrDatabaseError: {
 		Title:      "Internal Error",
