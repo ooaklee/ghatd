@@ -27,6 +27,13 @@ type UsermanagerService interface {
 	GetUserGroupMemberships(ctx context.Context, r *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error)
 	GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
 	GetLatestNotificationOverviews(ctx context.Context, r *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error)
+	GetNotifierConfig(ctx context.Context, r *GetNotifierConfigRequest) (*GetNotifierConfigResponse, error)
+	RegisterNotificationAddress(ctx context.Context, r *RegisterNotificationAddressRequest) (*RegisterNotificationAddressResponse, error)
+	ListNotificationAddresses(ctx context.Context, r *ListNotificationAddressesRequest) (*ListNotificationAddressesResponse, error)
+	DeleteNotificationAddress(ctx context.Context, r *DeleteNotificationAddressRequest) error
+	GetNotificationPreferences(ctx context.Context, r *GetNotificationPreferencesRequest) (*GetNotificationPreferencesResponse, error)
+	UpdateNotificationPreferences(ctx context.Context, r *UpdateNotificationPreferencesRequest) (*UpdateNotificationPreferencesResponse, error)
+	NotifyUser(ctx context.Context, r *NotifyUserRequest) (*NotifyUserResponse, error)
 	GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvitationsRequest) (*GetMyGroupInvitationsResponse, error)
 	AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupInvitationRequest) (*AcceptMyGroupInvitationResponse, error)
 	RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupInvitationRequest) (*RejectMyGroupInvitationResponse, error)
@@ -470,6 +477,124 @@ func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.
 	}
 
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Overviews)
+}
+
+// GetNotifierConfig handles the request to get notifier config.
+func (h *Handler) GetNotifierConfig(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetNotifierConfigRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetNotifierConfig(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
+}
+
+// RegisterNotificationAddress handles notification address registration.
+func (h *Handler) RegisterNotificationAddress(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToRegisterNotificationAddressRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.RegisterNotificationAddress(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Address)
+}
+
+// ListNotificationAddresses handles notification address listing.
+func (h *Handler) ListNotificationAddresses(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToListNotificationAddressesRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ListNotificationAddresses(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Addresses)
+}
+
+// DeleteNotificationAddress handles notification address deletion.
+func (h *Handler) DeleteNotificationAddress(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToDeleteNotificationAddressRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if err := h.Service.DeleteNotificationAddress(r.Context(), request); err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
+}
+
+// GetNotificationPreferences handles notification preference lookup.
+func (h *Handler) GetNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetNotificationPreferencesRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetNotificationPreferences(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Preferences)
+}
+
+// UpdateNotificationPreferences handles notification preference updates.
+func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateNotificationPreferencesRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.UpdateNotificationPreferences(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Preferences)
+}
+
+// NotifyUser handles admin/service notification sends.
+func (h *Handler) NotifyUser(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToNotifyUserRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.NotifyUser(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Results)
 }
 
 // GetMyGroupInvitations handles the request to get the current user's outstanding group invitations.

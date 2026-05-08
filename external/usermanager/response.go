@@ -4,6 +4,7 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
+	"github.com/ooaklee/ghatd/external/notifier"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -84,6 +85,36 @@ type GetUserGroupsResponse struct {
 // GetLatestNotificationOverviewsResponse holds the response for fetching the latest notification overviews
 type GetLatestNotificationOverviewsResponse struct {
 	*common.GetLatestNotificationOverviewsResponse
+}
+
+// GetNotifierConfigResponse holds client-safe notifier config.
+type GetNotifierConfigResponse struct {
+	*notifier.GetNotifierConfigResponse
+}
+
+// RegisterNotificationAddressResponse holds the registered notification address.
+type RegisterNotificationAddressResponse struct {
+	*notifier.RegisterAddressResponse
+}
+
+// ListNotificationAddressesResponse holds notification addresses.
+type ListNotificationAddressesResponse struct {
+	*notifier.ListNotificationAddressesResponse
+}
+
+// GetNotificationPreferencesResponse holds notification preferences.
+type GetNotificationPreferencesResponse struct {
+	*notifier.GetNotificationPreferencesResponse
+}
+
+// UpdateNotificationPreferencesResponse holds notification preferences.
+type UpdateNotificationPreferencesResponse struct {
+	*notifier.UpdateNotificationPreferencesResponse
+}
+
+// NotifyUserResponse holds notification send results.
+type NotifyUserResponse struct {
+	*notifier.NotifyUserResponse
 }
 
 // PendingGroupInvitation holds the response for a pending group invitation
