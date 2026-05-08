@@ -15,6 +15,8 @@ type fakeRepository struct {
 	upserted     *NotificationAddress
 	deletedID    string
 	disabledHash string
+
+	disableError error
 }
 
 func (r *fakeRepository) UpsertAddress(ctx context.Context, address *NotificationAddress) (*NotificationAddress, error) {
@@ -40,6 +42,9 @@ func (r *fakeRepository) DeleteAddressesByUserID(ctx context.Context, userID str
 }
 
 func (r *fakeRepository) DisableAddressByHash(ctx context.Context, hash string) error {
+	if r.disableError != nil {
+		return r.disableError
+	}
 	r.disabledHash = hash
 	return nil
 }
@@ -79,13 +84,14 @@ func (s *fakeSender) Send(ctx context.Context, subject, message string, addresse
 // per-address delivery outcomes so we can test the cleanup path.
 //
 //   - invalidHashes lists address hashes whose delivery should be
-//     treated as a permanent (410/404) failure.  The sender calls
-//     its invalidAddressHandler for these.
+//     treated as a permanent failure. The sender calls its
+//     invalidAddressHandler for these and increments the per-call report's
+//     cleaned count.
 //   - transientError is returned for addresses NOT in invalidHashes.
 //     Set it to nil to simulate successful delivery.
 //
-// The sender records every address hash sent to and every hash
-// forwarded to the invalidAddressHandler.
+// If the invalidAddressHandler returns an error, that error is NOT
+// swallowed — it is joined into the return value so the caller sees it.
 type cleanupTrackingSender struct {
 	channel               NotificationChannel
 	invalidHashes         map[string]bool
@@ -103,33 +109,45 @@ func (c *cleanupTrackingSender) SetInvalidAddressHandler(handler func(ctx contex
 }
 
 func (c *cleanupTrackingSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
-	var transientErrs []error
+	_, err := c.SendWithReport(ctx, subject, message, addresses, data)
+	return err
+}
+
+func (c *cleanupTrackingSender) SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error) {
+	report := channelSendReport{}
+	c.sentAddrs = nil
+	c.badAddrs = nil
+
+	var allErrs []error
 	for _, addr := range addresses {
 		c.sentAddrs = append(c.sentAddrs, addr.AddressHash)
 		if c.invalidHashes != nil && c.invalidHashes[addr.AddressHash] {
 			c.badAddrs = append(c.badAddrs, addr.AddressHash)
 			if c.invalidAddressHandler != nil {
-				_ = c.invalidAddressHandler(ctx, addr.AddressHash)
+				if err := c.invalidAddressHandler(ctx, addr.AddressHash); err != nil {
+					allErrs = append(allErrs, err)
+					continue
+				}
 			}
+			report.Cleaned++
 			continue
 		}
 		if c.transientError != nil {
-			transientErrs = append(transientErrs, c.transientError)
+			allErrs = append(allErrs, c.transientError)
+			continue
 		}
+		report.Delivered++
 	}
-	if len(transientErrs) > 0 {
-		return errors.Join(transientErrs...)
+	if len(allErrs) > 0 {
+		return report, errors.Join(allErrs...)
 	}
-	return nil
+	return report, nil
 }
 
 // ---------------------------------------------------------------------------
 // Existing tests
 // ---------------------------------------------------------------------------
 
-// TestRegisterAddress_WebPushUpsertsActiveAddress verifies that
-// registering a valid Web Push address creates an ACTIVE address
-// record with the correct channel, user ID, and a computed address hash.
 func TestRegisterAddress_WebPushUpsertsActiveAddress(t *testing.T) {
 	repository := &fakeRepository{}
 	service := NewService(&NewServiceRequest{Repository: repository})
@@ -171,9 +189,6 @@ func TestRegisterAddress_WebPushUpsertsActiveAddress(t *testing.T) {
 	}
 }
 
-// TestRegisterAddress_RejectsInvalidChannelPayload checks that the
-// service rejects a Web Push registration that is missing endpoint
-// and key data.
 func TestRegisterAddress_RejectsInvalidChannelPayload(t *testing.T) {
 	service := NewService(&NewServiceRequest{Repository: &fakeRepository{}})
 
@@ -186,9 +201,6 @@ func TestRegisterAddress_RejectsInvalidChannelPayload(t *testing.T) {
 	}
 }
 
-// TestNotifyUser_SendsOnlyWhenPreferencesAllowChannel verifies that
-// NotifyUser respects per-channel preferences and only attempts to
-// send on channels that are enabled.
 func TestNotifyUser_SendsOnlyWhenPreferencesAllowChannel(t *testing.T) {
 	sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
 	repository := &fakeRepository{
@@ -231,9 +243,6 @@ func TestNotifyUser_SendsOnlyWhenPreferencesAllowChannel(t *testing.T) {
 	}
 }
 
-// TestNotifyUser_SkipsWhenPreferencesDisabled checks that NotifyUser
-// does not attempt any sends when the user has globally disabled
-// notifications, even when active addresses exist.
 func TestNotifyUser_SkipsWhenPreferencesDisabled(t *testing.T) {
 	sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
 	repository := &fakeRepository{
@@ -279,10 +288,8 @@ func testAddress(prefix string, hash string) NotificationAddress {
 	}
 }
 
-// TestNotifyUser_DisablesExpiredAddress calls NotifyUser when the sender
-// flags one address as permanently invalid.  The repository must record
-// the disabled hash, and the send result must still report Sent=true
-// because no transient error occurred.
+// TestNotifyUser_DisablesExpiredAddress — only expired address, cleanup
+// succeeds.  Attempted=1, Sent=false, Cleaned=1, no error.
 func TestNotifyUser_DisablesExpiredAddress(t *testing.T) {
 	addr := testAddress("bad", "hash-expired")
 	addrHash := addr.AddressHash
@@ -319,10 +326,22 @@ func TestNotifyUser_DisablesExpiredAddress(t *testing.T) {
 	if repo.disabledHash != addrHash {
 		t.Fatalf("expected disabledHash %q, got %q", addrHash, repo.disabledHash)
 	}
-	if len(response.Results) != 1 || !response.Results[0].Sent {
-		t.Fatalf("expected sent result, got %#v", response.Results)
+	if len(response.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(response.Results))
 	}
-	// the expired address was forwarded to the handler
+	r := response.Results[0]
+	if r.Attempted != 1 {
+		t.Fatalf("expected attempted=1, got %d", r.Attempted)
+	}
+	if r.Sent {
+		t.Fatal("expected Sent=false (cleanup-only, nothing delivered)")
+	}
+	if r.Cleaned != 1 {
+		t.Fatalf("expected Cleaned=1, got %d", r.Cleaned)
+	}
+	if r.Error != "" {
+		t.Fatalf("expected no error, got %q", r.Error)
+	}
 	if len(sender.badAddrs) != 1 || sender.badAddrs[0] != addrHash {
 		t.Fatalf("expected one bad address %q, got %v", addrHash, sender.badAddrs)
 	}
@@ -365,17 +384,27 @@ func TestNotifyUser_TransientFailureDoesNotDisable(t *testing.T) {
 	if repo.disabledHash != "" {
 		t.Fatalf("expected no disable, got disabledHash %q", repo.disabledHash)
 	}
-	if len(response.Results) != 1 || response.Results[0].Sent {
-		t.Fatalf("expected not-sent result, got %#v", response.Results)
+	if len(response.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(response.Results))
+	}
+	r := response.Results[0]
+	if r.Sent {
+		t.Fatal("expected Sent=false (transient failure)")
+	}
+	if r.Cleaned != 0 {
+		t.Fatalf("expected Cleaned=0, got %d", r.Cleaned)
+	}
+	if r.Error == "" {
+		t.Fatal("expected error message in result")
 	}
 	if len(sender.badAddrs) != 0 {
 		t.Fatalf("expected no bad addresses, got %v", sender.badAddrs)
 	}
 }
 
-// TestNotifyUser_MixedValidAndInvalidAddresses has one valid address and
-// one expired address.  The expired address should be disabled, the valid
-// one should succeed, and the overall send should be successful (no error).
+// TestNotifyUser_MixedValidAndInvalidAddresses — one valid + one expired.
+// The expired address is disabled, the valid one succeeds.  Sent=true,
+// Cleaned=1, no error.
 func TestNotifyUser_MixedValidAndInvalidAddresses(t *testing.T) {
 	validAddr := testAddress("valid", "hash-valid")
 	expiredAddr := testAddress("expired", "hash-expired")
@@ -413,20 +442,31 @@ func TestNotifyUser_MixedValidAndInvalidAddresses(t *testing.T) {
 	if repo.disabledHash != expiredHash {
 		t.Fatalf("expected disabledHash %q, got %q", expiredHash, repo.disabledHash)
 	}
-	if len(response.Results) != 1 || !response.Results[0].Sent {
-		t.Fatalf("expected sent result, got %#v", response.Results)
+	if len(response.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(response.Results))
 	}
-	// both addresses were attempted
+	r := response.Results[0]
+	if r.Attempted != 2 {
+		t.Fatalf("expected attempted=2, got %d", r.Attempted)
+	}
+	if !r.Sent {
+		t.Fatal("expected Sent=true (one valid delivery)")
+	}
+	if r.Cleaned != 1 {
+		t.Fatalf("expected Cleaned=1, got %d", r.Cleaned)
+	}
+	if r.Error != "" {
+		t.Fatalf("expected no error, got %q", r.Error)
+	}
 	if len(sender.sentAddrs) != 2 {
 		t.Fatalf("expected 2 attempted addresses, got %d", len(sender.sentAddrs))
 	}
 }
 
-// TestNotifyUser_ResultReflectsCleanup verifies that NotifyUser result
-// shows Sent=true when the only failure is a cleaned-up expired address
-// (no transient errors), and that the attempt count includes all addresses.
-func TestNotifyUser_ResultReflectsCleanup(t *testing.T) {
-	addr := testAddress("bad", "hash-only-expired")
+// TestNotifyUser_CleanupFailure surfaces error when the repository fails
+// to disable an expired address.  NotifyUser must return an error.
+func TestNotifyUser_CleanupFailure(t *testing.T) {
+	addr := testAddress("bad", "hash-cleanup-fail")
 	addrHash := addr.AddressHash
 
 	repo := &fakeRepository{
@@ -438,6 +478,7 @@ func TestNotifyUser_ResultReflectsCleanup(t *testing.T) {
 				string(NotificationChannelWebPush): true,
 			},
 		},
+		disableError: fmt.Errorf("mongo: connection lost"),
 	}
 
 	sender := &cleanupTrackingSender{
@@ -450,28 +491,78 @@ func TestNotifyUser_ResultReflectsCleanup(t *testing.T) {
 		Senders:    []ChannelSender{sender},
 	})
 
-	response, err := service.NotifyUser(context.Background(), &NotifyUserRequest{
+	_, err := service.NotifyUser(context.Background(), &NotifyUserRequest{
+		UserID:  "user-1",
+		Title:   "Hello",
+		Message: "World",
+	})
+	if err == nil {
+		t.Fatal("expected error when cleanup handler fails")
+	}
+	// disabledHash should NOT be set because DisableAddressByHash returned an error
+	if repo.disabledHash != "" {
+		t.Fatalf("expected disabledHash empty (disable failed), got %q", repo.disabledHash)
+	}
+}
+
+// TestNotifyUser_CleanupCountDoesNotLeakBetweenSends reuses one sender
+// across two NotifyUser calls. The second call must not inherit the cleanup
+// count from the first call.
+func TestNotifyUser_CleanupCountDoesNotLeakBetweenSends(t *testing.T) {
+	expiredAddr := testAddress("expired", "hash-expired")
+	validAddr := testAddress("valid", "hash-valid")
+
+	repo := &fakeRepository{
+		addresses: []NotificationAddress{expiredAddr},
+		preferences: &NotificationPreferences{
+			UserID:  "user-1",
+			Enabled: true,
+			Channels: map[string]bool{
+				string(NotificationChannelWebPush): true,
+			},
+		},
+	}
+
+	sender := &cleanupTrackingSender{
+		channel:       NotificationChannelWebPush,
+		invalidHashes: map[string]bool{expiredAddr.AddressHash: true},
+	}
+
+	service := NewService(&NewServiceRequest{
+		Repository: repo,
+		Senders:    []ChannelSender{sender},
+	})
+
+	firstResponse, err := service.NotifyUser(context.Background(), &NotifyUserRequest{
 		UserID:  "user-1",
 		Title:   "Hello",
 		Message: "World",
 	})
 	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+		t.Fatalf("expected first send to succeed, got %v", err)
 	}
-	if len(response.Results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(response.Results))
+	if len(firstResponse.Results) != 1 || firstResponse.Results[0].Cleaned != 1 || firstResponse.Results[0].Sent {
+		t.Fatalf("expected first result cleaned-only, got %#v", firstResponse.Results)
 	}
-	r := response.Results[0]
-	if r.Attempted != 1 {
-		t.Fatalf("expected attempted 1, got %d", r.Attempted)
+
+	repo.addresses = []NotificationAddress{validAddr}
+	sender.invalidHashes = map[string]bool{}
+
+	secondResponse, err := service.NotifyUser(context.Background(), &NotifyUserRequest{
+		UserID:  "user-1",
+		Title:   "Hello again",
+		Message: "World again",
+	})
+	if err != nil {
+		t.Fatalf("expected second send to succeed, got %v", err)
 	}
-	if !r.Sent {
-		t.Fatal("expected Sent=true (expired cleanup is not a send failure)")
+	if len(secondResponse.Results) != 1 {
+		t.Fatalf("expected one second result, got %d", len(secondResponse.Results))
 	}
-	if r.Skipped {
-		t.Fatal("expected Skipped=false")
+	if secondResponse.Results[0].Cleaned != 0 {
+		t.Fatalf("expected cleaned count to reset to 0, got %#v", secondResponse.Results[0])
 	}
-	if r.Error != "" {
-		t.Fatalf("expected no error, got %q", r.Error)
+	if !secondResponse.Results[0].Sent {
+		t.Fatalf("expected second result to be sent, got %#v", secondResponse.Results[0])
 	}
 }

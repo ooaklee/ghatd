@@ -21,6 +21,7 @@ type mockNotifierMongoDbStore struct {
 	findOneFunc          func(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 	deleteOneFunc        func(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	deleteManyFunc       func(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	updateOneFunc        func(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error
 }
 
 func (m *mockNotifierMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
@@ -60,6 +61,13 @@ func (m *mockNotifierMongoDbStore) InitialiseClient(ctx context.Context) (*mongo
 		return m.initialiseClientFunc(ctx)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockNotifierMongoDbStore) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error {
+	if m.updateOneFunc != nil {
+		return m.updateOneFunc(ctx, collection, filter, update, targetObjectName)
+	}
+	return errors.New("not implemented")
 }
 
 func (m *mockNotifierMongoDbStore) MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {
@@ -289,4 +297,71 @@ func TestRepository_DeleteAddressesByUserIDUsesDeleteManyHelper(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 1, deleteManyCalls)
+}
+
+// TestRepository_DisableAddressByHashUsesExecuteUpdateOneCommand verifies
+// that DisableAddressByHash delegates to ExecuteUpdateOneCommand with the
+// correct filter, update document, and target object name, and wraps errors.
+func TestRepository_DisableAddressByHashUsesExecuteUpdateOneCommand(t *testing.T) {
+	t.Parallel()
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	require.NoError(t, err)
+
+	updateOneCalls := 0
+	store := &mockNotifierMongoDbStore{
+		initialiseClientFunc: func(ctx context.Context) (*mongo.Client, error) {
+			return client, nil
+		},
+		getDatabaseFunc: func(ctx context.Context, dbName string) (*mongo.Database, error) {
+			return client.Database("notifier_test"), nil
+		},
+		updateOneFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error {
+			updateOneCalls++
+			assert.Equal(t, NotificationAddressesCollection, collection.Name())
+			assert.Equal(t, bson.M{"address_hash": "hash-abc"}, filter)
+			updateDoc, ok := update.(bson.M)
+			require.True(t, ok)
+			setDoc, ok := updateDoc["$set"].(bson.M)
+			require.True(t, ok)
+			assert.Equal(t, NotificationAddressStatusDisabled, setDoc["status"])
+			assert.NotEmpty(t, setDoc["metadata.updated_at"])
+			assert.Equal(t, "notification_address", targetObjectName)
+			return nil
+		},
+	}
+	repo := NewRepository(store)
+
+	err = repo.DisableAddressByHash(context.Background(), "hash-abc")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, updateOneCalls)
+}
+
+// TestRepository_DisableAddressByHashWrapsExecutorError checks that errors
+// from ExecuteUpdateOneCommand are wrapped in ErrDatabaseError.
+func TestRepository_DisableAddressByHashWrapsExecutorError(t *testing.T) {
+	t.Parallel()
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	require.NoError(t, err)
+
+	store := &mockNotifierMongoDbStore{
+		initialiseClientFunc: func(ctx context.Context) (*mongo.Client, error) {
+			return client, nil
+		},
+		getDatabaseFunc: func(ctx context.Context, dbName string) (*mongo.Database, error) {
+			return client.Database("notifier_test"), nil
+		},
+		updateOneFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error {
+			return errors.New("connection refused")
+		},
+	}
+	repo := NewRepository(store)
+
+	err = repo.DisableAddressByHash(context.Background(), "hash-abc")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrDatabaseError)
+	assert.Contains(t, err.Error(), "connection refused")
 }

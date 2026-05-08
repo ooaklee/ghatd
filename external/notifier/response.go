@@ -54,7 +54,10 @@ type GetNotifierConfigResponse struct {
 // tried to deliver to one channel.
 //
 //   - Attempted: how many addresses were targeted on this channel.
-//   - Sent: true if delivery was successful.
+//   - Sent: true if at least one address was delivered successfully
+//     (cleaned-up expired addresses do not count as delivered).
+//   - Cleaned: how many permanently invalid addresses were auto-disabled
+//     during this send attempt.
 //   - Skipped: true if the sender was not enabled (e.g. FCM without
 //     Firebase credentials configured).
 //   - Error: the error message for the send, if any.
@@ -62,6 +65,7 @@ type NotificationSendResult struct {
 	Channel   NotificationChannel `json:"channel"`
 	Attempted int                 `json:"attempted"`
 	Sent      bool                `json:"sent"`
+	Cleaned   int                 `json:"cleaned,omitempty"`
 	Skipped   bool                `json:"skipped"`
 	Error     string              `json:"error,omitempty"`
 }

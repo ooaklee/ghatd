@@ -3,7 +3,8 @@ package notifier
 import (
 	"context"
 	"errors"
-	"strings"
+	"fmt"
+	"regexp"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/nikoksr/notify"
@@ -36,6 +37,24 @@ type ChannelSender interface {
 type InvalidAddressCleanable interface {
 	SetInvalidAddressHandler(handler func(ctx context.Context, hash string) error)
 }
+
+// channelSendReport describes the result of one sender call.
+type channelSendReport struct {
+	Delivered int
+	Cleaned   int
+}
+
+// detailedChannelSender is implemented by senders that can report per-call
+// delivery and cleanup counts without storing mutable result state on the
+// shared sender instance.
+type detailedChannelSender interface {
+	SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error)
+}
+
+// permanentWebPushRe matches the webpush-go library's "unexpected status
+// code: XXX" error format.  We only consider 404 Not Found and 410 Gone
+// to be permanent – everything else is a transient delivery hiccup.
+var permanentWebPushRe = regexp.MustCompile(`unexpected status code:\s*(404|410)(?:\D|$)`)
 
 // WebPushSenderConfig contains the settings needed to send push
 // notifications to browsers using the Web Push protocol.
@@ -117,13 +136,24 @@ func (s *WebPushSender) PublicKey() string {
 //
 //   - Permanent failures trigger the invalidAddressHandler callback
 //     (if set) so the address is disabled and will not be retried.
+//     If the cleanup handler itself fails, that error is joined into
+//     the result so NotifyUser does not silently claim success.
 //   - Transient failures are collected and returned as a combined error.
 //
 // The overall error returned to the caller is nil unless one or more
-// addresses experienced a transient failure.
+// addresses experienced a transient failure OR the cleanup handler failed.
 func (s *WebPushSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
+	_, err := s.SendWithReport(ctx, subject, message, addresses, data)
+	return err
+}
+
+// SendWithReport delivers a push notification and returns per-call delivery
+// details. Unlike LastSend-style state, this report is local to the current
+// call and is safe for the service to use when senders are shared.
+func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error) {
+	report := channelSendReport{}
 	if !s.Enabled() {
-		return ErrNotificationSenderNotEnabled
+		return report, ErrNotificationSenderNotEnabled
 	}
 
 	valid := make([]NotificationAddress, 0, len(addresses))
@@ -133,28 +163,33 @@ func (s *WebPushSender) Send(ctx context.Context, subject, message string, addre
 		}
 	}
 	if len(valid) == 0 {
-		return ErrNotificationNoActiveAddresses
+		return report, ErrNotificationNoActiveAddresses
 	}
 
-	var transientErrs []error
+	var sendErrs []error
 	for _, address := range valid {
 		err := s.sendOne(ctx, subject, message, address, data)
 		if err == nil {
+			report.Delivered++
 			continue
 		}
 		if isPermanentWebPushError(err) {
 			if s.invalidAddressHandler != nil {
-				_ = s.invalidAddressHandler(ctx, address.AddressHash)
+				if cleanupErr := s.invalidAddressHandler(ctx, address.AddressHash); cleanupErr != nil {
+					sendErrs = append(sendErrs, fmt.Errorf("cleanup failed for address %s: %w", address.AddressHash, cleanupErr))
+					continue
+				}
+				report.Cleaned++
 			}
 			continue
 		}
-		transientErrs = append(transientErrs, err)
+		sendErrs = append(sendErrs, err)
 	}
 
-	if len(transientErrs) > 0 {
-		return errors.Join(transientErrs...)
+	if len(sendErrs) > 0 {
+		return report, errors.Join(sendErrs...)
 	}
-	return nil
+	return report, nil
 }
 
 // sendOne delivers the message to a single Web Push address.
@@ -176,19 +211,20 @@ func (s *WebPushSender) sendOne(ctx context.Context, subject, message string, ad
 	return notify.NewWithServices(webPushService).Send(ctx, subject, message)
 }
 
-// isPermanentWebPushError returns true when the error from a Web Push
-// delivery attempt indicates the subscription no longer exists.
+// isPermanentWebPushError returns true when the error matches the
+// webpush-go library's "unexpected status code: NNN" format with a
+// status of 404 (Not Found) or 410 (Gone).
 //
-// The webpush-go library returns "unexpected status code: 410" for
-// Gone and "unexpected status code: 404" for Not Found.  Both mean
-// the browser has unsubscribed and this address should be cleaned up.
-// All other errors (5xx, DNS, timeout) are considered transient.
+// These two codes mean the browser has unsubscribed and the server
+// should stop sending to this address.  The function uses a regex to
+// avoid false-positives on error messages that merely contain "404"
+// or "410" as arbitrary substrings (e.g. a timeout of "410ms" or an
+// endpoint URL containing "/404/").
 func isPermanentWebPushError(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
-	return strings.Contains(msg, "410") || strings.Contains(msg, "404")
+	return permanentWebPushRe.MatchString(err.Error())
 }
 
 // FCMSenderConfig contains the settings needed to send push

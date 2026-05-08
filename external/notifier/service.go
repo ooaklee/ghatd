@@ -432,11 +432,22 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 			continue
 		}
 
-		if err := sender.Send(ctx, req.Title, req.Message, channelAddresses, req.Data); err != nil {
-			result.Error = err.Error()
-			sendErrs = append(sendErrs, err)
+		var sendErr error
+		if detailedSender, ok := sender.(detailedChannelSender); ok {
+			report, err := detailedSender.SendWithReport(ctx, req.Title, req.Message, channelAddresses, req.Data)
+			sendErr = err
+			result.Cleaned = report.Cleaned
+			result.Sent = report.Delivered > 0
 		} else {
-			result.Sent = true
+			sendErr = sender.Send(ctx, req.Title, req.Message, channelAddresses, req.Data)
+			if sendErr == nil && len(channelAddresses) > 0 {
+				result.Sent = true
+			}
+		}
+
+		if sendErr != nil {
+			result.Error = sendErr.Error()
+			sendErrs = append(sendErrs, sendErr)
 		}
 		results = append(results, result)
 	}

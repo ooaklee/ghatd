@@ -22,6 +22,7 @@ type MongoDbStore interface {
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error
 
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
@@ -303,9 +304,9 @@ func (r *Repository) DeleteAddressesByUserID(ctx context.Context, userID string)
 }
 
 // DisableAddressByHash sets the status of the address with the given
-// hash to DISABLED.  The address record is kept so the device can
-// re-register without creating a duplicate.  If no address matches the
-// hash this method is a no-op (returns nil).
+// hash to DISABLED via the MongoDbStore helper.  The address record is
+// kept so the device can re-register without creating a duplicate.  If
+// no address matches the hash this method is a no-op (returns nil).
 func (r *Repository) DisableAddressByHash(ctx context.Context, hash string) error {
 	collection, err := r.GetNotificationAddressesCollection(ctx)
 	if err != nil {
@@ -313,6 +314,7 @@ func (r *Repository) DisableAddressByHash(ctx context.Context, hash string) erro
 	}
 
 	now := toolbox.TimeNowUTC()
+	filter := bson.M{"address_hash": hash}
 	update := bson.M{
 		"$set": bson.M{
 			"status":              NotificationAddressStatusDisabled,
@@ -320,8 +322,7 @@ func (r *Repository) DisableAddressByHash(ctx context.Context, hash string) erro
 		},
 	}
 
-	_, err = collection.UpdateOne(ctx, bson.M{"address_hash": hash}, update)
-	if err != nil {
+	if err := r.Store.ExecuteUpdateOneCommand(ctx, collection, filter, update, "notification_address"); err != nil {
 		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
 	}
 
