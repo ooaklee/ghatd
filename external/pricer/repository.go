@@ -3,6 +3,8 @@ package pricer
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -17,6 +19,8 @@ const (
 
 	// PriceFeaturesCollection collection name for price features.
 	PriceFeaturesCollection string = "pricing_features"
+
+	defaultCollectionInitMaxAttemptsLimit = 3
 )
 
 // TODO: Add unique index for pricing_plans.slug in migrations/bootstrap.
@@ -64,44 +68,98 @@ type PriceFeatureRepository interface {
 
 // Repository represents the datastore to hold pricer data.
 type Repository struct {
-	Store MongoDbStore
+	Store                          MongoDbStore
+	collectionInitMaxAttemptsLimit int
+
+	pricePlansCollection         *mongo.Collection
+	pricePlansCollectionMutex    sync.Mutex
+	priceFeaturesCollection      *mongo.Collection
+	priceFeaturesCollectionMutex sync.Mutex
 }
 
 // NewRepository initiates new instance of repository.
 func NewRepository(store MongoDbStore) *Repository {
 	return &Repository{
-		Store: store,
+		Store:                          store,
+		collectionInitMaxAttemptsLimit: defaultCollectionInitMaxAttemptsLimit,
 	}
+}
+
+// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
+	if limit > 0 {
+		r.collectionInitMaxAttemptsLimit = limit
+	}
+
+	return r
 }
 
 // GetPricePlansCollection returns collection used for pricing plans.
 func (r *Repository) GetPricePlansCollection(ctx context.Context) (*mongo.Collection, error) {
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	r.pricePlansCollectionMutex.Lock()
+	defer r.pricePlansCollectionMutex.Unlock()
+
+	if r.pricePlansCollection != nil {
+		return r.pricePlansCollection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
+	}
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.pricePlansCollection = db.Collection(PricePlansCollection)
+		return r.pricePlansCollection, nil
 	}
 
-	return db.Collection(PricePlansCollection), nil
+	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, PricePlansCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // GetPriceFeaturesCollection returns collection used for pricing features.
 func (r *Repository) GetPriceFeaturesCollection(ctx context.Context) (*mongo.Collection, error) {
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	r.priceFeaturesCollectionMutex.Lock()
+	defer r.priceFeaturesCollectionMutex.Unlock()
+
+	if r.priceFeaturesCollection != nil {
+		return r.priceFeaturesCollection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
+	}
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.priceFeaturesCollection = db.Collection(PriceFeaturesCollection)
+		return r.priceFeaturesCollection, nil
 	}
 
-	return db.Collection(PriceFeaturesCollection), nil
+	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, PriceFeaturesCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // CreatePricePlan creates a price plan in repository.

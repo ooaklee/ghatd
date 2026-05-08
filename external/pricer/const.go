@@ -70,6 +70,9 @@ const (
 
 	// ErrKeyInvalidPriceDate is returned when a price date value cannot be parsed.
 	ErrKeyInvalidPriceDate = "InvalidPriceDate"
+
+	// ErrKeyDatabaseError is returned when a database operation fails.
+	ErrKeyDatabaseError = "PricerDatabaseError"
 )
 
 const (
