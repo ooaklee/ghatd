@@ -127,7 +127,8 @@ func main() {
 	umsHandler := usermanager.NewHandler(&usermanager.NewHandlerRequest{
 		Service:   umsService,
 		Validator: validator,
-		// ... other options like ErrorMaps, Environment, etc.
+		// ... other options like ErrorMaps — build with errormanifest.Composer
+		//     (see github.com/ooaklee/ghatd/external/errormanifest)
 	})
 
 	// Mock middleware for the example
