@@ -7,6 +7,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
@@ -576,7 +577,12 @@ func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.R
 
 // GetBaseResponseHandler returns response handler configured with auth error map
 func (h *Handler) GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(h.errorMaps)
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(AccessmanagerErrorMap).
+			AddOverrides(h.errorMaps...).
+			Build(),
+	)
 }
 
 // RemoveAuthCookies is handling removing the cookies from the client

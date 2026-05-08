@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/reply/v2"
 )
@@ -324,9 +325,13 @@ func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, overviews.Overviews)
 }
 
-// getBaseResponseHandler returns response handler configured with auth error map
+// getBaseResponseHandler returns response handler with ContentManagerErrorMap
+// as the base layer and caller-supplied maps as overrides.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	consolidatedErrorMaps := append(h.errorMaps, ContentManagerErrorMap)
-
-	return reply.NewReplier(consolidatedErrorMaps)
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(ContentManagerErrorMap).
+			AddOverrides(h.errorMaps...).
+			Build(),
+	)
 }

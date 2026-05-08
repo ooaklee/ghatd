@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
 )
@@ -703,7 +704,12 @@ func (h *Handler) UpdateGroupOwner(w http.ResponseWriter, r *http.Request) {
 
 // GetBaseResponseHandler returns response handler configured with auth error map
 func (h *Handler) GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(h.ErrorMaps)
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(UsermanagerErrorMap).
+			AddOverrides(h.ErrorMaps...).
+			Build(),
+	)
 }
 
 // RemoveAuthCookies is handling removing the cookies from the client

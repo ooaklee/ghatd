@@ -1,6 +1,7 @@
 package contacter
 
 import (
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
 )
@@ -60,7 +61,13 @@ type GetCommsStatsResponse struct {
 	*CommsStats
 }
 
-// GetBaseResponseHandler returns response handler configured with contacter error map
-func GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(append([]reply.ErrorManifest{}, ContacterErrorMap))
+// GetBaseResponseHandler returns response handler with ContacterErrorMap as base
+// and caller-supplied maps as overrides.
+func (h *Handler) GetBaseResponseHandler() *reply.Replier {
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(ContacterErrorMap).
+			AddOverrides(h.ErrorMaps...).
+			Build(),
+	)
 }

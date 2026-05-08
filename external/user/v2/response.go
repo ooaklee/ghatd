@@ -1,6 +1,7 @@
 package user
 
 import (
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -156,7 +157,13 @@ func (p *PaginationMetadata) GetMetaData() map[string]interface{} {
 	}
 }
 
-// GetBaseResponseHandler returns response handler configured with user error map
-func GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(append([]reply.ErrorManifest{}, UserErrorMap))
+// GetBaseResponseHandler returns response handler with UserErrorMap as base
+// and caller-supplied maps as overrides.
+func (h *Handler) GetBaseResponseHandler() *reply.Replier {
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(UserErrorMap).
+			AddOverrides(h.ErrorMaps...).
+			Build(),
+	)
 }

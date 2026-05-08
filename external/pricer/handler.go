@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -272,7 +273,10 @@ func (h *Handler) DeleteFeature(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	consolidatedErrorMaps := append(h.ErrorMaps, PricerErrorMap)
-
-	return reply.NewReplier(consolidatedErrorMaps)
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(PricerErrorMap).
+			AddOverrides(h.ErrorMaps...).
+			Build(),
+	)
 }

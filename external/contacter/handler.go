@@ -3,6 +3,8 @@ package contacter
 import (
 	"context"
 	"net/http"
+
+	"github.com/ooaklee/reply/v2"
 )
 
 // ContacterService interface defines expected methods of a valid contacter service
@@ -22,13 +24,15 @@ type ContacterValidator interface {
 type Handler struct {
 	Service   ContacterService
 	Validator ContacterValidator
+	ErrorMaps []reply.ErrorManifest
 }
 
 // NewHandler returns a new contacter handler
-func NewHandler(service ContacterService, validator ContacterValidator) *Handler {
+func NewHandler(service ContacterService, validator ContacterValidator, errorMaps ...reply.ErrorManifest) *Handler {
 	return &Handler{
 		Service:   service,
 		Validator: validator,
+		ErrorMaps: errorMaps,
 	}
 }
 
@@ -39,15 +43,15 @@ func (h *Handler) GetCommsStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Validator.Validate(request); err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetCommsStats(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }

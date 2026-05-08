@@ -44,13 +44,15 @@ type UserValidator interface {
 type Handler struct {
 	Service   UserService
 	Validator UserValidator
+	ErrorMaps []reply.ErrorManifest
 }
 
 // NewHandler returns a new user handler
-func NewHandler(service UserService, validator UserValidator) *Handler {
+func NewHandler(service UserService, validator UserValidator, errorMaps ...reply.ErrorManifest) *Handler {
 	return &Handler{
 		Service:   service,
 		Validator: validator,
+		ErrorMaps: errorMaps,
 	}
 }
 
@@ -58,395 +60,395 @@ func NewHandler(service UserService, validator UserValidator) *Handler {
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToCreateUserRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateUser(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.User)
 }
 
 // GetUserByID handles retrieval of a user by ID
 func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserByIDRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserByID(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // GetUserByNanoID handles retrieval of a user by nano ID
 func (h *Handler) GetUserByNanoID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserByNanoIDRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserByNanoID(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // GetUserByEmail handles retrieval of a user by email
 func (h *Handler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserByEmailRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserByEmail(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // UpdateUser handles user updates
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToUpdateUserRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateUser(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // DeleteUser handles user deletion
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToDeleteUserRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.DeleteUser(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusNoContent, nil)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusNoContent, nil)
 }
 
 // GetUsers handles retrieval of multiple users with filters and pagination
 func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUsersRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUsers(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	// Return with pagination metadata if requested
 	if request.IncludeMeta {
-		GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users, reply.WithMeta(response.Meta.GetMetaData()))
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Users)
 }
 
 // UpdateUserStatus handles user status updates
 func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToUpdateUserStatusRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateUserStatus(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // AddUserRole handles adding a role to a user
 func (h *Handler) AddUserRole(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToAddUserRoleRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.AddUserRole(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // RemoveUserRole handles removing a role from a user
 func (h *Handler) RemoveUserRole(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToRemoveUserRoleRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RemoveUserRole(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // VerifyUserEmail handles marking a user's email as verified
 func (h *Handler) VerifyUserEmail(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToVerifyUserEmailRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.VerifyUserEmail(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // UnverifyUserEmail handles marking a user's email as unverified
 func (h *Handler) UnverifyUserEmail(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToUnverifyUserEmailRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UnverifyUserEmail(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // VerifyUserPhone handles marking a user's phone as verified
 func (h *Handler) VerifyUserPhone(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToVerifyUserPhoneRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.VerifyUserPhone(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // RecordUserLogin handles recording a user login event
 func (h *Handler) RecordUserLogin(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToRecordUserLoginRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RecordUserLogin(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // GetUserProfile handles retrieval of a user's full profile
 func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserProfileRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserProfile(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
 }
 
 // GetUserMicroProfile handles retrieval of a user's micro profile
 func (h *Handler) GetUserMicroProfile(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserMicroProfileRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserMicroProfile(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
 }
 
 // SetUserExtension handles setting an extension field value
 func (h *Handler) SetUserExtension(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToSetUserExtensionRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.SetUserExtension(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // GetUserExtension handles retrieving an extension field value
 func (h *Handler) GetUserExtension(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserExtensionRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserExtension(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // UpdateUserPersonalInfo handles updating a user's personal information
 func (h *Handler) UpdateUserPersonalInfo(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToUpdateUserPersonalInfoRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateUserPersonalInfo(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // ValidateUser handles validating a user
 func (h *Handler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToValidateUserRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ValidateUser(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // BulkUpdateUsersStatus handles bulk updating user statuses
 func (h *Handler) BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToBulkUpdateUsersStatusRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.BulkUpdateUsersStatus(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetUserStats handles retrieving aggregated stats about platform users
 func (h *Handler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserStatsRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserStats(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetUserConfigs handles retrieving supported user config presets
 func (h *Handler) GetUserConfigs(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserConfigsRequest(r, h.Validator)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserConfigs(r.Context(), request)
 	if err != nil {
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }

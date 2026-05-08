@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -26,13 +27,15 @@ type UserValidator interface {
 type Handler struct {
 	Service   UserService
 	Validator UserValidator
+	ErrorMaps []reply.ErrorManifest
 }
 
 // NewHandler returns user handler
-func NewHandler(service UserService, validator UserValidator) *Handler {
+func NewHandler(service UserService, validator UserValidator, errorMaps ...reply.ErrorManifest) *Handler {
 	return &Handler{
 		Service:   service,
 		Validator: validator,
+		ErrorMaps: errorMaps,
 	}
 }
 
@@ -42,19 +45,19 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetProfileRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetProfile(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
 
 }
 
@@ -64,19 +67,19 @@ func (h *Handler) GetMicroProfile(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetMicroProfileRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetMicroProfile(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
 
 }
 
@@ -86,19 +89,19 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToCreateUserRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateUser(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.User)
 }
 
 // GetUsers returns all the users
@@ -107,25 +110,25 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUsersRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	users, err := h.Service.GetUsers(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if request.Meta {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, users.Users, reply.WithMeta(users.GetMetaData()))
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, users.Users, reply.WithMeta(users.GetMetaData()))
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, users.Users)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, users.Users)
 
 }
 
@@ -135,19 +138,19 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetUserByIdRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserByID(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 
 }
 
@@ -157,19 +160,19 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToUpdateUserRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateUser(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
 // DeleteUser returns reponse after user delete request
@@ -178,22 +181,28 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToDeleteUserRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.DeleteUser(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
-		GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	//nolint will set up default fallback later
-	GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
-// GetBaseResponseHandler returns response handler configured with user error map
-func GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(append([]reply.ErrorManifest{}, UserErrorMap))
+// GetBaseResponseHandler returns response handler with UserErrorMap as base
+// and caller-supplied maps as overrides.
+func (h *Handler) GetBaseResponseHandler() *reply.Replier {
+	return reply.NewReplier(
+		errormanifest.NewComposer().
+			Add(UserErrorMap).
+			AddOverrides(h.ErrorMaps...).
+			Build(),
+	)
 }
