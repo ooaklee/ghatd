@@ -6,6 +6,7 @@ import (
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ritwickdey/querydecoder"
 	"go.uber.org/zap"
@@ -106,4 +107,43 @@ func mapRequestToGetUserBillingDetailRequest(request *http.Request, validator Bi
 	parsedRequest.RequestingUserID = requestingUserId
 
 	return &parsedRequest, nil
+}
+
+// MapRequestToGetPricingPlansRequest maps incoming BMS pricing plan list requests.
+func MapRequestToGetPricingPlansRequest(request *http.Request, validator BillingManagerValidator) (*GetPricingPlansRequest, error) {
+	parsedRequest, err := pricer.MapRequestToGetPricePlansRequest(request, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPricingPlansRequest{
+		UserID:               accessmanagerhelpers.AcquireFrom(request.Context()),
+		GetPricePlansRequest: parsedRequest,
+	}, nil
+}
+
+// MapRequestToGetPricePlanBySlugRequest maps incoming BMS price plan slug requests.
+func MapRequestToGetPricePlanBySlugRequest(request *http.Request, validator BillingManagerValidator) (*GetPricePlanBySlugRequest, error) {
+	parsedRequest, err := pricer.MapRequestToGetPricePlanBySlugRequest(request, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPricePlanBySlugRequest{
+		UserID:                    accessmanagerhelpers.AcquireFrom(request.Context()),
+		GetPricePlanBySlugRequest: parsedRequest,
+	}, nil
+}
+
+// MapRequestToGetPriceFeaturesRequest maps incoming BMS price feature list requests.
+func MapRequestToGetPriceFeaturesRequest(request *http.Request, validator BillingManagerValidator) (*GetPriceFeaturesRequest, error) {
+	parsedRequest, err := pricer.MapRequestToGetFeaturesRequest(request, validator)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPriceFeaturesRequest{
+		UserID:             accessmanagerhelpers.AcquireFrom(request.Context()),
+		GetFeaturesRequest: parsedRequest,
+	}, nil
 }

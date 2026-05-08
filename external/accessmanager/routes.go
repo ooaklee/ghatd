@@ -162,10 +162,14 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificRevoke, request.Handler.RevokeUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
 	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenThreshold, request.Handler.GetUserAPITokenThreshold).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerLogoutOtherSessions, request.Handler.LogoutUserOthers).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	if request.ActiveValidApiTokenOrJWTMiddleware != nil {
+		accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	}
 
 	accessmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc("/users/{userID}/email", request.Handler.UpdateUserEmail).Methods(http.MethodPatch, http.MethodOptions)
-	accessmanagerActiveOnlyRoutes.Use(request.ActiveOnlyMiddleware)
+	accessmanagerActiveOnlyRoutes.HandleFunc("/users/{userID}/email", request.Handler.UpdateUserEmail).Methods(http.MethodPatch, http.MethodOptions)
+	if request.ActiveOnlyMiddleware != nil {
+		accessmanagerActiveOnlyRoutes.Use(request.ActiveOnlyMiddleware)
+	}
 
 }

@@ -55,10 +55,14 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}", request.Handler.UpdatePostById).Methods(http.MethodPatch, http.MethodOptions)
 	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}", request.Handler.DeletePostById).Methods(http.MethodDelete, http.MethodOptions)
 	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}/restore", request.Handler.RestorePostById).Methods(http.MethodPatch, http.MethodOptions)
-	contentManagerAdminOnlyRoutes.Use(request.MiddlewareAdminApiTokenOrJwtRequired)
+	if request.MiddlewareAdminApiTokenOrJwtRequired != nil {
+		contentManagerAdminOnlyRoutes.Use(request.MiddlewareAdminApiTokenOrJwtRequired)
+	}
 
 	contentManagerValidUserOnlyRoutes := httpRouter.PathPrefix("/api/v1/cms").Subrouter()
-	contentManagerValidUserOnlyRoutes.Use(request.MiddlewareValidApiTokenOrJWTMiddleware)
+	if request.MiddlewareValidApiTokenOrJWTMiddleware != nil {
+		contentManagerValidUserOnlyRoutes.Use(request.MiddlewareValidApiTokenOrJWTMiddleware)
+	}
 
 	contentManagerOpenRoutes := httpRouter.PathPrefix("/api/v1/cms").Subrouter()
 	contentManagerOpenRoutes.HandleFunc("/changelog", request.Handler.GetChangelogItems).Methods(http.MethodGet, http.MethodOptions)
@@ -68,5 +72,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	contentManagerOpenRoutes.HandleFunc("/articles", request.Handler.GetArticles).Methods(http.MethodGet, http.MethodOptions)
 	contentManagerOpenRoutes.HandleFunc("/articles/{urlFriendlyId}", request.Handler.GetArticleItemByUrlFriendlyId).Methods(http.MethodGet, http.MethodOptions)
 	contentManagerOpenRoutes.HandleFunc("/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
+	if request.RateLimitOrActiveMiddleware != nil {
+		contentManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
+	}
 }

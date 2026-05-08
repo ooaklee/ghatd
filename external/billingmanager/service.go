@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
@@ -43,6 +45,13 @@ type BillingService interface {
 	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
 }
 
+// PricerService defines the pricing operations exposed through billing manager.
+type PricerService interface {
+	GetPricePlans(ctx context.Context, req *pricer.GetPricePlansRequest) (*pricer.GetPricePlansResponse, error)
+	GetPricePlanBySlug(ctx context.Context, req *pricer.GetPricePlanBySlugRequest) (*pricer.GetPricePlanBySlugResponse, error)
+	GetFeatures(ctx context.Context, req *pricer.GetFeaturesRequest) (*pricer.GetFeaturesResponse, error)
+}
+
 // Service orchestrates webhook processing and billing operations
 // It uses paymentprovider for webhook verification and billingstore for persistence
 type Service struct {
@@ -50,6 +59,7 @@ type Service struct {
 	BillingService   BillingService
 	AuditService     AuditService // Optional audit logging
 	UserService      UserService  // Optional user service integration
+	PricerService    PricerService
 }
 
 // NewService creates a new billing manager service
@@ -69,6 +79,12 @@ func (s *Service) WithAuditService(audit AuditService) *Service {
 // WithUserService adds user service integration
 func (s *Service) WithUserService(userSvc UserService) *Service {
 	s.UserService = userSvc
+	return s
+}
+
+// WithPricerService adds pricing catalog read capability.
+func (s *Service) WithPricerService(pricerSvc PricerService) *Service {
+	s.PricerService = pricerSvc
 	return s
 }
 
@@ -152,6 +168,109 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 	}
 
 	return nil
+}
+
+// GetPricingPlans retrieves pricing plans for external BMS clients.
+func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansRequest) (*GetPricingPlansResponse, error) {
+
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.PricerService == nil {
+		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
+	if !isAdmin {
+		// Non-admin users are not allowed to access pricing in certain states, i.e draft, archieved, etc
+		// we should override any queries to ensure they can only see active pricing plans
+		if req.GetPricePlansRequest == nil {
+			req.GetPricePlansRequest = &pricer.GetPricePlansRequest{}
+		}
+		req.GetPricePlansRequest.IsNotDeleted = true
+		req.GetPricePlansRequest.IsPublished = true
+		log.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
+	}
+
+	response, err := s.PricerService.GetPricePlans(ctx, req.GetPricePlansRequest)
+	if err != nil {
+		log.Error("failed-to-get-pricing-plans", zap.String("user-id", req.UserID), zap.Error(err))
+		return nil, err
+	}
+
+	return &GetPricingPlansResponse{GetPricePlansResponse: response}, nil
+}
+
+// GetPricePlanBySlug retrieves a pricing plan by slug for external BMS clients.
+func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error) {
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.PricerService == nil {
+		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+	}
+
+	response, err := s.PricerService.GetPricePlanBySlug(ctx, req.GetPricePlanBySlugRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
+	if !isAdmin {
+		// Non-admin users are not allowed to access pricing in certain states, i.e draft, archieved, etc
+		// we should override any queries to ensure they can only see active pricing plans
+		if response.PricePlan.DeletedAt != "" || !isPricePlanPubliclyVisible(response.PricePlan.PublishedAt) {
+			log.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
+			return nil, errors.New(pricer.ErrKeyPricePlanNotFound)
+		}
+	}
+
+	return &GetPricePlanBySlugResponse{GetPricePlanBySlugResponse: response}, nil
+}
+
+// GetPricingFeatures retrieves pricing feature catalog items for external BMS clients.
+func (s *Service) GetPricingFeatures(ctx context.Context, req *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error) {
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	if s.PricerService == nil {
+		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+		return nil, errors.New(ErrKeyBillingManagerPricerServiceNotSet)
+	}
+
+	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
+	if !isAdmin {
+		// Non-admin users are not allowed to access price features in certain states, i.e draft, archieved, etc
+		// we should override any queries to ensure they can only see active features
+		if req.GetFeaturesRequest == nil {
+			req.GetFeaturesRequest = &pricer.GetFeaturesRequest{}
+		}
+
+		req.GetFeaturesRequest.IsNotDeleted = true
+		req.GetFeaturesRequest.IsPublished = true
+		log.Debug("non-admin-user-requesting-pricing-features-only-returning-features-in-valid-state", zap.String("user-id", req.UserID))
+	}
+
+	response, err := s.PricerService.GetFeatures(ctx, req.GetFeaturesRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetPriceFeaturesResponse{GetFeaturesResponse: response}, nil
+}
+
+// isPricePlanPubliclyVisible checks if a price plan is publicly visible based on its published_at timestamp.
+func isPricePlanPubliclyVisible(publishedAt string) bool {
+	publishedAt = strings.TrimSpace(publishedAt)
+	if publishedAt == "" {
+		return false
+	}
+
+	publishedAtTime, err := time.Parse(time.RFC3339, publishedAt)
+	if err != nil {
+		return false
+	}
+
+	return !publishedAtTime.After(time.Now().UTC())
 }
 
 // GetUserSubscriptionStatus retrieves a user's subscription status
@@ -348,6 +467,21 @@ func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingD
 	return &GetUserBillingDetailResponse{
 		BillingDetail: detail,
 	}, nil
+}
+
+// isRequesterAdmin safely checks if the requester has admin privileges
+func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.Logger) bool {
+	if s.UserService == nil {
+		return false
+	}
+
+	userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
+	if err != nil || userResp == nil || userResp.User == nil {
+		log.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
+		return false
+	}
+
+	return userResp.User.IsAdmin()
 }
 
 // isUserAuthorisedToProceedWithUserOperation checks if the requesting user is authorised to perform operations on behalf of the target user.

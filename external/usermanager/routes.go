@@ -92,11 +92,15 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
-	userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
+	if request.RateLimitOrActiveMiddleware != nil {
+		userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
+	}
 
 	usermanagerActiveOnlyRoutesPre := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerActiveOnlyRoutesPre.HandleFunc("/groups/config", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerActiveOnlyRoutesPre.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	if request.ActiveValidApiTokenOrJWTMiddleware != nil {
+		usermanagerActiveOnlyRoutesPre.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	}
 
 	// Special case route for /me endpoint to allow user to handle situations such
 	// as avoiding 401s being returned to Google when it tries to index the page
@@ -105,7 +109,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	userMeEndpointRoute.HandleFunc("/me", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
 	if request.CustomMeEndpointValidApiTokenOrJWTMiddleware != nil {
 		userMeEndpointRoute.Use(request.CustomMeEndpointValidApiTokenOrJWTMiddleware)
-	} else {
+	} else if request.ValidApiTokenOrJWTMiddleware != nil {
 		userMeEndpointRoute.Use(request.ValidApiTokenOrJWTMiddleware)
 	}
 
@@ -127,13 +131,17 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/descendants", request.Handler.GetGroupDescendants).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)
+	if request.ValidApiTokenOrJWTMiddleware != nil {
+		usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)
+	}
 
 	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerAdminRoutes.HandleFunc("/comms", request.Handler.GetComms).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/comms/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/comms/{id}", request.Handler.UpdateComms).Methods(http.MethodPut, http.MethodOptions)
-	usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
+	if request.AdminOnlyMiddleware != nil {
+		usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
+	}
 
 	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
@@ -144,5 +152,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members/{memberID}", request.Handler.RemoveGroupMember).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members/{memberID}", request.Handler.UpdateGroupMember).Methods(http.MethodPatch, http.MethodOptions)
 	usermanagerActiveOnlyRoutes.HandleFunc("/me", request.Handler.UpdateUserProfile).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	if request.ActiveValidApiTokenOrJWTMiddleware != nil {
+		usermanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
+	}
 }

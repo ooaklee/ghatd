@@ -106,7 +106,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	// Statistics
 	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
 
-	groupsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	if request.AdminOnlyMiddleware != nil {
+		groupsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	}
 
 	// Authenticated routes (if needed for self-service operations)
 	// Uncomment and customise as needed:

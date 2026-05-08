@@ -50,6 +50,8 @@ A complete billing solution split into three composable packages for maximum fle
   - `paymentprovider` - Abstract payment provider webhook verification and payload normalisation (Stripe, Lemon Squeezy, Ko-fi)
   - `billing` - Manage subscription and billing event data persistence with repository pattern
   - `billingmanager` - High-level orchestration with webhook processing and audit integration
+- **[Pricer](./docs/getting-started/pricer/)** - Source-of-truth pricing catalog with plans, feature entitlements, provider refs, Mongo migrations, and pricing-card E2E fixtures
+  - `pricer` - Manage pricing plans, costs, features, and provider-linked catalog metadata
 
 ### Additional Packages
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging

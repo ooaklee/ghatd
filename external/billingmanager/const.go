@@ -49,4 +49,7 @@ const (
 	// ErrKeyBillingManagerNoUserIdentifyingInformationInPayload is returned when unable to find a user from the provider's payload as no email is present
 	// so we have no way to identify the user
 	ErrKeyBillingManagerNoUserIdentifyingInformationInPayload = "BillingManagerNoUserIdentifyingInformationInPayload"
+
+	// ErrKeyBillingManagerPricerServiceNotSet is returned when pricing endpoints are used without pricer service wiring.
+	ErrKeyBillingManagerPricerServiceNotSet = "BillingManagerPricerServiceNotSet"
 )
