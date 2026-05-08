@@ -16,13 +16,15 @@ import (
 type PolicyType string
 
 const (
-	// TermsOfServicePolicy represents a policy that hold terms policy
+	// TermsOfServicePolicy represents a policy that holds terms and conditions.
 	TermsOfServicePolicy PolicyType = "TERMS_OF_SERVICE"
-	// TermsOfServicePolicy represents policy that hold the privacy policy
+	// PrivacyPolicy represents a policy that holds the privacy policy.
 	PrivacyPolicy PolicyType = "PRIVACY"
-	// TermsOfServicePolicy represents policy that hold the cookie policy
+	// CookiesPolicy represents a policy that holds the cookie policy.
 	CookiesPolicy PolicyType = "COOKIES"
-	// TermsOfServicePolicy represents policy that hold the refund policy
+	// SecurityAndCompliancePolicy represents a policy that holds the security and compliance policy.
+	SecurityAndCompliancePolicy PolicyType = "SECURITY_AND_COMPLIANCE"
+	// RefundPolicy represents a policy that holds the refund policy.
 	RefundPolicy PolicyType = "REFUND"
 )
 

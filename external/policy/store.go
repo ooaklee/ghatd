@@ -176,6 +176,101 @@ func (s *Store) GenerateStaticPolicies() {
 
 	s.Policies = append(s.Policies, cookiePolicy)
 
+	///////////////////////////////////////////////////////////////
+
+	securityAndCompliancePolicy := WebAppPolicy{
+		Name:        "Security and Compliance",
+		Type:        SecurityAndCompliancePolicy,
+		LastUpdated: "31 March, 2026",
+		Sections: []PolicySection{
+			{
+				Paragraphs: []template.HTML{
+					template.HTML(`Effective 31 March, 2026`),
+					template.HTML(`This document summarises our approach to protecting the security, privacy, integrity, and availability of the data you entrust to us.`),
+					template.HTML(`This policy is intended as a starting point for services built with GHATD. Each service should update it to reflect its actual deployment model, infrastructure providers, data retention practices, and operational controls.`),
+				},
+			},
+			{
+				Header:          `Deployment and Infrastructure`,
+				HeaderWithIndex: true,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Deployment and Infrastructure"), " ", "-"),
+				Paragraphs: []template.HTML{
+					template.HTML(`GHATD is designed around a one-binary, deploy-anywhere model. A service built with GHATD may run on dedicated servers, virtual machines, containers, serverless platforms, managed cloud services, or a combination of these depending on the needs of the operator.`),
+					template.HTML(`Where third-party infrastructure providers are used, they may support areas such as DNS, DDoS protection, hosting, databases, object storage, email delivery, session management, caching, queues, monitoring, and backups.`),
+				},
+			},
+			{
+				Header:          `Authentication`,
+				HeaderWithIndex: true,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Authentication"), " ", "-"),
+				Paragraphs: []template.HTML{
+					template.HTML(`The Service may support authentication methods such as email magic links, OAuth providers, password-less login, or other mechanisms configured by the operator. Authentication options should be updated in this policy to match the live Service.`),
+				},
+			},
+			{
+				Header:          `Session Management`,
+				HeaderWithIndex: true,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Session Management"), " ", "-"),
+				Paragraphs: []template.HTML{
+					template.HTML(`Session state is managed using the Service's configured authentication and storage systems. Depending on the deployment, this may include secure cookies, signed tokens, a database, an in-memory store, Upstash, Redis-compatible services, or another session backend.`),
+				},
+			},
+			{
+				Header:          `Data Protection`,
+				HeaderWithIndex: true,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Data Protection"), " ", "-"),
+				Paragraphs: []template.HTML{
+					template.HTML(`We use reasonable technical and organisational measures to protect personal information and service data. These measures may include encryption in transit, access controls, audit logging, backup procedures, and provider-level security controls where managed infrastructure is used.`),
+					template.HTML(`Data deletion, retention, and backup schedules depend on the Service's configuration and should be documented according to the systems actually in use.`),
+				},
+			},
+			{
+				Header:          `Security Practices`,
+				HeaderWithIndex: true,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Security Practices"), " ", "-"),
+				Paragraphs: []template.HTML{
+					template.HTML(`<ul>
+						<li>&ensp;<span>&#8226;</span> <b>Operational Access</b>: Access to production systems should be limited to authorised personnel who need it to operate, maintain, or secure the Service.</li>
+						<li>&ensp;<span>&#8226;</span> <b>Testing</b>: Changes should be tested before release where practical, especially for authentication, billing, data access, and other critical workflows.</li>
+						<li>&ensp;<span>&#8226;</span> <b>Provider Review</b>: When managed services are used, operators should review their security, privacy, and compliance documentation.</li>
+					</ul>`),
+				},
+			},
+			{
+				Header:          `Third-Party Providers`,
+				HeaderWithIndex: true,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Third-Party Providers"), " ", "-"),
+				Paragraphs: []template.HTML{
+					template.HTML(`A GHATD service may use third-party providers where appropriate. Example providers and trust resources include:<br><br><ul>
+						<li>&ensp;<span>&#8226;</span> <b>Cloudflare</b>: <a href="https://www.cloudflare.com/trust-hub/compliance-resources/" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">Compliance Resources</a></li>
+						<li>&ensp;<span>&#8226;</span> <b>Hetzner</b>: <a href="https://www.hetzner.com/unternehmen/zertifizierung/" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">Certification Information</a></li>
+						<li>&ensp;<span>&#8226;</span> <b>Amazon Web Services (AWS)</b>: <a href="https://aws.amazon.com/compliance/programs/" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">Compliance Programs</a></li>
+						<li>&ensp;<span>&#8226;</span> <b>MongoDB Atlas</b>: <a href="https://www.mongodb.com/cloud/trust/compliance" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">Compliance Resources</a></li>
+						<li>&ensp;<span>&#8226;</span> <b>Upstash</b>: <a href="https://upstash.com/docs/common/help/compliance" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">Compliance Information</a></li>
+					</ul>`),
+					template.HTML(`For details on third-party services that may receive personal information, please refer to our <a href="/policy/privacy" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">Privacy Policy</a>.`),
+				},
+			},
+			{
+				Header:          `Contact Us`,
+				HeaderId:        strings.ReplaceAll(toolbox.StringStandardisedToLower("Contact Us"), " ", "-"),
+				HeaderWithIndex: true,
+				Paragraphs: []template.HTML{
+					template.HTML(fmt.Sprintf(`If you have any questions about this Security and Compliance document, please contact us:<br><br><ul>
+						<li>&ensp;<span>&#8226;</span> Via email: <a href="mailto:%s?subject=About%%20your%%20security%%20and%%20compliance%%20policy"  class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">%s</a></li>
+						<li>&ensp;<span>&#8226;</span> Via our <a href="/contact" class="text-primary opacity-80 font-bold hover:cursor-pointer hover:opacity-100">contact page</a></li>
+					</ul>`, s.BusinessEntityEmail, s.BusinessEntityEmail)),
+				},
+			},
+		},
+	}
+
+	// generate the table of contents based on the
+	// sections passed in above
+	securityAndCompliancePolicy.TableOfContentsItems = securityAndCompliancePolicy.GetTableOfContentsItems()
+
+	s.Policies = append(s.Policies, securityAndCompliancePolicy)
+
 }
 
 // AddPolicy adds a new policy to the list of policies
