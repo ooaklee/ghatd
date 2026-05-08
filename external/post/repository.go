@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -17,6 +18,8 @@ import (
 
 // PostCollection collection name for posts
 const PostCollection string = "posts"
+
+const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
@@ -40,31 +43,62 @@ type MongoDbStore interface {
 
 // Repository represents the datastore to hold resource data
 type Repository struct {
-	Store MongoDbStore
+	Store                          MongoDbStore
+	collectionInitMaxAttemptsLimit int
+
+	collection      *mongo.Collection
+	collectionMutex sync.Mutex
 }
 
 // NewRepository initiates new instance of repository
 func NewRepository(store MongoDbStore) *Repository {
 	return &Repository{
-		Store: store,
+		Store:                          store,
+		collectionInitMaxAttemptsLimit: defaultCollectionInitMaxAttemptsLimit,
 	}
+}
+
+// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
+	if limit > 0 {
+		r.collectionInitMaxAttemptsLimit = limit
+	}
+
+	return r
 }
 
 // GetPostCollection returns collection used for posts domain
 func (r *Repository) GetPostCollection(ctx context.Context) (*mongo.Collection, error) {
+	r.collectionMutex.Lock()
+	defer r.collectionMutex.Unlock()
 
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	if r.collection != nil {
+		return r.collection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
-	collection := db.Collection(PostCollection)
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	return collection, nil
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.collection = db.Collection(PostCollection)
+		return r.collection, nil
+	}
+
+	return nil, fmt.Errorf("unable to initialise %s collection after %d attempts: %w", PostCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // CreateRawPosts handles creating a tax band from raw definition in repositry

@@ -3,7 +3,9 @@ package group
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -12,6 +14,8 @@ import (
 
 // GroupCollection collection name for groups
 const GroupCollection string = "groups"
+
+const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold group data
 type MongoDbStore interface {
@@ -35,30 +39,62 @@ type MongoDbStore interface {
 
 // Repository handles group data persistence
 type Repository struct {
-	Store MongoDbStore
+	Store                          MongoDbStore
+	collectionInitMaxAttemptsLimit int
+
+	collection      *mongo.Collection
+	collectionMutex sync.Mutex
 }
 
 // NewRepository creates a new group repository
 func NewRepository(store MongoDbStore) *Repository {
 	return &Repository{
-		Store: store,
+		Store:                          store,
+		collectionInitMaxAttemptsLimit: defaultCollectionInitMaxAttemptsLimit,
 	}
+}
+
+// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
+	if limit > 0 {
+		r.collectionInitMaxAttemptsLimit = limit
+	}
+
+	return r
 }
 
 // GetGroupCollection returns collection used for groups domain
 func (r *Repository) GetGroupCollection(ctx context.Context) (*mongo.Collection, error) {
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	r.collectionMutex.Lock()
+	defer r.collectionMutex.Unlock()
+
+	if r.collection != nil {
+		return r.collection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
-	collection := db.Collection(GroupCollection)
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	return collection, nil
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.collection = db.Collection(GroupCollection)
+		return r.collection, nil
+	}
+
+	return nil, fmt.Errorf("%s: unable to initialise %s collection after %d attempts: %w", ErrKeyDatabaseError, GroupCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // CreateGroup creates a new group in the repository

@@ -2,7 +2,9 @@ package audit
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,6 +13,8 @@ import (
 
 // AuditCollection collection name for audit events
 const AuditCollection string = "audit"
+
+const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
@@ -34,31 +38,62 @@ type MongoDbStore interface {
 
 // Repository represents the datastore to hold resource data
 type Repository struct {
-	Store MongoDbStore
+	Store                          MongoDbStore
+	collectionInitMaxAttemptsLimit int
+
+	collection      *mongo.Collection
+	collectionMutex sync.Mutex
 }
 
 // NewRepository initiates new instance of repository
 func NewRepository(store MongoDbStore) *Repository {
 	return &Repository{
-		Store: store,
+		Store:                          store,
+		collectionInitMaxAttemptsLimit: defaultCollectionInitMaxAttemptsLimit,
 	}
+}
+
+// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
+	if limit > 0 {
+		r.collectionInitMaxAttemptsLimit = limit
+	}
+
+	return r
 }
 
 // GetAuditCollection returns collection used for audit domain
 func (r *Repository) GetAuditCollection(ctx context.Context) (*mongo.Collection, error) {
+	r.collectionMutex.Lock()
+	defer r.collectionMutex.Unlock()
 
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	if r.collection != nil {
+		return r.collection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
-	collection := db.Collection(AuditCollection)
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	return collection, nil
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.collection = db.Collection(AuditCollection)
+		return r.collection, nil
+	}
+
+	return nil, fmt.Errorf("unable to initialise %s collection after %d attempts: %w", AuditCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // GetTotalAuditLogEvents total log entries token from DB that match passed arguments
