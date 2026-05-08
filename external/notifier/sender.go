@@ -2,6 +2,8 @@ package notifier
 
 import (
 	"context"
+	"errors"
+	"strings"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/nikoksr/notify"
@@ -24,6 +26,17 @@ type ChannelSender interface {
 	Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error
 }
 
+// InvalidAddressCleanable is implemented by senders that can receive a
+// callback to disable or delete an address that is permanently invalid.
+//
+// The notifier Service detects this interface on registered senders and
+// wires the callback to its repository so expired subscriptions are
+// automatically cleaned up during delivery without leaking into every
+// sender implementation.
+type InvalidAddressCleanable interface {
+	SetInvalidAddressHandler(handler func(ctx context.Context, hash string) error)
+}
+
 // WebPushSenderConfig contains the settings needed to send push
 // notifications to browsers using the Web Push protocol.
 //
@@ -44,21 +57,32 @@ type WebPushSenderConfig struct {
 // WebPushSender sends browser push notifications via the nikoksr/notify
 // library's webpush service.
 //
-// When the service calls Send(), the sender converts the notifier address
-// list into the subscription format that notifywebpush expects, creates
-// a notifier service instance with the configured VAPID keys, and
-// delivers the message.
+// The sender sends to each address individually so it can detect which
+// subscription is permanently gone (HTTP 410 Gone or 404 Not Found)
+// versus a transient delivery hiccup (5xx, network timeout).  When a
+// permanent failure is detected the sender calls its
+// invalidAddressHandler callback — which the Service wires to
+// DisableAddressByHash — so the address is automatically disabled and
+// will not be retried on future sends.
 //
-// The sender is automatically disabled at startup if VAPID keys are not
-// provided, so deployments without push notification support can still
-// use the rest of the notifier package.
+// Transient errors are returned as-is and do not trigger cleanup.
 type WebPushSender struct {
-	config WebPushSenderConfig
+	config                WebPushSenderConfig
+	invalidAddressHandler func(ctx context.Context, hash string) error
 }
 
 // NewWebPushSender creates a Web Push sender from the given config.
 func NewWebPushSender(config WebPushSenderConfig) *WebPushSender {
 	return &WebPushSender{config: config}
+}
+
+// SetInvalidAddressHandler sets the callback invoked when a Web Push
+// subscription is determined to be permanently invalid (gone/unsubscribed).
+//
+// The handler receives the address hash (SHA-256 of channel:identity)
+// which the repository uses to find and disable the address.
+func (s *WebPushSender) SetInvalidAddressHandler(handler func(ctx context.Context, hash string) error) {
+	s.invalidAddressHandler = handler
 }
 
 // Channel always returns NotificationChannelWebPush.
@@ -86,50 +110,85 @@ func (s *WebPushSender) PublicKey() string {
 
 // Send delivers a push notification to the given browser subscriptions.
 //
-// Each NotificationAddress in the addresses list must have a non-nil
-// WebPush field with a valid endpoint and keys. Addresses that are not
-// WEBPUSH or that have nil WebPush payloads are silently skipped.
+// Each address is sent individually so the sender can distinguish
+// permanent failures (HTTP 410 Gone / 404 Not Found — the subscription
+// no longer exists) from transient failures (5xx, DNS, timeout — the
+// push service is unreachable right now).
 //
-// The method:
-//  1. Converts the notifier address list into notifywebpush.Subscription
-//     objects that the library understands.
-//  2. Creates a notifywebpush service instance authenticated with the
-//     configured VAPID keys.
-//  3. Optionally attaches extra data from the request (e.g. a URL to
-//     open when the user clicks the notification).
-//  4. Sends the notification through nikoksr/notify, which handles
-//     the HTTP POST to each browser's push endpoint.
+//   - Permanent failures trigger the invalidAddressHandler callback
+//     (if set) so the address is disabled and will not be retried.
+//   - Transient failures are collected and returned as a combined error.
+//
+// The overall error returned to the caller is nil unless one or more
+// addresses experienced a transient failure.
 func (s *WebPushSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
 	if !s.Enabled() {
 		return ErrNotificationSenderNotEnabled
 	}
 
-	subscriptions := make([]notifywebpush.Subscription, 0, len(addresses))
+	valid := make([]NotificationAddress, 0, len(addresses))
 	for _, address := range addresses {
-		if address.Channel != NotificationChannelWebPush || address.WebPush == nil {
-			continue
+		if address.Channel == NotificationChannelWebPush && address.WebPush != nil {
+			valid = append(valid, address)
 		}
-
-		subscriptions = append(subscriptions, notifywebpush.Subscription{
-			Endpoint: address.WebPush.Endpoint,
-			Keys: webpush.Keys{
-				Auth:   address.WebPush.Keys.Auth,
-				P256dh: address.WebPush.Keys.P256DH,
-			},
-		})
 	}
-
-	if len(subscriptions) == 0 {
+	if len(valid) == 0 {
 		return ErrNotificationNoActiveAddresses
 	}
 
+	var transientErrs []error
+	for _, address := range valid {
+		err := s.sendOne(ctx, subject, message, address, data)
+		if err == nil {
+			continue
+		}
+		if isPermanentWebPushError(err) {
+			if s.invalidAddressHandler != nil {
+				_ = s.invalidAddressHandler(ctx, address.AddressHash)
+			}
+			continue
+		}
+		transientErrs = append(transientErrs, err)
+	}
+
+	if len(transientErrs) > 0 {
+		return errors.Join(transientErrs...)
+	}
+	return nil
+}
+
+// sendOne delivers the message to a single Web Push address.
+func (s *WebPushSender) sendOne(ctx context.Context, subject, message string, address NotificationAddress, data map[string]interface{}) error {
+	subscription := notifywebpush.Subscription{
+		Endpoint: address.WebPush.Endpoint,
+		Keys: webpush.Keys{
+			Auth:   address.WebPush.Keys.Auth,
+			P256dh: address.WebPush.Keys.P256DH,
+		},
+	}
+
 	webPushService := notifywebpush.New(s.config.VAPIDPublicKey, s.config.VAPIDPrivateKey)
-	webPushService.AddReceivers(subscriptions...)
+	webPushService.AddReceivers(subscription)
 	if len(data) > 0 {
 		ctx = notifywebpush.WithData(ctx, data)
 	}
 
 	return notify.NewWithServices(webPushService).Send(ctx, subject, message)
+}
+
+// isPermanentWebPushError returns true when the error from a Web Push
+// delivery attempt indicates the subscription no longer exists.
+//
+// The webpush-go library returns "unexpected status code: 410" for
+// Gone and "unexpected status code: 404" for Not Found.  Both mean
+// the browser has unsubscribed and this address should be cleaned up.
+// All other errors (5xx, DNS, timeout) are considered transient.
+func isPermanentWebPushError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "410") || strings.Contains(msg, "404")
 }
 
 // FCMSenderConfig contains the settings needed to send push
@@ -157,13 +216,24 @@ type FCMSenderConfig struct {
 // The sender is designed to be quiet when Firebase is not configured.
 // If Enabled is false or no credentials are provided, the sender
 // reports as unavailable and the service skips FCM delivery.
+//
+// An invalidAddressHandler field and SetInvalidAddressHandler setter
+// are included for future FCM token invalidation support but are not
+// wired in v1.
 type FCMSender struct {
-	config FCMSenderConfig
+	config                FCMSenderConfig
+	invalidAddressHandler func(ctx context.Context, hash string) error
 }
 
 // NewFCMSender creates an FCM sender from the given config.
 func NewFCMSender(config FCMSenderConfig) *FCMSender {
 	return &FCMSender{config: config}
+}
+
+// SetInvalidAddressHandler sets the callback invoked when an FCM
+// token is determined to be permanently invalid (not yet wired in v1).
+func (s *FCMSender) SetInvalidAddressHandler(handler func(ctx context.Context, hash string) error) {
+	s.invalidAddressHandler = handler
 }
 
 // Channel always returns NotificationChannelFCM.

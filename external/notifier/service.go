@@ -26,6 +26,13 @@ type NotificationRepository interface {
 	GetPreferencesByUserID(ctx context.Context, userID string) (*NotificationPreferences, error)
 	UpsertPreferences(ctx context.Context, preferences *NotificationPreferences) (*NotificationPreferences, error)
 	DeletePreferencesByUserID(ctx context.Context, userID string) error
+
+	// DisableAddressByHash sets the status of the address with the given
+	// hash to DISABLED without removing the record.  It is used by the
+	// cleanup path when a sender detects a permanently invalid subscription
+	// (e.g. Web Push 410 Gone) so the address is not retried on future
+	// sends but can still be re-registered later by the same device.
+	DisableAddressByHash(ctx context.Context, hash string) error
 }
 
 // Service is the core of the notifier package. It handles:
@@ -105,9 +112,18 @@ func NewService(r *NewServiceRequest) *Service {
 // This method returns the service pointer so calls can be chained:
 //
 //	service.WithSender(webPushSender).WithSender(fcmSender)
+//
+// If the sender implements [InvalidAddressCleanable], the service
+// automatically wires a cleanup handler that disables permanently
+// invalid addresses via the repository.
 func (s *Service) WithSender(sender ChannelSender) *Service {
 	if sender == nil {
 		return s
+	}
+	if cleanable, ok := sender.(InvalidAddressCleanable); ok && s.Repository != nil {
+		cleanable.SetInvalidAddressHandler(func(ctx context.Context, hash string) error {
+			return s.Repository.DisableAddressByHash(ctx, hash)
+		})
 	}
 	s.senders[sender.Channel().Normalised()] = sender
 	return s

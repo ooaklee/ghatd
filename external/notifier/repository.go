@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -295,6 +296,32 @@ func (r *Repository) DeleteAddressesByUserID(ctx context.Context, userID string)
 	}
 
 	if err := r.Store.ExecuteDeleteManyCommand(ctx, collection, bson.M{"user_id": userID}, "notification_addresses"); err != nil {
+		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
+	}
+
+	return nil
+}
+
+// DisableAddressByHash sets the status of the address with the given
+// hash to DISABLED.  The address record is kept so the device can
+// re-register without creating a duplicate.  If no address matches the
+// hash this method is a no-op (returns nil).
+func (r *Repository) DisableAddressByHash(ctx context.Context, hash string) error {
+	collection, err := r.GetNotificationAddressesCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := toolbox.TimeNowUTC()
+	update := bson.M{
+		"$set": bson.M{
+			"status":              NotificationAddressStatusDisabled,
+			"metadata.updated_at": now,
+		},
+	}
+
+	_, err = collection.UpdateOne(ctx, bson.M{"address_hash": hash}, update)
+	if err != nil {
 		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
 	}
 
