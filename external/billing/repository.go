@@ -3,6 +3,8 @@ package billing
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -16,6 +18,8 @@ const BillingEventsCollection string = "billing_events"
 
 // BillingSubscriptionsCollection collection name for billing subscriptions
 const BillingSubscriptionsCollection string = "billing_subscriptions"
+
+const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
@@ -39,48 +43,98 @@ type MongoDbStore interface {
 
 // Repository represents the datastore to hold resource data
 type Repository struct {
-	Store MongoDbStore
+	Store                          MongoDbStore
+	collectionInitMaxAttemptsLimit int
+
+	billingEventsCollection      *mongo.Collection
+	billingEventsCollectionMutex sync.Mutex
+	subscriptionsCollection      *mongo.Collection
+	subscriptionsCollectionMutex sync.Mutex
 }
 
 // NewRepository initiates new instance of repository
 func NewRepository(store MongoDbStore) *Repository {
 	return &Repository{
-		Store: store,
+		Store:                          store,
+		collectionInitMaxAttemptsLimit: defaultCollectionInitMaxAttemptsLimit,
 	}
+}
+
+// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
+	if limit > 0 {
+		r.collectionInitMaxAttemptsLimit = limit
+	}
+
+	return r
 }
 
 // GetBillingEventsCollection returns collection used for billing events domain
 func (r *Repository) GetBillingEventsCollection(ctx context.Context) (*mongo.Collection, error) {
+	r.billingEventsCollectionMutex.Lock()
+	defer r.billingEventsCollectionMutex.Unlock()
 
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	if r.billingEventsCollection != nil {
+		return r.billingEventsCollection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
-	collection := db.Collection(BillingEventsCollection)
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	return collection, nil
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.billingEventsCollection = db.Collection(BillingEventsCollection)
+		return r.billingEventsCollection, nil
+	}
+
+	return nil, fmt.Errorf("unable to initialise %s collection after %d attempts: %w", BillingEventsCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // GetBillingSubscriptionsCollection returns a collection used for the subscriptions domain
 func (r *Repository) GetBillingSubscriptionsCollection(ctx context.Context) (*mongo.Collection, error) {
+	r.subscriptionsCollectionMutex.Lock()
+	defer r.subscriptionsCollectionMutex.Unlock()
 
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	if r.subscriptionsCollection != nil {
+		return r.subscriptionsCollection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
-	collection := db.Collection(BillingSubscriptionsCollection)
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	return collection, nil
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.subscriptionsCollection = db.Collection(BillingSubscriptionsCollection)
+		return r.subscriptionsCollection, nil
+	}
+
+	return nil, fmt.Errorf("unable to initialise %s collection after %d attempts: %w", BillingSubscriptionsCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // GetTotalSubscriptions handles fetching the total count of subscriptions in repository

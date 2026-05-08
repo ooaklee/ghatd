@@ -108,6 +108,26 @@ func TestRepository_GetStreakCollectionReturnsAfterMaxAttempts(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, collection)
-	assert.Equal(t, collectionInitMaxAttempts, initialiseAttempts)
+	assert.Equal(t, defaultCollectionInitMaxAttemptsLimit, initialiseAttempts)
 	assert.Contains(t, err.Error(), ErrKeyDatabaseError)
+}
+
+func TestRepository_WithCollectionInitMaxAttemptsLimitOverridesDefault(t *testing.T) {
+	t.Parallel()
+
+	initialiseAttempts := 0
+	store := &mockMongoDbStore{
+		initialiseClientFunc: func(ctx context.Context) (*mongo.Client, error) {
+			initialiseAttempts++
+			return nil, errors.New("init-error")
+		},
+	}
+	repo := NewRepository(store).WithCollectionInitMaxAttemptsLimit(2)
+
+	collection, err := repo.GetStreakCollection(context.Background())
+
+	require.Error(t, err)
+	assert.Nil(t, collection)
+	assert.Equal(t, 2, initialiseAttempts)
+	assert.Contains(t, err.Error(), "after 2 attempts")
 }

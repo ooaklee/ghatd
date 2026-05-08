@@ -3,6 +3,8 @@ package user
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/repository"
@@ -13,6 +15,8 @@ import (
 )
 
 const UserCollection = "users"
+
+const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
@@ -36,31 +40,62 @@ type MongoDbStore interface {
 
 // Repository represents the datastore to hold resource data
 type Repository struct {
-	Store MongoDbStore
+	Store                          MongoDbStore
+	collectionInitMaxAttemptsLimit int
+
+	collection      *mongo.Collection
+	collectionMutex sync.Mutex
 }
 
 // NewRepository initiates new instance of repository
 func NewRepository(store MongoDbStore) *Repository {
 	return &Repository{
-		Store: store,
+		Store:                          store,
+		collectionInitMaxAttemptsLimit: defaultCollectionInitMaxAttemptsLimit,
 	}
+}
+
+// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
+	if limit > 0 {
+		r.collectionInitMaxAttemptsLimit = limit
+	}
+
+	return r
 }
 
 // GetUserCollection returns collection used for users domain
 func (r *Repository) GetUserCollection(ctx context.Context) (*mongo.Collection, error) {
+	r.collectionMutex.Lock()
+	defer r.collectionMutex.Unlock()
 
-	_, err := r.Store.InitialiseClient(ctx)
-	if err != nil {
-		return nil, err
+	if r.collection != nil {
+		return r.collection, nil
 	}
 
-	db, err := r.Store.GetDatabase(ctx, "")
-	if err != nil {
-		return nil, err
+	var lastErr error
+	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
+	if collectionInitMaxAttemptsLimit <= 0 {
+		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
-	collection := db.Collection(UserCollection)
+	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		_, err := r.Store.InitialiseClient(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	return collection, nil
+		db, err := r.Store.GetDatabase(ctx, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		r.collection = db.Collection(UserCollection)
+		return r.collection, nil
+	}
+
+	return nil, fmt.Errorf("unable to initialise %s collection after %d attempts: %w", UserCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
 // GetTotalUsers total users from DB that match passed arguments
