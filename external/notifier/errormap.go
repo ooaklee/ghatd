@@ -6,7 +6,7 @@ import (
 	"github.com/ooaklee/reply/v2"
 )
 
-// NotifierErrorMap is the public error manifest that allows GHATD's API
+// NotifierErrorMap is the public error manifest that teaches GHATD's API
 // layer how to turn notifier errors into clean HTTP responses.
 //
 // Each entry maps a sentinel error (from errors.go) to:
@@ -17,8 +17,8 @@ import (
 //   - Code – a stable error code (NTF00-XXX) that clients and support teams
 //     can rely on even when the error message text changes.
 //
-// The error manifest is plugged into the GHATD error middleware at startup
-// , so any notifier error returned from a handler is automatically converted
+// The error manifest is plugged into the GHATD error middleware at startup,
+// so any notifier error returned from a handler is automatically converted
 // to the right API response.
 var NotifierErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrDatabaseError: {

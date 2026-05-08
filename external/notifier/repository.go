@@ -2,6 +2,7 @@ package notifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -17,6 +18,7 @@ import (
 // and collection-management methods that notifier actually uses.
 type MongoDbStore interface {
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 
@@ -268,12 +270,17 @@ func (r *Repository) DeleteAddressByIDForUser(ctx context.Context, userID, addre
 		return err
 	}
 
-	result, err := collection.DeleteOne(ctx, bson.M{"_id": addressID, "user_id": userID})
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
+	queryFilter := bson.M{"_id": addressID, "user_id": userID}
+	var address NotificationAddress
+	if err := r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &address, "notification_address", false, ErrNotificationAddressNotFound); err != nil {
+		if !errors.Is(err, ErrNotificationAddressNotFound) {
+			return fmt.Errorf("%w: %v", ErrDatabaseError, err)
+		}
+		return err
 	}
-	if result.DeletedCount == 0 {
-		return ErrNotificationAddressNotFound
+
+	if err := r.Store.ExecuteDeleteOneCommand(ctx, collection, queryFilter, "notification_address"); err != nil {
+		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
 	}
 
 	return nil
@@ -287,7 +294,7 @@ func (r *Repository) DeleteAddressesByUserID(ctx context.Context, userID string)
 		return err
 	}
 
-	if _, err := collection.DeleteMany(ctx, bson.M{"user_id": userID}); err != nil {
+	if err := r.Store.ExecuteDeleteManyCommand(ctx, collection, bson.M{"user_id": userID}, "notification_addresses"); err != nil {
 		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
 	}
 
@@ -309,6 +316,9 @@ func (r *Repository) GetPreferencesByUserID(ctx context.Context, userID string) 
 	var preferences NotificationPreferences
 	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_id": userID}, &preferences, "notification_preferences", false, ErrNotificationAddressNotFound)
 	if err != nil {
+		if !errors.Is(err, ErrNotificationAddressNotFound) {
+			return nil, fmt.Errorf("%w: %v", ErrDatabaseError, err)
+		}
 		return nil, err
 	}
 
@@ -361,7 +371,7 @@ func (r *Repository) DeletePreferencesByUserID(ctx context.Context, userID strin
 		return err
 	}
 
-	if _, err := collection.DeleteOne(ctx, bson.M{"_id": userID}); err != nil {
+	if err := r.Store.ExecuteDeleteOneCommand(ctx, collection, bson.M{"_id": userID}, "notification_preferences"); err != nil {
 		return fmt.Errorf("%w: %v", ErrDatabaseError, err)
 	}
 
