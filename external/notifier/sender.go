@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"regexp"
 
+	"firebase.google.com/go/v4/messaging"
+	"github.com/appleboy/go-fcm"
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"github.com/nikoksr/notify"
-	notifyfcm "github.com/nikoksr/notify/service/fcm"
 	notifywebpush "github.com/nikoksr/notify/service/webpush"
 )
 
@@ -291,10 +292,13 @@ func (s *FCMSender) Enabled() bool {
 //
 // The method:
 //  1. Extracts the valid FCM tokens from the address list.
-//  2. Creates an FCM notify service instance authenticated with the
-//     configured credentials (file or project ID).
-//  3. Adds the tokens as receivers.
-//  4. Sends the notification through nikoksr/notify.
+//  2. Creates an FCM client authenticated with the configured
+//     credentials (file or project ID).
+//  3. Sends the notification directly via the Firebase Admin SDK.
+//
+// Note: this sender uses go-fcm's NewClient directly rather than
+// nikoksr/notify's FCM service to ensure credentials are applied
+// during client construction, not after.
 func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
 	if !s.Enabled() {
 		return ErrNotificationSenderNotEnabled
@@ -312,19 +316,44 @@ func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses
 		return ErrNotificationNoActiveAddresses
 	}
 
-	options := []notifyfcm.Option{}
+	var opts []fcm.Option
 	if s.config.CredentialsFile != "" {
-		options = append(options, notifyfcm.WithCredentialsFile(s.config.CredentialsFile))
+		opts = append(opts, fcm.WithCredentialsFile(s.config.CredentialsFile))
 	}
 	if s.config.ProjectID != "" {
-		options = append(options, notifyfcm.WithProjectID(s.config.ProjectID))
+		opts = append(opts, fcm.WithProjectID(s.config.ProjectID))
 	}
 
-	fcmService, err := notifyfcm.New(ctx, options...)
+	fcmClient, err := fcm.NewClient(ctx, opts...)
 	if err != nil {
 		return err
 	}
-	fcmService.AddReceivers(tokens...)
 
-	return notify.NewWithServices(fcmService).Send(ctx, subject, message)
+	if len(tokens) == 1 {
+		msg := &messaging.Message{
+			Token: tokens[0],
+			Notification: &messaging.Notification{
+				Title: subject,
+				Body:  message,
+			},
+		}
+		_, err := fcmClient.Send(ctx, msg)
+		if err != nil {
+			return err
+		}
+	} else {
+		msg := &messaging.MulticastMessage{
+			Tokens: tokens,
+			Notification: &messaging.Notification{
+				Title: subject,
+				Body:  message,
+			},
+		}
+		_, err := fcmClient.SendMulticast(ctx, msg)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

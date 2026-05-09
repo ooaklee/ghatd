@@ -138,6 +138,34 @@ The `NoopNotificationTokenProvider` returns `const Stream.empty()`.
 In the host application server wiring, the FCM sender should be wired like this:
 
 ```go
+if settings.NotifierFCMEnabled {
+    credsFile, err := notifier.ResolveCredentialsFile(
+        settings.NotifierFCMCredentialsFileB64,
+        settings.NotifierFCMCredentialsFile,
+    )
+    if err != nil {
+        return fmt.Errorf("resolve FCM credentials: %v", err)
+    }
+    notifierService.WithSender(notifier.NewFCMSender(notifier.FCMSenderConfig{
+        Enabled:         settings.NotifierFCMEnabled,
+        CredentialsFile: credsFile,
+        ProjectID:       settings.NotifierFCMProjectID,
+    }))
+}
+```
+
+`ResolveCredentialsFile` is a shared utility in `external/notifier` that
+returns the credentials file path to use. If the base64 variant
+(`NOTIFIER_FCM_CREDENTIALS_FILE_B64`) is set, it decodes the payload
+into a temp file; otherwise it returns the file-path variant as-is.
+
+If you prefer, you can provide `NOTIFIER_FCM_CREDENTIALS_FILE` and 
+`NOTIFIER_FCM_PROJECT_ID` in the deployment environment. you will have to
+make sure `NOTIFIER_FCM_CREDENTIALS_FILE` is accessible to be read.
+
+```go
+//...
+
 notifierService.WithSender(notifier.NewFCMSender(notifier.FCMSenderConfig{
     Enabled:         settings.NotifierFCMEnabled,
     CredentialsFile: settings.NotifierFCMCredentialsFile,
@@ -145,9 +173,6 @@ notifierService.WithSender(notifier.NewFCMSender(notifier.FCMSenderConfig{
 }))
 ```
 
-Activation requires setting `NOTIFIER_FCM_ENABLED=true` and providing one of
-`NOTIFIER_FCM_CREDENTIALS_FILE` or `NOTIFIER_FCM_PROJECT_ID` in the deployment
-environment.
 
 **Server-side changes required:**
 
@@ -158,18 +183,12 @@ environment.
   `invalidAddressHandler` to disable the address via `DisableAddressByHash`.
 
   Unlike Web Push where the HTTP status indicates permanence, FCM errors come
-  inside the `notifyfcm` response. The current `notifyfcm` library
-  (`github.com/nikoksr/notify/service/fcm v1.5.0`) does not surface
-  per-token errors — it sends to all tokens in one batch and returns a single
-  error if any fail. This means **per-token invalidation requires either**:
-
-  a. Sending to each token individually (like `WebPushSender` does), or
-  b. Patching or replacing the `notifyfcm` dependency with one that exposes
-     per-registration-error results.
-
-  **Recommendation**: Option (a) — refactor `FCMSender.Send()` to iterate
-  tokens individually. This matches the Web Push pattern and avoids a
-  dependency fork.
+  inside the Firebase Admin SDK response. The sender currently uses `go-fcm`
+  directly (rather than `nikoksr/notify/service/fcm`) to ensure credentials are
+  applied during `NewClient` construction. The sender sends single-token
+  messages individually so per-token errors can be detected. Multicast is used
+  when there are multiple tokens, but per-token error extraction from the
+  multicast response is not yet wired.
 
 ### 6. Config endpoint updates
 

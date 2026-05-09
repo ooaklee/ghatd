@@ -37,12 +37,14 @@ notifier/
 ├── service.go        # Business logic: register, list, send, preferences
 ├── repository.go     # MongoDB persistence
 ├── sender.go         # Web Push and FCM delivery adapters
+├── utils.go          # Shared helpers (credentials decoding, etc.)
 ├── request.go        # API request types
 ├── response.go       # API response types
 ├── const.go          # Constants and error keys
 ├── errors.go         # Sentinel errors
 ├── errormap.go       # HTTP error code mapping
 ├── service_test.go   # Service tests with fakes
+├── utils_test.go     # Tests for shared helpers
 └── migrations/
     └── indexes_notifier.go  # Database index setup and rollback
 ```
@@ -140,5 +142,10 @@ response, err := service.NotifyUser(ctx, &notifier.NotifyUserRequest{
 3. **Preference defaults** — New users default to "enabled for all channels."
    `GetPreferences` returns defaults when no document exists yet.
 
-4. **FCM ready but disabled** — The FCM sender and mobile registration hooks
-   are built. They stay disabled until Firebase credentials are provided.
+4. **FCM delivery** — The FCM sender uses `go-fcm` directly for client
+   construction with credentials applied at construction time. Enable with
+   `NOTIFIER_FCM_ENABLED=true` and provide credentials via
+   `NOTIFIER_FCM_CREDENTIALS_FILE`, `NOTIFIER_FCM_CREDENTIALS_FILE_B64`
+   (base64-encoded, takes precedence), or `NOTIFIER_FCM_PROJECT_ID`.
+   Use `ResolveCredentialsFile(b64, filePath)` to decode base64 credentials
+   into a temp file — callers own cleanup of the returned file path.

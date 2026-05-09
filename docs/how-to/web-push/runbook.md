@@ -61,6 +61,7 @@ key stays on the server and **must never be committed to version control**.
 | `NotifierWebPushVAPIDPrivateKey`  | `NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY`   | (empty)  | The private key from step 1 |
 | `NotifierFCMEnabled`              | `NOTIFIER_FCM_ENABLED`                 | `false`  | Leave `false` unless Firebase is configured |
 | `NotifierFCMCredentialsFile`      | `NOTIFIER_FCM_CREDENTIALS_FILE`        | (empty)  | Path to Firebase service-account JSON |
+| `NotifierFCMCredentialsFileB64`   | `NOTIFIER_FCM_CREDENTIALS_FILE_B64`   | (empty)  | Base64-encoded Firebase credentials; takes precedence over the file path |
 | `NotifierFCMProjectID`            | `NOTIFIER_FCM_PROJECT_ID`             | (empty)  | Firebase project ID |
 
 ### Docker Compose (development)
@@ -75,6 +76,7 @@ Add these lines to the `x_environments` block in
 - NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY=${NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY-}
 - NOTIFIER_FCM_ENABLED=${NOTIFIER_FCM_ENABLED-false}
 - NOTIFIER_FCM_CREDENTIALS_FILE=${NOTIFIER_FCM_CREDENTIALS_FILE-}
+- NOTIFIER_FCM_CREDENTIALS_FILE_B64=${NOTIFIER_FCM_CREDENTIALS_FILE_B64-}
 - NOTIFIER_FCM_PROJECT_ID=${NOTIFIER_FCM_PROJECT_ID-}
 ```
 
@@ -178,7 +180,27 @@ curl -s -X POST \
   }' | jq .
 ```
 
-**Expected success response (one active browser address):**
+**Expected success response (Web Push + FCM addresses registered):**
+```json
+{
+  "data": [
+    {
+      "channel": "FCM",
+      "attempted": 1,
+      "sent": true,
+      "skipped": false
+    },
+    {
+      "channel": "WEBPUSH",
+      "attempted": 1,
+      "sent": true,
+      "skipped": false
+    }
+  ]
+}
+```
+
+**Expected success response (one active browser address, no FCM):**
 ```json
 {
   "data": [
@@ -186,7 +208,6 @@ curl -s -X POST \
       "channel": "WEBPUSH",
       "attempted": 1,
       "sent": true,
-      "cleaned": 0,
       "skipped": false
     }
   ]
@@ -295,6 +316,27 @@ true:
 
 Double-check the values are actually making it to the server (see
 step 3 — the `/config` response tells you).
+
+### "NTF00-007 — Send failed" with FCM
+
+FCM delivery fails with NTF00-007 when the sender is enabled but
+cannot create or deliver through the Firebase client. Common causes:
+
+1. **Wrong project ID** — the Firebase project ID is just the project
+   name (e.g. `ghatd-e59aa`), not the storage bucket domain
+   (e.g. `ghatd-e59aa.firebasestorage.app`).
+
+2. **Credentials file path** — if using `NOTIFIER_FCM_CREDENTIALS_FILE`,
+   ensure the file is readable at the specified path inside the container.
+
+3. **Base64 credentials** — when using `NOTIFIER_FCM_CREDENTIALS_FILE_B64`,
+   the server decodes the base64 payload and writes it to a temp file. If
+   the base64 is malformed, check the server logs for
+   `server/decode-fcm-credentials-b64`.
+
+4. **FCM token mismatch** — the device's FCM token must belong to the
+   same Firebase project the server is authenticating against. Re-register
+   the mobile device if the token is stale.
 
 ### Expired subscription not cleaned up
 

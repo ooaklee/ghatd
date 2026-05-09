@@ -20,7 +20,8 @@ UserManager (UMS) depends on `notifier.Service` as an optional dependency
 authentication and admin access control.
 
 V1 supports Web Push end-to-end (browser subscription through to delivery)
-and adds FCM registration hooks without introducing Firebase app configuration.
+and adds FCM registration and delivery hooks. FCM delivery is gated behind
+the `Enabled` flag and requires Firebase credentials.
 
 ## Discussion
 
@@ -56,19 +57,21 @@ The `Sanitise()` method creates a `NotificationAddressSummary` that only
 includes non-sensitive fields (ID, channel, status, device info, timestamps).
 The full addresses are only used internally by `NotifyUser`.
 
-### Why FCM is plumbed but disabled?
+### Why FCM is gated behind a feature flag?
 
-The plan calls for FCM support, but Firebase project configuration is not
-available yet. Rather than block the entire feature, the FCM sender adapter
-and mobile registration hooks are built but gated behind the `Enabled` flag.
-When Firebase credentials arrive, flipping the flag is all that is needed.
+FCM delivery requires Firebase project credentials that may not be available
+in every deployment. The FCM sender adapter and mobile registration hooks are
+built but gated behind the `Enabled` flag. When Firebase credentials arrive,
+flipping the flag and providing credentials (file path or base64-encoded) is
+all that's needed.
 
 ## Consequences
 
 - All notification preferences move from `UniversalUser` to a dedicated
   `notification_preferences` collection.
-- The notifier package adds a new dependency: `github.com/nikoksr/notify`
-  and its webpush/FCM service sub-packages.
+- The notifier package adds dependencies: `github.com/nikoksr/notify`
+  (webpush service), `github.com/appleboy/go-fcm` (FCM client), and
+  `firebase.google.com/go/v4/messaging` (Firebase Admin SDK messaging types).
 - Server deployments without push notification support can leave the
   notifier unwired; UMS returns HTTP 503 for notification endpoints rather
   than failing to start.
