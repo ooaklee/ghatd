@@ -53,6 +53,26 @@ func TestResolveCredentialsFile_ValidBase64_WritesTempFile(t *testing.T) {
 	}
 }
 
+func TestResolveCredentialsFileWithCleanup_ValidBase64_RemovesTempFile(t *testing.T) {
+	original := `{"project_id":"test-123"}`
+	b64 := base64.StdEncoding.EncodeToString([]byte(original))
+
+	path, cleanup, err := ResolveCredentialsFileWithCleanup(b64, "/etc/fcm.json")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected temp credentials file to exist: %v", err)
+	}
+
+	cleanup()
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected temp credentials file to be removed, got %v", err)
+	}
+}
+
 func TestResolveCredentialsFile_InvalidBase64_Error(t *testing.T) {
 	_, err := ResolveCredentialsFile("!!!not-valid-base64!!!", "/etc/fcm.json")
 	if err == nil {

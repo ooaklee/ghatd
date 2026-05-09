@@ -323,8 +323,8 @@ FCM delivery fails with NTF00-007 when the sender is enabled but
 cannot create or deliver through the Firebase client. Common causes:
 
 1. **Wrong project ID** — the Firebase project ID is just the project
-   name (e.g. `ghatd-e59aa`), not the storage bucket domain
-   (e.g. `ghatd-e59aa.firebasestorage.app`).
+   name (e.g. `<firebase-project-id>`), not the storage bucket domain
+   (e.g. `<firebase-project-id>.firebasestorage.app`).
 
 2. **Credentials file path** — if using `NOTIFIER_FCM_CREDENTIALS_FILE`,
    ensure the file is readable at the specified path inside the container.

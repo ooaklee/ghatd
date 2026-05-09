@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"firebase.google.com/go/v4/messaging"
-	"github.com/appleboy/go-fcm"
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/appleboy/go-fcm"
 	"github.com/nikoksr/notify"
 	notifywebpush "github.com/nikoksr/notify/service/webpush"
 )
@@ -225,7 +226,29 @@ func isPermanentWebPushError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return permanentWebPushRe.MatchString(err.Error())
+	if permanentWebPushRe.MatchString(err.Error()) {
+		return true
+	}
+	if wrapped := errors.Unwrap(err); wrapped != nil {
+		return isPermanentWebPushError(wrapped)
+	}
+	for _, wrapped := range unwrapJoinedErrors(err) {
+		if isPermanentWebPushError(wrapped) {
+			return true
+		}
+	}
+	return false
+}
+
+func unwrapJoinedErrors(err error) []error {
+	type joinedError interface {
+		Unwrap() []error
+	}
+
+	if joined, ok := err.(joinedError); ok {
+		return joined.Unwrap()
+	}
+	return nil
 }
 
 // FCMSenderConfig contains the settings needed to send push
@@ -268,7 +291,7 @@ func NewFCMSender(config FCMSenderConfig) *FCMSender {
 }
 
 // SetInvalidAddressHandler sets the callback invoked when an FCM
-// token is determined to be permanently invalid (not yet wired in v1).
+// token is determined to be permanently invalid.
 func (s *FCMSender) SetInvalidAddressHandler(handler func(ctx context.Context, hash string) error) {
 	s.invalidAddressHandler = handler
 }
@@ -300,8 +323,20 @@ func (s *FCMSender) Enabled() bool {
 // nikoksr/notify's FCM service to ensure credentials are applied
 // during client construction, not after.
 func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
+	_, err := s.SendWithReport(ctx, subject, message, addresses, data)
+	return err
+}
+
+// SendWithReport delivers a push notification through Firebase Cloud
+// Messaging and returns how many target tokens Firebase accepted.
+//
+// Firebase batch sends can partially fail without returning a top-level
+// error. Returning a report prevents NotifyUser from saying "sent" when
+// every token was rejected.
+func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error) {
+	report := channelSendReport{}
 	if !s.Enabled() {
-		return ErrNotificationSenderNotEnabled
+		return report, ErrNotificationSenderNotEnabled
 	}
 
 	tokens := make([]string, 0, len(addresses))
@@ -313,7 +348,7 @@ func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses
 	}
 
 	if len(tokens) == 0 {
-		return ErrNotificationNoActiveAddresses
+		return report, ErrNotificationNoActiveAddresses
 	}
 
 	var opts []fcm.Option
@@ -326,9 +361,10 @@ func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses
 
 	fcmClient, err := fcm.NewClient(ctx, opts...)
 	if err != nil {
-		return err
+		return report, err
 	}
 
+	var batchResponse *messaging.BatchResponse
 	if len(tokens) == 1 {
 		msg := &messaging.Message{
 			Token: tokens[0],
@@ -337,9 +373,9 @@ func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses
 				Body:  message,
 			},
 		}
-		_, err := fcmClient.Send(ctx, msg)
+		batchResponse, err = fcmClient.Send(ctx, msg)
 		if err != nil {
-			return err
+			return report, err
 		}
 	} else {
 		msg := &messaging.MulticastMessage{
@@ -349,11 +385,40 @@ func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses
 				Body:  message,
 			},
 		}
-		_, err := fcmClient.SendMulticast(ctx, msg)
+		batchResponse, err = fcmClient.SendMulticast(ctx, msg)
 		if err != nil {
-			return err
+			return report, err
 		}
 	}
 
-	return nil
+	if batchResponse == nil {
+		return report, errors.New("fcm delivery failed: nil batch response")
+	}
+
+	report.Delivered = batchResponse.SuccessCount
+	if batchResponse.FailureCount > 0 {
+		return report, fcmBatchResponseError(batchResponse)
+	}
+
+	return report, nil
+}
+
+func fcmBatchResponseError(response *messaging.BatchResponse) error {
+	if response == nil || response.FailureCount == 0 {
+		return nil
+	}
+
+	failures := make([]string, 0, response.FailureCount)
+	for index, sendResponse := range response.Responses {
+		if sendResponse == nil || sendResponse.Success || sendResponse.Error == nil {
+			continue
+		}
+		failures = append(failures, fmt.Sprintf("token[%d]: %v", index, sendResponse.Error))
+	}
+
+	if len(failures) == 0 {
+		return fmt.Errorf("fcm delivery failed for %d token(s)", response.FailureCount)
+	}
+
+	return fmt.Errorf("fcm delivery failed for %d token(s): %s", response.FailureCount, strings.Join(failures, "; "))
 }

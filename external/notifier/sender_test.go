@@ -3,7 +3,10 @@ package notifier
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+
+	"firebase.google.com/go/v4/messaging"
 )
 
 func TestIsPermanentWebPushError_TruePositives(t *testing.T) {
@@ -25,6 +28,16 @@ func TestIsPermanentWebPushError_TruePositives(t *testing.T) {
 			permanent: true,
 		},
 		{
+			name:      "wrapped 410 Gone",
+			err:       fmt.Errorf("notify send failed: %w", fmt.Errorf("unexpected status code: 410")),
+			permanent: true,
+		},
+		{
+			name:      "joined 404 Not Found",
+			err:       errors.Join(errors.New("temporary failure"), fmt.Errorf("unexpected status code: 404")),
+			permanent: true,
+		},
+		{
 			name:      "nil error",
 			err:       nil,
 			permanent: false,
@@ -38,6 +51,64 @@ func TestIsPermanentWebPushError_TruePositives(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tt.permanent, got)
 			}
 		})
+	}
+}
+
+func TestFCMBatchResponseError_NoFailures(t *testing.T) {
+	t.Parallel()
+
+	err := fcmBatchResponseError(&messaging.BatchResponse{
+		SuccessCount: 1,
+		FailureCount: 0,
+		Responses: []*messaging.SendResponse{
+			{Success: true, MessageID: "msg-1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestFCMBatchResponseError_FailuresIncludeTokenIndex(t *testing.T) {
+	t.Parallel()
+
+	err := fcmBatchResponseError(&messaging.BatchResponse{
+		SuccessCount: 1,
+		FailureCount: 1,
+		Responses: []*messaging.SendResponse{
+			{Success: true, MessageID: "msg-1"},
+			{Success: false, Error: errors.New("registration token is not registered")},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for failed FCM response")
+	}
+
+	message := err.Error()
+	if !strings.Contains(message, "fcm delivery failed for 1 token(s)") {
+		t.Fatalf("expected failure count in error, got %q", message)
+	}
+	if !strings.Contains(message, "token[1]: registration token is not registered") {
+		t.Fatalf("expected token index in error, got %q", message)
+	}
+}
+
+func TestFCMBatchResponseError_FailureCountWithoutResponseErrors(t *testing.T) {
+	t.Parallel()
+
+	err := fcmBatchResponseError(&messaging.BatchResponse{
+		SuccessCount: 0,
+		FailureCount: 1,
+		Responses: []*messaging.SendResponse{
+			nil,
+			{Success: false},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for failed FCM response")
+	}
+	if err.Error() != "fcm delivery failed for 1 token(s)" {
+		t.Fatalf("unexpected error: %q", err.Error())
 	}
 }
 
