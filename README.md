@@ -59,8 +59,9 @@ A complete billing solution split into three composable packages for maximum fle
 - **[Notifier](./external/notifier/)** - Push notification registration, preferences, and delivery
 - **[Reminder](./docs/getting-started/reminder/)** - User-owned scheduled reminders with target-based lookups and execution tracking
 - **[Repository](./external/repository/)** - MongoDB repository patterns and utilities
+- **[Starter/v0](./external/starter/v0/)** - Ejectable lazy composition layer for GHATD application wiring
+- **[Error Manifest](./external/errormanifest/)** - Cross-package error mapping and bundle composition
 - **`TBC`**
-
 
 **Note on Core Packages:** This Core Package and sub-sections will be updated as more core packages are added and the refactoring work is completed on legacy packages. The goal is to ensure that each package includes a getting-started guide accompanied by working examples to help you integrate them into your projects.
 

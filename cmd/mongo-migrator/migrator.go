@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/cmd/mongo-migrator/settings"
+	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	_ "github.com/ooaklee/ghatd/migrations/mongo"
 	"github.com/spf13/cobra"
@@ -82,20 +83,15 @@ func runMigrator(args []string) error {
 		return fmt.Errorf("migrator/unable-to-load-migration-settings: %v", err)
 	}
 
-	// Create Mongo Uri
-	var mongoHostUri string
-	if appSettings.MongoDatabaseAtlas {
-		mongoHostUri = fmt.Sprintf(
-			"mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority&appName=%s",
-			appSettings.MongoDatabaseUsername,
-			appSettings.MongoDatabasePassword,
-			appSettings.MongoDatabaseHost,
-			appSettings.MongoDatabaseAppName,
-		)
-	} else {
-		mongoHostUri = fmt.Sprintf("mongodb://%v:%v@%v", appSettings.MongoDatabaseUsername,
-			appSettings.MongoDatabasePassword,
-			appSettings.MongoDatabaseHost)
+	mongoHostUri, err := repositoryhelpers.GenerateMongoURI(repositoryhelpers.MongoURIConfig{
+		Username: appSettings.MongoDatabaseUsername,
+		Password: appSettings.MongoDatabasePassword,
+		Host:     appSettings.MongoDatabaseHost,
+		AppName:  appSettings.MongoDatabaseAppName,
+		Atlas:    appSettings.MongoDatabaseAtlas,
+	})
+	if err != nil {
+		return fmt.Errorf("migrator/unable-to-build-mongo-uri: %v", err)
 	}
 
 	maxWait := time.Duration(60 * time.Second)
