@@ -75,4 +75,12 @@ const (
 
 	// UserManagerURIVariableAddressID is the URI variable for notification address ID
 	UserManagerURIVariableAddressID = "addressID"
+
+	// UserManagerURIVariableReminderID is the URI variable for reminder ID
+	UserManagerURIVariableReminderID = "reminderID"
+)
+
+const (
+	// ErrKeyReminderServiceNotEnabled is returned when reminder features are requested but ReminderService is not configured
+	ErrKeyReminderServiceNotEnabled = "ReminderServiceNotEnabled"
 )

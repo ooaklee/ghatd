@@ -52,6 +52,15 @@ type UsermanagerService interface {
 	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
 	UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberRequest) (*UpdateGroupMemberResponse, error)
 	UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error)
+	// Reminder methods
+	CreateReminder(ctx context.Context, r *CreateReminderRequest) (*CreateReminderResponse, error)
+	GetReminderByID(ctx context.Context, r *GetReminderByIDRequest) (*GetReminderByIDResponse, error)
+	ListReminders(ctx context.Context, r *ListRemindersRequest) (*ListRemindersResponse, error)
+	UpdateReminderByID(ctx context.Context, r *UpdateReminderByIDRequest) (*UpdateReminderByIDResponse, error)
+	DeleteReminderByID(ctx context.Context, r *DeleteReminderByIDRequest) error
+	DisableReminderByID(ctx context.Context, r *DisableReminderByIDRequest) (*UpdateReminderByIDResponse, error)
+	GetReminderStats(ctx context.Context, r *GetReminderStatsRequest) (*GetReminderStatsResponse, error)
+	GetDueReminders(ctx context.Context, r *GetDueRemindersRequest) (*GetDueRemindersResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
@@ -825,6 +834,141 @@ func (h *Handler) UpdateGroupOwner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// CreateReminder handles the request to create a reminder.
+func (h *Handler) CreateReminder(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToCreateReminderRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.CreateReminder(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Reminder)
+}
+
+// GetReminderByID handles the request to get a reminder by ID.
+func (h *Handler) GetReminderByID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetReminderByIDRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetReminderByID(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Reminder)
+}
+
+// ListReminders handles the request to list reminders.
+func (h *Handler) ListReminders(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToListRemindersRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ListReminders(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Reminders)
+}
+
+// UpdateReminderByID handles the request to update a reminder by ID.
+func (h *Handler) UpdateReminderByID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToUpdateReminderByIDRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.UpdateReminderByID(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Reminder)
+}
+
+// DeleteReminderByID handles the request to delete a reminder by ID.
+func (h *Handler) DeleteReminderByID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToDeleteReminderByIDRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	if err := h.Service.DeleteReminderByID(r.Context(), request); err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
+}
+
+// DisableReminderByID handles the request to disable a reminder by ID.
+func (h *Handler) DisableReminderByID(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToDisableReminderByIDRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.DisableReminderByID(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Reminder)
+}
+
+// GetReminderStats handles the request to get reminder statistics.
+func (h *Handler) GetReminderStats(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetReminderStatsRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetReminderStats(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Stats)
+}
+
+// GetDueReminders handles the request to get due reminders.
+func (h *Handler) GetDueReminders(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetDueRemindersRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetDueReminders(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Reminders)
 }
 
 // GetBaseResponseHandler returns response handler configured with auth error map

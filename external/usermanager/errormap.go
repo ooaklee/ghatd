@@ -26,6 +26,7 @@ var UsermanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrFailedToUpdateGroupOwner:    {Title: "Internal Error", Detail: "Failed to update group owner. Please try again.", StatusCode: 500, Code: "USM00-014"},
 	ErrInvalidMemberID:             {Title: "Bad Request", Detail: "A valid member ID must be provided.", StatusCode: 400, Code: "USM00-015"},
 	ErrNotifierServiceNotEnabled:   {Title: "Service Unavailable", Detail: "Notification features have not been enabled for this service.", StatusCode: 503, Code: "USM00-018"},
+	ErrReminderServiceNotEnabled:   {Title: "Service Unavailable", Detail: "Reminder features have not been enabled for this service.", StatusCode: 503, Code: "USM00-019"},
 	ErrFailedToResolveGroupAccessMap: {
 		Title:      "Internal Error",
 		Detail:     "Failed to resolve user access for the requested group. Please try again.",

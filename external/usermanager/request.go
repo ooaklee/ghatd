@@ -5,6 +5,7 @@ import (
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/notifier"
+	"github.com/ooaklee/ghatd/external/reminder"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -387,6 +388,64 @@ type UpdateGroupMemberRequest struct {
 
 	// UpdateMemberRoleRequest carries the underlying member-role update payload.
 	*group.UpdateMemberRoleRequest
+}
+
+// CreateReminderRequest holds the data needed to create a reminder for the current user.
+type CreateReminderRequest struct {
+	UserID string
+	*reminder.CreateReminderRequest
+}
+
+// GetReminderByIDRequest holds the data needed to get a reminder.
+type GetReminderByIDRequest struct {
+	UserID string
+	Id     string
+}
+
+// ListRemindersRequest holds the data needed to list reminders.
+type ListRemindersRequest struct {
+	UserID       string
+	FilterUserID string `query:"user_id"`
+	Status       string `query:"status"`
+	TargetType   string `query:"target_type"`
+	TargetId     string `query:"target_id"`
+	Page         int    `query:"page"`
+	PerPage      int    `query:"per_page"`
+}
+
+// UpdateReminderByIDRequest holds the data needed to update a reminder.
+type UpdateReminderByIDRequest struct {
+	UserID string
+	Id     string
+	*reminder.UpdateReminderByIDRequest
+}
+
+// DeleteReminderByIDRequest holds the data needed to delete a reminder.
+type DeleteReminderByIDRequest struct {
+	UserID string
+	Id     string
+}
+
+// DisableReminderByIDRequest holds the data needed to disable a reminder.
+type DisableReminderByIDRequest struct {
+	UserID string
+	Id     string
+}
+
+// GetDueRemindersRequest holds the data needed to get due reminders.
+type GetDueRemindersRequest struct {
+	UserID        string
+	FilterUserID  string   `query:"user_id"`
+	FilterUserIDs []string `query:"user_ids"`
+	DueBefore     string   `query:"due_before"`
+	Limit         int      `query:"limit"`
+}
+
+// GetReminderStatsRequest holds the data needed to get reminder stats.
+type GetReminderStatsRequest struct {
+	UserID        string
+	FilterUserID  string   `query:"user_id"`
+	FilterUserIDs []string `query:"user_ids"`
 }
 
 // UpdateGroupOwnerRequest holds the data needed to update group ownership

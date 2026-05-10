@@ -9,6 +9,7 @@ import (
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/notifier"
+	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ritwickdey/querydecoder"
@@ -1056,6 +1057,189 @@ func MapRequestToValidateGroupNameRequest(r *http.Request, validator Usermanager
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("validate-group-name-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToCreateReminderRequest maps incoming create reminder request to the correct struct.
+func MapRequestToCreateReminderRequest(r *http.Request, validator UsermanagerValidator) (*CreateReminderRequest, error) {
+	var parsedRequest CreateReminderRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	baseRequest := reminder.CreateReminderRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	baseRequest.UserID = userID
+
+	parsedRequest.UserID = userID
+	parsedRequest.CreateReminderRequest = &baseRequest
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetReminderByIDRequest maps incoming get-reminder-by-ID request to the correct struct.
+func MapRequestToGetReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*GetReminderByIDRequest, error) {
+	var parsedRequest GetReminderByIDRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
+	if err != nil {
+		log.Error("unable-get-reminder-id-from-uri")
+		return nil, ErrRequestFailedValidation
+	}
+
+	parsedRequest.UserID = userID
+	parsedRequest.Id = reminderID
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToListRemindersRequest maps incoming reminder list request to the correct struct.
+func MapRequestToListRemindersRequest(r *http.Request, validator UsermanagerValidator) (*ListRemindersRequest, error) {
+	var parsedRequest ListRemindersRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	parsedRequest.UserID = userID
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToUpdateReminderByIDRequest maps incoming update-reminder-by-ID request to the correct struct.
+func MapRequestToUpdateReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*UpdateReminderByIDRequest, error) {
+	var parsedRequest UpdateReminderByIDRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
+	if err != nil {
+		log.Error("unable-get-reminder-id-from-uri")
+		return nil, ErrRequestFailedValidation
+	}
+
+	baseRequest := reminder.UpdateReminderByIDRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	baseRequest.UserID = userID
+	baseRequest.Id = reminderID
+
+	parsedRequest.UserID = userID
+	parsedRequest.Id = reminderID
+	parsedRequest.UpdateReminderByIDRequest = &baseRequest
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToDeleteReminderByIDRequest maps incoming delete-reminder-by-ID request to the correct struct.
+func MapRequestToDeleteReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*DeleteReminderByIDRequest, error) {
+	var parsedRequest DeleteReminderByIDRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
+	if err != nil {
+		log.Error("unable-get-reminder-id-from-uri")
+		return nil, ErrRequestFailedValidation
+	}
+
+	parsedRequest.UserID = userID
+	parsedRequest.Id = reminderID
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToDisableReminderByIDRequest maps incoming disable-reminder-by-ID request to the correct struct.
+func MapRequestToDisableReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*DisableReminderByIDRequest, error) {
+	var parsedRequest DisableReminderByIDRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
+	if err != nil {
+		log.Error("unable-get-reminder-id-from-uri")
+		return nil, ErrRequestFailedValidation
+	}
+
+	parsedRequest.UserID = userID
+	parsedRequest.Id = reminderID
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetReminderStatsRequest maps incoming reminder stats request to the correct struct.
+func MapRequestToGetReminderStatsRequest(r *http.Request, validator UsermanagerValidator) (*GetReminderStatsRequest, error) {
+	var parsedRequest GetReminderStatsRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetDueRemindersRequest maps incoming due reminders request to the correct struct.
+func MapRequestToGetDueRemindersRequest(r *http.Request, validator UsermanagerValidator) (*GetDueRemindersRequest, error) {
+	var parsedRequest GetDueRemindersRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+
+	if parsedRequest.Limit <= 0 {
+		parsedRequest.Limit = 100
 	}
 
 	return &parsedRequest, nil

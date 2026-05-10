@@ -56,6 +56,8 @@ A complete billing solution split into three composable packages for maximum fle
 ### Additional Packages
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging
 - **[Logger](./external/logger/)** - Structured logging with middleware support
+- **[Notifier](./external/notifier/)** - Push notification registration, preferences, and delivery
+- **[Reminder](./docs/getting-started/reminder/)** - User-owned scheduled reminders with target-based lookups and execution tracking
 - **[Repository](./external/repository/)** - MongoDB repository patterns and utilities
 - **`TBC`**
 

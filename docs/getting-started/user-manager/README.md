@@ -24,6 +24,7 @@ The `usermanager` is designed to streamline complex user-related workflows into 
 -   **Group Memberships**: A dedicated `/me/memberships` endpoint lets the authenticated user retrieve their group memberships, with optional filtering by group type (e.g. `TEAM`, `ORGANISATION`, etc.), the ability to include descendant groups, and optional root-prefix naming (`prefix_name`).
 -   **Group Management**: Active users can create groups, add/remove members, and update group ownership — all through the `usermanager` surface. The service layer applies its own authorisation logic (admin flag or group access) on top of the route-level middleware.
 -   **Communication Management**: Integrates with the `contacter` service to manage communication preferences and history (admin-only).
+-   **Reminder Management**: Optionally integrates with the `reminder` service so users can create and manage scheduled reminders, while admin/service views can inspect reminder volume, due reminders, and stats.
 
 ## API Endpoints
 
@@ -41,6 +42,12 @@ These require a valid JWT or API token.
 -   `GET /api/v1/ums/me/enriched`: Get an enriched profile, optionally including all group memberships. Supports `include_all_groups` and `prefix_name`.
 -   `GET /api/v1/ums/me/memberships`: Get the authenticated user's group memberships. Supports `group_type`, `include_descendants`, and `prefix_name`.
 -   `GET /api/v1/ums/me/groups`: Get a paginated list of groups the authenticated user belongs to. Supports `prefix_name`.
+-   `GET /api/v1/ums/me/reminders`: List reminders for the authenticated user. Supports `status`, `target_type`, `target_id`, `page`, and `per_page`.
+-   `POST /api/v1/ums/me/reminders`: Create a reminder for the authenticated user.
+-   `GET /api/v1/ums/me/reminders/{reminderID}`: Get one reminder owned by the authenticated user.
+-   `PATCH /api/v1/ums/me/reminders/{reminderID}`: Update one reminder owned by the authenticated user.
+-   `DELETE /api/v1/ums/me/reminders/{reminderID}`: Delete one reminder owned by the authenticated user.
+-   `POST /api/v1/ums/me/reminders/{reminderID}/disable`: Disable one reminder owned by the authenticated user.
 -   `GET /api/v1/ums/users/{userId}`: Get a user by their ID.
 -   `GET /api/v1/ums/groups/{groupID}`: Get enriched detail for a specific group (members, owner, etc.). Supports `prefix_name`.
 -   `GET /api/v1/ums/groups/{groupID}/stats`: Get statistics for a specific group. Supports `prefix_name`.
@@ -70,6 +77,18 @@ Think of it as breadcrumbs for group names, but without the crumbs in your keybo
 -   `GET /api/v1/ums/comms`: List all comms entries.
 -   `GET /api/v1/ums/comms/stats`: Get comms statistics.
 -   `PUT /api/v1/ums/comms/{id}`: Update a comms entry.
+-   `POST /api/v1/ums/users/{userId}/notifications`: Send a notification to a user when notifier is wired.
+-   `GET /api/v1/ums/reminders`: List reminders across users. Supports `user_id`, `status`, `target_type`, `target_id`, `page`, and `per_page`.
+-   `GET /api/v1/ums/reminders/stats`: Get aggregate reminder stats for admin overview pages. Supports optional `user_id` and `user_ids`.
+-   `GET /api/v1/ums/reminders/due`: Get reminders that are ready for scheduler processing. Supports optional `user_id`, `user_ids`, `due_before`, and `limit`; if neither `user_id` nor `user_ids` is provided, it retrieves due reminders for everyone.
+
+### Reminder list authorisation
+
+UMS uses one `ListReminders` service method for both `GET /me/reminders` and
+`GET /reminders`. The service checks the requesting user through `UserService`.
+If the requester is not an admin, the request is locked to their own `UserID`
+even if a different `user_id` filter is supplied. Admin users may omit
+`user_id` to list across users, or pass it to inspect one user's reminders.
 
 ### Active users only
 These require the user to be both authenticated and active.
@@ -92,6 +111,7 @@ For a detailed guide on setting up the main application router, please see the [
 import (
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/router"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/ghatd/external/validator"
@@ -111,6 +131,7 @@ func main() {
 	contacterService := contacter.NewService(...)
 	auditService := audit.NewService(...)
 	apiTokenService := apitoken.NewService(...)
+	reminderService := reminder.NewService(...)
 
 	// Create the usermanager service
 	umsService := usermanager.NewService(&usermanager.NewServiceRequest{
@@ -122,6 +143,7 @@ func main() {
 
 	// Add optional services
 	umsService.WithGroupService(groupService)
+	umsService.WithReminderService(reminderService)
 
 	// Create the usermanager handler
 	umsHandler := usermanager.NewHandler(&usermanager.NewHandlerRequest{

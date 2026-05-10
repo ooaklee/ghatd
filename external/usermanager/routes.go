@@ -49,6 +49,15 @@ type UsermanagerHandler interface {
 	GetGroupLineage(w http.ResponseWriter, r *http.Request)
 	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
 	ValidateGroupName(w http.ResponseWriter, r *http.Request)
+	// Reminder methods
+	CreateReminder(w http.ResponseWriter, r *http.Request)
+	GetReminderByID(w http.ResponseWriter, r *http.Request)
+	ListReminders(w http.ResponseWriter, r *http.Request)
+	UpdateReminderByID(w http.ResponseWriter, r *http.Request)
+	DeleteReminderByID(w http.ResponseWriter, r *http.Request)
+	DisableReminderByID(w http.ResponseWriter, r *http.Request)
+	GetReminderStats(w http.ResponseWriter, r *http.Request)
+	GetDueReminders(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -132,6 +141,12 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations", request.Handler.GetMyGroupInvitations).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations/{groupID}/accept", request.Handler.AcceptMyGroupInvitation).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations/{groupID}/reject", request.Handler.RejectMyGroupInvitation).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders", request.Handler.ListReminders).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders", request.Handler.CreateReminder).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.GetReminderByID).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.UpdateReminderByID).Methods(http.MethodPatch, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.DeleteReminderByID).Methods(http.MethodDelete, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}/disable", request.Handler.DisableReminderByID).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/config", request.Handler.GetNotifierConfig).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses", request.Handler.ListNotificationAddresses).Methods(http.MethodGet, http.MethodOptions)
@@ -161,6 +176,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	usermanagerAdminServiceRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerAdminServiceRoutes.HandleFunc("/users/{userId}/notifications", request.Handler.NotifyUser).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/reminders", request.Handler.ListReminders).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/reminders/stats", request.Handler.GetReminderStats).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/reminders/due", request.Handler.GetDueReminders).Methods(http.MethodGet, http.MethodOptions)
 	if request.AdminApiTokenOrJWTMiddleware != nil {
 		usermanagerAdminServiceRoutes.Use(request.AdminApiTokenOrJWTMiddleware)
 	} else if request.AdminOnlyMiddleware != nil {

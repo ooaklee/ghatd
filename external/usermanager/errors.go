@@ -21,4 +21,6 @@ var (
 	ErrUserAlreadyMemberOfGroup      = errors.New(ErrKeyUserAlreadyMemberOfGroup)
 	ErrUserManagerError              = errors.New(ErrKeyUserManagerError)
 	ErrUserNotFound                  = errors.New(ErrKeyUserNotFound)
+	// ErrReminderServiceNotEnabled means reminder features were requested but no reminder service is configured.
+	ErrReminderServiceNotEnabled = errors.New(ErrKeyReminderServiceNotEnabled)
 )

@@ -181,6 +181,30 @@ func (m *mockUmsService) UpdateGroupMember(ctx context.Context, r *usermanager.U
 func (m *mockUmsService) UpdateGroupOwner(ctx context.Context, r *usermanager.UpdateGroupOwnerRequest) (*usermanager.UpdateGroupOwnerResponse, error) {
 	return nil, stubErr
 }
+func (m *mockUmsService) CreateReminder(ctx context.Context, r *usermanager.CreateReminderRequest) (*usermanager.CreateReminderResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetReminderByID(ctx context.Context, r *usermanager.GetReminderByIDRequest) (*usermanager.GetReminderByIDResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) ListReminders(ctx context.Context, r *usermanager.ListRemindersRequest) (*usermanager.ListRemindersResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) UpdateReminderByID(ctx context.Context, r *usermanager.UpdateReminderByIDRequest) (*usermanager.UpdateReminderByIDResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) DeleteReminderByID(ctx context.Context, r *usermanager.DeleteReminderByIDRequest) error {
+	return stubErr
+}
+func (m *mockUmsService) DisableReminderByID(ctx context.Context, r *usermanager.DisableReminderByIDRequest) (*usermanager.UpdateReminderByIDResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetReminderStats(ctx context.Context, r *usermanager.GetReminderStatsRequest) (*usermanager.GetReminderStatsResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetDueReminders(ctx context.Context, r *usermanager.GetDueRemindersRequest) (*usermanager.GetDueRemindersResponse, error) {
+	return nil, stubErr
+}
 
 // mockValidator wraps [validator.Validate] so tests can force validation failures.
 type mockValidator struct {

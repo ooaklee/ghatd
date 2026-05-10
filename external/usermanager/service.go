@@ -12,6 +12,7 @@ import (
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/notifier"
+	"github.com/ooaklee/ghatd/external/reminder"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
@@ -73,6 +74,20 @@ type GroupService interface {
 	RejectInvite(ctx context.Context, req *group.RejectInviteRequest) (*group.RejectInviteResponse, error)
 }
 
+// ReminderService expected methods of a valid reminder service.
+type ReminderService interface {
+	CreateReminder(ctx context.Context, r *reminder.CreateReminderRequest) (*reminder.CreateReminderResponse, error)
+	GetReminderByID(ctx context.Context, r *reminder.GetReminderByIDRequest) (*reminder.GetReminderByIDResponse, error)
+	ListReminders(ctx context.Context, r *reminder.ListRemindersRequest) (*reminder.ListRemindersResponse, error)
+	GetRemindersForTargetTypeByUserID(ctx context.Context, r *reminder.GetRemindersForTargetTypeByUserIDRequest) (*reminder.ListRemindersResponse, error)
+	GetActiveRemindersForTargetTypeByUserID(ctx context.Context, r *reminder.GetActiveRemindersForTargetTypeByUserIDRequest) (*reminder.ListRemindersResponse, error)
+	UpdateReminderByID(ctx context.Context, r *reminder.UpdateReminderByIDRequest) (*reminder.UpdateReminderByIDResponse, error)
+	DeleteReminderByID(ctx context.Context, r *reminder.DeleteReminderByIDRequest) error
+	DisableReminderByID(ctx context.Context, r *reminder.DisableReminderByIDRequest) (*reminder.UpdateReminderByIDResponse, error)
+	GetReminderStats(ctx context.Context, r *reminder.GetReminderStatsRequest) (*reminder.GetReminderStatsResponse, error)
+	GetDueReminders(ctx context.Context, r *reminder.GetDueRemindersRequest) (*reminder.GetDueRemindersResponse, error)
+}
+
 // NotifierService expected methods of a valid notifier service.
 type NotifierService interface {
 	RegisterAddress(ctx context.Context, r *notifier.RegisterAddressRequest) (*notifier.RegisterAddressResponse, error)
@@ -93,6 +108,7 @@ type Service struct {
 	ContacterService ContacterService
 	GroupService     GroupService
 	NotifierService  NotifierService
+	ReminderService  ReminderService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -124,6 +140,12 @@ func NewService(r *NewServiceRequest) *Service {
 // WithGroupService adds group service integration
 func (s *Service) WithGroupService(groupSvc GroupService) *Service {
 	s.GroupService = groupSvc
+	return s
+}
+
+// WithReminderService adds reminder service integration.
+func (s *Service) WithReminderService(reminderSvc ReminderService) *Service {
+	s.ReminderService = reminderSvc
 	return s
 }
 

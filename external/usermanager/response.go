@@ -5,6 +5,7 @@ import (
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/notifier"
+	"github.com/ooaklee/ghatd/external/reminder"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -283,6 +284,36 @@ type RemoveGroupMemberResponse struct {
 // UpdateGroupMemberResponse holds the response for updating a member's role in a group
 type UpdateGroupMemberResponse struct {
 	Success bool `json:"success"`
+}
+
+// CreateReminderResponse holds the response for creating a reminder.
+type CreateReminderResponse struct {
+	*reminder.CreateReminderResponse
+}
+
+// GetReminderByIDResponse holds the response for getting a reminder.
+type GetReminderByIDResponse struct {
+	*reminder.GetReminderByIDResponse
+}
+
+// ListRemindersResponse holds the response for listing reminders.
+type ListRemindersResponse struct {
+	*reminder.ListRemindersResponse
+}
+
+// UpdateReminderByIDResponse holds the response for updating a reminder.
+type UpdateReminderByIDResponse struct {
+	*reminder.UpdateReminderByIDResponse
+}
+
+// GetReminderStatsResponse holds the response for reminder stats.
+type GetReminderStatsResponse struct {
+	*reminder.GetReminderStatsResponse
+}
+
+// GetDueRemindersResponse holds the response for getting due reminders.
+type GetDueRemindersResponse struct {
+	*reminder.GetDueRemindersResponse
 }
 
 // UpdateGroupOwnerResponse holds the response for updating group ownership
