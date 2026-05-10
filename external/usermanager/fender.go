@@ -8,6 +8,7 @@ import (
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ritwickdey/querydecoder"
@@ -476,6 +477,159 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("get-latest-notification-overviews-request-validation-failed", zap.Error(err))
+		return nil, ErrRequestFailedValidation
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetNotifierConfigRequest maps incoming notifier config request to the correct struct.
+func MapRequestToGetNotifierConfigRequest(r *http.Request, validator UsermanagerValidator) (*GetNotifierConfigRequest, error) {
+	var parsedRequest GetNotifierConfigRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+	parsedRequest.GetNotifierConfigRequest = &notifier.GetNotifierConfigRequest{}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToRegisterNotificationAddressRequest maps incoming notification address registration to the correct struct.
+func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator UsermanagerValidator) (*RegisterNotificationAddressRequest, error) {
+	var parsedRequest RegisterNotificationAddressRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	baseRequest := notifier.RegisterAddressRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, notifier.ErrInvalidNotificationAddressBody
+	}
+	baseRequest.UserID = userID
+
+	parsedRequest.UserId = userID
+	parsedRequest.RegisterAddressRequest = &baseRequest
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("register-notification-address-request-validation-failed", zap.Error(err))
+		return nil, ErrRequestFailedValidation
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToListNotificationAddressesRequest maps incoming notification address list request to the correct struct.
+func MapRequestToListNotificationAddressesRequest(r *http.Request, validator UsermanagerValidator) (*ListNotificationAddressesRequest, error) {
+	var parsedRequest ListNotificationAddressesRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	parsedRequest.UserId = userID
+	parsedRequest.ListNotificationAddressesRequest = &notifier.ListNotificationAddressesRequest{UserID: userID}
+	return &parsedRequest, nil
+}
+
+// MapRequestToDeleteNotificationAddressRequest maps incoming notification address delete request to the correct struct.
+func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator UsermanagerValidator) (*DeleteNotificationAddressRequest, error) {
+	var parsedRequest DeleteNotificationAddressRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	addressID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableAddressID)
+	if err != nil {
+		log.Error("unable-get-notification-address-id-from-uri")
+		return nil, ErrRequestFailedValidation
+	}
+
+	parsedRequest.UserId = userID
+	parsedRequest.DeleteNotificationAddressRequest = &notifier.DeleteNotificationAddressRequest{
+		UserID:    userID,
+		AddressID: addressID,
+	}
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetNotificationPreferencesRequest maps incoming notification preferences request to the correct struct.
+func MapRequestToGetNotificationPreferencesRequest(r *http.Request, validator UsermanagerValidator) (*GetNotificationPreferencesRequest, error) {
+	var parsedRequest GetNotificationPreferencesRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	parsedRequest.UserId = userID
+	parsedRequest.GetNotificationPreferencesRequest = &notifier.GetNotificationPreferencesRequest{UserID: userID}
+	return &parsedRequest, nil
+}
+
+// MapRequestToUpdateNotificationPreferencesRequest maps incoming notification preferences update to the correct struct.
+func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator UsermanagerValidator) (*UpdateNotificationPreferencesRequest, error) {
+	var parsedRequest UpdateNotificationPreferencesRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	baseRequest := notifier.UpdateNotificationPreferencesRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, notifier.ErrInvalidNotificationPreferences
+	}
+	baseRequest.UserID = userID
+
+	parsedRequest.UserId = userID
+	parsedRequest.UpdateNotificationPreferencesRequest = &baseRequest
+	return &parsedRequest, nil
+}
+
+// MapRequestToNotifyUserRequest maps incoming admin/service notification send request to the correct struct.
+func MapRequestToNotifyUserRequest(r *http.Request, validator UsermanagerValidator) (*NotifyUserRequest, error) {
+	var parsedRequest NotifyUserRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	targetUserID, err := toolbox.GetVariableValueFromUri(r, "userId")
+	if err != nil {
+		log.Error("unable-get-target-user-id-from-uri")
+		return nil, ErrRequestFailedValidation
+	}
+
+	baseRequest := notifier.NotifyUserRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, notifier.ErrInvalidNotificationAddressBody
+	}
+	baseRequest.UserID = targetUserID
+
+	parsedRequest.NotifyUserRequest = &baseRequest
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("notify-user-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 

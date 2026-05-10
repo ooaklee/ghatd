@@ -15,6 +15,7 @@ var (
 	ErrInvalidMemberID               = errors.New(ErrKeyInvalidMemberID)
 	ErrInvalidUserBody               = errors.New(ErrKeyInvalidUserBody)
 	ErrNoGroupsFound                 = errors.New(ErrKeyNoGroupsFound)
+	ErrNotifierServiceNotEnabled     = errors.New(ErrKeyNotifierServiceNotEnabled)
 	ErrRequestFailedValidation       = errors.New(ErrKeyRequestFailedValidation)
 	ErrUnableToIdentifyUser          = errors.New(ErrKeyUnableToIdentifyUser)
 	ErrUserAlreadyMemberOfGroup      = errors.New(ErrKeyUserAlreadyMemberOfGroup)

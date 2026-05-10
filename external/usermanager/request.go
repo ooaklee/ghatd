@@ -4,6 +4,7 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
+	"github.com/ooaklee/ghatd/external/notifier"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -196,6 +197,48 @@ type GetLatestNotificationOverviewsRequest struct {
 
 	// GetLatestNotificationOverviewsRequest carries the underlying notification query parameters.
 	*common.GetLatestNotificationOverviewsRequest
+}
+
+// GetNotifierConfigRequest holds the data needed to fetch notifier config.
+type GetNotifierConfigRequest struct {
+	UserId string
+	*notifier.GetNotifierConfigRequest
+}
+
+// RegisterNotificationAddressRequest holds the data needed to register a notification address for the current user.
+type RegisterNotificationAddressRequest struct {
+	UserId string
+	*notifier.RegisterAddressRequest
+}
+
+// ListNotificationAddressesRequest holds the data needed to list notification addresses for the current user.
+type ListNotificationAddressesRequest struct {
+	UserId string
+	*notifier.ListNotificationAddressesRequest
+}
+
+// DeleteNotificationAddressRequest holds the data needed to delete a notification address for the current user.
+type DeleteNotificationAddressRequest struct {
+	UserId string
+	*notifier.DeleteNotificationAddressRequest
+}
+
+// GetNotificationPreferencesRequest holds the data needed to fetch notification preferences.
+type GetNotificationPreferencesRequest struct {
+	UserId string
+	*notifier.GetNotificationPreferencesRequest
+}
+
+// UpdateNotificationPreferencesRequest holds the data needed to update notification preferences.
+type UpdateNotificationPreferencesRequest struct {
+	UserId string
+	*notifier.UpdateNotificationPreferencesRequest
+}
+
+// NotifyUserRequest holds the data needed for an admin/service notification send.
+type NotifyUserRequest struct {
+	UserId string
+	*notifier.NotifyUserRequest
 }
 
 // GetMyGroupInvitationsRequest holds the data needed to fetch the current user's group invitations.

@@ -11,6 +11,7 @@ import (
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/notifier"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
@@ -72,6 +73,18 @@ type GroupService interface {
 	RejectInvite(ctx context.Context, req *group.RejectInviteRequest) (*group.RejectInviteResponse, error)
 }
 
+// NotifierService expected methods of a valid notifier service.
+type NotifierService interface {
+	RegisterAddress(ctx context.Context, r *notifier.RegisterAddressRequest) (*notifier.RegisterAddressResponse, error)
+	GetActiveAddressesByUserID(ctx context.Context, r *notifier.GetActiveNotificationAddressesRequest) (*notifier.GetActiveNotificationAddressesResponse, error)
+	ListUserAddresses(ctx context.Context, r *notifier.ListNotificationAddressesRequest) (*notifier.ListNotificationAddressesResponse, error)
+	DeleteAddress(ctx context.Context, r *notifier.DeleteNotificationAddressRequest) error
+	GetPreferences(ctx context.Context, r *notifier.GetNotificationPreferencesRequest) (*notifier.GetNotificationPreferencesResponse, error)
+	UpdatePreferences(ctx context.Context, r *notifier.UpdateNotificationPreferencesRequest) (*notifier.UpdateNotificationPreferencesResponse, error)
+	GetConfig(ctx context.Context, r *notifier.GetNotifierConfigRequest) (*notifier.GetNotifierConfigResponse, error)
+	NotifyUser(ctx context.Context, r *notifier.NotifyUserRequest) (*notifier.NotifyUserResponse, error)
+}
+
 // Service holds and manages usermanager business logic
 type Service struct {
 	UserService      UserService
@@ -79,6 +92,7 @@ type Service struct {
 	AuditService     AuditService
 	ContacterService ContacterService
 	GroupService     GroupService
+	NotifierService  NotifierService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -110,6 +124,12 @@ func NewService(r *NewServiceRequest) *Service {
 // WithGroupService adds group service integration
 func (s *Service) WithGroupService(groupSvc GroupService) *Service {
 	s.GroupService = groupSvc
+	return s
+}
+
+// WithNotifierService adds notifier service integration.
+func (s *Service) WithNotifierService(notifierSvc NotifierService) *Service {
+	s.NotifierService = notifierSvc
 	return s
 }
 

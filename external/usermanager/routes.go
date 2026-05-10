@@ -24,6 +24,13 @@ type UsermanagerHandler interface {
 	GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.Request)
 	GetUserGroups(w http.ResponseWriter, r *http.Request)
 	GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request)
+	GetNotifierConfig(w http.ResponseWriter, r *http.Request)
+	RegisterNotificationAddress(w http.ResponseWriter, r *http.Request)
+	ListNotificationAddresses(w http.ResponseWriter, r *http.Request)
+	DeleteNotificationAddress(w http.ResponseWriter, r *http.Request)
+	GetNotificationPreferences(w http.ResponseWriter, r *http.Request)
+	UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request)
+	NotifyUser(w http.ResponseWriter, r *http.Request)
 	GetMyGroupInvitations(w http.ResponseWriter, r *http.Request)
 	AcceptMyGroupInvitation(w http.ResponseWriter, r *http.Request)
 	RejectMyGroupInvitation(w http.ResponseWriter, r *http.Request)
@@ -66,6 +73,9 @@ type AttachRoutesRequest struct {
 
 	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
 	AdminOnlyMiddleware mux.MiddlewareFunc
+
+	// AdminApiTokenOrJWTMiddleware locks endpoints down to either admin API tokens or admin JWT users.
+	AdminApiTokenOrJWTMiddleware mux.MiddlewareFunc
 
 	// ActiveValidApiTokenOrJWTMiddleware is middleware that is used to lock
 	// down endpoints to either tokens or JWT (active)
@@ -123,6 +133,12 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations/{groupID}/accept", request.Handler.AcceptMyGroupInvitation).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations/{groupID}/reject", request.Handler.RejectMyGroupInvitation).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/config", request.Handler.GetNotifierConfig).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses", request.Handler.ListNotificationAddresses).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses", request.Handler.RegisterNotificationAddress).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses/{addressID}", request.Handler.DeleteNotificationAddress).Methods(http.MethodDelete, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/preferences", request.Handler.GetNotificationPreferences).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/preferences", request.Handler.UpdateNotificationPreferences).Methods(http.MethodPatch, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}/groups", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
@@ -141,6 +157,14 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAdminRoutes.HandleFunc("/comms/{id}", request.Handler.UpdateComms).Methods(http.MethodPut, http.MethodOptions)
 	if request.AdminOnlyMiddleware != nil {
 		usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
+	}
+
+	usermanagerAdminServiceRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
+	usermanagerAdminServiceRoutes.HandleFunc("/users/{userId}/notifications", request.Handler.NotifyUser).Methods(http.MethodPost, http.MethodOptions)
+	if request.AdminApiTokenOrJWTMiddleware != nil {
+		usermanagerAdminServiceRoutes.Use(request.AdminApiTokenOrJWTMiddleware)
+	} else if request.AdminOnlyMiddleware != nil {
+		usermanagerAdminServiceRoutes.Use(request.AdminOnlyMiddleware)
 	}
 
 	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()

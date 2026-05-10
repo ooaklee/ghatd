@@ -61,6 +61,9 @@ const (
 	// ErrKeyGroupServiceNotEnabled is returned when group features are requested but GroupService is not configured
 	ErrKeyGroupServiceNotEnabled = "GroupServiceNotEnabled"
 
+	// ErrKeyNotifierServiceNotEnabled is returned when notification features are requested but NotifierService is not configured
+	ErrKeyNotifierServiceNotEnabled = "NotifierServiceNotEnabled"
+
 	// ErrKeyFailedToUpdateGroupOwner returned when updating group owner fails
 	ErrKeyFailedToUpdateGroupOwner = "FailedToUpdateGroupOwner"
 
@@ -69,4 +72,7 @@ const (
 
 	// ErrKeyInvalidMemberID returned when the provided member ID is invalid or empty
 	ErrKeyInvalidMemberID = "InvalidMemberID"
+
+	// UserManagerURIVariableAddressID is the URI variable for notification address ID
+	UserManagerURIVariableAddressID = "addressID"
 )
