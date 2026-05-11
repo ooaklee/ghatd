@@ -47,6 +47,9 @@ The starter package intentionally does not create Redis clients, email
 providers, OAuth providers, payment provider clients, validators, or resource
 cleanup functions. Those remain visible and replaceable in the host application.
 
+For a fuller server-command example that mirrors a GHATD host application
+setup, see [starter/v0 Host Application Setup](starter-v0-host-application-style.md).
+
 ## AttachDefaultRoutes
 
 `AttachDefaultRoutes` is an **optional, ejectable** helper that attaches every
@@ -143,4 +146,5 @@ introduce hidden global state or a validation framework dependency.
 ## Related
 
 - [Package README](../../external/starter/v0/README.md)
+- [Host application setup](starter-v0-host-application-style.md)
 - [Architecture Decision Records](../adr/)

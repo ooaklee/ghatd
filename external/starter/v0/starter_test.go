@@ -3,11 +3,13 @@ package starter
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/billingmanager"
 	"github.com/ooaklee/ghatd/external/emailmanager"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
@@ -131,9 +133,10 @@ func TestConfigValidate(t *testing.T) {
 
 func TestNewStack(t *testing.T) {
 	tests := []struct {
-		name    string
-		request *NewStackRequest
-		wantErr error
+		name          string
+		request       *NewStackRequest
+		wantErr       error
+		wantErrString string
 	}{
 		{
 			name:    "Failure - nil request",
@@ -149,7 +152,7 @@ func TestNewStack(t *testing.T) {
 					LogLevel:    "debug",
 				},
 			},
-			wantErr: nil,
+			wantErrString: "starter/config-invalid-port",
 		},
 		{
 			name: "Success - valid config with no layers yet",
@@ -181,6 +184,9 @@ func TestNewStack(t *testing.T) {
 			}
 			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
 				t.Fatalf("expected %v, got %v", tt.wantErr, err)
+			}
+			if tt.wantErrString != "" && !strings.Contains(err.Error(), tt.wantErrString) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantErrString, err)
 			}
 		})
 	}
@@ -714,6 +720,422 @@ func TestNewMiddleware(t *testing.T) {
 	}
 }
 
+func TestNewStack_LayersPreserved(t *testing.T) {
+	cleanupCalled := false
+	cleanupFn := func(ctx context.Context) error {
+		cleanupCalled = true
+		return nil
+	}
+	repos := validRepositories(t)
+	services := validServices(t)
+	handlers := validHandlers(t)
+	middleware := validMiddleware(t)
+
+	stack, err := NewStack(&NewStackRequest{
+		Config: Config{
+			Port:        8080,
+			Environment: "local",
+			LogLevel:    "debug",
+		},
+		Repositories: repos,
+		Services:     services,
+		Handlers:     handlers,
+		Middleware:   middleware,
+		Cleanup:      cleanupFn,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if stack.Repositories != repos {
+		t.Fatalf("expected supplied repositories to be preserved")
+	}
+	if stack.Services != services {
+		t.Fatalf("expected supplied services to be preserved")
+	}
+	if stack.Handlers != handlers {
+		t.Fatalf("expected supplied handlers to be preserved")
+	}
+	if stack.Middleware != middleware {
+		t.Fatalf("expected supplied middleware to be preserved")
+	}
+	if stack.Cleanup == nil {
+		t.Fatalf("expected supplied cleanup to be preserved")
+	}
+	if err := stack.Cleanup(context.Background()); err != nil {
+		t.Fatalf("expected cleanup to run without error, got %v", err)
+	}
+	if !cleanupCalled {
+		t.Fatalf("expected supplied cleanup to be callable from stack")
+	}
+}
+
+func TestResolvePolicyStore(t *testing.T) {
+	supplied := &fakePolicyStore{}
+
+	tests := []struct {
+		name    string
+		store   policy.PolicyStore
+		cfg     *PolicyConfig
+		wantErr error
+		assert  func(t *testing.T, got policy.PolicyStore)
+	}{
+		{
+			name:  "GOOD - caller-supplied store is returned",
+			store: supplied,
+			assert: func(t *testing.T, got policy.PolicyStore) {
+				if got != supplied {
+					t.Fatalf("expected supplied store to be preserved")
+				}
+			},
+		},
+		{
+			name:    "BAD - both store and config are nil",
+			wantErr: ErrNilPolicyConfig,
+		},
+		{
+			name: "BAD - missing business entity name",
+			cfg: &PolicyConfig{
+				BusinessEntityEmail:     "hello@example.test",
+				BusinessEntityWebsite:   "https://example.test",
+				LegalBusinessEntityName: "Example Ltd",
+			},
+			wantErr: ErrInvalidPolicyConfig,
+		},
+		{
+			name: "BAD - missing business entity email",
+			cfg: &PolicyConfig{
+				BusinessEntityName:      "Example",
+				BusinessEntityWebsite:   "https://example.test",
+				LegalBusinessEntityName: "Example Ltd",
+			},
+			wantErr: ErrInvalidPolicyConfig,
+		},
+		{
+			name: "BAD - missing business entity website",
+			cfg: &PolicyConfig{
+				BusinessEntityName:      "Example",
+				BusinessEntityEmail:     "hello@example.test",
+				LegalBusinessEntityName: "Example Ltd",
+			},
+			wantErr: ErrInvalidPolicyConfig,
+		},
+		{
+			name: "BAD - missing legal business entity name",
+			cfg: &PolicyConfig{
+				BusinessEntityName:    "Example",
+				BusinessEntityEmail:   "hello@example.test",
+				BusinessEntityWebsite: "https://example.test",
+			},
+			wantErr: ErrInvalidPolicyConfig,
+		},
+		{
+			name: "BAD - website without :// with GenerateStaticPolicies",
+			cfg: &PolicyConfig{
+				BusinessEntityName:      "Example",
+				BusinessEntityEmail:     "hello@example.test",
+				BusinessEntityWebsite:   "example.test",
+				LegalBusinessEntityName: "Example Ltd",
+				GenerateStaticPolicies:  true,
+			},
+			wantErr: ErrInvalidPolicyConfig,
+		},
+		{
+			name: "GOOD - website without :// when GenerateStaticPolicies is false",
+			cfg: &PolicyConfig{
+				BusinessEntityName:      "Example",
+				BusinessEntityEmail:     "hello@example.test",
+				BusinessEntityWebsite:   "example.test",
+				LegalBusinessEntityName: "Example Ltd",
+				GenerateStaticPolicies:  false,
+			},
+			assert: func(t *testing.T, got policy.PolicyStore) {
+				if got == nil {
+					t.Fatalf("expected policy store")
+				}
+			},
+		},
+		{
+			name: "GOOD - valid config with GenerateStaticPolicies creates store",
+			cfg: &PolicyConfig{
+				BusinessEntityName:      "Example",
+				BusinessEntityEmail:     "hello@example.test",
+				BusinessEntityWebsite:   "https://example.test",
+				LegalBusinessEntityName: "Example Ltd",
+				GenerateStaticPolicies:  true,
+			},
+			assert: func(t *testing.T, got policy.PolicyStore) {
+				if got == nil {
+					t.Fatalf("expected policy store")
+				}
+			},
+		},
+		{
+			name: "GOOD - valid config without GenerateStaticPolicies",
+			cfg: &PolicyConfig{
+				BusinessEntityName:      "Example",
+				BusinessEntityEmail:     "hello@example.test",
+				BusinessEntityWebsite:   "https://example.test",
+				LegalBusinessEntityName: "Example Ltd",
+			},
+			assert: func(t *testing.T, got policy.PolicyStore) {
+				if got == nil {
+					t.Fatalf("expected policy store")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolvePolicyStore(tt.store, tt.cfg)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("expected %v, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if tt.assert != nil {
+				tt.assert(t, got)
+			}
+		})
+	}
+}
+
+func TestResolvePaymentProviderRegistry(t *testing.T) {
+	suppliedRegistry := paymentprovider.NewProviderRegistry()
+
+	tests := []struct {
+		name      string
+		registry  billingmanager.ProviderRegistry
+		providers []paymentprovider.Provider
+		wantErr   error
+		assert    func(t *testing.T, got billingmanager.ProviderRegistry)
+	}{
+		{
+			name:     "GOOD - supplied registry is returned when no providers",
+			registry: suppliedRegistry,
+			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
+				if got != suppliedRegistry {
+					t.Fatalf("expected supplied registry to be preserved")
+				}
+			},
+		},
+		{
+			name:     "BAD - registry and providers both supplied",
+			registry: suppliedRegistry,
+			providers: []paymentprovider.Provider{
+				fakePaymentProvider{},
+			},
+			wantErr: ErrPaymentProviderRegistryConflict,
+		},
+		{
+			name:      "GOOD - empty providers create empty registry",
+			providers: []paymentprovider.Provider{},
+			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
+				if got == nil {
+					t.Fatalf("expected registry")
+				}
+			},
+		},
+		{
+			name: "GOOD - providers create registry",
+			providers: []paymentprovider.Provider{
+				fakePaymentProvider{},
+			},
+			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
+				if got == nil {
+					t.Fatalf("expected registry")
+				}
+			},
+		},
+		{
+			name: "BAD - nil provider in list",
+			providers: []paymentprovider.Provider{
+				fakePaymentProvider{},
+				nil,
+			},
+			wantErr: ErrNilPaymentProvider,
+		},
+		{
+			name: "GOOD - nil registry with nil providers creates new registry",
+			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
+				if got == nil {
+					t.Fatalf("expected registry")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolvePaymentProviderRegistry(tt.registry, tt.providers)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("expected %v, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if tt.assert != nil {
+				tt.assert(t, got)
+			}
+		})
+	}
+}
+
+func TestResolveHandlerErrorMaps(t *testing.T) {
+	defaults := []reply.ErrorManifest{
+		{errors.New("default"): {Code: "default", Title: "default"}},
+	}
+	custom := []reply.ErrorManifest{
+		{errors.New("custom"): {Code: "custom", Title: "custom"}},
+	}
+	empty := []reply.ErrorManifest{}
+
+	tests := []struct {
+		name    string
+		custom  []reply.ErrorManifest
+		wantLen int
+	}{
+		{
+			name:    "GOOD - nil custom returns defaults",
+			custom:  nil,
+			wantLen: 1,
+		},
+		{
+			name:    "GOOD - custom maps are passed through",
+			custom:  custom,
+			wantLen: 1,
+		},
+		{
+			name:    "GOOD - empty allows explicit clearing",
+			custom:  empty,
+			wantLen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveHandlerErrorMaps(tt.custom, defaults)
+			if got == nil {
+				t.Fatalf("expected non-nil, got nil")
+			}
+			if len(got) != tt.wantLen {
+				t.Fatalf("expected %d entries, got %d", tt.wantLen, len(got))
+			}
+		})
+	}
+}
+
+func TestValidateRepositoriesForServices(t *testing.T) {
+	fullRepos := validRepositories(t)
+	core := fullRepos.Core
+
+	tests := []struct {
+		name    string
+		mutate  func(*Repositories)
+		wantErr error
+	}{
+		{
+			name:    "GOOD - full repositories",
+			wantErr: nil,
+		},
+		{
+			name:    "BAD - nil repositories",
+			mutate:  func(r *Repositories) { *r = Repositories{} },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil APIToken",
+			mutate:  func(r *Repositories) { r.APIToken = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Audit",
+			mutate:  func(r *Repositories) { r.Audit = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Billing",
+			mutate:  func(r *Repositories) { r.Billing = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Contacter",
+			mutate:  func(r *Repositories) { r.Contacter = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Group",
+			mutate:  func(r *Repositories) { r.Group = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Notifier",
+			mutate:  func(r *Repositories) { r.Notifier = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Post",
+			mutate:  func(r *Repositories) { r.Post = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil Pricer",
+			mutate:  func(r *Repositories) { r.Pricer = nil },
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name:    "BAD - nil User",
+			mutate:  func(r *Repositories) { r.User = nil },
+			wantErr: ErrNilRepositories,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repos := &Repositories{
+				Core:      core,
+				APIToken:  fullRepos.APIToken,
+				Audit:     fullRepos.Audit,
+				Billing:   fullRepos.Billing,
+				Contacter: fullRepos.Contacter,
+				Group:     fullRepos.Group,
+				Notifier:  fullRepos.Notifier,
+				Post:      fullRepos.Post,
+				Pricer:    fullRepos.Pricer,
+				User:      fullRepos.User,
+			}
+			if tt.name == "BAD - nil repositories" {
+				err := validateRepositoriesForServices(nil)
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("expected %v, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if tt.mutate != nil {
+				tt.mutate(repos)
+			}
+
+			err := validateRepositoriesForServices(repos)
+			if tt.wantErr == nil {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("expected %v, got %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
 func validRepositories(t *testing.T) *Repositories {
 	t.Helper()
 
@@ -782,6 +1204,17 @@ type fakeValidator struct{}
 
 func (fakeValidator) Validate(s interface{}) error {
 	return nil
+}
+
+type fakePaymentProvider struct{}
+
+func (fakePaymentProvider) GetProviderName() string                                    { return "fake" }
+func (fakePaymentProvider) VerifyWebhook(ctx context.Context, req *http.Request) error { return nil }
+func (fakePaymentProvider) ParsePayload(ctx context.Context, req *http.Request) (*paymentprovider.WebhookPayload, error) {
+	return nil, nil
+}
+func (fakePaymentProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*paymentprovider.SubscriptionInfo, error) {
+	return nil, nil
 }
 
 type fakePolicyStore struct {

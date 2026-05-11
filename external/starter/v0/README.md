@@ -77,6 +77,9 @@ service layer only requires accessmanager's ephemeral-store contract; the
 middleware layer can additionally accept a `HardenedRateLimitStore` override
 when hardened rate limiting uses a different store.
 
+For a fuller GHATD host application server-command walkthrough, see
+[`docs/getting-started/starter-v0-host-application-style.md`](../../../docs/getting-started/starter-v0-host-application-style.md).
+
 `NewStack` intentionally accepts nil layer fields so teams can adopt starter/v0
 incrementally. Treat nil layers as "not wired yet" and check them before use.
 

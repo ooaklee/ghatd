@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -324,4 +325,274 @@ func TestResolveAddr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStartServerWith_ConfiguredServerFields(t *testing.T) {
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	t.Run("GOOD - ReadHeaderTimeout set on server", func(t *testing.T) {
+		var capturedSrv *http.Server
+		doneCh := make(chan struct{})
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "8080",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: time.Second,
+			ReadHeaderTimeout:       10 * time.Second,
+			ListenAndServe: func(s *http.Server) error {
+				capturedSrv = s
+				close(doneCh)
+				return nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		<-doneCh
+		if capturedSrv.ReadHeaderTimeout != 10*time.Second {
+			t.Fatalf("expected ReadHeaderTimeout %v, got %v", 10*time.Second, capturedSrv.ReadHeaderTimeout)
+		}
+		if capturedSrv.Addr != "localhost:8080" {
+			t.Fatalf("expected Addr %q, got %q", "localhost:8080", capturedSrv.Addr)
+		}
+		if capturedSrv.Handler == nil {
+			t.Fatalf("expected Handler to be set")
+		}
+	})
+}
+
+func TestStartServerWith_LogMessages(t *testing.T) {
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	t.Run("GOOD - server listening log message", func(t *testing.T) {
+		messages := make(chan string, 1)
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "5050",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: 100 * time.Millisecond,
+			Log: func(level, message string) {
+				messages <- fmt.Sprintf("%s: %s", level, message)
+			},
+			ListenAndServe: func(s *http.Server) error {
+				return nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		msgs := readLogMessages(t, messages, 1)
+		if !hasLogMessage(msgs, "server listening on") {
+			t.Fatalf("expected 'server listening on' message, got %v", msgs)
+		}
+		if !strings.HasPrefix(msgs[0], "info: ") {
+			t.Fatalf("expected log level 'info', got %q", msgs[0])
+		}
+	})
+
+	t.Run("GOOD - shutdown signal log message", func(t *testing.T) {
+		sigCh := make(chan os.Signal, 1)
+		messages := make(chan string, 2)
+		listenStarted := make(chan struct{})
+		listenCh := make(chan struct{})
+		go func() {
+			<-listenStarted
+			sigCh <- syscall.SIGTERM
+		}()
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "6060",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: 100 * time.Millisecond,
+			Signals:                 sigCh,
+			Log: func(level, message string) {
+				messages <- fmt.Sprintf("%s: %s", level, message)
+			},
+			ListenAndServe: func(s *http.Server) error {
+				close(listenStarted)
+				<-listenCh
+				return nil
+			},
+			Shutdown: func(s *http.Server, ctx context.Context) error {
+				close(listenCh)
+				return nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		msgs := readLogMessages(t, messages, 2)
+		if !hasLogMessage(msgs, "server listening on") {
+			t.Fatalf("expected listening log message, got %v", msgs)
+		}
+		if !hasLogMessage(msgs, "shutting down gracefully") {
+			t.Fatalf("expected shutdown signal log message, got %v", msgs)
+		}
+	})
+
+	t.Run("GOOD - context cancellation log message", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		listenStarted := make(chan struct{})
+		listenCh := make(chan struct{})
+		messages := make(chan string, 2)
+		go func() {
+			<-listenStarted
+			cancel()
+		}()
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "7070",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: 100 * time.Millisecond,
+			Context:                 ctx,
+			Log: func(level, message string) {
+				messages <- fmt.Sprintf("%s: %s", level, message)
+			},
+			ListenAndServe: func(s *http.Server) error {
+				close(listenStarted)
+				<-listenCh
+				return nil
+			},
+			Shutdown: func(s *http.Server, ctx context.Context) error {
+				close(listenCh)
+				return nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		msgs := readLogMessages(t, messages, 2)
+		if !hasLogMessage(msgs, "server listening on") {
+			t.Fatalf("expected listening log message, got %v", msgs)
+		}
+		if !hasLogMessage(msgs, "context done") {
+			t.Fatalf("expected 'context done' log message, got %v", msgs)
+		}
+	})
+}
+
+func TestStartServerWith_ErrorWrapping(t *testing.T) {
+	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	t.Run("BAD - startup error wraps ErrStartupFailure with original error", func(t *testing.T) {
+		origErr := errors.New("port already in use")
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "8080",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: time.Second,
+			ListenAndServe: func(s *http.Server) error {
+				return origErr
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, ErrStartupFailure) {
+			t.Fatalf("expected error to wrap ErrStartupFailure, got %v", err)
+		}
+		if !strings.Contains(err.Error(), origErr.Error()) {
+			t.Fatalf("expected wrapped error to contain %q, got %v", origErr, err)
+		}
+	})
+
+	t.Run("BAD - shutdown error wraps ErrShutdownFailure with original error", func(t *testing.T) {
+		sigCh := make(chan os.Signal, 1)
+		go func() { sigCh <- syscall.SIGTERM }()
+		listenCh := make(chan struct{})
+		shutdownErr := errors.New("database drain failed")
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "8080",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: time.Second,
+			Signals:                 sigCh,
+			ListenAndServe: func(s *http.Server) error {
+				<-listenCh
+				return nil
+			},
+			Shutdown: func(s *http.Server, ctx context.Context) error {
+				close(listenCh)
+				return shutdownErr
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if !errors.Is(err, ErrShutdownFailure) {
+			t.Fatalf("expected error to wrap ErrShutdownFailure, got %v", err)
+		}
+		if !strings.Contains(err.Error(), shutdownErr.Error()) {
+			t.Fatalf("expected wrapped error to contain %q, got %v", shutdownErr, err)
+		}
+	})
+
+	t.Run("GOOD - shutdown deadline context is created with correct timeout", func(t *testing.T) {
+		sigCh := make(chan os.Signal, 1)
+		listenCh := make(chan struct{})
+		var capturedCtx context.Context
+		var shutdownObservedAt time.Time
+		go func() { sigCh <- syscall.SIGTERM }()
+		err := StartServerWith(&StartServerWithRequest{
+			Host:                    "localhost",
+			Port:                    "8080",
+			Handler:                 dummyHandler,
+			GracefulShutdownTimeout: 500 * time.Millisecond,
+			Signals:                 sigCh,
+			ListenAndServe: func(s *http.Server) error {
+				<-listenCh
+				return nil
+			},
+			Shutdown: func(s *http.Server, ctx context.Context) error {
+				shutdownObservedAt = time.Now()
+				capturedCtx = ctx
+				close(listenCh)
+				return nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if capturedCtx == nil {
+			t.Fatal("expected shutdown context to be set")
+		}
+		deadline, ok := capturedCtx.Deadline()
+		if !ok {
+			t.Fatal("expected shutdown context to have deadline")
+		}
+		gotTimeout := deadline.Sub(shutdownObservedAt)
+		if gotTimeout <= 0 || gotTimeout > 500*time.Millisecond {
+			t.Fatalf("expected deadline within 500ms from shutdown, got %v", gotTimeout)
+		}
+	})
+}
+
+func readLogMessages(t *testing.T, messages <-chan string, count int) []string {
+	t.Helper()
+
+	got := make([]string, 0, count)
+	timeout := time.After(500 * time.Millisecond)
+	for len(got) < count {
+		select {
+		case msg := <-messages:
+			got = append(got, msg)
+		case <-timeout:
+			t.Fatalf("expected %d log messages, got %d: %v", count, len(got), got)
+		}
+	}
+
+	return got
+}
+
+func hasLogMessage(messages []string, contains string) bool {
+	for _, msg := range messages {
+		if strings.Contains(msg, contains) {
+			return true
+		}
+	}
+
+	return false
 }
