@@ -78,6 +78,31 @@ starter-owned constructors for common GHATD repositories, services, handlers,
 and middleware. Once that API is stable, the host application's server entry
 point will be migrated to consume `external/starter/v0`.
 
+The second rollout slice adds that wiring layer:
+
+- `NewRepositories` builds the standard Mongo-backed repositories from a core
+  `external/repository.MongoDbRepository`, while allowing per-repository
+  overrides.
+- `NewServices` builds the standard GHATD services and manager services from
+  repositories plus explicit host-provided integrations for ephemeral storage,
+  email, optional audit overrides, OAuth, policy, notifications, auth secrets,
+  and payment providers.
+- `NewHandlers` builds the standard handlers with default error bundles from
+  `external/errormanifest/bundles`, while allowing callers to replace or clear
+  those bundles.
+- `NewMiddleware` wraps the accessmanager middleware suite instead of
+  duplicating all middleware aliases inside starter. It can reuse the
+  service-layer ephemeral store when that store supports hardened rate
+  limiting, or accept an explicit middleware store override.
+- `NewStack` validates `Config` and groups already-built layers. It does not
+  force all layers to be present, so projects can adopt starter/v0
+  incrementally. Nil layers mean "not wired yet" and must be checked before
+  use.
+
+The starter constructors use request structs. This keeps the API readable as
+the dependency list grows and gives host applications named escape hatches for
+custom repositories, configs, error maps, and provider registries.
+
 ## Consequences
 
 New GHATD projects gain a Lazy path that makes the first server easier to
@@ -113,3 +138,14 @@ without forcing immediate changes on projects using v0.
 The next phases must be careful not to hide app-specific decisions too deeply.
 Provider choices, secrets, environment behavior, and cleanup should remain
 visible and replaceable from the host application's server setup.
+
+The second rollout preserves that boundary. Starter creates GHATD-owned
+components, but it still expects the host application to create and own Mongo
+handlers, Redis clients, email providers, OAuth providers, validators, payment
+provider clients, and cleanup behavior.
+
+The initial host application migration follows that shape: it keeps database,
+cache, email provider, payment provider, OAuth provider, push notification
+credential cleanup, router setup, and server shutdown in its own server entry
+point, while delegating GHATD repositories, services, handlers, error bundles,
+and access middleware aliases to `external/starter/v0`.

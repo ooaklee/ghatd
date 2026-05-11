@@ -1,9 +1,9 @@
 # starter/v0 - Ejectable Lazy Composition Layer
 
-`starter/v0` is a **minimal, ejectable composition skeleton** for GHATD. It
+`starter/v0` is a **minimal, ejectable composition layer** for GHATD. It
 defines the top-level container types (`Config`, `Repositories`, `Services`,
-`Handlers`, `Middleware`, `Stack`, `Cleanup`) that reflect how a GHATD
-application is assembled at the `main` package level.
+`Handlers`, `Middleware`, `Stack`, `Cleanup`) and constructors that reflect how
+a GHATD application is assembled at the `main` package level.
 
 ## Philosophy
 
@@ -12,10 +12,10 @@ composition layer over the existing modular GHATD packages
 (`external/usermanager`, `external/accessmanager`, `external/billingmanager`,
 etc.). It exists to:
 
-- **Reserve the shape** - show new contributors what a wiring looks like
-  before they learn every package.
-- **Eliminate boilerplate** - provide a single `Stack` value that can be
-  populated in `main`.
+- **Reserve the shape** - show new contributors what wiring looks like before
+  they learn every package.
+- **Eliminate boilerplate** - provide constructors for the common GHATD
+  repository, service, handler, and middleware layers.
 - **Enable ejection** - when the skeleton no longer fits, copy the files out
   of this package and modify them freely. There is zero framework lock-in.
 
@@ -24,12 +24,32 @@ etc.). It exists to:
 | Type            | Purpose                                                  |
 |-----------------|----------------------------------------------------------|
 | `Config`        | Runtime parameters (port, environment, log level).       |
-| `Repositories`  | Data-layer dependency container.                         |
-| `Services`      | Business-logic dependency container.                     |
+| `Repositories`  | Data-layer dependency container and Mongo repository wiring. |
+| `Services`      | Business-logic dependency container and manager service wiring. |
 | `Handlers`      | HTTP handler dependency container.                       |
-| `Middleware`    | HTTP middleware constructor container.                   |
+| `Middleware`    | Access middleware suite container.                       |
 | `Stack`         | Top-level composition aggregating all containers.        |
 | `Cleanup`       | Graceful resource-release function.                      |
+
+## Constructors
+
+| Function            | Purpose                                      |
+|---------------------|----------------------------------------------|
+| `NewRepositories`   | Builds package repositories from a core Mongo repository, with per-repository overrides. |
+| `NewServices`       | Builds GHATD services from repositories and explicit app integrations such as Redis, email, audit, OAuth, policy, and payment providers. |
+| `NewHandlers`       | Builds standard GHATD handlers with default error bundles and explicit override hooks. |
+| `NewMiddleware`     | Builds the accessmanager middleware suite.   |
+| `NewStack`          | Validates config and groups already-built layers. |
+
+Starter creates GHATD components, but it does not create third-party clients.
+Mongo handlers, Redis stores, email managers, OAuth providers, payment
+providers, validators, and cleanup remain visible in the host application. The
+service layer only requires accessmanager's ephemeral-store contract; the
+middleware layer can additionally accept a `HardenedRateLimitStore` override
+when hardened rate limiting uses a different store.
+
+`NewStack` intentionally accepts nil layer fields so teams can adopt starter/v0
+incrementally. Treat nil layers as "not wired yet" and check them before use.
 
 ## Usage
 
@@ -52,10 +72,66 @@ func main() {
         panic(err)
     }
 
-    stack := starter.Stack{
-        Config: cfg,
-        // Populate remaining fields when wiring is ready.
+    repositories, err := starter.NewRepositories(&starter.NewRepositoriesRequest{
+        Core: coreRepository,
+    })
+    if err != nil {
+        panic(err)
     }
+
+    services, err := starter.NewServices(&starter.NewServicesRequest{
+        Repositories:             repositories,
+        EphemeralStore:            ephemeralStore,
+        EmailManager:              emailManager,
+        AccessTokenSecret:         accessTokenSecret,
+        RefreshTokenSecret:        refreshTokenSecret,
+        StaticPlaceholderUUID:     staticPlaceholderUUID,
+        AuditService:              auditService, // optional; starter creates one when nil.
+        AutoAdminEmailAddressRegex: adminEmailRegex,
+        ValidPostTags:             nil, // nil uses GHATD defaults; []string{} disables them.
+        PolicyConfig: &starter.PolicyConfig{
+            BusinessEntityName:      "Example",
+            BusinessEntityEmail:     "hello@example.test",
+            BusinessEntityWebsite:   "https://example.test",
+            LegalBusinessEntityName: "Example Ltd",
+            GenerateStaticPolicies:  true,
+        },
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    handlers, err := starter.NewHandlers(&starter.NewHandlersRequest{
+        Services:                 services,
+        Validator:                validator,
+        Environment:              cfg.Environment,
+        CookiePrefixAuthToken:    "auth",
+        CookiePrefixRefreshToken: "refresh",
+        CookieDomain:             "example.test",
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    middleware, err := starter.NewMiddleware(&starter.NewMiddlewareRequest{
+        Services:    services,
+        Environment: cfg.Environment,
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    stack, err := starter.NewStack(&starter.NewStackRequest{
+        Config:       cfg,
+        Repositories: repositories,
+        Services:     services,
+        Handlers:     handlers,
+        Middleware:   middleware,
+    })
+    if err != nil {
+        panic(err)
+    }
+
     defer func() {
         if stack.Cleanup != nil {
             _ = stack.Cleanup(context.Background())
