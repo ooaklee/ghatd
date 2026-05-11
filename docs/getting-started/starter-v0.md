@@ -22,6 +22,7 @@ Instead it reserves the shape so that:
 | `Config`     | struct         | Runtime parameters (`Port`, `Environment`, `LogLevel`). |
 | `Stack`      | struct         | Top-level composition of every application layer.  |
 | `Cleanup`    | func type      | `func(context.Context) error` for graceful teardown.|
+| `CleanupGroup` | struct      | Aggregates multiple `Cleanup` functions into one, with `Add` and `Run(ctx)`.|
 | `Repositories` | struct       | Data-layer dependency container.                   |
 | `Services`   | struct         | Business-logic dependency container.               |
 | `Handlers`   | struct         | HTTP handler dependency container.                 |
@@ -39,8 +40,25 @@ The common Lazy path is:
 6. Group the results with `starter.NewStack`.
 
 The starter package intentionally does not create Redis clients, email
-providers, OAuth providers, payment provider clients, validators, or cleanup
-logic. Those remain visible and replaceable in the host application.
+providers, OAuth providers, payment provider clients, validators, or resource
+cleanup functions. Those remain visible and replaceable in the host application.
+
+## CleanupGroup
+
+`CleanupGroup` aggregates multiple host-owned `Cleanup` functions (for example
+database close, Redis close, temporary credential removal, or background
+goroutine cancellation) into a single `Cleanup`.
+
+- `Add(fns ...Cleanup)` appends non-nil cleanups; nil entries are ignored.
+- `Run(ctx)` invokes every registered cleanup in insertion order. Every
+  cleanup runs even when earlier ones fail. All errors are collected and joined
+  with `errors.Join`.
+- `Run` satisfies the `Cleanup` signature, so it can be passed directly as
+  `Stack.Cleanup` via `cleanupGroup.Run`.
+
+HTTP server graceful shutdown is still runtime lifecycle wiring. A future
+`external/http/server` helper can own that flow without making starter/v0 a
+runtime container.
 
 ## Escape Hatches
 

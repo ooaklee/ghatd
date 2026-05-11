@@ -30,6 +30,7 @@ etc.). It exists to:
 | `Middleware`    | Access middleware suite container.                       |
 | `Stack`         | Top-level composition aggregating all containers.        |
 | `Cleanup`       | Graceful resource-release function.                      |
+| `CleanupGroup`  | Aggregates multiple `Cleanup` functions into one.        |
 
 ## Constructors
 
@@ -40,6 +41,32 @@ etc.). It exists to:
 | `NewHandlers`       | Builds standard GHATD handlers with default error bundles and explicit override hooks. |
 | `NewMiddleware`     | Builds the accessmanager middleware suite.   |
 | `NewStack`          | Validates config and groups already-built layers. |
+
+## CleanupGroup
+
+`CleanupGroup` aggregates multiple `Cleanup` functions into a single `Cleanup`.
+It is useful when multiple resources (database connections, Redis clients,
+temporary credential files, background goroutines) need independent teardown.
+
+```go
+var cleanupGroup starter.CleanupGroup
+cleanupGroup.Add(mongoHandler.Close)
+cleanupGroup.Add(func(ctx context.Context) error {
+    return redisClient.Close()
+})
+cleanupGroup.Add(nil) // silently ignored
+
+stack, _ := starter.NewStack(&starter.NewStackRequest{
+    Config:   cfg,
+    Cleanup:  cleanupGroup.Run, // assignable to Stack.Cleanup
+})
+```
+
+- `Add(fns ...Cleanup)` appends non-nil cleanups in insertion order.
+- `Run(ctx)` invokes every registered cleanup, collects all errors with
+  `errors.Join`, and always runs every cleanup even when earlier ones fail.
+- `CleanupGroup` implements the `Cleanup` signature via its `Run` method, so
+  it can be assigned directly to `Stack.Cleanup`.
 
 Starter creates GHATD components, but it does not create third-party clients.
 Mongo handlers, Redis stores, email managers, OAuth providers, payment

@@ -139,6 +139,18 @@ The next phases must be careful not to hide app-specific decisions too deeply.
 Provider choices, secrets, environment behavior, and cleanup should remain
 visible and replaceable from the host application's server setup.
 
+The `CleanupGroup` helper (added in a follow-up) provides a lightweight way to
+aggregate multiple `Cleanup` functions, one per resource, without hand-rolling
+error collection. It remains consistent with the "cleanup lives in the
+host application" rule, because the host still owns the individual `Cleanup`
+functions; `CleanupGroup` is only a composition helper that runs them all and
+joins errors. Its `Run` method satisfies the `Cleanup` type so it can be
+assigned directly to `Stack.Cleanup`.
+
+HTTP server graceful shutdown remains separate runtime lifecycle wiring. It may
+move later to `external/http/server`, but it should not become a
+`starter/v0` service concern.
+
 The second rollout preserves that boundary. Starter creates GHATD-owned
 components, but it still expects the host application to create and own Mongo
 handlers, Redis clients, email providers, OAuth providers, validators, payment
