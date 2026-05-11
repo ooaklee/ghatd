@@ -27,6 +27,7 @@ Instead it reserves the shape so that:
 | `Services`   | struct         | Business-logic dependency container.               |
 | `Handlers`   | struct         | HTTP handler dependency container.                 |
 | `Middleware` | struct         | Accessmanager middleware suite container.          |
+| `RouteGroup` | string type    | Typed enum identifying a standard API route group for `AttachDefaultRoutes`. |
 
 ## Constructor Flow
 
@@ -38,10 +39,60 @@ The common Lazy path is:
 4. Call `starter.NewHandlers` with services and a validator.
 5. Call `starter.NewMiddleware` with services.
 6. Group the results with `starter.NewStack`.
+7. (Optional) Call `starter.AttachDefaultRoutes` with the stack and router to
+   attach every standard GHATD API route group in one call, or attach routes
+   individually per package.
 
 The starter package intentionally does not create Redis clients, email
 providers, OAuth providers, payment provider clients, validators, or resource
 cleanup functions. Those remain visible and replaceable in the host application.
+
+## AttachDefaultRoutes
+
+`AttachDefaultRoutes` is an **optional, ejectable** helper that attaches every
+standard GHATD API route group (`/api/v1/pricing`, `/api/v2/users`,
+`/api/v1/groups`, `/api/v1/ams`, `/api/v1/ums`, `/api/v1/cms`, `/api/v1/bms`,
+`/api/v1/policies`) to a `*router.Router` using the handlers and middleware
+from a `Stack`. It does **not** attach SPA routes — those remain the host's
+responsibility.
+
+### Usage
+
+```go
+err := starter.AttachDefaultRoutes(&starter.AttachDefaultRoutesRequest{
+    Router: httpRouter,
+    Stack:  stack,
+    Skip:   []starter.RouteGroup{starter.RouteGroupUserManager},
+})
+```
+
+### RouteGroup constants
+
+| Constant                              | Route prefix        |
+|---------------------------------------|---------------------|
+| `RouteGroupPricer`                    | `/api/v1/pricing`   |
+| `RouteGroupPolicy`                    | `/api/v1/policies`  |
+| `RouteGroupUser`                      | `/api/v2/users`     |
+| `RouteGroupGroup`                     | `/api/v1/groups`    |
+| `RouteGroupAccessManager`             | `/api/v1/ams`       |
+| `RouteGroupUserManager`               | `/api/v1/ums`       |
+| `RouteGroupContentManager`            | `/api/v1/cms`       |
+| `RouteGroupBillingManager`            | `/api/v1/bms`       |
+
+### Skip semantics
+
+- Skipped groups are not attached and their handler may be nil.
+- Middleware validation considers only non-skipped groups. Shared middleware
+  is still required when at least one non-skipped group depends on it.
+- If the remaining groups do not need middleware, `Stack.Middleware` may be nil.
+- Unknown `RouteGroup` values fail validation so typos do not silently attach routes.
+- Skipping all groups is valid and attaches no routes.
+
+### Ejection
+
+`AttachDefaultRoutes` calls the same per-package `AttachRoutes` functions that
+host applications call directly. If the default wiring no longer fits, replace
+the single call with per-package calls or copy the function body.
 
 ## CleanupGroup
 

@@ -31,16 +31,18 @@ etc.). It exists to:
 | `Stack`         | Top-level composition aggregating all containers.        |
 | `Cleanup`       | Graceful resource-release function.                      |
 | `CleanupGroup`  | Aggregates multiple `Cleanup` functions into one.        |
+| `RouteGroup`    | String enum identifying a standard API route group for `AttachDefaultRoutes`. |
 
 ## Constructors
 
-| Function            | Purpose                                      |
-|---------------------|----------------------------------------------|
-| `NewRepositories`   | Builds package repositories from a core Mongo repository, with per-repository overrides. |
-| `NewServices`       | Builds GHATD services from repositories and explicit app integrations such as Redis, email, audit, OAuth, policy, and payment providers. |
-| `NewHandlers`       | Builds standard GHATD handlers with default error bundles and explicit override hooks. |
-| `NewMiddleware`     | Builds the accessmanager middleware suite.   |
-| `NewStack`          | Validates config and groups already-built layers. |
+| Function               | Purpose                                      |
+|------------------------|----------------------------------------------|
+| `NewRepositories`      | Builds package repositories from a core Mongo repository, with per-repository overrides. |
+| `NewServices`          | Builds GHATD services from repositories and explicit app integrations such as Redis, email, audit, OAuth, policy, and payment providers. |
+| `NewHandlers`          | Builds standard GHATD handlers with default error bundles and explicit override hooks. |
+| `NewMiddleware`        | Builds the accessmanager middleware suite.   |
+| `NewStack`             | Validates config and groups already-built layers. |
+| `AttachDefaultRoutes`  | Attaches standard GHATD API routes from `Stack.Handlers` and `Stack.Middleware` to a router. |
 
 ## CleanupGroup
 
@@ -166,6 +168,53 @@ func main() {
     }()
 }
 ```
+
+## AttachDefaultRoutes
+
+`AttachDefaultRoutes` attaches every standard GHATD API route group to a
+`*router.Router` in a single call, using the handlers and middleware from a
+`Stack`. It eliminates the per-package `AttachRoutes` boilerplate while
+remaining fully ejectable.
+
+```go
+err := starter.AttachDefaultRoutes(&starter.AttachDefaultRoutesRequest{
+    Router: httpRouter,
+    Stack:  stack,
+    Skip:   []starter.RouteGroup{starter.RouteGroupUserManager},
+})
+if err != nil {
+    // handle validation error
+}
+```
+
+### RouteGroup constants
+
+| Constant                              | Routes attached                                      |
+|---------------------------------------|------------------------------------------------------|
+| `RouteGroupPricer`                    | `/api/v1/pricing/*`                                  |
+| `RouteGroupPolicy`                    | `/api/v1/policies/*`                                 |
+| `RouteGroupUser`                      | `/api/v2/users/*`                                    |
+| `RouteGroupGroup`                     | `/api/v1/groups/*`                                   |
+| `RouteGroupAccessManager`             | `/api/v1/ams/*`                                      |
+| `RouteGroupUserManager`               | `/api/v1/ums/*`                                      |
+| `RouteGroupContentManager`            | `/api/v1/cms/*`                                      |
+| `RouteGroupBillingManager`            | `/api/v1/bms/*`                                      |
+
+### Skip semantics
+
+Groups listed in `Skip` are omitted entirely. A skipped group's handler may be
+nil — validation only enforces non-nil handlers for non-skipped groups.
+Middleware is validated based on the union of all remaining (non-skipped)
+groups, so a shared middleware is still required when at least one non-skipped
+group depends on it. If the remaining groups do not need access middleware
+(for example, policy-only routing), `Stack.Middleware` may be nil. Unknown
+`RouteGroup` values fail validation so typos do not silently attach routes.
+
+### What AttachDefaultRoutes does NOT attach
+
+- SPA routes (catch-all `/` handler) — these remain host-owned.
+- Auth verify/CORS middleware — the host owns router bootstrap and middleware.
+- Router bootstrap — the host creates the `*router.Router` and starts the HTTP server.
 
 ## Ejection
 

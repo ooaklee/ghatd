@@ -103,6 +103,31 @@ The starter constructors use request structs. This keeps the API readable as
 the dependency list grows and gives host applications named escape hatches for
 custom repositories, configs, error maps, and provider registries.
 
+### Phase 3 — Route Attachment Helper (AttachDefaultRoutes)
+
+The third rollout slice adds `AttachDefaultRoutes`, an optional helper that
+attaches every standard GHATD API route group in a single call:
+
+- `RouteGroup` is a typed string enum with constants for each package:
+  `pricer`, `policy`, `user`, `group`, `accessmanager`, `usermanager`,
+  `contentmanager`, `billingmanager`.
+- `AttachDefaultRoutesRequest` holds a `*router.Router`, `*Stack`, and
+  `Skip []RouteGroup`.
+- `AttachDefaultRoutes` calls each non-skipped package's `AttachRoutes`
+  function with the corresponding handler from `Stack.Handlers` and
+  middleware from `Stack.Middleware.AccessManager`.
+- Validation enforces non-nil handlers for non-skipped groups and non-nil
+  middleware for every middleware function required by at least one
+  non-skipped group. Skipped groups may have nil handlers, and a remaining
+  policy-only/default subset may omit access middleware entirely.
+- Unknown `RouteGroup` values fail validation instead of being silently ignored.
+- SPA routes, auth verify/CORS middleware, and router bootstrap remain
+  host-owned — `AttachDefaultRoutes` attaches only API routes.
+
+This preserves ejectability: if the default wiring no longer fits, replace
+the single `AttachDefaultRoutes` call with per-package `AttachRoutes` calls
+or copy the function body.
+
 ## Consequences
 
 New GHATD projects gain a Lazy path that makes the first server easier to
