@@ -107,9 +107,9 @@ goroutine cancellation) into a single `Cleanup`.
 - `Run` satisfies the `Cleanup` signature, so it can be passed directly as
   `Stack.Cleanup` via `cleanupGroup.Run`.
 
-HTTP server graceful shutdown is still runtime lifecycle wiring. A future
-`external/http/server` helper can own that flow without making starter/v0 a
-runtime container.
+HTTP server graceful shutdown is handled by `external/http/server` (an
+ejectable lifecycle helper with `StartServerWith`) and is not a
+`starter/v0` service concern per se.
 
 ## Escape Hatches
 

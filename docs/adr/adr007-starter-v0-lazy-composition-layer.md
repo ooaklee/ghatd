@@ -172,8 +172,8 @@ functions; `CleanupGroup` is only a composition helper that runs them all and
 joins errors. Its `Run` method satisfies the `Cleanup` type so it can be
 assigned directly to `Stack.Cleanup`.
 
-HTTP server graceful shutdown remains separate runtime lifecycle wiring. It may
-move later to `external/http/server`, but it should not become a
+HTTP server graceful shutdown lives in `external/http/server` as an
+ejectable lifecycle helper (`StartServerWith`) and is not a
 `starter/v0` service concern.
 
 The second rollout preserves that boundary. Starter creates GHATD-owned

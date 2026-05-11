@@ -59,6 +59,7 @@ A complete billing solution split into three composable packages for maximum fle
 - **[Notifier](./external/notifier/)** - Push notification registration, preferences, and delivery
 - **[Reminder](./docs/getting-started/reminder/)** - User-owned scheduled reminders with target-based lookups and execution tracking
 - **[Repository](./external/repository/)** - MongoDB repository patterns and utilities
+- **[Server](./external/http/server/)** - Ejectable HTTP server lifecycle helper with graceful shutdown
 - **[Starter/v0](./external/starter/v0/)** - Ejectable lazy composition layer for GHATD application wiring
 - **[Error Manifest](./external/errormanifest/)** - Cross-package error mapping and bundle composition
 - **`TBC`**
