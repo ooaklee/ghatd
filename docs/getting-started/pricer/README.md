@@ -1,6 +1,6 @@
 # Pricer
 
-Pricer is the **source of truth for the pricing catalog**. It defines plans, feature entitlements, monetary costs, and provider references that describe what your product costs and what end users get at each tier. The `pricer` package provides a full CRUD API for managing these records, and is designed to be composed into your application or exposed through the Billing Manager Service (BMS) for read-only access by your frontend or Companion app.
+Pricer is the **source of truth for the pricing catalogue**. It defines plans, feature entitlements, monetary costs, and provider references that describe what your product costs and what end users get at each tier. The `pricer` package provides a full CRUD API for managing these records, and is designed to be composed into your application or exposed through the Billing Manager Service (BMS) for read-only access by your frontend or Companion app.
 
 ## Core Packages Overview
 
@@ -8,7 +8,7 @@ The pricer package is self-contained, but integrates with other packages in the 
 
 | Package | Purpose | Role with Pricer |
 |---|---|---|
-| `pricer` | Source of truth for pricing plans, features, costs, and provider refs. | Core catalog management |
+| `pricer` | Source of truth for pricing plans, features, costs, and provider refs. | Core catalogue management |
 | `billingmanager` | Exposes read-only pricing endpoints for consumer-facing apps. | External consumers (Companion app) |
 
 ## Data Model Overview
@@ -24,7 +24,7 @@ A price plan is a named tier or product offering. It has a lifecycle, one or mor
 | `name` | `string` | Display name |
 | `description` | `string` | Optional plan description |
 | `status` | `string` | Lifecycle state (see [Lifecycle](#lifecycle)) |
-| `features` | `[]PlanFeatureRef` | Ordered feature catalog references |
+| `features` | `[]PlanFeatureRef` | Ordered feature catalogue references |
 | `costs` | `[]PriceCost` | Monetary costs attached to this plan |
 | `discounts` | `[]PriceDiscount` | Optional typed discount rules (amount or percent) |
 | `payment_terms` | `PricePaymentTerms` | Optional payment terms (collection method, due days) |
@@ -38,7 +38,7 @@ A price plan is a named tier or product offering. It has a lifecycle, one or mor
 
 ### Price Feature
 
-A price feature is a reusable catalog item describing a capability or entitlement that can be included in plans.
+A price feature is a reusable catalogue item describing a capability or entitlement that can be included in plans.
 
 | Field | Type | Description |
 |---|---|---|
@@ -53,7 +53,7 @@ A price feature is a reusable catalog item describing a capability or entitlemen
 
 ### Plan Feature Reference
 
-Links a feature catalog item to a plan, with plan-specific overrides.
+Links a feature catalogue item to a plan, with plan-specific overrides.
 
 | Field | Type | Description |
 |---|---|---|
@@ -380,7 +380,7 @@ GET /api/v1/bms/pricing/plans/pro
 
 ### GET `/api/v1/bms/pricing/features`
 
-Returns a paginated list of published feature catalog items.
+Returns a paginated list of published feature catalogue items.
 
 #### Query Parameters
 
@@ -516,7 +516,7 @@ pricerRepository := pricer.NewRepository(coreRepository)
 pricerService := pricer.NewService(pricerRepository)
 ```
 
-### 3. Create Feature Catalog Items
+### 3. Create Feature Catalogue Items
 
 ```go
 ctx := context.Background()
@@ -690,7 +690,7 @@ migrate.Register(
 
 Seed migrations are also provided:
 
-- `external/pricer/migrations/seed_pricing.go` inserts a starter feature catalog and starter plan.
+- `external/pricer/migrations/seed_pricing.go` inserts a starter feature catalogue and starter plan.
 - `external/pricer/migrations/seed_test_plans.go` inserts Fireflies-style comparison plans (`free`, `pro`, `enterprise`) for pricing-card E2E verification.
 
 ## Local E2E Testing
@@ -740,7 +740,7 @@ Then rerun the same test without `-update` to confirm the new fixture matches ru
 
 Here's a list of areas for improvement in future iterations of `pricer`. These suggestions are not prioritised.
 
-### Catalog Features
+### Catalogue Features
 - [ ] Plan versioning / change history
 - [ ] Plan comparison matrix endpoint
 - [ ] Plan tags and categories

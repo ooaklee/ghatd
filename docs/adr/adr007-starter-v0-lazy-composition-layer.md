@@ -26,7 +26,7 @@ and wire many concerns before it has a working server:
 - Access middleware aliases for route attachment.
 - Handler construction and route attachment.
 - Provider setup for email, OAuth, billing, notifications, Redis, and MongoDB.
-- Cleanup behavior for long-lived clients and temporary credential files.
+- Cleanup behaviour for long-lived clients and temporary credential files.
 
 The immediate pain point was MongoDB URI construction. Both standard MongoDB
 and Atlas connection strings were being assembled inline with `fmt.Sprintf`,
@@ -46,7 +46,7 @@ The starter rollout will follow these rules:
 
 1. Core packages remain independently usable.
 2. Starter code composes existing packages; it does not reimplement domain
-   behavior.
+   behaviour.
 3. Starter exposes the real components it creates through named containers
    such as `Repositories`, `Services`, `Handlers`, `Middleware`, and `Stack`.
 4. Starter users can replace individual components or copy the starter wiring
@@ -137,7 +137,7 @@ The starter package creates a clear place for common application wiring, which
 should reduce copy-paste setup in host projects and lower cognitive load for
 new contributors.
 
-Core packages remain the source of truth for behavior. This keeps package
+Core packages remain the source of truth for behaviour. This keeps package
 ownership clear and avoids a monolithic starter package that becomes a second
 implementation of GHATD.
 
@@ -153,7 +153,7 @@ its table tests together.
 
 MongoDB URI helpers improve safety by URL-encoding credentials and query
 parameters. Atlas URIs with an empty `appName` omit the empty query parameter
-instead of producing `appName=`, which is a small behavioral improvement over
+instead of producing `appName=`, which is a small behavioural improvement over
 the previous inline string formatting.
 
 Starter/v0 is intentionally versioned in its import path. If the starter API
@@ -161,7 +161,7 @@ needs a breaking redesign later, a future `external/starter/v1` can be added
 without forcing immediate changes on projects using v0.
 
 The next phases must be careful not to hide app-specific decisions too deeply.
-Provider choices, secrets, environment behavior, and cleanup should remain
+Provider choices, secrets, environment behaviour, and cleanup should remain
 visible and replaceable from the host application's server setup.
 
 The `CleanupGroup` helper (added in a follow-up) provides a lightweight way to
@@ -179,7 +179,7 @@ ejectable lifecycle helper (`StartServerWith`) and is not a
 The second rollout preserves that boundary. Starter creates GHATD-owned
 components, but it still expects the host application to create and own Mongo
 handlers, Redis clients, email providers, OAuth providers, validators, payment
-provider clients, and cleanup behavior.
+provider clients, and cleanup behaviour.
 
 The initial host application migration follows that shape: it keeps database,
 cache, email provider, payment provider, OAuth provider, push notification

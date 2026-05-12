@@ -4,19 +4,20 @@
 
 # GHAT(D)
 
-GHAT(D) is an open-source, opinionated, and free full-stack web application framework based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI, which originally formed the foundational stack. Over time, for improved usability, it has also been extended to support most Vite-compatible frameworks (tested with Vue). The aim is to make GHAT(D) a solid foundation for creating highly portable, scalable, and performant full-stack projects. Whether you need just a backend, a landing page, or even a blog (coming soon), you can still utilise the GHAT(D) framework.
+GHAT(D) is an open-source, opinionated, and free full-stack web application foundation based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI, which originally formed the foundational stack. Over time, for improved usability, it has also been extended to support most Vite-compatible front-end stacks (tested with Vue). The aim is to make GHAT(D) a solid base for creating highly portable, scalable, and performant full-stack projects. Whether you need just a backend, a landing page, or even a blog (coming soon), you can still utilise GHAT(D) without committing to a hidden application container.
 
-We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "builder blocks" which we call `Details`. A `Detail` is an independent application that can function both within the GHAT(D) framework and on their own. At present, we only support `api` and `web` typed `Details`.
+We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "builder blocks" which we call `Details`. A `Detail` is an independent application that can function both within a GHAT(D) project and on its own. At present, we only support `api`, `web`, `web-vite` (WIP) typed `Details`.
 
 ## Motivation
 
-GHAT(D) is a hobby project I work on in my spare time. This project is designed to provide a good "getting started" framework for people like me who are interested in Go, APIs, and Web Applications and want a consistent base & standards on which to build projects. I hope that this framework can be used as a foundation for building out many awesome projects and initiatives.
+GHAT(D) is a hobby project I work on in my spare time. It is designed to provide a friendly starting point for people like me who are interested in Go, APIs, and web applications, and who want a consistent foundation and shared standards to build from. I hope GHAT(D) can serve as an ejectable base for many awesome projects and initiatives.
+
 
 I also aim to use this project as a learning opportunity, to improve my understanding of and share my knowledge of lightweight frontend libraries, highly portable full-stack alternatives, and cost-effective infrastructure solutions for full-scale products. 
 
 As we develop this project, I want to also create tutorials/guides for those who want to integrate it with other technologies, such as `rpc`,  `graphql`,  `websocket`, and others.
 
-I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I am aspiring to create a standardised framework that helps those curious (about Go, APIs, hubby projects, and web app development) to turn their ideas/ hobbies into tangible product(s) that they can demo and even ship.
+I am a platform engineer by trade, so I do not promise perfect code by any stretch of the imagination (especially with the front end - so please support and contribute). Instead, I am aspiring to create a standardised project base that helps those curious (about Go, APIs, hobby projects, and web app development) to turn their ideas/ hobbies into tangible product(s) that they can demo and even ship.
 
 This will be an exciting experience, and I look forward to building out this project with you all and sharing my progress and knowledge as it matures.
 

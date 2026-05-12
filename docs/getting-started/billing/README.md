@@ -335,7 +335,7 @@ Alice buys a subscription for bob@example.com
 
 **3. Corporate Bulk Purchases**
 ```
-A company admin buys 10 licenses
+A company admin buys 10 licences
 → Provides a list of employee emails
 → Subscriptions are created for each email
 → Employees sign up at their convenience
