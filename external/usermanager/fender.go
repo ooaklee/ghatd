@@ -687,6 +687,31 @@ func MapRequestToNotifyUserRequest(r *http.Request, validator UsermanagerValidat
 	return &parsedRequest, nil
 }
 
+// MapRequestToNotifyUsersRequest maps incoming admin notification dispatch request to the correct struct.
+func MapRequestToNotifyUsersRequest(r *http.Request, validator UsermanagerValidator) (*NotifyUsersRequest, error) {
+	var parsedRequest NotifyUsersRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	baseRequest := notifier.NotifyUsersRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, notifier.ErrInvalidNotificationAddressBody
+	}
+
+	parsedRequest.NotifyUsersRequest = &baseRequest
+	if err := validateParsedRequest(parsedRequest, validator); err != nil {
+		log.Error("notify-users-request-validation-failed", zap.Error(err))
+		return nil, ErrRequestFailedValidation
+	}
+
+	return &parsedRequest, nil
+}
+
 // MapRequestToGetMyGroupInvitationsRequest maps incoming my-group-invitations request to the correct struct.
 func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator UsermanagerValidator) (*GetMyGroupInvitationsRequest, error) {
 	var parsedRequest GetMyGroupInvitationsRequest

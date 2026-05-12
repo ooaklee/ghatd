@@ -31,6 +31,7 @@ type UsermanagerHandler interface {
 	GetNotificationPreferences(w http.ResponseWriter, r *http.Request)
 	UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request)
 	NotifyUser(w http.ResponseWriter, r *http.Request)
+	NotifyUsers(w http.ResponseWriter, r *http.Request)
 	GetMyGroupInvitations(w http.ResponseWriter, r *http.Request)
 	AcceptMyGroupInvitation(w http.ResponseWriter, r *http.Request)
 	RejectMyGroupInvitation(w http.ResponseWriter, r *http.Request)
@@ -185,6 +186,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	usermanagerAdminServiceRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	usermanagerAdminServiceRoutes.HandleFunc("/users/{userId}/notifications", request.Handler.NotifyUser).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/notifications", request.Handler.NotifyUsers).Methods(http.MethodPost, http.MethodOptions)
 	usermanagerAdminServiceRoutes.HandleFunc("/reminders", request.Handler.ListReminders).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminServiceRoutes.HandleFunc("/reminders/stats", request.Handler.GetReminderStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminServiceRoutes.HandleFunc("/reminders/due", request.Handler.GetDueReminders).Methods(http.MethodGet, http.MethodOptions)

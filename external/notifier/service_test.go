@@ -10,13 +10,14 @@ import (
 // fakeRepository is a test double that records calls and returns
 // canned responses, letting us test the Service without a real MongoDB.
 type fakeRepository struct {
-	addresses    []NotificationAddress
-	preferences  *NotificationPreferences
-	upserted     *NotificationAddress
-	deletedID    string
-	disabledHash string
-	listRequest  *ListNotificationAddressesRequest
-	countRequest *ListNotificationAddressesRequest
+	addresses           []NotificationAddress
+	preferences         *NotificationPreferences
+	preferencesByUserID map[string]*NotificationPreferences
+	upserted            *NotificationAddress
+	deletedID           string
+	disabledHash        string
+	listRequest         *ListNotificationAddressesRequest
+	countRequest        *ListNotificationAddressesRequest
 
 	disableError error
 }
@@ -27,7 +28,11 @@ func (r *fakeRepository) UpsertAddress(ctx context.Context, address *Notificatio
 }
 
 func (r *fakeRepository) GetActiveAddressesByUserID(ctx context.Context, userID string, channels ...NotificationChannel) ([]NotificationAddress, error) {
-	return r.addresses, nil
+	return filterFakeActiveAddresses(r.addresses, userID, channels...), nil
+}
+
+func (r *fakeRepository) GetAllActiveAddresses(ctx context.Context, channels ...NotificationChannel) ([]NotificationAddress, error) {
+	return filterFakeActiveAddresses(r.addresses, "", channels...), nil
 }
 
 func (r *fakeRepository) GetAddressesByUserID(ctx context.Context, userID string) ([]NotificationAddress, error) {
@@ -62,6 +67,13 @@ func (r *fakeRepository) DisableAddressByHash(ctx context.Context, hash string) 
 }
 
 func (r *fakeRepository) GetPreferencesByUserID(ctx context.Context, userID string) (*NotificationPreferences, error) {
+	if r.preferencesByUserID != nil {
+		preferences := r.preferencesByUserID[userID]
+		if preferences == nil {
+			return nil, ErrNotificationAddressNotFound
+		}
+		return preferences, nil
+	}
 	if r.preferences == nil {
 		return nil, ErrNotificationAddressNotFound
 	}
@@ -75,6 +87,28 @@ func (r *fakeRepository) UpsertPreferences(ctx context.Context, preferences *Not
 
 func (r *fakeRepository) DeletePreferencesByUserID(ctx context.Context, userID string) error {
 	return nil
+}
+
+func filterFakeActiveAddresses(addresses []NotificationAddress, userID string, channels ...NotificationChannel) []NotificationAddress {
+	channelSet := map[NotificationChannel]bool{}
+	for _, channel := range channels {
+		channelSet[channel.Normalised()] = true
+	}
+
+	filtered := []NotificationAddress{}
+	for _, address := range addresses {
+		if address.Status != NotificationAddressStatusActive {
+			continue
+		}
+		if userID != "" && address.UserID != userID {
+			continue
+		}
+		if len(channelSet) > 0 && !channelSet[address.Channel.Normalised()] {
+			continue
+		}
+		filtered = append(filtered, address)
+	}
+	return filtered
 }
 
 // fakeSender is a test double for ChannelSender that records how many
@@ -681,5 +715,235 @@ func TestNotifyUser_CleanupCountDoesNotLeakBetweenSends(t *testing.T) {
 	}
 	if !secondResponse.Results[0].Sent {
 		t.Fatalf("expected second result to be sent, got %#v", secondResponse.Results[0])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NotifyUsers tests
+// ---------------------------------------------------------------------------
+
+func TestNotifyUsers_TargetedMultiUser(t *testing.T) {
+	sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
+	repository := &fakeRepository{
+		addresses: []NotificationAddress{
+			{
+				ID: "addr-1", UserID: "user-1", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive,
+				WebPush: &WebPushAddress{Endpoint: "https://push.example/1", Keys: WebPushKeys{Auth: "a", P256DH: "k"}},
+			},
+			{
+				ID: "addr-2", UserID: "user-2", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive,
+				WebPush: &WebPushAddress{Endpoint: "https://push.example/2", Keys: WebPushKeys{Auth: "a", P256DH: "k"}},
+			},
+		},
+		preferences: &NotificationPreferences{
+			UserID:  "user-1",
+			Enabled: true,
+			Channels: map[string]bool{
+				string(NotificationChannelWebPush): true,
+			},
+		},
+	}
+	service := NewService(&NewServiceRequest{
+		Repository: repository,
+		Senders:    []ChannelSender{sender},
+	})
+
+	response, err := service.NotifyUsers(context.Background(), &NotifyUsersRequest{
+		UserIDs: []string{"user-1", "user-2"},
+		Title:   "Hello",
+		Message: "World",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(response.Results) != 2 {
+		t.Fatalf("expected 2 user results, got %d", len(response.Results))
+	}
+	if response.Results[0].UserID != "user-1" || response.Results[1].UserID != "user-2" {
+		t.Fatalf("unexpected user order: %v", response.Results)
+	}
+	if len(response.Results[0].Results) != 1 || !response.Results[0].Results[0].Sent {
+		t.Fatalf("expected user-1 sent, got %#v", response.Results[0].Results)
+	}
+	if len(response.Results[1].Results) != 1 || !response.Results[1].Results[0].Sent {
+		t.Fatalf("expected user-2 sent, got %#v", response.Results[1].Results)
+	}
+}
+
+func TestNotifyUsers_BroadcastAllUsers(t *testing.T) {
+	sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
+	repository := &fakeRepository{
+		addresses: []NotificationAddress{
+			{
+				ID: "addr-1", UserID: "user-a", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive,
+				WebPush: &WebPushAddress{Endpoint: "https://push.example/a", Keys: WebPushKeys{Auth: "a", P256DH: "k"}},
+			},
+			{
+				ID: "addr-2", UserID: "user-b", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive,
+				WebPush: &WebPushAddress{Endpoint: "https://push.example/b", Keys: WebPushKeys{Auth: "a", P256DH: "k"}},
+			},
+			{
+				ID: "addr-3", UserID: "user-c", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive,
+				WebPush: &WebPushAddress{Endpoint: "https://push.example/c", Keys: WebPushKeys{Auth: "a", P256DH: "k"}},
+			},
+			{
+				ID: "addr-4", UserID: "user-c", Channel: NotificationChannelFCM, Status: NotificationAddressStatusActive,
+				FCM: &FCMAddress{Token: "fcm-token-c"},
+			},
+		},
+		preferences: &NotificationPreferences{
+			UserID:  "user-a",
+			Enabled: true,
+			Channels: map[string]bool{
+				string(NotificationChannelWebPush): true,
+			},
+		},
+	}
+	fcmSender := &fakeSender{channel: NotificationChannelFCM, enabled: true}
+	service := NewService(&NewServiceRequest{
+		Repository: repository,
+		Senders:    []ChannelSender{sender, fcmSender},
+	})
+
+	response, err := service.NotifyUsers(context.Background(), &NotifyUsersRequest{
+		Title:   "Broadcast",
+		Message: "All users",
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(response.Results) != 3 {
+		t.Fatalf("expected 3 user results, got %d", len(response.Results))
+	}
+
+	userIDs := map[string]bool{}
+	for _, r := range response.Results {
+		userIDs[r.UserID] = true
+	}
+	if !userIDs["user-a"] || !userIDs["user-b"] || !userIDs["user-c"] {
+		t.Fatalf("expected user-a, user-b, user-c, got %v", userIDs)
+	}
+}
+
+func TestNotifyUsers_TableTests(t *testing.T) {
+	tests := []struct {
+		name          string
+		req           *NotifyUsersRequest
+		addresses     []NotificationAddress
+		prefs         *NotificationPreferences
+		prefsByUserID map[string]*NotificationPreferences
+		wantErr       error
+		wantUsers     int
+		wantSent      map[string]bool
+	}{
+		{
+			name: "GOOD targeted multi-user",
+			req:  &NotifyUsersRequest{UserIDs: []string{"u1", "u2"}, Title: "Hi", Message: "There"},
+			addresses: []NotificationAddress{
+				{ID: "a1", UserID: "u1", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive, WebPush: &WebPushAddress{Endpoint: "https://e1", Keys: WebPushKeys{Auth: "a", P256DH: "k"}}},
+				{ID: "a2", UserID: "u2", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive, WebPush: &WebPushAddress{Endpoint: "https://e2", Keys: WebPushKeys{Auth: "a", P256DH: "k"}}},
+			},
+			prefs:     &NotificationPreferences{UserID: "u1", Enabled: true, Channels: map[string]bool{string(NotificationChannelWebPush): true}},
+			wantUsers: 2,
+			wantSent:  map[string]bool{"u1": true, "u2": true},
+		},
+		{
+			name: "GOOD broadcast all",
+			req:  &NotifyUsersRequest{Title: "Hi", Message: "There"},
+			addresses: []NotificationAddress{
+				{ID: "a1", UserID: "u1", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive, WebPush: &WebPushAddress{Endpoint: "https://e1", Keys: WebPushKeys{Auth: "a", P256DH: "k"}}},
+				{ID: "a2", UserID: "u2", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive, WebPush: &WebPushAddress{Endpoint: "https://e2", Keys: WebPushKeys{Auth: "a", P256DH: "k"}}},
+			},
+			prefs:     &NotificationPreferences{UserID: "u1", Enabled: true, Channels: map[string]bool{string(NotificationChannelWebPush): true}},
+			wantUsers: 2,
+			wantSent:  map[string]bool{"u1": true, "u2": true},
+		},
+		{
+			name: "GOOD targeted multi-user honours per-user disabled preference",
+			req:  &NotifyUsersRequest{UserIDs: []string{"u1", "u2"}, Title: "Hi", Message: "There"},
+			addresses: []NotificationAddress{
+				{ID: "a1", UserID: "u1", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive, WebPush: &WebPushAddress{Endpoint: "https://e1", Keys: WebPushKeys{Auth: "a", P256DH: "k"}}},
+				{ID: "a2", UserID: "u2", Channel: NotificationChannelWebPush, Status: NotificationAddressStatusActive, WebPush: &WebPushAddress{Endpoint: "https://e2", Keys: WebPushKeys{Auth: "a", P256DH: "k"}}},
+			},
+			prefsByUserID: map[string]*NotificationPreferences{
+				"u1": {UserID: "u1", Enabled: true, Channels: map[string]bool{string(NotificationChannelWebPush): true}},
+				"u2": {UserID: "u2", Enabled: false, Channels: map[string]bool{string(NotificationChannelWebPush): true}},
+			},
+			wantUsers: 2,
+			wantSent:  map[string]bool{"u1": true, "u2": false},
+		},
+		{
+			name:    "BAD missing title",
+			req:     &NotifyUsersRequest{UserIDs: []string{"u1"}, Message: "There"},
+			wantErr: ErrInvalidNotificationAddressBody,
+		},
+		{
+			name:    "BAD missing message",
+			req:     &NotifyUsersRequest{UserIDs: []string{"u1"}, Title: "Hi"},
+			wantErr: ErrInvalidNotificationAddressBody,
+		},
+		{
+			name:    "BAD missing both title and message",
+			req:     &NotifyUsersRequest{UserIDs: []string{"u1"}},
+			wantErr: ErrInvalidNotificationAddressBody,
+		},
+		{
+			name:    "BAD invalid channel",
+			req:     &NotifyUsersRequest{UserIDs: []string{"u1"}, Title: "Hi", Message: "There", Channels: []NotificationChannel{"SMS"}},
+			wantErr: ErrInvalidNotificationChannel,
+		},
+		{
+			name:      "GOOD empty user ids with no active addresses",
+			req:       &NotifyUsersRequest{Title: "Hi", Message: "There"},
+			wantUsers: 0,
+		},
+		{
+			name:      "GOOD user with no addresses gets empty result",
+			req:       &NotifyUsersRequest{UserIDs: []string{"u1"}, Title: "Hi", Message: "There"},
+			wantUsers: 1,
+			wantSent:  map[string]bool{"u1": false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sender := &fakeSender{channel: NotificationChannelWebPush, enabled: true}
+			repo := &fakeRepository{
+				addresses:           tt.addresses,
+				preferences:         tt.prefs,
+				preferencesByUserID: tt.prefsByUserID,
+			}
+			service := NewService(&NewServiceRequest{
+				Repository: repo,
+				Senders:    []ChannelSender{sender},
+			})
+
+			response, err := service.NotifyUsers(context.Background(), tt.req)
+
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("expected %v, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if len(response.Results) != tt.wantUsers {
+				t.Fatalf("expected %d user results, got %d", tt.wantUsers, len(response.Results))
+			}
+			if tt.wantSent != nil {
+				for _, r := range response.Results {
+					expectedSent, ok := tt.wantSent[r.UserID]
+					if !ok {
+						t.Fatalf("unexpected user %q in results", r.UserID)
+					}
+					actualSent := len(r.Results) > 0 && r.Results[0].Sent
+					if actualSent != expectedSent {
+						t.Fatalf("user %q: expected sent=%v, got %v", r.UserID, expectedSent, actualSent)
+					}
+				}
+			}
+		})
 	}
 }

@@ -99,6 +99,7 @@ type NotifierService interface {
 	UpdatePreferences(ctx context.Context, r *notifier.UpdateNotificationPreferencesRequest) (*notifier.UpdateNotificationPreferencesResponse, error)
 	GetConfig(ctx context.Context, r *notifier.GetNotifierConfigRequest) (*notifier.GetNotifierConfigResponse, error)
 	NotifyUser(ctx context.Context, r *notifier.NotifyUserRequest) (*notifier.NotifyUserResponse, error)
+	NotifyUsers(ctx context.Context, r *notifier.NotifyUsersRequest) (*notifier.NotifyUsersResponse, error)
 }
 
 // Service holds and manages usermanager business logic

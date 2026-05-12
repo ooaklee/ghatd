@@ -34,6 +34,7 @@ type UsermanagerService interface {
 	GetNotificationPreferences(ctx context.Context, r *GetNotificationPreferencesRequest) (*GetNotificationPreferencesResponse, error)
 	UpdateNotificationPreferences(ctx context.Context, r *UpdateNotificationPreferencesRequest) (*UpdateNotificationPreferencesResponse, error)
 	NotifyUser(ctx context.Context, r *NotifyUserRequest) (*NotifyUserResponse, error)
+	NotifyUsers(ctx context.Context, r *NotifyUsersRequest) (*NotifyUsersResponse, error)
 	GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvitationsRequest) (*GetMyGroupInvitationsResponse, error)
 	AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupInvitationRequest) (*AcceptMyGroupInvitationResponse, error)
 	RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupInvitationRequest) (*RejectMyGroupInvitationResponse, error)
@@ -629,6 +630,23 @@ func (h *Handler) NotifyUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.Service.NotifyUser(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Results)
+}
+
+// NotifyUsers handles admin notification dispatches to multiple users.
+func (h *Handler) NotifyUsers(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToNotifyUsersRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.NotifyUsers(r.Context(), request)
 	if err != nil {
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return

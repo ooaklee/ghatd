@@ -136,6 +136,11 @@ type NotifyUserResponse struct {
 	*notifier.NotifyUserResponse
 }
 
+// NotifyUsersResponse holds notification dispatch results.
+type NotifyUsersResponse struct {
+	*notifier.NotifyUsersResponse
+}
+
 // PendingGroupInvitation holds the response for a pending group invitation
 type PendingGroupInvitation struct {
 

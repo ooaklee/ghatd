@@ -203,6 +203,37 @@ func (s *Service) NotifyUser(ctx context.Context, r *NotifyUserRequest) (*Notify
 	return &NotifyUserResponse{NotifyUserResponse: response}, nil
 }
 
+// NotifyUsers delivers a push notification dispatch to zero or more
+// users across zero or more channels.
+//
+// This is an admin-only endpoint under POST /notifications. The
+// request specifies:
+//
+//   - UserIDs (optional) — which users to notify. An empty list means
+//     every user with at least one active notification address.
+//   - Title and Message — the notification headline and body text.
+//   - Channels (optional) — limit delivery to specific channels. Empty
+//     means all supported channels.
+//   - Data (optional) — extra key-value pairs forwarded to the push payload.
+//
+// Per-user preferences are honoured: users with notifications disabled
+// globally will not receive anything.
+func (s *Service) NotifyUsers(ctx context.Context, r *NotifyUsersRequest) (*NotifyUsersResponse, error) {
+	if err := s.ensureNotifierService(); err != nil {
+		return nil, err
+	}
+
+	response, err := s.NotifierService.NotifyUsers(ctx, r.NotifyUsersRequest)
+	if err != nil {
+		if response != nil {
+			return &NotifyUsersResponse{NotifyUsersResponse: response}, err
+		}
+		return nil, err
+	}
+
+	return &NotifyUsersResponse{NotifyUsersResponse: response}, nil
+}
+
 func (s *Service) wrapNotificationPreferences(ctx context.Context, preferences *notifier.NotificationPreferences, includeUser bool) *NotificationPreferencesWithUser {
 	if preferences == nil {
 		return nil

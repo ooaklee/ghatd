@@ -92,6 +92,25 @@ type UpdateNotificationPreferencesRequest struct {
 // This request has no fields because the config is global per server.
 type GetNotifierConfigRequest struct{}
 
+// NotifyUsersRequest is sent by an admin to create a notification dispatch
+// for zero or more users across zero or more channels.
+//
+// When UserIDs is empty, the service resolves every user that has at
+// least one active notification address and delivers to all of them.
+//
+// When Channels is empty, the service delivers to every supported
+// channel (WEBPUSH and FCM) that the user has active addresses for.
+//
+// Title and Message are required. Data carries optional key-value pairs
+// forwarded to the push payload for client-side handling.
+type NotifyUsersRequest struct {
+	UserIDs  []string               `json:"user_ids,omitempty"`
+	Title    string                 `json:"title" validate:"required"`
+	Message  string                 `json:"message" validate:"required"`
+	Channels []NotificationChannel  `json:"channels,omitempty"`
+	Data     map[string]interface{} `json:"data,omitempty"`
+}
+
 // NotifyUserRequest is sent by an admin or an internal service to send
 // a notification to a specific user.
 //

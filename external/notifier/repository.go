@@ -230,6 +230,21 @@ func (r *Repository) GetActiveAddressesByUserID(ctx context.Context, userID stri
 	return r.findAddresses(ctx, filter)
 }
 
+// GetAllActiveAddresses returns every active notification address across
+// all users, optionally filtered to specific channels.
+//
+// This is used by the NotifyUsers dispatch path when no explicit user
+// IDs are provided so the notifier can deliver to everyone who has
+// registered a device.
+func (r *Repository) GetAllActiveAddresses(ctx context.Context, channels ...NotificationChannel) ([]NotificationAddress, error) {
+	filter := bson.M{"status": NotificationAddressStatusActive}
+	if len(channels) > 0 {
+		filter["channel"] = bson.M{"$in": channels}
+	}
+
+	return r.findAddresses(ctx, filter)
+}
+
 // GetAddressesByUserID returns all addresses for a user, regardless of
 // status (ACTIVE and DISABLED).
 //

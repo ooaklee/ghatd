@@ -95,3 +95,19 @@ type NotificationSendResult struct {
 type NotifyUserResponse struct {
 	Results []NotificationSendResult `json:"results"`
 }
+
+// NotifyUsersResult reports what happened for one targeted user when
+// the notifier tried to deliver a notification dispatch.
+type NotifyUsersResult struct {
+	UserID  string                   `json:"user_id"`
+	Results []NotificationSendResult `json:"results"`
+}
+
+// NotifyUsersResponse contains one result per user that the notifier
+// attempted to deliver a notification dispatch to.
+//
+// A single NotifyUsersRequest targeting many users produces a list of
+// per-user results, each containing per-channel delivery outcomes.
+type NotifyUsersResponse struct {
+	Results []NotifyUsersResult `json:"results"`
+}

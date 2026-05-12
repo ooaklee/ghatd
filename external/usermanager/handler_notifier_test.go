@@ -35,6 +35,7 @@ type mockUmsService struct {
 	updateNotificationPreferencesFunc  func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error)
 	getLatestNotificationOverviewsFunc func(ctx context.Context, r *usermanager.GetLatestNotificationOverviewsRequest) (*usermanager.GetLatestNotificationOverviewsResponse, error)
 	notifyUserFunc                     func(ctx context.Context, r *usermanager.NotifyUserRequest) (*usermanager.NotifyUserResponse, error)
+	notifyUsersFunc                    func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error)
 }
 
 // stubErr is returned when a mockUmsService method is called without a matching *Func field.
@@ -85,6 +86,13 @@ func (m *mockUmsService) UpdateNotificationPreferences(ctx context.Context, r *u
 func (m *mockUmsService) NotifyUser(ctx context.Context, r *usermanager.NotifyUserRequest) (*usermanager.NotifyUserResponse, error) {
 	if m.notifyUserFunc != nil {
 		return m.notifyUserFunc(ctx, r)
+	}
+	return nil, stubErr
+}
+
+func (m *mockUmsService) NotifyUsers(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error) {
+	if m.notifyUsersFunc != nil {
+		return m.notifyUsersFunc(ctx, r)
 	}
 	return nil, stubErr
 }
@@ -1096,4 +1104,200 @@ func TestHandler_NotifyUser_PartialSuccess_ErrorResponse(t *testing.T) {
 	require.NotPanics(t, func() { h.NotifyUser(rec, req) })
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Equal(t, "NTF00-007", responseErrorCode(t, rec))
+}
+
+// ---------------------------------------------------------------------------
+// NotifyUsers (admin broadcast)
+// ---------------------------------------------------------------------------
+
+func TestHandler_NotifyUsers_GOOD_TargetedMultiUser(t *testing.T) {
+	t.Parallel()
+
+	results := []notifier.NotifyUsersResult{
+		{
+			UserID: "user-1",
+			Results: []notifier.NotificationSendResult{
+				{Channel: notifier.NotificationChannelWebPush, Attempted: 1, Sent: true},
+			},
+		},
+		{
+			UserID: "user-2",
+			Results: []notifier.NotificationSendResult{
+				{Channel: notifier.NotificationChannelWebPush, Attempted: 2, Sent: true},
+				{Channel: notifier.NotificationChannelFCM, Attempted: 1, Sent: true},
+			},
+		},
+	}
+
+	svc := &mockUmsService{
+		notifyUsersFunc: func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error) {
+			require.Equal(t, "admin-id", r.UserId)
+			require.NotNil(t, r.NotifyUsersRequest)
+			require.Equal(t, []string{"user-1", "user-2"}, r.NotifyUsersRequest.UserIDs)
+			require.Equal(t, "Broadcast Title", r.NotifyUsersRequest.Title)
+			require.Equal(t, "Broadcast Message", r.NotifyUsersRequest.Message)
+			return &usermanager.NotifyUsersResponse{
+				NotifyUsersResponse: &notifier.NotifyUsersResponse{Results: results},
+			}, nil
+		},
+	}
+
+	body := `{"user_ids":["user-1","user-2"],"title":"Broadcast Title","message":"Broadcast Message"}`
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications", []byte(body), "admin-id")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var notifyResults []notifier.NotifyUsersResult
+	responseData(t, rec, &notifyResults)
+	require.Len(t, notifyResults, 2)
+	assert.Equal(t, "user-1", notifyResults[0].UserID)
+	assert.True(t, notifyResults[0].Results[0].Sent)
+	assert.Equal(t, "user-2", notifyResults[1].UserID)
+	require.Len(t, notifyResults[1].Results, 2)
+}
+
+func TestHandler_NotifyUsers_GOOD_BroadcastAll(t *testing.T) {
+	t.Parallel()
+
+	results := []notifier.NotifyUsersResult{
+		{
+			UserID: "user-a",
+			Results: []notifier.NotificationSendResult{
+				{Channel: notifier.NotificationChannelWebPush, Attempted: 1, Sent: true},
+			},
+		},
+		{
+			UserID: "user-b",
+			Results: []notifier.NotificationSendResult{
+				{Channel: notifier.NotificationChannelFCM, Attempted: 1, Sent: true},
+			},
+		},
+		{
+			UserID: "user-c",
+			Results: []notifier.NotificationSendResult{
+				{Channel: notifier.NotificationChannelWebPush, Attempted: 1, Sent: true},
+			},
+		},
+	}
+
+	svc := &mockUmsService{
+		notifyUsersFunc: func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error) {
+			require.Empty(t, r.NotifyUsersRequest.UserIDs)
+			require.Empty(t, r.NotifyUsersRequest.Channels)
+			return &usermanager.NotifyUsersResponse{
+				NotifyUsersResponse: &notifier.NotifyUsersResponse{Results: results},
+			}, nil
+		},
+	}
+
+	body := `{"title":"All Hands","message":"Meeting at 3pm"}`
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications", []byte(body), "admin-id")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var notifyResults []notifier.NotifyUsersResult
+	responseData(t, rec, &notifyResults)
+	require.Len(t, notifyResults, 3)
+	assert.Equal(t, "user-a", notifyResults[0].UserID)
+	assert.Equal(t, "user-b", notifyResults[1].UserID)
+	assert.Equal(t, "user-c", notifyResults[2].UserID)
+}
+
+func TestHandler_NotifyUsers_BAD_MissingSubjectOrMessage(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"missing title", `{"user_ids":["u1"],"message":"body"}`},
+		{"missing message", `{"user_ids":["u1"],"title":"title"}`},
+		{"missing both", `{"user_ids":["u1"]}`},
+		{"empty title", `{"user_ids":["u1"],"title":"","message":"body"}`},
+		{"empty message", `{"user_ids":["u1"],"title":"title","message":""}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newTestHandler(&mockUmsService{})
+			req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications", []byte(tt.body), "admin-id")
+			rec := httptest.NewRecorder()
+
+			require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, "USM00-004", responseErrorCode(t, rec))
+		})
+	}
+}
+
+func TestHandler_NotifyUsers_BAD_InvalidChannel(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockUmsService{
+		notifyUsersFunc: func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error) {
+			return nil, notifier.ErrInvalidNotificationChannel
+		},
+	}
+
+	body := `{"user_ids":["u1"],"title":"Hello","message":"World","channels":["SMS","WEBPUSH"]}`
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications", []byte(body), "admin-id")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "NTF00-003", responseErrorCode(t, rec))
+}
+
+func TestHandler_NotifyUsers_Unauthenticated(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler(&mockUmsService{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ums/notifications", bytes.NewBufferString(`{"title":"Hi","message":"there"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestHandler_NotifyUsers_InvalidBody(t *testing.T) {
+	t.Parallel()
+
+	h := newTestHandler(&mockUmsService{})
+	req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications", []byte(`{bad}`), "admin-id")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "NTF00-002", responseErrorCode(t, rec))
+}
+
+func TestHandler_NotifyUsers_ServiceError(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockUmsService{
+		notifyUsersFunc: func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error) {
+			return nil, notifier.ErrInvalidNotificationAddressBody
+		},
+	}
+
+	body := `{"title":"Hi","message":"there"}`
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications", []byte(body), "admin-id")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.NotifyUsers(rec, req) })
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "NTF00-002", responseErrorCode(t, rec))
 }

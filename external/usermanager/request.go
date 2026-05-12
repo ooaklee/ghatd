@@ -297,6 +297,17 @@ type NotifyUserRequest struct {
 	*notifier.NotifyUserRequest
 }
 
+// NotifyUsersRequest holds the data needed for an admin notification dispatch
+// to zero or more users across zero or more channels.
+type NotifyUsersRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	UserId string
+
+	// NotifyUsersRequest carries the target users, notification payload, and
+	// optional channel filters.
+	*notifier.NotifyUsersRequest
+}
+
 // GetMyGroupInvitationsRequest holds the data needed to fetch the current user's group invitations.
 type GetMyGroupInvitationsRequest struct {
 	// UserId is the ID of the requester.
