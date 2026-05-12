@@ -53,7 +53,7 @@ The starter rollout will follow these rules:
    into their own project when they outgrow the default path.
 5. New helpers live in the package that owns the concern. For example, MongoDB
    URI helpers live in `external/repository/helpers`, not in starter.
-6. Tests for each rollout slice use table-driven GOOD/BAD cases where practical.
+6. Tests for each rollout slice use table-driven SUCCESS/FAILURE cases where practical.
 7. Documentation is updated alongside each implementation slice.
 
 For this first rollout slice, we will add the foundation pieces that reduce

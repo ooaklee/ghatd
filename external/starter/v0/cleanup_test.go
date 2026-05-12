@@ -15,12 +15,12 @@ func TestCleanupGroup_Add(t *testing.T) {
 		wantN int
 	}{
 		{
-			name:  "GOOD - add nil only is ignored",
+			name:  "SUCCESS - add nil only is ignored",
 			fns:   []Cleanup{nil},
 			wantN: 0,
 		},
 		{
-			name: "GOOD - nil among real cleanups is skipped",
+			name: "SUCCESS - nil among real cleanups is skipped",
 			fns: []Cleanup{
 				nil,
 				func(ctx context.Context) error { return nil },
@@ -30,7 +30,7 @@ func TestCleanupGroup_Add(t *testing.T) {
 			wantN: 2,
 		},
 		{
-			name: "GOOD - no nil adds all",
+			name: "SUCCESS - no nil adds all",
 			fns: []Cleanup{
 				func(ctx context.Context) error { return nil },
 				func(ctx context.Context) error { return nil },
@@ -38,7 +38,7 @@ func TestCleanupGroup_Add(t *testing.T) {
 			wantN: 2,
 		},
 		{
-			name:  "GOOD - empty add",
+			name:  "SUCCESS - empty add",
 			fns:   nil,
 			wantN: 0,
 		},
@@ -67,19 +67,19 @@ func TestCleanupGroup_Run(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "GOOD - nil group produces nil error",
+			name: "SUCCESS - nil group produces nil error",
 			setup: func() (*CleanupGroup, []string) {
 				return nil, nil
 			},
 		},
 		{
-			name: "GOOD - no cleanups produces nil error",
+			name: "SUCCESS - no cleanups produces nil error",
 			setup: func() (*CleanupGroup, []string) {
 				return &CleanupGroup{}, nil
 			},
 		},
 		{
-			name: "GOOD - single cleanup that succeeds",
+			name: "SUCCESS - single cleanup that succeeds",
 			setup: func() (*CleanupGroup, []string) {
 				var g CleanupGroup
 				g.Add(func(ctx context.Context) error { return nil })
@@ -87,7 +87,7 @@ func TestCleanupGroup_Run(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - multiple cleanups called in forward order",
+			name: "SUCCESS - multiple cleanups called in forward order",
 			setup: func() (*CleanupGroup, []string) {
 				var g CleanupGroup
 				var order []string
@@ -100,7 +100,7 @@ func TestCleanupGroup_Run(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - nil cleanup functions are silently skipped",
+			name: "SUCCESS - nil cleanup functions are silently skipped",
 			setup: func() (*CleanupGroup, []string) {
 				var g CleanupGroup
 				var order []string
@@ -113,7 +113,7 @@ func TestCleanupGroup_Run(t *testing.T) {
 			},
 		},
 		{
-			name: "BAD - first errors, second runs, errors joined",
+			name: "FAILURE - first errors, second runs, errors joined",
 			setup: func() (*CleanupGroup, []string) {
 				var g CleanupGroup
 				var order []string
@@ -126,7 +126,7 @@ func TestCleanupGroup_Run(t *testing.T) {
 			wantErr: "first error",
 		},
 		{
-			name: "BAD - all error, all errors joined",
+			name: "FAILURE - all error, all errors joined",
 			setup: func() (*CleanupGroup, []string) {
 				var g CleanupGroup
 				var order []string
@@ -140,7 +140,7 @@ func TestCleanupGroup_Run(t *testing.T) {
 			wantErr: "e1",
 		},
 		{
-			name: "BAD - all error, joined contains all messages",
+			name: "FAILURE - all error, joined contains all messages",
 			setup: func() (*CleanupGroup, []string) {
 				var g CleanupGroup
 				g.Add(
@@ -179,12 +179,12 @@ func TestCleanupGroup_Run(t *testing.T) {
 				t.Fatalf("expected error containing %q, got %q", tt.wantErr, err.Error())
 			}
 
-			if strings.HasPrefix(tt.name, "BAD - all error, all errors joined") {
+			if strings.HasPrefix(tt.name, "FAILURE - all error, all errors joined") {
 				if !strings.Contains(err.Error(), "e1") || !strings.Contains(err.Error(), "e2") || !strings.Contains(err.Error(), "e3") {
 					t.Fatalf("expected joined error to contain all error messages, got %q", err.Error())
 				}
 			}
-			if strings.HasPrefix(tt.name, "BAD - all error, joined contains") {
+			if strings.HasPrefix(tt.name, "FAILURE - all error, joined contains") {
 				if !strings.Contains(err.Error(), "alpha") || !strings.Contains(err.Error(), "beta") {
 					t.Fatalf("expected joined error to contain both messages, got %q", err.Error())
 				}

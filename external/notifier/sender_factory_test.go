@@ -19,19 +19,19 @@ func TestNewStandardSenders(t *testing.T) {
 		assert             func(t *testing.T, result *StandardSendersResult, fcm *FCMSender)
 	}{
 		{
-			name: "GOOD - nil request returns disabled Web Push sender and no FCM sender",
+			name: "SUCCESS - nil request returns disabled Web Push sender and no FCM sender",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return nil
 			},
 		},
 		{
-			name: "GOOD - nil Web Push config returns disabled Web Push sender",
+			name: "SUCCESS - nil Web Push config returns disabled Web Push sender",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return &StandardSendersRequest{}
 			},
 		},
 		{
-			name: "GOOD - explicit Web Push enable with keys creates enabled Web Push sender",
+			name: "SUCCESS - explicit Web Push enable with keys creates enabled Web Push sender",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return &StandardSendersRequest{
 					WebPush: &WebPushSenderConfig{
@@ -44,7 +44,7 @@ func TestNewStandardSenders(t *testing.T) {
 			wantWebPushEnabled: true,
 		},
 		{
-			name: "GOOD - VAPID keys implicitly enable Web Push sender",
+			name: "SUCCESS - VAPID keys implicitly enable Web Push sender",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return &StandardSendersRequest{
 					WebPush: &WebPushSenderConfig{
@@ -56,7 +56,7 @@ func TestNewStandardSenders(t *testing.T) {
 			wantWebPushEnabled: true,
 		},
 		{
-			name: "GOOD - explicit Web Push enable without keys produces disabled sender",
+			name: "SUCCESS - explicit Web Push enable without keys produces disabled sender",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return &StandardSendersRequest{
 					WebPush: &WebPushSenderConfig{
@@ -66,7 +66,7 @@ func TestNewStandardSenders(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - disabled FCM config creates no FCM sender",
+			name: "SUCCESS - disabled FCM config creates no FCM sender",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return &StandardSendersRequest{
 					FCM: &FCMSenderConfig{Enabled: false},
@@ -74,7 +74,7 @@ func TestNewStandardSenders(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - FCM enabled with file path preserves caller-owned credentials file",
+			name: "SUCCESS - FCM enabled with file path preserves caller-owned credentials file",
 			request: func(t *testing.T) *StandardSendersRequest {
 				tmpDir := t.TempDir()
 				credentialsFile := filepath.Join(tmpDir, "fcm-credentials.json")
@@ -100,7 +100,7 @@ func TestNewStandardSenders(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - FCM enabled with base64 writes temp credentials and cleanup removes them",
+			name: "SUCCESS - FCM enabled with base64 writes temp credentials and cleanup removes them",
 			request: func(t *testing.T) *StandardSendersRequest {
 				credentialsJSON := `{"project_id":"test-b64"}`
 				return &StandardSendersRequest{
@@ -128,7 +128,7 @@ func TestNewStandardSenders(t *testing.T) {
 			},
 		},
 		{
-			name: "BAD - invalid base64 credentials returns decode error",
+			name: "FAILURE - invalid base64 credentials returns decode error",
 			request: func(t *testing.T) *StandardSendersRequest {
 				return &StandardSendersRequest{
 					FCM: &FCMSenderConfig{

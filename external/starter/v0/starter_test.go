@@ -780,7 +780,7 @@ func TestResolvePolicyStore(t *testing.T) {
 		assert  func(t *testing.T, got policy.PolicyStore)
 	}{
 		{
-			name:  "GOOD - caller-supplied store is returned",
+			name:  "SUCCESS - caller-supplied store is returned",
 			store: supplied,
 			assert: func(t *testing.T, got policy.PolicyStore) {
 				if got != supplied {
@@ -789,11 +789,11 @@ func TestResolvePolicyStore(t *testing.T) {
 			},
 		},
 		{
-			name:    "BAD - both store and config are nil",
+			name:    "FAILURE - both store and config are nil",
 			wantErr: ErrNilPolicyConfig,
 		},
 		{
-			name: "BAD - missing business entity name",
+			name: "FAILURE - missing business entity name",
 			cfg: &PolicyConfig{
 				BusinessEntityEmail:     "hello@example.test",
 				BusinessEntityWebsite:   "https://example.test",
@@ -802,7 +802,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			wantErr: ErrInvalidPolicyConfig,
 		},
 		{
-			name: "BAD - missing business entity email",
+			name: "FAILURE - missing business entity email",
 			cfg: &PolicyConfig{
 				BusinessEntityName:      "Example",
 				BusinessEntityWebsite:   "https://example.test",
@@ -811,7 +811,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			wantErr: ErrInvalidPolicyConfig,
 		},
 		{
-			name: "BAD - missing business entity website",
+			name: "FAILURE - missing business entity website",
 			cfg: &PolicyConfig{
 				BusinessEntityName:      "Example",
 				BusinessEntityEmail:     "hello@example.test",
@@ -820,7 +820,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			wantErr: ErrInvalidPolicyConfig,
 		},
 		{
-			name: "BAD - missing legal business entity name",
+			name: "FAILURE - missing legal business entity name",
 			cfg: &PolicyConfig{
 				BusinessEntityName:    "Example",
 				BusinessEntityEmail:   "hello@example.test",
@@ -829,7 +829,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			wantErr: ErrInvalidPolicyConfig,
 		},
 		{
-			name: "BAD - website without :// with GenerateStaticPolicies",
+			name: "FAILURE - website without :// with GenerateStaticPolicies",
 			cfg: &PolicyConfig{
 				BusinessEntityName:      "Example",
 				BusinessEntityEmail:     "hello@example.test",
@@ -840,7 +840,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			wantErr: ErrInvalidPolicyConfig,
 		},
 		{
-			name: "GOOD - website without :// when GenerateStaticPolicies is false",
+			name: "SUCCESS - website without :// when GenerateStaticPolicies is false",
 			cfg: &PolicyConfig{
 				BusinessEntityName:      "Example",
 				BusinessEntityEmail:     "hello@example.test",
@@ -855,7 +855,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - valid config with GenerateStaticPolicies creates store",
+			name: "SUCCESS - valid config with GenerateStaticPolicies creates store",
 			cfg: &PolicyConfig{
 				BusinessEntityName:      "Example",
 				BusinessEntityEmail:     "hello@example.test",
@@ -870,7 +870,7 @@ func TestResolvePolicyStore(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - valid config without GenerateStaticPolicies",
+			name: "SUCCESS - valid config without GenerateStaticPolicies",
 			cfg: &PolicyConfig{
 				BusinessEntityName:      "Example",
 				BusinessEntityEmail:     "hello@example.test",
@@ -915,7 +915,7 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 		assert    func(t *testing.T, got billingmanager.ProviderRegistry)
 	}{
 		{
-			name:     "GOOD - supplied registry is returned when no providers",
+			name:     "SUCCESS - supplied registry is returned when no providers",
 			registry: suppliedRegistry,
 			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
 				if got != suppliedRegistry {
@@ -924,7 +924,7 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 			},
 		},
 		{
-			name:     "BAD - registry and providers both supplied",
+			name:     "FAILURE - registry and providers both supplied",
 			registry: suppliedRegistry,
 			providers: []paymentprovider.Provider{
 				fakePaymentProvider{},
@@ -932,7 +932,7 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 			wantErr: ErrPaymentProviderRegistryConflict,
 		},
 		{
-			name:      "GOOD - empty providers create empty registry",
+			name:      "SUCCESS - empty providers create empty registry",
 			providers: []paymentprovider.Provider{},
 			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
 				if got == nil {
@@ -941,7 +941,7 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 			},
 		},
 		{
-			name: "GOOD - providers create registry",
+			name: "SUCCESS - providers create registry",
 			providers: []paymentprovider.Provider{
 				fakePaymentProvider{},
 			},
@@ -952,7 +952,7 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 			},
 		},
 		{
-			name: "BAD - nil provider in list",
+			name: "FAILURE - nil provider in list",
 			providers: []paymentprovider.Provider{
 				fakePaymentProvider{},
 				nil,
@@ -960,7 +960,7 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 			wantErr: ErrNilPaymentProvider,
 		},
 		{
-			name: "GOOD - nil registry with nil providers creates new registry",
+			name: "SUCCESS - nil registry with nil providers creates new registry",
 			assert: func(t *testing.T, got billingmanager.ProviderRegistry) {
 				if got == nil {
 					t.Fatalf("expected registry")
@@ -1003,17 +1003,17 @@ func TestResolveHandlerErrorMaps(t *testing.T) {
 		wantLen int
 	}{
 		{
-			name:    "GOOD - nil custom returns defaults",
+			name:    "SUCCESS - nil custom returns defaults",
 			custom:  nil,
 			wantLen: 1,
 		},
 		{
-			name:    "GOOD - custom maps are passed through",
+			name:    "SUCCESS - custom maps are passed through",
 			custom:  custom,
 			wantLen: 1,
 		},
 		{
-			name:    "GOOD - empty allows explicit clearing",
+			name:    "SUCCESS - empty allows explicit clearing",
 			custom:  empty,
 			wantLen: 0,
 		},
@@ -1042,56 +1042,56 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "GOOD - full repositories",
+			name:    "SUCCESS - full repositories",
 			wantErr: nil,
 		},
 		{
-			name:    "BAD - nil repositories",
+			name:    "FAILURE - nil repositories",
 			mutate:  func(r *Repositories) { *r = Repositories{} },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil APIToken",
+			name:    "FAILURE - nil APIToken",
 			mutate:  func(r *Repositories) { r.APIToken = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Audit",
+			name:    "FAILURE - nil Audit",
 			mutate:  func(r *Repositories) { r.Audit = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Billing",
+			name:    "FAILURE - nil Billing",
 			mutate:  func(r *Repositories) { r.Billing = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Contacter",
+			name:    "FAILURE - nil Contacter",
 			mutate:  func(r *Repositories) { r.Contacter = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Group",
+			name:    "FAILURE - nil Group",
 			mutate:  func(r *Repositories) { r.Group = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Notifier",
+			name:    "FAILURE - nil Notifier",
 			mutate:  func(r *Repositories) { r.Notifier = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Post",
+			name:    "FAILURE - nil Post",
 			mutate:  func(r *Repositories) { r.Post = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil Pricer",
+			name:    "FAILURE - nil Pricer",
 			mutate:  func(r *Repositories) { r.Pricer = nil },
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "BAD - nil User",
+			name:    "FAILURE - nil User",
 			mutate:  func(r *Repositories) { r.User = nil },
 			wantErr: ErrNilRepositories,
 		},
@@ -1111,7 +1111,7 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 				Pricer:    fullRepos.Pricer,
 				User:      fullRepos.User,
 			}
-			if tt.name == "BAD - nil repositories" {
+			if tt.name == "FAILURE - nil repositories" {
 				err := validateRepositoriesForServices(nil)
 				if !errors.Is(err, tt.wantErr) {
 					t.Fatalf("expected %v, got %v", tt.wantErr, err)

@@ -330,7 +330,7 @@ func TestResolveAddr(t *testing.T) {
 func TestStartServerWith_ConfiguredServerFields(t *testing.T) {
 	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
-	t.Run("GOOD - ReadHeaderTimeout set on server", func(t *testing.T) {
+	t.Run("SUCCESS - ReadHeaderTimeout set on server", func(t *testing.T) {
 		var capturedSrv *http.Server
 		doneCh := make(chan struct{})
 		err := StartServerWith(&StartServerWithRequest{
@@ -364,7 +364,7 @@ func TestStartServerWith_ConfiguredServerFields(t *testing.T) {
 func TestStartServerWith_LogMessages(t *testing.T) {
 	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
-	t.Run("GOOD - server listening log message", func(t *testing.T) {
+	t.Run("SUCCESS - server listening log message", func(t *testing.T) {
 		messages := make(chan string, 1)
 		err := StartServerWith(&StartServerWithRequest{
 			Host:                    "localhost",
@@ -391,7 +391,7 @@ func TestStartServerWith_LogMessages(t *testing.T) {
 		}
 	})
 
-	t.Run("GOOD - shutdown signal log message", func(t *testing.T) {
+	t.Run("SUCCESS - shutdown signal log message", func(t *testing.T) {
 		sigCh := make(chan os.Signal, 1)
 		messages := make(chan string, 2)
 		listenStarted := make(chan struct{})
@@ -432,7 +432,7 @@ func TestStartServerWith_LogMessages(t *testing.T) {
 		}
 	})
 
-	t.Run("GOOD - context cancellation log message", func(t *testing.T) {
+	t.Run("SUCCESS - context cancellation log message", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		listenStarted := make(chan struct{})
 		listenCh := make(chan struct{})
@@ -477,7 +477,7 @@ func TestStartServerWith_LogMessages(t *testing.T) {
 func TestStartServerWith_ErrorWrapping(t *testing.T) {
 	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
-	t.Run("BAD - startup error wraps ErrStartupFailure with original error", func(t *testing.T) {
+	t.Run("FAILURE - startup error wraps ErrStartupFailure with original error", func(t *testing.T) {
 		origErr := errors.New("port already in use")
 		err := StartServerWith(&StartServerWithRequest{
 			Host:                    "localhost",
@@ -499,7 +499,7 @@ func TestStartServerWith_ErrorWrapping(t *testing.T) {
 		}
 	})
 
-	t.Run("BAD - shutdown error wraps ErrShutdownFailure with original error", func(t *testing.T) {
+	t.Run("FAILURE - shutdown error wraps ErrShutdownFailure with original error", func(t *testing.T) {
 		sigCh := make(chan os.Signal, 1)
 		go func() { sigCh <- syscall.SIGTERM }()
 		listenCh := make(chan struct{})
@@ -530,7 +530,7 @@ func TestStartServerWith_ErrorWrapping(t *testing.T) {
 		}
 	})
 
-	t.Run("GOOD - shutdown deadline context is created with correct timeout", func(t *testing.T) {
+	t.Run("SUCCESS - shutdown deadline context is created with correct timeout", func(t *testing.T) {
 		sigCh := make(chan os.Signal, 1)
 		listenCh := make(chan struct{})
 		var capturedCtx context.Context

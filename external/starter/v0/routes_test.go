@@ -18,12 +18,12 @@ func TestAttachDefaultRoutes_BadRequest(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "BAD - nil request",
+			name:    "FAILURE - nil request",
 			req:     nil,
 			wantErr: ErrNilAttachDefaultRoutesRequest,
 		},
 		{
-			name: "BAD - nil Router",
+			name: "FAILURE - nil Router",
 			req: &AttachDefaultRoutesRequest{
 				Router: nil,
 				Stack:  &Stack{},
@@ -31,7 +31,7 @@ func TestAttachDefaultRoutes_BadRequest(t *testing.T) {
 			wantErr: ErrNilRouter,
 		},
 		{
-			name: "BAD - nil Stack",
+			name: "FAILURE - nil Stack",
 			req: &AttachDefaultRoutesRequest{
 				Router: router.NewRouter(nil, nil),
 				Stack:  nil,
@@ -39,7 +39,7 @@ func TestAttachDefaultRoutes_BadRequest(t *testing.T) {
 			wantErr: ErrNilStack,
 		},
 		{
-			name: "BAD - nil Handlers",
+			name: "FAILURE - nil Handlers",
 			req: &AttachDefaultRoutesRequest{
 				Router: router.NewRouter(nil, nil),
 				Stack:  &Stack{},
@@ -47,7 +47,7 @@ func TestAttachDefaultRoutes_BadRequest(t *testing.T) {
 			wantErr: ErrNilHandlers,
 		},
 		{
-			name: "BAD - nil Middleware",
+			name: "FAILURE - nil Middleware",
 			req: &AttachDefaultRoutesRequest{
 				Router: router.NewRouter(nil, nil),
 				Stack: &Stack{
@@ -57,7 +57,7 @@ func TestAttachDefaultRoutes_BadRequest(t *testing.T) {
 			wantErr: ErrNilMiddleware,
 		},
 		{
-			name: "BAD - nil Middleware.AccessManager suite",
+			name: "FAILURE - nil Middleware.AccessManager suite",
 			req: &AttachDefaultRoutesRequest{
 				Router: router.NewRouter(nil, nil),
 				Stack: &Stack{
@@ -68,7 +68,7 @@ func TestAttachDefaultRoutes_BadRequest(t *testing.T) {
 			wantErr: ErrNilMiddlewareSuite,
 		},
 		{
-			name: "BAD - unknown skipped route group",
+			name: "FAILURE - unknown skipped route group",
 			req: &AttachDefaultRoutesRequest{
 				Router: router.NewRouter(nil, nil),
 				Stack: &Stack{
@@ -104,14 +104,14 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 		skipRest []RouteGroup
 	}{
 		{
-			name:    "BAD - missing pricer handler",
+			name:    "FAILURE - missing pricer handler",
 			wantErr: ErrMissingPricerHandler,
 			mutate: func(h *Handlers) {
 				h.Pricer = nil
 			},
 		},
 		{
-			name:    "BAD - missing policy handler",
+			name:    "FAILURE - missing policy handler",
 			wantErr: ErrMissingPolicyHandler,
 			mutate: func(h *Handlers) {
 				h.Policy = nil
@@ -119,7 +119,7 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name:    "BAD - missing user handler",
+			name:    "FAILURE - missing user handler",
 			wantErr: ErrMissingUserHandler,
 			mutate: func(h *Handlers) {
 				h.User = nil
@@ -127,7 +127,7 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name:    "BAD - missing group handler",
+			name:    "FAILURE - missing group handler",
 			wantErr: ErrMissingGroupHandler,
 			mutate: func(h *Handlers) {
 				h.Group = nil
@@ -135,7 +135,7 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name:    "BAD - missing accessmanager handler",
+			name:    "FAILURE - missing accessmanager handler",
 			wantErr: ErrMissingAccessManagerHandler,
 			mutate: func(h *Handlers) {
 				h.AccessManager = nil
@@ -143,7 +143,7 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name:    "BAD - missing usermanager handler",
+			name:    "FAILURE - missing usermanager handler",
 			wantErr: ErrMissingUserManagerHandler,
 			mutate: func(h *Handlers) {
 				h.UserManager = nil
@@ -151,7 +151,7 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name:    "BAD - missing contentmanager handler",
+			name:    "FAILURE - missing contentmanager handler",
 			wantErr: ErrMissingContentManagerHandler,
 			mutate: func(h *Handlers) {
 				h.ContentManager = nil
@@ -159,7 +159,7 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupBillingManager},
 		},
 		{
-			name:    "BAD - missing billingmanager handler",
+			name:    "FAILURE - missing billingmanager handler",
 			wantErr: ErrMissingBillingManagerHandler,
 			mutate: func(h *Handlers) {
 				h.BillingManager = nil
@@ -203,63 +203,63 @@ func TestAttachDefaultRoutes_BadMissingMiddleware(t *testing.T) {
 		skip   []RouteGroup
 	}{
 		{
-			name: "BAD - missing AdminOnly middleware",
+			name: "FAILURE - missing AdminOnly middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.AdminOnly = nil
 			},
 			skip: []RouteGroup{RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name: "BAD - missing Authenticated middleware",
+			name: "FAILURE - missing Authenticated middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.Authenticated = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupAccessManager, RouteGroupBillingManager, RouteGroupContentManager},
 		},
 		{
-			name: "BAD - missing ActiveOnly middleware",
+			name: "FAILURE - missing ActiveOnly middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.ActiveOnly = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name: "BAD - missing ActiveValidApiTokenOrJWT middleware",
+			name: "FAILURE - missing ActiveValidApiTokenOrJWT middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.ActiveValidApiTokenOrJWT = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager},
 		},
 		{
-			name: "BAD - missing HardenedRateLimit middleware",
+			name: "FAILURE - missing HardenedRateLimit middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.HardenedRateLimit = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name: "BAD - missing AdminApiTokenOrJWT middleware",
+			name: "FAILURE - missing AdminApiTokenOrJWT middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.AdminApiTokenOrJWT = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupBillingManager},
 		},
 		{
-			name: "BAD - missing ActiveValidApiTokenOrAuthenticated middleware",
+			name: "FAILURE - missing ActiveValidApiTokenOrAuthenticated middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.ActiveValidApiTokenOrAuthenticated = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupContentManager, RouteGroupBillingManager},
 		},
 		{
-			name: "BAD - missing RateLimitOrActive middleware",
+			name: "FAILURE - missing RateLimitOrActive middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.RateLimitOrActive = nil
 			},
 			skip: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupBillingManager},
 		},
 		{
-			name: "BAD - missing CustomMeEndpointValidApiTokenOrJWT middleware",
+			name: "FAILURE - missing CustomMeEndpointValidApiTokenOrJWT middleware",
 			mutate: func(s *accessmiddleware.Suite) {
 				s.CustomMeEndpointValidApiTokenOrJWT = nil
 			},
