@@ -8,31 +8,50 @@ service, handler, middleware, stack, and route wiring.
 
 ## Ownership Split
 
-| Host application owns | `starter/v0` helps with |
-|-----------------------|-------------------------|
+| Host application owns | GHATD lazy helpers can reduce |
+|-----------------------|------------------------------|
 | Settings and environment loading | Repository container construction |
-| Logger, validator, and observability clients | Service container construction |
-| Mongo, Redis, email, OAuth, and payment clients | Handler container construction |
-| SPA file serving and router bootstrap | Access middleware suite construction |
-| Resource cleanup registration | Stack validation and grouping |
-| HTTP server lifecycle | Standard GHATD route attachment |
+| Logger, validator, and observability choices | Service container construction |
+| Mongo, Redis, email, OAuth, and payment settings | Handler container construction |
+| SPA asset source and router middleware ordering | Access middleware suite construction |
+| Resource cleanup registration | Package-owned runtime bootstrap |
+| HTTP server lifecycle choices | Standard GHATD route attachment |
 
 This split is intentional. A new project can start lazy, then eject any layer
 back into its own `cmd/server` package when custom behaviour becomes clearer.
 
 ## Flow
 
-1. Load settings and initialise host-owned clients.
-2. Build the Mongo URI and core repository.
+1. Load settings and initialise host-owned observability, logging, and validation.
+2. Use package-owned bootstrap helpers for repeatable foundations such as SPA
+   router setup, Mongo runtime setup, Redis runtime setup, SparkPost, and
+   standard email manager wiring.
 3. Register resource cleanups in `starter.CleanupGroup`.
-4. Build app-specific integrations such as Redis stores, email managers, OAuth
+4. Build app-specific integrations such as OAuth
    providers, notifier senders, and payment providers.
 5. Build `starter.Repositories`, `starter.Services`, `starter.Handlers`, and
    `starter.Middleware`.
 6. Group the layers with `starter.NewStack`.
 7. Attach standard GHATD API routes with `starter.AttachDefaultRoutes`.
-8. Attach host-owned SPA routes.
-9. Start the HTTP server with `external/http/server.StartServerWith`.
+8. Attach the default auth verify route with
+   `router.AttachDefaultAuthVerifyRoute`, or use `router.NewAuthVerifyHandler`
+   directly when the host application needs custom endpoint paths.
+9. Attach host-owned SPA routes.
+10. Start the HTTP server with `external/http/server.StartServerWith`.
+
+## Package-Owned Bootstrap Helpers
+
+The lazy path now keeps repeated setup logic inside the package that owns the
+concept:
+
+| Helper | Package | Use it for |
+|--------|---------|------------|
+| `NewBootstrap` | `external/spa` | SPA fallback handler, router creation, and later SPA route attachment. |
+| `NewMongoRuntime` | `external/repository` | Mongo URI generation, handler creation, warmup, cleanup, and core repository creation. |
+| `NewRedisRuntime` | `external/ephemeral` | Redis client creation, optional hooks, ping, cleanup, and ephemeral store creation. |
+| `NewSparkPostClient` | `external/emailprovider` | SparkPost client initialisation with optional transport instrumentation. |
+| `NewStandardEmailManager` | `external/emailmanager` | Standard GHATD email templater plus email manager wiring. |
+| `AttachDefaultAuthVerifyRoute` | `external/router` | Default auth verification route registration from backend/frontend base URLs. |
 
 ## Trimmed Example
 
@@ -63,17 +82,16 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
         return err
     }
 
-    spaHandler := spa.NewSpaHandler(&spa.NewSpaHandlerRequest{
+    spaBootstrap, err := spa.NewBootstrap(&spa.BootstrapRequest{
         EmbeddedContent:               embeddedContent,
         EmbeddedContentFilePathPrefix: embeddedContentFilePathPrefix,
-        HandleUpdatePathToIndexFunc:   spa.NewHandleUpdatePathToIndex(),
+        DefaultHealthcheckHandler:     response.GetDefault200Response,
+        Middlewares:                   routerMiddlewares,
     })
-
-    httpRouter := router.NewRouter(
-        spaHandler.GetResourceNotFoundError,
-        response.GetDefault200Response,
-        routerMiddlewares...,
-    )
+    if err != nil {
+        return fmt.Errorf("server/spa-bootstrap-initialisation-failed: %v", err)
+    }
+    httpRouter := spaBootstrap.Router
 
     var cleanupGroup starter.CleanupGroup
     defer func() {
@@ -82,48 +100,86 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
         }
     }()
 
-    mongoURI, err := repositoryhelpers.GenerateMongoURI(repositoryhelpers.MongoURIConfig{
-        Username: appSettings.MongoDatabaseUsername,
-        Password: appSettings.MongoDatabasePassword,
-        Host:     appSettings.MongoDatabaseHost,
-        AppName:  appSettings.MongoDatabaseAppName,
-        Atlas:    appSettings.MongoDatabaseAtlas,
+    mongoRuntime, err := repository.NewMongoRuntime(context.Background(), &repository.NewMongoRuntimeRequest{
+        URIConfig: repositoryhelpers.MongoURIConfig{
+            Username: appSettings.MongoDatabaseUsername,
+            Password: appSettings.MongoDatabasePassword,
+            Host:     appSettings.MongoDatabaseHost,
+            AppName:  appSettings.MongoDatabaseAppName,
+            Atlas:    appSettings.MongoDatabaseAtlas,
+        },
+        Database: appSettings.MongoDatabaseName,
+        Options: []repositoryhelpers.ConfigOption{
+            repositoryhelpers.WithConnectionPool(200, 10, 15*time.Minute),
+            repositoryhelpers.WithTimeouts(5*time.Second, 3*time.Second, 120*time.Second),
+            repositoryhelpers.WithRetryPolicy(true, true, 10*time.Second),
+        },
     })
     if err != nil {
-        return fmt.Errorf("server/failed-to-generate-mongo-uri: %v", err)
+        return fmt.Errorf("server/mongo-runtime-initialisation-failed: %v", err)
     }
+    cleanupGroup.Add(mongoRuntime.Close)
 
-    mongoHandler, err := repositoryhelpers.NewHandlerWithOptions(
-        mongoURI,
-        appSettings.MongoDatabaseName,
-        repositoryhelpers.WithConnectionPool(200, 10, 15*time.Minute),
-        repositoryhelpers.WithTimeouts(5*time.Second, 3*time.Second, 120*time.Second),
-        repositoryhelpers.WithRetryPolicy(true, true, 10*time.Second),
-    )
+    redisRuntime, err := ephemeral.NewRedisRuntime(context.Background(), &ephemeral.NewRedisRuntimeRequest{
+        Options: &redis.Options{
+            Addr:     appSettings.RedisDSN,
+            Password: appSettings.RedisPassword,
+        },
+        MaxUnauthedRequestAllowance: appSettings.MaxUnauthedRequestAllowance,
+        Component:                   appSettings.Component,
+        Environment:                 appSettings.Environment,
+    })
     if err != nil {
-        return err
+        return fmt.Errorf("server/redis-runtime-initialisation-failed: %v", err)
     }
-    cleanupGroup.Add(mongoHandler.Close)
-
-    coreRepository := repository.NewMongoDbRepositoryWithDefaults(
-        mongoHandler,
-        appSettings.MongoDatabaseName,
-    )
+    cleanupGroup.Add(redisRuntime.Close)
 
     starterRepositories, err := starter.NewRepositories(&starter.NewRepositoriesRequest{
-        Core: coreRepository,
+        Core: mongoRuntime.CoreRepository,
     })
     if err != nil {
         return fmt.Errorf("server/starter-repositories-initialisation-failed: %v", err)
     }
 
     auditService := audit.NewService(starterRepositories.Audit)
-    ephemeralStore := ephemeral.NewRedisStore(redisClient, maxAttempts, component, environment)
-    emailManager := emailmanager.NewEmailManager(emailTemplater, emailProvider, auditService, emailConfig)
+
+    sparkpostClient, err := emailprovider.NewSparkPostClient(&emailprovider.NewSparkPostClientRequest{
+        BaseURL:    appSettings.SparkpostURLEndpoint,
+        APIKey:     appSettings.SparkpostAccessToken,
+        APIVersion: 1,
+    })
+    if err != nil {
+        return fmt.Errorf("server/sparkpost-client-initialisation-failed: %v", err)
+    }
+
+    var emailProvider emailprovider.EmailProvider
+    emailProvider = emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{})
+    if appSettings.Environment == "production" {
+        emailProvider = emailprovider.NewSparkPostEmailProvider(sparkpostClient)
+    }
+
+    emailVerificationFullEndpoint := appSettings.BackendBaseURL + router.AuthVerifyEndpoint
+    emailManager, err := emailmanager.NewStandardEmailManager(&emailmanager.NewStandardEmailManagerRequest{
+        Provider:                      emailProvider,
+        AuditService:                  auditService,
+        FrontendBaseURL:               appSettings.FrontendBaseURL,
+        EmailVerificationFullEndpoint: emailVerificationFullEndpoint,
+        DashboardVerificationURIPath:  emailVerificationFullEndpoint,
+        Environment:                   appSettings.Environment,
+        BusinessEntityName:            appSettings.BusinessEntityName,
+        BusinessEntityWebsite:         appSettings.BusinessEntityWebsite,
+        WelcomeEmailSubject:           appSettings.EmailWelcomeSubject,
+        LoginEmailSubject:             appSettings.EmailLoginSubject,
+        FromEmailAddress:              appSettings.EmailFromAddr,
+        NoReplyEmailAddress:           appSettings.EmailNoReplyAddr,
+    })
+    if err != nil {
+        return fmt.Errorf("server/email-manager-initialisation-failed: %v", err)
+    }
 
     starterServices, err := starter.NewServices(&starter.NewServicesRequest{
         Repositories:          starterRepositories,
-        EphemeralStore:        ephemeralStore,
+        EphemeralStore:        redisRuntime.Store,
         EmailManager:          emailManager,
         AccessTokenSecret:     appSettings.AccessTokenSecret,
         RefreshTokenSecret:    appSettings.RefreshTokenSecret,
@@ -206,12 +262,17 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
         return fmt.Errorf("server/starter-routes-attachment-failed: %v", err)
     }
 
-    spa.AttachRoutes(&spa.AttachRoutesRequest{
-        Router:                        httpRouter,
-        SpaFileSystem:                 embeddedContent,
-        EmbeddedContentFilePathPrefix: embeddedContentFilePathPrefix,
-        HandleUpdatePathToIndexFunc:   spa.NewHandleUpdatePathToIndex(),
-    })
+    if err := router.AttachDefaultAuthVerifyRoute(&router.AttachDefaultAuthVerifyRouteRequest{
+        Router:          httpRouter,
+        BackendBaseURL:  appSettings.BackendBaseURL,
+        FrontendBaseURL: appSettings.FrontendBaseURL,
+    }); err != nil {
+        return fmt.Errorf("server/auth-verify-route-attachment-failed: %v", err)
+    }
+
+    if err := spaBootstrap.AttachRoutes(); err != nil {
+        return fmt.Errorf("server/spa-routes-attachment-failed: %v", err)
+    }
 
     return httpserver.StartServerWith(&httpserver.StartServerWithRequest{
         Host:                    appSettings.Host,
@@ -228,8 +289,10 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
 
 ## Migration Notes
 
-- Keep third-party clients explicit until the project has a stable opinion
+- Keep third-party settings explicit until the project has a stable opinion
   about Redis, email, OAuth, payment, observability, and storage lifecycle.
+  Use the package-owned runtime helpers for the common path, and eject back to
+  direct client construction when the host application needs custom behaviour.
 - Prefer `starter.AttachDefaultRoutes` for a lazy first pass. Eject route
   attachment back into per-package calls when one route group needs custom
   middleware or ordering.

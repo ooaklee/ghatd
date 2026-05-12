@@ -46,6 +46,13 @@ The common Lazy path is:
 The starter package intentionally does not create Redis clients, email
 providers, OAuth providers, payment provider clients, validators, or resource
 cleanup functions. Those remain visible and replaceable in the host application.
+For the lazy path, package-owned helpers such as `repository.NewMongoRuntime`,
+`ephemeral.NewRedisRuntime`, `emailprovider.NewSparkPostClient`,
+`emailmanager.NewStandardEmailManager`, `spa.NewBootstrap`, and
+`router.AttachDefaultAuthVerifyRoute` can reduce repeated host-application
+setup without moving that ownership into `starter/v0`. Use
+`router.NewAuthVerifyHandler` directly when a project needs custom auth verify
+endpoint paths.
 
 For a fuller server-command example that mirrors a GHATD host application
 setup, see [starter/v0 Host Application Setup](starter-v0-host-application-style.md).

@@ -293,3 +293,133 @@ func TestNewAuthVerifyHandler_LocalDevLocationHeaderCarriesFrontendNextStep(t *t
 		rec.Header().Get("Location"),
 	)
 }
+
+func TestAttachDefaultAuthVerifyRoute(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		backendBase    string
+		frontendBase   string
+		rawQuery       string
+		expectStatus   int
+		expectLocation string
+	}{
+		{
+			name:           "Redirect to verify API when type is 2 with valid base URLs",
+			backendBase:    "https://api.example.com",
+			frontendBase:   "https://app.example.com",
+			rawQuery:       "__t=token-abc&type=2&request_url=/welcome",
+			expectStatus:   http.StatusTemporaryRedirect,
+			expectLocation: "https://api.example.com/api/v1/ams/verify/email?t=token-abc&next_step=" + url.QueryEscape("https://app.example.com/welcome"),
+		},
+		{
+			name:           "Redirect to login API when type is 1 with valid base URLs",
+			backendBase:    "https://api.example.com",
+			frontendBase:   "https://app.example.com",
+			rawQuery:       "__t=login-token&type=1&request_url=/dashboard",
+			expectStatus:   http.StatusTemporaryRedirect,
+			expectLocation: "https://api.example.com/api/v1/ams/login?t=login-token&next_step=" + url.QueryEscape("https://app.example.com/dashboard"),
+		},
+		{
+			name:           "Missing type redirects to frontend login with valid base URLs",
+			backendBase:    "https://api.example.com",
+			frontendBase:   "https://app.example.com",
+			rawQuery:       "__t=token-without-type",
+			expectStatus:   http.StatusTemporaryRedirect,
+			expectLocation: "https://app.example.com/auth/login",
+		},
+		{
+			name:           "Localhost base URLs compose correctly",
+			backendBase:    "http://localhost:4000/",
+			frontendBase:   "http://localhost:5173/",
+			rawQuery:       "__t=local-token&type=2",
+			expectStatus:   http.StatusTemporaryRedirect,
+			expectLocation: "http://localhost:4000/api/v1/ams/verify/email?t=local-token&next_step=" + url.QueryEscape("http://localhost:5173/"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := router.NewRouter(nil, nil)
+			require.NotNil(t, r)
+
+			req := router.AttachDefaultAuthVerifyRouteRequest{
+				Router:          r,
+				BackendBaseURL:  tt.backendBase,
+				FrontendBaseURL: tt.frontendBase,
+			}
+			require.NoError(t, router.AttachDefaultAuthVerifyRoute(&req))
+
+			httpReq := httptest.NewRequest(http.MethodGet, router.AuthVerifyEndpoint+"?"+tt.rawQuery, nil)
+			httpReq.URL.RawQuery = tt.rawQuery
+			rec := httptest.NewRecorder()
+
+			r.GetRouter().ServeHTTP(rec, httpReq)
+
+			assert.Equal(t, tt.expectStatus, rec.Code)
+			assert.Equal(t, tt.expectLocation, rec.Header().Get("Location"))
+		})
+	}
+}
+
+func TestAttachDefaultAuthVerifyRouteErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		request *router.AttachDefaultAuthVerifyRouteRequest
+		wantErr string
+	}{
+		{
+			name:    "Bad - nil request",
+			wantErr: "router/auth-verify-route-nil-request",
+		},
+		{
+			name: "Bad - missing router",
+			request: &router.AttachDefaultAuthVerifyRouteRequest{
+				BackendBaseURL:  "https://api.example.com",
+				FrontendBaseURL: "https://app.example.com",
+			},
+			wantErr: "router/auth-verify-route-missing-router",
+		},
+		{
+			name: "Bad - missing backend base URL",
+			request: &router.AttachDefaultAuthVerifyRouteRequest{
+				Router:          router.NewRouter(nil, nil),
+				FrontendBaseURL: "https://app.example.com",
+			},
+			wantErr: "router/auth-verify-route-invalid-backend-base-url",
+		},
+		{
+			name: "Bad - relative frontend base URL",
+			request: &router.AttachDefaultAuthVerifyRouteRequest{
+				Router:          router.NewRouter(nil, nil),
+				BackendBaseURL:  "https://api.example.com",
+				FrontendBaseURL: "/app",
+			},
+			wantErr: "router/auth-verify-route-invalid-frontend-base-url",
+		},
+		{
+			name: "Bad - frontend base URL with query",
+			request: &router.AttachDefaultAuthVerifyRouteRequest{
+				Router:          router.NewRouter(nil, nil),
+				BackendBaseURL:  "https://api.example.com",
+				FrontendBaseURL: "https://app.example.com?next=/dashboard",
+			},
+			wantErr: "router/auth-verify-route-invalid-frontend-base-url",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := router.AttachDefaultAuthVerifyRoute(tt.request)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}

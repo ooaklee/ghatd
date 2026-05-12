@@ -10,7 +10,37 @@ The core of the new structure is the **RepositoryHelper** interface, which handl
 
 > To see various examples of how these packages can be leverated
 
-### **1. Build a MongoDB URI**
+### **1. Use the Mongo runtime helper**
+
+For a GHATD host application, `NewMongoRuntime` keeps the common bootstrap in
+one place: URI generation, handler creation, optional warmup, cleanup, and the
+core Mongo repository used by `starter/v0`.
+
+```Go
+mongoRuntime, err := repository.NewMongoRuntime(context.Background(), &repository.NewMongoRuntimeRequest{
+	URIConfig: repositoryhelpers.MongoURIConfig{
+		Username: os.Getenv("MONGO_DB_USERNAME"),
+		Password: os.Getenv("MONGO_DB_PASSWORD"),
+		Host:     os.Getenv("MONGO_DB_HOST"),
+		AppName:  os.Getenv("MONGO_DB_APP_NAME"),
+		Atlas:    os.Getenv("MONGO_DB_ATLAS") == "true",
+	},
+	Database: os.Getenv("MONGO_DB_NAME"),
+	Options: []repositoryhelpers.ConfigOption{
+		repositoryhelpers.WithConnectionPool(200, 10, 15*time.Minute),
+		repositoryhelpers.WithTimeouts(5*time.Second, 3*time.Second, 120*time.Second),
+		repositoryhelpers.WithRetryPolicy(true, true, 10*time.Second),
+	},
+})
+if err != nil {
+	log.Fatal(err)
+}
+defer mongoRuntime.Close(context.Background())
+
+coreRepository := mongoRuntime.CoreRepository
+```
+
+### **2. Build a MongoDB URI**
 
 Use the URI helpers when a project collects MongoDB settings as separate
 environment variables. They keep Atlas and non-Atlas URI generation in one
@@ -32,7 +62,7 @@ if err != nil {
 For lower-level composition, use `GenerateGenericMongoURI` or
 `GenerateAtlasMongoURI` directly.
 
-### **2. Initialise the Repository Helper**
+### **3. Initialise the Repository Helper**
 
 You create a handler with and configuration as required using the options and then use it to create your core repository.
 
@@ -69,7 +99,7 @@ func main() {
 }
 ```
 
-### **3. Inject and Use in Repositories**
+### **4. Inject and Use in Repositories**
 
 In your application's domain repositories (like `UserRepository`), you inject and use a `MongoDbStore` interface (shape as needed) to perform all database interactions, logging, and result mapping.
 

@@ -6,6 +6,7 @@ The `router` package provides a standardised, project-specific wrapper around `g
 
 -   **`router.go`**: Contains the `Router` struct and the `NewRouter` constructor. It initialises a `mux.Router` and applies any provided default handlers or global middleware.
 -   **`handler.go`**: Provides handlers for common, cross-cutting concerns. A key example is `NewAuthVerifyHandler`, which manages the redirection flow for email and login verification links.
+-   **`auth_verify.go`**: Provides `AttachDefaultAuthVerifyRoute`, a host-application helper that registers GHATD's default verification route from backend and frontend base URLs. Use `NewAuthVerifyHandler` directly when the host application needs custom endpoint paths.
 -   **`const.go`**: Defines constant URI paths for shared endpoints like health checks (`/v0/health/check`) and authentication verification (`/v0/auth/verify`).
 
 ## Getting Started
@@ -73,16 +74,14 @@ func main() {
 	)
 
 	// 4. Add Application-Specific Handlers
-	// The AuthVerifyEndpoint is a special handler for processing verification links from emails.
-	ghatdRouter.GetRouter().HandleFunc(
-		router.AuthVerifyEndpoint,
-		router.NewAuthVerifyHandler(
-			backendBaseURL+"/api/v1/ams/verify/email?t=%s", // URL to verify an email
-			backendBaseURL+"/api/v1/ams/login?t=%s",      // URL to process a magic login link
-			frontendBaseURL+"/auth/login",                // Fallback URL for failed attempts
-			frontendBaseURL,                              // Success URL after verification
-		),
-	)
+	// The default auth verify route processes verification links from emails.
+	if err := router.AttachDefaultAuthVerifyRoute(&router.AttachDefaultAuthVerifyRouteRequest{
+		Router:          ghatdRouter,
+		BackendBaseURL:  backendBaseURL,
+		FrontendBaseURL: frontendBaseURL,
+	}); err != nil {
+		panic(err)
+	}
 
 	// 5. Attach Service-Specific Routes
 	// At this point, you would attach the routes for each of your services.

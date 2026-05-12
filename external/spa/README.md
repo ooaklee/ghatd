@@ -4,6 +4,30 @@ Lightweight helpers for serving a single-page application (SPA) from embedded/st
 
 ## Quick start
 
+For the common host-application path, use `NewBootstrap` to create the SPA
+fallback handler and router together:
+
+```go
+spaBootstrap, err := spa.NewBootstrap(&spa.BootstrapRequest{
+	EmbeddedContent:               embeddedContent,
+	EmbeddedContentFilePathPrefix: embeddedContentFilePathPrefix,
+	DefaultHealthcheckHandler:     response.GetDefault200Response,
+	Middlewares:                   routerMiddlewares,
+})
+if err != nil {
+	return err
+}
+
+httpRouter := spaBootstrap.Router
+
+// Attach API routes before this call so the SPA catch-all stays last.
+if err := spaBootstrap.AttachRoutes(); err != nil {
+	return err
+}
+```
+
+For lower-level composition:
+
 1) Create the SPA handler used for 404 fallbacks:
 
 ```go
@@ -17,12 +41,14 @@ spaHandler := spa.NewSpaHandler(&spa.NewSpaHandlerRequest{
 2) Attach SPA routes to the app router so static assets are served and all other paths are rewritten to the SPA index:
 
 ```go
-spa.AttachRoutes(&spa.AttachRoutesRequest{
+if err := spa.AttachRoutes(&spa.AttachRoutesRequest{
 	Router:                        httpRouter,
 	SpaFileSystem:                 embeddedContent,
 	EmbeddedContentFilePathPrefix: embeddedContentFilePathPrefix,
 	HandleUpdatePathToIndexFunc:   spa.NewHandleUpdatePathToIndex(),
-})
+}); err != nil {
+	return err
+}
 ```
 
 3) Control how paths are rewritten with `NewHandleUpdatePathToIndex`:
@@ -45,4 +71,3 @@ customHandleUpdatePath := spa.NewHandleUpdatePathToIndex(
 - `NewHandleUpdatePathToIndex` builds a function that rewrites request paths to `/` unless the URL has a bypassed extension (defaults include `.js`, `.css`, images, fonts, etc.). This keeps SPA deep links working while letting static assets be served directly.
 - `NewSpaHandler` uses that function inside `GetResourceNotFoundError` to serve the embedded `/dist/index.html` for non-API 404s.
 - `AttachRoutes` wires the same updater into a catch-all route so browser requests without a known asset extension are rewritten and served by the SPA bundle.
-

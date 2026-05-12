@@ -20,6 +20,43 @@ For a high-level overview of how this might fit into your project, please [**vis
 
 This section shows how to set up the `emailmanager` and send a verification email. This is the recommended way to use the system for standard operations. For more examples, [check out the reference examples above](#core-packages-overview).
 
+For the standard GHATD host-application setup, prefer
+`emailprovider.NewSparkPostClient` and `emailmanager.NewStandardEmailManager`.
+They keep the common SparkPost client and email template wiring in the packages
+that own those concepts.
+
+```go
+sparkpostClient, err := emailprovider.NewSparkPostClient(&emailprovider.NewSparkPostClientRequest{
+    BaseURL:    sparkpostURL,
+    APIKey:     sparkpostAPIKey,
+    APIVersion: 1,
+})
+if err != nil {
+    return err
+}
+
+provider := emailprovider.NewSparkPostEmailProvider(sparkpostClient)
+manager, err := emailmanager.NewStandardEmailManager(&emailmanager.NewStandardEmailManagerRequest{
+    Provider:                      provider,
+    AuditService:                  auditService,
+    FrontendBaseURL:               "https://app.example.com",
+    EmailVerificationFullEndpoint: "https://api.example.com/v0/auth/verify",
+    DashboardVerificationURIPath:  "https://api.example.com/v0/auth/verify",
+    Environment:                   "production",
+    BusinessEntityName:            "Example",
+    BusinessEntityWebsite:         "https://example.com",
+    WelcomeEmailSubject:           "Welcome",
+    LoginEmailSubject:             "Your login link",
+    FromEmailAddress:              "noreply@example.com",
+    NoReplyEmailAddress:           "noreply@example.com",
+})
+if err != nil {
+    return err
+}
+```
+
+The lower-level setup remains available when a project needs custom templates.
+
 ### 1. Import Packages and Configure
 
 You'll need configuration for the `emailtemplater`, an `emailprovider` instance, and an [`audit` service](../../../external/audit).

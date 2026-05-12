@@ -70,12 +70,18 @@ stack, _ := starter.NewStack(&starter.NewStackRequest{
 - `CleanupGroup` implements the `Cleanup` signature via its `Run` method, so
   it can be assigned directly to `Stack.Cleanup`.
 
-Starter creates GHATD components, but it does not create third-party clients.
+Starter creates GHATD components, but it does not own third-party choices.
 Mongo handlers, Redis stores, email managers, OAuth providers, payment
-providers, validators, and cleanup remain visible in the host application. The
-service layer only requires accessmanager's ephemeral-store contract; the
-middleware layer can additionally accept a `HardenedRateLimitStore` override
-when hardened rate limiting uses a different store.
+providers, validators, and cleanup remain visible in the host application.
+Package-owned helpers such as `repository.NewMongoRuntime`,
+`ephemeral.NewRedisRuntime`, `emailprovider.NewSparkPostClient`,
+`emailmanager.NewStandardEmailManager`, `spa.NewBootstrap`, and
+`router.AttachDefaultAuthVerifyRoute` can reduce repeated setup without moving that
+ownership into `starter/v0`. `router.NewAuthVerifyHandler` remains available
+for custom auth verify endpoint paths. The service layer only requires accessmanager's
+ephemeral-store contract; the middleware layer can additionally accept a
+`HardenedRateLimitStore` override when hardened rate limiting uses a different
+store.
 
 For a fuller GHATD host application server-command walkthrough, see
 [`docs/getting-started/starter-v0-host-application-style.md`](../../../docs/getting-started/starter-v0-host-application-style.md).
@@ -216,7 +222,8 @@ group depends on it. If the remaining groups do not need access middleware
 ### What AttachDefaultRoutes does NOT attach
 
 - SPA routes (catch-all `/` handler) — these remain host-owned.
-- Auth verify/CORS middleware — the host owns router bootstrap and middleware.
+- Auth verify/CORS middleware — package helpers exist, but the host owns when
+  they are attached and how middleware is ordered.
 - Router bootstrap — the host creates the `*router.Router` and starts the HTTP server.
 
 ## Ejection

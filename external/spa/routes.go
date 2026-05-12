@@ -3,7 +3,6 @@ package spa
 import (
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"regexp"
 
@@ -32,15 +31,33 @@ type AttachRoutesRequest struct {
 	HandleUpdatePathToIndexFunc func(r *http.Request) *http.Request
 }
 
-// AttachRoutes attaches spa handler to corresponding
-// routes on router
-func AttachRoutes(request *AttachRoutesRequest) {
+// AttachRoutes attaches spa handler to corresponding routes on router.
+func AttachRoutes(request *AttachRoutesRequest) error {
+	if request == nil {
+		return fmt.Errorf("spa/attach-routes-nil-request")
+	}
+	if request.Router == nil {
+		return fmt.Errorf("spa/attach-routes-missing-router")
+	}
+	if request.Router.GetRouter() == nil {
+		return fmt.Errorf("spa/attach-routes-missing-http-router")
+	}
+	if request.SpaFileSystem == nil {
+		return fmt.Errorf("spa/attach-routes-missing-file-system")
+	}
 
 	// Create filesystem only holding dist dir assets
 	distDirFS, err := fs.Sub(request.SpaFileSystem, fmt.Sprintf("%sdist", request.EmbeddedContentFilePathPrefix))
 	if err != nil {
-		log.Default().Panicln("unable-to-create-file-system-for-static-assets", err)
-		return
+		return fmt.Errorf("spa/attach-routes-file-system: %w", err)
+	}
+	if _, err := fs.Stat(distDirFS, "."); err != nil {
+		return fmt.Errorf("spa/attach-routes-file-system: %w", err)
+	}
+
+	handleUpdatePathToIndexFunc := request.HandleUpdatePathToIndexFunc
+	if handleUpdatePathToIndexFunc == nil {
+		handleUpdatePathToIndexFunc = NewHandleUpdatePathToIndex()
 	}
 
 	httpRouter := request.Router.GetRouter()
@@ -59,10 +76,11 @@ func AttachRoutes(request *AttachRoutesRequest) {
 			// if the r.URL.Path does not have a suffix such as .js,
 			// .css, .png, .jpg, .jpeg, .gif, .svg, or .ico then we
 			// should update path to go to /
-			r = request.HandleUpdatePathToIndexFunc(r)
+			r = handleUpdatePathToIndexFunc(r)
 
 			fileServer.ServeHTTP(w, r)
 		}
 	})
 
+	return nil
 }
