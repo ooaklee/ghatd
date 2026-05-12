@@ -5,8 +5,9 @@ With [**`Details`**](../../about-details.md), you can transform your ideas and h
 
 ## Prerequisites
 
-- Go installed/ available
-- The [**`GHAT(D) CLI`**](#) installed
+- Go installed and available on your `PATH`.
+- The [**`GHATD CLI`**](#) installed.
+- For `web-vite` details, Node.js and the package manager used by the detail.
 
 ## Steps
 
@@ -21,7 +22,8 @@ ghatdcli new -n [PROJECT_NAME] -m [PROJECT_MODULE_PATH] -w [COMMA_SEPARATED_LINK
 
 > Remember to replace the placeholders in the command above! 
 >
-> - It is possible to ignore`[DESTINATION_DIR]` if you want the new app to be generated in the same folder `ghatdcli` is being used in.
+> - It is possible to ignore `[DESTINATION_DIR]` if you want the new app to be generated in the same folder `ghatdcli` is being used in.
+> - Detail links can use `owner/repo`, `github.com/owner/repo`, `https://github.com/owner/repo`, or SSH-style GitHub sources.
 
 - Run your new web app:
 
@@ -31,9 +33,16 @@ go mod tidy
 go run main.go start-server
 ```
 
+- When a generated app includes a `web-vite` detail, build the SPA before running a production-style Go binary:
+
+```shell
+cd [PROJECT_NAME]
+npm install
+npm run build
+go run main.go start-server
+```
+
 > For the best developer experience we recommend using [`reflex`](https://github.com/cespare/reflex).
 
 ## Additional context
-
-
 

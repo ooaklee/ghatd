@@ -3,7 +3,19 @@ package config
 import (
 	"os"
 
+	"github.com/ooaklee/ghatd/internal/cli/common"
 	"github.com/ooaklee/ghatd/internal/cli/reader"
+)
+
+const (
+	// DetailTypeAPI is a Go API detail.
+	DetailTypeAPI = "api"
+
+	// DetailTypeWeb is a Go web detail with GHATD-managed embedded assets.
+	DetailTypeWeb = "web"
+
+	// DetailTypeWebVite is a Vite SPA detail copied into the host app root.
+	DetailTypeWebVite = "web-vite"
 )
 
 // DetailConfig is the representation of a valid Detail configuration file
@@ -48,7 +60,21 @@ func ValidateDetailConfig(config *DetailConfig) error {
 		return nil
 	}
 
+	if config.Type != "" && !IsSupportedDetailType(config.Type) {
+		return common.ErrDetailTypeInvalidError
+	}
+
 	return nil
+}
+
+// IsSupportedDetailType reports whether detailType can be composed by the CLI.
+func IsSupportedDetailType(detailType string) bool {
+	switch detailType {
+	case DetailTypeAPI, DetailTypeWeb, DetailTypeWebVite:
+		return true
+	default:
+		return false
+	}
 }
 
 // ReadDetailConfig loads up passed configuration file. Returns nil if config does not exist

@@ -33,18 +33,20 @@ tells you the device name, platform, and status. The secrets stay on the server.
 
 ```
 notifier/
-├── model.go          # Data types: addresses, preferences, config
-├── service.go        # Business logic: register, list, send, preferences
-├── repository.go     # MongoDB persistence
-├── sender.go         # Web Push and FCM delivery adapters
-├── utils.go          # Shared helpers (credentials decoding, etc.)
-├── request.go        # API request types
-├── response.go       # API response types
-├── const.go          # Constants and error keys
-├── errors.go         # Sentinel errors
-├── errormap.go       # HTTP error code mapping
-├── service_test.go   # Service tests with fakes
-├── utils_test.go     # Tests for shared helpers
+├── model.go              # Data types: addresses, preferences, config
+├── service.go            # Business logic: register, list, send, preferences
+├── repository.go         # MongoDB persistence
+├── sender.go             # Web Push and FCM delivery adapters
+├── sender_factory.go     # Standard sender factory (NewStandardSenders)
+├── utils.go              # Shared helpers (credentials decoding, etc.)
+├── request.go            # API request types
+├── response.go           # API response types
+├── const.go              # Constants and error keys
+├── errors.go             # Sentinel errors
+├── errormap.go           # HTTP error code mapping
+├── service_test.go       # Service tests with fakes
+├── sender_factory_test.go
+├── utils_test.go         # Tests for shared helpers
 └── migrations/
     └── indexes_notifier.go  # Database index setup and rollback
 ```
@@ -104,7 +106,46 @@ await umsClient.post('me/notifications/addresses', {
 });
 ```
 
-### 4. Send a notification (admin only)
+### 4. Use the sender factory
+
+Instead of constructing each sender manually you can use the factory:
+
+```go
+import "github.com/ooaklee/ghatd/external/notifier"
+
+sendersResult, err := notifier.NewStandardSenders(&notifier.StandardSendersRequest{
+    WebPush: &notifier.WebPushSenderConfig{
+        VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC"),
+        VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE"),
+    },
+    FCM: &notifier.FCMSenderConfig{
+        Enabled:         os.Getenv("NOTIFIER_FCM_ENABLED") == "true",
+        CredentialsFile: os.Getenv("NOTIFIER_FCM_CREDENTIALS_FILE"),
+    },
+    FCMCredentialsBase64: os.Getenv("NOTIFIER_FCM_CREDENTIALS_FILE_B64"),
+})
+if err != nil {
+    return err
+}
+defer sendersResult.Cleanup() // remove any temp credential files on shutdown
+
+service := notifier.NewService(&notifier.NewServiceRequest{
+    Repository: repo,
+    Senders:    sendersResult.Senders,
+})
+```
+
+The Web Push sender is always included. Its `Enabled` field is set to `true`
+when explicitly enabled **or** when both VAPID keys are non-empty. The FCM
+sender is only included when `req.FCM.Enabled` is `true`.
+
+**Cleanup ownership**: When `FCMCredentialsBase64` is set, `NewStandardSenders`
+decodes the value into a temporary file. The returned `Cleanup` function
+removes that file. The caller **must** call `Cleanup` (typically at server
+shutdown) to avoid leaking temporary credentials on disk. When no FCM sender
+is configured, `Cleanup` is a no-op.
+
+### 5. Send a notification (admin only)
 
 ```go
 response, err := service.NotifyUser(ctx, &notifier.NotifyUserRequest{
@@ -147,5 +188,7 @@ response, err := service.NotifyUser(ctx, &notifier.NotifyUserRequest{
    `NOTIFIER_FCM_ENABLED=true` and provide credentials via
    `NOTIFIER_FCM_CREDENTIALS_FILE`, `NOTIFIER_FCM_CREDENTIALS_FILE_B64`
    (base64-encoded, takes precedence), or `NOTIFIER_FCM_PROJECT_ID`.
-   Use `ResolveCredentialsFile(b64, filePath)` to decode base64 credentials
-   into a temp file — callers own cleanup of the returned file path.
+   Prefer `NewStandardSenders` for application wiring; it decodes base64
+   credentials into a temp file and returns the cleanup function. Use
+   `ResolveCredentialsFileWithCleanup` directly only when custom sender wiring
+   needs lower-level control.

@@ -220,7 +220,7 @@ func main() {
     // Select database
     db := client.Database("your_database_name")
     
-    // Initialize migration system
+    // Initialise migration system
     migrate.SetDatabase(db)
     
     // Register user v2 indexes migration
@@ -533,7 +533,7 @@ db.users.find({
 Keep both models running simultaneously:
 
 ```go
-// Initialize v2 system
+// Initialise v2 system
 userFactory := NewUserFactory(WebAppUserConfig())
 v2Service := NewService(v2Repository, auditService, config, ...)
 v2Handler := NewHandler(v2Service, validator)
