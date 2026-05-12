@@ -15,6 +15,8 @@ type fakeRepository struct {
 	upserted     *NotificationAddress
 	deletedID    string
 	disabledHash string
+	listRequest  *ListNotificationAddressesRequest
+	countRequest *ListNotificationAddressesRequest
 
 	disableError error
 }
@@ -30,6 +32,16 @@ func (r *fakeRepository) GetActiveAddressesByUserID(ctx context.Context, userID 
 
 func (r *fakeRepository) GetAddressesByUserID(ctx context.Context, userID string) ([]NotificationAddress, error) {
 	return r.addresses, nil
+}
+
+func (r *fakeRepository) GetAddresses(ctx context.Context, req *ListNotificationAddressesRequest) ([]NotificationAddress, error) {
+	r.listRequest = req
+	return r.addresses, nil
+}
+
+func (r *fakeRepository) CountAddresses(ctx context.Context, req *ListNotificationAddressesRequest) (int64, error) {
+	r.countRequest = req
+	return int64(len(r.addresses)), nil
 }
 
 func (r *fakeRepository) DeleteAddressByIDForUser(ctx context.Context, userID, addressID string) error {
@@ -198,6 +210,111 @@ func TestRegisterAddress_RejectsInvalidChannelPayload(t *testing.T) {
 	})
 	if err != ErrInvalidNotificationAddressBody {
 		t.Fatalf("expected invalid address body, got %v", err)
+	}
+}
+
+func TestListAddresses_AdminFiltersAndSanitises(t *testing.T) {
+	tests := []struct {
+		name        string
+		request     *ListNotificationAddressesRequest
+		wantErr     error
+		wantChannel NotificationChannel
+		wantStatus  NotificationAddressStatus
+		wantPage    int
+		wantPerPage int
+	}{
+		{
+			name: "filters by user channel and status",
+			request: &ListNotificationAddressesRequest{
+				UserID:  "user-1",
+				Channel: "webpush",
+				Status:  "active",
+			},
+			wantChannel: NotificationChannelWebPush,
+			wantStatus:  NotificationAddressStatusActive,
+			wantPage:    1,
+			wantPerPage: 25,
+		},
+		{
+			name:        "allows platform wide listing",
+			request:     &ListNotificationAddressesRequest{},
+			wantPage:    1,
+			wantPerPage: 25,
+		},
+		{
+			name:        "normalises pagination and caps page size",
+			request:     &ListNotificationAddressesRequest{Page: 2, PerPage: 250},
+			wantPage:    2,
+			wantPerPage: 100,
+		},
+		{
+			name:    "rejects invalid channel",
+			request: &ListNotificationAddressesRequest{Channel: "SMS"},
+			wantErr: ErrInvalidNotificationChannel,
+		},
+		{
+			name:    "rejects invalid status",
+			request: &ListNotificationAddressesRequest{Status: "BROKEN"},
+			wantErr: ErrInvalidNotificationAddressBody,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repository := &fakeRepository{
+				addresses: []NotificationAddress{
+					{
+						ID:          "addr-1",
+						UserID:      "user-1",
+						Channel:     NotificationChannelWebPush,
+						Status:      NotificationAddressStatusActive,
+						AddressHash: "secret-hash",
+						WebPush:     &WebPushAddress{Endpoint: "https://push.example/subscription", Keys: WebPushKeys{Auth: "auth", P256DH: "p256dh"}},
+					},
+				},
+			}
+			service := NewService(&NewServiceRequest{Repository: repository})
+
+			response, err := service.ListAddresses(context.Background(), tt.request)
+
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("expected %v, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if repository.listRequest == nil {
+				t.Fatal("expected repository list request")
+			}
+			if repository.countRequest == nil {
+				t.Fatal("expected repository count request")
+			}
+			if tt.wantChannel != "" && repository.listRequest.Channel != tt.wantChannel {
+				t.Fatalf("expected channel %q, got %q", tt.wantChannel, repository.listRequest.Channel)
+			}
+			if tt.wantStatus != "" && repository.listRequest.Status != tt.wantStatus {
+				t.Fatalf("expected status %q, got %q", tt.wantStatus, repository.listRequest.Status)
+			}
+			if repository.listRequest.Page != tt.wantPage || repository.listRequest.PerPage != tt.wantPerPage {
+				t.Fatalf("expected page/perPage %d/%d, got %d/%d", tt.wantPage, tt.wantPerPage, repository.listRequest.Page, repository.listRequest.PerPage)
+			}
+			if len(response.Addresses) != 1 {
+				t.Fatalf("expected one address, got %d", len(response.Addresses))
+			}
+			if response.Total != 1 || response.Page != tt.wantPage || response.PerPage != tt.wantPerPage {
+				t.Fatalf("unexpected response metadata: %#v", response.GetMetaData())
+			}
+			summary := response.Addresses[0]
+			if summary.UserID != "user-1" {
+				t.Fatalf("expected user id on admin summary, got %q", summary.UserID)
+			}
+			if summary.ID != "addr-1" || summary.Channel != NotificationChannelWebPush {
+				t.Fatalf("unexpected summary: %#v", summary)
+			}
+		})
 	}
 }
 

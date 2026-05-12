@@ -193,7 +193,11 @@ type GetUserGroupsRequest struct {
 
 // GetLatestNotificationOverviewsRequest holds the data needed to fetch latest notification overviews.
 type GetLatestNotificationOverviewsRequest struct {
-	// UserId is the ID of the requester.
+	// UserId is the authenticated requester/actor ID.
+	//
+	// On admin routes this remains the admin user's ID for authorisation,
+	// logging, and audit context. The target user being queried lives in the
+	// embedded GetLatestNotificationOverviewsRequest.UserID field instead.
 	UserId string
 
 	// GetLatestNotificationOverviewsRequest carries the underlying notification query parameters.
@@ -202,43 +206,94 @@ type GetLatestNotificationOverviewsRequest struct {
 
 // GetNotifierConfigRequest holds the data needed to fetch notifier config.
 type GetNotifierConfigRequest struct {
+	// UserId is the authenticated requester asking for notifier config.
 	UserId string
+
+	// GetNotifierConfigRequest carries the underlying notifier config request.
 	*notifier.GetNotifierConfigRequest
 }
 
 // RegisterNotificationAddressRequest holds the data needed to register a notification address for the current user.
 type RegisterNotificationAddressRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	//
+	// On admin routes this remains the admin user's ID. The target user whose
+	// address is being registered lives in RegisterAddressRequest.UserID.
 	UserId string
+
+	// RegisterAddressRequest carries the underlying notification address payload.
 	*notifier.RegisterAddressRequest
 }
 
 // ListNotificationAddressesRequest holds the data needed to list notification addresses for the current user.
 type ListNotificationAddressesRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	//
+	// On admin routes this remains the admin user's ID. The target filter lives
+	// in ListNotificationAddressesRequest.UserID on the embedded notifier request.
 	UserId string
+
+	// AdminView indicates whether the request came through the admin notifications route.
+	AdminView bool
+
+	// IncludeUsers indicates whether address summaries should be enriched with user profiles.
+	IncludeUsers bool `query:"include_users"`
+
+	// ListNotificationAddressesRequest carries the underlying notifier list filters and pagination.
 	*notifier.ListNotificationAddressesRequest
 }
 
 // DeleteNotificationAddressRequest holds the data needed to delete a notification address for the current user.
 type DeleteNotificationAddressRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	//
+	// On admin routes this remains the admin user's ID. The target user whose
+	// address is being deleted lives in DeleteNotificationAddressRequest.UserID.
 	UserId string
+
+	// DeleteNotificationAddressRequest carries the target user and address identifiers.
 	*notifier.DeleteNotificationAddressRequest
 }
 
 // GetNotificationPreferencesRequest holds the data needed to fetch notification preferences.
 type GetNotificationPreferencesRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	//
+	// On admin routes this remains the admin user's ID. The target user whose
+	// preferences are being fetched lives in GetNotificationPreferencesRequest.UserID.
 	UserId string
+
+	// IncludeUser indicates whether the response should include the target user's profile.
+	IncludeUser bool
+
+	// GetNotificationPreferencesRequest carries the target notification preference lookup.
 	*notifier.GetNotificationPreferencesRequest
 }
 
 // UpdateNotificationPreferencesRequest holds the data needed to update notification preferences.
 type UpdateNotificationPreferencesRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	//
+	// On admin routes this remains the admin user's ID. The target user whose
+	// preferences are being updated lives in UpdateNotificationPreferencesRequest.UserID.
 	UserId string
+
+	// IncludeUser indicates whether the response should include the target user's profile.
+	IncludeUser bool
+
+	// UpdateNotificationPreferencesRequest carries the underlying preference update payload.
 	*notifier.UpdateNotificationPreferencesRequest
 }
 
 // NotifyUserRequest holds the data needed for an admin/service notification send.
 type NotifyUserRequest struct {
+	// UserId is the authenticated requester/actor ID.
+	//
+	// The target notification recipient lives in NotifyUserRequest.UserID on the
+	// embedded notifier request.
 	UserId string
+
+	// NotifyUserRequest carries the target recipient and notification payload.
 	*notifier.NotifyUserRequest
 }
 
@@ -392,59 +447,103 @@ type UpdateGroupMemberRequest struct {
 
 // CreateReminderRequest holds the data needed to create a reminder for the current user.
 type CreateReminderRequest struct {
+	// UserID is the authenticated requester creating the reminder.
 	UserID string
+
+	// CreateReminderRequest carries the underlying reminder creation payload.
 	*reminder.CreateReminderRequest
 }
 
 // GetReminderByIDRequest holds the data needed to get a reminder.
 type GetReminderByIDRequest struct {
+	// UserID is the authenticated requester fetching the reminder.
 	UserID string
-	Id     string
+
+	// Id is the reminder identifier to fetch.
+	Id string
 }
 
 // ListRemindersRequest holds the data needed to list reminders.
 type ListRemindersRequest struct {
-	UserID       string
+	// UserID is the authenticated requester listing reminders.
+	UserID string
+
+	// FilterUserID optionally filters reminders by a single target user.
 	FilterUserID string `query:"user_id"`
-	Status       string `query:"status"`
-	TargetType   string `query:"target_type"`
-	TargetId     string `query:"target_id"`
-	Page         int    `query:"page"`
-	PerPage      int    `query:"per_page"`
+
+	// Status optionally filters reminders by reminder status.
+	Status string `query:"status"`
+
+	// TargetType optionally filters reminders by the type of target resource.
+	TargetType string `query:"target_type"`
+
+	// TargetId optionally filters reminders by the target resource identifier.
+	TargetId string `query:"target_id"`
+
+	// Page specifies the page of reminder results to return.
+	Page int `query:"page"`
+
+	// PerPage specifies the number of reminder results to return per page.
+	PerPage int `query:"per_page"`
 }
 
 // UpdateReminderByIDRequest holds the data needed to update a reminder.
 type UpdateReminderByIDRequest struct {
+	// UserID is the authenticated requester updating the reminder.
 	UserID string
-	Id     string
+
+	// Id is the reminder identifier to update.
+	Id string
+
+	// UpdateReminderByIDRequest carries the underlying reminder update payload.
 	*reminder.UpdateReminderByIDRequest
 }
 
 // DeleteReminderByIDRequest holds the data needed to delete a reminder.
 type DeleteReminderByIDRequest struct {
+	// UserID is the authenticated requester deleting the reminder.
 	UserID string
-	Id     string
+
+	// Id is the reminder identifier to delete.
+	Id string
 }
 
 // DisableReminderByIDRequest holds the data needed to disable a reminder.
 type DisableReminderByIDRequest struct {
+	// UserID is the authenticated requester disabling the reminder.
 	UserID string
-	Id     string
+
+	// Id is the reminder identifier to disable.
+	Id string
 }
 
 // GetDueRemindersRequest holds the data needed to get due reminders.
 type GetDueRemindersRequest struct {
-	UserID        string
-	FilterUserID  string   `query:"user_id"`
+	// UserID is the authenticated requester fetching due reminders.
+	UserID string
+
+	// FilterUserID optionally filters due reminders by a single target user.
+	FilterUserID string `query:"user_id"`
+
+	// FilterUserIDs optionally filters due reminders by multiple target users.
 	FilterUserIDs []string `query:"user_ids"`
-	DueBefore     string   `query:"due_before"`
-	Limit         int      `query:"limit"`
+
+	// DueBefore optionally filters reminders due before the provided timestamp.
+	DueBefore string `query:"due_before"`
+
+	// Limit optionally caps the number of due reminders returned.
+	Limit int `query:"limit"`
 }
 
 // GetReminderStatsRequest holds the data needed to get reminder stats.
 type GetReminderStatsRequest struct {
-	UserID        string
-	FilterUserID  string   `query:"user_id"`
+	// UserID is the authenticated requester fetching reminder stats.
+	UserID string
+
+	// FilterUserID optionally filters reminder stats by a single target user.
+	FilterUserID string `query:"user_id"`
+
+	// FilterUserIDs optionally filters reminder stats by multiple target users.
 	FilterUserIDs []string `query:"user_ids"`
 }
 

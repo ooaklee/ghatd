@@ -2,7 +2,9 @@ package usermanager
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/gorilla/mux"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
@@ -461,8 +463,8 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 	var parsedRequest GetLatestNotificationOverviewsRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if requesterUserID == "" {
 		log.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -474,6 +476,15 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 		return nil, ErrRequestFailedValidation
 	}
 
+	targetUserID := getOptionalVariableValueFromURI(r, "userId")
+	if targetUserID == "" {
+		targetUserID = strings.TrimSpace(baseRequest.UserID)
+	}
+	if targetUserID == "" {
+		targetUserID = requesterUserID
+	}
+	baseRequest.UserID = targetUserID
+	parsedRequest.UserId = requesterUserID
 	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
@@ -504,8 +515,8 @@ func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator U
 	var parsedRequest RegisterNotificationAddressRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
-	if userID == "" {
+	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if requesterUserID == "" {
 		log.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -514,9 +525,15 @@ func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator U
 	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
 		return nil, notifier.ErrInvalidNotificationAddressBody
 	}
+	userID := requesterUserID
+	if isAdminNotificationRoute(r) {
+		if queryUserID := strings.TrimSpace(r.URL.Query().Get("user_id")); queryUserID != "" {
+			userID = queryUserID
+		}
+	}
 	baseRequest.UserID = userID
 
-	parsedRequest.UserId = userID
+	parsedRequest.UserId = requesterUserID
 	parsedRequest.RegisterAddressRequest = &baseRequest
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		log.Error("register-notification-address-request-validation-failed", zap.Error(err))
@@ -531,14 +548,31 @@ func MapRequestToListNotificationAddressesRequest(r *http.Request, validator Use
 	var parsedRequest ListNotificationAddressesRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
-	if userID == "" {
+	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if requesterUserID == "" {
 		log.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
-	parsedRequest.UserId = userID
-	parsedRequest.ListNotificationAddressesRequest = &notifier.ListNotificationAddressesRequest{UserID: userID}
+	baseRequest := notifier.ListNotificationAddressesRequest{}
+	if err := querydecoder.New(r.URL.Query()).Decode(&baseRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	baseRequest.Channel = baseRequest.Channel.Normalised()
+	baseRequest.Status = baseRequest.Status.Normalised()
+
+	parsedRequest.UserId = requesterUserID
+	parsedRequest.AdminView = isAdminNotificationRoute(r)
+	parsedRequest.IncludeUsers = parsedRequest.AdminView
+	if includeUsers := strings.TrimSpace(r.URL.Query().Get("include_users")); includeUsers != "" {
+		parsedRequest.IncludeUsers = !strings.EqualFold(includeUsers, "false") && includeUsers != "0"
+	}
+
+	if !parsedRequest.AdminView {
+		baseRequest.UserID = requesterUserID
+	}
+
+	parsedRequest.ListNotificationAddressesRequest = &baseRequest
 	return &parsedRequest, nil
 }
 
@@ -547,8 +581,8 @@ func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator Use
 	var parsedRequest DeleteNotificationAddressRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
-	if userID == "" {
+	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if requesterUserID == "" {
 		log.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -559,9 +593,14 @@ func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator Use
 		return nil, ErrRequestFailedValidation
 	}
 
-	parsedRequest.UserId = userID
+	targetUserID := getOptionalVariableValueFromURI(r, "userId")
+	if targetUserID == "" {
+		targetUserID = requesterUserID
+	}
+
+	parsedRequest.UserId = requesterUserID
 	parsedRequest.DeleteNotificationAddressRequest = &notifier.DeleteNotificationAddressRequest{
-		UserID:    userID,
+		UserID:    targetUserID,
 		AddressID: addressID,
 	}
 	return &parsedRequest, nil
@@ -572,14 +611,20 @@ func MapRequestToGetNotificationPreferencesRequest(r *http.Request, validator Us
 	var parsedRequest GetNotificationPreferencesRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
-	if userID == "" {
+	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if requesterUserID == "" {
 		log.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
-	parsedRequest.UserId = userID
-	parsedRequest.GetNotificationPreferencesRequest = &notifier.GetNotificationPreferencesRequest{UserID: userID}
+	targetUserID := getOptionalVariableValueFromURI(r, "userId")
+	if targetUserID == "" {
+		targetUserID = requesterUserID
+	}
+
+	parsedRequest.UserId = requesterUserID
+	parsedRequest.IncludeUser = isAdminNotificationRoute(r)
+	parsedRequest.GetNotificationPreferencesRequest = &notifier.GetNotificationPreferencesRequest{UserID: targetUserID}
 	return &parsedRequest, nil
 }
 
@@ -588,8 +633,8 @@ func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator
 	var parsedRequest UpdateNotificationPreferencesRequest
 	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
-	if userID == "" {
+	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if requesterUserID == "" {
 		log.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -598,9 +643,14 @@ func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator
 	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
 		return nil, notifier.ErrInvalidNotificationPreferences
 	}
-	baseRequest.UserID = userID
+	targetUserID := getOptionalVariableValueFromURI(r, "userId")
+	if targetUserID == "" {
+		targetUserID = requesterUserID
+	}
+	baseRequest.UserID = targetUserID
 
-	parsedRequest.UserId = userID
+	parsedRequest.UserId = requesterUserID
+	parsedRequest.IncludeUser = isAdminNotificationRoute(r)
 	parsedRequest.UpdateNotificationPreferencesRequest = &baseRequest
 	return &parsedRequest, nil
 }
@@ -1243,4 +1293,20 @@ func MapRequestToGetDueRemindersRequest(r *http.Request, validator UsermanagerVa
 	}
 
 	return &parsedRequest, nil
+}
+
+// getOptionalVariableValueFromURI returns the trimmed mux path variable for the
+// provided key, or an empty string when the variable is not present.
+func getOptionalVariableValueFromURI(r *http.Request, key string) string {
+	return strings.TrimSpace(mux.Vars(r)[key])
+}
+
+// isAdminNotificationRoute reports whether the request is for an admin
+// notifications endpoint rather than the current user's notifications endpoint.
+func isAdminNotificationRoute(r *http.Request) bool {
+	path := strings.TrimRight(r.URL.Path, "/")
+	if strings.Contains(path, "/me/notifications") {
+		return false
+	}
+	return strings.HasSuffix(path, "/notifications") || strings.Contains(path, "/notifications/")
 }

@@ -2,6 +2,10 @@ package usermanager
 
 import (
 	"context"
+	"strings"
+
+	"github.com/ooaklee/ghatd/external/notifier"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // ensureNotifierService returns an error if the notifier service has not been
@@ -75,12 +79,32 @@ func (s *Service) ListNotificationAddresses(ctx context.Context, r *ListNotifica
 		return nil, err
 	}
 
-	response, err := s.NotifierService.ListUserAddresses(ctx, r.ListNotificationAddressesRequest)
+	var response *notifier.ListNotificationAddressesResponse
+	var err error
+	if r.AdminView {
+		response, err = s.NotifierService.ListAddresses(ctx, r.ListNotificationAddressesRequest)
+	} else {
+		response, err = s.NotifierService.ListUserAddresses(ctx, r.ListNotificationAddressesRequest)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	return &ListNotificationAddressesResponse{ListNotificationAddressesResponse: response}, nil
+	addresses := make([]NotificationAddressWithUser, 0, len(response.Addresses))
+	userCache := map[string]*EnrichedUserProfile{}
+	for _, address := range response.Addresses {
+		item := NotificationAddressWithUser{NotificationAddressSummary: address}
+		if r.IncludeUsers {
+			item.User = s.resolveNotificationUser(ctx, address.UserID, userCache)
+		}
+		addresses = append(addresses, item)
+	}
+
+	return &ListNotificationAddressesResponse{
+		Addresses:                         addresses,
+		Meta:                              response.GetMetaData(),
+		ListNotificationAddressesResponse: response,
+	}, nil
 }
 
 // DeleteNotificationAddress removes a single registered push destination
@@ -112,7 +136,10 @@ func (s *Service) GetNotificationPreferences(ctx context.Context, r *GetNotifica
 		return nil, err
 	}
 
-	return &GetNotificationPreferencesResponse{GetNotificationPreferencesResponse: response}, nil
+	return &GetNotificationPreferencesResponse{
+		Preferences:                        s.wrapNotificationPreferences(ctx, response.Preferences, r.IncludeUser),
+		GetNotificationPreferencesResponse: response,
+	}, nil
 }
 
 // UpdateNotificationPreferences changes the current user's notification
@@ -136,7 +163,10 @@ func (s *Service) UpdateNotificationPreferences(ctx context.Context, r *UpdateNo
 		return nil, err
 	}
 
-	return &UpdateNotificationPreferencesResponse{UpdateNotificationPreferencesResponse: response}, nil
+	return &UpdateNotificationPreferencesResponse{
+		Preferences:                           s.wrapNotificationPreferences(ctx, response.Preferences, r.IncludeUser),
+		UpdateNotificationPreferencesResponse: response,
+	}, nil
 }
 
 // NotifyUser sends a push notification to all of a target user's active
@@ -171,4 +201,66 @@ func (s *Service) NotifyUser(ctx context.Context, r *NotifyUserRequest) (*Notify
 	}
 
 	return &NotifyUserResponse{NotifyUserResponse: response}, nil
+}
+
+func (s *Service) wrapNotificationPreferences(ctx context.Context, preferences *notifier.NotificationPreferences, includeUser bool) *NotificationPreferencesWithUser {
+	if preferences == nil {
+		return nil
+	}
+
+	item := &NotificationPreferencesWithUser{NotificationPreferences: preferences}
+	if includeUser {
+		item.User = s.resolveNotificationUser(ctx, preferences.UserID, nil)
+	}
+	return item
+}
+
+func (s *Service) resolveNotificationUser(ctx context.Context, userID string, cache map[string]*EnrichedUserProfile) *EnrichedUserProfile {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || s.UserService == nil {
+		return nil
+	}
+	if cache != nil {
+		if profile, ok := cache[userID]; ok {
+			return profile
+		}
+	}
+
+	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: userID})
+	if err != nil || userResponse == nil || userResponse.User == nil {
+		if cache != nil {
+			cache[userID] = nil
+		}
+		return nil
+	}
+
+	profile := buildNotificationEnrichedUserProfile(userResponse.User)
+	if cache != nil {
+		cache[userID] = profile
+	}
+	return profile
+}
+
+func buildNotificationEnrichedUserProfile(user *userv2.UniversalUser) *EnrichedUserProfile {
+	if user == nil {
+		return nil
+	}
+
+	profile := &EnrichedUserProfile{
+		ID:     user.ID,
+		Email:  user.Email,
+		Status: user.Status,
+		Roles:  user.Roles,
+		Groups: []UserGroupMembership{},
+	}
+	if user.PersonalInfo != nil {
+		profile.FullName = user.PersonalInfo.FullName
+		profile.FirstName = user.PersonalInfo.FirstName
+		profile.LastName = user.PersonalInfo.LastName
+	}
+	if user.Metadata != nil {
+		profile.CreatedAt = user.Metadata.CreatedAt
+		profile.LastLoginAt = user.Metadata.LastLoginAt
+	}
+	return profile
 }

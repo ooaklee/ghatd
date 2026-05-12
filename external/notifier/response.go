@@ -1,5 +1,7 @@
 package notifier
 
+import "github.com/ooaklee/ghatd/external/toolbox"
+
 // RegisterAddressResponse wraps the sanitised address that was registered.
 //
 // The response returns a NotificationAddressSummary, not the full
@@ -26,7 +28,21 @@ type GetActiveNotificationAddressesResponse struct {
 // stripped. The user can see their device name, platform, channel,
 // and when it was last seen, but not the secrets needed to send.
 type ListNotificationAddressesResponse struct {
-	Addresses []NotificationAddressSummary `json:"addresses"`
+	Addresses  []NotificationAddressSummary `json:"addresses"`
+	Total      int                          `json:"-"`
+	TotalPages int                          `json:"-"`
+	PerPage    int                          `json:"-"`
+	Page       int                          `json:"-"`
+}
+
+// GetMetaData returns pagination metadata in the reply.WithMeta format.
+func (r *ListNotificationAddressesResponse) GetMetaData() map[string]interface{} {
+	return map[string]interface{}{
+		string(toolbox.ResponseMetaKeyResourcePerPage): r.PerPage,
+		string(toolbox.ResponseMetaKeyTotalResources):  r.Total,
+		string(toolbox.ResponseMetaKeyTotalPages):      r.TotalPages,
+		string(toolbox.ResponseMetaKeyPage):            r.Page,
+	}
 }
 
 // GetNotificationPreferencesResponse returns a user's current

@@ -18,6 +18,7 @@ import (
 // This is a subset of the full data store interface – only the read, write,
 // and collection-management methods that notifier actually uses.
 type MongoDbStore interface {
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
@@ -239,15 +240,74 @@ func (r *Repository) GetAddressesByUserID(ctx context.Context, userID string) ([
 	return r.findAddresses(ctx, bson.M{"user_id": userID})
 }
 
+// GetAddresses returns notification addresses matching optional admin filters.
+func (r *Repository) GetAddresses(ctx context.Context, req *ListNotificationAddressesRequest) ([]NotificationAddress, error) {
+	return r.findAddresses(ctx, buildAddressListFilter(req), buildAddressListOptions(req))
+}
+
+// CountAddresses returns the number of notification addresses matching optional admin filters.
+func (r *Repository) CountAddresses(ctx context.Context, req *ListNotificationAddressesRequest) (int64, error) {
+	collection, err := r.GetNotificationAddressesCollection(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	total, err := r.Store.ExecuteCountDocuments(ctx, collection, buildAddressListFilter(req))
+	if err != nil {
+		return 0, fmt.Errorf("%w: %v", ErrDatabaseError, err)
+	}
+
+	return total, nil
+}
+
+func buildAddressListFilter(req *ListNotificationAddressesRequest) bson.M {
+	filter := bson.M{}
+	if req != nil {
+		if req.UserID != "" {
+			filter["user_id"] = req.UserID
+		}
+		if req.Channel != "" {
+			filter["channel"] = req.Channel
+		}
+		if req.Status != "" {
+			filter["status"] = req.Status
+		}
+	}
+
+	return filter
+}
+
+func buildAddressListOptions(req *ListNotificationAddressesRequest) *options.FindOptions {
+	findOptions := options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}})
+	if req == nil {
+		return findOptions
+	}
+
+	if req.PerPage > 0 {
+		findOptions.SetLimit(int64(req.PerPage))
+		page := req.Page
+		if page <= 0 {
+			page = 1
+		}
+		findOptions.SetSkip(int64((page - 1) * req.PerPage))
+	}
+
+	return findOptions
+}
+
 // findAddresses runs a find query against the notification_addresses
 // collection and returns the results sorted by most-recently-updated first.
-func (r *Repository) findAddresses(ctx context.Context, filter bson.M) ([]NotificationAddress, error) {
+func (r *Repository) findAddresses(ctx context.Context, filter bson.M, opts ...*options.FindOptions) ([]NotificationAddress, error) {
 	collection, err := r.GetNotificationAddressesCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, filter, options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}}))
+	if len(opts) == 0 {
+		opts = []*options.FindOptions{options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}})}
+	}
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, filter, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrDatabaseError, err)
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"math"
 	"sort"
 	"strings"
 
@@ -20,6 +21,8 @@ import (
 type NotificationRepository interface {
 	UpsertAddress(ctx context.Context, address *NotificationAddress) (*NotificationAddress, error)
 	GetActiveAddressesByUserID(ctx context.Context, userID string, channels ...NotificationChannel) ([]NotificationAddress, error)
+	GetAddresses(ctx context.Context, r *ListNotificationAddressesRequest) ([]NotificationAddress, error)
+	CountAddresses(ctx context.Context, r *ListNotificationAddressesRequest) (int64, error)
 	GetAddressesByUserID(ctx context.Context, userID string) ([]NotificationAddress, error)
 	DeleteAddressByIDForUser(ctx context.Context, userID, addressID string) error
 	DeleteAddressesByUserID(ctx context.Context, userID string) error
@@ -223,12 +226,70 @@ func (s *Service) ListUserAddresses(ctx context.Context, req *ListNotificationAd
 		return nil, err
 	}
 
+	return sanitiseAddresses(addresses), nil
+}
+
+// ListAddresses returns a sanitised list of notification destinations for admin
+// dashboards. Unlike ListUserAddresses, UserID is optional so callers can inspect
+// platform-wide registrations and narrow them with filters.
+func (s *Service) ListAddresses(ctx context.Context, req *ListNotificationAddressesRequest) (*ListNotificationAddressesResponse, error) {
+	if req == nil {
+		req = &ListNotificationAddressesRequest{}
+	}
+
+	filter := *req
+	filter.UserID = strings.TrimSpace(filter.UserID)
+	if filter.Channel != "" {
+		filter.Channel = filter.Channel.Normalised()
+		if !filter.Channel.IsSupported() {
+			return nil, ErrInvalidNotificationChannel
+		}
+	}
+	if filter.Status != "" {
+		filter.Status = filter.Status.Normalised()
+		if !filter.Status.IsSupported() {
+			return nil, ErrInvalidNotificationAddressBody
+		}
+	}
+	filter.Page, filter.PerPage = normaliseAddressListPagination(filter.Page, filter.PerPage)
+
+	total, err := s.Repository.CountAddresses(ctx, &filter)
+	if err != nil {
+		return nil, err
+	}
+	addresses, err := s.Repository.GetAddresses(ctx, &filter)
+	if err != nil {
+		return nil, err
+	}
+
+	response := sanitiseAddresses(addresses)
+	response.Total = int(total)
+	response.TotalPages = int(math.Ceil(float64(total) / float64(filter.PerPage)))
+	response.PerPage = filter.PerPage
+	response.Page = filter.Page
+	return response, nil
+}
+
+func sanitiseAddresses(addresses []NotificationAddress) *ListNotificationAddressesResponse {
 	summaries := make([]NotificationAddressSummary, 0, len(addresses))
 	for _, address := range addresses {
 		summaries = append(summaries, address.Sanitise())
 	}
 
-	return &ListNotificationAddressesResponse{Addresses: summaries}, nil
+	return &ListNotificationAddressesResponse{Addresses: summaries}
+}
+
+func normaliseAddressListPagination(page, perPage int) (int, int) {
+	if page <= 0 {
+		page = 1
+	}
+	if perPage <= 0 {
+		perPage = 25
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+	return page, perPage
 }
 
 // DeleteAddress removes one of a user's registered notification addresses.

@@ -93,6 +93,7 @@ type NotifierService interface {
 	RegisterAddress(ctx context.Context, r *notifier.RegisterAddressRequest) (*notifier.RegisterAddressResponse, error)
 	GetActiveAddressesByUserID(ctx context.Context, r *notifier.GetActiveNotificationAddressesRequest) (*notifier.GetActiveNotificationAddressesResponse, error)
 	ListUserAddresses(ctx context.Context, r *notifier.ListNotificationAddressesRequest) (*notifier.ListNotificationAddressesResponse, error)
+	ListAddresses(ctx context.Context, r *notifier.ListNotificationAddressesRequest) (*notifier.ListNotificationAddressesResponse, error)
 	DeleteAddress(ctx context.Context, r *notifier.DeleteNotificationAddressRequest) error
 	GetPreferences(ctx context.Context, r *notifier.GetNotificationPreferencesRequest) (*notifier.GetNotificationPreferencesResponse, error)
 	UpdatePreferences(ctx context.Context, r *notifier.UpdateNotificationPreferencesRequest) (*notifier.UpdateNotificationPreferencesResponse, error)

@@ -100,17 +100,35 @@ type RegisterNotificationAddressResponse struct {
 
 // ListNotificationAddressesResponse holds notification addresses.
 type ListNotificationAddressesResponse struct {
+	Addresses []NotificationAddressWithUser `json:"addresses"`
+	Meta      map[string]interface{}        `json:"-"`
 	*notifier.ListNotificationAddressesResponse
+}
+
+// NotificationAddressWithUser extends a sanitised notifier address with the
+// owning user's profile for admin/device-management views.
+type NotificationAddressWithUser struct {
+	notifier.NotificationAddressSummary
+	User *EnrichedUserProfile `json:"user,omitempty"`
 }
 
 // GetNotificationPreferencesResponse holds notification preferences.
 type GetNotificationPreferencesResponse struct {
+	Preferences *NotificationPreferencesWithUser `json:"preferences,omitempty"`
 	*notifier.GetNotificationPreferencesResponse
 }
 
 // UpdateNotificationPreferencesResponse holds notification preferences.
 type UpdateNotificationPreferencesResponse struct {
+	Preferences *NotificationPreferencesWithUser `json:"preferences,omitempty"`
 	*notifier.UpdateNotificationPreferencesResponse
+}
+
+// NotificationPreferencesWithUser extends notification preferences with the
+// owning user's profile for admin views.
+type NotificationPreferencesWithUser struct {
+	*notifier.NotificationPreferences
+	User *EnrichedUserProfile `json:"user,omitempty"`
 }
 
 // NotifyUserResponse holds notification send results.

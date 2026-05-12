@@ -170,6 +170,15 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAdminRoutes.HandleFunc("/comms", request.Handler.GetComms).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/comms/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/comms/{id}", request.Handler.UpdateComms).Methods(http.MethodPut, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/config", request.Handler.GetNotifierConfig).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/addresses", request.Handler.ListNotificationAddresses).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/addresses", request.Handler.RegisterNotificationAddress).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/addresses/{addressID}", request.Handler.DeleteNotificationAddress).Methods(http.MethodDelete, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/preferences", request.Handler.GetNotificationPreferences).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/preferences", request.Handler.UpdateNotificationPreferences).Methods(http.MethodPatch, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
 	if request.AdminOnlyMiddleware != nil {
 		usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
 	}

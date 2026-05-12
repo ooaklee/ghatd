@@ -244,11 +244,16 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLate
 		return nil, ErrGroupServiceNotEnabled
 	}
 
+	targetUserID := strings.TrimSpace(r.UserId)
+	if r.GetLatestNotificationOverviewsRequest != nil && strings.TrimSpace(r.GetLatestNotificationOverviewsRequest.UserID) != "" {
+		targetUserID = strings.TrimSpace(r.GetLatestNotificationOverviewsRequest.UserID)
+	}
+
 	userEmail := strings.TrimSpace(r.UserEmail)
 	if userEmail == "" {
-		userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: targetUserID})
 		if err != nil {
-			log.Error("failed-to-resolve-user-email-for-notifications", zap.String("user-id", r.UserId), zap.Error(err))
+			log.Error("failed-to-resolve-user-email-for-notifications", zap.String("user-id", targetUserID), zap.Error(err))
 			return nil, err
 		}
 
@@ -256,13 +261,13 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLate
 	}
 
 	overviews, err := s.GroupService.GetLatestNotificationOverviews(ctx, &common.GetLatestNotificationOverviewsRequest{
-		UserID:    r.UserId,
+		UserID:    targetUserID,
 		UserEmail: userEmail,
 		Kinds:     r.Kinds,
 		Limit:     r.Limit,
 	})
 	if err != nil {
-		log.Error("failed-to-get-group-notification-overviews", zap.String("user-id", r.UserId), zap.Error(err))
+		log.Error("failed-to-get-group-notification-overviews", zap.String("user-id", targetUserID), zap.Error(err))
 		return nil, err
 	}
 

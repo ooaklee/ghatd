@@ -145,6 +145,7 @@ type NotificationAddress struct {
 // secrets on the server where they belong.
 type NotificationAddressSummary struct {
 	ID         string                    `json:"id"`
+	UserID     string                    `json:"user_id,omitempty"`
 	Channel    NotificationChannel       `json:"channel"`
 	Status     NotificationAddressStatus `json:"status"`
 	DeviceID   string                    `json:"device_id,omitempty"`
@@ -228,6 +229,7 @@ type FCMClientConfig struct {
 func (a NotificationAddress) Sanitise() NotificationAddressSummary {
 	summary := NotificationAddressSummary{
 		ID:         a.ID,
+		UserID:     a.UserID,
 		Channel:    a.Channel,
 		Status:     a.Status,
 		DeviceID:   a.DeviceID,
@@ -242,6 +244,21 @@ func (a NotificationAddress) Sanitise() NotificationAddressSummary {
 	}
 
 	return summary
+}
+
+// Normalised returns the canonical uppercase form of an address status.
+func (s NotificationAddressStatus) Normalised() NotificationAddressStatus {
+	return NotificationAddressStatus(strings.ToUpper(strings.TrimSpace(string(s))))
+}
+
+// IsSupported returns true when the notifier package recognises this status.
+func (s NotificationAddressStatus) IsSupported() bool {
+	switch s.Normalised() {
+	case NotificationAddressStatusActive, NotificationAddressStatusDisabled:
+		return true
+	default:
+		return false
+	}
 }
 
 // Normalised returns the canonical uppercase form of a channel name.

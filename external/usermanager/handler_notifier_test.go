@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/reply/v2"
@@ -26,13 +27,14 @@ import (
 // returns a safe zero value.  This keeps test setup focused on the exact
 // methods under test while letting the compiler verify the interface.
 type mockUmsService struct {
-	getNotifierConfigFunc             func(ctx context.Context, r *usermanager.GetNotifierConfigRequest) (*usermanager.GetNotifierConfigResponse, error)
-	registerNotificationAddressFunc   func(ctx context.Context, r *usermanager.RegisterNotificationAddressRequest) (*usermanager.RegisterNotificationAddressResponse, error)
-	listNotificationAddressesFunc     func(ctx context.Context, r *usermanager.ListNotificationAddressesRequest) (*usermanager.ListNotificationAddressesResponse, error)
-	deleteNotificationAddressFunc     func(ctx context.Context, r *usermanager.DeleteNotificationAddressRequest) error
-	getNotificationPreferencesFunc    func(ctx context.Context, r *usermanager.GetNotificationPreferencesRequest) (*usermanager.GetNotificationPreferencesResponse, error)
-	updateNotificationPreferencesFunc func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error)
-	notifyUserFunc                    func(ctx context.Context, r *usermanager.NotifyUserRequest) (*usermanager.NotifyUserResponse, error)
+	getNotifierConfigFunc              func(ctx context.Context, r *usermanager.GetNotifierConfigRequest) (*usermanager.GetNotifierConfigResponse, error)
+	registerNotificationAddressFunc    func(ctx context.Context, r *usermanager.RegisterNotificationAddressRequest) (*usermanager.RegisterNotificationAddressResponse, error)
+	listNotificationAddressesFunc      func(ctx context.Context, r *usermanager.ListNotificationAddressesRequest) (*usermanager.ListNotificationAddressesResponse, error)
+	deleteNotificationAddressFunc      func(ctx context.Context, r *usermanager.DeleteNotificationAddressRequest) error
+	getNotificationPreferencesFunc     func(ctx context.Context, r *usermanager.GetNotificationPreferencesRequest) (*usermanager.GetNotificationPreferencesResponse, error)
+	updateNotificationPreferencesFunc  func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error)
+	getLatestNotificationOverviewsFunc func(ctx context.Context, r *usermanager.GetLatestNotificationOverviewsRequest) (*usermanager.GetLatestNotificationOverviewsResponse, error)
+	notifyUserFunc                     func(ctx context.Context, r *usermanager.NotifyUserRequest) (*usermanager.NotifyUserResponse, error)
 }
 
 // stubErr is returned when a mockUmsService method is called without a matching *Func field.
@@ -128,6 +130,9 @@ func (m *mockUmsService) GetUserGroups(ctx context.Context, r *usermanager.GetUs
 	return nil, stubErr
 }
 func (m *mockUmsService) GetLatestNotificationOverviews(ctx context.Context, r *usermanager.GetLatestNotificationOverviewsRequest) (*usermanager.GetLatestNotificationOverviewsResponse, error) {
+	if m.getLatestNotificationOverviewsFunc != nil {
+		return m.getLatestNotificationOverviewsFunc(ctx, r)
+	}
 	return nil, stubErr
 }
 func (m *mockUmsService) GetMyGroupInvitations(ctx context.Context, r *usermanager.GetMyGroupInvitationsRequest) (*usermanager.GetMyGroupInvitationsResponse, error) {
@@ -338,6 +343,44 @@ func TestHandler_GetNotifierConfig_ServiceUnavailable(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// GetLatestNotificationOverviews
+// ---------------------------------------------------------------------------
+
+func TestHandler_GetLatestNotificationOverviews_AdminRouteTargetsPathUser(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockUmsService{
+		getLatestNotificationOverviewsFunc: func(ctx context.Context, r *usermanager.GetLatestNotificationOverviewsRequest) (*usermanager.GetLatestNotificationOverviewsResponse, error) {
+			require.Equal(t, "admin-1", r.UserId)
+			require.NotNil(t, r.GetLatestNotificationOverviewsRequest)
+			require.Equal(t, "target-user-1", r.GetLatestNotificationOverviewsRequest.UserID)
+			require.Equal(t, "group_invite_outstanding", r.Kinds)
+			require.Equal(t, 5, r.Limit)
+			return &usermanager.GetLatestNotificationOverviewsResponse{
+				GetLatestNotificationOverviewsResponse: &common.GetLatestNotificationOverviewsResponse{
+					Overviews: []common.NotificationOverview{
+						{ID: "overview-1", Source: common.NotificationSourceGroup, Kind: common.NotificationKindGroupInviteOutstanding, Title: "Invitation"},
+					},
+				},
+			}, nil
+		},
+	}
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodGet, "/api/v1/ums/notifications/target-user-1/latest?kinds=group_invite_outstanding&limit=5", nil, "admin-1")
+	req = mux.SetURLVars(req, map[string]string{"userId": "target-user-1"})
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.GetLatestNotificationOverviews(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var overviews []common.NotificationOverview
+	responseData(t, rec, &overviews)
+	require.Len(t, overviews, 1)
+	assert.Equal(t, "overview-1", overviews[0].ID)
+}
+
+// ---------------------------------------------------------------------------
 // RegisterNotificationAddress
 // ---------------------------------------------------------------------------
 
@@ -406,6 +449,41 @@ func TestHandler_RegisterNotificationAddress_FCM(t *testing.T) {
 	var summary notifier.NotificationAddressSummary
 	responseData(t, rec, &summary)
 	assert.Equal(t, "addr-fcm-1", summary.ID)
+}
+
+func TestHandler_RegisterNotificationAddress_AdminRouteCanRegisterForTargetUser(t *testing.T) {
+	t.Parallel()
+
+	expectedSummary := notifier.NotificationAddressSummary{
+		ID: "addr-admin-target", UserID: "target-user-1", Channel: notifier.NotificationChannelWebPush, Status: "ACTIVE",
+		DeviceName: "Target Browser", Platform: "WEB",
+	}
+
+	svc := &mockUmsService{
+		registerNotificationAddressFunc: func(ctx context.Context, r *usermanager.RegisterNotificationAddressRequest) (*usermanager.RegisterNotificationAddressResponse, error) {
+			require.Equal(t, "admin-1", r.UserId)
+			require.NotNil(t, r.RegisterAddressRequest)
+			require.Equal(t, "target-user-1", r.RegisterAddressRequest.UserID)
+			require.Equal(t, notifier.NotificationChannelWebPush, r.RegisterAddressRequest.Channel)
+			return &usermanager.RegisterNotificationAddressResponse{
+				RegisterAddressResponse: &notifier.RegisterAddressResponse{Address: expectedSummary},
+			}, nil
+		},
+	}
+
+	body := `{"channel":"WEBPUSH","device_name":"Target Browser","platform":"WEB","webpush":{"endpoint":"https://example","keys":{"p256dh":"k","auth":"a"}}}`
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodPost, "/api/v1/ums/notifications/addresses?user_id=target-user-1", []byte(body), "admin-1")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.RegisterNotificationAddress(rec, req) })
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	var summary notifier.NotificationAddressSummary
+	responseData(t, rec, &summary)
+	assert.Equal(t, "target-user-1", summary.UserID)
+	assert.Equal(t, "addr-admin-target", summary.ID)
 }
 
 func TestHandler_RegisterNotificationAddress_InvalidBody(t *testing.T) {
@@ -526,6 +604,69 @@ func TestHandler_ListNotificationAddresses_Unauthenticated(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+func TestHandler_ListNotificationAddresses_AdminRouteCanListPlatformDevices(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockUmsService{
+		listNotificationAddressesFunc: func(ctx context.Context, r *usermanager.ListNotificationAddressesRequest) (*usermanager.ListNotificationAddressesResponse, error) {
+			require.Equal(t, "admin-1", r.UserId)
+			require.True(t, r.AdminView)
+			require.True(t, r.IncludeUsers)
+			require.NotNil(t, r.ListNotificationAddressesRequest)
+			require.Empty(t, r.ListNotificationAddressesRequest.UserID)
+			require.Equal(t, notifier.NotificationChannelWebPush, r.ListNotificationAddressesRequest.Channel)
+			require.Equal(t, notifier.NotificationAddressStatusActive, r.ListNotificationAddressesRequest.Status)
+			require.Equal(t, 2, r.ListNotificationAddressesRequest.Page)
+			require.Equal(t, 25, r.ListNotificationAddressesRequest.PerPage)
+			require.True(t, r.ListNotificationAddressesRequest.Meta)
+			return &usermanager.ListNotificationAddressesResponse{
+				Addresses: []usermanager.NotificationAddressWithUser{
+					{
+						NotificationAddressSummary: notifier.NotificationAddressSummary{
+							ID: "addr-1", UserID: "user-1", Channel: notifier.NotificationChannelWebPush, Status: notifier.NotificationAddressStatusActive,
+						},
+						User: &usermanager.EnrichedUserProfile{ID: "user-1", Email: "user@example.com", FullName: "User One"},
+					},
+				},
+			}, nil
+		},
+	}
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodGet, "/api/v1/ums/notifications/addresses?channel=webpush&status=active&page=2&per_page=25&meta=true", nil, "admin-1")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.ListNotificationAddresses(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var addresses []usermanager.NotificationAddressWithUser
+	responseData(t, rec, &addresses)
+	require.Len(t, addresses, 1)
+	assert.Equal(t, "user-1", addresses[0].UserID)
+	require.NotNil(t, addresses[0].User)
+	assert.Equal(t, "user@example.com", addresses[0].User.Email)
+}
+
+func TestHandler_ListNotificationAddresses_AdminRouteCanFilterByUser(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockUmsService{
+		listNotificationAddressesFunc: func(ctx context.Context, r *usermanager.ListNotificationAddressesRequest) (*usermanager.ListNotificationAddressesResponse, error) {
+			require.True(t, r.AdminView)
+			require.Equal(t, "user-2", r.ListNotificationAddressesRequest.UserID)
+			require.False(t, r.IncludeUsers)
+			return &usermanager.ListNotificationAddressesResponse{Addresses: []usermanager.NotificationAddressWithUser{}}, nil
+		},
+	}
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodGet, "/api/v1/ums/notifications/addresses?user_id=user-2&include_users=false", nil, "admin-1")
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.ListNotificationAddresses(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
 // ---------------------------------------------------------------------------
 // DeleteNotificationAddress
 // ---------------------------------------------------------------------------
@@ -592,6 +733,27 @@ func TestHandler_DeleteNotificationAddress_MissingAddressID(t *testing.T) {
 	require.NotPanics(t, func() { h.DeleteNotificationAddress(rec, req) })
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, "USM00-004", responseErrorCode(t, rec))
+}
+
+func TestHandler_DeleteNotificationAddress_AdminRouteTargetsPathUser(t *testing.T) {
+	t.Parallel()
+
+	svc := &mockUmsService{
+		deleteNotificationAddressFunc: func(ctx context.Context, r *usermanager.DeleteNotificationAddressRequest) error {
+			require.Equal(t, "admin-id", r.UserId)
+			require.Equal(t, "target-user-1", r.DeleteNotificationAddressRequest.UserID)
+			require.Equal(t, "addr-to-delete", r.DeleteNotificationAddressRequest.AddressID)
+			return nil
+		},
+	}
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodDelete, "/api/v1/ums/notifications/target-user-1/addresses/addr-to-delete", nil, "admin-id")
+	req = mux.SetURLVars(req, map[string]string{"userId": "target-user-1", usermanager.UserManagerURIVariableAddressID: "addr-to-delete"})
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.DeleteNotificationAddress(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +828,43 @@ func TestHandler_GetNotificationPreferences_Unauthenticated(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+func TestHandler_GetNotificationPreferences_AdminRouteReturnsUserDetails(t *testing.T) {
+	t.Parallel()
+
+	prefs := &notifier.NotificationPreferences{
+		UserID: "target-user-1", Enabled: true,
+		Channels: map[string]bool{string(notifier.NotificationChannelWebPush): true},
+	}
+
+	svc := &mockUmsService{
+		getNotificationPreferencesFunc: func(ctx context.Context, r *usermanager.GetNotificationPreferencesRequest) (*usermanager.GetNotificationPreferencesResponse, error) {
+			require.Equal(t, "admin-id", r.UserId)
+			require.Equal(t, "target-user-1", r.GetNotificationPreferencesRequest.UserID)
+			require.True(t, r.IncludeUser)
+			return &usermanager.GetNotificationPreferencesResponse{
+				Preferences: &usermanager.NotificationPreferencesWithUser{
+					NotificationPreferences: prefs,
+					User:                    &usermanager.EnrichedUserProfile{ID: "target-user-1", Email: "target@example.com"},
+				},
+			}, nil
+		},
+	}
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodGet, "/api/v1/ums/notifications/target-user-1/preferences", nil, "admin-id")
+	req = mux.SetURLVars(req, map[string]string{"userId": "target-user-1"})
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.GetNotificationPreferences(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response usermanager.NotificationPreferencesWithUser
+	responseData(t, rec, &response)
+	assert.Equal(t, "target-user-1", response.UserID)
+	require.NotNil(t, response.User)
+	assert.Equal(t, "target@example.com", response.User.Email)
+}
+
 // ---------------------------------------------------------------------------
 // UpdateNotificationPreferences
 // ---------------------------------------------------------------------------
@@ -725,6 +924,47 @@ func TestHandler_UpdateNotificationPreferences_Unauthenticated(t *testing.T) {
 
 	require.NotPanics(t, func() { h.UpdateNotificationPreferences(rec, req) })
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestHandler_UpdateNotificationPreferences_AdminRouteTargetsPathUser(t *testing.T) {
+	t.Parallel()
+
+	updated := &notifier.NotificationPreferences{
+		UserID: "target-user-1", Enabled: false,
+		Channels: map[string]bool{string(notifier.NotificationChannelWebPush): false},
+	}
+
+	svc := &mockUmsService{
+		updateNotificationPreferencesFunc: func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error) {
+			require.Equal(t, "admin-1", r.UserId)
+			require.NotNil(t, r.UpdateNotificationPreferencesRequest)
+			require.Equal(t, "target-user-1", r.UpdateNotificationPreferencesRequest.UserID)
+			require.True(t, r.IncludeUser)
+			require.False(t, r.UpdateNotificationPreferencesRequest.Channels[string(notifier.NotificationChannelWebPush)])
+			return &usermanager.UpdateNotificationPreferencesResponse{
+				Preferences: &usermanager.NotificationPreferencesWithUser{
+					NotificationPreferences: updated,
+					User:                    &usermanager.EnrichedUserProfile{ID: "target-user-1", Email: "target@example.com"},
+				},
+			}, nil
+		},
+	}
+
+	body := `{"channels":{"WEBPUSH":false}}`
+
+	h := newTestHandler(svc)
+	req := authenticatedRequest(http.MethodPatch, "/api/v1/ums/notifications/target-user-1/preferences", []byte(body), "admin-1")
+	req = mux.SetURLVars(req, map[string]string{"userId": "target-user-1"})
+	rec := httptest.NewRecorder()
+
+	require.NotPanics(t, func() { h.UpdateNotificationPreferences(rec, req) })
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response usermanager.NotificationPreferencesWithUser
+	responseData(t, rec, &response)
+	assert.Equal(t, "target-user-1", response.UserID)
+	require.NotNil(t, response.User)
+	assert.Equal(t, "target@example.com", response.User.Email)
 }
 
 // ---------------------------------------------------------------------------

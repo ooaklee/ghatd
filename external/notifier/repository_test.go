@@ -18,13 +18,26 @@ import (
 type mockNotifierMongoDbStore struct {
 	initialiseClientFunc func(ctx context.Context) (*mongo.Client, error)
 	getDatabaseFunc      func(ctx context.Context, dbName string) (*mongo.Database, error)
+	countFunc            func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	findFunc             func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
 	findOneFunc          func(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 	deleteOneFunc        func(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	deleteManyFunc       func(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	updateOneFunc        func(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error
+	mapAllFunc           func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+}
+
+func (m *mockNotifierMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+	if m.countFunc != nil {
+		return m.countFunc(ctx, collection, filter, opts...)
+	}
+	return 0, errors.New("not implemented")
 }
 
 func (m *mockNotifierMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+	if m.findFunc != nil {
+		return m.findFunc(ctx, collection, filter, opts...)
+	}
 	return nil, errors.New("not implemented")
 }
 
@@ -71,6 +84,9 @@ func (m *mockNotifierMongoDbStore) ExecuteUpdateOneCommand(ctx context.Context, 
 }
 
 func (m *mockNotifierMongoDbStore) MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {
+	if m.mapAllFunc != nil {
+		return m.mapAllFunc(ctx, cursor, result, resultObjectName)
+	}
 	return errors.New("not implemented")
 }
 
@@ -233,6 +249,93 @@ func TestRepository_DeleteAddressByIDForUserUsesRepositoryHelpers(t *testing.T) 
 	require.NoError(t, err)
 	assert.Equal(t, 1, findOneCalls)
 	assert.Equal(t, 1, deleteOneCalls)
+}
+
+func TestRepository_GetAddressesBuildsAdminFilter(t *testing.T) {
+	t.Parallel()
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	require.NoError(t, err)
+
+	findCalls := 0
+	store := &mockNotifierMongoDbStore{
+		initialiseClientFunc: func(ctx context.Context) (*mongo.Client, error) {
+			return client, nil
+		},
+		getDatabaseFunc: func(ctx context.Context, dbName string) (*mongo.Database, error) {
+			return client.Database("notifier_test"), nil
+		},
+		findFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+			findCalls++
+			assert.Equal(t, NotificationAddressesCollection, collection.Name())
+			assert.Equal(t, bson.M{
+				"user_id": "user-1",
+				"channel": NotificationChannelWebPush,
+				"status":  NotificationAddressStatusActive,
+			}, filter)
+			require.Len(t, opts, 1)
+			require.NotNil(t, opts[0].Limit)
+			require.NotNil(t, opts[0].Skip)
+			assert.Equal(t, int64(25), *opts[0].Limit)
+			assert.Equal(t, int64(50), *opts[0].Skip)
+			return mongo.NewCursorFromDocuments([]interface{}{}, nil, nil)
+		},
+		mapAllFunc: func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {
+			assert.Equal(t, "notification_addresses", resultObjectName)
+			return nil
+		},
+	}
+	repo := NewRepository(store)
+
+	addresses, err := repo.GetAddresses(context.Background(), &ListNotificationAddressesRequest{
+		UserID:  "user-1",
+		Channel: NotificationChannelWebPush,
+		Status:  NotificationAddressStatusActive,
+		Page:    3,
+		PerPage: 25,
+	})
+
+	require.NoError(t, err)
+	assert.Empty(t, addresses)
+	assert.Equal(t, 1, findCalls)
+}
+
+func TestRepository_CountAddressesBuildsAdminFilter(t *testing.T) {
+	t.Parallel()
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	require.NoError(t, err)
+
+	countCalls := 0
+	store := &mockNotifierMongoDbStore{
+		initialiseClientFunc: func(ctx context.Context) (*mongo.Client, error) {
+			return client, nil
+		},
+		getDatabaseFunc: func(ctx context.Context, dbName string) (*mongo.Database, error) {
+			return client.Database("notifier_test"), nil
+		},
+		countFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+			countCalls++
+			assert.Equal(t, NotificationAddressesCollection, collection.Name())
+			assert.Equal(t, bson.M{
+				"user_id": "user-1",
+				"channel": NotificationChannelFCM,
+				"status":  NotificationAddressStatusDisabled,
+			}, filter)
+			return 42, nil
+		},
+	}
+	repo := NewRepository(store)
+
+	total, err := repo.CountAddresses(context.Background(), &ListNotificationAddressesRequest{
+		UserID:  "user-1",
+		Channel: NotificationChannelFCM,
+		Status:  NotificationAddressStatusDisabled,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), total)
+	assert.Equal(t, 1, countCalls)
 }
 
 // TestRepository_DeleteAddressByIDForUserStopsWhenAddressIsNotFound ensures

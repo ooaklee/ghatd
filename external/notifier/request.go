@@ -42,7 +42,13 @@ type GetActiveNotificationAddressesRequest struct {
 // endpoints and FCM tokens are stripped out before the response reaches
 // the client.
 type ListNotificationAddressesRequest struct {
-	UserID string `validate:"required"`
+	UserID  string                    `json:"user_id,omitempty" query:"user_id"`
+	Channel NotificationChannel       `json:"channel,omitempty" query:"channel"`
+	Status  NotificationAddressStatus `json:"status,omitempty" query:"status"`
+
+	PerPage int  `json:"per_page,omitempty" query:"per_page"`
+	Page    int  `json:"page,omitempty" query:"page"`
+	Meta    bool `json:"meta,omitempty" query:"meta"`
 }
 
 // DeleteNotificationAddressRequest identifies which address a user wants

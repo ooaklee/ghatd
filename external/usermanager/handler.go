@@ -536,7 +536,28 @@ func (h *Handler) ListNotificationAddresses(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Addresses)
+	addresses := response.Addresses
+	if addresses == nil && response.ListNotificationAddressesResponse != nil {
+		addresses = make([]NotificationAddressWithUser, 0, len(response.ListNotificationAddressesResponse.Addresses))
+		for _, address := range response.ListNotificationAddressesResponse.Addresses {
+			addresses = append(addresses, NotificationAddressWithUser{NotificationAddressSummary: address})
+		}
+	}
+
+	if request.ListNotificationAddressesRequest != nil && request.ListNotificationAddressesRequest.Meta {
+		meta := response.Meta
+		if meta == nil && response.ListNotificationAddressesResponse != nil {
+			meta = response.ListNotificationAddressesResponse.GetMetaData()
+		}
+		if meta != nil {
+			h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, addresses, reply.WithMeta(meta))
+			return
+		}
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, addresses)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, addresses)
 }
 
 // DeleteNotificationAddress handles notification address deletion.
@@ -569,7 +590,12 @@ func (h *Handler) GetNotificationPreferences(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Preferences)
+	preferences := response.Preferences
+	if preferences == nil && response.GetNotificationPreferencesResponse != nil {
+		preferences = &NotificationPreferencesWithUser{NotificationPreferences: response.GetNotificationPreferencesResponse.Preferences}
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, preferences)
 }
 
 // UpdateNotificationPreferences handles notification preference updates.
@@ -586,7 +612,12 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Preferences)
+	preferences := response.Preferences
+	if preferences == nil && response.UpdateNotificationPreferencesResponse != nil {
+		preferences = &NotificationPreferencesWithUser{NotificationPreferences: response.UpdateNotificationPreferencesResponse.Preferences}
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, preferences)
 }
 
 // NotifyUser handles admin/service notification sends.
