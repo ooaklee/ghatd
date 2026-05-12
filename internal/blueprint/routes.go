@@ -1,23 +1,23 @@
 package blueprint
 
 import (
-	"fmt"
+	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/router"
 )
 
 // blueprintHandler expected methods for valid blueprint handler
-type blueprintHandler interface{}
+type blueprintHandler interface {
+	CreateBlueprint(w http.ResponseWriter, r *http.Request)
+	GetBlueprintByID(w http.ResponseWriter, r *http.Request)
+	GetBlueprints(w http.ResponseWriter, r *http.Request)
+}
 
 const (
 	// ApiBlueprintPrefix base URI prefix for all blueprint routes
-	ApiBlueprintPrefix = common.ApiV1UriPrefix + "/blueprint"
-)
-
-var (
-	// ApiBlueprintIdVariable URI variable used to get blueprint Id out of URI
-	ApiBlueprintIdVariable = fmt.Sprintf("/{%s}", BlueprintURIVariableId)
+	ApiBlueprintPrefix = common.ApiV1UriPrefix + "/blueprints"
 )
 
 // AttachRoutesRequest holds everything needed to attach blueprint
@@ -28,6 +28,12 @@ type AttachRoutesRequest struct {
 
 	// Handler valid blueprint handler
 	Handler blueprintHandler
+
+	// AdminOnlyMiddleware middleware used to lock management endpoints down to admin only.
+	AdminOnlyMiddleware mux.MiddlewareFunc
+
+	// AuthenticatedMiddleware middleware used for authenticated user endpoints.
+	AuthenticatedMiddleware mux.MiddlewareFunc
 }
 
 // AttachRoutes attaches blueprint handler to corresponding
@@ -35,11 +41,18 @@ type AttachRoutesRequest struct {
 func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter := request.Router.GetRouter()
 
-	blueprintRoutes := httpRouter.PathPrefix(ApiBlueprintPrefix).Subrouter()
+	blueprintAdminRoutes := httpRouter.PathPrefix(ApiBlueprintPrefix).Subrouter()
+	blueprintAdminRoutes.HandleFunc("", request.Handler.CreateBlueprint).Methods(http.MethodPost, http.MethodOptions)
 
-	//nolint Remove when implemented route, to stop error
-	if blueprintRoutes.KeepContext {
-		fmt.Print("Remove me...")
+	if request.AdminOnlyMiddleware != nil {
+		blueprintAdminRoutes.Use(request.AdminOnlyMiddleware)
 	}
 
+	blueprintAuthenticatedRoutes := httpRouter.PathPrefix(ApiBlueprintPrefix).Subrouter()
+	blueprintAuthenticatedRoutes.HandleFunc("", request.Handler.GetBlueprints).Methods(http.MethodGet, http.MethodOptions)
+	blueprintAuthenticatedRoutes.HandleFunc("/{blueprintId}", request.Handler.GetBlueprintByID).Methods(http.MethodGet, http.MethodOptions)
+
+	if request.AuthenticatedMiddleware != nil {
+		blueprintAuthenticatedRoutes.Use(request.AuthenticatedMiddleware)
+	}
 }
