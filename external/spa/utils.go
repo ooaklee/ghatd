@@ -16,7 +16,7 @@ type PathUpdateOptions struct {
 }
 
 // DefaultBypassExtensions defines the default file extensions that bypass SPA index rewriting.
-var DefaultBypassExtensions = []string{".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".txt", ".woff", ".woff2", ".traineddata", ".xml", ".avif"}
+var DefaultBypassExtensions = []string{".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".txt", ".woff", ".woff2", ".traineddata", ".xml", ".avif", ".webmanifest"}
 
 // DefaultPathUpdateOptions returns the default options for NewHandleUpdatePathToIndex
 func DefaultPathUpdateOptions() *PathUpdateOptions {

@@ -78,6 +78,33 @@ func TestBootstrapAttachRoutes(t *testing.T) {
 	}
 }
 
+func TestBootstrapAttachRoutesServesWebManifest(t *testing.T) {
+	bootstrap, err := NewBootstrap(&BootstrapRequest{
+		EmbeddedContent: fstest.MapFS{
+			"dist/index.html":           {Data: []byte("<h1>hello</h1>")},
+			"dist/manifest.webmanifest": {Data: []byte(`{"name":"Example"}`)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewBootstrap() error = %v", err)
+	}
+
+	if err := bootstrap.AttachRoutes(); err != nil {
+		t.Fatalf("AttachRoutes() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/manifest.webmanifest", nil)
+	rec := httptest.NewRecorder()
+
+	bootstrap.Router.GetRouter().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); body != `{"name":"Example"}` {
+		t.Fatalf("body = %q, want manifest body", body)
+	}
+}
+
 func TestBootstrapAttachRoutesErrors(t *testing.T) {
 	tests := []struct {
 		name    string
