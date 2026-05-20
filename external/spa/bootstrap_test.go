@@ -103,6 +103,9 @@ func TestBootstrapAttachRoutesServesWebManifest(t *testing.T) {
 	if body := rec.Body.String(); body != `{"name":"Example"}` {
 		t.Fatalf("body = %q, want manifest body", body)
 	}
+	if contentType := rec.Header().Get("Content-Type"); contentType != "application/manifest+json" {
+		t.Fatalf("Content-Type = %q, want application/manifest+json", contentType)
+	}
 }
 
 func TestBootstrapAttachRoutesErrors(t *testing.T) {
