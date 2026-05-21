@@ -196,7 +196,16 @@ func (m *Middleware) attemptTokenRefresh(
 		return nil, err
 	}
 
-	// Set new tokens in cookies
+	// Update request header with new access token
+	req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+
+	// Retry validation with new token
+	authedUserResp, err := validateFunc(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set new tokens in cookies only after the retry accepts the refreshed token.
 	toolbox.AddAuthCookies(
 		w,
 		m.environment,
@@ -209,11 +218,7 @@ func (m *Middleware) attemptTokenRefresh(
 		tokenResp.RefreshTokenExpiresAt,
 	)
 
-	// Update request header with new access token
-	req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
-
-	// Retry validation with new token
-	return validateFunc(req)
+	return authedUserResp, nil
 }
 
 // handleJWTRequest is a unified handler for all JWT validation types

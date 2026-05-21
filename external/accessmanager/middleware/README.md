@@ -36,3 +36,15 @@ usermanager.AttachRoutes(&usermanager.AttachRoutesRequest{
 When `ErrorMaps` is nil, `NewSuite` uses `bundles.AuthMiddleware()` as the
 default error map set. Pass a non-nil `ErrorMaps` slice, including an empty
 slice, to fully own the error mapping used by the suite.
+
+## Refresh Cookie Timing
+
+`JWTRequired` and `RateLimitOrActiveJWTRequired` can refresh an expired access
+token when the request still includes a valid refresh-token cookie. The
+middleware updates the request with the new access token, retries validation,
+and only then writes replacement auth cookies to the response.
+
+This keeps cookie state aligned with route authorization. If refresh succeeds
+but retry validation rejects the replacement access token, the response does
+not commit the new cookies and the client can fall back to its normal session
+probe or login flow.

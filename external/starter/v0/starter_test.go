@@ -1265,6 +1265,36 @@ func (fakeEphemeralStore) DeleteAuth(ctx context.Context, tokenID string) (int64
 	return 0, nil
 }
 
+// AcquireRefreshTokenRotationLock stubs refresh rotation locking for starter tests.
+func (fakeEphemeralStore) AcquireRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+
+// ReleaseRefreshTokenRotationLock stubs refresh rotation lock release for starter tests.
+func (fakeEphemeralStore) ReleaseRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string) (int64, error) {
+	return 1, nil
+}
+
+// StoreRefreshTokenRotationResult stubs refresh rotation replay storage for starter tests.
+func (fakeEphemeralStore) StoreRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string, result *ephemeral.RefreshTokenRotationResult, ttl time.Duration) error {
+	return nil
+}
+
+// GetRefreshTokenRotationResult stubs refresh rotation replay lookup for starter tests.
+func (fakeEphemeralStore) GetRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string) (*ephemeral.RefreshTokenRotationResult, error) {
+	return nil, nil
+}
+
+// AcquireLoginEmailCooldown stubs login-email cooldown acquisition for starter tests.
+func (fakeEphemeralStore) AcquireLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+
+// ReleaseLoginEmailCooldown stubs login-email cooldown release for starter tests.
+func (fakeEphemeralStore) ReleaseLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string) (int64, error) {
+	return 1, nil
+}
+
 func (fakeEphemeralStore) AddRequestCountEntry(ctx context.Context, clientIP string) error {
 	return nil
 }
@@ -1317,6 +1347,36 @@ func (fakeAccessEphemeralStore) FetchAuth(ctx context.Context, accessDetails eph
 
 func (fakeAccessEphemeralStore) DeleteAuth(ctx context.Context, tokenID string) (int64, error) {
 	return 0, nil
+}
+
+// AcquireRefreshTokenRotationLock stubs refresh rotation locking for access starter tests.
+func (fakeAccessEphemeralStore) AcquireRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+
+// ReleaseRefreshTokenRotationLock stubs refresh rotation lock release for access starter tests.
+func (fakeAccessEphemeralStore) ReleaseRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string) (int64, error) {
+	return 1, nil
+}
+
+// StoreRefreshTokenRotationResult stubs refresh rotation replay storage for access starter tests.
+func (fakeAccessEphemeralStore) StoreRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string, result *ephemeral.RefreshTokenRotationResult, ttl time.Duration) error {
+	return nil
+}
+
+// GetRefreshTokenRotationResult stubs refresh rotation replay lookup for access starter tests.
+func (fakeAccessEphemeralStore) GetRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string) (*ephemeral.RefreshTokenRotationResult, error) {
+	return nil, nil
+}
+
+// AcquireLoginEmailCooldown stubs login-email cooldown acquisition for access starter tests.
+func (fakeAccessEphemeralStore) AcquireLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+
+// ReleaseLoginEmailCooldown stubs login-email cooldown release for access starter tests.
+func (fakeAccessEphemeralStore) ReleaseLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string) (int64, error) {
+	return 1, nil
 }
 
 func (fakeAccessEphemeralStore) AddRequestCountEntry(ctx context.Context, clientIP string) error {

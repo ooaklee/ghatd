@@ -88,6 +88,8 @@ GHAT(D) supports a dual-channel verification flow for login and email verificati
 | **Auto-blocking** | IPs exceeding the threshold are temporarily blocked (default: 1 hour) |
 | **One-time use** | Codes and tokens are invalidated after successful verification |
 | **Time-bounded** | All codes and tokens have TTLs (default: 10 minutes for login/verification) |
+| **Refresh rotation tolerance** | Near-concurrent duplicate refreshes can reuse the winning rotation result instead of consuming the same refresh token twice |
+| **Login email cooldown** | Duplicate login email sends for the same active user/context are suppressed during a short cooldown window |
 | **Audit logging** | All verification attempts (pass and fail) and rate-limit blocks are logged for monitoring |
 | **Rate-limit response** | Blocked IPs receive HTTP 429 with `EPH0-002` — no information leakage |
 

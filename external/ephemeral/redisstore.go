@@ -2,6 +2,8 @@ package ephemeral
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -15,6 +17,8 @@ import (
 // PersistentClient holds methods for a valid cache
 type PersistentClient interface {
 	Set(key string, value interface{}, expiration time.Duration) *redis.StatusCmd
+	// SetNX stores a value only when the key is not already present.
+	SetNX(key string, value interface{}, expiration time.Duration) *redis.BoolCmd
 	Get(key string) *redis.StringCmd
 	Del(keys ...string) *redis.IntCmd
 	Incr(key string) *redis.IntCmd
@@ -25,6 +29,24 @@ const (
 	// prefixTemplate is how the cache key prefix should be shaped, <appComponent>-<appEnvironment>_
 	prefixTemplate string = "%s-%s_"
 )
+
+// refreshTokenRotationKey returns the cache key for a completed refresh rotation result.
+func refreshTokenRotationKey(userID, refreshTokenUUID string) string {
+	return fmt.Sprintf("refresh-rotation:%s:%s", userID, refreshTokenUUID)
+}
+
+// refreshTokenRotationLockKey returns the cache key for the in-flight refresh rotation lock.
+func refreshTokenRotationLockKey(userID, refreshTokenUUID string) string {
+	return fmt.Sprintf("refresh-rotation-lock:%s:%s", userID, refreshTokenUUID)
+}
+
+// loginEmailCooldownKey returns a non-reversible login-email cooldown key for a user/context.
+func loginEmailCooldownKey(userID string, isDashboardRequest bool, requestURL string) string {
+	// requestURLHash keeps the request context out of the raw Redis key while still scoping cooldowns.
+	requestURLHash := sha256.Sum256([]byte(requestURL))
+
+	return fmt.Sprintf("login-email-cooldown:%s:%t:%x", userID, isDashboardRequest, requestURLHash)
+}
 
 // Client communicates with the persistent storage
 type Client struct {
@@ -77,6 +99,69 @@ func (c *Client) CreateAuth(ctx context.Context, userID string, tokenDetails Tok
 	}
 
 	return nil
+}
+
+// AcquireRefreshTokenRotationLock tries to claim the rotation for a refresh token.
+func (c *Client) AcquireRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error) {
+	completeKey := c.keyPrefix + refreshTokenRotationLockKey(userID, refreshTokenUUID)
+
+	return c.client.SetNX(completeKey, "1", ttl).Result()
+}
+
+// ReleaseRefreshTokenRotationLock releases a previously acquired refresh rotation lock.
+func (c *Client) ReleaseRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string) (int64, error) {
+	completeKey := c.keyPrefix + refreshTokenRotationLockKey(userID, refreshTokenUUID)
+
+	return c.client.Del(completeKey).Result()
+}
+
+// StoreRefreshTokenRotationResult stores the newly issued token pair for brief replay.
+func (c *Client) StoreRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string, result *RefreshTokenRotationResult, ttl time.Duration) error {
+	if result == nil {
+		return fmt.Errorf("nil refresh token rotation result")
+	}
+
+	payload, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+
+	completeKey := c.keyPrefix + refreshTokenRotationKey(userID, refreshTokenUUID)
+	return c.client.Set(completeKey, string(payload), ttl).Err()
+}
+
+// GetRefreshTokenRotationResult retrieves a recently rotated token pair.
+func (c *Client) GetRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string) (*RefreshTokenRotationResult, error) {
+	completeKey := c.keyPrefix + refreshTokenRotationKey(userID, refreshTokenUUID)
+
+	raw, err := c.client.Get(completeKey).Result()
+	if err == redis.Nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var result RefreshTokenRotationResult
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// AcquireLoginEmailCooldown tries to claim the login-email cooldown window.
+func (c *Client) AcquireLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string, ttl time.Duration) (bool, error) {
+	completeKey := c.keyPrefix + loginEmailCooldownKey(userID, isDashboardRequest, requestURL)
+
+	return c.client.SetNX(completeKey, "1", ttl).Result()
+}
+
+// ReleaseLoginEmailCooldown releases a login-email cooldown claim.
+func (c *Client) ReleaseLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string) (int64, error) {
+	completeKey := c.keyPrefix + loginEmailCooldownKey(userID, isDashboardRequest, requestURL)
+
+	return c.client.Del(completeKey).Result()
 }
 
 // DeleteAllTokenExceptedSpecified deletes all keys except the ones specified

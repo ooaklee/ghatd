@@ -48,6 +48,8 @@ Also keep the auth-initiation statuses separate from session-probe statuses:
 
 Neither status means the client is authenticated yet. Only the later magic-link or code verification response establishes the cookie session.
 
+For login initiation, treat any successful `2xx` response from `POST /api/v1/ams/login` as an accepted request and navigate the user to the check-email screen. Access Manager may suppress duplicate email sends for the same active user and request context during a short cooldown window, so retrying the same request repeatedly is not a useful user action. Keep the submit button disabled while the request is in flight, and keep it locked after the accepted response while the app transitions to the check-email route.
+
 For protected browser routes, preserve the intended destination in a `request_url` query value, such as `/auth/login?request_url=/app/projects`. Pass the same path to `POST /api/v1/ams/login` or `POST /api/v1/ams/signup` so email links can return the user to the right place.
 
 ## Email Magic Link
@@ -122,6 +124,10 @@ Clients can also call the explicit refresh endpoint when they need to rotate bef
 ```http
 POST /api/v1/ams/tokens/refresh
 ```
+
+Refresh-token rotation is tolerant of near-concurrent duplicate requests. The first valid request consumes the old refresh token and stores a short-lived replay result; duplicate requests for the same token can reuse that result instead of failing simply because another tab or request won the race. Middleware writes replacement cookies only after the retried protected request accepts the refreshed access token.
+
+Clients should still use `/api/v1/ums/me` as the source of truth after refresh uncertainty. If a refresh call fails or a protected request still returns an auth error, clear local session state and route through login rather than looping refresh attempts.
 
 For logout, clear local user state first, then call:
 
