@@ -37,6 +37,16 @@ Cookie attributes come from the handler configuration:
 
 Browser clients should use credentialed requests, such as Axios `withCredentials: true`, and native clients should use a persistent cookie jar. Clients do not need to store JWTs themselves. To resolve the current session, call `GET /api/v1/ums/me`; a `200` response means the cookie session is usable, while `401` or `403` should clear local user state and send the user through the login flow again.
 
+## Refresh Rotation Tolerance
+
+Access Manager treats refresh-token rotation as a one-winner operation. The first request that validates a refresh token claims a short-lived rotation lock, consumes the old refresh token, creates the replacement access and refresh tokens, and stores a short-lived replay result in ephemeral storage.
+
+Near-concurrent duplicate refreshes for the same user and refresh token do not rotate a second time. They first check for an existing replay result, then wait briefly when another request already holds the lock. If the winning request completes, the duplicate receives the same replacement token pair. If no result appears before the wait expires, the duplicate is rejected and the client should resolve the session again through the normal `/me` probe or login flow.
+
+Middleware refreshes also validate the retried request before writing replacement cookies to the response. This avoids committing cookies for a token pair that the protected route would immediately reject.
+
+Clients should still avoid intentionally fanning out refresh calls, but host applications do not need every tab, worker, and retry path to serialize perfectly. The server tolerates the common browser race where multiple requests discover an expired access-token cookie at nearly the same time.
+
 ## Dual-Channel Verification
 
 The access manager supports a dual-channel verification flow: users receive both a **magic link** (with a JWT token) and an **8-character alphanumeric verification code** in the same login or verification email. Some apps label this manual-entry value as a secret code.
@@ -70,6 +80,10 @@ Use verification type `2` when the client is tracking a pending signup or email-
 6. The user clicks `/v0/auth/verify?type=1&__t=<token>&request_url=<path>`.
 7. The bridge redirects to `/api/v1/ams/login?t=<token>&next_step=<frontend-url>`.
 8. Access Manager validates the login token, creates an authenticated session, stores it in ephemeral storage, invalidates the initial login token, sets auth cookies, and returns `200 OK` or redirects to `next_step`.
+
+For an active user, duplicate login-initiation requests for the same user, dashboard flag, and requested return URL are suppressed for a short cooldown window. The API still preserves its non-enumerating response behavior, but only the first accepted request should send an email. If token setup or email delivery fails before the email is accepted, the cooldown is released so a retry can send a new email.
+
+Client login forms should treat any successful `2xx` response from `POST /api/v1/ams/login` as "check your email", disable duplicate submits while the request is in flight, and keep the form locked once the request is accepted. This protects email quotas and gives users a stable transition to the check-email screen.
 
 Use verification type `1` when the client is tracking a pending login email.
 
@@ -107,6 +121,8 @@ For an app-facing checklist that applies these flows from a client perspective, 
 | **Brute-force protection** | `HardenedRateLimitProtection` middleware tracks attempts per IP and per code within a configurable window (default: 5/hr per IP, 5/hr per code) |
 | **Auto-blocking** | IPs exceeding the threshold are temporarily blocked (default: 1 hour) |
 | **One-time use** | Codes and tokens are invalidated after successful verification |
+| **Refresh rotation tolerance** | One request rotates a refresh token while short-lived replay results tolerate near-concurrent duplicate refreshes |
+| **Login email cooldown** | Duplicate login email sends for the same active user/context are suppressed during a short cooldown window |
 | **Audit logging** | All verification attempts and rate-limit blocks are logged for monitoring |
 | **Rate-limit response** | Blocked IPs receive HTTP 429 with `EPH0-002` — no information leakage |
 

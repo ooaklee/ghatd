@@ -16,6 +16,19 @@ type TokenDetailsAuth interface {
 	GetTokenRefreshTimeToLive() time.Duration
 }
 
+// RefreshTokenRotationResult is the short-lived replay payload stored when a
+// refresh token has just been rotated.
+type RefreshTokenRotationResult struct {
+	// AccessToken is the replacement access token returned by the winning refresh.
+	AccessToken string `json:"access_token"`
+	// RefreshToken is the replacement refresh token returned by the winning refresh.
+	RefreshToken string `json:"refresh_token"`
+	// AccessTokenExpiresAt is the replacement access token expiry timestamp.
+	AccessTokenExpiresAt int64 `json:"access_token_expires_at"`
+	// RefreshTokenExpiresAt is the replacement refresh token expiry timestamp.
+	RefreshTokenExpiresAt int64 `json:"refresh_token_expires_at"`
+}
+
 // TokenDetailsAccess holds methods for a passing valid
 // token access details
 type TokenDetailsAccess interface {
@@ -62,14 +75,14 @@ type TokenDetails struct {
 	EvTtl time.Duration
 }
 
-// GetTokenAccessUuidreturns the access token's uuid
+// GetTokenAccessUuid returns the access token's uuid
 func (t *TokenDetails) GetTokenAccessUuid() string {
 	return t.AccessUuid
 }
 
 // GetTokenRefreshUuid returns the refresh token's uuid
 func (t *TokenDetails) GetTokenRefreshUuid() string {
-	return t.RefreshToken
+	return t.RefreshUuid
 }
 
 // GetTokenAccessTimeToLive returns the access token's time to live
@@ -77,7 +90,7 @@ func (t *TokenDetails) GetTokenAccessTimeToLive() time.Duration {
 	return t.AtTtl
 }
 
-// GetTokenAccessTimeToLive returns the refresh token's time to live
+// GetTokenRefreshTimeToLive returns the refresh token's time to live
 func (t *TokenDetails) GetTokenRefreshTimeToLive() time.Duration {
 	return t.RtTtl
 }
@@ -131,17 +144,17 @@ func (t *TokenAccessDetails) GetTokenAccessUuid() string {
 	return t.AccessUuid
 }
 
-// GetTokenAccessUuid returns the user id of the token's owner
+// GetUserId returns the user id of the token's owner
 func (t *TokenAccessDetails) GetUserId() string {
 	return t.UserId
 }
 
-// GetTokenAccessUuid returns whether the token's owner is an admin
+// IsUserAdmin returns whether the token's owner is an admin
 func (t *TokenAccessDetails) IsUserAdmin() bool {
 	return t.IsAdmin
 }
 
-// GetTokenAccessUuid returns whether the owner's account is in an active state
+// IsUserAuthorized returns whether the owner's account is in an active state
 func (t *TokenAccessDetails) IsUserAuthorized() bool {
 	return t.IsAuthorized
 }

@@ -50,6 +50,18 @@ type EphemeralStore interface {
 	StoreToken(ctx context.Context, accessTokenUUID string, userID string, ttl time.Duration) error
 	FetchAuth(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error)
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
+	// AcquireRefreshTokenRotationLock claims the right to rotate one refresh token.
+	AcquireRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error)
+	// ReleaseRefreshTokenRotationLock releases a previously claimed refresh rotation lock.
+	ReleaseRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string) (int64, error)
+	// StoreRefreshTokenRotationResult stores a short-lived replay payload for duplicate refreshes.
+	StoreRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string, result *ephemeral.RefreshTokenRotationResult, ttl time.Duration) error
+	// GetRefreshTokenRotationResult fetches a short-lived replay payload for duplicate refreshes.
+	GetRefreshTokenRotationResult(ctx context.Context, userID, refreshTokenUUID string) (*ephemeral.RefreshTokenRotationResult, error)
+	// AcquireLoginEmailCooldown claims the login-email send window for one user/context.
+	AcquireLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string, ttl time.Duration) (bool, error)
+	// ReleaseLoginEmailCooldown releases a login-email send window after a failed send setup.
+	ReleaseLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string) (int64, error)
 	AddRequestCountEntry(ctx context.Context, clientIp string) error
 	DeleteAllTokenExceptedSpecified(ctx context.Context, userId string, exemptionTokenIds []string) error
 	CodeExists(ctx context.Context, code string) (bool, error)
@@ -127,6 +139,19 @@ type Service struct {
 	OauthServices         []OauthService
 	StaticPlaceholderUuid string
 }
+
+const (
+	// refreshTokenRotationReplayTTL bounds how long a consumed refresh token can replay the winning rotation result.
+	refreshTokenRotationReplayTTL = 30 * time.Second
+	// refreshTokenRotationLockTTL bounds how long one process may hold the refresh rotation lock.
+	refreshTokenRotationLockTTL = 5 * time.Second
+	// refreshTokenRotationWaitTimeout bounds how long duplicate refreshes wait for the winning rotation result.
+	refreshTokenRotationWaitTimeout = 2 * time.Second
+	// refreshTokenRotationWaitInterval controls how often duplicate refreshes poll for the winning rotation result.
+	refreshTokenRotationWaitInterval = 25 * time.Millisecond
+	// loginEmailCooldownTTL bounds duplicate login-initiation email sends for the same user/context.
+	loginEmailCooldownTTL = 60 * time.Second
+)
 
 // NewServiceRequest holds all expected dependencies for an accessmanager service
 type NewServiceRequest struct {
@@ -1139,21 +1164,71 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
-	tokenUser, refreshTokenUuid, err := s.RemoveRefreshTokenWithCookieValue(ctx, r.RefreshToken)
+	tokenUser, refreshTokenDetails, err := s.refreshTokenUserFromCookieValue(ctx, r.RefreshToken)
 	if err != nil {
 		return nil, err
 	}
 
+	refreshTokenUuid := refreshTokenDetails.RefreshUUID
+	userID := tokenUser.GetUserId()
+
+	if response, err := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); err != nil {
+		return nil, err
+	} else if response != nil {
+		log.Info("refresh-token-rotation-replayed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		return response, nil
+	}
+
+	lockAcquired, err := s.EphemeralStore.AcquireRefreshTokenRotationLock(ctx, userID, refreshTokenUuid, refreshTokenRotationLockTTL)
+	if err != nil {
+		log.Error("refresh-token-rotation-lock-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+		return nil, err
+	}
+	if !lockAcquired {
+		response, waitErr := s.waitForRefreshTokenRotationResponse(ctx, userID, refreshTokenUuid)
+		if waitErr != nil {
+			return nil, waitErr
+		}
+		if response != nil {
+			log.Info("refresh-token-rotation-replayed-after-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			return response, nil
+		}
+
+		log.Error("refresh-token-rotation-lock-timeout-without-result", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
+	}
+	defer func() {
+		if _, releaseErr := s.EphemeralStore.ReleaseRefreshTokenRotationLock(ctx, userID, refreshTokenUuid); releaseErr != nil {
+			log.Warn("refresh-token-rotation-lock-release-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(releaseErr))
+		}
+	}()
+
+	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
+	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userID, refreshTokenUuid))
+	if err != nil || deleted == 0 {
+		if response, replayErr := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); replayErr != nil {
+			return nil, replayErr
+		} else if response != nil {
+			log.Info("refresh-token-rotation-replayed-after-delete-miss", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			return response, nil
+		}
+
+		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userID), zap.Error(err))
+		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
+	}
+
+	log.Info("refresh-token-successfully-removed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+
 	// check if access token is present and clean up along with it
 	if r.AccessToken != "" {
 
-		log.Info("access-token-present-in-refresh-token-request", zap.String("user-id", tokenUser.GetUserId()), zap.String("refresh-token", refreshTokenUuid))
+		log.Info("access-token-present-in-refresh-token-request", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 
-		err := s.RemoveAccessTokenWithCookieValue(ctx, tokenUser.GetUserId(), r.AccessToken)
+		err := s.RemoveAccessTokenWithCookieValue(ctx, userID, r.AccessToken)
 		if err != nil {
-			log.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", tokenUser.GetUserId()), zap.Error(err))
+			log.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.Error(err))
 		} else {
-			log.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", tokenUser.GetUserId()), zap.String("refresh-token", refreshTokenUuid))
+			log.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 		}
 
 	}
@@ -1165,10 +1240,21 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	}
 
 	// Save the tokens to ephemeralstore
-	err = s.EphemeralStore.CreateAuth(ctx, tokenUser.GetUserId(), newTokensDetails)
+	err = s.EphemeralStore.CreateAuth(ctx, userID, newTokensDetails)
 	if err != nil {
-		log.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", tokenUser.GetUserId()), zap.Error(err))
+		log.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", userID), zap.Error(err))
 		return nil, err
+	}
+
+	// rotationResult lets duplicate refresh attempts receive the same replacement token pair.
+	rotationResult := &ephemeral.RefreshTokenRotationResult{
+		AccessToken:           newTokensDetails.AccessToken,
+		RefreshToken:          newTokensDetails.RefreshToken,
+		AccessTokenExpiresAt:  newTokensDetails.AtExpires,
+		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
+	}
+	if err := s.EphemeralStore.StoreRefreshTokenRotationResult(ctx, userID, refreshTokenUuid, rotationResult, refreshTokenRotationReplayTTL); err != nil {
+		log.Warn("refresh-token-rotation-result-store-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
 	}
 
 	return &RefreshTokenResponse{
@@ -1177,6 +1263,54 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		AccessTokenExpiresAt:  newTokensDetails.AtExpires,
 		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
 	}, nil
+}
+
+// refreshTokenRotationResponse maps a cached rotation replay payload to the service response.
+func (s *Service) refreshTokenRotationResponse(ctx context.Context, userID, refreshTokenUuid string) (*RefreshTokenResponse, error) {
+	result, err := s.EphemeralStore.GetRefreshTokenRotationResult(ctx, userID, refreshTokenUuid)
+	if err != nil || result == nil {
+		return nil, err
+	}
+
+	return &RefreshTokenResponse{
+		AccessToken:           result.AccessToken,
+		RefreshToken:          result.RefreshToken,
+		AccessTokenExpiresAt:  result.AccessTokenExpiresAt,
+		RefreshTokenExpiresAt: result.RefreshTokenExpiresAt,
+	}, nil
+}
+
+// waitForRefreshTokenRotationResponse polls briefly for the winning refresh rotation result.
+func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userID, refreshTokenUuid string) (*RefreshTokenResponse, error) {
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
+
+	timeout := time.NewTimer(refreshTokenRotationWaitTimeout)
+	defer timeout.Stop()
+
+	ticker := time.NewTicker(refreshTokenRotationWaitInterval)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		response, err := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid)
+		if response != nil {
+			return response, nil
+		}
+		if err != nil {
+			lastErr = err
+			log.Warn("refresh-token-rotation-result-fetch-failed-during-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timeout.C:
+			return nil, lastErr
+		case <-ticker.C:
+		}
+	}
 }
 
 // RemoveAccessTokenWithCookieValue removes access token with the given cookie value
@@ -1210,7 +1344,40 @@ func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, 
 	return nil
 }
 
-// RemoveRefreshTokenWithCookieValue removes refresh token with the given cookie valu
+// refreshTokenUserFromCookieValue validates a refresh cookie and returns its user and token metadata.
+func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, *auth.TokenRefreshDetails, error) {
+	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
+		zap.AddStacktrace(zap.DPanicLevel),
+	)
+
+	log.Info("processing-refresh-token-by-cookie-value")
+
+	// Check validity
+	refreshToken, err := s.AuthService.CheckRefreshTokenIsValid(ctx, refreshTokenCookieValue)
+	if err != nil {
+		log.Error("failed-to-check-if-refresh-token-is-valid", zap.Error(err))
+		return nil, nil, err
+	}
+
+	// Get token details
+	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, refreshToken)
+	if err != nil {
+		log.Error("failed-to-get-refresh-token-by-its-uuid", zap.Error(err))
+		return nil, nil, err
+	}
+
+	// Get user details
+	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
+		ID: refreshTokenDetails.UserID})
+	if err != nil {
+		log.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
+		return nil, refreshTokenDetails, err
+	}
+
+	return persistentUserResponse.User, refreshTokenDetails, nil
+}
+
+// RemoveRefreshTokenWithCookieValue removes refresh token with the given cookie value
 // returns the user id of the refresh token and an error if any
 func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error) {
 
@@ -1224,31 +1391,16 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 
 	log.Info("processing-refresh-token-removal-by-cookie-value")
 
-	// Check validity
-	refreshToken, err := s.AuthService.CheckRefreshTokenIsValid(ctx, refreshTokenCookieValue)
+	tokenUser, refreshTokenDetails, err := s.refreshTokenUserFromCookieValue(ctx, refreshTokenCookieValue)
 	if err != nil {
-		log.Error("failed-to-check-if-refresh-token-is-valid", zap.Error(err))
-		return nil, refreshTokenUuid, err
-	}
-
-	// Get token details
-	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, refreshToken)
-	if err != nil {
-		log.Error("failed-to-get-refresh-token-by-its-uuid", zap.Error(err))
+		if refreshTokenDetails != nil {
+			refreshTokenUuid = refreshTokenDetails.RefreshUUID
+		}
 		return nil, refreshTokenUuid, err
 	}
 
 	refreshTokenUuid = refreshTokenDetails.RefreshUUID
-
-	// Get user details
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-		ID: refreshTokenDetails.UserID})
-	if err != nil {
-		log.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
-		return nil, refreshTokenUuid, err
-	}
-
-	userId = persistentUserResponse.User.ID
+	userId = tokenUser.GetUserId()
 
 	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, refreshTokenDetails.RefreshUUID))
@@ -1258,7 +1410,7 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	}
 
 	log.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
-	return persistentUserResponse.User, refreshTokenUuid, nil
+	return tokenUser, refreshTokenUuid, nil
 }
 
 // LoginUser handies verifying initial login token token, and  actioning all surrounding steps in
@@ -1704,6 +1856,29 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 		zap.AddStacktrace(zap.DPanicLevel),
 	)
 
+	// cooldownAcquired is false when a recent accepted login email already exists for this user/context.
+	cooldownAcquired, err := s.EphemeralStore.AcquireLoginEmailCooldown(ctx, user.ID, isDashboardRequest, requestUrl, loginEmailCooldownTTL)
+	if err != nil {
+		log.Error("unable-to-acquire-login-email-cooldown:", zap.String("user-id", user.ID), zap.Error(err))
+		return "", err
+	}
+	if !cooldownAcquired {
+		log.Info("login-email-cooldown-active", zap.String("user-id", user.ID))
+		return "", nil
+	}
+
+	// keepCooldown flips to true only after the email send has been accepted by the email manager.
+	keepCooldown := false
+	defer func() {
+		if keepCooldown {
+			return
+		}
+
+		if _, releaseErr := s.EphemeralStore.ReleaseLoginEmailCooldown(ctx, user.ID, isDashboardRequest, requestUrl); releaseErr != nil {
+			log.Warn("login-email-cooldown-release-failed", zap.String("user-id", user.ID), zap.Error(releaseErr))
+		}
+	}()
+
 	tokenDetails, err := s.AuthService.CreateInitalToken(ctx, user)
 	if err != nil {
 		log.Error("unable-to-generate-initiate-login-email-token:", zap.String("user-id", user.ID))
@@ -1741,6 +1916,8 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 		log.Error("unable-to-send-initiate-login-email:", zap.String("user-id", user.ID))
 		return "", err
 	}
+
+	keepCooldown = true
 
 	return tokenDetails.EphemeralToken, nil
 }

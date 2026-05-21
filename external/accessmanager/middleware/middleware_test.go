@@ -109,6 +109,17 @@ func createTestHandler() http.Handler {
 	})
 }
 
+// responseHasCookieValue reports whether a response included the expected cookie value.
+func responseHasCookieValue(cookies []*http.Cookie, name, value string) bool {
+	for _, cookie := range cookies {
+		if cookie.Name == name && cookie.Value == value {
+			return true
+		}
+	}
+
+	return false
+}
+
 func TestNewMiddleware(t *testing.T) {
 	service := &mockAccessManagerService{}
 
@@ -332,6 +343,13 @@ func TestJWTRequired_TokenRefresh(t *testing.T) {
 	if callCount != 2 {
 		t.Errorf("Expected middleware function to be called twice (initial + retry), got %d", callCount)
 	}
+
+	if !responseHasCookieValue(w.Result().Cookies(), "test_auth", "new-access-token") {
+		t.Error("Expected refreshed access cookie to be set after successful retry validation")
+	}
+	if !responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
+		t.Error("Expected refreshed refresh cookie to be set after successful retry validation")
+	}
 }
 
 func TestJWTRequired_RefreshTokenFailure(t *testing.T) {
@@ -357,6 +375,54 @@ func TestJWTRequired_RefreshTokenFailure(t *testing.T) {
 
 	if w.Code == http.StatusOK {
 		t.Error("Expected non-200 status code when refresh token is invalid")
+	}
+}
+
+// TestJWTRequired_RefreshRetryValidationFailureDoesNotSetNewCookies verifies refreshed cookies are only committed after retry validation succeeds.
+func TestJWTRequired_RefreshRetryValidationFailureDoesNotSetNewCookies(t *testing.T) {
+	callCount := 0
+	refreshCallCount := 0
+	mockService := &mockAccessManagerService{
+		middlewareJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			callCount++
+			return nil, errors.New("token invalid")
+		},
+		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
+			refreshCallCount++
+			return &accessmanager.RefreshTokenResponse{
+				AccessToken:           "new-access-token",
+				RefreshToken:          "new-refresh-token",
+				AccessTokenExpiresAt:  1700000000,
+				RefreshTokenExpiresAt: 1700000000,
+			}, nil
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.JWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: "expired-jwt-token"})
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: "valid-refresh-token"})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Error("Expected non-200 status code when retry validation rejects refreshed token")
+	}
+	if callCount != 2 {
+		t.Errorf("Expected middleware function to be called twice (initial + retry), got %d", callCount)
+	}
+	if refreshCallCount != 1 {
+		t.Errorf("Expected refresh token function to be called once, got %d", refreshCallCount)
+	}
+	if responseHasCookieValue(w.Result().Cookies(), "test_auth", "new-access-token") {
+		t.Error("Did not expect refreshed access cookie to be set before retry validation succeeds")
+	}
+	if responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
+		t.Error("Did not expect refreshed refresh cookie to be set before retry validation succeeds")
 	}
 }
 
@@ -575,6 +641,101 @@ func TestRateLimitOrActiveJWTRequired_TokenRefresh(t *testing.T) {
 
 	if callCount != 2 {
 		t.Errorf("Expected middleware function to be called twice, got %d", callCount)
+	}
+
+	if !responseHasCookieValue(w.Result().Cookies(), "test_auth", "new-access-token") {
+		t.Error("Expected refreshed access cookie to be set after successful retry validation")
+	}
+	if !responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
+		t.Error("Expected refreshed refresh cookie to be set after successful retry validation")
+	}
+}
+
+// TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureDoesNotSetNewCookies verifies RateLimitOrActiveJWTRequired uses the same cookie timing.
+func TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureDoesNotSetNewCookies(t *testing.T) {
+	callCount := 0
+	refreshCallCount := 0
+
+	mockService := &mockAccessManagerService{
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			callCount++
+			return nil, errors.New("token invalid")
+		},
+		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
+			refreshCallCount++
+			return &accessmanager.RefreshTokenResponse{
+				AccessToken:           "new-access-token",
+				RefreshToken:          "new-refresh-token",
+				AccessTokenExpiresAt:  1700000000,
+				RefreshTokenExpiresAt: 1700000000,
+			}, nil
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/public", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: "expired-jwt-token"})
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: "valid-refresh-token"})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Error("Expected non-200 status code when retry validation rejects refreshed token")
+	}
+	if callCount != 2 {
+		t.Errorf("Expected middleware function to be called twice, got %d", callCount)
+	}
+	if refreshCallCount != 1 {
+		t.Errorf("Expected refresh token function to be called once, got %d", refreshCallCount)
+	}
+	if responseHasCookieValue(w.Result().Cookies(), "test_auth", "new-access-token") {
+		t.Error("Did not expect refreshed access cookie to be set before retry validation succeeds")
+	}
+	if responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
+		t.Error("Did not expect refreshed refresh cookie to be set before retry validation succeeds")
+	}
+}
+
+// TestRateLimitOrActiveJWTRequired_RefreshTokenFailure verifies failed refreshes do not set replacement cookies.
+func TestRateLimitOrActiveJWTRequired_RefreshTokenFailure(t *testing.T) {
+	refreshCallCount := 0
+
+	mockService := &mockAccessManagerService{
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return nil, errors.New("token expired")
+		},
+		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
+			refreshCallCount++
+			return nil, errors.New("refresh token invalid")
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/public", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: "expired-jwt-token"})
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: "invalid-refresh-token"})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Error("Expected non-200 status code when refresh token is invalid")
+	}
+	if refreshCallCount != 1 {
+		t.Errorf("Expected refresh token function to be called once, got %d", refreshCallCount)
+	}
+	if responseHasCookieValue(w.Result().Cookies(), "test_auth", "new-access-token") {
+		t.Error("Did not expect refreshed access cookie to be set when refresh service fails")
+	}
+	if responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
+		t.Error("Did not expect refreshed refresh cookie to be set when refresh service fails")
 	}
 }
 
