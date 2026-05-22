@@ -9,7 +9,9 @@ import (
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
+	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/repository"
+	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -24,6 +26,8 @@ type Repositories struct {
 	Notifier  *notifier.Repository
 	Post      *post.Repository
 	Pricer    *pricer.Repository
+	Reminder  *reminder.Repository
+	Streaker  *streaker.Repository
 	User      *userv2.Repository
 }
 
@@ -40,6 +44,8 @@ type NewRepositoriesRequest struct {
 	Notifier  *notifier.Repository
 	Post      *post.Repository
 	Pricer    *pricer.Repository
+	Reminder  *reminder.Repository
+	Streaker  *streaker.Repository
 	User      *userv2.Repository
 }
 
@@ -63,6 +69,8 @@ func NewRepositories(r *NewRepositoriesRequest) (*Repositories, error) {
 		Notifier:  r.Notifier,
 		Post:      r.Post,
 		Pricer:    r.Pricer,
+		Reminder:  r.Reminder,
+		Streaker:  r.Streaker,
 		User:      r.User,
 	}
 
@@ -90,6 +98,12 @@ func NewRepositories(r *NewRepositoriesRequest) (*Repositories, error) {
 	if repos.Pricer == nil {
 		repos.Pricer = pricer.NewRepository(r.Core)
 	}
+	if repos.Reminder == nil {
+		repos.Reminder = reminder.NewRepository(r.Core)
+	}
+	if repos.Streaker == nil {
+		repos.Streaker = streaker.NewRepository(r.Core)
+	}
 	if repos.User == nil {
 		repos.User = userv2.NewRepository(r.Core)
 	}
@@ -110,6 +124,8 @@ func validateRepositoriesForServices(repos *Repositories) error {
 		repos.Notifier == nil ||
 		repos.Post == nil ||
 		repos.Pricer == nil ||
+		repos.Reminder == nil ||
+		repos.Streaker == nil ||
 		repos.User == nil {
 		return ErrNilRepositories
 	}

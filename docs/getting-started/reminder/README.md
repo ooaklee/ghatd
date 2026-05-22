@@ -55,6 +55,12 @@ if err := reminderMigrations.InitRemindersIndexesUp(db); err != nil {
 }
 ```
 
+With `external/starter/v0`, `starter.NewRepositories` and
+`starter.NewServices` create this repository/service pair for you as
+`Services.Reminder`. Starter attaches it to `Services.UserManager` by default;
+you still run the reminder migrations from the host application's migration
+flow.
+
 ## Creating a Reminder
 
 ```go

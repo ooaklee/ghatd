@@ -21,6 +21,11 @@ handlers add their package-local base maps internally. For example,
 `bundles.AccessManager()` intentionally excludes
 `accessmanager.AccessmanagerErrorMap`.
 
+`bundles.UserManager()` includes cross-package maps for services surfaced
+through UMS, including `reminder.ReminderErrorMap` for the `/api/v1/ums`
+reminder endpoints. The usermanager handler still adds its own
+`UsermanagerErrorMap` internally.
+
 Middleware-level bundles are different. `bundles.AuthMiddleware()` includes
 `accessmanager.AccessmanagerErrorMap` because access middleware uses the
 provided map set directly.

@@ -85,6 +85,13 @@ active, err := service.GetActiveRemindersForTargetTypeByUserID(ctx, &reminder.Ge
 })
 ```
 
+When using `external/starter/v0`, `starter.NewRepositories` creates the
+reminder repository and `starter.NewServices` creates `Services.Reminder`.
+Starter also attaches that service to `Services.UserManager` by default, so
+the UMS reminder endpoints are enabled when the User Manager route group is
+attached. Pass `starter.NewServicesRequest.ReminderService` only when UMS
+should use a custom reminder implementation.
+
 Use `GetRemindersForTargetTypeByUserID` when a product screen needs all
 reminders for a target. Use `GetActiveRemindersForTargetTypeByUserID` when a
 scheduler or UI only needs enabled reminders.

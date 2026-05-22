@@ -26,6 +26,15 @@ type Service struct {
 	StreakRepository StreakRepository
 }
 
+type resolvedRecordStreakRequest struct {
+	scope           StreakScope
+	createdByUserId string
+	occurredAt      time.Time
+	periodType      StreakPeriodType
+	periodKey       string
+	statsReq        StreakStatsRequest
+}
+
 // NewService returns a new instance of the streaker service.
 func NewService(streakRepository StreakRepository) *Service {
 	return &Service{
@@ -33,13 +42,51 @@ func NewService(streakRepository StreakRepository) *Service {
 	}
 }
 
+// GetStreakByScopeAndPeriodOrCreate returns the streak entry for the resolved
+// scope and period, creating it when it does not already exist.
+func (s *Service) GetStreakByScopeAndPeriodOrCreate(ctx context.Context, req *RecordStreakRequest) (*RecordStreakResponse, error) {
+	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	log.Debug("initiating-get-streak-by-scope-and-period-or-create-request", zap.Any("request", req))
+
+	resolvedReq, existingRes, err := s.getStreakByScopeAndPeriodFromRecordRequest(ctx, req, log)
+	if err != nil || existingRes != nil {
+		return existingRes, err
+	}
+
+	createdRes, err := s.createResolvedStreak(ctx, req, resolvedReq, log)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("get-streak-by-scope-and-period-or-create-request-successful", zap.Any("request", req), zap.Any("created-streak", createdRes.Streak))
+	return createdRes, nil
+}
+
 // RecordStreak records a completion and computes the streak count for its scope.
 func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*RecordStreakResponse, error) {
 	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
 	log.Debug("initiating-record-streak-request", zap.Any("request", req))
 
+	resolvedReq, existingRes, err := s.getStreakByScopeAndPeriodFromRecordRequest(ctx, req, log)
+	if err != nil || existingRes != nil {
+		return existingRes, err
+	}
+
+	createdRes, err := s.createResolvedStreak(ctx, req, resolvedReq, log)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("record-streak-request-successful", zap.Any("request", req), zap.Any("created-streak", createdRes.Streak))
+	return createdRes, nil
+}
+
+// getStreakByScopeAndPeriodFromRecordRequest validates and resolves a record
+// request, returning an existing streak response when the period was already
+// recorded.
+func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context, req *RecordStreakRequest, log *zap.Logger) (*resolvedRecordStreakRequest, *RecordStreakResponse, error) {
 	if req == nil {
-		return nil, ErrStreakTypeIsRequired
+		return nil, nil, ErrStreakTypeIsRequired
 	}
 
 	scope := NormaliseScope(StreakScope{
@@ -50,30 +97,30 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 	})
 
 	if err := validateRequiredScope(scope); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	createdByUserId := strings.TrimSpace(req.CreatedByUserId)
 	if createdByUserId == "" {
-		return nil, ErrCreatedByUserIdIsRequired
+		return nil, nil, ErrCreatedByUserIdIsRequired
 	}
 
 	periodType, err := NormalisePeriodType(req.PeriodType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	occurredAt := time.Now().UTC()
 	if strings.TrimSpace(req.OccurredAt) != "" {
 		occurredAt, err = ParseStreakTime(req.OccurredAt)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	periodKey, err := BuildPeriodKey(occurredAt, periodType, req.PeriodKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	statsReq := StreakStatsRequest{
@@ -84,43 +131,59 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 		PeriodType: periodType,
 	}
 
+	resolvedReq := &resolvedRecordStreakRequest{
+		scope:           scope,
+		createdByUserId: createdByUserId,
+		occurredAt:      occurredAt,
+		periodType:      periodType,
+		periodKey:       periodKey,
+		statsReq:        statsReq,
+	}
+
 	existing, err := s.StreakRepository.GetStreakByScopeAndPeriod(ctx, &GetLatestStreakRequest{
 		StreakStatsRequest: statsReq,
 		PeriodKey:          periodKey,
 	})
 	if err == nil && existing != nil {
-		return &RecordStreakResponse{Streak: existing}, nil
+		return resolvedReq, &RecordStreakResponse{Streak: existing}, nil
 	}
 	if err != nil && !errors.Is(err, ErrResourceNotFound) {
-		log.Error("failed-to-record-streak-error-checking-period", zap.Any("request", req), zap.Error(err))
-		return nil, err
+		log.Error("failed-to-resolve-streak-error-checking-period", zap.Any("request", req), zap.Error(err))
+		return nil, nil, err
 	}
 
+	return resolvedReq, nil, nil
+}
+
+// createResolvedStreak creates a streak from a previously validated and
+// resolved record request, carrying forward consecutive count and previous
+// streak metadata when available.
+func (s *Service) createResolvedStreak(ctx context.Context, req *RecordStreakRequest, resolvedReq *resolvedRecordStreakRequest, log *zap.Logger) (*RecordStreakResponse, error) {
 	var previous *Streak
-	previous, err = s.StreakRepository.GetLatestStreak(ctx, &GetLatestStreakRequest{
-		StreakStatsRequest: statsReq,
+	previous, err := s.StreakRepository.GetLatestStreak(ctx, &GetLatestStreakRequest{
+		StreakStatsRequest: resolvedReq.statsReq,
 	})
 	if err != nil && !errors.Is(err, ErrResourceNotFound) {
-		log.Error("failed-to-record-streak-error-getting-latest-streak", zap.Any("request", req), zap.Error(err))
+		log.Error("failed-to-create-streak-error-getting-latest-streak", zap.Any("request", req), zap.Error(err))
 		return nil, err
 	}
 
 	currentCount := 1
-	if previous != nil && IsConsecutivePeriod(previous.PeriodKey, periodKey, periodType) {
+	if previous != nil && IsConsecutivePeriod(previous.PeriodKey, resolvedReq.periodKey, resolvedReq.periodType) {
 		currentCount = previous.CurrentCount + 1
 	}
 
 	newStreak := &Streak{
 		StreakName:      strings.TrimSpace(req.StreakName),
-		StreakType:      scope.StreakType,
-		OwnerId:         scope.OwnerId,
-		TargetType:      scope.TargetType,
-		TargetId:        scope.TargetId,
-		PeriodType:      periodType,
-		PeriodKey:       periodKey,
-		OccurredAt:      FormatStreakTime(occurredAt),
+		StreakType:      resolvedReq.scope.StreakType,
+		OwnerId:         resolvedReq.scope.OwnerId,
+		TargetType:      resolvedReq.scope.TargetType,
+		TargetId:        resolvedReq.scope.TargetId,
+		PeriodType:      resolvedReq.periodType,
+		PeriodKey:       resolvedReq.periodKey,
+		OccurredAt:      FormatStreakTime(resolvedReq.occurredAt),
 		CurrentCount:    currentCount,
-		CreatedByUserId: createdByUserId,
+		CreatedByUserId: resolvedReq.createdByUserId,
 		Metadata:        req.Metadata,
 	}
 
@@ -130,11 +193,10 @@ func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*
 
 	createdStreak, err := s.StreakRepository.CreateStreak(ctx, newStreak)
 	if err != nil {
-		log.Error("failed-to-record-streak-error-creating-streak", zap.Any("request", req), zap.Any("new-streak", newStreak), zap.Error(err))
+		log.Error("failed-to-create-streak-error-creating-streak", zap.Any("request", req), zap.Any("new-streak", newStreak), zap.Error(err))
 		return nil, err
 	}
 
-	log.Debug("record-streak-request-successful", zap.Any("request", req), zap.Any("created-streak", createdStreak))
 	return &RecordStreakResponse{Streak: createdStreak}, nil
 }
 
@@ -253,6 +315,8 @@ func (s *Service) GetNumberOfStreaksByStreakTypeAndUserID(ctx context.Context, r
 	return s.GetNumberOfStreaks(ctx, req)
 }
 
+// normaliseStatsRequest validates and standardises a stats request before it is
+// passed to the repository layer.
 func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error) {
 	if req == nil {
 		return nil, ErrStreakTypeIsRequired
@@ -295,6 +359,8 @@ func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error)
 	}, nil
 }
 
+// validateRequiredScope returns the first missing required field for a fully
+// qualified streak scope.
 func validateRequiredScope(scope StreakScope) error {
 	if scope.StreakType == "" {
 		return ErrStreakTypeIsRequired
@@ -312,6 +378,8 @@ func validateRequiredScope(scope StreakScope) error {
 	return nil
 }
 
+// normaliseStreakType trims and converts a streak type value into the canonical
+// kebab-case representation.
 func normaliseStreakType(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {

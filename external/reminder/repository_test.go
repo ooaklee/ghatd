@@ -33,12 +33,12 @@ func (m *mockMongoDbStore) ExecuteFindOneCommandDecodeResult(ctx context.Context
 	return errors.New("not implemented")
 }
 
-func (m *mockMongoDbStore) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
-	return nil, errors.New("not implemented")
+func (m *mockMongoDbStore) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, resultObjectName string) error {
+	return errors.New("not implemented")
 }
 
-func (m *mockMongoDbStore) ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error) {
-	return nil, errors.New("not implemented")
+func (m *mockMongoDbStore) ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
+	return errors.New("not implemented")
 }
 
 func (m *mockMongoDbStore) GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error) {

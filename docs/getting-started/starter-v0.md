@@ -35,7 +35,7 @@ The common Lazy path is:
 
 1. Build third-party and app-specific dependencies in `main`.
 2. Call `starter.NewRepositories` with a core Mongo repository.
-3. Call `starter.NewServices` with repositories plus explicit Redis/email/OAuth/policy/payment inputs.
+3. Call `starter.NewServices` with repositories plus explicit Redis/email/OAuth/policy/notification/payment inputs.
 4. Call `starter.NewHandlers` with services and a validator.
 5. Call `starter.NewMiddleware` with services.
 6. Group the results with `starter.NewStack`.
@@ -53,6 +53,13 @@ For the lazy path, package-owned helpers such as `repository.NewMongoRuntime`,
 setup without moving that ownership into `starter/v0`. Use
 `router.NewAuthVerifyHandler` directly when a project needs custom auth verify
 endpoint paths.
+
+`NewRepositories` includes the reminder and streaker Mongo repositories, and
+`NewServices` exposes them as `Services.Reminder` and `Services.Streaker`. The
+reminder service is also attached to `Services.UserManager` by default so the
+UMS reminder endpoints are live when the User Manager route group is attached.
+Streaker remains host-routed in v0; call `Services.Streaker` from custom
+handlers or jobs.
 
 For a fuller server-command example that mirrors a GHATD host application
 setup, see [starter/v0 Host Application Setup](starter-v0-host-application-style.md).
@@ -85,7 +92,7 @@ err := starter.AttachDefaultRoutes(&starter.AttachDefaultRoutesRequest{
 | `RouteGroupUser`                      | `/api/v2/users`     |
 | `RouteGroupGroup`                     | `/api/v1/groups`    |
 | `RouteGroupAccessManager`             | `/api/v1/ams`       |
-| `RouteGroupUserManager`               | `/api/v1/ums`       |
+| `RouteGroupUserManager`               | `/api/v1/ums`, including reminders |
 | `RouteGroupContentManager`            | `/api/v1/cms`       |
 | `RouteGroupBillingManager`            | `/api/v1/bms`       |
 
@@ -129,8 +136,9 @@ piece they need:
 - `NewRepositoriesRequest` accepts per-repository overrides.
 - `NewServicesRequest` accepts custom policy stores, group/user config,
   audit services, notifier senders, OAuth services, payment registries, payment
-  providers, and post tag configuration. `ValidPostTags: nil` uses GHATD
-  defaults, while `ValidPostTags: []string{}` intentionally disables them.
+  providers, a custom UMS reminder service override, and post tag
+  configuration. `ValidPostTags: nil` uses GHATD defaults, while
+  `ValidPostTags: []string{}` intentionally disables them.
 - `NewHandlersRequest` accepts `HandlerErrorMaps`; `nil` uses starter defaults,
   while an empty slice intentionally clears a bundle.
 - `NewMiddlewareRequest` accepts custom error maps, rate-limit tuning, and an

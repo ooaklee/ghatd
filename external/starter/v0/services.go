@@ -18,6 +18,8 @@ import (
 	"github.com/ooaklee/ghatd/external/policy"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
+	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
 )
@@ -37,6 +39,8 @@ type Services struct {
 	Policy                  *policy.Service
 	Post                    *post.Service
 	Pricer                  *pricer.Service
+	Reminder                *reminder.Service
+	Streaker                *streaker.Service
 	User                    *userv2.Service
 	UserManager             *usermanager.Service
 	EphemeralStore          accessmanager.EphemeralStore
@@ -77,6 +81,8 @@ type NewServicesRequest struct {
 	ValidPostTags []string
 
 	NotifierSenders []notifier.ChannelSender
+	// ReminderService overrides the reminder service attached to UserManager.
+	// When nil, starter attaches the Reminder service it creates from repositories.
 	ReminderService usermanager.ReminderService
 
 	PolicyStore  policy.PolicyStore
@@ -142,6 +148,8 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	postService := post.NewService(r.Repositories.Post, resolvePostTags(r.ValidPostTags))
 	billingService := billing.NewService(r.Repositories.Billing, r.Repositories.Billing)
 	pricerService := pricer.NewService(r.Repositories.Pricer)
+	reminderService := reminder.NewService(r.Repositories.Reminder)
+	streakerService := streaker.NewService(r.Repositories.Streaker)
 	notifierService := notifier.NewService(&notifier.NewServiceRequest{
 		Repository: r.Repositories.Notifier,
 		Senders:    r.NotifierSenders,
@@ -169,7 +177,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		ApiTokenService:  apiTokenService,
 		AuditService:     auditService,
 		ContacterService: contacterService,
-	}).WithGroupService(groupService).WithNotifierService(notifierService)
+	}).WithGroupService(groupService).WithNotifierService(notifierService).WithReminderService(reminderService)
 	if r.ReminderService != nil {
 		userManagerService.WithReminderService(r.ReminderService)
 	}
@@ -203,6 +211,8 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		Policy:                  policyService,
 		Post:                    postService,
 		Pricer:                  pricerService,
+		Reminder:                reminderService,
+		Streaker:                streakerService,
 		User:                    userService,
 		UserManager:             userManagerService,
 		EphemeralStore:          r.EphemeralStore,

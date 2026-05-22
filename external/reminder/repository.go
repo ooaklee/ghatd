@@ -20,8 +20,8 @@ type MongoDbStore interface {
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
-	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error)
-	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error)
+	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, resultObjectName string) error
+	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
@@ -338,7 +338,7 @@ func (r *Repository) UpdateReminderByID(ctx context.Context, reminder *Reminder)
 	filter := bson.M{"_id": reminder.Id}
 	update := bson.M{"$set": reminder}
 
-	_, err = r.Store.ExecuteUpdateOneCommand(ctx, collection, filter, update)
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, filter, update, "reminder")
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +356,7 @@ func (r *Repository) PatchReminder(ctx context.Context, id string, update map[st
 	update["updated_at"] = toolboxTimeNow()
 
 	filter := bson.M{"_id": id}
-	_, err = r.Store.ExecuteUpdateOneCommand(ctx, collection, filter, bson.M{"$set": update})
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, filter, bson.M{"$set": update}, "reminder")
 	if err != nil {
 		return err
 	}
@@ -376,7 +376,7 @@ func (r *Repository) DeleteReminderByID(ctx context.Context, id string) error {
 	}
 
 	filter := bson.M{"_id": id}
-	_, err = r.Store.ExecuteDeleteOneCommand(ctx, collection, filter)
+	err = r.Store.ExecuteDeleteOneCommand(ctx, collection, filter, "reminder")
 	if err != nil {
 		return err
 	}

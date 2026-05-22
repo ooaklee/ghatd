@@ -53,6 +53,11 @@ concept:
 | `NewStandardEmailManager` | `external/emailmanager` | Standard GHATD email templater plus email manager wiring. |
 | `AttachDefaultAuthVerifyRoute` | `external/router` | Default auth verification route registration from backend/frontend base URLs. |
 
+Starter builds `Services.Reminder` and attaches it to `Services.UserManager`
+by default, so UMS reminder routes work through `AttachDefaultRoutes`.
+Starter also builds `Services.Streaker` for host-owned handlers or background
+jobs. The host application still owns Mongo migrations for both packages.
+
 ## Trimmed Example
 
 The example below is intentionally trimmed. It shows where starter/v0 fits in
@@ -210,6 +215,8 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
     if err != nil {
         return fmt.Errorf("server/starter-services-initialisation-failed: %v", err)
     }
+    // starterServices.Reminder is attached to starterServices.UserManager by default.
+    // starterServices.Streaker is available for host-owned handlers or jobs.
 
     starterHandlers, err := starter.NewHandlers(&starter.NewHandlersRequest{
         Services:                 starterServices,

@@ -13,6 +13,7 @@ import (
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
+	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/reply/v2"
@@ -42,6 +43,7 @@ func UserManager() []reply.ErrorManifest {
 		toolbox.ToolboxErrorMap,
 		group.GroupErrorMap,
 		notifier.NotifierErrorMap,
+		reminder.ReminderErrorMap,
 	})
 }
 

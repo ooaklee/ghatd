@@ -128,6 +128,24 @@ This preserves ejectability: if the default wiring no longer fits, replace
 the single `AttachDefaultRoutes` call with per-package `AttachRoutes` calls
 or copy the function body.
 
+### Phase 4: Reminder and Streaker Package Support
+
+A follow-up slice adds package support for `external/reminder` and
+`external/streaker` without changing starter's ownership boundaries:
+
+- `NewRepositories` builds reminder and streaker Mongo repositories from the
+  core repository, while keeping per-repository overrides.
+- `NewServices` builds `Services.Reminder` and `Services.Streaker`.
+- The starter-created reminder service is attached to `Services.UserManager`
+  by default, so the existing UMS reminder routes are backed by reminder when
+  `RouteGroupUserManager` is attached.
+- `NewServicesRequest.ReminderService` remains an escape hatch for callers
+  that want UMS to use a custom reminder implementation.
+- Streaker remains service-only in starter/v0. Host applications own any
+  streaker route shape, scheduler, or product-specific workflow.
+- Starter does not run package migrations; consuming applications keep their
+  Mongo migration flow and include reminder/streaker indexes there.
+
 ## Consequences
 
 New GHATD projects gain a Lazy path that makes the first server easier to

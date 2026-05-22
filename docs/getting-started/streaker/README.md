@@ -68,6 +68,11 @@ if err != nil {
 currentCount := recorded.Streak.CurrentCount
 ```
 
+With `external/starter/v0`, `starter.NewRepositories` creates the streaker
+repository and `starter.NewServices` exposes the service as `Services.Streaker`.
+Starter/v0 does not attach streaker routes; use the service from host-owned
+handlers, jobs, or product workflows.
+
 ## Stats
 
 Stats requests require `PeriodType`, because current, longest, and total counts are only meaningful inside a specific rhythm. For example, a user's daily app streak and weekly app streak can both be valid, but they answer different product questions.

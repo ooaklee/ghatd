@@ -222,6 +222,90 @@ func TestService_RecordStreakReturnsExistingPeriodEntry(t *testing.T) {
 	assert.Equal(t, existing, res.Streak)
 }
 
+func TestService_GetStreakByScopeAndPeriodOrCreateReturnsExistingEntry(t *testing.T) {
+	t.Parallel()
+
+	existing := &streaker.Streak{
+		Id:           "existing-id",
+		StreakName:   "App Streak",
+		StreakType:   "app-streak",
+		OwnerId:      "user-1",
+		TargetType:   "app",
+		TargetId:     "platform",
+		PeriodType:   streaker.StreakPeriodTypeDaily,
+		PeriodKey:    "2026-05-08",
+		CurrentCount: 4,
+	}
+	createCalled := false
+
+	repo := &mockStreakRepository{
+		getStreakByScopeAndPeriodFunc: func(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
+			assert.Equal(t, "app-streak", req.StreakType)
+			assert.Equal(t, "user-1", req.OwnerId)
+			assert.Equal(t, "app", req.TargetType)
+			assert.Equal(t, "platform", req.TargetId)
+			assert.Equal(t, streaker.StreakPeriodTypeDaily, req.PeriodType)
+			assert.Equal(t, "2026-05-08", req.PeriodKey)
+			return existing, nil
+		},
+		createStreakFunc: func(ctx context.Context, st *streaker.Streak) (*streaker.Streak, error) {
+			createCalled = true
+			return st, nil
+		},
+	}
+	svc := streaker.NewService(repo)
+
+	res, err := svc.GetStreakByScopeAndPeriodOrCreate(context.Background(), &streaker.RecordStreakRequest{
+		StreakName:      "App Streak",
+		StreakType:      "App Streak",
+		OwnerId:         "user-1",
+		TargetType:      "App",
+		TargetId:        "platform",
+		OccurredAt:      "2026-05-08T09:00:00",
+		CreatedByUserId: "user-1",
+	})
+
+	require.NoError(t, err)
+	assert.False(t, createCalled)
+	assert.Equal(t, existing, res.Streak)
+}
+
+func TestService_GetStreakByScopeAndPeriodOrCreateCreatesMissingEntry(t *testing.T) {
+	t.Parallel()
+
+	var created *streaker.Streak
+	repo := &mockStreakRepository{
+		createStreakFunc: func(ctx context.Context, st *streaker.Streak) (*streaker.Streak, error) {
+			created = st
+			st.Id = "created-id"
+			st.NanoId = "created-nano"
+			return st, nil
+		},
+	}
+	svc := streaker.NewService(repo)
+
+	res, err := svc.GetStreakByScopeAndPeriodOrCreate(context.Background(), &streaker.RecordStreakRequest{
+		StreakName:      "App Streak",
+		StreakType:      "App Streak",
+		OwnerId:         "user-1",
+		TargetType:      "App",
+		TargetId:        "platform",
+		OccurredAt:      "2026-05-08T09:00:00",
+		CreatedByUserId: "user-1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.NotNil(t, created)
+	assert.Equal(t, "created-id", res.Streak.Id)
+	assert.Equal(t, "App Streak", created.StreakName)
+	assert.Equal(t, "app-streak", created.StreakType)
+	assert.Equal(t, "app", created.TargetType)
+	assert.Equal(t, streaker.StreakPeriodTypeDaily, created.PeriodType)
+	assert.Equal(t, "2026-05-08", created.PeriodKey)
+	assert.Equal(t, 1, created.CurrentCount)
+}
+
 func TestService_RecordStreakPeriodExamples(t *testing.T) {
 	t.Parallel()
 
