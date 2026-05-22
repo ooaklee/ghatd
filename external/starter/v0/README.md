@@ -95,15 +95,21 @@ incrementally. Treat nil layers as "not wired yet" and check them before use.
 Mongo repository unless the caller supplies overrides. `NewServices` then
 creates `Services.Reminder` and `Services.Streaker`.
 
-The starter-created reminder service is attached to `Services.UserManager` by
-default, so the UMS reminder endpoints under `/api/v1/ums` are backed by a
-real reminder service when `AttachDefaultRoutes` includes
-`RouteGroupUserManager`. To attach a different implementation to UMS, pass
-`NewServicesRequest.ReminderService`.
+Reminder and streaker are optional starter integrations. If their repositories
+are available, `NewServices` creates `Services.Reminder` and
+`Services.Streaker`; if they are absent, the rest of the stack can still be
+constructed.
 
-`streaker` does not have a standard starter route group in v0. Host
-applications can call `Services.Streaker` directly from jobs or custom API
-handlers, and they still own any streaker-specific route design.
+The starter-created reminder and streaker services are attached to
+`Services.UserManager` by default. When `AttachDefaultRoutes` includes
+`RouteGroupUserManager`, UMS exposes reminder and streak endpoints backed by
+those services. To attach a different implementation to UMS, pass
+`NewServicesRequest.ReminderService` or `NewServicesRequest.StreakService`.
+
+`streaker` does not have a standalone starter route group in v0. Host
+applications still own product-specific streak workflows, schedulers, and
+custom API routes. Those workflows can call `Services.Streaker` directly or
+use the UMS streak endpoints for authenticated user-scoped access.
 
 ## Usage
 
@@ -221,7 +227,7 @@ if err != nil {
 | `RouteGroupUser`                      | `/api/v2/users/*`                                    |
 | `RouteGroupGroup`                     | `/api/v1/groups/*`                                   |
 | `RouteGroupAccessManager`             | `/api/v1/ams/*`                                      |
-| `RouteGroupUserManager`               | `/api/v1/ums/*`, including reminder endpoints        |
+| `RouteGroupUserManager`               | `/api/v1/ums/*`, including reminder and streak endpoints |
 | `RouteGroupContentManager`            | `/api/v1/cms/*`                                      |
 | `RouteGroupBillingManager`            | `/api/v1/bms/*`                                      |
 

@@ -15,6 +15,8 @@ import (
 type mockMongoDbStore struct {
 	initialiseClientFunc func(ctx context.Context) (*mongo.Client, error)
 	getDatabaseFunc      func(ctx context.Context, dbName string) (*mongo.Database, error)
+	executeFindFunc      func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	mapAllFunc           func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
 func (m *mockMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
@@ -22,6 +24,9 @@ func (m *mockMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection
 }
 
 func (m *mockMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+	if m.executeFindFunc != nil {
+		return m.executeFindFunc(ctx, collection, filter, opts...)
+	}
 	return nil, errors.New("not implemented")
 }
 
@@ -52,6 +57,9 @@ func (m *mockMongoDbStore) InitialiseClient(ctx context.Context) (*mongo.Client,
 }
 
 func (m *mockMongoDbStore) MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {
+	if m.mapAllFunc != nil {
+		return m.mapAllFunc(ctx, cursor, result, resultObjectName)
+	}
 	return errors.New("not implemented")
 }
 
@@ -130,4 +138,56 @@ func TestRepository_WithCollectionInitMaxAttemptsLimitOverridesDefault(t *testin
 	assert.Nil(t, collection)
 	assert.Equal(t, 2, initialiseAttempts)
 	assert.Contains(t, err.Error(), "after 2 attempts")
+}
+
+func TestRepository_ListStreaksBuildsHistoryFilter(t *testing.T) {
+	t.Parallel()
+
+	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	require.NoError(t, err)
+
+	var capturedFilter bson.M
+	var capturedOptions *options.FindOptions
+	store := &mockMongoDbStore{
+		executeFindFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+			capturedFilter = filter.(bson.M)
+			require.Len(t, opts, 1)
+			capturedOptions = opts[0]
+			return nil, nil
+		},
+		mapAllFunc: func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {
+			streaks := result.(*[]*Streak)
+			*streaks = []*Streak{{Id: "streak-1", PeriodKey: "2026-05-21"}}
+			return nil
+		},
+	}
+	repo := NewRepository(store)
+	repo.collection = client.Database("streaker_test").Collection(StreakCollection)
+
+	res, err := repo.ListStreaks(context.Background(), &ListStreaksRequest{
+		StreakStatsRequest: StreakStatsRequest{
+			StreakType: "wms-saved-words",
+			OwnerId:    "user-1",
+			TargetType: "affirmation",
+			TargetId:   "saved-words",
+			PeriodType: StreakPeriodTypeDaily,
+		},
+		PeriodKeyFrom: "2026-05-20",
+		PeriodKeyTo:   "2026-05-22",
+		Page:          2,
+		PerPage:       25,
+		Sort:          "asc",
+	})
+
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.Equal(t, "wms-saved-words", capturedFilter["streak_type"])
+	assert.Equal(t, "user-1", capturedFilter["owner_id"])
+	assert.Equal(t, "affirmation", capturedFilter["target_type"])
+	assert.Equal(t, "saved-words", capturedFilter["target_id"])
+	assert.Equal(t, StreakPeriodTypeDaily, capturedFilter["period_type"])
+	assert.Equal(t, bson.M{"$gte": "2026-05-20", "$lte": "2026-05-22"}, capturedFilter["period_key"])
+	require.NotNil(t, capturedOptions)
+	assert.Equal(t, int64(25), *capturedOptions.Limit)
+	assert.Equal(t, int64(25), *capturedOptions.Skip)
 }

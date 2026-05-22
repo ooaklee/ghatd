@@ -19,6 +19,7 @@ type StreakRepository interface {
 	GetLatestStreak(ctx context.Context, req *GetLatestStreakRequest) (*Streak, error)
 	GetLongestStreak(ctx context.Context, req *GetLongestStreakRequest) (*Streak, error)
 	GetTotalStreaks(ctx context.Context, req *GetNumberOfStreaksRequest) (int64, error)
+	ListStreaks(ctx context.Context, req *ListStreaksRequest) ([]*Streak, error)
 }
 
 // Service represents the streaker service.
@@ -315,6 +316,27 @@ func (s *Service) GetNumberOfStreaksByStreakTypeAndUserID(ctx context.Context, r
 	return s.GetNumberOfStreaks(ctx, req)
 }
 
+// ListStreaks lists streak entries matching the provided filters.
+func (s *Service) ListStreaks(ctx context.Context, req *ListStreaksRequest) (*ListStreaksResponse, error) {
+	listReq, err := normaliseListStreaksRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	streaks, err := s.StreakRepository.ListStreaks(ctx, listReq)
+	if err != nil && errors.Is(err, ErrResourceNotFound) {
+		return &ListStreaksResponse{Streaks: []*Streak{}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if streaks == nil {
+		streaks = []*Streak{}
+	}
+
+	return &ListStreaksResponse{Streaks: streaks}, nil
+}
+
 // normaliseStatsRequest validates and standardises a stats request before it is
 // passed to the repository layer.
 func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error) {
@@ -356,6 +378,60 @@ func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error)
 		TargetType: scope.TargetType,
 		TargetId:   scope.TargetId,
 		PeriodType: periodType,
+	}, nil
+}
+
+func normaliseListStreaksRequest(req *ListStreaksRequest) (*ListStreaksRequest, error) {
+	if req == nil {
+		return nil, ErrOwnerIdIsRequired
+	}
+
+	scope := NormaliseScope(StreakScope{
+		StreakType: normaliseStreakType(req.StreakType),
+		OwnerId:    req.OwnerId,
+		TargetType: normaliseStreakType(req.TargetType),
+		TargetId:   req.TargetId,
+	})
+	if scope.OwnerId == "" {
+		return nil, ErrOwnerIdIsRequired
+	}
+	if req.PeriodType == "" {
+		return nil, ErrPeriodTypeIsRequired
+	}
+
+	periodType, err := NormalisePeriodType(req.PeriodType)
+	if err != nil {
+		return nil, err
+	}
+
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	perPage := req.PerPage
+	if perPage <= 0 {
+		perPage = 100
+	}
+	if perPage > 200 {
+		perPage = 200
+	}
+
+	return &ListStreaksRequest{
+		StreakStatsRequest: StreakStatsRequest{
+			StreakType: scope.StreakType,
+			OwnerId:    scope.OwnerId,
+			TargetType: scope.TargetType,
+			TargetId:   scope.TargetId,
+			PeriodType: periodType,
+		},
+		PeriodKey:      strings.TrimSpace(req.PeriodKey),
+		PeriodKeyFrom:  strings.TrimSpace(req.PeriodKeyFrom),
+		PeriodKeyTo:    strings.TrimSpace(req.PeriodKeyTo),
+		OccurredAtFrom: strings.TrimSpace(req.OccurredAtFrom),
+		OccurredAtTo:   strings.TrimSpace(req.OccurredAtTo),
+		Page:           page,
+		PerPage:        perPage,
+		Sort:           strings.TrimSpace(req.Sort),
 	}, nil
 }
 

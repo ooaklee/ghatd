@@ -23,4 +23,6 @@ var (
 	ErrUserNotFound                  = errors.New(ErrKeyUserNotFound)
 	// ErrReminderServiceNotEnabled means reminder features were requested but no reminder service is configured.
 	ErrReminderServiceNotEnabled = errors.New(ErrKeyReminderServiceNotEnabled)
+	// ErrStreakServiceNotEnabled means streak features were requested but no streak service is configured.
+	ErrStreakServiceNotEnabled = errors.New(ErrKeyStreakServiceNotEnabled)
 )

@@ -141,10 +141,17 @@ A follow-up slice adds package support for `external/reminder` and
   `RouteGroupUserManager` is attached.
 - `NewServicesRequest.ReminderService` remains an escape hatch for callers
   that want UMS to use a custom reminder implementation.
-- Streaker remains service-only in starter/v0. Host applications own any
-  streaker route shape, scheduler, or product-specific workflow.
+- Streaker is also attached to `Services.UserManager` by default when
+  available, enabling UMS streak routes while host applications continue to own
+  product-specific streak workflows and schedulers.
+- `NewServicesRequest.StreakService` remains an escape hatch for callers that
+  want UMS to use a custom streak implementation.
 - Starter does not run package migrations; consuming applications keep their
   Mongo migration flow and include reminder/streaker indexes there.
+
+ADR010 records the follow-up decision for optional reminder and streaker
+manager integrations, including the nil-service behaviour and product-workflow
+ownership boundary.
 
 ## Consequences
 

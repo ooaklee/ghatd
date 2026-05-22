@@ -62,6 +62,12 @@ type UsermanagerService interface {
 	DisableReminderByID(ctx context.Context, r *DisableReminderByIDRequest) (*UpdateReminderByIDResponse, error)
 	GetReminderStats(ctx context.Context, r *GetReminderStatsRequest) (*GetReminderStatsResponse, error)
 	GetDueReminders(ctx context.Context, r *GetDueRemindersRequest) (*GetDueRemindersResponse, error)
+	// Streak methods
+	RecordStreak(ctx context.Context, r *RecordStreakRequest) (*RecordStreakResponse, error)
+	ListStreaks(ctx context.Context, r *ListStreaksRequest) (*ListStreaksResponse, error)
+	GetCurrentStreak(ctx context.Context, r *GetCurrentStreakRequest) (*GetCurrentStreakResponse, error)
+	GetLongestStreak(ctx context.Context, r *GetLongestStreakRequest) (*GetLongestStreakResponse, error)
+	GetNumberOfStreaks(ctx context.Context, r *GetNumberOfStreaksRequest) (*GetNumberOfStreaksResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
@@ -1018,6 +1024,91 @@ func (h *Handler) GetDueReminders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Reminders)
+}
+
+// RecordStreak handles the request to record a streak.
+func (h *Handler) RecordStreak(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToRecordStreakRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.RecordStreak(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Streak)
+}
+
+// ListStreaks handles the request to list streaks.
+func (h *Handler) ListStreaks(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToListStreaksRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.ListStreaks(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Streaks)
+}
+
+// GetCurrentStreak handles the request to get the current streak count.
+func (h *Handler) GetCurrentStreak(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetCurrentStreakRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetCurrentStreak(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.GetCurrentCountResponse)
+}
+
+// GetLongestStreak handles the request to get the longest streak count.
+func (h *Handler) GetLongestStreak(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetLongestStreakRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetLongestStreak(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.GetLongestStreakResponse)
+}
+
+// GetNumberOfStreaks handles the request to count streak entries.
+func (h *Handler) GetNumberOfStreaks(w http.ResponseWriter, r *http.Request) {
+	request, err := MapRequestToGetNumberOfStreaksRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.Service.GetNumberOfStreaks(r.Context(), request)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.GetNumberOfStreaksResponse)
 }
 
 // GetBaseResponseHandler returns response handler configured with auth error map

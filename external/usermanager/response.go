@@ -6,6 +6,7 @@ import (
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -337,6 +338,31 @@ type GetReminderStatsResponse struct {
 // GetDueRemindersResponse holds the response for getting due reminders.
 type GetDueRemindersResponse struct {
 	*reminder.GetDueRemindersResponse
+}
+
+// RecordStreakResponse holds the response for recording a streak.
+type RecordStreakResponse struct {
+	*streaker.RecordStreakResponse
+}
+
+// ListStreaksResponse holds the response for listing streaks.
+type ListStreaksResponse struct {
+	*streaker.ListStreaksResponse
+}
+
+// GetCurrentStreakResponse holds the current streak count response.
+type GetCurrentStreakResponse struct {
+	*streaker.GetCurrentCountResponse
+}
+
+// GetLongestStreakResponse holds the longest streak response.
+type GetLongestStreakResponse struct {
+	*streaker.GetLongestStreakResponse
+}
+
+// GetNumberOfStreaksResponse holds the streak count response.
+type GetNumberOfStreaksResponse struct {
+	*streaker.GetNumberOfStreaksResponse
 }
 
 // UpdateGroupOwnerResponse holds the response for updating group ownership

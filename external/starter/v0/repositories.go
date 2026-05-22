@@ -124,8 +124,6 @@ func validateRepositoriesForServices(repos *Repositories) error {
 		repos.Notifier == nil ||
 		repos.Post == nil ||
 		repos.Pricer == nil ||
-		repos.Reminder == nil ||
-		repos.Streaker == nil ||
 		repos.User == nil {
 		return ErrNilRepositories
 	}

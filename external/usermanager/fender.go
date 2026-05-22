@@ -12,6 +12,7 @@ import (
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ritwickdey/querydecoder"
@@ -1315,6 +1316,126 @@ func MapRequestToGetDueRemindersRequest(r *http.Request, validator UsermanagerVa
 
 	if parsedRequest.Limit <= 0 {
 		parsedRequest.Limit = 100
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToRecordStreakRequest maps incoming record-streak request to the correct struct.
+func MapRequestToRecordStreakRequest(r *http.Request, validator UsermanagerValidator) (*RecordStreakRequest, error) {
+	var parsedRequest RecordStreakRequest
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	if userID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	baseRequest := streaker.RecordStreakRequest{}
+	if err := toolbox.DecodeRequestBody(r, &baseRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	baseRequest.OwnerId = userID
+	baseRequest.CreatedByUserId = userID
+
+	parsedRequest.UserID = userID
+	parsedRequest.RecordStreakRequest = &baseRequest
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToListStreaksRequest maps incoming list-streaks request to the correct struct.
+func MapRequestToListStreaksRequest(r *http.Request, validator UsermanagerValidator) (*ListStreaksRequest, error) {
+	parsedRequest := ListStreaksRequest{ListStreaksRequest: &streaker.ListStreaksRequest{}}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if err := querydecoder.New(r.URL.Query()).Decode(parsedRequest.ListStreaksRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if parsedRequest.PeriodType == "" {
+		parsedRequest.PeriodType = streaker.StreakPeriodTypeDaily
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetCurrentStreakRequest maps incoming current-streak request to the correct struct.
+func MapRequestToGetCurrentStreakRequest(r *http.Request, validator UsermanagerValidator) (*GetCurrentStreakRequest, error) {
+	parsedRequest := GetCurrentStreakRequest{GetCurrentCountRequest: &streaker.GetCurrentCountRequest{}}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if err := querydecoder.New(r.URL.Query()).Decode(parsedRequest.GetCurrentCountRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if parsedRequest.PeriodType == "" {
+		parsedRequest.PeriodType = streaker.StreakPeriodTypeDaily
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetLongestStreakRequest maps incoming longest-streak request to the correct struct.
+func MapRequestToGetLongestStreakRequest(r *http.Request, validator UsermanagerValidator) (*GetLongestStreakRequest, error) {
+	parsedRequest := GetLongestStreakRequest{GetLongestStreakRequest: &streaker.GetLongestStreakRequest{}}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if err := querydecoder.New(r.URL.Query()).Decode(parsedRequest.GetLongestStreakRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if parsedRequest.PeriodType == "" {
+		parsedRequest.PeriodType = streaker.StreakPeriodTypeDaily
+	}
+
+	return &parsedRequest, nil
+}
+
+// MapRequestToGetNumberOfStreaksRequest maps incoming streak-count request to the correct struct.
+func MapRequestToGetNumberOfStreaksRequest(r *http.Request, validator UsermanagerValidator) (*GetNumberOfStreaksRequest, error) {
+	parsedRequest := GetNumberOfStreaksRequest{GetNumberOfStreaksRequest: &streaker.GetNumberOfStreaksRequest{}}
+	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+
+	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	if parsedRequest.UserID == "" {
+		log.Error("unable-get-user-id")
+		return nil, ErrUnableToIdentifyUser
+	}
+
+	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if err := querydecoder.New(r.URL.Query()).Decode(parsedRequest.GetNumberOfStreaksRequest); err != nil {
+		return nil, ErrRequestFailedValidation
+	}
+	if parsedRequest.PeriodType == "" {
+		parsedRequest.PeriodType = streaker.StreakPeriodTypeDaily
 	}
 
 	return &parsedRequest, nil

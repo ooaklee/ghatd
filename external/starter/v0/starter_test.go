@@ -413,6 +413,33 @@ func TestNewServices(t *testing.T) {
 				if got.UserManager.ReminderService != got.Reminder {
 					t.Fatalf("expected user manager to receive starter reminder service")
 				}
+				if got.UserManager.StreakService != got.Streaker {
+					t.Fatalf("expected user manager to receive starter streak service")
+				}
+			},
+		},
+		{
+			name: "Success - optional reminder and streaker services may be absent",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				req.Repositories.Reminder = nil
+				req.Repositories.Streaker = nil
+				return req
+			},
+			assert: func(t *testing.T, got *Services) {
+				t.Helper()
+				if got.Reminder != nil {
+					t.Fatalf("expected reminder service to be omitted")
+				}
+				if got.Streaker != nil {
+					t.Fatalf("expected streaker service to be omitted")
+				}
+				if got.UserManager.ReminderService != nil {
+					t.Fatalf("expected user manager reminder service to be omitted")
+				}
+				if got.UserManager.StreakService != nil {
+					t.Fatalf("expected user manager streak service to be omitted")
+				}
 			},
 		},
 		{
@@ -1126,14 +1153,12 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 			wantErr: ErrNilRepositories,
 		},
 		{
-			name:    "FAILURE - nil Reminder",
-			mutate:  func(r *Repositories) { r.Reminder = nil },
-			wantErr: ErrNilRepositories,
+			name:   "SUCCESS - nil Reminder",
+			mutate: func(r *Repositories) { r.Reminder = nil },
 		},
 		{
-			name:    "FAILURE - nil Streaker",
-			mutate:  func(r *Repositories) { r.Streaker = nil },
-			wantErr: ErrNilRepositories,
+			name:   "SUCCESS - nil Streaker",
+			mutate: func(r *Repositories) { r.Streaker = nil },
 		},
 		{
 			name:    "FAILURE - nil User",

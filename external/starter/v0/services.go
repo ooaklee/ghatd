@@ -84,6 +84,9 @@ type NewServicesRequest struct {
 	// ReminderService overrides the reminder service attached to UserManager.
 	// When nil, starter attaches the Reminder service it creates from repositories.
 	ReminderService usermanager.ReminderService
+	// StreakService overrides the streaker service attached to UserManager.
+	// When nil, starter attaches the Streaker service it creates from repositories.
+	StreakService usermanager.StreakService
 
 	PolicyStore  policy.PolicyStore
 	PolicyConfig *PolicyConfig
@@ -148,8 +151,14 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	postService := post.NewService(r.Repositories.Post, resolvePostTags(r.ValidPostTags))
 	billingService := billing.NewService(r.Repositories.Billing, r.Repositories.Billing)
 	pricerService := pricer.NewService(r.Repositories.Pricer)
-	reminderService := reminder.NewService(r.Repositories.Reminder)
-	streakerService := streaker.NewService(r.Repositories.Streaker)
+	var reminderService *reminder.Service
+	if r.Repositories.Reminder != nil {
+		reminderService = reminder.NewService(r.Repositories.Reminder)
+	}
+	var streakerService *streaker.Service
+	if r.Repositories.Streaker != nil {
+		streakerService = streaker.NewService(r.Repositories.Streaker)
+	}
 	notifierService := notifier.NewService(&notifier.NewServiceRequest{
 		Repository: r.Repositories.Notifier,
 		Senders:    r.NotifierSenders,
@@ -177,9 +186,18 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		ApiTokenService:  apiTokenService,
 		AuditService:     auditService,
 		ContacterService: contacterService,
-	}).WithGroupService(groupService).WithNotifierService(notifierService).WithReminderService(reminderService)
+	}).WithGroupService(groupService).WithNotifierService(notifierService)
+	if reminderService != nil {
+		userManagerService.WithReminderService(reminderService)
+	}
 	if r.ReminderService != nil {
 		userManagerService.WithReminderService(r.ReminderService)
+	}
+	if streakerService != nil {
+		userManagerService.WithStreakService(streakerService)
+	}
+	if r.StreakService != nil {
+		userManagerService.WithStreakService(r.StreakService)
 	}
 
 	accessManagerService := accessmanager.NewService(&accessmanager.NewServiceRequest{

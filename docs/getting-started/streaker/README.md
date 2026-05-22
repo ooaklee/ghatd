@@ -1,10 +1,16 @@
 # Streaker
 
-The `streaker` package tracks repeat completions for a user or owner against any target on the platform. It is intentionally generic: an app can record an "app-open" streak, an "affirmation-listened" streak, a "content-read" streak, or a future to-do completion streak without changing the package.
+`external/streaker` records repeat completions for a user or owner against a
+stable target. It is intentionally generic: the package does not know whether
+a completion means an app open, lesson completion, saved item, reading play, or
+task check-off.
 
-## Model
+Use Streaker when a host application needs idempotent "completed this period"
+tracking plus current count, best count, and history.
 
-Each completion creates a `streaks` document for a scope:
+## Core Model
+
+Each streak entry is unique per:
 
 - `streak_type`
 - `owner_id`
@@ -13,103 +19,176 @@ Each completion creates a `streaks` document for a scope:
 - `period_type`
 - `period_key`
 
-The package computes `current_count` from the latest previous entry in the same scope. If the previous period is consecutive, the count increments. If there is a gap, the count resets to `1`. Each new entry stores a lightweight `previous` reference so consumers can trace how the count was calculated without extra queries.
+Calling `RecordStreak` more than once for the same scope and period returns the
+existing entry. It does not increment the count again.
 
-Mongo indexes include a unique compound index across the scope and period fields. That makes `RecordStreak` idempotent for the same user, target, streak type, and period.
+For `daily`, `weekly`, and `monthly` periods, Streaker derives `period_key`
+from `occurred_at` in UTC. For `custom`, callers must provide `period_key`.
 
-### How the "Period" System Works (aka How to keep your streak alive)
-
-Think of the `Period` fields like keeping a Snapchat or Duolingo streak alive. A streak isn't just "you clicked a button"—it's "you clicked a button *today*." The period fields tell the system what the rules are for your streak.
-
-- **`PeriodType` (The Rule):** How often do you need to do the thing?
-  - `daily`: You have to do it once a day.
-  - `weekly`: You have to do it once a week.
-  - `monthly`: You have to do it once a month.
-  - `custom`: You make up the rules! (Like beating specific levels in a game).
-
-- **`PeriodKey` (The Bucket):** Which exact day, week, or level did you just finish?
-  - daily: `2026-05-08` (Today's bucket)
-  - weekly: `2026-w19` (This week's bucket)
-  - custom: `level-4`, `boss-fight-3` (A specific challenge bucket)
-
-- **`OccurredAt` (The Exact Time):** The exact second you actually did the task. For daily, weekly, or monthly streaks, the code will look at this exact time and automatically figure out what your `PeriodKey` (Bucket) should be. 
-
-Because of this system, you can build streaks for *anything*. A "daily app open" streak. A "weekly math homework" streak. A custom "completed a game world" streak. 
-
-#### Examples of how it behaves:
-
-**1. You can't double-dip (Anti-cheat)**
-If you are on a daily streak, and you do the task 5 times on Tuesday, your streak only goes up by 1. The system sees you already filled the "Tuesday" bucket and ignores the extra attempts. Your streak count stays exactly the same.
-
-**2. Keeping it alive (Consecutive)**
-If you log in on Monday, your streak is 1. If you log in on Tuesday, your streak becomes 2! 
-
-**3. Dropping the ball (Gaps)**
-If you log in on Monday (streak = 1), skip Tuesday, and log in on Wednesday... oh no! Your streak resets back to 1. But don't worry, the system keeps a hidden memory of your past streak so you never lose your history.
-
-## Basic Usage
+## Setup
 
 ```go
-repo := streaker.NewRepository(mongoStore)
-service := streaker.NewService(repo)
+import (
+    "github.com/ooaklee/ghatd/external/streaker"
+    streakerMigrations "github.com/ooaklee/ghatd/external/streaker/migrations"
+)
 
-recorded, err := service.RecordStreak(ctx, &streaker.RecordStreakRequest{
-    StreakName:      "App Streak",
-    StreakType:      "app-streak",
+repo := streaker.NewRepository(mongoStore)
+streakService := streaker.NewService(repo)
+
+if err := streakerMigrations.InitStreaksIndexesUp(db); err != nil {
+    return err
+}
+```
+
+With `external/starter/v0`, `NewRepositories` creates the streaker repository
+when a core Mongo repository is supplied, and `NewServices` exposes
+`Services.Streaker`. Streaker is optional: if it is omitted, the rest of the
+starter stack can still run.
+
+Starter attaches `Services.Streaker` to `Services.UserManager` when available,
+which enables the UMS streak endpoints under `/api/v1/ums`.
+
+## Recording Aggregate Actions
+
+Use stable targets for aggregate daily actions. Put event-specific resource IDs
+in metadata.
+
+```go
+res, err := streakService.RecordStreak(ctx, &streaker.RecordStreakRequest{
+    StreakName:      "Daily saved item",
+    StreakType:      "saved-items",
     OwnerId:         userID,
-    TargetType:      "app",
-    TargetId:        "platform",
+    TargetType:      "item",
+    TargetId:        "daily-save",
+    PeriodType:      streaker.StreakPeriodTypeDaily,
     CreatedByUserId: userID,
+    Metadata: map[string]interface{}{
+        "item_id":  itemID,
+        "platform": "web",
+    },
 })
 if err != nil {
     return err
 }
 
-currentCount := recorded.Streak.CurrentCount
+_ = res.Streak.CurrentCount
 ```
 
-With `external/starter/v0`, `starter.NewRepositories` creates the streaker
-repository and `starter.NewServices` exposes the service as `Services.Streaker`.
-Starter/v0 does not attach streaker routes; use the service from host-owned
-handlers, jobs, or product workflows.
+Avoid using a changing resource ID as `target_id` when the product goal is
+"complete this once per period across any resource." A changing `target_id`
+creates one streak scope per resource.
 
-## Stats
+Call `RecordStreak` after the host application has accepted the user action as
+valid. Streaker does not know whether a play, save, check-in, or task
+completion should count; it only records the stable streak scope it receives.
 
-Stats requests require `PeriodType`, because current, longest, and total counts are only meaningful inside a specific rhythm. For example, a user's daily app streak and weekly app streak can both be valid, but they answer different product questions.
+## Consecutive Behaviour
+
+When the latest previous entry is in the immediately preceding period,
+`current_count` increments. If there is a gap, the new entry resets to `1`.
+
+Examples for a daily streak:
+
+| Action | Result |
+|--------|--------|
+| Record Monday | `current_count = 1` |
+| Record Tuesday | `current_count = 2` |
+| Record Tuesday again | existing Tuesday entry is returned |
+| Skip Wednesday, record Thursday | `current_count = 1` |
+
+The package stores a lightweight `previous` reference on new entries so callers
+can inspect how a count was calculated without an extra query.
+
+## Reading Stats
 
 ```go
-current, err := service.GetCurrentCountByStreakTypeAndUserID(ctx, &streaker.GetCurrentCountRequest{
+current, err := streakService.GetCurrentCount(ctx, &streaker.GetCurrentCountRequest{
     StreakStatsRequest: streaker.StreakStatsRequest{
-        StreakType:  "app-streak",
-        OwnerId:     userID,
-        PeriodType:  streaker.StreakPeriodTypeDaily,
+        StreakType: "saved-items",
+        OwnerId:    userID,
+        TargetType: "item",
+        TargetId:   "daily-save",
+        PeriodType: streaker.StreakPeriodTypeDaily,
     },
 })
 
-longest, err := service.GetLongestStreakByStreakTypeAndUserID(ctx, &streaker.GetLongestStreakRequest{
+best, err := streakService.GetLongestStreak(ctx, &streaker.GetLongestStreakRequest{
     StreakStatsRequest: streaker.StreakStatsRequest{
-        StreakType:  "app-streak",
-        OwnerId:     userID,
-        PeriodType:  streaker.StreakPeriodTypeDaily,
-    },
-})
-
-total, err := service.GetNumberOfStreaksByStreakTypeAndUserID(ctx, &streaker.GetNumberOfStreaksRequest{
-    StreakStatsRequest: streaker.StreakStatsRequest{
-        StreakType:  "app-streak",
-        OwnerId:     userID,
-        PeriodType:  streaker.StreakPeriodTypeDaily,
+        StreakType: "saved-items",
+        OwnerId:    userID,
+        TargetType: "item",
+        TargetId:   "daily-save",
+        PeriodType: streaker.StreakPeriodTypeDaily,
     },
 })
 ```
 
-Add `TargetType` and `TargetId` to the stats request when the screen needs the count for a specific thing, such as one course, one affirmation pack, or one task list.
+`GetCurrentCount` returns the latest recorded count for the scope. If a host
+application needs "active today" semantics, compare the response period with
+the current period.
 
-## Migrations
+## Listing History
 
-Use the package migration helpers in the consuming application's mongo migrations:
+Use `ListStreaks` for streak boards, calendars, and history views.
 
 ```go
-streakerMigrations.InitStreaksIndexesUp(db)
-streakerMigrations.InitStreaksIndexesDown(db)
+history, err := streakService.ListStreaks(ctx, &streaker.ListStreaksRequest{
+    StreakStatsRequest: streaker.StreakStatsRequest{
+        StreakType: "saved-items",
+        OwnerId:    userID,
+        TargetType: "item",
+        TargetId:   "daily-save",
+        PeriodType: streaker.StreakPeriodTypeDaily,
+    },
+    PeriodKeyFrom: "2026-05-16",
+    PeriodKeyTo:   "2026-05-22",
+    Sort:          "asc",
+    PerPage:       50,
+})
 ```
+
+For generated daily, weekly, and monthly keys, period-key ranges sort
+lexicographically because the keys are stable and zero-padded.
+
+## UMS Endpoints
+
+When Streaker is attached to User Manager, authenticated users can access:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/ums/me/streaks` | List the authenticated user's streak history. |
+| `POST /api/v1/ums/me/streaks/record` | Record a streak for the authenticated user. |
+| `GET /api/v1/ums/me/streaks/current` | Get the authenticated user's current count. |
+| `GET /api/v1/ums/me/streaks/longest` | Get the authenticated user's best count. |
+| `GET /api/v1/ums/me/streaks/count` | Count streak entries for the authenticated user. |
+
+Admin/service read endpoints are also available:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/ums/streaks` | List streak history, optionally filtered by `user_id`. |
+| `GET /api/v1/ums/streaks/current` | Read current count for a target user and scope. |
+| `GET /api/v1/ums/streaks/longest` | Read best count for a target user and scope. |
+| `GET /api/v1/ums/streaks/count` | Count entries for a target user and scope. |
+
+The `/me` routes always scope `owner_id` to the authenticated requester.
+Admin/service routes may use `user_id` to inspect one target user after the
+caller has passed User Manager's access checks.
+
+## Optional Integration Pattern
+
+For host application side effects:
+
+1. Log before attempting to record a streak.
+2. Skip if the service is not configured.
+3. Warn and continue if recording fails.
+
+For direct user-facing streak APIs, return a clear service-unavailable or
+skipped response when Streaker is not attached. That keeps optional
+integration behaviour visible without breaking unrelated application features.
+
+## Package README
+
+See [`external/streaker/README.md`](../../../external/streaker/README.md) for
+the package-level reference.
