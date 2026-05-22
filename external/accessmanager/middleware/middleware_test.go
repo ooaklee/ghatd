@@ -10,6 +10,7 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/ephemeral"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/reply/v2"
 )
@@ -113,6 +114,18 @@ func createTestHandler() http.Handler {
 func responseHasCookieValue(cookies []*http.Cookie, name, value string) bool {
 	for _, cookie := range cookies {
 		if cookie.Name == name && cookie.Value == value {
+			return true
+		}
+	}
+
+	return false
+}
+
+// responseHasCookieRemoval reports whether a response included an expired cookie
+// marker for the supplied name.
+func responseHasCookieRemoval(cookies []*http.Cookie, name string) bool {
+	for _, cookie := range cookies {
+		if cookie.Name == name && cookie.Value == "" && cookie.MaxAge < 0 {
 			return true
 		}
 	}
@@ -578,6 +591,160 @@ func TestRateLimitOrActiveJWTRequired_NoCookies(t *testing.T) {
 	}
 }
 
+func TestRateLimitOrActiveJWTRequired_EmptyCookiesFallsBackToPublicFlowAndClearsCookies(t *testing.T) {
+	userID := "rate-limited-user"
+	callCount := 0
+	mockService := &mockAccessManagerService{
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			callCount++
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Errorf("Expected empty cookies to be removed from Authorization fallback, got %q", got)
+			}
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/public", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: ""})
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: ""})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+	if callCount != 1 {
+		t.Errorf("Expected public flow to be called once, got %d", callCount)
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected empty access cookie to be cleared")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected empty refresh cookie to be cleared")
+	}
+}
+
+func TestRateLimitOrActiveJWTRequired_MissingRefreshCookieFallsBackToPublicFlowAndClearsCookies(t *testing.T) {
+	userID := "rate-limited-user"
+	callCount := 0
+	mockService := &mockAccessManagerService{
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			callCount++
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Errorf("Expected missing refresh fallback to remove Authorization, got %q", got)
+			}
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/public", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: "orphaned-access-token"})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+	if callCount != 1 {
+		t.Errorf("Expected public flow to be called once, got %d", callCount)
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected orphaned access cookie to be cleared")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected refresh cookie deletion marker to be set")
+	}
+}
+
+func TestRateLimitOrActiveJWTRequired_MissingAuthCookieFallsBackToPublicFlowAndClearsCookies(t *testing.T) {
+	userID := "rate-limited-user"
+	callCount := 0
+	mockService := &mockAccessManagerService{
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			callCount++
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Errorf("Expected missing auth fallback to remove Authorization, got %q", got)
+			}
+			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/public", nil)
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: "orphaned-refresh-token"})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+	if callCount != 1 {
+		t.Errorf("Expected public flow to be called once, got %d", callCount)
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected access cookie deletion marker to be set")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected orphaned refresh cookie to be cleared")
+	}
+}
+
+func TestRateLimitOrActiveJWTRequired_FallbackRateLimitErrorReturnsHTTPError(t *testing.T) {
+	handlerCalled := false
+	mockService := &mockAccessManagerService{
+		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return nil, ephemeral.ErrRequestorLimitExceeded
+		},
+	}
+
+	middleware := NewMiddleware(&NewMiddlewareRequest{
+		Service:                  mockService,
+		ErrorMaps:                []reply.ErrorManifest{ephemeral.EphemeralStoreErrorMap},
+		Environment:              "test",
+		CookiePrefixAuthToken:    "test_auth",
+		CookiePrefixRefreshToken: "test_refresh",
+		CookieDomain:             "test.com",
+	})
+	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/public", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: ""})
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: ""})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("Expected status code %d, got %d", http.StatusTooManyRequests, w.Code)
+	}
+	if handlerCalled {
+		t.Error("Did not expect handler to run when anonymous fallback is rate limited")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected rate-limited fallback to clear access cookie")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected rate-limited fallback to clear refresh cookie")
+	}
+}
+
 func TestRateLimitOrActiveJWTRequired_WithValidJWT(t *testing.T) {
 	userID := "authenticated-user-123"
 	mockService := &mockAccessManagerService{
@@ -651,14 +818,17 @@ func TestRateLimitOrActiveJWTRequired_TokenRefresh(t *testing.T) {
 	}
 }
 
-// TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureDoesNotSetNewCookies verifies RateLimitOrActiveJWTRequired uses the same cookie timing.
-func TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureDoesNotSetNewCookies(t *testing.T) {
+// TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureFallsBackWithoutNewCookies verifies RateLimitOrActiveJWTRequired downgrades to the public flow when retry validation rejects refreshed tokens.
+func TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureFallsBackWithoutNewCookies(t *testing.T) {
 	callCount := 0
 	refreshCallCount := 0
 
 	mockService := &mockAccessManagerService{
 		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
 			callCount++
+			if r.Header.Get("Authorization") == "" {
+				return mockAuthedResp("rate-limited-user", userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+			}
 			return nil, errors.New("token invalid")
 		},
 		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
@@ -683,11 +853,11 @@ func TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureDoesNotSetNew
 
 	wrappedHandler.ServeHTTP(w, req)
 
-	if w.Code == http.StatusOK {
-		t.Error("Expected non-200 status code when retry validation rejects refreshed token")
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d after fallback, got %d", http.StatusOK, w.Code)
 	}
-	if callCount != 2 {
-		t.Errorf("Expected middleware function to be called twice, got %d", callCount)
+	if callCount != 3 {
+		t.Errorf("Expected middleware function to be called three times, got %d", callCount)
 	}
 	if refreshCallCount != 1 {
 		t.Errorf("Expected refresh token function to be called once, got %d", refreshCallCount)
@@ -698,14 +868,25 @@ func TestRateLimitOrActiveJWTRequired_RefreshRetryValidationFailureDoesNotSetNew
 	if responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
 		t.Error("Did not expect refreshed refresh cookie to be set before retry validation succeeds")
 	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected failed refresh validation to clear access cookie")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected failed refresh validation to clear refresh cookie")
+	}
 }
 
-// TestRateLimitOrActiveJWTRequired_RefreshTokenFailure verifies failed refreshes do not set replacement cookies.
-func TestRateLimitOrActiveJWTRequired_RefreshTokenFailure(t *testing.T) {
+// TestRateLimitOrActiveJWTRequired_RefreshTokenFailureFallsBackWithoutNewCookies verifies failed refreshes do not set replacement cookies and continue as public.
+func TestRateLimitOrActiveJWTRequired_RefreshTokenFailureFallsBackWithoutNewCookies(t *testing.T) {
+	callCount := 0
 	refreshCallCount := 0
 
 	mockService := &mockAccessManagerService{
 		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			callCount++
+			if r.Header.Get("Authorization") == "" {
+				return mockAuthedResp("rate-limited-user", userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+			}
 			return nil, errors.New("token expired")
 		},
 		refreshTokenFunc: func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error) {
@@ -725,8 +906,11 @@ func TestRateLimitOrActiveJWTRequired_RefreshTokenFailure(t *testing.T) {
 
 	wrappedHandler.ServeHTTP(w, req)
 
-	if w.Code == http.StatusOK {
-		t.Error("Expected non-200 status code when refresh token is invalid")
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d after fallback, got %d", http.StatusOK, w.Code)
+	}
+	if callCount != 2 {
+		t.Errorf("Expected middleware function to be called twice, got %d", callCount)
 	}
 	if refreshCallCount != 1 {
 		t.Errorf("Expected refresh token function to be called once, got %d", refreshCallCount)
@@ -736,6 +920,41 @@ func TestRateLimitOrActiveJWTRequired_RefreshTokenFailure(t *testing.T) {
 	}
 	if responseHasCookieValue(w.Result().Cookies(), "test_refresh", "new-refresh-token") {
 		t.Error("Did not expect refreshed refresh cookie to be set when refresh service fails")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected failed refresh to clear access cookie")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected failed refresh to clear refresh cookie")
+	}
+}
+
+func TestActiveValidApiTokenOrJWTRequired_EmptyCookiesRemainProtected(t *testing.T) {
+	mockService := &mockAccessManagerService{
+		middlewareActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
+			return nil, errors.New("token invalid")
+		},
+	}
+
+	middleware := createTestMiddleware(mockService)
+	handler := createTestHandler()
+	wrappedHandler := middleware.ActiveValidApiTokenOrJWTRequired(handler)
+
+	req := httptest.NewRequest("GET", "/protected", nil)
+	req.AddCookie(&http.Cookie{Name: "test_auth", Value: ""})
+	req.AddCookie(&http.Cookie{Name: "test_refresh", Value: ""})
+	w := httptest.NewRecorder()
+
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code == http.StatusOK {
+		t.Error("Expected protected middleware to reject empty auth cookies")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_auth") {
+		t.Error("Expected protected middleware to clear empty access cookie")
+	}
+	if !responseHasCookieRemoval(w.Result().Cookies(), "test_refresh") {
+		t.Error("Expected protected middleware to clear empty refresh cookie")
 	}
 }
 

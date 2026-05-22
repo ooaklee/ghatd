@@ -7,8 +7,10 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // jwtValidationType defines the type of JWT validation to perform
@@ -276,39 +278,34 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		authCookie, _ := req.Cookie(m.cookiePrefixAuthToken)
 		refreshCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
+		hasAuthCookie := authCookie != nil && authCookie.Value != ""
+		hasRefreshCookie := refreshCookie != nil && refreshCookie.Value != ""
 
-		// If both cookies are absent, use rate limiting flow
-		if authCookie == nil && refreshCookie == nil {
-			authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
-			if err != nil {
-				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
-				return
-			}
-
-			req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-			handler.ServeHTTP(w, req)
+		// If both cookies are absent or empty, use the public rate-limited flow.
+		if !hasAuthCookie && !hasRefreshCookie {
+			m.handleRateLimitOrActiveUnauthenticated(w, req, handler, authCookie != nil || refreshCookie != nil, "empty-or-missing-auth-cookies", nil, authCookie, refreshCookie)
 			return
 		}
 
 		// Otherwise handle JWT authentication with refresh capability
-		if refreshCookie == nil {
-			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
+		if !hasAuthCookie {
+			m.handleRateLimitOrActiveUnauthenticated(w, req, handler, true, "missing-auth-cookie", accessmanager.ErrUnauthorizedUnableToAttainRequestorID, authCookie, refreshCookie)
 			return
 		}
 
-		if authCookie != nil {
-			req.Header["Authorization"] = []string{"Bearer " + authCookie.Value}
+		if !hasRefreshCookie {
+			m.handleRateLimitOrActiveUnauthenticated(w, req, handler, true, "missing-refresh-cookie", accessmanager.ErrUnauthorizedUnableToAttainRequestorID, authCookie, refreshCookie)
+			return
 		}
+
+		req.Header["Authorization"] = []string{"Bearer " + authCookie.Value}
 
 		authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
 		if err != nil {
 			// Try token refresh
 			authedUserResp, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, m.service.MiddlewareRateLimitOrActiveJWTRequired)
 			if refreshErr != nil {
-				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-				m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				m.handleRateLimitOrActiveUnauthenticated(w, req, handler, true, "auth-validation-or-refresh-failed", err, authCookie, refreshCookie)
 				return
 			}
 
@@ -322,6 +319,40 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 
 		handler.ServeHTTP(w, req)
 	})
+}
+
+func (m *Middleware) handleRateLimitOrActiveUnauthenticated(
+	w http.ResponseWriter,
+	req *http.Request,
+	handler http.Handler,
+	clearCookies bool,
+	reason string,
+	authErr error,
+	authCookie *http.Cookie,
+	refreshCookie *http.Cookie,
+) {
+	if clearCookies {
+		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+		logger.Info(req.Context(), "rate-limit-or-active-auth-downgraded",
+			zap.String("reason", reason),
+			zap.Bool("has-auth-cookie", authCookie != nil),
+			zap.Bool("auth-cookie-empty", authCookie != nil && authCookie.Value == ""),
+			zap.Bool("has-refresh-cookie", refreshCookie != nil),
+			zap.Bool("refresh-cookie-empty", refreshCookie != nil && refreshCookie.Value == ""),
+			zap.Error(authErr),
+		)
+	}
+
+	req.Header.Del("Authorization")
+	authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
+	if err != nil {
+		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
+
+	handler.ServeHTTP(w, req)
 }
 
 // handleAdminAPITokenRequiredRequest is checking to make sure the request
