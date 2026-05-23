@@ -42,6 +42,10 @@ const (
 	// is being used by the client
 	WebPlatformHttpRequestHeader string = "X-Platform"
 
+	// TimezoneHttpRequestHeader is the header used to inform the server which IANA
+	// timezone the client is currently using.
+	TimezoneHttpRequestHeader string = "X-Timezone"
+
 	// CacheSkipHttpResponseHeader is the response header used to tell server not to cache the
 	// response from the endpoint
 	CacheSkipHttpResponseHeader string = "X-Cache-Skip"
@@ -58,6 +62,17 @@ const (
 
 	AccessTokenAuthInfoCookieName  string = "access_token"
 	RefreshTokenAuthInfoCookieName string = "refresh_token"
+)
+
+const (
+	// PlatformWeb is the web app X-Platform value.
+	PlatformWeb string = "web"
+
+	// PlatformMobile is the mobile app X-Platform value.
+	PlatformMobile string = "mobile"
+
+	// PlatformBrowserExtension is the browser extension X-Platform value.
+	PlatformBrowserExtension string = "browser-extension"
 )
 
 const (
