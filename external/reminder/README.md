@@ -17,9 +17,10 @@ Declarations live in the `reminders` collection. Execution attempts live in the
 reminder stays small and easy to update, while the system can still keep a
 history of sends, failures, skips, and notification references.
 
-All stored timestamps should be UTC. The optional `timezone` field records the
-user's local timezone so clients and admin tools can display the intended local
-time without changing the persisted UTC value.
+All stored execution timestamps and due timestamps are UTC. Reminder
+declarations keep `target_time` as the user's local wall-clock time, store the
+IANA `timezone`, and derive `next_due_at` as the UTC timestamp that scheduler
+queries should use.
 
 ## Package Structure
 
@@ -50,8 +51,9 @@ reminder/
 | `target_id` | The specific platform object ID, when there is one. |
 | `title` | The short reminder label. |
 | `description` | Optional user-facing detail. |
-| `target_time` | The UTC time the reminder is due. |
-| `timezone` | Optional user timezone for display and local-time reasoning. |
+| `target_time` | The local wall-clock time, initially `HH:MM`. |
+| `timezone` | IANA timezone used to resolve the local target time. Defaults to `UTC`. |
+| `next_due_at` | UTC timestamp for the next due occurrence. Scheduler queries use this field. |
 | `status` | `active`, `disabled`, `completed`, or `deleted`. |
 | `task_data` | Optional structured payload for product-specific context. |
 
@@ -71,7 +73,7 @@ created, err := service.CreateReminder(ctx, &reminder.CreateReminderRequest{
     TargetId:    "course-123",
     Title:       "Finish today's lesson",
     Description: "Keep your streak moving.",
-    TargetTime:  "2026-05-15T10:00:00Z",
+    TargetTime:  "09:00",
     Timezone:    "Europe/London",
 })
 if err != nil {
@@ -84,6 +86,13 @@ active, err := service.GetActiveRemindersForTargetTypeByUserID(ctx, &reminder.Ge
     TargetId:   "course-123",
 })
 ```
+
+When using `external/starter/v0`, `starter.NewRepositories` creates the
+reminder repository and `starter.NewServices` creates `Services.Reminder`.
+Starter also attaches that service to `Services.UserManager` by default, so
+the UMS reminder endpoints are enabled when the User Manager route group is
+attached. Pass `starter.NewServicesRequest.ReminderService` only when UMS
+should use a custom reminder implementation.
 
 Use `GetRemindersForTargetTypeByUserID` when a product screen needs all
 reminders for a target. Use `GetActiveRemindersForTargetTypeByUserID` when a
@@ -114,7 +123,7 @@ reminders for a set of users.
 
 ```go
 due, err := service.GetDueReminders(ctx, &reminder.GetDueRemindersRequest{
-    DueBefore: "2026-05-15T10:05:00Z",
+    DueBefore: "2026-05-15T10:05:00",
     UserIDs:   []string{"user-123", "user-456"},
     Limit:     100,
 })
@@ -128,7 +137,7 @@ for _, item := range due.Reminders {
         UserID:          item.UserID,
         TargetType:      item.TargetType,
         TargetId:        item.TargetId,
-        ScheduledFor:    item.TargetTime,
+        ScheduledFor:    item.NextDueAt,
         Status:          reminder.ReminderExecutionStatusSent,
         Attempt:         1,
         NotificationRef: "notifier-message-id",

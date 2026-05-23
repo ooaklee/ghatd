@@ -105,6 +105,10 @@ To use the `usermanager` service, you must initialise it and attach its routes t
 
 For a detailed guide on setting up the main application router, please see the [Router Package Getting Started documentation](../router/README.md).
 
+If the application uses `external/starter/v0`, starter creates the reminder
+service and attaches it to User Manager by default. The manual example below is
+for projects composing `usermanager` directly.
+
 **Example Initialisation:**
 
 ```go

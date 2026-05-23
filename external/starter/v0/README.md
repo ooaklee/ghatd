@@ -10,7 +10,7 @@ a GHATD application is assembled at the `main` package level.
 **starter/v0 is NOT a replacement architecture.** It is a thin, lazy
 composition layer over the existing modular GHATD packages
 (`external/usermanager`, `external/accessmanager`, `external/billingmanager`,
-etc.). It exists to:
+`external/reminder`, `external/streaker`, etc.). It exists to:
 
 - **Reserve the shape** - show new contributors what wiring looks like before
   they learn every package.
@@ -38,7 +38,7 @@ etc.). It exists to:
 | Function               | Purpose                                      |
 |------------------------|----------------------------------------------|
 | `NewRepositories`      | Builds package repositories from a core Mongo repository, with per-repository overrides. |
-| `NewServices`          | Builds GHATD services from repositories and explicit app integrations such as Redis, email, audit, OAuth, policy, and payment providers. |
+| `NewServices`          | Builds GHATD services from repositories plus explicit app integrations such as Redis, email, audit, OAuth, policy, notifications, and payment providers. Includes reminder and streaker services. |
 | `NewHandlers`          | Builds standard GHATD handlers with default error bundles and explicit override hooks. |
 | `NewMiddleware`        | Builds the accessmanager middleware suite.   |
 | `NewStack`             | Validates config and groups already-built layers. |
@@ -88,6 +88,28 @@ For a fuller GHATD host application server-command walkthrough, see
 
 `NewStack` intentionally accepts nil layer fields so teams can adopt starter/v0
 incrementally. Treat nil layers as "not wired yet" and check them before use.
+
+## Reminder and Streaker
+
+`NewRepositories` creates `Reminder` and `Streaker` repositories from the core
+Mongo repository unless the caller supplies overrides. `NewServices` then
+creates `Services.Reminder` and `Services.Streaker`.
+
+Reminder and streaker are optional starter integrations. If their repositories
+are available, `NewServices` creates `Services.Reminder` and
+`Services.Streaker`; if they are absent, the rest of the stack can still be
+constructed.
+
+The starter-created reminder and streaker services are attached to
+`Services.UserManager` by default. When `AttachDefaultRoutes` includes
+`RouteGroupUserManager`, UMS exposes reminder and streak endpoints backed by
+those services. To attach a different implementation to UMS, pass
+`NewServicesRequest.ReminderService` or `NewServicesRequest.StreakService`.
+
+`streaker` does not have a standalone starter route group in v0. Host
+applications still own product-specific streak workflows, schedulers, and
+custom API routes. Those workflows can call `Services.Streaker` directly or
+use the UMS streak endpoints for authenticated user-scoped access.
 
 ## Usage
 
@@ -205,7 +227,7 @@ if err != nil {
 | `RouteGroupUser`                      | `/api/v2/users/*`                                    |
 | `RouteGroupGroup`                     | `/api/v1/groups/*`                                   |
 | `RouteGroupAccessManager`             | `/api/v1/ams/*`                                      |
-| `RouteGroupUserManager`               | `/api/v1/ums/*`                                      |
+| `RouteGroupUserManager`               | `/api/v1/ums/*`, including reminder and streak endpoints |
 | `RouteGroupContentManager`            | `/api/v1/cms/*`                                      |
 | `RouteGroupBillingManager`            | `/api/v1/bms/*`                                      |
 

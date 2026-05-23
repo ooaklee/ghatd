@@ -33,12 +33,12 @@ func (m *mockMongoDbStore) ExecuteFindOneCommandDecodeResult(ctx context.Context
 	return errors.New("not implemented")
 }
 
-func (m *mockMongoDbStore) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, opts ...*options.UpdateOptions) (*mongo.UpdateResult, error) {
-	return nil, errors.New("not implemented")
+func (m *mockMongoDbStore) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, resultObjectName string) error {
+	return errors.New("not implemented")
 }
 
-func (m *mockMongoDbStore) ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error) {
-	return nil, errors.New("not implemented")
+func (m *mockMongoDbStore) ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
+	return errors.New("not implemented")
 }
 
 func (m *mockMongoDbStore) GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error) {
@@ -171,7 +171,7 @@ func TestBuildReminderListFilter(t *testing.T) {
 
 	t.Run("with due before", func(t *testing.T) {
 		f := buildReminderListFilter(&ReminderFilter{DueBefore: "2026-05-10T12:00:00"})
-		assert.Equal(t, bson.M{"$lte": "2026-05-10T12:00:00"}, f["target_time"])
+		assert.Equal(t, bson.M{"$lte": "2026-05-10T12:00:00"}, f["next_due_at"])
 	})
 
 	t.Run("with user and status", func(t *testing.T) {

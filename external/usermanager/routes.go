@@ -59,6 +59,12 @@ type UsermanagerHandler interface {
 	DisableReminderByID(w http.ResponseWriter, r *http.Request)
 	GetReminderStats(w http.ResponseWriter, r *http.Request)
 	GetDueReminders(w http.ResponseWriter, r *http.Request)
+	// Streak methods
+	RecordStreak(w http.ResponseWriter, r *http.Request)
+	ListStreaks(w http.ResponseWriter, r *http.Request)
+	GetCurrentStreak(w http.ResponseWriter, r *http.Request)
+	GetLongestStreak(w http.ResponseWriter, r *http.Request)
+	GetNumberOfStreaks(w http.ResponseWriter, r *http.Request)
 }
 
 const (
@@ -148,6 +154,11 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.UpdateReminderByID).Methods(http.MethodPatch, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.DeleteReminderByID).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}/disable", request.Handler.DisableReminderByID).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks", request.Handler.ListStreaks).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/record", request.Handler.RecordStreak).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/current", request.Handler.GetCurrentStreak).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/longest", request.Handler.GetLongestStreak).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/count", request.Handler.GetNumberOfStreaks).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/config", request.Handler.GetNotifierConfig).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses", request.Handler.ListNotificationAddresses).Methods(http.MethodGet, http.MethodOptions)
@@ -190,6 +201,10 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAdminServiceRoutes.HandleFunc("/reminders", request.Handler.ListReminders).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminServiceRoutes.HandleFunc("/reminders/stats", request.Handler.GetReminderStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminServiceRoutes.HandleFunc("/reminders/due", request.Handler.GetDueReminders).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/streaks", request.Handler.ListStreaks).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/streaks/current", request.Handler.GetCurrentStreak).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/streaks/longest", request.Handler.GetLongestStreak).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminServiceRoutes.HandleFunc("/streaks/count", request.Handler.GetNumberOfStreaks).Methods(http.MethodGet, http.MethodOptions)
 	if request.AdminApiTokenOrJWTMiddleware != nil {
 		usermanagerAdminServiceRoutes.Use(request.AdminApiTokenOrJWTMiddleware)
 	} else if request.AdminOnlyMiddleware != nil {

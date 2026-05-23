@@ -215,6 +215,58 @@ func (r *Repository) GetTotalStreaks(ctx context.Context, req *GetNumberOfStreak
 	return r.Store.ExecuteCountDocuments(ctx, collection, queryFilter)
 }
 
+// ListStreaks retrieves streak entries matching the provided filters.
+func (r *Repository) ListStreaks(ctx context.Context, req *ListStreaksRequest) ([]*Streak, error) {
+	collection, err := r.GetStreakCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	queryFilter := buildStreakQueryFilter(&req.StreakStatsRequest)
+	addStreakListFilter(queryFilter, req)
+
+	sortDirection := -1
+	if strings.EqualFold(req.Sort, "asc") || strings.EqualFold(req.Sort, "ascending") {
+		sortDirection = 1
+	}
+
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	perPage := req.PerPage
+	if perPage <= 0 {
+		perPage = 100
+	}
+
+	findOptions := options.Find().
+		SetSort(bson.D{
+			{Key: "occurred_at", Value: sortDirection},
+			{Key: "created_at", Value: sortDirection},
+		}).
+		SetSkip(int64((page - 1) * perPage)).
+		SetLimit(int64(perPage))
+
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	var streaks []*Streak
+	if err = r.Store.MapAllInCursorToResult(ctx, cursor, &streaks, "streaks"); err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no-documents-found") {
+			return []*Streak{}, nil
+		}
+		return nil, err
+	}
+
+	if streaks == nil {
+		streaks = []*Streak{}
+	}
+
+	return streaks, nil
+}
+
 func buildStreakQueryFilter(req *StreakStatsRequest) bson.M {
 	queryFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -243,4 +295,37 @@ func buildStreakQueryFilter(req *StreakStatsRequest) bson.M {
 	}
 
 	return queryFilter
+}
+
+func addStreakListFilter(queryFilter bson.M, req *ListStreaksRequest) {
+	if req == nil {
+		return
+	}
+
+	if req.PeriodKey != "" {
+		queryFilter["period_key"] = req.PeriodKey
+		return
+	}
+
+	periodKeyRange := bson.M{}
+	if req.PeriodKeyFrom != "" {
+		periodKeyRange["$gte"] = req.PeriodKeyFrom
+	}
+	if req.PeriodKeyTo != "" {
+		periodKeyRange["$lte"] = req.PeriodKeyTo
+	}
+	if len(periodKeyRange) > 0 {
+		queryFilter["period_key"] = periodKeyRange
+	}
+
+	occurredAtRange := bson.M{}
+	if req.OccurredAtFrom != "" {
+		occurredAtRange["$gte"] = req.OccurredAtFrom
+	}
+	if req.OccurredAtTo != "" {
+		occurredAtRange["$lte"] = req.OccurredAtTo
+	}
+	if len(occurredAtRange) > 0 {
+		queryFilter["occurred_at"] = occurredAtRange
+	}
 }

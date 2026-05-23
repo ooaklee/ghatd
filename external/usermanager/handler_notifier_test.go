@@ -218,6 +218,21 @@ func (m *mockUmsService) GetReminderStats(ctx context.Context, r *usermanager.Ge
 func (m *mockUmsService) GetDueReminders(ctx context.Context, r *usermanager.GetDueRemindersRequest) (*usermanager.GetDueRemindersResponse, error) {
 	return nil, stubErr
 }
+func (m *mockUmsService) RecordStreak(ctx context.Context, r *usermanager.RecordStreakRequest) (*usermanager.RecordStreakResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) ListStreaks(ctx context.Context, r *usermanager.ListStreaksRequest) (*usermanager.ListStreaksResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetCurrentStreak(ctx context.Context, r *usermanager.GetCurrentStreakRequest) (*usermanager.GetCurrentStreakResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetLongestStreak(ctx context.Context, r *usermanager.GetLongestStreakRequest) (*usermanager.GetLongestStreakResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetNumberOfStreaks(ctx context.Context, r *usermanager.GetNumberOfStreaksRequest) (*usermanager.GetNumberOfStreaksResponse, error) {
+	return nil, stubErr
+}
 
 // mockValidator wraps [validator.Validate] so tests can force validation failures.
 type mockValidator struct {

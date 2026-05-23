@@ -42,6 +42,14 @@ func InitRemindersIndexesUp(db *mongo.Database) error {
 		Options: options.Index().SetName("idx_reminders_user_target_time"),
 	}
 
+	userNextDueAtIndexModel := mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "user_id", Value: 1},
+			{Key: "next_due_at", Value: 1},
+		},
+		Options: options.Index().SetName("idx_reminders_user_next_due_at"),
+	}
+
 	userTargetStatusIndexModel := mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "user_id", Value: 1},
@@ -53,12 +61,31 @@ func InitRemindersIndexesUp(db *mongo.Database) error {
 		Options: options.Index().SetName("idx_reminders_user_target_status_time"),
 	}
 
+	userTargetStatusNextDueAtIndexModel := mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "user_id", Value: 1},
+			{Key: "target_type", Value: 1},
+			{Key: "target_id", Value: 1},
+			{Key: "status", Value: 1},
+			{Key: "next_due_at", Value: 1},
+		},
+		Options: options.Index().SetName("idx_reminders_user_target_status_next_due_at"),
+	}
+
 	dueLookupIndexModel := mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "status", Value: 1},
 			{Key: "target_time", Value: 1},
 		},
 		Options: options.Index().SetName("idx_reminders_due_lookup"),
+	}
+
+	dueLookupNextDueAtIndexModel := mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "status", Value: 1},
+			{Key: "next_due_at", Value: 1},
+		},
+		Options: options.Index().SetName("idx_reminders_due_lookup_next_due_at"),
 	}
 
 	createdAtIndexModel := mongo.IndexModel{
@@ -72,8 +99,11 @@ func InitRemindersIndexesUp(db *mongo.Database) error {
 			nanoIDIndexModel,
 			userStatusIndexModel,
 			userTargetTimeIndexModel,
+			userNextDueAtIndexModel,
 			userTargetStatusIndexModel,
+			userTargetStatusNextDueAtIndexModel,
 			dueLookupIndexModel,
+			dueLookupNextDueAtIndexModel,
 			createdAtIndexModel,
 		},
 	)
@@ -138,8 +168,11 @@ func InitRemindersIndexesDown(db *mongo.Database) error {
 		"idx_reminders_nano_id",
 		"idx_reminders_user_status",
 		"idx_reminders_user_target_time",
+		"idx_reminders_user_next_due_at",
 		"idx_reminders_user_target_status_time",
+		"idx_reminders_user_target_status_next_due_at",
 		"idx_reminders_due_lookup",
+		"idx_reminders_due_lookup_next_due_at",
 		"idx_reminders_created_at",
 	}
 

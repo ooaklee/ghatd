@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -62,6 +63,16 @@ func (s *Service) CreateReminder(ctx context.Context, req *CreateReminderRequest
 		return nil, ErrTargetTimeIsRequired
 	}
 
+	timezone, _, err := NormaliseReminderTimezone(req.Timezone)
+	if err != nil {
+		return nil, err
+	}
+
+	nextDueAt, err := BuildNextDueAt(targetTime, timezone, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+
 	status, err := ValidateAndNormaliseStatus(req.Status)
 	if err != nil {
 		return nil, err
@@ -76,7 +87,8 @@ func (s *Service) CreateReminder(ctx context.Context, req *CreateReminderRequest
 		Title:           title,
 		Description:     strings.TrimSpace(req.Description),
 		TargetTime:      targetTime,
-		Timezone:        strings.TrimSpace(req.Timezone),
+		Timezone:        timezone,
+		NextDueAt:       nextDueAt,
 		Status:          status,
 		TaskData:        req.TaskData,
 		CreatedByUserID: userID,
@@ -208,11 +220,14 @@ func (s *Service) UpdateReminderByID(ctx context.Context, req *UpdateReminderByI
 	if req.Description != nil {
 		existing.Description = strings.TrimSpace(*req.Description)
 	}
+	scheduleChanged := false
 	if req.TargetTime != nil {
 		existing.TargetTime = strings.TrimSpace(*req.TargetTime)
+		scheduleChanged = true
 	}
 	if req.Timezone != nil {
 		existing.Timezone = strings.TrimSpace(*req.Timezone)
+		scheduleChanged = true
 	}
 	if req.Status != nil {
 		newStatus, err := ValidateAndNormaliseStatus(*req.Status)
@@ -226,6 +241,18 @@ func (s *Service) UpdateReminderByID(ctx context.Context, req *UpdateReminderByI
 	}
 	if req.TaskData != nil {
 		existing.TaskData = req.TaskData
+	}
+	if scheduleChanged || strings.TrimSpace(existing.NextDueAt) == "" {
+		timezone, _, err := NormaliseReminderTimezone(existing.Timezone)
+		if err != nil {
+			return nil, err
+		}
+		nextDueAt, err := BuildNextDueAt(existing.TargetTime, timezone, time.Now().UTC())
+		if err != nil {
+			return nil, err
+		}
+		existing.Timezone = timezone
+		existing.NextDueAt = nextDueAt
 	}
 
 	existing.UpdatedByUserID = req.UserID

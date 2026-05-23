@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
@@ -605,13 +606,27 @@ func (h *Handler) RemoveCookiesWithName(w http.ResponseWriter, cookieName string
 	toolbox.RemoveCookiesWithName(w, h.Environment, cookieName, h.CookieDomain)
 }
 
-// redirectToHomeIfPlatformHeaderDetected checks the request headers for the presence of the web platform or HTMX headers.
-// If either header is present, the function redirects the user to the home page (/) and returns true.
+// redirectToHomeIfPlatformHeaderDetected checks the request headers for browser-owned
+// logout flows that expect a navigation redirect rather than an API response.
 // Otherwise, it returns false.
 func redirectToHomeIfPlatformHeaderDetected(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get(common.WebPlatformHttpRequestHeader) != "" || r.Header.Get(common.HtmxHttpRequestHeader) != "" {
+	if shouldRedirectToHomeForRequest(r) {
 		http.Redirect(w, r, "/", http.StatusFound)
 		return true
 	}
 	return false
+}
+
+// shouldRedirectToHomeForRequest reports whether the request expects a browser navigation redirect.
+func shouldRedirectToHomeForRequest(r *http.Request) bool {
+	if r.Header.Get(common.HtmxHttpRequestHeader) != "" {
+		return true
+	}
+
+	switch strings.ToLower(strings.TrimSpace(r.Header.Get(common.WebPlatformHttpRequestHeader))) {
+	case common.PlatformWeb:
+		return true
+	default:
+		return false
+	}
 }

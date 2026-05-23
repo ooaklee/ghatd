@@ -83,4 +83,7 @@ const (
 const (
 	// ErrKeyReminderServiceNotEnabled is returned when reminder features are requested but ReminderService is not configured
 	ErrKeyReminderServiceNotEnabled = "ReminderServiceNotEnabled"
+
+	// ErrKeyStreakServiceNotEnabled is returned when streak features are requested but StreakService is not configured
+	ErrKeyStreakServiceNotEnabled = "StreakServiceNotEnabled"
 )

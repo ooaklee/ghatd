@@ -19,6 +19,8 @@ var (
 	ErrTargetTimeIsRequired = errors.New(ErrKeyTargetTimeIsRequired)
 	// ErrInvalidTargetTime means a reminder target time could not be accepted.
 	ErrInvalidTargetTime = errors.New(ErrKeyInvalidTargetTime)
+	// ErrInvalidTimezone means a reminder timezone could not be accepted.
+	ErrInvalidTimezone = errors.New(ErrKeyInvalidTimezone)
 	// ErrInvalidStatus means the reminder status is not supported.
 	ErrInvalidStatus = errors.New(ErrKeyInvalidStatus)
 	// ErrResourceNotFound means the requested reminder or execution record could not be found.

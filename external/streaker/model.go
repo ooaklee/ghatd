@@ -5,10 +5,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
+
+const defaultPeriodTimezone = "UTC"
 
 // StreakScope identifies the entity and target a streak belongs to.
 type StreakScope struct {
@@ -21,12 +24,13 @@ type StreakScope struct {
 // PreviousStreakEntry is stored on each streak entry when a related previous
 // entry exists. It gives consumers a cheap chain back through the streak.
 type PreviousStreakEntry struct {
-	Id           string `json:"id" bson:"id"`
-	NanoId       string `json:"nano_id,omitempty" bson:"_nano_id,omitempty"`
-	PeriodKey    string `json:"period_key" bson:"period_key"`
-	OccurredAt   string `json:"occurred_at" bson:"occurred_at"`
-	CurrentCount int    `json:"current_count" bson:"current_count"`
-	CreatedAt    string `json:"created_at" bson:"created_at"`
+	Id             string `json:"id" bson:"id"`
+	NanoId         string `json:"nano_id,omitempty" bson:"_nano_id,omitempty"`
+	PeriodKey      string `json:"period_key" bson:"period_key"`
+	PeriodTimezone string `json:"period_timezone,omitempty" bson:"period_timezone,omitempty"`
+	OccurredAt     string `json:"occurred_at" bson:"occurred_at"`
+	CurrentCount   int    `json:"current_count" bson:"current_count"`
+	CreatedAt      string `json:"created_at" bson:"created_at"`
 }
 
 // Streak represents a single qualifying completion for a streak scope.
@@ -40,9 +44,10 @@ type Streak struct {
 	TargetType string `json:"target_type" bson:"target_type"`
 	TargetId   string `json:"target_id" bson:"target_id"`
 
-	PeriodType StreakPeriodType `json:"period_type" bson:"period_type"`
-	PeriodKey  string           `json:"period_key" bson:"period_key"`
-	OccurredAt string           `json:"occurred_at" bson:"occurred_at"`
+	PeriodType     StreakPeriodType `json:"period_type" bson:"period_type"`
+	PeriodKey      string           `json:"period_key" bson:"period_key"`
+	PeriodTimezone string           `json:"period_timezone,omitempty" bson:"period_timezone,omitempty"`
+	OccurredAt     string           `json:"occurred_at" bson:"occurred_at"`
 
 	CurrentCount int                    `json:"current_count" bson:"current_count"`
 	Previous     *PreviousStreakEntry   `json:"previous,omitempty" bson:"previous,omitempty"`
@@ -109,12 +114,13 @@ func (s *Streak) ToPreviousEntry() *PreviousStreakEntry {
 	}
 
 	return &PreviousStreakEntry{
-		Id:           s.Id,
-		NanoId:       s.NanoId,
-		PeriodKey:    s.PeriodKey,
-		OccurredAt:   s.OccurredAt,
-		CurrentCount: s.CurrentCount,
-		CreatedAt:    s.CreatedAt,
+		Id:             s.Id,
+		NanoId:         s.NanoId,
+		PeriodKey:      s.PeriodKey,
+		PeriodTimezone: s.PeriodTimezone,
+		OccurredAt:     s.OccurredAt,
+		CurrentCount:   s.CurrentCount,
+		CreatedAt:      s.CreatedAt,
 	}
 }
 
@@ -164,18 +170,43 @@ func NormalisePeriodType(periodType StreakPeriodType) (StreakPeriodType, error) 
 	}
 }
 
-// BuildPeriodKey converts a timestamp and period type into a stable key.
+// NormalisePeriodTimezone returns the package default timezone when none is provided.
+func NormalisePeriodTimezone(value string) (string, *time.Location, error) {
+	timezone := strings.TrimSpace(value)
+	if timezone == "" {
+		timezone = defaultPeriodTimezone
+	}
+
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		return "", nil, ErrInvalidPeriodTimezone
+	}
+
+	return timezone, location, nil
+}
+
+// BuildPeriodKey converts a timestamp and period type into a stable UTC key.
 func BuildPeriodKey(value time.Time, periodType StreakPeriodType, providedPeriodKey string) (string, error) {
-	value = value.UTC()
+	return BuildPeriodKeyForTimezone(value, periodType, providedPeriodKey, defaultPeriodTimezone)
+}
+
+// BuildPeriodKeyForTimezone converts a timestamp and period type into a stable
+// key after first resolving the timestamp in the provided IANA timezone.
+func BuildPeriodKeyForTimezone(value time.Time, periodType StreakPeriodType, providedPeriodKey string, periodTimezone string) (string, error) {
+	_, location, err := NormalisePeriodTimezone(periodTimezone)
+	if err != nil {
+		return "", err
+	}
+	localValue := value.In(location)
 	providedPeriodKey = strings.TrimSpace(providedPeriodKey)
 
 	switch periodType {
 	case StreakPeriodTypeDaily:
-		return value.Format("2006-01-02"), nil
+		return localValue.Format("2006-01-02"), nil
 	case StreakPeriodTypeWeekly:
-		return buildWeekPeriodKey(value), nil
+		return buildWeekPeriodKeyForLocation(value, location), nil
 	case StreakPeriodTypeMonthly:
-		return value.Format("2006-01"), nil
+		return localValue.Format("2006-01"), nil
 	case StreakPeriodTypeCustom:
 		if providedPeriodKey == "" {
 			return "", ErrPeriodKeyIsRequired
@@ -241,6 +272,14 @@ func parsePeriodKey(periodKey string, periodType StreakPeriodType) (time.Time, b
 
 func buildWeekPeriodKey(value time.Time) string {
 	year, week := value.UTC().ISOWeek()
+	return strconv.Itoa(year) + "-w" + leftPadInt(week, 2)
+}
+
+func buildWeekPeriodKeyForLocation(value time.Time, location *time.Location) string {
+	if location == nil {
+		location = time.UTC
+	}
+	year, week := value.In(location).ISOWeek()
 	return strconv.Itoa(year) + "-w" + leftPadInt(week, 2)
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -556,6 +557,63 @@ type GetReminderStatsRequest struct {
 
 	// FilterUserIDs optionally filters reminder stats by multiple target users.
 	FilterUserIDs []string `query:"user_ids"`
+}
+
+// RecordStreakRequest holds the data needed to record a streak for the current user.
+type RecordStreakRequest struct {
+	// UserID is the authenticated requester recording the streak.
+	UserID string
+
+	// RecordStreakRequest carries the underlying streak creation payload.
+	*streaker.RecordStreakRequest
+}
+
+// ListStreaksRequest holds the data needed to list streak history.
+type ListStreaksRequest struct {
+	// UserID is the authenticated requester listing streaks.
+	UserID string
+
+	// FilterUserID optionally filters streaks by a target user on admin/service routes.
+	FilterUserID string `query:"user_id"`
+
+	// ListStreaksRequest carries the underlying streak history filters.
+	*streaker.ListStreaksRequest
+}
+
+// GetCurrentStreakRequest holds filters used to get the current streak count.
+type GetCurrentStreakRequest struct {
+	// UserID is the authenticated requester getting streak stats.
+	UserID string
+
+	// FilterUserID optionally filters streaks by a target user on admin/service routes.
+	FilterUserID string `query:"user_id"`
+
+	// GetCurrentCountRequest carries the underlying streak stats filters.
+	*streaker.GetCurrentCountRequest
+}
+
+// GetLongestStreakRequest holds filters used to get the personal best streak.
+type GetLongestStreakRequest struct {
+	// UserID is the authenticated requester getting streak stats.
+	UserID string
+
+	// FilterUserID optionally filters streaks by a target user on admin/service routes.
+	FilterUserID string `query:"user_id"`
+
+	// GetLongestStreakRequest carries the underlying streak stats filters.
+	*streaker.GetLongestStreakRequest
+}
+
+// GetNumberOfStreaksRequest holds filters used to count streak entries.
+type GetNumberOfStreaksRequest struct {
+	// UserID is the authenticated requester getting streak stats.
+	UserID string
+
+	// FilterUserID optionally filters streaks by a target user on admin/service routes.
+	FilterUserID string `query:"user_id"`
+
+	// GetNumberOfStreaksRequest carries the underlying streak stats filters.
+	*streaker.GetNumberOfStreaksRequest
 }
 
 // UpdateGroupOwnerRequest holds the data needed to update group ownership

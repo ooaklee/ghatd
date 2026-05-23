@@ -38,6 +38,12 @@ var ReminderErrorMap reply.ErrorManifest = reply.ErrorManifest{
 		Code:       "REM0-004",
 		Detail:     "The provided target time is invalid",
 	},
+	ErrInvalidTimezone: {
+		Title:      "Invalid Timezone",
+		StatusCode: http.StatusBadRequest,
+		Code:       "REM0-015",
+		Detail:     "Please provide a valid IANA timezone",
+	},
 	ErrInvalidStatus: {
 		Title:      "Invalid Status",
 		StatusCode: http.StatusBadRequest,

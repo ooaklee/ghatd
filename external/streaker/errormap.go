@@ -50,6 +50,12 @@ var StreakErrorMap reply.ErrorManifest = reply.ErrorManifest{
 		Code:       "STR0-007",
 		Detail:     "The provided occurred_at value is invalid",
 	},
+	ErrInvalidPeriodTimezone: {
+		Title:      "Invalid Period Timezone",
+		StatusCode: http.StatusBadRequest,
+		Code:       "STR0-018",
+		Detail:     "Please provide a valid IANA timezone",
+	},
 	ErrPeriodKeyIsRequired: {
 		Title:      "Missing Period Key",
 		StatusCode: http.StatusBadRequest,

@@ -18,6 +18,8 @@ import (
 	"github.com/ooaklee/ghatd/external/policy"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
+	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
 )
@@ -37,6 +39,8 @@ type Services struct {
 	Policy                  *policy.Service
 	Post                    *post.Service
 	Pricer                  *pricer.Service
+	Reminder                *reminder.Service
+	Streaker                *streaker.Service
 	User                    *userv2.Service
 	UserManager             *usermanager.Service
 	EphemeralStore          accessmanager.EphemeralStore
@@ -77,7 +81,12 @@ type NewServicesRequest struct {
 	ValidPostTags []string
 
 	NotifierSenders []notifier.ChannelSender
+	// ReminderService overrides the reminder service attached to UserManager.
+	// When nil, starter attaches the Reminder service it creates from repositories.
 	ReminderService usermanager.ReminderService
+	// StreakService overrides the streaker service attached to UserManager.
+	// When nil, starter attaches the Streaker service it creates from repositories.
+	StreakService usermanager.StreakService
 
 	PolicyStore  policy.PolicyStore
 	PolicyConfig *PolicyConfig
@@ -142,6 +151,14 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	postService := post.NewService(r.Repositories.Post, resolvePostTags(r.ValidPostTags))
 	billingService := billing.NewService(r.Repositories.Billing, r.Repositories.Billing)
 	pricerService := pricer.NewService(r.Repositories.Pricer)
+	var reminderService *reminder.Service
+	if r.Repositories.Reminder != nil {
+		reminderService = reminder.NewService(r.Repositories.Reminder)
+	}
+	var streakerService *streaker.Service
+	if r.Repositories.Streaker != nil {
+		streakerService = streaker.NewService(r.Repositories.Streaker)
+	}
 	notifierService := notifier.NewService(&notifier.NewServiceRequest{
 		Repository: r.Repositories.Notifier,
 		Senders:    r.NotifierSenders,
@@ -170,8 +187,17 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		AuditService:     auditService,
 		ContacterService: contacterService,
 	}).WithGroupService(groupService).WithNotifierService(notifierService)
+	if reminderService != nil {
+		userManagerService.WithReminderService(reminderService)
+	}
 	if r.ReminderService != nil {
 		userManagerService.WithReminderService(r.ReminderService)
+	}
+	if streakerService != nil {
+		userManagerService.WithStreakService(streakerService)
+	}
+	if r.StreakService != nil {
+		userManagerService.WithStreakService(r.StreakService)
 	}
 
 	accessManagerService := accessmanager.NewService(&accessmanager.NewServiceRequest{
@@ -203,6 +229,8 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		Policy:                  policyService,
 		Post:                    postService,
 		Pricer:                  pricerService,
+		Reminder:                reminderService,
+		Streaker:                streakerService,
 		User:                    userService,
 		UserManager:             userManagerService,
 		EphemeralStore:          r.EphemeralStore,

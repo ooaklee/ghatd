@@ -9,6 +9,7 @@ var (
 	ErrIdIsRequired               = errors.New(ErrKeyIdIsRequired)
 	ErrInvalidCurrentCount        = errors.New(ErrKeyInvalidCurrentCount)
 	ErrInvalidOccurredAt          = errors.New(ErrKeyInvalidOccurredAt)
+	ErrInvalidPeriodTimezone      = errors.New(ErrKeyInvalidPeriodTimezone)
 	ErrInvalidPeriodType          = errors.New(ErrKeyInvalidPeriodType)
 	ErrNanoIdIsRequired           = errors.New(ErrKeyNanoIdIsRequired)
 	ErrOwnerIdIsRequired          = errors.New(ErrKeyOwnerIdIsRequired)

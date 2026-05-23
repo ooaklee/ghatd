@@ -22,9 +22,21 @@ Browser clients should use credentialed requests:
 axios.create({
   baseURL: '/api/v1/ams/',
   withCredentials: true,
-  headers: { 'X-Platform': 'web' },
+  headers: {
+    'X-Platform': 'web',
+    'X-Timezone': Intl.DateTimeFormat().resolvedOptions().timeZone,
+  },
 });
 ```
+
+`X-Platform` is a client-surface hint. Access Manager uses `web` for browser
+logout flows that should redirect back to `/`. Native or extension clients
+should send their own platform value, such as `mobile` or `browser-extension`,
+and expect API responses rather than navigation redirects.
+
+`X-Timezone` should be an IANA timezone, such as `Europe/London`. GHATD does
+not authenticate with this value, but host applications can use it when passing
+request context into timezone-aware packages such as Streaker and Reminder.
 
 Native clients should use a persistent cookie jar. The app should not store token response values as its primary session state; GHATD sets `HttpOnly` access and refresh token cookies, and the client sends those cookies back on later requests.
 

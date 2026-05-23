@@ -15,7 +15,9 @@ import (
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/ooaklee/ghatd/external/policy"
 	"github.com/ooaklee/ghatd/external/post"
+	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/repository"
+	"github.com/ooaklee/ghatd/external/streaker"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -195,6 +197,8 @@ func TestNewStack(t *testing.T) {
 func TestNewRepositories(t *testing.T) {
 	core := &repository.MongoDbRepository{}
 	overrideAudit := audit.NewRepository(core)
+	overrideReminder := reminder.NewRepository(core)
+	overrideStreaker := streaker.NewRepository(core)
 
 	tests := []struct {
 		name    string
@@ -224,21 +228,30 @@ func TestNewRepositories(t *testing.T) {
 				}
 				if got.APIToken == nil || got.Audit == nil || got.Billing == nil ||
 					got.Contacter == nil || got.Group == nil || got.Notifier == nil ||
-					got.Post == nil || got.Pricer == nil || got.User == nil {
+					got.Post == nil || got.Pricer == nil || got.Reminder == nil ||
+					got.Streaker == nil || got.User == nil {
 					t.Fatalf("expected all repositories to be populated: %#v", got)
 				}
 			},
 		},
 		{
-			name: "Success - explicit repository override is preserved",
+			name: "Success - explicit repository overrides are preserved",
 			request: &NewRepositoriesRequest{
-				Core:  core,
-				Audit: overrideAudit,
+				Core:     core,
+				Audit:    overrideAudit,
+				Reminder: overrideReminder,
+				Streaker: overrideStreaker,
 			},
 			assert: func(t *testing.T, got *Repositories) {
 				t.Helper()
 				if got.Audit != overrideAudit {
 					t.Fatalf("expected audit override to be preserved")
+				}
+				if got.Reminder != overrideReminder {
+					t.Fatalf("expected reminder override to be preserved")
+				}
+				if got.Streaker != overrideStreaker {
+					t.Fatalf("expected streaker override to be preserved")
 				}
 			},
 		},
@@ -269,6 +282,7 @@ func TestNewRepositories(t *testing.T) {
 func TestNewServices(t *testing.T) {
 	customPaymentProviderRegistry := paymentprovider.NewProviderRegistry()
 	customAuditService := audit.NewService(validRepositories(t).Audit)
+	customReminderService := reminder.NewService(validRepositories(t).Reminder)
 
 	tests := []struct {
 		name    string
@@ -380,7 +394,8 @@ func TestNewServices(t *testing.T) {
 					got.Auth == nil || got.Billing == nil || got.BillingManager == nil ||
 					got.Contacter == nil || got.ContentManager == nil || got.Group == nil ||
 					got.Notifier == nil || got.Policy == nil || got.Post == nil ||
-					got.Pricer == nil || got.User == nil || got.UserManager == nil {
+					got.Pricer == nil || got.Reminder == nil || got.Streaker == nil ||
+					got.User == nil || got.UserManager == nil {
 					t.Fatalf("expected all services to be populated: %#v", got)
 				}
 				if got.AccessManager.GroupService != got.Group {
@@ -394,6 +409,36 @@ func TestNewServices(t *testing.T) {
 				}
 				if got.UserManager.NotifierService != got.Notifier {
 					t.Fatalf("expected user manager to receive notifier service")
+				}
+				if got.UserManager.ReminderService != got.Reminder {
+					t.Fatalf("expected user manager to receive starter reminder service")
+				}
+				if got.UserManager.StreakService != got.Streaker {
+					t.Fatalf("expected user manager to receive starter streak service")
+				}
+			},
+		},
+		{
+			name: "Success - optional reminder and streaker services may be absent",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				req.Repositories.Reminder = nil
+				req.Repositories.Streaker = nil
+				return req
+			},
+			assert: func(t *testing.T, got *Services) {
+				t.Helper()
+				if got.Reminder != nil {
+					t.Fatalf("expected reminder service to be omitted")
+				}
+				if got.Streaker != nil {
+					t.Fatalf("expected streaker service to be omitted")
+				}
+				if got.UserManager.ReminderService != nil {
+					t.Fatalf("expected user manager reminder service to be omitted")
+				}
+				if got.UserManager.StreakService != nil {
+					t.Fatalf("expected user manager streak service to be omitted")
 				}
 			},
 		},
@@ -450,6 +495,23 @@ func TestNewServices(t *testing.T) {
 				}
 				if got.AccessManager.AuditService != customAuditService {
 					t.Fatalf("expected access manager to receive custom audit service")
+				}
+			},
+		},
+		{
+			name: "Success - custom usermanager reminder service is preserved",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				req.ReminderService = customReminderService
+				return req
+			},
+			assert: func(t *testing.T, got *Services) {
+				t.Helper()
+				if got.Reminder == nil {
+					t.Fatalf("expected starter reminder service to still be created")
+				}
+				if got.UserManager.ReminderService != customReminderService {
+					t.Fatalf("expected user manager to receive custom reminder service")
 				}
 			},
 		},
@@ -1091,6 +1153,14 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 			wantErr: ErrNilRepositories,
 		},
 		{
+			name:   "SUCCESS - nil Reminder",
+			mutate: func(r *Repositories) { r.Reminder = nil },
+		},
+		{
+			name:   "SUCCESS - nil Streaker",
+			mutate: func(r *Repositories) { r.Streaker = nil },
+		},
+		{
 			name:    "FAILURE - nil User",
 			mutate:  func(r *Repositories) { r.User = nil },
 			wantErr: ErrNilRepositories,
@@ -1109,6 +1179,8 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 				Notifier:  fullRepos.Notifier,
 				Post:      fullRepos.Post,
 				Pricer:    fullRepos.Pricer,
+				Reminder:  fullRepos.Reminder,
+				Streaker:  fullRepos.Streaker,
 				User:      fullRepos.User,
 			}
 			if tt.name == "FAILURE - nil repositories" {

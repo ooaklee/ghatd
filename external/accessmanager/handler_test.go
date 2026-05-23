@@ -15,6 +15,7 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/auth"
+	"github.com/ooaklee/ghatd/external/common"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/validator"
 )
@@ -574,6 +575,72 @@ func TestHandler_RefreshToken(t *testing.T) {
 				assert.True(t, hasCookie(cookies, testCookieAuth), "expected auth cookie to be set")
 				assert.True(t, hasCookie(cookies, testCookieRefresh), "expected refresh cookie to be set")
 			}
+		})
+	}
+}
+
+func TestHandler_LogoutUserRedirectsOnlyForWebSurfaces(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		platformHeader string
+		htmxHeader     string
+		expectStatus   int
+		expectLocation string
+	}{
+		{
+			name:           "legacy web platform redirects home",
+			platformHeader: common.PlatformWeb,
+			expectStatus:   http.StatusFound,
+			expectLocation: "/",
+		},
+		{
+			name:           "htmx request redirects home",
+			htmxHeader:     "true",
+			expectStatus:   http.StatusFound,
+			expectLocation: "/",
+		},
+		{
+			name:           "mobile platform receives API accepted response",
+			platformHeader: common.PlatformMobile,
+			expectStatus:   http.StatusAccepted,
+		},
+		{
+			name:           "browser extension platform receives API accepted response",
+			platformHeader: common.PlatformBrowserExtension,
+			expectStatus:   http.StatusAccepted,
+		},
+		{
+			name:           "project-prefixed web platform receives API accepted response",
+			platformHeader: "project-web",
+			expectStatus:   http.StatusAccepted,
+		},
+		{
+			name:           "unknown platform receives API accepted response",
+			platformHeader: "custom-client",
+			expectStatus:   http.StatusAccepted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			h := newTestHandler(&mockAccessmanagerService{})
+			req := httptest.NewRequest(http.MethodGet, "/v1/ams/logout", nil)
+			if tt.platformHeader != "" {
+				req.Header.Set(common.WebPlatformHttpRequestHeader, tt.platformHeader)
+			}
+			if tt.htmxHeader != "" {
+				req.Header.Set(common.HtmxHttpRequestHeader, tt.htmxHeader)
+			}
+			rec := httptest.NewRecorder()
+
+			h.LogoutUser(rec, req)
+
+			assert.Equal(t, tt.expectStatus, rec.Code)
+			assert.Equal(t, tt.expectLocation, rec.Header().Get("Location"))
 		})
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
@@ -88,6 +89,15 @@ type ReminderService interface {
 	GetDueReminders(ctx context.Context, r *reminder.GetDueRemindersRequest) (*reminder.GetDueRemindersResponse, error)
 }
 
+// StreakService expected methods of a valid streaker service.
+type StreakService interface {
+	RecordStreak(ctx context.Context, r *streaker.RecordStreakRequest) (*streaker.RecordStreakResponse, error)
+	GetCurrentCount(ctx context.Context, r *streaker.GetCurrentCountRequest) (*streaker.GetCurrentCountResponse, error)
+	GetLongestStreak(ctx context.Context, r *streaker.GetLongestStreakRequest) (*streaker.GetLongestStreakResponse, error)
+	GetNumberOfStreaks(ctx context.Context, r *streaker.GetNumberOfStreaksRequest) (*streaker.GetNumberOfStreaksResponse, error)
+	ListStreaks(ctx context.Context, r *streaker.ListStreaksRequest) (*streaker.ListStreaksResponse, error)
+}
+
 // NotifierService expected methods of a valid notifier service.
 type NotifierService interface {
 	RegisterAddress(ctx context.Context, r *notifier.RegisterAddressRequest) (*notifier.RegisterAddressResponse, error)
@@ -111,6 +121,7 @@ type Service struct {
 	GroupService     GroupService
 	NotifierService  NotifierService
 	ReminderService  ReminderService
+	StreakService    StreakService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -148,6 +159,12 @@ func (s *Service) WithGroupService(groupSvc GroupService) *Service {
 // WithReminderService adds reminder service integration.
 func (s *Service) WithReminderService(reminderSvc ReminderService) *Service {
 	s.ReminderService = reminderSvc
+	return s
+}
+
+// WithStreakService adds streaker service integration.
+func (s *Service) WithStreakService(streakSvc StreakService) *Service {
+	s.StreakService = streakSvc
 	return s
 }
 

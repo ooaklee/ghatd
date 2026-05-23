@@ -23,7 +23,7 @@ The package uses two MongoDB collections.
 
 | Collection | Purpose |
 |---|---|
-| `reminders` | Stores the reminder declaration: owner, target, title, due time, timezone, status, and task data. |
+| `reminders` | Stores the reminder declaration: owner, target, local target time, timezone, next UTC due time, status, and task data. |
 | `reminder_executions` | Stores processing history: scheduled time, sent/failed/skipped status, attempt number, notification reference, error, and metadata. |
 
 This split keeps reminder configuration separate from delivery history. A user
@@ -34,8 +34,9 @@ Each reminder can include:
 - `user_id`: the owner of the reminder.
 - `target_type`: the kind of thing the reminder relates to.
 - `target_id`: the concrete target object, if applicable.
-- `target_time`: the UTC due time.
-- `timezone`: the user's timezone for local display and admin analysis.
+- `target_time`: the local wall-clock due time, initially `HH:MM`.
+- `timezone`: the user's IANA timezone. Defaults to `UTC` when omitted.
+- `next_due_at`: the UTC timestamp scheduler queries use for the next due occurrence.
 - `status`: `active`, `disabled`, `completed`, or `deleted`.
 - `task_data`: optional structured data for the host application.
 
@@ -55,6 +56,12 @@ if err := reminderMigrations.InitRemindersIndexesUp(db); err != nil {
 }
 ```
 
+With `external/starter/v0`, `starter.NewRepositories` and
+`starter.NewServices` create this repository/service pair for you as
+`Services.Reminder`. Starter attaches it to `Services.UserManager` by default;
+you still run the reminder migrations from the host application's migration
+flow.
+
 ## Creating a Reminder
 
 ```go
@@ -64,7 +71,7 @@ created, err := reminderService.CreateReminder(ctx, &reminder.CreateReminderRequ
     TargetId:    "lesson-123",
     Title:       "Finish your lesson",
     Description: "You planned to complete this today.",
-    TargetTime:  "2026-05-15T18:30:00Z",
+    TargetTime:  "18:30",
     Timezone:    "Europe/London",
     TaskData: map[string]interface{}{
         "url": "/lessons/lesson-123",
@@ -77,8 +84,9 @@ if err != nil {
 _ = created.Reminder.Id
 ```
 
-Store `target_time` in UTC. Keep `timezone` as the user's local timezone so the
-front end and admin tools can show the intended local time.
+Store `target_time` as the user's local wall-clock time and pass an IANA
+`timezone`. GHATD computes `next_due_at` in UTC so schedulers can poll due
+reminders without reimplementing timezone logic.
 
 ## Target-Based Lookups
 
@@ -151,7 +159,7 @@ many users with `UserIDs`.
 
 ```go
 due, err := reminderService.GetDueReminders(ctx, &reminder.GetDueRemindersRequest{
-    DueBefore: "2026-05-15T18:35:00Z",
+    DueBefore: "2026-05-15T18:35:00",
     UserIDs:   []string{"user-123", "user-456"},
     Limit:     100,
 })
@@ -167,7 +175,7 @@ for _, item := range due.Reminders {
         UserID:          item.UserID,
         TargetType:      item.TargetType,
         TargetId:        item.TargetId,
-        ScheduledFor:    item.TargetTime,
+        ScheduledFor:    item.NextDueAt,
         Status:          reminder.ReminderExecutionStatusSent,
         Attempt:         1,
         NotificationRef: "notification-id",

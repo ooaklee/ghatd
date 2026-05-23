@@ -21,3 +21,8 @@ type GetCurrentCountResponse struct {
 type GetNumberOfStreaksResponse struct {
 	Total int64 `json:"total"`
 }
+
+// ListStreaksResponse returns streak entries matching the requested filters.
+type ListStreaksResponse struct {
+	Streaks []*Streak `json:"streaks"`
+}
