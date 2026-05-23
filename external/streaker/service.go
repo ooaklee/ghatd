@@ -33,6 +33,7 @@ type resolvedRecordStreakRequest struct {
 	occurredAt      time.Time
 	periodType      StreakPeriodType
 	periodKey       string
+	periodTimezone  string
 	statsReq        StreakStatsRequest
 }
 
@@ -119,7 +120,12 @@ func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context
 		}
 	}
 
-	periodKey, err := BuildPeriodKey(occurredAt, periodType, req.PeriodKey)
+	periodTimezone, _, err := NormalisePeriodTimezone(req.PeriodTimezone)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	periodKey, err := BuildPeriodKeyForTimezone(occurredAt, periodType, req.PeriodKey, periodTimezone)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -138,6 +144,7 @@ func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context
 		occurredAt:      occurredAt,
 		periodType:      periodType,
 		periodKey:       periodKey,
+		periodTimezone:  periodTimezone,
 		statsReq:        statsReq,
 	}
 
@@ -182,6 +189,7 @@ func (s *Service) createResolvedStreak(ctx context.Context, req *RecordStreakReq
 		TargetId:        resolvedReq.scope.TargetId,
 		PeriodType:      resolvedReq.periodType,
 		PeriodKey:       resolvedReq.periodKey,
+		PeriodTimezone:  resolvedReq.periodTimezone,
 		OccurredAt:      FormatStreakTime(resolvedReq.occurredAt),
 		CurrentCount:    currentCount,
 		CreatedByUserId: resolvedReq.createdByUserId,

@@ -134,9 +134,42 @@ func TestService_CreateReminderSuccess(t *testing.T) {
 	assert.Equal(t, "lesson-1", res.Reminder.TargetId)
 	assert.Equal(t, "Test Reminder", res.Reminder.Title)
 	assert.Equal(t, "2026-05-15T10:00:00.000000000", res.Reminder.TargetTime)
+	assert.Equal(t, "UTC", res.Reminder.Timezone)
+	assert.Equal(t, "2026-05-15T10:00:00", res.Reminder.NextDueAt)
 	assert.Equal(t, reminder.ReminderStatusActive, res.Reminder.Status)
 	assert.NotEmpty(t, res.Reminder.Id)
 	assert.NotEmpty(t, res.Reminder.NanoId)
+}
+
+func TestService_CreateReminderComputesTimezoneAwareNextDueAt(t *testing.T) {
+	t.Parallel()
+
+	var created *reminder.Reminder
+	repo := &mockReminderRepository{
+		createReminderFunc: func(ctx context.Context, r *reminder.Reminder) (*reminder.Reminder, error) {
+			created = r
+			r.Id = "generated-id"
+			r.NanoId = "generated-nano"
+			return r, nil
+		},
+	}
+	svc := reminder.NewService(repo)
+
+	res, err := svc.CreateReminder(context.Background(), &reminder.CreateReminderRequest{
+		UserID:     "user-1",
+		TargetType: "space",
+		TargetId:   "space-1",
+		Title:      "Morning reminder",
+		TargetTime: "09:00",
+		Timezone:   "Europe/London",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, res.Reminder)
+	require.NotNil(t, created)
+	assert.Equal(t, "09:00", created.TargetTime)
+	assert.Equal(t, "Europe/London", created.Timezone)
+	assert.NotEmpty(t, created.NextDueAt)
 }
 
 func TestService_CreateReminderValidatesRequiredFields(t *testing.T) {
@@ -179,6 +212,18 @@ func TestService_CreateReminderValidatesRequiredFields(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, reminder.ErrTargetTimeIsRequired)
+	})
+
+	t.Run("invalid timezone", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.CreateReminder(context.Background(), &reminder.CreateReminderRequest{
+			UserID:     "user-1",
+			Title:      "Test",
+			TargetTime: "09:00",
+			Timezone:   "not-a-zone",
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, reminder.ErrInvalidTimezone)
 	})
 }
 

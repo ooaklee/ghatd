@@ -46,10 +46,12 @@ const (
 	ErrKeyTargetTypeIsRequired = "ReminderTargetTypeIsRequired"
 	// ErrKeyTitleIsRequired is returned when a reminder declaration has no title.
 	ErrKeyTitleIsRequired = "ReminderTitleIsRequired"
-	// ErrKeyTargetTimeIsRequired is returned when a reminder has no scheduled UTC target time.
+	// ErrKeyTargetTimeIsRequired is returned when a reminder has no scheduled target time.
 	ErrKeyTargetTimeIsRequired = "ReminderTargetTimeIsRequired"
 	// ErrKeyInvalidTargetTime is returned when a reminder target time cannot be accepted.
 	ErrKeyInvalidTargetTime = "ReminderInvalidTargetTime"
+	// ErrKeyInvalidTimezone is returned when a reminder timezone cannot be accepted.
+	ErrKeyInvalidTimezone = "ReminderInvalidTimezone"
 	// ErrKeyInvalidStatus is returned when a reminder status is not supported.
 	ErrKeyInvalidStatus = "ReminderInvalidStatus"
 	// ErrKeyResourceNotFound is returned when a reminder or execution record cannot be found.

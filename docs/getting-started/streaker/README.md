@@ -23,7 +23,13 @@ Calling `RecordStreak` more than once for the same scope and period returns the
 existing entry. It does not increment the count again.
 
 For `daily`, `weekly`, and `monthly` periods, Streaker derives `period_key`
-from `occurred_at` in UTC. For `custom`, callers must provide `period_key`.
+from `occurred_at` in `period_timezone`. If no timezone is supplied, Streaker
+uses `UTC` for backward compatibility. For `custom`, callers must provide
+`period_key`.
+
+`period_timezone` must be an IANA timezone such as `Europe/London` or
+`America/New_York`. The effective timezone is stored on each entry for
+debugging and auditability, but it is not part of the uniqueness contract.
 
 ## Setup
 
@@ -62,6 +68,7 @@ res, err := streakService.RecordStreak(ctx, &streaker.RecordStreakRequest{
     TargetType:      "item",
     TargetId:        "daily-save",
     PeriodType:      streaker.StreakPeriodTypeDaily,
+    PeriodTimezone:  "Europe/London",
     CreatedByUserId: userID,
     Metadata: map[string]interface{}{
         "item_id":  itemID,
@@ -126,7 +133,8 @@ best, err := streakService.GetLongestStreak(ctx, &streaker.GetLongestStreakReque
 
 `GetCurrentCount` returns the latest recorded count for the scope. If a host
 application needs "active today" semantics, compare the response period with
-the current period.
+the current local period. Use `BuildPeriodKeyForTimezone` when deriving local
+summary windows.
 
 ## Listing History
 

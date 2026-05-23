@@ -232,7 +232,7 @@ func buildReminderListFilter(req *ReminderFilter) bson.M {
 	}
 
 	if req.DueBefore != "" {
-		queryFilter["target_time"] = bson.M{"$lte": req.DueBefore}
+		queryFilter["next_due_at"] = bson.M{"$lte": req.DueBefore}
 	}
 
 	return queryFilter
@@ -421,7 +421,7 @@ func (r *Repository) CountReminders(ctx context.Context, filter *ReminderFilter)
 	return count, nil
 }
 
-// GetDueReminders returns reminders whose target time is due on or before the supplied UTC timestamp.
+// GetDueReminders returns reminders whose next due time is due on or before the supplied UTC timestamp.
 func (r *Repository) GetDueReminders(ctx context.Context, filter *ReminderFilter, limit int64) ([]*Reminder, error) {
 	collection, err := r.GetReminderCollection(ctx)
 	if err != nil {
@@ -431,7 +431,7 @@ func (r *Repository) GetDueReminders(ctx context.Context, filter *ReminderFilter
 	queryFilter := buildReminderListFilter(filter)
 
 	findOptions := options.Find().
-		SetSort(bson.D{{Key: "target_time", Value: 1}})
+		SetSort(bson.D{{Key: "next_due_at", Value: 1}, {Key: "target_time", Value: 1}})
 
 	if limit > 0 {
 		findOptions.SetLimit(limit)

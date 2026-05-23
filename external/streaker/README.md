@@ -29,7 +29,13 @@ Supported period types are:
 - `custom`
 
 For `daily`, `weekly`, and `monthly`, Streaker derives `period_key` from
-`occurred_at` in UTC. For `custom`, callers must provide `period_key`.
+`occurred_at` in `period_timezone`. If `period_timezone` is omitted, Streaker
+uses `UTC` for backward compatibility. For `custom`, callers must provide
+`period_key`.
+
+`period_timezone` must be an IANA timezone such as `Europe/London` or
+`America/New_York`. Streaker stores the effective timezone on each entry so host
+applications can audit which local boundary created the period key.
 
 ## Service Setup
 
@@ -72,6 +78,7 @@ res, err := svc.RecordStreak(ctx, &streaker.RecordStreakRequest{
     TargetType:      "item",
     TargetId:        "daily-save",
     PeriodType:      streaker.StreakPeriodTypeDaily,
+    PeriodTimezone:  "Europe/London",
     CreatedByUserId: "<user-id>",
     Metadata: map[string]interface{}{
         "item_id":  "<item-id>",
@@ -115,7 +122,9 @@ best, err := svc.GetLongestStreak(ctx, &streaker.GetLongestStreakRequest{
 
 `GetCurrentCount` returns the latest recorded count for the scope. If a host
 application needs "active today" semantics, compare the returned `period_key`
-with today and the immediately preceding period.
+with the current local period and the immediately preceding period. Use
+`BuildPeriodKeyForTimezone` to derive local period keys consistently with
+recording.
 
 ## Listing History
 

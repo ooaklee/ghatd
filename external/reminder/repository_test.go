@@ -171,7 +171,7 @@ func TestBuildReminderListFilter(t *testing.T) {
 
 	t.Run("with due before", func(t *testing.T) {
 		f := buildReminderListFilter(&ReminderFilter{DueBefore: "2026-05-10T12:00:00"})
-		assert.Equal(t, bson.M{"$lte": "2026-05-10T12:00:00"}, f["target_time"])
+		assert.Equal(t, bson.M{"$lte": "2026-05-10T12:00:00"}, f["next_due_at"])
 	})
 
 	t.Run("with user and status", func(t *testing.T) {

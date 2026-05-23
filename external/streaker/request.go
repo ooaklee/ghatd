@@ -10,7 +10,9 @@ type RecordStreakRequest struct {
 
 	PeriodType StreakPeriodType `json:"period_type,omitempty"`
 	PeriodKey  string           `json:"period_key,omitempty"`
-	OccurredAt string           `json:"occurred_at,omitempty"`
+	// PeriodTimezone is the IANA timezone used to derive daily, weekly, and monthly period keys.
+	PeriodTimezone string `json:"period_timezone,omitempty"`
+	OccurredAt     string `json:"occurred_at,omitempty"`
 
 	CreatedByUserId string                 `json:"created_by_user_id" validate:"required"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`

@@ -100,8 +100,42 @@ func TestService_RecordStreakCreatesFirstEntry(t *testing.T) {
 	assert.Equal(t, "app", created.TargetType)
 	assert.Equal(t, streaker.StreakPeriodTypeDaily, created.PeriodType)
 	assert.Equal(t, "2026-05-08", created.PeriodKey)
+	assert.Equal(t, "UTC", created.PeriodTimezone)
 	assert.Equal(t, 1, created.CurrentCount)
 	assert.Nil(t, created.Previous)
+}
+
+func TestService_RecordStreakUsesPeriodTimezone(t *testing.T) {
+	t.Parallel()
+
+	var created *streaker.Streak
+	repo := &mockStreakRepository{
+		getStreakByScopeAndPeriodFunc: func(ctx context.Context, req *streaker.GetLatestStreakRequest) (*streaker.Streak, error) {
+			assert.Equal(t, "2026-05-23", req.PeriodKey)
+			return nil, streaker.ErrResourceNotFound
+		},
+		createStreakFunc: func(ctx context.Context, st *streaker.Streak) (*streaker.Streak, error) {
+			created = st
+			return st, nil
+		},
+	}
+	svc := streaker.NewService(repo)
+
+	res, err := svc.RecordStreak(context.Background(), &streaker.RecordStreakRequest{
+		StreakType:      "app streak",
+		OwnerId:         "user-1",
+		TargetType:      "app",
+		TargetId:        "platform",
+		OccurredAt:      "2026-05-22T23:31:00",
+		PeriodTimezone:  "Europe/London",
+		CreatedByUserId: "user-1",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, res.Streak)
+	require.NotNil(t, created)
+	assert.Equal(t, "2026-05-23", created.PeriodKey)
+	assert.Equal(t, "Europe/London", created.PeriodTimezone)
 }
 
 func TestService_RecordStreakIncrementsConsecutiveEntry(t *testing.T) {
