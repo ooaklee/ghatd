@@ -264,7 +264,7 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 	// More information can be found here: https://github.com/victorspringer/http-cache?tab=readme-ov-file#getting-started
 	memcachedCacheAdapter, err := memory.NewAdapter(
 		memory.AdapterWithAlgorithm(memory.LRU),
-		memory.AdapterWithCapacity(10000000),
+		memory.AdapterWithCapacity(10000),
 	)
 	if err != nil {
 		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-adapter: %v", err)
