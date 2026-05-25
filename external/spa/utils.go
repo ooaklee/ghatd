@@ -13,6 +13,7 @@ type PathOption func(*PathUpdateOptions)
 // PathUpdateOptions defines options for NewHandleUpdatePathToIndex.
 type PathUpdateOptions struct {
 	bypassFileExtensions map[string]struct{}
+	bypassFileNames      map[string]struct{}
 }
 
 // DefaultBypassExtensions defines the default file extensions that bypass SPA index rewriting.
@@ -20,12 +21,13 @@ var DefaultBypassExtensions = []string{".js", ".css", ".png", ".jpg", ".jpeg", "
 
 // DefaultPathUpdateOptions returns the default options for NewHandleUpdatePathToIndex
 func DefaultPathUpdateOptions() *PathUpdateOptions {
-
-	result := &PathUpdateOptions{bypassFileExtensions: map[string]struct{}{}}
+	result := &PathUpdateOptions{
+		bypassFileExtensions: map[string]struct{}{},
+		bypassFileNames:      map[string]struct{}{},
+	}
 	for _, extension := range DefaultBypassExtensions {
 		result.bypassFileExtensions[extension] = struct{}{}
 	}
-
 	return result
 }
 
@@ -67,6 +69,33 @@ func IgnoreFileExtension(fileExtension string) PathOption {
 	}
 }
 
+func normaliseFileName(fileName string) string {
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		return ""
+	}
+
+	fileName = path.Base(fileName)
+	if fileName == "." || fileName == "/" {
+		return ""
+	}
+
+	return fileName
+}
+
+// BypassWithFileName allows a file name to bypass SPA index rewriting.
+// It matches against the URL path filename segment only, not the full route path.
+func BypassWithFileName(fileName string) PathOption {
+	normalisedFileName := normaliseFileName(fileName)
+
+	return func(options *PathUpdateOptions) {
+		if normalisedFileName == "" {
+			return
+		}
+		options.bypassFileNames[normalisedFileName] = struct{}{}
+	}
+}
+
 // IgnoreDefaultFileExtensions removes all default bypass extensions from the
 // path update options.
 //
@@ -90,7 +119,8 @@ func IgnoreDefaultFileExtensions() PathOption {
 // By default, common static file extensions are bypassed so those requests are
 // not rewritten to "/". Additional rules can be added with PathOption, for
 // example BypassWithFileExtension("webp") to allow an extension through
-// or IgnoreFileExtension("js") to force rewriting that extension to "/".
+// or BypassWithFileName("beacon-example.html") to allow one specific file
+// through without bypassing every file with the same extension.
 //
 // Option order matters for default extensions:
 //
@@ -103,6 +133,9 @@ func NewHandleUpdatePathToIndex(options ...PathOption) func(r *http.Request) *ht
 	}
 
 	return func(r *http.Request) *http.Request {
+		if _, fileNameBypass := pathOptions.bypassFileNames[path.Base(r.URL.Path)]; fileNameBypass {
+			return r
+		}
 		if _, exists := pathOptions.bypassFileExtensions[path.Ext(r.URL.Path)]; !exists {
 			r.URL.Path = "/"
 		}

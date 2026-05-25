@@ -108,6 +108,48 @@ func TestBootstrapAttachRoutesServesWebManifest(t *testing.T) {
 	}
 }
 
+func TestBootstrapAttachRoutesServesBypassedFileName(t *testing.T) {
+	bootstrap, err := NewBootstrap(&BootstrapRequest{
+		EmbeddedContent: fstest.MapFS{
+			"dist/index.html":           {Data: []byte("<h1>index</h1>")},
+			"dist/beacon-example.html":  {Data: []byte("<h1>beacon</h1>")},
+			"dist/another-example.html": {Data: []byte("<h1>another</h1>")},
+		},
+		HandleUpdatePathToIndexFunc: NewHandleUpdatePathToIndex(
+			BypassWithFileName("beacon-example.html"),
+		),
+	})
+	if err != nil {
+		t.Fatalf("NewBootstrap() error = %v", err)
+	}
+
+	if err := bootstrap.AttachRoutes(); err != nil {
+		t.Fatalf("AttachRoutes() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/beacon-example.html", nil)
+	rec := httptest.NewRecorder()
+
+	bootstrap.Router.GetRouter().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); body != "<h1>beacon</h1>" {
+		t.Fatalf("body = %q, want beacon body", body)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/another-example.html", nil)
+	rec = httptest.NewRecorder()
+
+	bootstrap.Router.GetRouter().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); body != "<h1>index</h1>" {
+		t.Fatalf("body = %q, want index body", body)
+	}
+}
+
 func TestBootstrapAttachRoutesErrors(t *testing.T) {
 	tests := []struct {
 		name    string

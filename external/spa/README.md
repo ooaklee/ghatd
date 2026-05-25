@@ -64,10 +64,17 @@ customHandleUpdatePath := spa.NewHandleUpdatePathToIndex(
 	spa.BypassWithFileExtension(".webp"),
 	spa.IgnoreFileExtension("txt"),
 )
+
+// Bypass specific files by name. The match is against the path filename segment, not the full route.
+// This is independent of extension bypass rules.
+beaconHandleUpdatePath := spa.NewHandleUpdatePathToIndex(
+	spa.BypassWithFileName("beacon-loader.js"),
+	spa.BypassWithFileName("beacon-example.html"),
+)
 ```
 
 ### How it works
 
-- `NewHandleUpdatePathToIndex` builds a function that rewrites request paths to `/` unless the URL has a bypassed extension (defaults include `.js`, `.css`, images, fonts, etc.). This keeps SPA deep links working while letting static assets be served directly.
+- `NewHandleUpdatePathToIndex` builds a function that rewrites request paths to `/` unless the URL has a bypassed extension (defaults include `.js`, `.css`, images, fonts, etc.) or a bypassed filename. This keeps SPA deep links working while letting static assets be served directly.
 - `NewSpaHandler` uses that function inside `GetResourceNotFoundError` to serve the embedded `/dist/index.html` for non-API 404s.
 - `AttachRoutes` wires the same updater into a catch-all route so browser requests without a known asset extension are rewritten and served by the SPA bundle.

@@ -26,3 +26,52 @@ func TestNewHandleUpdatePathToIndexRewritesSpaRoute(t *testing.T) {
 		t.Fatalf("path = %q, want /", got.URL.Path)
 	}
 }
+
+func TestNewHandleUpdatePathToIndexBypassesNamedFileButRewritesOtherHtml(t *testing.T) {
+	updatePath := NewHandleUpdatePathToIndex(
+		BypassWithFileName("beacon-example.html"),
+	)
+
+	beaconReq := httptest.NewRequest("GET", "/beacon-example.html", nil)
+	beaconGot := updatePath(beaconReq)
+	if beaconGot.URL.Path != "/beacon-example.html" {
+		t.Fatalf("path = %q, want /beacon-example.html", beaconGot.URL.Path)
+	}
+
+	anotherReq := httptest.NewRequest("GET", "/another.html", nil)
+	anotherGot := updatePath(anotherReq)
+	if anotherGot.URL.Path != "/" {
+		t.Fatalf("path = %q, want /", anotherGot.URL.Path)
+	}
+}
+
+func TestNewHandleUpdatePathToIndexBypassesNamedFileFromNestedRoute(t *testing.T) {
+	updatePath := NewHandleUpdatePathToIndex(
+		BypassWithFileName("/public/beacon-example.html"),
+	)
+
+	req := httptest.NewRequest("GET", "/nested/beacon-example.html", nil)
+	got := updatePath(req)
+	if got.URL.Path != "/nested/beacon-example.html" {
+		t.Fatalf("path = %q, want /nested/beacon-example.html", got.URL.Path)
+	}
+}
+
+func TestNewHandleUpdatePathToIndexFileNameBypassesWhenExtensionIgnored(t *testing.T) {
+	updatePath := NewHandleUpdatePathToIndex(
+		IgnoreFileExtension(".js"),
+		BypassWithFileName("beacon-loader.js"),
+	)
+
+	loaderReq := httptest.NewRequest("GET", "/beacon-loader.js", nil)
+	loaderGot := updatePath(loaderReq)
+	if loaderGot.URL.Path != "/beacon-loader.js" {
+		t.Fatalf("path = %q, want /beacon-loader.js", loaderGot.URL.Path)
+	}
+
+	otherJsReq := httptest.NewRequest("GET", "/other.js", nil)
+	otherJsGot := updatePath(otherJsReq)
+	if otherJsGot.URL.Path != "/" {
+		t.Fatalf("path = %q, want /", otherJsGot.URL.Path)
+	}
+}
