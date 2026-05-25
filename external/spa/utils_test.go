@@ -75,3 +75,41 @@ func TestNewHandleUpdatePathToIndexFileNameBypassesWhenExtensionIgnored(t *testi
 		t.Fatalf("path = %q, want /", otherJsGot.URL.Path)
 	}
 }
+
+func TestNewHandleUpdatePathToIndexIgnoreFileNameRewritesNamedFile(t *testing.T) {
+	updatePath := NewHandleUpdatePathToIndex(
+		BypassWithFileName("beacon-example.html"),
+		IgnoreFileName("beacon-example.html"),
+	)
+
+	req := httptest.NewRequest("GET", "/beacon-example.html", nil)
+	got := updatePath(req)
+	if got.URL.Path != "/" {
+		t.Fatalf("path = %q, want /", got.URL.Path)
+	}
+}
+
+func TestNewHandleUpdatePathToIndexIgnoreFileNameOverridesExtensionBypass(t *testing.T) {
+	updatePath := NewHandleUpdatePathToIndex(
+		IgnoreFileName("beacon-loader.js"),
+	)
+
+	req := httptest.NewRequest("GET", "/beacon-loader.js", nil)
+	got := updatePath(req)
+	if got.URL.Path != "/" {
+		t.Fatalf("path = %q, want /", got.URL.Path)
+	}
+}
+
+func TestNewHandleUpdatePathToIndexLaterBypassFileNameOverridesIgnoreFileName(t *testing.T) {
+	updatePath := NewHandleUpdatePathToIndex(
+		IgnoreFileName("beacon-loader.js"),
+		BypassWithFileName("beacon-loader.js"),
+	)
+
+	req := httptest.NewRequest("GET", "/beacon-loader.js", nil)
+	got := updatePath(req)
+	if got.URL.Path != "/beacon-loader.js" {
+		t.Fatalf("path = %q, want /beacon-loader.js", got.URL.Path)
+	}
+}
