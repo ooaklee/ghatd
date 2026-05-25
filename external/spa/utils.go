@@ -71,6 +71,7 @@ func IgnoreFileExtension(fileExtension string) PathOption {
 	}
 }
 
+// normaliseFileName trims file name input and keeps only the final path segment.
 func normaliseFileName(fileName string) string {
 	fileName = strings.TrimSpace(fileName)
 	if fileName == "" {
