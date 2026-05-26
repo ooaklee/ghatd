@@ -12,7 +12,7 @@ const (
 	expiredHTTPDate           = "Thu, 01 Jan 1970 00:00:00 GMT"
 )
 
-// applyStaticAssetCachePolicy sets cache headers for SPA assets that must be revalidated.
+// applyStaticAssetCachePolicy sets cache headers for service-worker scripts that must be revalidated.
 func applyStaticAssetCachePolicy(w http.ResponseWriter, r *http.Request) {
 	if !isRootServiceWorkerRequest(r) {
 		return
