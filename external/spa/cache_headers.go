@@ -1,0 +1,33 @@
+package spa
+
+import (
+	"net/http"
+	"path"
+	"strings"
+)
+
+const (
+	serviceWorkerFileName     = "service-worker.js"
+	serviceWorkerCacheControl = "no-cache, no-store, must-revalidate"
+)
+
+// applyStaticAssetCachePolicy sets cache headers for SPA assets that must be revalidated.
+func applyStaticAssetCachePolicy(w http.ResponseWriter, r *http.Request) {
+	if !isRootServiceWorkerRequest(r) {
+		return
+	}
+
+	w.Header().Set("Cache-Control", serviceWorkerCacheControl)
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+}
+
+// isRootServiceWorkerRequest reports whether the request targets the root service-worker script.
+func isRootServiceWorkerRequest(r *http.Request) bool {
+	if r == nil || r.URL == nil {
+		return false
+	}
+
+	requestPath := path.Clean("/" + strings.TrimLeft(r.URL.Path, "/"))
+	return requestPath == "/"+serviceWorkerFileName
+}

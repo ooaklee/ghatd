@@ -60,6 +60,7 @@ func (h *Handler) GetResourceNotFoundError(w http.ResponseWriter, r *http.Reques
 
 	// Reset the request URL path to the root ("/") to
 	// serve the default index page for non-existent resources
+	applyStaticAssetCachePolicy(w, r)
 	r = h.spaUpdatePathToIndexFunc(r)
 
 	http.FileServer(http.FS(distDirFS)).ServeHTTP(w, r)

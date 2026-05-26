@@ -150,6 +150,76 @@ func TestBootstrapAttachRoutesServesBypassedFileName(t *testing.T) {
 	}
 }
 
+func TestBootstrapAttachRoutesServesServiceWorkerWithNoCacheHeaders(t *testing.T) {
+	bootstrap, err := NewBootstrap(&BootstrapRequest{
+		EmbeddedContent: fstest.MapFS{
+			"dist/index.html":        {Data: []byte("<h1>hello</h1>")},
+			"dist/service-worker.js": {Data: []byte("self.addEventListener('install', () => {})")},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewBootstrap() error = %v", err)
+	}
+
+	if err := bootstrap.AttachRoutes(); err != nil {
+		t.Fatalf("AttachRoutes() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/service-worker.js", nil)
+	rec := httptest.NewRecorder()
+
+	bootstrap.Router.GetRouter().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if body := rec.Body.String(); body != "self.addEventListener('install', () => {})" {
+		t.Fatalf("body = %q, want service worker body", body)
+	}
+	if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != serviceWorkerCacheControl {
+		t.Fatalf("Cache-Control = %q, want %q", cacheControl, serviceWorkerCacheControl)
+	}
+	if pragma := rec.Header().Get("Pragma"); pragma != "no-cache" {
+		t.Fatalf("Pragma = %q, want no-cache", pragma)
+	}
+	if expires := rec.Header().Get("Expires"); expires != "0" {
+		t.Fatalf("Expires = %q, want 0", expires)
+	}
+}
+
+func TestBootstrapAttachRoutesDoesNotSetNoCacheHeadersForOrdinaryAssets(t *testing.T) {
+	bootstrap, err := NewBootstrap(&BootstrapRequest{
+		EmbeddedContent: fstest.MapFS{
+			"dist/index.html":       {Data: []byte("<h1>hello</h1>")},
+			"dist/assets/app.js":    {Data: []byte("console.log('hello')")},
+			"dist/assets/app.css":   {Data: []byte("body{}")},
+			"dist/site.webmanifest": {Data: []byte(`{"name":"Example"}`)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewBootstrap() error = %v", err)
+	}
+
+	if err := bootstrap.AttachRoutes(); err != nil {
+		t.Fatalf("AttachRoutes() error = %v", err)
+	}
+
+	for _, targetPath := range []string{"/assets/app.js", "/assets/app.css", "/site.webmanifest"} {
+		req := httptest.NewRequest(http.MethodGet, targetPath, nil)
+		rec := httptest.NewRecorder()
+
+		bootstrap.Router.GetRouter().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d", targetPath, rec.Code, http.StatusOK)
+		}
+		if cacheControl := rec.Header().Get("Cache-Control"); cacheControl != "" {
+			t.Fatalf("%s Cache-Control = %q, want empty", targetPath, cacheControl)
+		}
+		if pragma := rec.Header().Get("Pragma"); pragma != "" {
+			t.Fatalf("%s Pragma = %q, want empty", targetPath, pragma)
+		}
+	}
+}
+
 func TestBootstrapAttachRoutesErrors(t *testing.T) {
 	tests := []struct {
 		name    string
