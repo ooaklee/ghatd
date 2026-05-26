@@ -76,6 +76,7 @@ func AttachRoutes(request *AttachRoutesRequest) error {
 			// if the r.URL.Path does not have a suffix such as .js,
 			// .css, .png, .jpg, .jpeg, .gif, .svg, or .ico then we
 			// should update path to go to /
+			applyStaticAssetCachePolicy(w, r)
 			r = handleUpdatePathToIndexFunc(r)
 
 			fileServer.ServeHTTP(w, r)
