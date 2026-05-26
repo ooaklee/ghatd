@@ -9,6 +9,7 @@ import (
 const (
 	serviceWorkerFileName     = "service-worker.js"
 	serviceWorkerCacheControl = "no-cache, no-store, must-revalidate"
+	expiredHTTPDate           = "Thu, 01 Jan 1970 00:00:00 GMT"
 )
 
 // applyStaticAssetCachePolicy sets cache headers for SPA assets that must be revalidated.
@@ -19,7 +20,7 @@ func applyStaticAssetCachePolicy(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", serviceWorkerCacheControl)
 	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
+	w.Header().Set("Expires", expiredHTTPDate)
 }
 
 // isRootServiceWorkerRequest reports whether the request targets the root service-worker script.

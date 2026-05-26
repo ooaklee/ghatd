@@ -181,8 +181,8 @@ func TestBootstrapAttachRoutesServesServiceWorkerWithNoCacheHeaders(t *testing.T
 	if pragma := rec.Header().Get("Pragma"); pragma != "no-cache" {
 		t.Fatalf("Pragma = %q, want no-cache", pragma)
 	}
-	if expires := rec.Header().Get("Expires"); expires != "0" {
-		t.Fatalf("Expires = %q, want 0", expires)
+	if expires := rec.Header().Get("Expires"); expires != expiredHTTPDate {
+		t.Fatalf("Expires = %q, want %q", expires, expiredHTTPDate)
 	}
 }
 
@@ -216,6 +216,9 @@ func TestBootstrapAttachRoutesDoesNotSetNoCacheHeadersForOrdinaryAssets(t *testi
 		}
 		if pragma := rec.Header().Get("Pragma"); pragma != "" {
 			t.Fatalf("%s Pragma = %q, want empty", targetPath, pragma)
+		}
+		if expires := rec.Header().Get("Expires"); expires != "" {
+			t.Fatalf("%s Expires = %q, want empty", targetPath, expires)
 		}
 	}
 }
