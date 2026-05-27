@@ -2,7 +2,6 @@ package emailprovider
 
 import (
 	"context"
-	"strings"
 
 	sp "github.com/SparkPost/gosparkpost"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -31,11 +30,11 @@ func NewSparkPostEmailProvider(client SparkPostClient) *SparkPostEmailProvider {
 // Send handles sending an email via SparkPost
 func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendResult, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/emailprovider", "sparkpost-send")
-	logger.Info("sparkpost-email-send-started", sparkPostEmailLogFields(p.Name(), email)...)
+	logger.Info("sparkpost-email-send-started", emailLogFields(p.Name(), email)...)
 
 	// Validate email
 	if err := validateEmail(email); err != nil {
-		logger.Warn("sparkpost-email-validation-failed", append(sparkPostEmailLogFields(p.Name(), email), zap.Error(err))...)
+		logger.Warn("sparkpost-email-validation-failed", append(emailLogFields(p.Name(), email), zap.Error(err))...)
 		return &SendResult{
 			Provider: p.Name(),
 			Success:  false,
@@ -57,7 +56,7 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 	// Send via SparkPost
 	messageID, _, err := p.client.Send(transmission)
 	if err != nil {
-		logger.Error("sparkpost-email-send-failed", append(sparkPostEmailLogFields(p.Name(), email), zap.Error(err))...)
+		logger.Error("sparkpost-email-send-failed", append(emailLogFields(p.Name(), email), zap.Error(err))...)
 		return &SendResult{
 			Provider: p.Name(),
 			Success:  false,
@@ -65,7 +64,7 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 		}, ErrEmailProviderSendFailed
 	}
 
-	logger.Info("sparkpost-email-sent", append(sparkPostEmailLogFields(p.Name(), email), zap.String("message-id", messageID))...)
+	logger.Info("sparkpost-email-sent", append(emailLogFields(p.Name(), email), zap.String("message-id", messageID))...)
 	return &SendResult{
 		MessageID: messageID,
 		Provider:  p.Name(),
@@ -103,30 +102,4 @@ func validateEmail(email *Email) error {
 		return ErrEmailProviderMissingBody
 	}
 	return nil
-}
-
-func sparkPostEmailLogFields(provider string, email *Email) []zap.Field {
-	fields := []zap.Field{
-		zap.String("provider", provider),
-	}
-	if email == nil {
-		return append(fields, zap.Bool("email-present", false))
-	}
-
-	return append(fields,
-		zap.Bool("email-present", true),
-		zap.String("recipient-domain", emailDomainForLog(email.To)),
-		zap.String("sender-domain", emailDomainForLog(email.From)),
-		zap.Bool("has-reply-to", strings.TrimSpace(email.ReplyTo) != ""),
-		zap.Bool("has-html-body", strings.TrimSpace(email.HTMLBody) != ""),
-		zap.Bool("has-text-body", strings.TrimSpace(email.TextBody) != ""),
-	)
-}
-
-func emailDomainForLog(value string) string {
-	parts := strings.Split(strings.TrimSpace(value), "@")
-	if len(parts) != 2 {
-		return ""
-	}
-	return strings.ToLower(parts[1])
 }

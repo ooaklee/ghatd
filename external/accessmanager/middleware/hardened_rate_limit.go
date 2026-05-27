@@ -110,7 +110,8 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 			if err != nil {
 				logger.Warn("rate-limit-exceeded-blocking-ip",
 					zap.String("client-ip", clientIP),
-					zap.String("code", code),
+					zap.Bool("code-present", code != ""),
+					zap.Int("code-length", len(code)),
 					zap.Int("max-attempts", h.maxAttempts),
 					zap.Error(err),
 				)
@@ -129,7 +130,8 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 
 			logger.Info("verification-attempt",
 				zap.String("client-ip", clientIP),
-				zap.String("code", code),
+				zap.Bool("code-present", code != ""),
+				zap.Int("code-length", len(code)),
 			)
 
 			next.ServeHTTP(w, r)

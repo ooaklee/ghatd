@@ -545,7 +545,8 @@ func (s *Service) AssociateSubscriptionsWithUser(ctx context.Context, req *Assoc
 
 	logger.Info("associate-subscriptions-with-user-request-successful",
 		zap.String("user-id", req.UserID),
-		zap.String("email", req.Email),
+		zap.Bool("email-present", emailPresentForLog(req.Email)),
+		zap.String("email-domain", emailDomainForLog(req.Email)),
 		zap.Int("associated-count", count))
 
 	return &AssociateSubscriptionsWithUserResponse{
@@ -573,7 +574,8 @@ func (s *Service) AssociateBillingEventsWithUser(ctx context.Context, req *Assoc
 
 	logger.Info("associate-billing-events-with-user-request-successful",
 		zap.String("user-id", req.UserID),
-		zap.String("email", req.Email),
+		zap.Bool("email-present", emailPresentForLog(req.Email)),
+		zap.String("email-domain", emailDomainForLog(req.Email)),
 		zap.Int("associated-count", count))
 
 	return &AssociateBillingEventsWithUserResponse{

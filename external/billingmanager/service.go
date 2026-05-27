@@ -308,7 +308,11 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 		if err == nil {
 			emailSubsResp, _ := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: userResp.User.Email})
 			if len(emailSubsResp.Subscriptions) > 0 {
-				logger.Info("found-email-based-subscription-associating-with-user", append(logFields, zap.String("email", userResp.User.Email), zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)))...)
+				logger.Info("found-email-based-subscription-associating-with-user", append(logFields,
+					zap.Bool("email-present", emailPresentForLog(userResp.User.Email)),
+					zap.String("email-domain", emailDomainForLog(userResp.User.Email)),
+					zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)),
+				)...)
 				// Associate found subscriptions with user
 				_, _ = s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
 					UserID: req.UserID,
@@ -537,7 +541,11 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 	if s.UserService != nil && payload.CustomerEmail != "" {
 		userResp, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: payload.CustomerEmail})
 		if err == nil {
-			logger.Info("found-user-id-falling-back-to-payload-email", zap.String("user-id", userResp.User.GetUserId()), zap.String("payload-email", payload.CustomerEmail))
+			logger.Info("found-user-id-falling-back-to-payload-email",
+				zap.String("user-id", userResp.User.GetUserId()),
+				zap.Bool("payload-email-present", emailPresentForLog(payload.CustomerEmail)),
+				zap.String("payload-email-domain", emailDomainForLog(payload.CustomerEmail)),
+			)
 			return userResp.User.GetUserId(), nil
 		}
 	}
@@ -548,7 +556,10 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 		return "", ErrBillingManagerNoUserIdentifyingInformationInPayload
 	}
 
-	logger.Info("no-user-found-will-store-subscription-with-email-only", zap.String("email", payload.CustomerEmail))
+	logger.Info("no-user-found-will-store-subscription-with-email-only",
+		zap.Bool("email-present", emailPresentForLog(payload.CustomerEmail)),
+		zap.String("email-domain", emailDomainForLog(payload.CustomerEmail)),
+	)
 
 	return "", nil
 }
@@ -594,7 +605,8 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 	logFields := []zap.Field{
 		zap.String("provider", providerName),
 		zap.String("subscription-id", payload.SubscriptionID),
-		zap.String("email", payload.CustomerEmail),
+		zap.Bool("email-present", emailPresentForLog(payload.CustomerEmail)),
+		zap.String("email-domain", emailDomainForLog(payload.CustomerEmail)),
 	}
 
 	// Add user-id to logs if present, otherwise note it's email-only

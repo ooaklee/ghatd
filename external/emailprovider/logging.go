@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/ooaklee/ghatd/external/logger"
-	"go.uber.org/zap"
 )
 
 // LoggingEmailProviderConfig holds configuration for the logging email provider
 type LoggingEmailProviderConfig struct {
-	// DisableFullHtmlBodyPreview determines if the HTML body preview should be truncated
+	// DisableFullHtmlBodyPreview is retained for compatibility.
+	// Email bodies are never written to logs.
 	DisableFullHtmlBodyPreview bool
 }
 
@@ -43,19 +43,7 @@ func (p *LoggingEmailProvider) Send(ctx context.Context, email *Email) (*SendRes
 	// Get logger from context
 	logger := logger.AcquirePackageFrom(ctx, "external/emailprovider")
 
-	// Log the email details
-	var logFields []zap.Field = []zap.Field{
-		zap.String("provider", p.Name()),
-		zap.String("to", email.To),
-		zap.String("from", email.From),
-		zap.String("subject", email.Subject),
-	}
-
-	if p.config == nil || p.config.DisableFullHtmlBodyPreview {
-		logFields = append(logFields, zap.String("html_body_preview", truncateString(email.HTMLBody, 200)))
-	} else {
-		logFields = append(logFields, zap.String("html_body_preview", email.HTMLBody))
-	}
+	logFields := emailLogFields(p.Name(), email)
 
 	logger.Info("email-outputted-locally--not-sent",
 		logFields...,
@@ -81,14 +69,6 @@ func (p *LoggingEmailProvider) Name() string {
 // The Logging email provider is always healthy
 func (p *LoggingEmailProvider) IsHealthy(ctx context.Context) bool {
 	return true
-}
-
-// truncateString truncates a string to the specified length
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 // generateRandomID generates a simple random ID for local message IDs

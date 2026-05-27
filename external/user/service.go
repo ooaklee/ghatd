@@ -221,7 +221,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		boasiEmailRegex := regexp.MustCompile(s.autoAdminEmailAddressRegex)
 		isAutoAdminEmail = boasiEmailRegex.Match([]byte(user.Email))
 		if isAutoAdminEmail {
-			logger.Info("assigning-admin-role-to-user-role", zap.String("team-member-email", user.Email))
+			logger.Info("assigning-admin-role-to-user-role", emailLogFields("team-member-email", user.Email)...)
 			user.Roles = append(user.Roles, UserRoleAdmin)
 		}
 	}
@@ -232,7 +232,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 	}
 
 	if s.autoAdminEmailAddressRegex != "" && isAutoAdminEmail {
-		logger.Warn("user-created-with-admin-role", zap.String("team-member-email", user.Email), zap.String("user-id", user.ID))
+		logger.Warn("user-created-with-admin-role", append(emailLogFields("team-member-email", user.Email), zap.String("user-id", user.ID))...)
 	}
 
 	return &CreateUserResponse{

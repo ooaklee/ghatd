@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+
+	"github.com/ooaklee/ghatd/external/logger"
 )
 
 // Provider defines the interface that all payment providers must implement
@@ -34,4 +36,12 @@ func endpointHostForLog(endpoint string) string {
 		return ""
 	}
 	return parsed.Host
+}
+
+func emailPresentForLog(value string) bool {
+	return logger.EmailPresentForLog(value)
+}
+
+func emailDomainForLog(value string) string {
+	return logger.EmailDomainForLog(value)
 }

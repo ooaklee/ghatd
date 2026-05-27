@@ -152,7 +152,8 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 	logger.Debug("parsed-kofi-webhook-payload",
 		zap.String("event-type", eventType),
 		zap.String("payment-type", paymentType),
-		zap.String("email", payload.Email),
+		zap.Bool("email-present", emailPresentForLog(payload.Email)),
+		zap.String("email-domain", emailDomainForLog(payload.Email)),
 		zap.Int64("amount", amount),
 		zap.String("currency", payload.Currency),
 		zap.Bool("is-one-off", isOneOff))

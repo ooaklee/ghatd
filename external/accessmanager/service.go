@@ -467,7 +467,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 
 			decoded64RequestUrl, err := base64.StdEncoding.DecodeString(splitProtectionStateTokenCookieValue[1])
 			if err != nil {
-				logger.Warn("failed-to-decode-detected-request-url-uri-for-sso-callback", zap.String("encoded-request-url", splitProtectionStateTokenCookieValue[1]))
+				logger.Warn("failed-to-decode-detected-request-url-uri-for-sso-callback", requestURLLogFields(splitProtectionStateTokenCookieValue[1])...)
 			}
 
 			if err == nil && string(decoded64RequestUrl) != "" {
@@ -566,7 +566,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 				Email:                    providerUserInfo.GetUserEmail(),
 			})
 			if err != nil {
-				logger.Error("provider-signup-user-creation-failed-after-successful-login-initiation", zap.String("user-email:", providerUserInfo.GetUserEmail()))
+				logger.Error("provider-signup-user-creation-failed-after-successful-login-initiation", append(emailLogFields("user-email", providerUserInfo.GetUserEmail()), zap.Error(err))...)
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
@@ -1174,13 +1174,13 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	if response, err := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); err != nil {
 		return nil, err
 	} else if response != nil {
-		logger.Info("refresh-token-rotation-replayed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		logger.Info("refresh-token-rotation-replayed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 		return response, nil
 	}
 
 	lockAcquired, err := s.EphemeralStore.AcquireRefreshTokenRotationLock(ctx, userID, refreshTokenUuid, refreshTokenRotationLockTTL)
 	if err != nil {
-		logger.Error("refresh-token-rotation-lock-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+		logger.Error("refresh-token-rotation-lock-failed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(err))
 		return nil, err
 	}
 	if !lockAcquired {
@@ -1189,16 +1189,16 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 			return nil, waitErr
 		}
 		if response != nil {
-			logger.Info("refresh-token-rotation-replayed-after-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			logger.Info("refresh-token-rotation-replayed-after-wait", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 			return response, nil
 		}
 
-		logger.Error("refresh-token-rotation-lock-timeout-without-result", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		logger.Error("refresh-token-rotation-lock-timeout-without-result", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 	defer func() {
 		if _, releaseErr := s.EphemeralStore.ReleaseRefreshTokenRotationLock(ctx, userID, refreshTokenUuid); releaseErr != nil {
-			logger.Warn("refresh-token-rotation-lock-release-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(releaseErr))
+			logger.Warn("refresh-token-rotation-lock-release-failed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(releaseErr))
 		}
 	}()
 
@@ -1208,7 +1208,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		if response, replayErr := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); replayErr != nil {
 			return nil, replayErr
 		} else if response != nil {
-			logger.Info("refresh-token-rotation-replayed-after-delete-miss", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			logger.Info("refresh-token-rotation-replayed-after-delete-miss", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 			return response, nil
 		}
 
@@ -1216,18 +1216,18 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
-	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 
 	// check if access token is present and clean up along with it
 	if r.AccessToken != "" {
 
-		logger.Info("access-token-present-in-refresh-token-request", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		logger.Info("access-token-present-in-refresh-token-request", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 
 		err := s.RemoveAccessTokenWithCookieValue(ctx, userID, r.AccessToken)
 		if err != nil {
 			logger.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.Error(err))
 		} else {
-			logger.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			logger.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
 		}
 
 	}
@@ -1253,7 +1253,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
 	}
 	if err := s.EphemeralStore.StoreRefreshTokenRotationResult(ctx, userID, refreshTokenUuid, rotationResult, refreshTokenRotationReplayTTL); err != nil {
-		logger.Warn("refresh-token-rotation-result-store-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+		logger.Warn("refresh-token-rotation-result-store-failed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(err))
 	}
 
 	return &RefreshTokenResponse{
@@ -1300,7 +1300,7 @@ func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userI
 		}
 		if err != nil {
 			lastErr = err
-			logger.Warn("refresh-token-rotation-result-fetch-failed-during-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+			logger.Warn("refresh-token-rotation-result-fetch-failed-during-wait", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(err))
 		}
 
 		select {
@@ -1333,11 +1333,11 @@ func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, 
 
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, accessTokenDetails.AccessUUID))
 	if err != nil || deleted == 0 {
-		logger.Warn("access-token-removal-failed", zap.String("user-id", userId), zap.String("access-token", accessTokenDetails.AccessUUID), zap.Error(err))
+		logger.Warn("access-token-removal-failed", zap.String("user-id", userId), zap.String("access-token-id", accessTokenDetails.AccessUUID), zap.Error(err))
 		return err
 	}
 
-	logger.Info("access-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", accessTokenDetails.AccessUUID))
+	logger.Info("access-token-successfully-removed", zap.String("user-id", userId), zap.String("access-token-id", accessTokenDetails.AccessUUID))
 
 	return nil
 }
@@ -1403,7 +1403,7 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 		return nil, refreshTokenUuid, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
-	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
+	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token-id", refreshTokenDetails.RefreshUUID))
 	return tokenUser, refreshTokenUuid, nil
 }
 
@@ -1682,7 +1682,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 
 	// handle associating pre-registered subscriptions and billing events if any
 	if s.BillingService != nil {
-		logger.Info("checking-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		logger.Info("checking-for-pre-registered-subscriptions", append([]zap.Field{zap.String("user-id", newUser.User.ID)}, emailLogFields("user-email", newUser.User.Email)...)...)
 		unassociatedSubResp, err := s.BillingService.GetUnassociatedSubscriptions(ctx, &billing.GetUnassociatedSubscriptionsRequest{
 			Email: newUser.User.Email,
 			Limit: 50,
@@ -1706,7 +1706,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 			}
 		}
 
-		logger.Info("checking-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		logger.Info("checking-for-pre-registered-billing-events", append([]zap.Field{zap.String("user-id", newUser.User.ID)}, emailLogFields("user-email", newUser.User.Email)...)...)
 		unassociatedBillingEventsResp, err := s.BillingService.GetUnassociatedBillingEvents(ctx, &billing.GetUnassociatedBillingEventsRequest{
 			Email: newUser.User.Email,
 			Limit: 100,
@@ -1733,7 +1733,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 
 	// handle auto-join/auto-invite group membership if group service is available
 	if s.GroupService != nil {
-		logger.Info("checking-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		logger.Info("checking-for-auto-join-groups", append([]zap.Field{zap.String("user-id", newUser.User.ID)}, emailLogFields("user-email", newUser.User.Email)...)...)
 		autoJoinGroupsResp, err := s.GroupService.GetParentGroupsWithAutoJoinForEmail(ctx, newUser.User.Email)
 		if err != nil {
 			logger.Error("failed-to-check-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.Error(err))
@@ -2001,16 +2001,16 @@ func (s *Service) resolveTokenFromCode(ctx context.Context, code string) (string
 
 	token, err := s.EphemeralStore.GetCodeMapping(ctx, code)
 	if err != nil {
-		logger.Warn("code-to-token-mapping-not-found", zap.String("code", code), zap.Error(err))
+		logger.Warn("code-to-token-mapping-not-found", append(verificationCodeLogFields(code), zap.Error(err))...)
 		return "", ErrInvalidVerificationCode
 	}
 
 	if token == "" {
-		logger.Warn("code-to-token-mapping-returned-empty-token", zap.String("code", code))
+		logger.Warn("code-to-token-mapping-returned-empty-token", verificationCodeLogFields(code)...)
 		return "", ErrInvalidVerificationCode
 	}
 
-	logger.Info("successfully-resolved-code-to-token", zap.String("code", code))
+	logger.Info("successfully-resolved-code-to-token", verificationCodeLogFields(code)...)
 
 	return token, nil
 }

@@ -87,7 +87,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	// Check if user already exists
 	existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
 	if existingUser != nil {
-		logger.Error("user-with-email-already-exists", zap.String("email", req.Email))
+		logger.Error("user-with-email-already-exists", emailLogFields("email", req.Email)...)
 		return nil, ErrEmailAlreadyExists
 	}
 
@@ -233,7 +233,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 
 	user, err := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), true)
 	if err != nil {
-		logger.Error("failed to get user by email", zap.Error(err), zap.String("email", req.Email))
+		logger.Error("failed to get user by email", append(emailLogFields("email", req.Email), zap.Error(err))...)
 		return nil, ErrUserNotFound
 	}
 

@@ -1206,7 +1206,7 @@ func (s *Service) AddMember(ctx context.Context, req *AddMemberRequest) (*AddMem
 // InviteUser adds a pending invitation for an email address to a top-level group.
 func (s *Service) InviteUser(ctx context.Context, req *InviteUserRequest) (*InviteUserResponse, error) {
 	logger := logger.AcquirePackageFrom(ctx, "external/group").With(zap.String("operation", "invite-user"))
-	logger.Debug("inviting-user-to-group", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail))
+	logger.Debug("inviting-user-to-group", append([]zap.Field{zap.String("group_id", req.GroupID)}, emailLogFields("invite-email", req.InviteEmail)...)...)
 
 	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
 	if err != nil {
@@ -1232,7 +1232,7 @@ func (s *Service) InviteUser(ctx context.Context, req *InviteUserRequest) (*Invi
 
 	targetAdded, err := s.addPendingInviteMember(targetGroup, inviteEmail, req.Role, req.InvitedByID)
 	if err != nil {
-		logger.Error("failed-to-add-pending-invite-to-target-group", zap.Error(err), zap.String("group_id", req.GroupID), zap.String("invite_email", inviteEmail))
+		logger.Error("failed-to-add-pending-invite-to-target-group", append([]zap.Field{zap.Error(err), zap.String("group_id", req.GroupID)}, emailLogFields("invite-email", inviteEmail)...)...)
 		return nil, err
 	}
 	if !targetAdded {
@@ -1268,7 +1268,7 @@ func (s *Service) InviteUser(ctx context.Context, req *InviteUserRequest) (*Invi
 // UninviteUser removes a pending invitation from a top-level group.
 func (s *Service) UninviteUser(ctx context.Context, req *UninviteUserRequest) (*UninviteUserResponse, error) {
 	logger := logger.AcquirePackageFrom(ctx, "external/group").With(zap.String("operation", "uninvite-user"))
-	logger.Debug("uninviting-user-from-group", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail))
+	logger.Debug("uninviting-user-from-group", append([]zap.Field{zap.String("group_id", req.GroupID)}, emailLogFields("invite-email", req.InviteEmail)...)...)
 
 	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
 	if err != nil {
@@ -1316,7 +1316,7 @@ func (s *Service) UninviteUser(ctx context.Context, req *UninviteUserRequest) (*
 // AcceptInvite accepts a pending invitation for a user and materialises membership.
 func (s *Service) AcceptInvite(ctx context.Context, req *AcceptInviteRequest) (*AcceptInviteResponse, error) {
 	logger := logger.AcquirePackageFrom(ctx, "external/group").With(zap.String("operation", "accept-invite"))
-	logger.Debug("accepting-group-invite", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail), zap.String("user_id", req.UserID))
+	logger.Debug("accepting-group-invite", append([]zap.Field{zap.String("group_id", req.GroupID), zap.String("user_id", req.UserID)}, emailLogFields("invite-email", req.InviteEmail)...)...)
 
 	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
 	if err != nil {
@@ -1374,7 +1374,7 @@ func (s *Service) AcceptInvite(ctx context.Context, req *AcceptInviteRequest) (*
 // RejectInvite rejects a pending invitation from a top-level group.
 func (s *Service) RejectInvite(ctx context.Context, req *RejectInviteRequest) (*RejectInviteResponse, error) {
 	logger := logger.AcquirePackageFrom(ctx, "external/group").With(zap.String("operation", "reject-invite"))
-	logger.Debug("rejecting-group-invite", zap.String("group_id", req.GroupID), zap.String("invite_email", req.InviteEmail))
+	logger.Debug("rejecting-group-invite", append([]zap.Field{zap.String("group_id", req.GroupID)}, emailLogFields("invite-email", req.InviteEmail)...)...)
 
 	inviteEmail, err := toolbox.NormaliseEmail(req.InviteEmail)
 	if err != nil {
@@ -2348,7 +2348,7 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *commo
 		PrefixName: true,
 	})
 	if err != nil {
-		logger.Error("failed-to-get-groups-awaiting-invite-answer-for-notifications", zap.Error(err), zap.String("invite_email", inviteEmail))
+		logger.Error("failed-to-get-groups-awaiting-invite-answer-for-notifications", append([]zap.Field{zap.Error(err)}, emailLogFields("invite-email", inviteEmail)...)...)
 		return nil, err
 	}
 
@@ -2850,7 +2850,7 @@ func (s *Service) GetParentGroupsWithAutoJoinForEmail(ctx context.Context, email
 	// Extract domain from email
 	emailDomain := extractEmailDomain(trimmedEmail)
 	if emailDomain == "" {
-		logger.Error("invalid-email-format", zap.String("email", trimmedEmail))
+		logger.Error("invalid-email-format", emailLogFields("email", trimmedEmail)...)
 		return nil, ErrGroupInvalidEmailFormat
 	}
 

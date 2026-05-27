@@ -152,11 +152,11 @@ func MapRequestToOauthLoginRequest(request *http.Request, validator Accessmanage
 
 		decodedUriValue, err := url.PathUnescape(parsedRequest.RequestUrl)
 		if err != nil {
-			logger.Warn("failed-to-decode-request-url-uri-for-sso-login", zap.String("encoded-request-url", parsedRequest.RequestUrl))
+			logger.Warn("failed-to-decode-request-url-uri-for-sso-login", requestURLLogFields(parsedRequest.RequestUrl)...)
 		}
 
 		if err == nil {
-			logger.Info("request-url-uri-decoded-for-sso-login", zap.String("encoded-request-url", parsedRequest.RequestUrl))
+			logger.Info("request-url-uri-decoded-for-sso-login", requestURLLogFields(parsedRequest.RequestUrl)...)
 			parsedRequest.RequestUrl = decodedUriValue
 		}
 	}
@@ -458,7 +458,7 @@ func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.
 		return nil, ErrInvalidUserEmail
 	}
 
-	logger.Debug("login-request-submitted.", zap.String("email", parsedRequest.Email))
+	logger.Debug("login-request-submitted.", emailLogFields("email", parsedRequest.Email)...)
 
 	return parsedRequest, nil
 

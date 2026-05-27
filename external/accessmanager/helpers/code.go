@@ -51,14 +51,14 @@ func GenerateUniqueCode(ctx context.Context, store CodeStore, ttl time.Duration)
 
 		exists, err := store.CodeExists(ctx, code)
 		if err != nil {
-			logger.Error("failed-to-check-code-existence", zap.String("code", code), zap.Error(err))
+			logger.Error("failed-to-check-code-existence", zap.Int("attempt", attempt), zap.Bool("code-present", code != ""), zap.Int("code-length", len(code)), zap.Error(err))
 			return "", ErrCodeGenerationFailure
 		}
 
 		if !exists {
 			err = store.StoreCode(ctx, code, ttl)
 			if err != nil {
-				logger.Error("failed-to-store-code", zap.String("code", code), zap.Error(err))
+				logger.Error("failed-to-store-code", zap.Int("attempt", attempt), zap.Bool("code-present", code != ""), zap.Int("code-length", len(code)), zap.Error(err))
 				return "", ErrCodeGenerationFailure
 			}
 

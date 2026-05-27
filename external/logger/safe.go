@@ -29,6 +29,22 @@ func SafeValue(value any) any {
 	return safeValue(reflect.ValueOf(value), 0)
 }
 
+// EmailPresentForLog reports whether an email-like value is present without
+// exposing the address itself.
+func EmailPresentForLog(value string) bool {
+	return strings.TrimSpace(value) != ""
+}
+
+// EmailDomainForLog returns the lower-case domain for an email-like value.
+// The local part is intentionally omitted because it can identify a person.
+func EmailDomainForLog(value string) string {
+	parts := strings.Split(strings.TrimSpace(value), "@")
+	if len(parts) != 2 {
+		return ""
+	}
+	return strings.ToLower(parts[1])
+}
+
 func safeValue(value reflect.Value, depth int) any {
 	value = indirectValue(value)
 	if !value.IsValid() {

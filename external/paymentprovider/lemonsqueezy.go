@@ -109,7 +109,11 @@ func (l *LemonSqueezyProvider) ParsePayload(ctx context.Context, req *http.Reque
 		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
-	logger.Debug("parsed-lemonsqueezy-webhook-payload", zap.String("event-type", eventType), zap.String("email", webhook.Data.Attributes.UserEmail))
+	logger.Debug("parsed-lemonsqueezy-webhook-payload",
+		zap.String("event-type", eventType),
+		zap.Bool("email-present", emailPresentForLog(webhook.Data.Attributes.UserEmail)),
+		zap.String("email-domain", emailDomainForLog(webhook.Data.Attributes.UserEmail)),
+	)
 
 	return &WebhookPayload{
 		EventType:          eventType,

@@ -614,13 +614,13 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 			"notification-send-failed",
 			zap.Int("channel-results", len(results)),
 			zap.Int("failed-channels", len(sendErrs)),
-			zap.Any("results", results),
+			zap.Any("results", safeLogValue(results)),
 			zap.Error(joinedErr),
 		)
 		return response, joinedErr
 	}
 
-	logger.Info("notification-send-completed", zap.Int("channel-results", len(results)), zap.Any("results", results))
+	logger.Info("notification-send-completed", zap.Int("channel-results", len(results)), zap.Any("results", safeLogValue(results)))
 	return response, nil
 }
 
@@ -701,7 +701,7 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 			}
 			continue
 		}
-		logger.Error("notification-dispatch-user-send-failed", zap.String("user-id", userID), zap.Any("results", result.Results), zap.Error(err))
+		logger.Error("notification-dispatch-user-send-failed", zap.String("user-id", userID), zap.Any("results", safeLogValue(result.Results)), zap.Error(err))
 		sendErrs = append(sendErrs, err)
 	}
 
@@ -711,13 +711,13 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 			"notification-dispatch-failed",
 			zap.Int("target-user-count", len(userIDs)),
 			zap.Int("failed-users", len(sendErrs)),
-			zap.Any("results", response.Results),
+			zap.Any("results", safeLogValue(response.Results)),
 			zap.Error(joinedErr),
 		)
 		return response, joinedErr
 	}
 
-	logger.Info("notification-dispatch-completed", zap.Int("target-user-count", len(userIDs)), zap.Any("results", response.Results))
+	logger.Info("notification-dispatch-completed", zap.Int("target-user-count", len(userIDs)), zap.Any("results", safeLogValue(response.Results)))
 	return response, nil
 }
 

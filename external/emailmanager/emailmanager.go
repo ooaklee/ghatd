@@ -205,10 +205,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 	// Check if we should actually send or just log
 	if !m.config.ShouldSendEmail {
 		logger.Info("email-outputted-locally-not-sent-disabled-by-config",
-			zap.String("to", rendered.To),
-			zap.String("from", rendered.From),
-			zap.String("subject", rendered.Subject),
-			zap.String("provider", emailInfo.EmailProvider),
+			outboundEmailLogFields(emailInfo.EmailProvider, "", rendered.To, rendered.From, rendered.Subject)...,
 		)
 
 		// Still log audit event even if not sending
@@ -239,19 +236,12 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 	// Send via provider
 	result, err := m.provider.Send(ctx, email)
 	if err != nil {
-		logger.Error("failed-to-send-email",
-			zap.String("provider", m.provider.Name()),
-			zap.String("to", rendered.To),
-			zap.Error(err),
-		)
+		logger.Error("failed-to-send-email", append(outboundEmailLogFields(m.provider.Name(), "", rendered.To, rendered.From, rendered.Subject), zap.Error(err))...)
 		return ErrEmailMailerSendFailed
 	}
 
 	logger.Info("email-sent-successfully",
-		zap.String("provider", result.Provider),
-		zap.String("message_id", result.MessageID),
-		zap.String("to", rendered.To),
-		zap.String("subject", rendered.Subject),
+		outboundEmailLogFields(result.Provider, result.MessageID, rendered.To, rendered.From, rendered.Subject)...,
 	)
 
 	// Log audit event if enabled
@@ -283,12 +273,12 @@ func (m *EmailManager) logAuditEvent(ctx context.Context, emailInfo *EmailInfo) 
 	})
 
 	if err != nil {
-		logger.Warn("failed-to-log-audit-event",
+		logger.Warn("failed-to-log-audit-event", append(
+			subjectLogFields(emailInfo.Subject),
 			zap.String("actor-id", audit.AuditActorIdSystem),
 			zap.String("user-id", emailInfo.UserId),
 			zap.String("event-type", string(audit.UserEmailOutbound)),
-			zap.String("subject", emailInfo.Subject),
 			zap.Error(err),
-		)
+		)...)
 	}
 }

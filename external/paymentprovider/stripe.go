@@ -189,7 +189,12 @@ func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*
 		nextBillingDate = time.Unix(int64(currentPeriodEnd), 0).Format(time.RFC3339)
 	}
 
-	logger.Debug("parsed-stripe-webhook-payload", zap.String("raw-event-type", event.Type), zap.String("event-type", stripeEventToStandard(event.Type)), zap.String("email", email))
+	logger.Debug("parsed-stripe-webhook-payload",
+		zap.String("raw-event-type", event.Type),
+		zap.String("event-type", stripeEventToStandard(event.Type)),
+		zap.Bool("email-present", emailPresentForLog(email)),
+		zap.String("email-domain", emailDomainForLog(email)),
+	)
 
 	return &WebhookPayload{
 		EventType:          stripeEventToStandard(event.Type),
