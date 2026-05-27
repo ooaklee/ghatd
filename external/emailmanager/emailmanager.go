@@ -40,12 +40,21 @@ type Config struct {
 	EnableAuditLogging bool
 }
 
+type localOutputProvider interface {
+	IsLocalOutputProvider() bool
+}
+
 // DefaultConfig returns a config with sensible defaults
 func DefaultConfig() *Config {
 	return &Config{
 		ShouldSendEmail:    true,
 		EnableAuditLogging: true,
 	}
+}
+
+func isLocalOutputProvider(provider emailprovider.EmailProvider) bool {
+	localProvider, ok := provider.(localOutputProvider)
+	return ok && localProvider.IsLocalOutputProvider()
 }
 
 // NewEmailManager creates a new email manager
@@ -175,23 +184,58 @@ func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) err
 		Subject:  req.Subject,
 		HTMLBody: req.HTMLBody,
 	}
+	emailInfo := &EmailInfo{
+		To:            req.To,
+		From:          req.From,
+		Subject:       req.Subject,
+		EmailProvider: m.provider.Name(),
+		UserId:        req.UserId,
+		RecipientType: req.RecipientType,
+	}
+
+	if !m.config.ShouldSendEmail {
+		messageID := ""
+		if isLocalOutputProvider(m.provider) {
+			result, err := m.provider.Send(ctx, email)
+			if err != nil {
+				logger.Error("failed-to-output-local-email", append(outboundEmailLogFields(m.provider.Name(), "", req.To, req.From, req.Subject), zap.Error(err))...)
+				return ErrEmailMailerSendFailed
+			}
+			messageID = result.MessageID
+			emailInfo.EmailProvider = result.Provider
+		}
+
+		logger.Info("email-outputted-locally-not-sent-disabled-by-config",
+			outboundEmailLogFields(emailInfo.EmailProvider, messageID, req.To, req.From, req.Subject)...,
+		)
+
+		if m.config.EnableAuditLogging && m.auditService != nil {
+			m.logAuditEvent(ctx, emailInfo)
+		}
+
+		return nil
+	}
+
+	if !m.provider.IsHealthy(ctx) {
+		logger.Error("email-provider-is-not-healthy",
+			zap.String("provider", m.provider.Name()),
+		)
+		return ErrEmailMailerProviderUnavailable
+	}
 
 	// Send via provider
 	result, err := m.provider.Send(ctx, email)
 	if err != nil {
+		logger.Error("failed-to-send-email", append(outboundEmailLogFields(m.provider.Name(), "", req.To, req.From, req.Subject), zap.Error(err))...)
 		return ErrEmailMailerSendFailed
 	}
+	emailInfo.EmailProvider = result.Provider
 
-	// Log audit event if enabled
+	logger.Info("email-sent-successfully",
+		outboundEmailLogFields(result.Provider, result.MessageID, req.To, req.From, req.Subject)...,
+	)
+
 	if m.config.EnableAuditLogging && m.auditService != nil {
-		emailInfo := &EmailInfo{
-			To:            req.To,
-			From:          req.From,
-			Subject:       req.Subject,
-			EmailProvider: result.Provider,
-			UserId:        req.UserId,
-			RecipientType: req.RecipientType,
-		}
 		m.logAuditEvent(ctx, emailInfo)
 	}
 
@@ -202,10 +246,30 @@ func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) err
 func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.RenderedEmail, emailInfo *EmailInfo) error {
 	logger := logger.AcquirePackageFrom(ctx, "external/emailmanager")
 
+	email := &emailprovider.Email{
+		To:       rendered.To,
+		From:     rendered.From,
+		ReplyTo:  rendered.ReplyTo,
+		Subject:  rendered.Subject,
+		HTMLBody: rendered.HTMLBody,
+	}
+
 	// Check if we should actually send or just log
 	if !m.config.ShouldSendEmail {
+		messageID := ""
+		providerName := emailInfo.EmailProvider
+		if isLocalOutputProvider(m.provider) {
+			result, err := m.provider.Send(ctx, email)
+			if err != nil {
+				logger.Error("failed-to-output-local-email", append(outboundEmailLogFields(providerName, "", rendered.To, rendered.From, rendered.Subject), zap.Error(err))...)
+				return ErrEmailMailerSendFailed
+			}
+			messageID = result.MessageID
+			providerName = result.Provider
+		}
+
 		logger.Info("email-outputted-locally-not-sent-disabled-by-config",
-			outboundEmailLogFields(emailInfo.EmailProvider, "", rendered.To, rendered.From, rendered.Subject)...,
+			outboundEmailLogFields(providerName, messageID, rendered.To, rendered.From, rendered.Subject)...,
 		)
 
 		// Still log audit event even if not sending
@@ -222,15 +286,6 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 			zap.String("provider", m.provider.Name()),
 		)
 		return ErrEmailMailerProviderUnavailable
-	}
-
-	// Create email object
-	email := &emailprovider.Email{
-		To:       rendered.To,
-		From:     rendered.From,
-		ReplyTo:  rendered.ReplyTo,
-		Subject:  rendered.Subject,
-		HTMLBody: rendered.HTMLBody,
 	}
 
 	// Send via provider
