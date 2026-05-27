@@ -25,7 +25,7 @@ func applyStaticAssetCachePolicy(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", expiredHTTPDate)
 	logger.AcquireOperationFrom(r.Context(), "external/spa", "static-asset-cache-policy").
-		Debug("spa-service-worker-cache-policy-applied", zap.String("path", r.URL.Path))
+		Debug("spa-service-worker-cache-policy-applied", zap.String("path", logger.RequestPath(r)))
 }
 
 // isRootServiceWorkerRequest reports whether the request targets the root service-worker script.

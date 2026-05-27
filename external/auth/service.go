@@ -171,15 +171,19 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 // Returns an error if no Authorization header is present or if the header
 // format is invalid.
 func (s *Service) ExtractToken(ctx context.Context, r *http.Request) (string, error) {
+	path := logger.RequestPath(r)
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-token")
-	authorization := r.Header.Get(httpHeaderKeyAuthorization)
+	authorization := ""
+	if r != nil {
+		authorization = r.Header.Get(httpHeaderKeyAuthorization)
+	}
 	if authorization == "" {
-		logger.Warn("auth-bearer-header-missing", zap.String("path", r.URL.Path))
+		logger.Warn("auth-bearer-header-missing", zap.String("path", path))
 		return "", ErrNoBearerHeaderFound
 	}
 
 	token := getTokenFromHeaderBearerToken(authorization)
-	logger.Debug("auth-bearer-token-extracted", zap.String("path", r.URL.Path), zap.Int("token-length", len(token)))
+	logger.Debug("auth-bearer-token-extracted", zap.String("path", path), zap.Int("token-length", len(token)))
 	return token, nil
 }
 
@@ -187,20 +191,21 @@ func (s *Service) ExtractToken(ctx context.Context, r *http.Request) (string, er
 //
 // It validates the token signature and returns the parsed token if valid.
 func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token, error) {
+	path := logger.RequestPath(r)
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "verify-token")
 	tokenString, err := s.ExtractToken(ctx, r)
 	if err != nil {
-		logger.Warn("auth-token-extract-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		logger.Warn("auth-token-extract-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
 	token, err := s.ParseAccessTokenFromString(ctx, tokenString)
 	if err != nil {
-		logger.Warn("auth-token-parse-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		logger.Warn("auth-token-parse-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
-	logger.Debug("auth-token-verified", zap.String("path", r.URL.Path))
+	logger.Debug("auth-token-verified", zap.String("path", path))
 	return token, nil
 }
 
@@ -271,19 +276,20 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 
 // CheckTokenIsValid verifies that the token is valid and has not expired.
 func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error {
+	path := logger.RequestPath(r)
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-token-is-valid")
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
-		logger.Warn("auth-token-validation-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		logger.Warn("auth-token-validation-failed", zap.String("path", path), zap.Error(err))
 		return err
 	}
 
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
-		logger.Warn("auth-token-invalid-claims", zap.String("path", r.URL.Path))
+		logger.Warn("auth-token-invalid-claims", zap.String("path", path))
 		return ErrUnauthorized
 	}
 
-	logger.Debug("auth-token-valid", zap.String("path", r.URL.Path))
+	logger.Debug("auth-token-valid", zap.String("path", path))
 	return nil
 }
 
@@ -291,20 +297,21 @@ func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error 
 //
 // Returns TokenAccessDetails containing user ID, access UUID, and authorization status.
 func (s *Service) ExtractTokenMetadata(ctx context.Context, r *http.Request) (*TokenAccessDetails, error) {
+	path := logger.RequestPath(r)
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-token-metadata")
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
-		logger.Warn("auth-token-metadata-verify-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		logger.Warn("auth-token-metadata-verify-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
 	details, err := s.CheckAccessTokenValidityGetDetails(ctx, token)
 	if err != nil {
-		logger.Warn("auth-token-metadata-extract-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		logger.Warn("auth-token-metadata-extract-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
-	logger.Debug("auth-token-metadata-extracted", zap.String("path", r.URL.Path), zap.String("user-id", details.UserID), zap.Bool("admin", details.IsAdmin), zap.Bool("authorized", details.IsAuthorized))
+	logger.Debug("auth-token-metadata-extracted", zap.String("path", path), zap.String("user-id", details.UserID), zap.Bool("admin", details.IsAdmin), zap.Bool("authorized", details.IsAuthorized))
 	return details, nil
 }
 

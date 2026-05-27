@@ -15,11 +15,12 @@ import (
 func mapRequestToProcessBillingProviderWebhooksRequest(request *http.Request, validator BillingManagerValidator) (*ProcessBillingProviderWebhooksRequest, error) {
 
 	var parsedRequest ProcessBillingProviderWebhooksRequest
+	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
 
 	providerName, err := toolbox.GetVariableValueFromUri(request, "providerName")
 	if err != nil {
-		logger.Error("unable-get-provider-name-from-uri", zap.String("method", request.Method), zap.String("path", request.URL.Path), zap.Error(err))
+		logger.Error("unable-get-provider-name-from-uri", zap.String("method", request.Method), zap.String("path", requestPath), zap.Error(err))
 		return nil, ErrBillingManagerUnableToGetProviderNameFromURI
 	}
 
@@ -33,6 +34,7 @@ func mapRequestToProcessBillingProviderWebhooksRequest(request *http.Request, va
 // struct.
 func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator BillingManagerValidator) (*GetUserBillingEventsRequest, error) {
 	var parsedRequest GetUserBillingEventsRequest
+	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
 	requestingUserId := accessmanagerhelpers.AcquireFrom(request.Context())
 
@@ -43,14 +45,14 @@ func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator Bi
 
 	userId, err := toolbox.GetVariableValueFromUri(request, "userId")
 	if err != nil {
-		logger.Error("unable-get-user-id-from-uri", zap.String("method", request.Method), zap.String("path", request.URL.Path), zap.Error(err))
+		logger.Error("unable-get-user-id-from-uri", zap.String("method", request.Method), zap.String("path", requestPath), zap.Error(err))
 		return nil, ErrBillingManagerUnableToGetUserIdFromURI
 	}
 
 	query := request.URL.Query()
 	err = querydecoder.New(query).Decode(&parsedRequest)
 	if err != nil {
-		logger.Error("unable-to-decode-query-to-billing-events-request", zap.String("method", request.Method), zap.String("path", request.URL.Path), zap.Error(err))
+		logger.Error("unable-to-decode-query-to-billing-events-request", zap.String("method", request.Method), zap.String("path", requestPath), zap.Error(err))
 		return nil, ErrInvalidBillingManagerRequestPayload
 	}
 
@@ -64,6 +66,7 @@ func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator Bi
 // struct.
 func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validator BillingManagerValidator) (*GetUserSubscriptionStatusRequest, error) {
 	var parsedRequest GetUserSubscriptionStatusRequest
+	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
 	requestingUserId := accessmanagerhelpers.AcquireFrom(request.Context())
 
@@ -74,7 +77,7 @@ func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validat
 
 	userId, err := toolbox.GetVariableValueFromUri(request, "userId")
 	if err != nil {
-		logger.Error("unable-get-user-id-from-uri", zap.String("method", request.Method), zap.String("path", request.URL.Path), zap.Error(err))
+		logger.Error("unable-get-user-id-from-uri", zap.String("method", request.Method), zap.String("path", requestPath), zap.Error(err))
 		return nil, ErrBillingManagerUnableToGetUserIdFromURI
 	}
 
@@ -88,6 +91,7 @@ func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validat
 // struct.
 func mapRequestToGetUserBillingDetailRequest(request *http.Request, validator BillingManagerValidator) (*GetUserBillingDetailRequest, error) {
 	var parsedRequest GetUserBillingDetailRequest
+	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
 	requestingUserId := accessmanagerhelpers.AcquireFrom(request.Context())
 
@@ -98,7 +102,7 @@ func mapRequestToGetUserBillingDetailRequest(request *http.Request, validator Bi
 
 	userId, err := toolbox.GetVariableValueFromUri(request, "userId")
 	if err != nil {
-		logger.Error("unable-get-user-id-from-uri", zap.String("method", request.Method), zap.String("path", request.URL.Path), zap.Error(err))
+		logger.Error("unable-get-user-id-from-uri", zap.String("method", request.Method), zap.String("path", requestPath), zap.Error(err))
 		return nil, ErrBillingManagerUnableToGetUserIdFromURI
 	}
 

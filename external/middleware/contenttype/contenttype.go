@@ -12,6 +12,7 @@ import (
 // NewContentType creates a middleware that sets the content-type header to application/json
 func NewContentType(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPath := logger.RequestPath(r)
 		logger := logger.AcquireOperationFrom(r.Context(), "external/middleware/contenttype", "content-type")
 
 		const contentTypeHeaderName string = "Content-Type"
@@ -20,7 +21,7 @@ func NewContentType(h http.Handler) http.Handler {
 		if strings.Contains(r.Header.Get(contentTypeHeaderName), jsonContentType) ||
 			(strings.HasPrefix(r.URL.Path, common.ApiV1UriPrefix) && !strings.Contains(r.Header.Get(common.HtmxHttpRequestHeader), "true")) {
 			w.Header().Set(contentTypeHeaderName, jsonContentType)
-			logger.Debug("content-type-json-applied", zap.String("path", r.URL.Path))
+			logger.Debug("content-type-json-applied", zap.String("path", requestPath))
 		}
 
 		h.ServeHTTP(w, r)

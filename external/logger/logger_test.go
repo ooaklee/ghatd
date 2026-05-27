@@ -2,6 +2,8 @@ package logger_test
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -49,6 +51,12 @@ func TestAcquireOperationFromAddsOperationAttribution(t *testing.T) {
 	assert.Equal(t, ghatdlogger.SourceGHATD, entries[0].ContextMap()[ghatdlogger.FieldSource])
 	assert.Equal(t, "external/notifier", entries[0].ContextMap()[ghatdlogger.FieldPackage])
 	assert.Equal(t, "notify-user", entries[0].ContextMap()[ghatdlogger.FieldOperation])
+}
+
+func TestRequestPathHandlesMissingURL(t *testing.T) {
+	assert.Equal(t, "", ghatdlogger.RequestPath(nil))
+	assert.Equal(t, "", ghatdlogger.RequestPath(&http.Request{}))
+	assert.Equal(t, "/health", ghatdlogger.RequestPath(&http.Request{URL: &url.URL{Path: "/health"}}))
 }
 
 func TestSafeValueKeepsOperationalFieldsAndRedactsPayloads(t *testing.T) {

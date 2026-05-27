@@ -1319,13 +1319,7 @@ func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, 
 
 	logger.Info("processing-access-token-removal-by-cookie-value")
 
-	tempRequest := &http.Request{
-		Header: http.Header{},
-	}
-
-	tempRequest.Header["Authorization"] = []string{"Bearer " + accessTokenCookieValue}
-
-	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, tempRequest)
+	accessTokenDetails, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, accessTokenCookieValue)
 	if err != nil {
 		logger.Error("failed-to-extract-access-token-details-from-cookie-value", zap.Error(err))
 		return err

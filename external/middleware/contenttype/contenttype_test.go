@@ -41,6 +41,17 @@ func TestNewContentType(t *testing.T) {
 
 }
 
+func TestNewContentTypeDoesNotRequireRequestURLWhenContentTypeAlreadyJSON(t *testing.T) {
+	req := &http.Request{Header: http.Header{"Content-Type": []string{"application/json"}}}
+	watcher := httptest.NewRecorder()
+	handler := contenttype.NewContentType(http.HandlerFunc(handlerFunc))
+
+	assert.NotPanics(t, func() {
+		handler.ServeHTTP(watcher, req)
+	})
+	assert.Contains(t, watcher.Result().Header["Content-Type"], "application/json")
+}
+
 func handlerFunc(w http.ResponseWriter, r *http.Request) {
 	//nolint not checked
 	w.Write([]byte("{\"message\": \"OK\"}"))

@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"net/http"
 	"runtime"
 	"strings"
 
@@ -35,6 +36,15 @@ func Error(ctx context.Context, msg string, fields ...zap.Field) {
 func With(ctx context.Context, fields ...zap.Field) context.Context {
 	logger := loggerForCaller(ctx, 2).With(fields...)
 	return TransitWith(ctx, logger)
+}
+
+// RequestPath returns a request path for logging without assuming the request
+// was created by net/http.
+func RequestPath(r *http.Request) string {
+	if r == nil || r.URL == nil {
+		return ""
+	}
+	return r.URL.Path
 }
 
 func loggerForCaller(ctx context.Context, skip int) *zap.Logger {

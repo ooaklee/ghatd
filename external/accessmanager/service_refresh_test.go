@@ -206,6 +206,40 @@ func newRefreshTokenTestService(store *refreshEphemeralStoreMock, authService *r
 	}
 }
 
+// TestServiceRemoveAccessTokenWithCookieValueDoesNotRequireHTTPRequestURL verifies
+// access-token cookie cleanup does not depend on a real request URL.
+func TestServiceRemoveAccessTokenWithCookieValueDoesNotRequireHTTPRequestURL(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	authService := auth.NewService(&auth.NewServiceRequest{
+		AccessTokenSecret:  "access-secret",
+		RefreshTokenSecret: "refresh-secret",
+	})
+	tokenDetails, err := authService.CreateToken(ctx, &userv2.UniversalUser{
+		ID:     "user-1",
+		Status: userv2.AccountStatusKeyActive,
+	})
+	require.NoError(t, err)
+
+	store := &refreshEphemeralStoreMock{
+		deleteAuthFunc: func(ctx context.Context, tokenID string) (int64, error) {
+			require.Contains(t, tokenID, "user-1:")
+			return 1, nil
+		},
+	}
+	service := &accessmanager.Service{
+		EphemeralStore: store,
+		AuthService:    authService,
+	}
+
+	require.NotPanics(t, func() {
+		err = service.RemoveAccessTokenWithCookieValue(ctx, "user-1", tokenDetails.AccessToken)
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, store.deleteAuthCalls)
+}
+
 // TestServiceRefreshTokenReplaysCachedRotation verifies duplicate refreshes can reuse a cached rotation result.
 func TestServiceRefreshTokenReplaysCachedRotation(t *testing.T) {
 	t.Parallel()
