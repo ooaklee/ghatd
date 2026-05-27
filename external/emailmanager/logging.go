@@ -32,7 +32,7 @@ func outboundEmailLogFields(provider, messageID, to, from, subject string) []zap
 		zap.String("provider", provider),
 	}
 	if messageID != "" {
-		fields = append(fields, zap.String("message_id", messageID))
+		fields = append(fields, zap.String("message-id", messageID))
 	}
 	fields = append(fields, emailLogFields("recipient", to)...)
 	fields = append(fields, emailLogFields("sender", from)...)
