@@ -24,9 +24,16 @@ var emailLinkPattern = regexp.MustCompile(`(?i)href\s*=\s*(?:"([^"]*)"|'([^']*)'
 
 // AttachLocalInboxRoutesRequest holds local email inbox route configuration.
 type AttachLocalInboxRoutesRequest struct {
-	Router   *router.Router
+	// Router is the GHATD router that will receive the local inbox routes.
+	Router *router.Router
+
+	// Provider is the local logging email provider whose captured emails will be rendered.
 	Provider *LoggingEmailProvider
-	Prefix   string
+
+	// Prefix optionally overrides the local inbox route prefix.
+	// It defaults to DefaultLocalInboxRoutePrefix when left empty.
+	Prefix string
+
 	// AllowRemote permits non-loopback clients to access the inbox.
 	// Keep this false unless another trusted local proxy protects the route.
 	AllowRemote bool
@@ -63,6 +70,7 @@ func AttachLocalInboxRoutes(request *AttachLocalInboxRoutesRequest) error {
 	inboxRouter.HandleFunc("/api/emails", handlers.apiList).Methods(http.MethodGet)
 	inboxRouter.HandleFunc("/{messageID}", handlers.detail).Methods(http.MethodGet)
 	inboxRouter.HandleFunc("/{messageID}/html", handlers.rawHTML).Methods(http.MethodGet)
+	inboxRouter.Use(localInboxNoStoreMiddleware)
 	if !request.AllowRemote {
 		inboxRouter.Use(localInboxLocalOnlyMiddleware)
 	}
@@ -98,6 +106,7 @@ type localInboxEmailSummary struct {
 	Links      []string `json:"links"`
 }
 
+// index renders the local email inbox list page.
 func (h *localInboxHandlers) index(w http.ResponseWriter, r *http.Request) {
 	emails := h.emailSummaries()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -107,6 +116,7 @@ func (h *localInboxHandlers) index(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// detail renders a captured email detail page with metadata, preview, and links.
 func (h *localInboxHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	email, ok := h.emailByRequest(w, r)
 	if !ok {
@@ -123,6 +133,7 @@ func (h *localInboxHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// rawHTML renders the captured email HTML body for previewing in a browser.
 func (h *localInboxHandlers) rawHTML(w http.ResponseWriter, r *http.Request) {
 	email, ok := h.emailByRequest(w, r)
 	if !ok {
@@ -139,16 +150,19 @@ func (h *localInboxHandlers) rawHTML(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, "<!doctype html><html><body><pre>%s</pre></body></html>", template.HTMLEscapeString(email.TextBody))
 }
 
+// clear removes all captured local emails and redirects back to the inbox list.
 func (h *localInboxHandlers) clear(w http.ResponseWriter, r *http.Request) {
 	h.provider.Inbox().Clear()
 	http.Redirect(w, r, h.prefix, http.StatusSeeOther)
 }
 
+// apiList writes JSON summaries for the captured local emails.
 func (h *localInboxHandlers) apiList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(h.emailSummaries())
 }
 
+// emailByRequest resolves the route message ID to a captured local email.
 func (h *localInboxHandlers) emailByRequest(w http.ResponseWriter, r *http.Request) (LocalEmail, bool) {
 	messageID := mux.Vars(r)["messageID"]
 	email, ok := h.provider.Inbox().Get(messageID)
@@ -159,6 +173,7 @@ func (h *localInboxHandlers) emailByRequest(w http.ResponseWriter, r *http.Reque
 	return email, true
 }
 
+// emailSummaries converts captured local emails into list and API summaries.
 func (h *localInboxHandlers) emailSummaries() []localInboxEmailSummary {
 	emails := h.provider.Inbox().List()
 	summaries := make([]localInboxEmailSummary, 0, len(emails))
@@ -176,14 +191,17 @@ func (h *localInboxHandlers) emailSummaries() []localInboxEmailSummary {
 	return summaries
 }
 
+// detailPath returns the inbox detail path for a captured email message ID.
 func (h *localInboxHandlers) detailPath(messageID string) string {
 	return h.prefix + "/" + url.PathEscape(messageID)
 }
 
+// rawHTMLPath returns the raw rendered-email path for a captured email message ID.
 func (h *localInboxHandlers) rawHTMLPath(messageID string) string {
 	return h.detailPath(messageID) + "/html"
 }
 
+// normaliseLocalInboxPrefix normalises a configured route prefix for mux routing.
 func normaliseLocalInboxPrefix(prefix string) string {
 	prefix = strings.TrimSpace(prefix)
 	if prefix == "" {
@@ -199,6 +217,15 @@ func normaliseLocalInboxPrefix(prefix string) string {
 	return prefix
 }
 
+// localInboxNoStoreMiddleware marks local inbox responses as uncacheable.
+func localInboxNoStoreMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		setLocalInboxNoStoreHeaders(w)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// localInboxLocalOnlyMiddleware rejects requests that do not originate from loopback.
 func localInboxLocalOnlyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isLocalInboxRequest(r) {
@@ -209,6 +236,14 @@ func localInboxLocalOnlyMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// setLocalInboxNoStoreHeaders prevents stale local inbox pages and summaries.
+func setLocalInboxNoStoreHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+}
+
+// isLocalInboxRequest reports whether a request remote address is localhost or loopback.
 func isLocalInboxRequest(r *http.Request) bool {
 	host := r.RemoteAddr
 	if splitHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -222,6 +257,7 @@ func isLocalInboxRequest(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// formatLocalEmailTime formats a captured email timestamp for inbox display.
 func formatLocalEmailTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
@@ -229,6 +265,7 @@ func formatLocalEmailTime(value time.Time) string {
 	return value.Format("2006-01-02 15:04:05 MST")
 }
 
+// extractEmailLinks extracts unique web links from a captured HTML email body.
 func extractEmailLinks(htmlBody string) []string {
 	matches := emailLinkPattern.FindAllStringSubmatch(htmlBody, -1)
 	links := make([]string, 0, len(matches))
@@ -251,6 +288,7 @@ func extractEmailLinks(htmlBody string) []string {
 	return links
 }
 
+// isLocalInboxWebLink reports whether a link is safe to expose as a web action.
 func isLocalInboxWebLink(link string) bool {
 	parsed, err := url.Parse(link)
 	if err != nil {
