@@ -187,6 +187,8 @@ if err != nil {
 
 By default, the local inbox is available at `/_ghatd/local/emails` and rejects non-loopback clients. Set a custom `Prefix` or `AllowRemote` only when another trusted local proxy protects the route.
 
+This local inbox workflow is described in [ADR014](../../adr/adr014-local-email-inbox-for-development.md).
+
 > **Note on Environments:** The `emailtemplater` is also **environment-aware**; for example, setting the `Environment` config to `"staging"` will add `[staging]` to the email subject line.
 
 ## Advanced Use Cases
