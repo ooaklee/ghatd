@@ -195,6 +195,7 @@ func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) err
 
 	if !m.config.ShouldSendEmail {
 		messageID := ""
+		outputtedLocally := false
 		if isLocalOutputProvider(m.provider) {
 			result, err := m.provider.Send(ctx, email)
 			if err != nil {
@@ -203,11 +204,10 @@ func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) err
 			}
 			messageID = result.MessageID
 			emailInfo.EmailProvider = result.Provider
+			outputtedLocally = true
 		}
 
-		logger.Info("email-outputted-locally-not-sent-disabled-by-config",
-			outboundEmailLogFields(emailInfo.EmailProvider, messageID, req.To, req.From, req.Subject)...,
-		)
+		logDisabledEmail(logger, emailInfo.EmailProvider, messageID, req.To, req.From, req.Subject, outputtedLocally)
 
 		if m.config.EnableAuditLogging && m.auditService != nil {
 			m.logAuditEvent(ctx, emailInfo)
@@ -258,6 +258,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 	if !m.config.ShouldSendEmail {
 		messageID := ""
 		providerName := emailInfo.EmailProvider
+		outputtedLocally := false
 		if isLocalOutputProvider(m.provider) {
 			result, err := m.provider.Send(ctx, email)
 			if err != nil {
@@ -266,11 +267,10 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 			}
 			messageID = result.MessageID
 			providerName = result.Provider
+			outputtedLocally = true
 		}
 
-		logger.Info("email-outputted-locally-not-sent-disabled-by-config",
-			outboundEmailLogFields(providerName, messageID, rendered.To, rendered.From, rendered.Subject)...,
-		)
+		logDisabledEmail(logger, providerName, messageID, rendered.To, rendered.From, rendered.Subject, outputtedLocally)
 
 		// Still log audit event even if not sending
 		if m.config.EnableAuditLogging && m.auditService != nil {
@@ -305,6 +305,17 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 	}
 
 	return nil
+}
+
+func logDisabledEmail(logger *zap.Logger, providerName, messageID, to, from, subject string, outputtedLocally bool) {
+	eventName := "email-not-sent-disabled-by-config"
+	if outputtedLocally {
+		eventName = "email-outputted-locally-not-sent-disabled-by-config"
+	}
+
+	logger.Info(eventName,
+		outboundEmailLogFields(providerName, messageID, to, from, subject)...,
+	)
 }
 
 // logAuditEvent logs an audit event for the sent email
