@@ -29,7 +29,7 @@ func NewService(AuditRespository AuditRespository) *Service {
 // LogAuditEvent handles creating an log entry event into audit repository
 // TODO: Create tests
 func (s *Service) LogAuditEvent(ctx context.Context, r *LogAuditEventRequest) error {
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/audit")
 
 	entry := AuditLogEntry{
 		ActorId:    r.ActorId,
@@ -40,7 +40,7 @@ func (s *Service) LogAuditEvent(ctx context.Context, r *LogAuditEventRequest) er
 			finalDomainName, err := toolbox.StringConvertToKebabCase(domainName)
 			if err != nil {
 				finalDomainName := toolbox.StringConvertToSnakeCase(toolbox.StringStandardisedToLower(domainName))
-				log.Warn("unable-to-normalise-domain-name-with-tag-rules", zap.String("original-name", domainName), zap.String("final-name", finalDomainName))
+				logger.Warn("unable-to-normalise-domain-name-with-tag-rules", zap.String("original-name", domainName), zap.String("final-name", finalDomainName))
 				return finalDomainName
 			}
 
@@ -59,5 +59,8 @@ func (s *Service) LogAuditEvent(ctx context.Context, r *LogAuditEventRequest) er
 
 // GetTotalAuditLogEvents gets the total on audit-based on passed values
 func (s *Service) GetTotalAuditLogEvents(ctx context.Context, r *GetTotalAuditLogEventsRequest) (int64, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/audit", "get-total-audit-log-events")
+	logger.Debug("handling-get-total-audit-log-events-request")
+
 	return s.AuditRespository.GetTotalAuditLogEvents(ctx, r.UserId, r.To, r.From, r.Domains, r.Actions, r.TargetId, r.TargetTypes)
 }

@@ -63,11 +63,11 @@ func (k *KofiProvider) GetProviderName() string {
 // The webhook secret should match the verification token configured in Ko-fi
 func (k *KofiProvider) VerifyWebhook(ctx context.Context, req *http.Request) error {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", k.name)).With(zap.String("method", "verify-webhook")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", k.name)).With(zap.String("operation", "verify-webhook"))
 
-	log.Debug("verifying-kofi-webhook")
+	logger.Debug("verifying-kofi-webhook")
 
-	dataField, err := k.getFormData(req, log)
+	dataField, err := k.getFormData(req, logger)
 	if err != nil {
 		return err
 	}
@@ -78,16 +78,16 @@ func (k *KofiProvider) VerifyWebhook(ctx context.Context, req *http.Request) err
 	}
 
 	if err := json.Unmarshal([]byte(dataField), &payload); err != nil {
-		log.Error("failed-to-parse-json-payload", zap.Error(err))
+		logger.Error("failed-to-parse-json-payload", zap.Error(err))
 		return ErrPaymentProviderInvalidPayload
 	}
 
 	if payload.VerificationToken != k.config.WebhookSecret {
-		log.Error("invalid-verification-token", zap.String("received", payload.VerificationToken))
+		logger.Error("invalid-verification-token", zap.Int("received-token-length", len(payload.VerificationToken)))
 		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
-	log.Debug("kofi-webhook-verified-successfully")
+	logger.Debug("kofi-webhook-verified-successfully")
 
 	return nil
 }
@@ -103,11 +103,11 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 		availableUntilDate string = ""
 	)
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", k.name)).With(zap.String("method", "parse-payload")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", k.name)).With(zap.String("operation", "parse-payload"))
 
-	log.Debug("parsing-kofi-webhook-payload")
+	logger.Debug("parsing-kofi-webhook-payload")
 
-	dataField, err := k.getFormData(req, log)
+	dataField, err := k.getFormData(req, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 	var payload KofiWebhookPayload
 
 	if err := json.Unmarshal([]byte(dataField), &payload); err != nil {
-		log.Warn("failed-to-parse-json-payload", zap.Error(err))
+		logger.Warn("failed-to-parse-json-payload", zap.Error(err))
 		return nil, ErrPaymentProviderPayloadParsing
 	}
 
@@ -149,7 +149,7 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 		availableUntilDate = calculateAvailableUntilDate(ctx, payload.Timestamp)
 	}
 
-	log.Debug("parsed-kofi-webhook-payload",
+	logger.Debug("parsed-kofi-webhook-payload",
 		zap.String("event-type", eventType),
 		zap.String("payment-type", paymentType),
 		zap.String("email", payload.Email),
@@ -184,12 +184,12 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 // Ko-fi does not provide this info, so we have to estimate it until their API improves
 // Their timestamp is in RFC3339 format, e.g., "2023-10-05T14:48:00Z"
 func calculateNextBillingDate(ctx context.Context, timestamp string) string {
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", "kofi")).With(zap.String("method", "calculate-next-billing-date")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", "kofi")).With(zap.String("operation", "calculate-next-billing-date"))
 
 	// convert to time.Time
 	providedTime, err := time.Parse(time.RFC3339, timestamp)
 	if err != nil {
-		log.Warn("failed-to-parse-timestamp-defaulting-to-30-days-later", zap.Error(err))
+		logger.Warn("failed-to-parse-timestamp-defaulting-to-30-days-later", zap.Error(err))
 		return time.Now().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	}
 
@@ -202,14 +202,14 @@ func calculateNextBillingDate(ctx context.Context, timestamp string) string {
 // We will give users an extra 48 hours grace period after the billing date to minimise disruption.
 // Their timestamp is in RFC3339 format, e.g., "2023-10-05T14:48:00Z"
 func calculateAvailableUntilDate(ctx context.Context, timestamp string) string {
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", "kofi")).With(zap.String("method", "calculate-available-until-date")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", "kofi")).With(zap.String("operation", "calculate-available-until-date"))
 
 	gracePeriod := 48 * time.Hour
 
 	// convert to time.Time
 	providedTime, err := time.Parse(time.RFC3339, timestamp)
 	if err != nil {
-		log.Warn("failed-to-parse-timestamp-defaulting-to-30-days-later", zap.Error(err))
+		logger.Warn("failed-to-parse-timestamp-defaulting-to-30-days-later", zap.Error(err))
 		return time.Now().Add(30 * 24 * time.Hour).Add(gracePeriod).Format(time.RFC3339)
 	}
 
@@ -247,25 +247,25 @@ func getPayloadPlanName(payload KofiWebhookPayload, planName string) string {
 // To get subscription info, we would need to track it in our own database.
 func (k *KofiProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error) {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", k.name)).With(zap.String("method", "get-subscription-info")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", k.name)).With(zap.String("operation", "get-subscription-info"))
 
-	log.Warn("kofi-get-subscription-info-not-supported-there-is-no-subscription-api")
+	logger.Warn("kofi-get-subscription-info-not-supported-there-is-no-subscription-api")
 
 	return nil, ErrPaymentProviderKofiNoSubscriptionAPI
 }
 
 // getFormData extracts the 'data' field from the form-encoded request
-func (k *KofiProvider) getFormData(req *http.Request, log *zap.Logger) (string, error) {
+func (k *KofiProvider) getFormData(req *http.Request, logger *zap.Logger) (string, error) {
 
 	if err := req.ParseForm(); err != nil {
-		log.Warn("failed-to-parse-form", zap.Error(err))
+		logger.Warn("failed-to-parse-form", zap.Error(err))
 		return "", ErrPaymentProviderInvalidPayload
 	}
 
 	// Ko-fi sends data as form-encoded with a 'data' field containing JSON
 	dataField := req.FormValue("data")
 	if dataField == "" {
-		log.Warn("missing-data-field-in-form")
+		logger.Warn("missing-data-field-in-form")
 		return "", ErrPaymentProviderInvalidPayload
 	}
 

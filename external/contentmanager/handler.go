@@ -2,12 +2,14 @@ package contentmanager
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // contentManagerService manages business logic for
@@ -59,9 +61,11 @@ func NewHandler(service contentManagerService, validator contentManagerValidator
 
 // CreatePost handles the request for creating a post
 func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-create-post")
 	request, err := mapRequestToCreatePostRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -69,6 +73,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	newlyCreated, err := h.service.CreatePost(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -79,9 +84,11 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 // UpdatePostById handles the request for updating a post by its ID
 func (h *Handler) UpdatePostById(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-update-post-by-id")
 	request, err := mapRequestToUpdatePostByIdRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -89,6 +96,7 @@ func (h *Handler) UpdatePostById(w http.ResponseWriter, r *http.Request) {
 	updatedPost, err := h.service.UpdatePostById(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -99,9 +107,11 @@ func (h *Handler) UpdatePostById(w http.ResponseWriter, r *http.Request) {
 
 // DeletePostById handles the request for deleting a post by its ID
 func (h *Handler) DeletePostById(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-delete-post-by-id")
 	request, err := mapRequestToDeletePostByIdRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -109,6 +119,7 @@ func (h *Handler) DeletePostById(w http.ResponseWriter, r *http.Request) {
 	_, err = h.service.DeletePostById(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -119,9 +130,11 @@ func (h *Handler) DeletePostById(w http.ResponseWriter, r *http.Request) {
 
 // RestorePostById handles the request for restoring a post by its ID
 func (h *Handler) RestorePostById(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-restore-post-by-id")
 	request, err := mapRequestToRestorePostByIdRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -129,6 +142,7 @@ func (h *Handler) RestorePostById(w http.ResponseWriter, r *http.Request) {
 	restoredPost, err := h.service.RestorePostById(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -139,9 +153,11 @@ func (h *Handler) RestorePostById(w http.ResponseWriter, r *http.Request) {
 
 // GetChangelogItems handles the request for getting changelog posts
 func (h *Handler) GetChangelogItems(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-changelog-items")
 	request, err := mapRequestToGetChangelogItemsRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -149,6 +165,7 @@ func (h *Handler) GetChangelogItems(w http.ResponseWriter, r *http.Request) {
 	posts, err := h.service.GetChangelogItems(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -166,9 +183,11 @@ func (h *Handler) GetChangelogItems(w http.ResponseWriter, r *http.Request) {
 // GetChangelogItemByUrlFriendlyId handles the request for getting changelog item by its
 // url friendly id
 func (h *Handler) GetChangelogItemByUrlFriendlyId(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-changelog-item-by-url-friendly-id")
 	request, err := mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -176,6 +195,7 @@ func (h *Handler) GetChangelogItemByUrlFriendlyId(w http.ResponseWriter, r *http
 	post, err := h.service.GetChangelogItemByUrlFriendlyId(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -186,9 +206,11 @@ func (h *Handler) GetChangelogItemByUrlFriendlyId(w http.ResponseWriter, r *http
 
 // GetGlossaryItems handles the request for getting glossary posts
 func (h *Handler) GetGlossaryItems(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-glossary-items")
 	request, err := mapRequestToGetGlossaryItemsRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -196,6 +218,7 @@ func (h *Handler) GetGlossaryItems(w http.ResponseWriter, r *http.Request) {
 	posts, err := h.service.GetGlossaryItems(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -212,9 +235,11 @@ func (h *Handler) GetGlossaryItems(w http.ResponseWriter, r *http.Request) {
 
 // GetFaqItems handles the request for getting faq posts
 func (h *Handler) GetFaqItems(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-faq-items")
 	request, err := mapRequestToGetFaqItemsRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -222,6 +247,7 @@ func (h *Handler) GetFaqItems(w http.ResponseWriter, r *http.Request) {
 	posts, err := h.service.GetFaqItems(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -238,9 +264,11 @@ func (h *Handler) GetFaqItems(w http.ResponseWriter, r *http.Request) {
 
 // GetArticles handles the request for getting articles posts
 func (h *Handler) GetArticles(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-articles")
 	request, err := mapRequestToGetArticlesRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -248,6 +276,7 @@ func (h *Handler) GetArticles(w http.ResponseWriter, r *http.Request) {
 	posts, err := h.service.GetArticles(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -265,9 +294,11 @@ func (h *Handler) GetArticles(w http.ResponseWriter, r *http.Request) {
 // GetArticleItemByUrlFriendlyId handles the request for getting article item by its
 // url friendly id
 func (h *Handler) GetArticleItemByUrlFriendlyId(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-article-item-by-url-friendly-id")
 	request, err := mapRequestToGetArticleItemByUrlFriendlyIdRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -275,6 +306,7 @@ func (h *Handler) GetArticleItemByUrlFriendlyId(w http.ResponseWriter, r *http.R
 	post, err := h.service.GetArticleItemByUrlFriendlyId(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -285,9 +317,11 @@ func (h *Handler) GetArticleItemByUrlFriendlyId(w http.ResponseWriter, r *http.R
 
 // GetLatestPostsByType handles the request for getting the latest posts by type
 func (h *Handler) GetLatestPostsByType(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-latest-posts-by-type")
 	request, err := mapRequestToGetLatestPostsByTypeRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -295,6 +329,7 @@ func (h *Handler) GetLatestPostsByType(w http.ResponseWriter, r *http.Request) {
 	posts, err := h.service.GetLatestPostsByType(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -305,14 +340,17 @@ func (h *Handler) GetLatestPostsByType(w http.ResponseWriter, r *http.Request) {
 
 // GetLatestNotificationOverviews handles the request for getting the latest notification overviews for the user
 func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-latest-notification-overviews")
 	request, err := mapRequestToGetLatestNotificationOverviewsRequest(r, h.validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	overviews, err := h.service.GetLatestNotificationOverviews(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

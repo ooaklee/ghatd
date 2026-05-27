@@ -2,10 +2,12 @@ package pricer
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // PriceService interface defines expected methods of a valid pricer service.
@@ -43,14 +45,17 @@ func NewHandler(service PriceService, validator PricerValidator, errorMaps ...re
 
 // CreatePricePlan handles price plan creation.
 func (h *Handler) CreatePricePlan(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-create-price-plan")
 	request, err := MapRequestToCreatePricePlanRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreatePricePlan(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -60,14 +65,17 @@ func (h *Handler) CreatePricePlan(w http.ResponseWriter, r *http.Request) {
 
 // UpdatePricePlan handles price plan updates.
 func (h *Handler) UpdatePricePlan(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-update-price-plan")
 	request, err := MapRequestToUpdatePricePlanRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdatePricePlan(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -77,14 +85,17 @@ func (h *Handler) UpdatePricePlan(w http.ResponseWriter, r *http.Request) {
 
 // GetPricePlanByID handles getting a price plan by ID.
 func (h *Handler) GetPricePlanByID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-get-price-plan-by-id")
 	request, err := MapRequestToGetPricePlanByIDRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricePlanByID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -94,14 +105,17 @@ func (h *Handler) GetPricePlanByID(w http.ResponseWriter, r *http.Request) {
 
 // GetPricePlanBySlug handles getting a price plan by slug.
 func (h *Handler) GetPricePlanBySlug(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-get-price-plan-by-slug")
 	request, err := MapRequestToGetPricePlanBySlugRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricePlanBySlug(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -111,14 +125,17 @@ func (h *Handler) GetPricePlanBySlug(w http.ResponseWriter, r *http.Request) {
 
 // GetPricePlans handles getting price plans.
 func (h *Handler) GetPricePlans(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-get-price-plans")
 	request, err := MapRequestToGetPricePlansRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricePlans(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -133,14 +150,17 @@ func (h *Handler) GetPricePlans(w http.ResponseWriter, r *http.Request) {
 
 // ValidatePriceSlug handles pricing slug validation without persisting anything.
 func (h *Handler) ValidatePriceSlug(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-validate-price-slug")
 	request, err := MapRequestToValidatePriceSlugRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ValidatePriceSlug(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -150,14 +170,17 @@ func (h *Handler) ValidatePriceSlug(w http.ResponseWriter, r *http.Request) {
 
 // PublishPricePlan handles price plan publishing.
 func (h *Handler) PublishPricePlan(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-publish-price-plan")
 	request, err := MapRequestToPublishPricePlanRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.PublishPricePlan(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -167,14 +190,17 @@ func (h *Handler) PublishPricePlan(w http.ResponseWriter, r *http.Request) {
 
 // ArchivePricePlan handles price plan archiving.
 func (h *Handler) ArchivePricePlan(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-archive-price-plan")
 	request, err := MapRequestToArchivePricePlanRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ArchivePricePlan(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -184,14 +210,17 @@ func (h *Handler) ArchivePricePlan(w http.ResponseWriter, r *http.Request) {
 
 // DeletePricePlan handles price plan soft deletion.
 func (h *Handler) DeletePricePlan(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-delete-price-plan")
 	request, err := MapRequestToDeletePricePlanRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.DeletePricePlan(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -201,14 +230,17 @@ func (h *Handler) DeletePricePlan(w http.ResponseWriter, r *http.Request) {
 
 // CreateFeature handles feature creation.
 func (h *Handler) CreateFeature(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-create-feature")
 	request, err := MapRequestToCreateFeatureRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateFeature(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -218,14 +250,17 @@ func (h *Handler) CreateFeature(w http.ResponseWriter, r *http.Request) {
 
 // UpdateFeature handles feature updates.
 func (h *Handler) UpdateFeature(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-update-feature")
 	request, err := MapRequestToUpdateFeatureRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateFeature(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -235,14 +270,17 @@ func (h *Handler) UpdateFeature(w http.ResponseWriter, r *http.Request) {
 
 // GetFeatures handles getting feature catalog items.
 func (h *Handler) GetFeatures(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-get-features")
 	request, err := MapRequestToGetFeaturesRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetFeatures(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -257,14 +295,17 @@ func (h *Handler) GetFeatures(w http.ResponseWriter, r *http.Request) {
 
 // DeleteFeature handles feature soft deletion.
 func (h *Handler) DeleteFeature(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/pricer", "handle-delete-feature")
 	request, err := MapRequestToDeleteFeatureRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.DeleteFeature(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

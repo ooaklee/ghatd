@@ -2,9 +2,11 @@ package contacter
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // ContacterService interface defines expected methods of a valid contacter service
@@ -38,17 +40,20 @@ func NewHandler(service ContacterService, validator ContacterValidator, errorMap
 
 // GetCommsStats handles retrieving aggregated stats about platform comms
 func (h *Handler) GetCommsStats(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contacter", "handle-get-comms-stats")
 	request := &GetCommsStatsRequest{
 		WithEmailRegex: r.URL.Query().Get("with_email_regex"),
 	}
 
 	if err := h.Validator.Validate(request); err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetCommsStats(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

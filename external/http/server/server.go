@@ -11,6 +11,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // StartServerWithRequest contains the configuration and optional hooks used to start an HTTP server.
@@ -68,6 +71,13 @@ func StartServerWith(req *StartServerWithRequest) error {
 		return ErrNonPositiveTimeout
 	}
 
+	ctx := req.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := logger.AcquireOperationFrom(ctx, "external/http/server", "start-server")
+	logger.Debug("server-start-requested", zap.String("addr", resolvedAddr))
+
 	srv := &http.Server{
 		Addr:              resolvedAddr,
 		Handler:           req.Handler,
@@ -104,25 +114,22 @@ func StartServerWith(req *StartServerWithRequest) error {
 		}
 	}
 
-	log := req.Log
-	if log == nil {
-		log = func(level, message string) {}
+	emitServerEvent := req.Log
+	if emitServerEvent == nil {
+		emitServerEvent = func(level, message string) {}
 	}
 
 	serverErrCh := make(chan error, 1)
 	go func() {
-		log("info", fmt.Sprintf("server listening on %s", resolvedAddr))
+		emitServerEvent("info", fmt.Sprintf("server listening on %s", resolvedAddr))
+		logger.Info("server-listening", zap.String("addr", resolvedAddr))
 		if err := listenAndServe(srv); err != nil {
+			logger.Error("server-listen-failed", zap.String("addr", resolvedAddr), zap.Error(err))
 			serverErrCh <- err
 			return
 		}
 		serverErrCh <- nil
 	}()
-
-	ctx := req.Context
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	select {
 	case err := <-serverErrCh:
@@ -131,17 +138,21 @@ func StartServerWith(req *StartServerWithRequest) error {
 		}
 		return nil
 	case sig := <-signals:
-		log("info", fmt.Sprintf("received signal %s, shutting down gracefully", sig))
+		emitServerEvent("info", fmt.Sprintf("received signal %s, shutting down gracefully", sig))
+		logger.Info("server-shutdown-signal-received", zap.String("signal", sig.String()))
 	case <-ctx.Done():
-		log("info", "context done, shutting down gracefully")
+		emitServerEvent("info", "context done, shutting down gracefully")
+		logger.Info("server-context-done", zap.Error(ctx.Err()))
 	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), req.GracefulShutdownTimeout)
 	defer cancel()
 
 	if err := shutdown(srv, shutdownCtx); err != nil {
+		logger.Error("server-shutdown-failed", zap.Error(err))
 		return fmt.Errorf("%w: %v", ErrShutdownFailure, err)
 	}
 
+	logger.Info("server-shutdown-completed")
 	return nil
 }

@@ -81,15 +81,13 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			log := logger.AcquireFrom(r.Context()).WithOptions(
-				zap.AddStacktrace(zap.DPanicLevel),
-			)
+			logger := logger.AcquirePackageFrom(r.Context(), "external/accessmanager/middleware")
 
 			clientIP := getValidClientIP(r)
 
 			blocked, err := h.ephemeralStore.IsIPBlocked(r.Context(), clientIP)
 			if err != nil {
-				log.Error("hrl/failed-to-check-ip-block-status",
+				logger.Error("failed-to-check-ip-block-status",
 					zap.String("client-ip", clientIP),
 					zap.Error(err),
 				)
@@ -98,7 +96,7 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 			}
 
 			if blocked {
-				log.Warn("hrl/blocked-ip-attempted-verification",
+				logger.Warn("blocked-ip-attempted-verification",
 					zap.String("client-ip", clientIP),
 				)
 
@@ -110,7 +108,7 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 
 			err = h.ephemeralStore.TrackHardenedAttempt(r.Context(), clientIP, code, h.maxAttempts, h.windowDuration)
 			if err != nil {
-				log.Warn("hrl/rate-limit-exceeded-blocking-ip",
+				logger.Warn("rate-limit-exceeded-blocking-ip",
 					zap.String("client-ip", clientIP),
 					zap.String("code", code),
 					zap.Int("max-attempts", h.maxAttempts),
@@ -119,7 +117,7 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 
 				blockErr := h.ephemeralStore.BlockIP(r.Context(), clientIP, h.blockDuration)
 				if blockErr != nil {
-					log.Error("hrl/failed-to-block-ip-after-rate-limit-exceeded",
+					logger.Error("failed-to-block-ip-after-rate-limit-exceeded",
 						zap.String("client-ip", clientIP),
 						zap.Error(blockErr),
 					)
@@ -129,7 +127,7 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 				return
 			}
 
-			log.Info("hrl/verification-attempt",
+			logger.Info("verification-attempt",
 				zap.String("client-ip", clientIP),
 				zap.String("code", code),
 			)

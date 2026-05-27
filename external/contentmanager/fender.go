@@ -17,10 +17,8 @@ import (
 func mapRequestToCreatePostRequest(r *http.Request, validator contentManagerValidator) (*CreatePostRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = &CreatePostRequest{
 			CreatePostRequest: &post.CreatePostRequest{},
@@ -39,7 +37,7 @@ func mapRequestToCreatePostRequest(r *http.Request, validator contentManagerVali
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-create-post-request", zap.Error(err))
+		logger.Warn("validation-failed-for-create-post-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -50,10 +48,8 @@ func mapRequestToCreatePostRequest(r *http.Request, validator contentManagerVali
 func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManagerValidator) (*UpdatePostByIdRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = &UpdatePostByIdRequest{
 			UpdatePostRequest: &post.UpdatePostRequest{},
@@ -71,7 +67,7 @@ func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManager
 	// Extract postId from URI
 	baseRequest.PostId, err = tctcToolbox.GetVariableValueFromUri(r, "postId")
 	if err != nil {
-		log.Warn("failed-to-extract-post-id-from-uri", zap.Error(err))
+		logger.Warn("failed-to-extract-post-id-from-uri", zap.Error(err))
 		return nil, post.ErrIdIsRequired
 	}
 
@@ -79,7 +75,7 @@ func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManager
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-update-post-by-id-request", zap.Error(err))
+		logger.Warn("validation-failed-for-update-post-by-id-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -90,10 +86,8 @@ func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManager
 func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManagerValidator) (*RestorePostByIdRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = &RestorePostByIdRequest{
 			RestorePostByIdRequest: &post.RestorePostByIdRequest{},
@@ -106,7 +100,7 @@ func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManage
 	// Extract postId from URI
 	baseRequest.Id, err = tctcToolbox.GetVariableValueFromUri(r, "postId")
 	if err != nil {
-		log.Warn("failed-to-extract-post-id-from-uri", zap.Error(err))
+		logger.Warn("failed-to-extract-post-id-from-uri", zap.Error(err))
 		return nil, post.ErrIdIsRequired
 	}
 
@@ -114,7 +108,7 @@ func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManage
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-restore-post-by-id-request", zap.Error(err))
+		logger.Warn("validation-failed-for-restore-post-by-id-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -125,10 +119,8 @@ func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManage
 func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManagerValidator) (*DeletePostByIdRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = &DeletePostByIdRequest{
 			DeletePostByIdRequest: &post.DeletePostByIdRequest{},
@@ -142,14 +134,14 @@ func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManager
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-glossary-items-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-glossary-items-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
 	// Extract postId from URI
 	baseRequest.Id, err = tctcToolbox.GetVariableValueFromUri(r, "postId")
 	if err != nil {
-		log.Warn("failed-to-extract-post-id-from-uri", zap.Error(err))
+		logger.Warn("failed-to-extract-post-id-from-uri", zap.Error(err))
 		return nil, post.ErrIdIsRequired
 	}
 
@@ -157,7 +149,7 @@ func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManager
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-delete-post-by-id-request", zap.Error(err))
+		logger.Warn("validation-failed-for-delete-post-by-id-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -168,10 +160,8 @@ func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManager
 func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManagerValidator) (*GetGlossaryItemsRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetGlossaryItemsRequest{
 			GetGlossaryItemsRequest: &post.GetGlossaryItemsRequest{
@@ -187,7 +177,7 @@ func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManag
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-glossary-items-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-glossary-items-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
@@ -195,7 +185,7 @@ func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManag
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-glossary-items-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-glossary-items-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -206,10 +196,8 @@ func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManag
 func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerValidator) (*GetFaqItemsRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetFaqItemsRequest{
 			GetFaqItemsRequest: &post.GetFaqItemsRequest{
@@ -225,7 +213,7 @@ func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerVal
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-faq-items-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-faq-items-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
@@ -233,7 +221,7 @@ func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerVal
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-faq-items-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-faq-items-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -244,10 +232,8 @@ func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerVal
 func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerValidator) (*GetArticlesRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetArticlesRequest{
 			GetArticlesRequest: &post.GetArticlesRequest{
@@ -263,7 +249,7 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-articles-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-articles-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
@@ -271,7 +257,7 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-articles-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-articles-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -282,10 +268,8 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentManagerValidator) (*GetChangelogItemsRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetChangelogItemsRequest{
 			GetChangelogItemsRequest: &post.GetChangelogItemsRequest{
@@ -301,7 +285,7 @@ func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentMana
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-changelog-items-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-changelog-items-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
@@ -309,7 +293,7 @@ func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentMana
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-changelog-items-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-changelog-items-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -320,10 +304,8 @@ func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentMana
 func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validator contentManagerValidator) (*GetChangelogItemByUrlFriendlyIdRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetChangelogItemByUrlFriendlyIdRequest{}
 	)
@@ -338,7 +320,7 @@ func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validat
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-changelog-item-by-url-friendly-id-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-changelog-item-by-url-friendly-id-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -350,10 +332,8 @@ func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validat
 func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator contentManagerValidator) (*GetArticleItemByUrlFriendlyIdRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetArticleItemByUrlFriendlyIdRequest{}
 	)
@@ -368,7 +348,7 @@ func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-article-item-by-url-friendly-id-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-article-item-by-url-friendly-id-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -380,10 +360,8 @@ func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator
 func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentManagerValidator) (*GetLatestPostsByTypeRequest, error) {
 
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetLatestPostsByTypeRequest{
 			GetLatestPostsByTypeRequest: &post.GetLatestPostsByTypeRequest{},
@@ -397,7 +375,7 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-latest-posts-by-type-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-latest-posts-by-type-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
@@ -405,7 +383,7 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-latest-posts-by-type-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-latest-posts-by-type-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 
@@ -415,10 +393,8 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 // mapRequestToGetLatestNotificationOverviewsRequest maps the http request to the get latest notification overviews request
 func mapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validator contentManagerValidator) (*GetLatestNotificationOverviewsRequest, error) {
 	var (
-		err error
-		log *zap.Logger = logger.AcquireFrom(r.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		err    error
+		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
 
 		parsedRequest = GetLatestNotificationOverviewsRequest{
 			GetLatestNotificationOverviewsRequest: &common.GetLatestNotificationOverviewsRequest{},
@@ -429,7 +405,7 @@ func mapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 	query := r.URL.Query()
 	err = querydecoder.New(query).Decode(&baseRequest)
 	if err != nil {
-		log.Warn("failed-to-decode-query-for-get-latest-notification-overviews-request", zap.Error(err))
+		logger.Warn("failed-to-decode-query-for-get-latest-notification-overviews-request", zap.Error(err))
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
@@ -438,7 +414,7 @@ func mapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
-		log.Warn("validation-failed-for-get-latest-notification-overviews-request", zap.Error(err))
+		logger.Warn("validation-failed-for-get-latest-notification-overviews-request", zap.Error(err))
 		return nil, post.ErrPostBadRequest
 	}
 

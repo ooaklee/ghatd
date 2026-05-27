@@ -2,10 +2,12 @@ package policy
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // policyService manages business logic around policy request
@@ -37,9 +39,11 @@ func NewHandler(service policyService, validator policyValidator, errorMaps ...r
 
 // GetPolicies handles request for returning all policies
 func (h *Handler) GetPolicies(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/policy", "handle-get-policies")
 	request, err := MapRequestToGetPoliciesRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -47,6 +51,7 @@ func (h *Handler) GetPolicies(w http.ResponseWriter, r *http.Request) {
 	policies, err := h.service.GetPolicies(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -58,9 +63,11 @@ func (h *Handler) GetPolicies(w http.ResponseWriter, r *http.Request) {
 // GetPolicyByName handles request for returning a policy with a specific name
 // if found
 func (h *Handler) GetPolicyByName(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/policy", "handle-get-policy-by-name")
 	request, err := MapRequestToGetPolicyByNameRequest(r, h.validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -68,6 +75,7 @@ func (h *Handler) GetPolicyByName(w http.ResponseWriter, r *http.Request) {
 	policy, err := h.service.GetPolicyByName(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

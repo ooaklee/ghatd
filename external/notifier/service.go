@@ -156,6 +156,9 @@ func (s *Service) WithSender(sender ChannelSender) *Service {
 //
 // The returned address is a sanitised summary with secrets stripped.
 func (s *Service) RegisterAddress(ctx context.Context, req *RegisterAddressRequest) (*RegisterAddressResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "register-address")
+	logger.Debug("handling-register-address-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrNotificationUserIDRequired
 	}
@@ -205,6 +208,9 @@ func (s *Service) RegisterAddress(ctx context.Context, req *RegisterAddressReque
 // tokens) because the notifier itself needs those secrets to deliver
 // push messages.
 func (s *Service) GetActiveAddressesByUserID(ctx context.Context, req *GetActiveNotificationAddressesRequest) (*GetActiveNotificationAddressesResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "get-active-addresses-by-user-id")
+	logger.Debug("handling-get-active-addresses-by-user-id-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrNotificationUserIDRequired
 	}
@@ -228,6 +234,9 @@ func (s *Service) GetActiveAddressesByUserID(ctx context.Context, req *GetActive
 // This is the method behind the GET /addresses endpoint. Users call it
 // to see which devices they have registered for push notifications.
 func (s *Service) ListUserAddresses(ctx context.Context, req *ListNotificationAddressesRequest) (*ListNotificationAddressesResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "list-user-addresses")
+	logger.Debug("handling-list-user-addresses-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrNotificationUserIDRequired
 	}
@@ -244,6 +253,9 @@ func (s *Service) ListUserAddresses(ctx context.Context, req *ListNotificationAd
 // dashboards. Unlike ListUserAddresses, UserID is optional so callers can inspect
 // platform-wide registrations and narrow them with filters.
 func (s *Service) ListAddresses(ctx context.Context, req *ListNotificationAddressesRequest) (*ListNotificationAddressesResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "list-addresses")
+	logger.Debug("handling-list-addresses-request")
+
 	if req == nil {
 		req = &ListNotificationAddressesRequest{}
 	}
@@ -309,6 +321,9 @@ func normaliseAddressListPagination(page, perPage int) (int, int) {
 // deleting it. If the address does not exist or belongs to a different
 // user, the call returns ErrNotificationAddressNotFound.
 func (s *Service) DeleteAddress(ctx context.Context, req *DeleteNotificationAddressRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "delete-address")
+	logger.Debug("handling-delete-address-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return ErrNotificationUserIDRequired
 	}
@@ -326,6 +341,9 @@ func (s *Service) DeleteAddress(ctx context.Context, req *DeleteNotificationAddr
 // means new users are opted in by default and can disable notifications
 // later if they want.
 func (s *Service) GetPreferences(ctx context.Context, req *GetNotificationPreferencesRequest) (*GetNotificationPreferencesResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "get-preferences")
+	logger.Debug("handling-get-preferences-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrNotificationUserIDRequired
 	}
@@ -355,6 +373,9 @@ func (s *Service) GetPreferences(ctx context.Context, req *GetNotificationPrefer
 // global setting is not changed. Channels that are not mentioned in
 // the map are left as they were.
 func (s *Service) UpdatePreferences(ctx context.Context, req *UpdateNotificationPreferencesRequest) (*UpdateNotificationPreferencesResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "update-preferences")
+	logger.Debug("handling-update-preferences-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrNotificationUserIDRequired
 	}
@@ -408,6 +429,9 @@ func (s *Service) UpdatePreferences(ctx context.Context, req *UpdateNotification
 // This method is safe to call without authentication – it doesn't expose
 // any user-specific data.
 func (s *Service) GetConfig(ctx context.Context, req *GetNotifierConfigRequest) (*GetNotifierConfigResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "get-config")
+	logger.Debug("handling-get-config-request")
+
 	config := &NotifierConfig{
 		SupportedChannels: []NotificationChannel{},
 		WebPush:           WebPushClientConfig{},
@@ -463,13 +487,12 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 	}
 
 	userID := strings.TrimSpace(req.UserID)
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(
-		zap.String("component", "notifier"),
+	logger := logger.AcquirePackageFrom(ctx, "external/notifier").With(
 		zap.String("operation", "notify-user"),
 		zap.String("user-id", userID),
 	)
 
-	log.Info(
+	logger.Info(
 		"notification-send-started",
 		zap.Strings("requested-channels", notificationChannelsForLog(req.Channels)),
 		zap.Strings("data-keys", notificationDataKeysForLog(req.Data)),
@@ -477,36 +500,36 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 
 	preferencesResponse, err := s.GetPreferences(ctx, &GetNotificationPreferencesRequest{UserID: userID})
 	if err != nil {
-		log.Error("notification-preferences-lookup-failed", zap.Error(err))
+		logger.Error("notification-preferences-lookup-failed", zap.Error(err))
 		return nil, err
 	}
 	preferences := preferencesResponse.Preferences
 	if preferences != nil && !preferences.Enabled {
-		log.Info("notification-send-skipped-user-preferences-disabled")
+		logger.Info("notification-send-skipped-user-preferences-disabled")
 		return &NotifyUserResponse{Results: []NotificationSendResult{}}, nil
 	}
 
 	channels, err := normaliseChannels(req.Channels)
 	if err != nil {
-		log.Warn("notification-send-invalid-channels", zap.Strings("requested-channels", notificationChannelsForLog(req.Channels)), zap.Error(err))
+		logger.Warn("notification-send-invalid-channels", zap.Strings("requested-channels", notificationChannelsForLog(req.Channels)), zap.Error(err))
 		return nil, err
 	}
 	addresses, err := s.Repository.GetActiveAddressesByUserID(ctx, userID, channels...)
 	if err != nil {
-		log.Error("notification-active-address-lookup-failed", zap.Strings("channels", notificationChannelsForLog(channels)), zap.Error(err))
+		logger.Error("notification-active-address-lookup-failed", zap.Strings("channels", notificationChannelsForLog(channels)), zap.Error(err))
 		return nil, err
 	}
 	if len(addresses) == 0 {
-		log.Warn("notification-send-no-active-addresses", zap.Strings("channels", notificationChannelsForLog(channels)))
+		logger.Warn("notification-send-no-active-addresses", zap.Strings("channels", notificationChannelsForLog(channels)))
 		return nil, ErrNotificationNoActiveAddresses
 	}
-	log.Info("notification-active-addresses-found", zap.Int("address-count", len(addresses)), zap.Strings("channels", notificationChannelsForLog(channels)))
+	logger.Info("notification-active-addresses-found", zap.Int("address-count", len(addresses)), zap.Strings("channels", notificationChannelsForLog(channels)))
 
 	addressesByChannel := map[NotificationChannel][]NotificationAddress{}
 	for _, address := range addresses {
 		channel := address.Channel.Normalised()
 		if preferences != nil && preferences.Channels != nil && !preferences.Channels[string(channel)] {
-			log.Info(
+			logger.Info(
 				"notification-address-skipped-by-channel-preference",
 				zap.String("channel", string(channel)),
 				zap.String("address-id", address.ID),
@@ -517,7 +540,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 		addressesByChannel[channel] = append(addressesByChannel[channel], address)
 	}
 	if len(addressesByChannel) == 0 {
-		log.Info("notification-send-skipped-all-addresses-filtered-by-preferences")
+		logger.Info("notification-send-skipped-all-addresses-filtered-by-preferences")
 	}
 
 	results := []NotificationSendResult{}
@@ -528,7 +551,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 		if sender == nil || !sender.Enabled() {
 			result.Skipped = true
 			result.Error = ErrNotificationSenderNotEnabled.Error()
-			log.Warn(
+			logger.Warn(
 				"notification-channel-sender-not-enabled",
 				zap.String("channel", string(channel)),
 				zap.Int("attempted-addresses", len(channelAddresses)),
@@ -539,7 +562,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 			continue
 		}
 
-		log.Info(
+		logger.Info(
 			"notification-channel-send-started",
 			zap.String("channel", string(channel)),
 			zap.Int("attempted-addresses", len(channelAddresses)),
@@ -562,7 +585,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 		if sendErr != nil {
 			result.Error = sendErr.Error()
 			sendErrs = append(sendErrs, sendErr)
-			log.Error(
+			logger.Error(
 				"notification-channel-send-failed",
 				zap.String("channel", string(channel)),
 				zap.Int("attempted-addresses", result.Attempted),
@@ -572,7 +595,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 				zap.Error(sendErr),
 			)
 		} else {
-			log.Info(
+			logger.Info(
 				"notification-channel-send-completed",
 				zap.String("channel", string(channel)),
 				zap.Int("attempted-addresses", result.Attempted),
@@ -587,7 +610,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 	response := &NotifyUserResponse{Results: results}
 	if len(sendErrs) > 0 {
 		joinedErr := errors.Join(append([]error{ErrNotificationSendFailed}, sendErrs...)...)
-		log.Error(
+		logger.Error(
 			"notification-send-failed",
 			zap.Int("channel-results", len(results)),
 			zap.Int("failed-channels", len(sendErrs)),
@@ -597,7 +620,7 @@ func (s *Service) NotifyUser(ctx context.Context, req *NotifyUserRequest) (*Noti
 		return response, joinedErr
 	}
 
-	log.Info("notification-send-completed", zap.Int("channel-results", len(results)), zap.Any("results", results))
+	logger.Info("notification-send-completed", zap.Int("channel-results", len(results)), zap.Any("results", results))
 	return response, nil
 }
 
@@ -627,12 +650,11 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 		return nil, ErrInvalidNotificationAddressBody
 	}
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(
-		zap.String("component", "notifier"),
+	logger := logger.AcquirePackageFrom(ctx, "external/notifier").With(
 		zap.String("operation", "notify-users"),
 	)
 
-	log.Info(
+	logger.Info(
 		"notification-dispatch-started",
 		zap.Int("requested-user-count", len(req.UserIDs)),
 		zap.Bool("broadcast", len(req.UserIDs) == 0),
@@ -642,19 +664,19 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 
 	channels, err := normaliseChannels(req.Channels)
 	if err != nil {
-		log.Warn("notification-dispatch-invalid-channels", zap.Strings("requested-channels", notificationChannelsForLog(req.Channels)), zap.Error(err))
+		logger.Warn("notification-dispatch-invalid-channels", zap.Strings("requested-channels", notificationChannelsForLog(req.Channels)), zap.Error(err))
 		return nil, err
 	}
 
 	userIDs, err := s.resolveNotifyUsersTargetUserIDs(ctx, req.UserIDs, channels)
 	if err != nil {
-		log.Error("notification-dispatch-target-resolution-failed", zap.Strings("channels", notificationChannelsForLog(channels)), zap.Error(err))
+		logger.Error("notification-dispatch-target-resolution-failed", zap.Strings("channels", notificationChannelsForLog(channels)), zap.Error(err))
 		return nil, err
 	}
 	if len(userIDs) == 0 {
-		log.Warn("notification-dispatch-no-target-users", zap.Bool("broadcast", len(req.UserIDs) == 0), zap.Strings("channels", notificationChannelsForLog(channels)))
+		logger.Warn("notification-dispatch-no-target-users", zap.Bool("broadcast", len(req.UserIDs) == 0), zap.Strings("channels", notificationChannelsForLog(channels)))
 	}
-	log.Info("notification-dispatch-targets-resolved", zap.Int("target-user-count", len(userIDs)), zap.Bool("broadcast", len(req.UserIDs) == 0))
+	logger.Info("notification-dispatch-targets-resolved", zap.Int("target-user-count", len(userIDs)), zap.Bool("broadcast", len(req.UserIDs) == 0))
 
 	response := &NotifyUsersResponse{Results: make([]NotifyUsersResult, 0, len(userIDs))}
 	var sendErrs []error
@@ -675,17 +697,17 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 
 		if err == nil || errors.Is(err, ErrNotificationNoActiveAddresses) {
 			if errors.Is(err, ErrNotificationNoActiveAddresses) {
-				log.Warn("notification-dispatch-user-no-active-addresses", zap.String("user-id", userID), zap.Strings("channels", notificationChannelsForLog(channels)))
+				logger.Warn("notification-dispatch-user-no-active-addresses", zap.String("user-id", userID), zap.Strings("channels", notificationChannelsForLog(channels)))
 			}
 			continue
 		}
-		log.Error("notification-dispatch-user-send-failed", zap.String("user-id", userID), zap.Any("results", result.Results), zap.Error(err))
+		logger.Error("notification-dispatch-user-send-failed", zap.String("user-id", userID), zap.Any("results", result.Results), zap.Error(err))
 		sendErrs = append(sendErrs, err)
 	}
 
 	if len(sendErrs) > 0 {
 		joinedErr := errors.Join(sendErrs...)
-		log.Error(
+		logger.Error(
 			"notification-dispatch-failed",
 			zap.Int("target-user-count", len(userIDs)),
 			zap.Int("failed-users", len(sendErrs)),
@@ -695,13 +717,12 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 		return response, joinedErr
 	}
 
-	log.Info("notification-dispatch-completed", zap.Int("target-user-count", len(userIDs)), zap.Any("results", response.Results))
+	logger.Info("notification-dispatch-completed", zap.Int("target-user-count", len(userIDs)), zap.Any("results", response.Results))
 	return response, nil
 }
 
 func (s *Service) resolveNotifyUsersTargetUserIDs(ctx context.Context, userIDs []string, channels []NotificationChannel) ([]string, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(
-		zap.String("component", "notifier"),
+	logger := logger.AcquirePackageFrom(ctx, "external/notifier").With(
 		zap.String("operation", "resolve-notify-users-targets"),
 	)
 
@@ -716,16 +737,16 @@ func (s *Service) resolveNotifyUsersTargetUserIDs(ctx context.Context, userIDs [
 			seen[userID] = true
 			resolved = append(resolved, userID)
 		}
-		log.Info("notification-explicit-target-users-resolved", zap.Int("requested-user-count", len(userIDs)), zap.Int("target-user-count", len(resolved)))
+		logger.Info("notification-explicit-target-users-resolved", zap.Int("requested-user-count", len(userIDs)), zap.Int("target-user-count", len(resolved)))
 		return resolved, nil
 	}
 
 	addresses, err := s.Repository.GetAllActiveAddresses(ctx, channels...)
 	if err != nil {
-		log.Error("notification-broadcast-active-address-lookup-failed", zap.Strings("channels", notificationChannelsForLog(channels)), zap.Error(err))
+		logger.Error("notification-broadcast-active-address-lookup-failed", zap.Strings("channels", notificationChannelsForLog(channels)), zap.Error(err))
 		return nil, err
 	}
-	log.Info("notification-broadcast-active-addresses-found", zap.Int("address-count", len(addresses)), zap.Strings("channels", notificationChannelsForLog(channels)))
+	logger.Info("notification-broadcast-active-addresses-found", zap.Int("address-count", len(addresses)), zap.Strings("channels", notificationChannelsForLog(channels)))
 	for _, address := range addresses {
 		userID := strings.TrimSpace(address.UserID)
 		if userID == "" || seen[userID] {
@@ -735,7 +756,7 @@ func (s *Service) resolveNotifyUsersTargetUserIDs(ctx context.Context, userIDs [
 		resolved = append(resolved, userID)
 	}
 	sort.Strings(resolved)
-	log.Info("notification-broadcast-target-users-resolved", zap.Int("target-user-count", len(resolved)))
+	logger.Info("notification-broadcast-target-users-resolved", zap.Int("target-user-count", len(resolved)))
 	return resolved, nil
 }
 

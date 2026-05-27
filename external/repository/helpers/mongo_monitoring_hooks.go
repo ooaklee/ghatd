@@ -5,6 +5,9 @@ import (
 	"log"
 	"strings"
 	"time"
+
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // LoggingHook provides basic logging for MongoDB operations
@@ -34,6 +37,7 @@ func (l *LoggingHook) OnConnect(ctx context.Context, addr string) context.Contex
 	}
 
 	l.logger.Printf("MongoDB: Connecting to %s", addr)
+	logger.AcquireOperationFrom(ctx, "external/repository/helpers", "monitoring-on-connect").Info("mongo-monitoring-connect", zap.String("masked-address", addr))
 	return ctx
 }
 
@@ -45,11 +49,13 @@ func (l *LoggingHook) OnDisconnect(ctx context.Context, addr string) {
 	}
 
 	l.logger.Printf("MongoDB: Disconnected from %s", addr)
+	logger.AcquireOperationFrom(ctx, "external/repository/helpers", "monitoring-on-disconnect").Info("mongo-monitoring-disconnect", zap.String("masked-address", addr))
 }
 
 // OnError logs error events
 func (l *LoggingHook) OnError(ctx context.Context, err error, operation string) {
 	l.logger.Printf("MongoDB Error during %s: %v", operation, err)
+	logger.AcquireOperationFrom(ctx, "external/repository/helpers", "monitoring-on-error", zap.String("mongo-operation", operation)).Error("mongo-monitoring-error", zap.Error(err))
 }
 
 // MetricsHook provides metrics collection for MongoDB operations

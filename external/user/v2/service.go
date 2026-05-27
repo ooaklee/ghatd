@@ -77,17 +77,17 @@ func (s *Service) WithConfigs(configs ...*UserConfig) *Service {
 
 // CreateUser creates a new user
 func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*CreateUserResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "create-user"))
 	config, err := s.resolveRequestedConfig(req.Type)
 	if err != nil {
-		log.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
+		logger.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
 		return nil, err
 	}
 
 	// Check if user already exists
 	existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
 	if existingUser != nil {
-		log.Error("user-with-email-already-exists", zap.String("email", req.Email))
+		logger.Error("user-with-email-already-exists", zap.String("email", req.Email))
 		return nil, ErrEmailAlreadyExists
 	}
 
@@ -157,14 +157,14 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 
 	// Validate user
 	if err := user.Validate(); err != nil {
-		log.Error("user-validation-failed", zap.Error(err))
+		logger.Error("user-validation-failed", zap.Error(err))
 		return nil, ErrValidationFailed
 	}
 
 	// Create user in repository
 	createdUser, err := s.UserRepository.CreateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-create-user", zap.Error(err))
+		logger.Error("failed-to-create-user", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -178,14 +178,14 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 		})
 	}
 
-	log.Info("user-created-successfully", zap.String("user-id", createdUser.ID))
+	logger.Info("user-created-successfully", zap.String("user-id", createdUser.ID))
 
 	return &CreateUserResponse{User: createdUser}, nil
 }
 
 // GetUserByID retrieves a user by ID
 func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*GetUserByIDResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "create-user"))
 
 	if req.ID == "" {
 		return nil, ErrInvalidUserID
@@ -193,7 +193,7 @@ func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*Ge
 
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed to get user by ID", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed to get user by ID", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -205,7 +205,7 @@ func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*Ge
 
 // GetUserByNanoID retrieves a user by nano ID
 func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDRequest) (*GetUserByNanoIDResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "create-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "create-user"))
 
 	if req.NanoID == "" {
 		return nil, ErrInvalidNanoID
@@ -213,7 +213,7 @@ func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDReque
 
 	user, err := s.UserRepository.GetUserByNanoID(ctx, req.NanoID)
 	if err != nil {
-		log.Error("failed to get user by nano ID", zap.Error(err), zap.String("nano_id", req.NanoID))
+		logger.Error("failed to get user by nano ID", zap.Error(err), zap.String("nano_id", req.NanoID))
 		return nil, ErrUserNotFound
 	}
 
@@ -225,7 +225,7 @@ func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDReque
 
 // GetUserByEmail retrieves a user by email
 func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest) (*GetUserByEmailResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-by-email")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-user-by-email"))
 
 	if req.Email == "" {
 		return nil, ErrInvalidEmail
@@ -233,7 +233,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 
 	user, err := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), true)
 	if err != nil {
-		log.Error("failed to get user by email", zap.Error(err), zap.String("email", req.Email))
+		logger.Error("failed to get user by email", zap.Error(err), zap.String("email", req.Email))
 		return nil, ErrUserNotFound
 	}
 
@@ -245,7 +245,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 
 // UpdateUser updates an existing user
 func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*UpdateUserResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "update-user"))
 
 	targetUserId := req.ID
 	if req.User != nil && req.User.ID != "" {
@@ -255,7 +255,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	// Get existing user
 	user, err := s.UserRepository.GetUserByID(ctx, targetUserId)
 	if err != nil {
-		log.Error("failed-to-get-user-for-update", zap.Error(err), zap.String("id", targetUserId))
+		logger.Error("failed-to-get-user-for-update", zap.Error(err), zap.String("id", targetUserId))
 		return nil, ErrUserNotFound
 	}
 
@@ -268,7 +268,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 		config, err := s.resolveRequestedConfig(requestedType)
 		if err != nil {
-			log.Error("invalid-user-config-type", zap.String("config-type", requestedType), zap.Error(err))
+			logger.Error("invalid-user-config-type", zap.String("config-type", requestedType), zap.Error(err))
 			return nil, err
 		}
 
@@ -299,7 +299,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		if req.Type != "" && req.Type != user.Type {
 			config, err := s.resolveRequestedConfig(req.Type)
 			if err != nil {
-				log.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
+				logger.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
 				return nil, err
 			}
 
@@ -350,7 +350,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		if req.Status != "" && req.Status != user.Status {
 			_, err := user.UpdateStatus(req.Status)
 			if err != nil {
-				log.Error("failed-to-update-user-status", zap.Error(err))
+				logger.Error("failed-to-update-user-status", zap.Error(err))
 				return nil, err
 			}
 			hasChanges = true
@@ -373,7 +373,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 	// Validate user
 	if err := user.Validate(); err != nil {
-		log.Error("user-validation-failed", zap.Error(err))
+		logger.Error("user-validation-failed", zap.Error(err))
 		return nil, ErrValidationFailed
 	}
 
@@ -385,7 +385,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	// Update in repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-update-user", zap.Error(err))
+		logger.Error("failed-to-update-user", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -399,26 +399,26 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		})
 	}
 
-	log.Info("user-updated-successfully", zap.String("user-id", updatedUser.ID))
+	logger.Info("user-updated-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &UpdateUserResponse{User: updatedUser}, nil
 }
 
 // DeleteUser deletes a user
 func (s *Service) DeleteUser(ctx context.Context, req *DeleteUserRequest) error {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "delete-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "delete-user"))
 
 	// Verify user exists
 	_, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("user-not-found", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("user-not-found", zap.Error(err), zap.String("id", req.ID))
 		return ErrUserNotFound
 	}
 
 	// Delete user
 	err = s.UserRepository.DeleteUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-delete-user", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-delete-user", zap.Error(err), zap.String("id", req.ID))
 		return ErrDatabaseError
 	}
 
@@ -432,14 +432,14 @@ func (s *Service) DeleteUser(ctx context.Context, req *DeleteUserRequest) error 
 		})
 	}
 
-	log.Info("user-deleted-successfully", zap.String("user-id", req.ID))
+	logger.Info("user-deleted-successfully", zap.String("user-id", req.ID))
 
 	return nil
 }
 
 // GetUsers retrieves users with filters and pagination
 func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsersResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-users")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-users"))
 
 	// Validate pagination
 	if req.Page < 1 {
@@ -467,14 +467,14 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 
 	totalMatchingUsers, err := s.UserRepository.GetTotalUsers(ctx, totalReq)
 	if err != nil {
-		log.Error("failed-to-get-total-users", zap.Error(err))
+		logger.Error("failed-to-get-total-users", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
 	// Get users
 	users, err := s.UserRepository.GetUsers(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-users", zap.Error(err))
+		logger.Error("failed-to-get-users", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -502,11 +502,11 @@ func (s *Service) GetUsers(ctx context.Context, req *GetUsersRequest) (*GetUsers
 
 // GetTotalUsers retrieves the total count of users matching filters
 func (s *Service) GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) (*GetTotalUsersResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-total-users")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-total-users"))
 
 	total, err := s.UserRepository.GetTotalUsers(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-total-users", zap.Error(err))
+		logger.Error("failed-to-get-total-users", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -515,12 +515,12 @@ func (s *Service) GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) 
 
 // UpdateUserStatus updates a user's status
 func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusRequest) (*UpdateUserStatusResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-user-status")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "update-user-status"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-status-update", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-status-update", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -530,14 +530,14 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	// Update status
 	updatedUser, err := user.UpdateStatus(req.DesiredStatus)
 	if err != nil {
-		log.Error("failed-to-update-user-status", zap.Error(err))
+		logger.Error("failed-to-update-user-status", zap.Error(err))
 		return nil, err
 	}
 
 	// Save to repository
 	updatedUser, err = s.UserRepository.UpdateUser(ctx, updatedUser)
 	if err != nil {
-		log.Error("failed-to-save-user-after-status-update", zap.Error(err))
+		logger.Error("failed-to-save-user-after-status-update", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -551,19 +551,19 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 		})
 	}
 
-	log.Info("user-status-updated-successfully", zap.String("user-id", updatedUser.ID), zap.String("status", req.DesiredStatus))
+	logger.Info("user-status-updated-successfully", zap.String("user-id", updatedUser.ID), zap.String("status", req.DesiredStatus))
 
 	return &UpdateUserStatusResponse{User: updatedUser}, nil
 }
 
 // AddUserRole adds a role to a user
 func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*AddUserRoleResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "add-user-role")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "add-user-role"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-adding-role", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-adding-role", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -576,7 +576,7 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-adding-role", zap.Error(err))
+		logger.Error("failed-to-save-user-after-adding-role", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -590,19 +590,19 @@ func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*Ad
 		})
 	}
 
-	log.Info("user-role-added-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
+	logger.Info("user-role-added-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
 
 	return &AddUserRoleResponse{User: updatedUser}, nil
 }
 
 // RemoveUserRole removes a role from a user
 func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest) (*RemoveUserRoleResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "remove-user-role")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "remove-user-role"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-removing-role", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-removing-role", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -615,7 +615,7 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-removing-role", zap.Error(err))
+		logger.Error("failed-to-save-user-after-removing-role", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -629,19 +629,19 @@ func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest
 		})
 	}
 
-	log.Info("user-role-removed-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
+	logger.Info("user-role-removed-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
 
 	return &RemoveUserRoleResponse{User: updatedUser}, nil
 }
 
 // VerifyUserEmail marks a user's email as verified
 func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailRequest) (*VerifyUserEmailResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "verify-user-email")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "verify-user-email"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-email-verification", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-email-verification", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -654,7 +654,7 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-email-verification", zap.Error(err))
+		logger.Error("failed-to-save-user-after-email-verification", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -668,19 +668,19 @@ func (s *Service) VerifyUserEmail(ctx context.Context, req *VerifyUserEmailReque
 		})
 	}
 
-	log.Info("user-email-verified-successfully", zap.String("user-id", updatedUser.ID))
+	logger.Info("user-email-verified-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &VerifyUserEmailResponse{User: updatedUser}, nil
 }
 
 // UnverifyUserEmail marks a user's email as unverified
 func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailRequest) (*UnverifyUserEmailResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "unverify-user-email")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "unverify-user-email"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-email-unverification", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-email-unverification", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -693,7 +693,7 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-email-unverification", zap.Error(err))
+		logger.Error("failed-to-save-user-after-email-unverification", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -707,19 +707,19 @@ func (s *Service) UnverifyUserEmail(ctx context.Context, req *UnverifyUserEmailR
 		})
 	}
 
-	log.Info("user-email-unverified-successfully", zap.String("user-id", updatedUser.ID))
+	logger.Info("user-email-unverified-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &UnverifyUserEmailResponse{User: updatedUser}, nil
 }
 
 // VerifyUserPhone marks a user's phone as verified
 func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneRequest) (*VerifyUserPhoneResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "veify-user-phone")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "veify-user-phone"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-phone-verification", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-phone-verification", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -732,7 +732,7 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-phone-verification", zap.Error(err))
+		logger.Error("failed-to-save-user-after-phone-verification", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -746,19 +746,19 @@ func (s *Service) VerifyUserPhone(ctx context.Context, req *VerifyUserPhoneReque
 		})
 	}
 
-	log.Info("user-phone-verified-successfully", zap.String("user-id", updatedUser.ID))
+	logger.Info("user-phone-verified-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &VerifyUserPhoneResponse{User: updatedUser}, nil
 }
 
 // RecordUserLogin records a user login event
 func (s *Service) RecordUserLogin(ctx context.Context, req *RecordUserLoginRequest) (*RecordUserLoginResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "record-user-login")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "record-user-login"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-login-recording", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-login-recording", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -772,22 +772,22 @@ func (s *Service) RecordUserLogin(ctx context.Context, req *RecordUserLoginReque
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-login-recording", zap.Error(err))
+		logger.Error("failed-to-save-user-after-login-recording", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
-	log.Info("user-login-recorded-successfully", zap.String("user-id", updatedUser.ID))
+	logger.Info("user-login-recorded-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &RecordUserLoginResponse{User: updatedUser}, nil
 }
 
 // GetUserProfile retrieves a user's profile
 func (s *Service) GetUserProfile(ctx context.Context, req *GetUserProfileRequest) (*GetUserProfileResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-profile")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-user-profile"))
 
 	userResp, err := s.GetUserByID(ctx, &GetUserByIDRequest{ID: req.ID})
 	if err != nil {
-		log.Error("failed-to-get-user-for-profile-retrieval", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-profile-retrieval", zap.Error(err), zap.String("id", req.ID))
 		return nil, err
 	}
 
@@ -798,11 +798,11 @@ func (s *Service) GetUserProfile(ctx context.Context, req *GetUserProfileRequest
 
 // GetUserMicroProfile retrieves a user's micro profile
 func (s *Service) GetUserMicroProfile(ctx context.Context, req *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-micro-profile")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-user-micro-profile"))
 
 	userResp, err := s.GetUserByID(ctx, &GetUserByIDRequest{ID: req.ID})
 	if err != nil {
-		log.Error("failed-to-get-user-for-micro-profile-retrieval", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-micro-profile-retrieval", zap.Error(err), zap.String("id", req.ID))
 		return nil, err
 	}
 
@@ -813,12 +813,12 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, req *GetUserMicroProf
 
 // SetUserExtension sets an extension field value
 func (s *Service) SetUserExtension(ctx context.Context, req *SetUserExtensionRequest) (*SetUserExtensionResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "set-user-extension")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "set-user-extension"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-setting-extension", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-setting-extension", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -835,23 +835,23 @@ func (s *Service) SetUserExtension(ctx context.Context, req *SetUserExtensionReq
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-setting-extension", zap.Error(err))
+		logger.Error("failed-to-save-user-after-setting-extension", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
-	log.Info("user-extension-set-successfully", zap.String("user-id", updatedUser.ID), zap.String("key", req.Key))
+	logger.Info("user-extension-set-successfully", zap.String("user-id", updatedUser.ID), zap.String("key", req.Key))
 
 	return &SetUserExtensionResponse{User: updatedUser}, nil
 }
 
 // GetUserExtension retrieves an extension field value
 func (s *Service) GetUserExtension(ctx context.Context, req *GetUserExtensionRequest) (*GetUserExtensionResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-extension")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-user-extension"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-getting-extension", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-getting-extension", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -866,12 +866,12 @@ func (s *Service) GetUserExtension(ctx context.Context, req *GetUserExtensionReq
 
 // UpdateUserPersonalInfo updates a user's personal information
 func (s *Service) UpdateUserPersonalInfo(ctx context.Context, req *UpdateUserPersonalInfoRequest) (*UpdateUserPersonalInfoResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "update-user-personal-info")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "update-user-personal-info"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-updating-personal-info", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-updating-personal-info", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -918,7 +918,7 @@ func (s *Service) UpdateUserPersonalInfo(ctx context.Context, req *UpdateUserPer
 	// Save to repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		log.Error("failed-to-save-user-after-updating-personal-info", zap.Error(err))
+		logger.Error("failed-to-save-user-after-updating-personal-info", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 
@@ -932,19 +932,19 @@ func (s *Service) UpdateUserPersonalInfo(ctx context.Context, req *UpdateUserPer
 		})
 	}
 
-	log.Info("user-personal-info-updated-successfully", zap.String("user-id", updatedUser.ID))
+	logger.Info("user-personal-info-updated-successfully", zap.String("user-id", updatedUser.ID))
 
 	return &UpdateUserPersonalInfoResponse{User: updatedUser}, nil
 }
 
 // ValidateUser validates a user
 func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*ValidateUserResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "validate-user")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "validate-user"))
 
 	// Get user
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-user-for-validation", zap.Error(err), zap.String("id", req.ID))
+		logger.Error("failed-to-get-user-for-validation", zap.Error(err), zap.String("id", req.ID))
 		return nil, ErrUserNotFound
 	}
 
@@ -955,7 +955,7 @@ func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*
 	validationErr := user.Validate()
 
 	if validationErr != nil {
-		log.Error("user-validation-failed", zap.Error(validationErr))
+		logger.Error("user-validation-failed", zap.Error(validationErr))
 		errorStr := validationErr.Error()
 		return &ValidateUserResponse{
 			Valid:  false,
@@ -968,7 +968,7 @@ func (s *Service) ValidateUser(ctx context.Context, req *ValidateUserRequest) (*
 
 // BulkUpdateUsersStatus updates status for multiple users
 func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "bulk-update-users-status")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "bulk-update-users-status"))
 
 	var successCount, failureCount int
 	var failedIDs []string
@@ -983,13 +983,13 @@ func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *BulkUpdateUser
 		if err != nil {
 			failureCount++
 			failedIDs = append(failedIDs, userID)
-			log.Warn("failed-to-update-user-status-in-bulk-operation", zap.String("user-id", userID), zap.Error(err))
+			logger.Warn("failed-to-update-user-status-in-bulk-operation", zap.String("user-id", userID), zap.Error(err))
 		} else {
 			successCount++
 		}
 	}
 
-	log.Info("bulk-status-update-completed", zap.Int("success", successCount), zap.Int("failures", failureCount))
+	logger.Info("bulk-status-update-completed", zap.Int("success", successCount), zap.Int("failures", failureCount))
 
 	return &BulkUpdateUsersStatusResponse{
 		UpdatedCount: successCount,
@@ -999,11 +999,11 @@ func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *BulkUpdateUser
 
 // GetUserStats retrieves aggregated stats about platform users
 func (s *Service) GetUserStats(ctx context.Context, req *GetUserStatsRequest) (*GetUserStatsResponse, error) {
-	log := logger.AcquireFrom(ctx).With(zap.String("method", "get-user-stats")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-user-stats"))
 
 	stats, err := s.UserRepository.GetUserStatsCounts(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-user-stats-counts", zap.Error(err))
+		logger.Error("failed-to-get-user-stats-counts", zap.Error(err))
 		return nil, ErrDatabaseError
 	}
 

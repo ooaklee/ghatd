@@ -47,6 +47,8 @@ func NewService(userRespository UserRespository, auditService AuditService, auto
 
 // GetMicroProfile returns user with matching ID's micro profile
 func (s *Service) GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest) (*GetMicroProfileResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/user", "get-micro-profile")
+	logger.Debug("handling-get-micro-profile-request")
 
 	userResponse, err := s.GetUserByID(ctx, &GetUserByIdRequest{
 		Id: r.Id,
@@ -62,6 +64,8 @@ func (s *Service) GetMicroProfile(ctx context.Context, r *GetMicroProfileRequest
 
 // GetProfile returns user with matching ID's profile
 func (s *Service) GetProfile(ctx context.Context, r *GetProfileRequest) (*GetProfileResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/user", "get-profile")
+	logger.Debug("handling-get-profile-request")
 
 	userResponse, err := s.GetUserByID(ctx, &GetUserByIdRequest{
 		Id: r.Id,
@@ -77,6 +81,8 @@ func (s *Service) GetProfile(ctx context.Context, r *GetProfileRequest) (*GetPro
 
 // GetUserByEmail returns an user if it matches email
 func (s *Service) GetUserByEmail(ctx context.Context, r *GetUserByEmailRequest) (*GetUserByEmailResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/user", "get-user-by-email")
+	logger.Debug("handling-get-user-by-email-request")
 
 	user, err := s.UserRespository.GetUserByEmail(ctx, normaliseUserEmail(r.Email), true)
 	if err != nil {
@@ -91,7 +97,7 @@ func (s *Service) GetUserByEmail(ctx context.Context, r *GetUserByEmailRequest) 
 // DeleteUser attempts to delete the user with matching ID in repository
 func (s *Service) DeleteUser(ctx context.Context, r *DeleteUserRequest) error {
 
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/user")
 
 	userToDelete, err := s.UserRespository.GetUserByID(ctx, r.Id)
 	if err != nil {
@@ -116,7 +122,7 @@ func (s *Service) DeleteUser(ctx context.Context, r *DeleteUserRequest) error {
 		})
 
 		if auditErr != nil {
-			log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.Id), zap.String("event-type", string(auditEvent)))
+			logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.Id), zap.String("event-type", string(auditEvent)))
 		}
 	}
 
@@ -125,6 +131,8 @@ func (s *Service) DeleteUser(ctx context.Context, r *DeleteUserRequest) error {
 
 // UpdateUser attempts to update the user with matching ID in repository
 func (s *Service) UpdateUser(ctx context.Context, r *UpdateUserRequest) (*UpdateUserResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/user", "update-user")
+	logger.Debug("handling-update-user-request")
 
 	var (
 		persistentUser *User
@@ -165,6 +173,8 @@ func (s *Service) UpdateUser(ctx context.Context, r *UpdateUserRequest) (*Update
 
 // GetUserByNanoId is returning a user if they have matching nano id
 func (s *Service) GetUserByNanoId(ctx context.Context, id string) (*GetUserByIDResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/user", "get-user-by-nano-id")
+	logger.Debug("handling-get-user-by-nano-id-request")
 
 	user, err := s.UserRespository.GetUserByNanoId(ctx, id)
 	if err != nil {
@@ -178,6 +188,8 @@ func (s *Service) GetUserByNanoId(ctx context.Context, id string) (*GetUserByIDR
 
 // GetUserByID returns an user if it matches id
 func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIdRequest) (*GetUserByIDResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/user", "get-user-by-id")
+	logger.Debug("handling-get-user-by-id-request")
 
 	user, err := s.UserRespository.GetUserByID(ctx, r.Id)
 	if err != nil {
@@ -193,7 +205,7 @@ func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIdRequest) (*GetU
 func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error) {
 
 	var isAutoAdminEmail bool
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/user")
 
 	user := User{
 		FirstName: normaliseUserNames(r.FirstName),
@@ -209,7 +221,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		boasiEmailRegex := regexp.MustCompile(s.autoAdminEmailAddressRegex)
 		isAutoAdminEmail = boasiEmailRegex.Match([]byte(user.Email))
 		if isAutoAdminEmail {
-			log.Info("assigning-admin-role-to-user-role", zap.String("team-member-email", user.Email))
+			logger.Info("assigning-admin-role-to-user-role", zap.String("team-member-email", user.Email))
 			user.Roles = append(user.Roles, UserRoleAdmin)
 		}
 	}
@@ -220,7 +232,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 	}
 
 	if s.autoAdminEmailAddressRegex != "" && isAutoAdminEmail {
-		log.Warn("user-created-with-admin-role", zap.String("team-member-email", user.Email), zap.String("user-id", user.ID))
+		logger.Warn("user-created-with-admin-role", zap.String("team-member-email", user.Email), zap.String("user-id", user.ID))
 	}
 
 	return &CreateUserResponse{
@@ -233,9 +245,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/user")
 	)
 
 	// default
@@ -254,16 +264,16 @@ func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersRe
 	// get count of all users
 	totalUsers, err := s.UserRespository.GetTotalUsers(ctx, r.FirstName, r.LastName, r.Email, r.Status, r.IsAdmin)
 	if err != nil {
-		logger.Error("failed-get-users-request--error-getting-total-users", zap.Any("request", r), zap.Error(err))
+		logger.Error("failed-get-users-request--error-getting-total-users", zap.Any("request", safeLogValue(r)), zap.Error(err))
 		return nil, err
 	}
 
 	r.TotalCount = int(totalUsers)
-	logger.Debug("handling-get-users-request--total-users-found", zap.Int64("total", totalUsers), zap.Any("request", r))
+	logger.Debug("handling-get-users-request--total-users-found", zap.Int64("total", totalUsers), zap.Any("request", safeLogValue(r)))
 
 	users, err := s.UserRespository.GetUsers(ctx, r)
 	if err != nil {
-		logger.Error("failed-get-users-request--error-getting-users", zap.Any("request", r), zap.Error(err))
+		logger.Error("failed-get-users-request--error-getting-users", zap.Any("request", safeLogValue(r)), zap.Error(err))
 		return nil, err
 	}
 

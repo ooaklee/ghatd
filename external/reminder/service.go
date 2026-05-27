@@ -41,8 +41,8 @@ func NewService(reminderRepository ReminderRepository) *Service {
 
 // CreateReminder validates and creates a reminder declaration for a user.
 func (s *Service) CreateReminder(ctx context.Context, req *CreateReminderRequest) (*CreateReminderResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("initiating-create-reminder-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
+	logger.Debug("initiating-create-reminder-request", zap.Any("request", safeLogValue(req)))
 
 	if req == nil {
 		return nil, ErrUserIDIsRequired
@@ -97,17 +97,17 @@ func (s *Service) CreateReminder(ctx context.Context, req *CreateReminderRequest
 
 	createdReminder, err := s.ReminderRepository.CreateReminder(ctx, reminder)
 	if err != nil {
-		log.Error("failed-to-create-reminder-error", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-reminder-error", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
-	log.Debug("create-reminder-request-successful", zap.Any("reminder-id", createdReminder.Id))
+	logger.Debug("create-reminder-request-successful", zap.Any("reminder-id", safeLogValue(createdReminder.Id)))
 	return &CreateReminderResponse{Reminder: createdReminder}, nil
 }
 
 // GetReminderByID retrieves one reminder declaration and enforces optional user ownership.
 func (s *Service) GetReminderByID(ctx context.Context, req *GetReminderByIDRequest) (*GetReminderByIDResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil || strings.TrimSpace(req.Id) == "" {
 		return nil, ErrIdIsRequired
@@ -118,7 +118,7 @@ func (s *Service) GetReminderByID(ctx context.Context, req *GetReminderByIDReque
 		if errors.Is(err, ErrResourceNotFound) {
 			return nil, ErrResourceNotFound
 		}
-		log.Error("failed-to-get-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-get-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
 		return nil, err
 	}
 	if strings.TrimSpace(req.UserID) != "" && reminder.UserID != strings.TrimSpace(req.UserID) {
@@ -130,7 +130,7 @@ func (s *Service) GetReminderByID(ctx context.Context, req *GetReminderByIDReque
 
 // ListReminders returns reminder declarations matching the provided filters.
 func (s *Service) ListReminders(ctx context.Context, req *ListRemindersRequest) (*ListRemindersResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil {
 		req = &ListRemindersRequest{}
@@ -163,7 +163,7 @@ func (s *Service) ListReminders(ctx context.Context, req *ListRemindersRequest) 
 		perPage,
 	)
 	if err != nil {
-		log.Error("failed-to-list-reminders-error", zap.String("user-id", req.UserID), zap.Error(err))
+		logger.Error("failed-to-list-reminders-error", zap.String("user-id", req.UserID), zap.Error(err))
 		return nil, err
 	}
 
@@ -178,7 +178,7 @@ func (s *Service) ListReminders(ctx context.Context, req *ListRemindersRequest) 
 
 // UpdateReminderByID applies user-owned changes to one reminder declaration.
 func (s *Service) UpdateReminderByID(ctx context.Context, req *UpdateReminderByIDRequest) (*UpdateReminderByIDResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil || strings.TrimSpace(req.Id) == "" {
 		return nil, ErrIdIsRequired
@@ -192,7 +192,7 @@ func (s *Service) UpdateReminderByID(ctx context.Context, req *UpdateReminderByI
 		if errors.Is(err, ErrResourceNotFound) {
 			return nil, ErrResourceNotFound
 		}
-		log.Error("failed-to-update-reminder-error-fetching", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-update-reminder-error-fetching", zap.String("reminder-id", req.Id), zap.Error(err))
 		return nil, err
 	}
 
@@ -259,7 +259,7 @@ func (s *Service) UpdateReminderByID(ctx context.Context, req *UpdateReminderByI
 
 	updated, err := s.ReminderRepository.UpdateReminderByID(ctx, existing)
 	if err != nil {
-		log.Error("failed-to-update-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-update-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
 		return nil, err
 	}
 
@@ -268,7 +268,7 @@ func (s *Service) UpdateReminderByID(ctx context.Context, req *UpdateReminderByI
 
 // DeleteReminderByID removes one reminder declaration after verifying ownership.
 func (s *Service) DeleteReminderByID(ctx context.Context, req *DeleteReminderByIDRequest) error {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil || strings.TrimSpace(req.Id) == "" {
 		return ErrIdIsRequired
@@ -282,7 +282,7 @@ func (s *Service) DeleteReminderByID(ctx context.Context, req *DeleteReminderByI
 		if errors.Is(err, ErrResourceNotFound) {
 			return ErrResourceNotFound
 		}
-		log.Error("failed-to-delete-reminder-error-fetching", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-delete-reminder-error-fetching", zap.String("reminder-id", req.Id), zap.Error(err))
 		return err
 	}
 
@@ -292,7 +292,7 @@ func (s *Service) DeleteReminderByID(ctx context.Context, req *DeleteReminderByI
 
 	err = s.ReminderRepository.DeleteReminderByID(ctx, req.Id)
 	if err != nil {
-		log.Error("failed-to-delete-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-delete-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
 		return err
 	}
 
@@ -301,7 +301,7 @@ func (s *Service) DeleteReminderByID(ctx context.Context, req *DeleteReminderByI
 
 // DisableReminderByID marks a user-owned reminder as disabled.
 func (s *Service) DisableReminderByID(ctx context.Context, req *DisableReminderByIDRequest) (*UpdateReminderByIDResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil || strings.TrimSpace(req.Id) == "" {
 		return nil, ErrIdIsRequired
@@ -315,7 +315,7 @@ func (s *Service) DisableReminderByID(ctx context.Context, req *DisableReminderB
 		if errors.Is(err, ErrResourceNotFound) {
 			return nil, ErrResourceNotFound
 		}
-		log.Error("failed-to-disable-reminder-error-fetching", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-disable-reminder-error-fetching", zap.String("reminder-id", req.Id), zap.Error(err))
 		return nil, err
 	}
 
@@ -332,7 +332,7 @@ func (s *Service) DisableReminderByID(ctx context.Context, req *DisableReminderB
 
 	updated, err := s.ReminderRepository.UpdateReminderByID(ctx, existing)
 	if err != nil {
-		log.Error("failed-to-disable-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
+		logger.Error("failed-to-disable-reminder-error", zap.String("reminder-id", req.Id), zap.Error(err))
 		return nil, err
 	}
 
@@ -341,7 +341,7 @@ func (s *Service) DisableReminderByID(ctx context.Context, req *DisableReminderB
 
 // GetReminderStats returns aggregate reminder counts for admin dashboards.
 func (s *Service) GetReminderStats(ctx context.Context, req *GetReminderStatsRequest) (*GetReminderStatsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil {
 		req = &GetReminderStatsRequest{}
@@ -352,25 +352,25 @@ func (s *Service) GetReminderStats(ctx context.Context, req *GetReminderStatsReq
 
 	total, err := s.ReminderRepository.CountReminders(ctx, baseFilter)
 	if err != nil {
-		log.Error("failed-to-count-reminders-total", zap.Error(err))
+		logger.Error("failed-to-count-reminders-total", zap.Error(err))
 		return nil, err
 	}
 
 	active, err := s.ReminderRepository.CountReminders(ctx, &ReminderFilter{UserIDs: userIDs, Status: string(ReminderStatusActive)})
 	if err != nil {
-		log.Error("failed-to-count-reminders-active", zap.Error(err))
+		logger.Error("failed-to-count-reminders-active", zap.Error(err))
 		return nil, err
 	}
 
 	completed, err := s.ReminderRepository.CountReminders(ctx, &ReminderFilter{UserIDs: userIDs, Status: string(ReminderStatusCompleted)})
 	if err != nil {
-		log.Error("failed-to-count-reminders-completed", zap.Error(err))
+		logger.Error("failed-to-count-reminders-completed", zap.Error(err))
 		return nil, err
 	}
 
 	disabled, err := s.ReminderRepository.CountReminders(ctx, &ReminderFilter{UserIDs: userIDs, Status: string(ReminderStatusDisabled)})
 	if err != nil {
-		log.Error("failed-to-count-reminders-disabled", zap.Error(err))
+		logger.Error("failed-to-count-reminders-disabled", zap.Error(err))
 		return nil, err
 	}
 
@@ -380,7 +380,7 @@ func (s *Service) GetReminderStats(ctx context.Context, req *GetReminderStatsReq
 		DueBefore: toolbox.TimeNowUTC(),
 	}, 0)
 	if err != nil {
-		log.Error("failed-to-get-due-reminders-count", zap.Error(err))
+		logger.Error("failed-to-get-due-reminders-count", zap.Error(err))
 		return nil, err
 	}
 
@@ -397,7 +397,7 @@ func (s *Service) GetReminderStats(ctx context.Context, req *GetReminderStatsReq
 
 // GetDueReminders returns active reminders ready for scheduler dispatch.
 func (s *Service) GetDueReminders(ctx context.Context, req *GetDueRemindersRequest) (*GetDueRemindersResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/reminder")
 
 	if req == nil {
 		req = &GetDueRemindersRequest{}
@@ -430,7 +430,7 @@ func (s *Service) GetDueReminders(ctx context.Context, req *GetDueRemindersReque
 		UserIDs:   userIDs,
 	}, limit)
 	if err != nil {
-		log.Error("failed-to-get-due-reminders-error", zap.Error(err))
+		logger.Error("failed-to-get-due-reminders-error", zap.Error(err))
 		return nil, err
 	}
 
@@ -439,6 +439,9 @@ func (s *Service) GetDueReminders(ctx context.Context, req *GetDueRemindersReque
 
 // GetRemindersForTargetTypeByUserID returns a user's reminders for a target type and optional target ID.
 func (s *Service) GetRemindersForTargetTypeByUserID(ctx context.Context, req *GetRemindersForTargetTypeByUserIDRequest) (*ListRemindersResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/reminder", "get-reminders-for-target-type-by-user-id")
+	logger.Debug("handling-get-reminders-for-target-type-by-user-id-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrUserIDIsRequired
 	}
@@ -460,6 +463,9 @@ func (s *Service) GetRemindersForTargetTypeByUserID(ctx context.Context, req *Ge
 
 // GetActiveRemindersForTargetTypeByUserID returns active reminders for a user's target type.
 func (s *Service) GetActiveRemindersForTargetTypeByUserID(ctx context.Context, req *GetActiveRemindersForTargetTypeByUserIDRequest) (*ListRemindersResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/reminder", "get-active-reminders-for-target-type-by-user-id")
+	logger.Debug("handling-get-active-reminders-for-target-type-by-user-id-request")
+
 	if req == nil || strings.TrimSpace(req.UserID) == "" {
 		return nil, ErrUserIDIsRequired
 	}
@@ -519,6 +525,9 @@ func reminderPaginationMeta(page, perPage int) map[string]interface{} {
 
 // RecordReminderExecution stores the result of one reminder scheduler or notification attempt.
 func (s *Service) RecordReminderExecution(ctx context.Context, req *RecordReminderExecutionRequest) (*RecordReminderExecutionResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/reminder", "record-reminder-execution")
+	logger.Debug("handling-record-reminder-execution-request")
+
 	if req == nil || strings.TrimSpace(req.ReminderId) == "" {
 		return nil, ErrIdIsRequired
 	}
@@ -577,6 +586,9 @@ func (s *Service) RecordReminderExecution(ctx context.Context, req *RecordRemind
 
 // ListReminderExecutions returns execution tracking records for operational review.
 func (s *Service) ListReminderExecutions(ctx context.Context, req *ListReminderExecutionsRequest) (*ListReminderExecutionsResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/reminder", "list-reminder-executions")
+	logger.Debug("handling-list-reminder-executions-request")
+
 	if req == nil {
 		req = &ListReminderExecutionsRequest{}
 	}

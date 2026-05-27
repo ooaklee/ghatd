@@ -39,12 +39,16 @@ func NewService(ApitokenRespository ApitokenRespository) *Service {
 
 // GetTotalApiTokens gets the total on api tokens based on passed values
 func (s *Service) GetTotalApiTokens(ctx context.Context, r *GetTotalApiTokensRequest) (int64, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "get-total-api-tokens")
+	logger.Debug("handling-get-total-api-tokens-request")
 
 	return s.ApitokenRespository.GetTotalApiTokens(ctx, r.UserId, "", r.Description, r.Status, r.To, r.From, r.OnlyEphemeral, r.OnlyPermanent)
 }
 
 // DeleteApiTokensByOwnerId deletes the histories that belong to matching user id
 func (s *Service) DeleteApiTokensByOwnerId(ctx context.Context, ownerId string) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "delete-api-tokens-by-owner-id")
+	logger.Debug("handling-delete-api-tokens-by-owner-id-request")
 
 	err := s.ApitokenRespository.DeleteResourcesByOwnerId(ctx, ownerId)
 	if err != nil {
@@ -57,7 +61,7 @@ func (s *Service) DeleteApiTokensByOwnerId(ctx context.Context, ownerId string) 
 // CreateAPIToken creates an API token adding,  any passed additional information
 // TODO: Create tests
 func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) (*CreateAPITokenResponse, error) {
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/apitoken")
 
 	if r.UserID == "" {
 		return nil, ErrRequiredUserIDMissing
@@ -86,7 +90,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 		// Add duration
 		createdAt, err := time.Parse(common.RFC3339NanoUTC, apiToken.CreatedAt)
 		if err != nil {
-			log.Error("unable-to-set-ttl-for-short-lived-user-api-token", zap.String("token-created-at", apiToken.CreatedAt), zap.String("user-id", r.UserID), zap.Error(err))
+			logger.Error("unable-to-set-ttl-for-short-lived-user-api-token", zap.String("token-created-at", apiToken.CreatedAt), zap.String("user-id", r.UserID), zap.Error(err))
 
 			return nil, ErrErrorCreatingShortLivedAccessToken
 		}
@@ -110,7 +114,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 	}
 
 	if r.UserNanoId == "" {
-		log.Warn("api-token-created-with-no-nano-id-ref", zap.String("user-id", r.UserID), zap.String("token-id", persistentApiToken.ID))
+		logger.Warn("api-token-created-with-no-nano-id-ref", zap.String("user-id", r.UserID), zap.String("token-id", persistentApiToken.ID))
 	}
 
 	return &CreateAPITokenResponse{
@@ -121,7 +125,7 @@ func (s *Service) CreateAPIToken(ctx context.Context, r *CreateAPITokenRequest) 
 // ExtractValidateUserAPITokenMetadata retrieves data from passed user api token
 // TODO: Create tests
 func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *http.Request) (*APITokenRequester, error) {
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/apitoken")
 	var requester APITokenRequester
 
 	// secret identifers from headers
@@ -130,7 +134,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 	splittedToken := strings.Split(userFullToken, ".")
 
 	if len(splittedToken) != 2 {
-		log.Error("user-api-token-passed-does-not-contain-expected-two-segments", zap.Int("number-of-segments", len(splittedToken)))
+		logger.Error("user-api-token-passed-does-not-contain-expected-two-segments", zap.Int("number-of-segments", len(splittedToken)))
 		return nil, ErrInvalidAPIFormatDetected
 	}
 
@@ -145,7 +149,7 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 			nonEmptySegment = splittedToken[0]
 		}
 
-		log.Error("user-api-token-passed-does-not-contain-two-non-empty-segments", zap.String("non-empty-segments", nonEmptySegment))
+		logger.Error("user-api-token-passed-does-not-contain-two-non-empty-segments", zap.String("non-empty-segments", nonEmptySegment))
 		return nil, ErrInvalidAPIFormatDetected
 	}
 
@@ -183,6 +187,8 @@ func (s *Service) ExtractValidateUserAPITokenMetadata(ctx context.Context, r *ht
 // UpdateAPITokenLastUsedAt updates the API Token's last used at time to now if the token matches the ID passed
 // TODO: Create tests
 func (s *Service) UpdateAPITokenLastUsedAt(ctx context.Context, r *UpdateAPITokenLastUsedAtRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "update-api-token-last-used-at")
+	logger.Debug("handling-update-api-token-last-used-at-request")
 
 	var targetTokenID string
 
@@ -220,6 +226,8 @@ func (s *Service) UpdateAPITokenLastUsedAt(ctx context.Context, r *UpdateAPIToke
 // ActivateAPIToken updates the API Token's Status to `ACTIVE` if the token matches the ID passed
 // TODO: Create tests
 func (s *Service) ActivateAPIToken(ctx context.Context, r *ActivateAPITokenRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "activate-api-token")
+	logger.Debug("handling-activate-api-token-request")
 
 	_, err := s.updateAPIToken(ctx, &updateAPITokenRequest{
 		APITokenID: r.ID,
@@ -232,6 +240,8 @@ func (s *Service) ActivateAPIToken(ctx context.Context, r *ActivateAPITokenReque
 // RevokeAPIToken updates the API Token's Status to `REVOKE` if the token matches the ID passed
 // TODO: Create tests
 func (s *Service) RevokeAPIToken(ctx context.Context, r *RevokeAPITokenRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "revoke-api-token")
+	logger.Debug("handling-revoke-api-token-request")
 
 	_, err := s.updateAPIToken(ctx, &updateAPITokenRequest{
 		APITokenID: r.ID,
@@ -245,6 +255,8 @@ func (s *Service) RevokeAPIToken(ctx context.Context, r *RevokeAPITokenRequest) 
 // as well as purging corresponding user embedded collection returning an error
 // if any failures occur.
 func (s *Service) DeleteAPIToken(ctx context.Context, r *DeleteAPITokenRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "delete-api-token")
+	logger.Debug("handling-delete-api-token-request")
 
 	return s.ApitokenRespository.DeleteAPITokenFor(ctx, r.UserID, r.APITokenID)
 }
@@ -255,7 +267,7 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 
 	var err error
 
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/apitoken")
 
 	// default
 	if r.Order == "" {
@@ -278,7 +290,7 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 
 	r.TotalCount = int(totalApiTokens)
 
-	log.Info("total-api-tokens-for-user-found", zap.Int64("total", totalApiTokens))
+	logger.Debug("total-api-tokens-for-user-found", zap.Int64("total", totalApiTokens))
 
 	apitokens, err := s.ApitokenRespository.GetAPITokens(ctx, &GetAPITokensRequest{
 		Order:           r.Order,
@@ -330,6 +342,8 @@ func (s *Service) GetAPITokensFor(ctx context.Context, r *GetAPITokensForRequest
 // GetAPIToken returns the API Token matching the ID stored in repository
 // TODO: Create tests
 func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetAPITokenResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "get-api-token")
+	logger.Debug("handling-get-api-token-request")
 
 	apitoken, err := s.ApitokenRespository.GetAPITokenByID(ctx, r.ID)
 	if err != nil {
@@ -359,7 +373,7 @@ func (s *Service) GetAPIToken(ctx context.Context, r *GetAPITokenRequest) (*GetA
 // TODO: Create tests
 func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*GetAPITokensResponse, error) {
 
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/apitoken")
 
 	// default
 	if r.Order == "" {
@@ -382,7 +396,7 @@ func (s *Service) GetAPITokens(ctx context.Context, r *GetAPITokensRequest) (*Ge
 
 	r.TotalCount = int(totalApiTokens)
 
-	log.Info("total-api-tokens-found", zap.Int64("total", totalApiTokens))
+	logger.Info("total-api-tokens-found", zap.Int64("total", totalApiTokens))
 
 	apitokens, err := s.ApitokenRespository.GetAPITokens(ctx, r)
 	if err != nil {
@@ -428,7 +442,7 @@ func (s *Service) analyseTokenTTLData(ctx context.Context, r *AnalyseTokenTTLDat
 	var userApiTokensToRemove []string
 	var userId string
 	var validUserApiTokens []UserAPIToken
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/apitoken")
 
 	if r == nil {
 		return []UserAPIToken{}
@@ -448,7 +462,7 @@ func (s *Service) analyseTokenTTLData(ctx context.Context, r *AnalyseTokenTTLDat
 
 		expiration, err := time.Parse(common.RFC3339NanoUTC, apiToken.TtlExpiresAt)
 		if err != nil {
-			log.Warn("unable-to-parse-user-api-token-expiry-date", zap.String("token-id", apiToken.ID), zap.String("expiry-date", apiToken.TtlExpiresAt), zap.String("user-id", apiToken.CreatedByID))
+			logger.Warn("unable-to-parse-user-api-token-expiry-date", zap.String("token-id", apiToken.ID), zap.String("expiry-date", apiToken.TtlExpiresAt), zap.String("user-id", apiToken.CreatedByID))
 			continue
 		}
 
@@ -477,7 +491,7 @@ func (s *Service) analyseTokenTTLData(ctx context.Context, r *AnalyseTokenTTLDat
 
 		//  if it fails just log a message and carry on by passing newly structured user object
 		if err != nil {
-			log.Error("failed-to-remove-expired-user-api-token", zap.String("token-id", userTokenId), zap.String("user-id", userId))
+			logger.Error("failed-to-remove-expired-user-api-token", zap.String("token-id", userTokenId), zap.String("user-id", userId))
 		}
 	}
 
@@ -489,6 +503,8 @@ func (s *Service) analyseTokenTTLData(ctx context.Context, r *AnalyseTokenTTLDat
 //
 // TODO: Consider whether user's should be able to update their description
 func (s *Service) updateAPIToken(ctx context.Context, r *updateAPITokenRequest) (*updateAPITokenResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/apitoken", "update-api-token")
+	logger.Debug("handling-update-api-token-request")
 
 	apiToken, err := s.ApitokenRespository.GetAPITokenByID(ctx, r.APITokenID)
 	if err != nil {

@@ -176,6 +176,9 @@ func (s *Service) WithNotifierService(notifierSvc NotifierService) *Service {
 
 // UpdateUserProfile handles the business logic of updating the requesting user's profile
 func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/usermanager", "update-user-profile")
+	logger.Debug("handling-update-user-profile-request")
+
 	serviceResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
 		ID:        r.UserId,
 		FirstName: r.FirstName,
@@ -192,6 +195,8 @@ func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileReq
 
 // GetUserMicroProfile handles the business logic of fetching the requesting user's micro profile
 func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/usermanager", "get-user-micro-profile")
+	logger.Debug("handling-get-user-micro-profile-request")
 
 	serviceResponse, err := s.UserService.GetUserMicroProfile(ctx, &userv2.GetUserMicroProfileRequest{
 		ID: r.UserId,
@@ -208,7 +213,7 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfil
 // GetUserByID handles the business logic of fetching a user by ID.
 func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error) {
 
-	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	logger.Debug("fetching-user-by-id", zap.String("user-id", r.ID))
 
@@ -239,9 +244,9 @@ func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetU
 // GetUsers handles the business logic of fetching users.
 func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error) {
 
-	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
-	logger.Debug("fetching-users", zap.Any("filters", r.GetUsersRequest))
+	logger.Debug("fetching-users", zap.Any("filters", safeLogValue(r.GetUsersRequest)))
 	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
 	if err != nil {
 		return nil, err
@@ -314,7 +319,7 @@ func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersRe
 // GetUserProfile handles the business logic of fetching the requesting user's profile
 func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error) {
 
-	logger := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	logger.Debug("fetching-user-profile", zap.String("user-id", r.UserId))
 
@@ -348,7 +353,7 @@ func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) 
 // TODO: Add audit logs, add more resource types
 func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error {
 
-	var logger = logger.AcquireFrom(ctx)
+	var logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 	var err error
 	targetUserID := strings.TrimSpace(r.ID)
 	if targetUserID == "" {
@@ -465,16 +470,14 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 	)
 
-	logger.Info("initiating-create-comms-request", zap.Any("request", req))
+	logger.Info("initiating-create-comms-request", zap.Any("request", safeLogValue(req)))
 
 	createdCommsResponse, err := s.ContacterService.CreateComms(ctx, req.CreateCommsRequest)
 	if err != nil {
-		logger.Error("failed-to-create-comms-error-creating-comms", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-comms-error-creating-comms", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreateCommsResponse{}, err
 	}
 
@@ -487,20 +490,18 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 		response = GetCommsResponse{
 			Comms: []contacter.Comms{},
 		}
 	)
 
-	logger.Info("initiating-get-comms-request", zap.Any("request", req))
+	logger.Info("initiating-get-comms-request", zap.Any("request", safeLogValue(req)))
 
 	commsResponse, err := s.ContacterService.GetComms(ctx, req.GetCommsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-comms-error-getting-comms", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-comms-error-getting-comms", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetCommsResponse{}, err
 	}
 
@@ -514,16 +515,14 @@ func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetComms
 func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 	)
 
-	logger.Info("initiating-update-comms-request", zap.Any("request", req))
+	logger.Info("initiating-update-comms-request", zap.Any("request", safeLogValue(req)))
 
 	updateCommsResponse, err := s.ContacterService.UpdateComms(ctx, req.UpdateCommsRequest)
 	if err != nil {
-		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdateCommsResponse{}, err
 	}
 
@@ -536,16 +535,14 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 func (s *Service) GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 	)
 
-	logger.Info("initiating-get-comms-stats-request", zap.Any("request", req))
+	logger.Info("initiating-get-comms-stats-request", zap.Any("request", safeLogValue(req)))
 
 	statsResponse, err := s.ContacterService.GetCommsStats(ctx, req.GetCommsStatsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-comms-stats-error-getting-comms-stats", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-comms-stats-error-getting-comms-stats", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetCommsStatsResponse{}, err
 	}
 

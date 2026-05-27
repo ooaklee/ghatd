@@ -2,10 +2,12 @@ package group
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // GroupService interface defines expected methods of a valid group service
@@ -69,14 +71,17 @@ func NewHandler(service GroupService, validator GroupValidator, errorMaps ...rep
 
 // CreateGroup handles group creation
 func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-create-group")
 	request, err := MapRequestToCreateGroupRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateGroup(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -86,14 +91,17 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupByID handles getting a group by ID
 func (h *Handler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-group-by-id")
 	request, err := MapRequestToGetGroupByIDRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupByID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -103,14 +111,17 @@ func (h *Handler) GetGroupByID(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupLineage handles getting a group's root-first lineage
 func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-group-lineage")
 	request, err := MapRequestToGetGroupLineageRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupLineage(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -120,14 +131,17 @@ func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupDescendants handles getting a group's descendants grouped by depth level
 func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-group-descendants")
 	request, err := MapRequestToGetGroupDescendantsRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupDescendants(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -137,14 +151,17 @@ func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupByNanoID handles getting a group by nano ID
 func (h *Handler) GetGroupByNanoID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-group-by-nano-id")
 	request, err := MapRequestToGetGroupByNanoIDRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupByNanoID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -154,14 +171,17 @@ func (h *Handler) GetGroupByNanoID(w http.ResponseWriter, r *http.Request) {
 
 // GetGroups handles getting groups with filters and pagination
 func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups")
 	request, err := MapRequestToGetGroupsRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroups(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -177,14 +197,17 @@ func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupsByUserID handles getting groups referenced by a user ID.
 func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups-by-user-id")
 	request, err := MapRequestToGetGroupsByUserIDRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupsByUserID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -195,14 +218,17 @@ func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
 // GetGroupsAwaitingAnswerForInvitationsByMemberID handles getting groups
 // with pending invitations matching the provided member ID.
 func (h *Handler) GetGroupsAwaitingAnswerForInvitationsByMemberID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups-awaiting-answer-for-invitations-by-member-id")
 	request, err := MapRequestToGetGroupsAwaitingAnswerForInvitationsByMemberIDRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupsAwaitingAnswerForInvitationsByMemberID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -212,14 +238,17 @@ func (h *Handler) GetGroupsAwaitingAnswerForInvitationsByMemberID(w http.Respons
 
 // GetGroupsByMemberID handles getting groups by member ID with pagination
 func (h *Handler) GetGroupsByMemberID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups-by-member-id")
 	request, err := MapRequestToGetGroupsRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupsByMemberID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -235,14 +264,17 @@ func (h *Handler) GetGroupsByMemberID(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupsByLeaderID handles getting groups by leader ID with pagination
 func (h *Handler) GetGroupsByLeaderID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups-by-leader-id")
 	request, err := MapRequestToGetGroupsRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupsByLeaderID(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -258,14 +290,17 @@ func (h *Handler) GetGroupsByLeaderID(w http.ResponseWriter, r *http.Request) {
 
 // SearchGroupsByExtension handles searching groups by extension field with pagination
 func (h *Handler) SearchGroupsByExtension(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-search-groups-by-extension")
 	request, err := MapRequestToGetGroupsRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.SearchGroupsByExtension(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -281,14 +316,17 @@ func (h *Handler) SearchGroupsByExtension(w http.ResponseWriter, r *http.Request
 
 // UpdateGroup handles group updates
 func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-update-group")
 	request, err := MapRequestToUpdateGroupRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateGroup(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -298,14 +336,17 @@ func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 
 // DeleteGroup handles group deletion
 func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-delete-group")
 	request, err := MapRequestToDeleteGroupRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	_, err = h.Service.DeleteGroup(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -315,14 +356,17 @@ func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 
 // AddMember handles adding a member to a group
 func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-add-member")
 	request, err := MapRequestToAddMemberRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.AddMember(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -332,14 +376,17 @@ func (h *Handler) AddMember(w http.ResponseWriter, r *http.Request) {
 
 // InviteUser handles inviting a user to a group
 func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-invite-user")
 	request, err := MapRequestToInviteUserRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.InviteUser(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -349,14 +396,17 @@ func (h *Handler) InviteUser(w http.ResponseWriter, r *http.Request) {
 
 // UninviteUser handles revoking a pending invite from a group
 func (h *Handler) UninviteUser(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-uninvite-user")
 	request, err := MapRequestToUninviteUserRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UninviteUser(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -366,14 +416,17 @@ func (h *Handler) UninviteUser(w http.ResponseWriter, r *http.Request) {
 
 // AcceptInvite handles accepting a pending invite for a group
 func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-accept-invite")
 	request, err := MapRequestToAcceptInviteRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.AcceptInvite(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -383,14 +436,17 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 
 // RejectInvite handles rejecting a pending invite for a group
 func (h *Handler) RejectInvite(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-reject-invite")
 	request, err := MapRequestToRejectInviteRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RejectInvite(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -400,14 +456,17 @@ func (h *Handler) RejectInvite(w http.ResponseWriter, r *http.Request) {
 
 // RemoveMember handles removing a member from a group
 func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-remove-member")
 	request, err := MapRequestToRemoveMemberRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RemoveMember(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -417,14 +476,17 @@ func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 
 // UpdateMemberRole handles updating a member's role
 func (h *Handler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-update-member-role")
 	request, err := MapRequestToUpdateMemberRoleRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateMemberRole(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -434,14 +496,17 @@ func (h *Handler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupMembers handles getting group members
 func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-group-members")
 	request, err := MapRequestToGetGroupMembersRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupMembers(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -451,14 +516,17 @@ func (h *Handler) GetGroupMembers(w http.ResponseWriter, r *http.Request) {
 
 // UpdateOwner handles updating group owner
 func (h *Handler) UpdateOwner(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-update-owner")
 	request, err := MapRequestToUpdateOwnerRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateOwner(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -468,8 +536,10 @@ func (h *Handler) UpdateOwner(w http.ResponseWriter, r *http.Request) {
 
 // RepairInvalidMembers handles repairing groups that contain members with empty or null IDs.
 func (h *Handler) RepairInvalidMembers(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-repair-invalid-members")
 	response, err := h.Service.RepairInvalidMembers(r.Context())
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -479,14 +549,17 @@ func (h *Handler) RepairInvalidMembers(w http.ResponseWriter, r *http.Request) {
 
 // ArchiveGroup handles archiving a group
 func (h *Handler) ArchiveGroup(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-archive-group")
 	request, err := MapRequestToArchiveGroupRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ArchiveGroup(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -496,14 +569,17 @@ func (h *Handler) ArchiveGroup(w http.ResponseWriter, r *http.Request) {
 
 // RestoreGroup handles restoring an archived group
 func (h *Handler) RestoreGroup(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-restore-group")
 	request, err := MapRequestToRestoreGroupRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RestoreGroup(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -513,14 +589,17 @@ func (h *Handler) RestoreGroup(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupStats handles getting group statistics
 func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-group-stats")
 	request, err := MapRequestToGetGroupStatsRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupStats(r.Context(), request.ID)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -530,8 +609,10 @@ func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupsStats handles getting aggregate stats across all groups
 func (h *Handler) GetGroupsStats(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups-stats")
 	response, err := h.Service.GetGroupsStats(r.Context(), &GetGroupsStatsRequest{})
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -541,8 +622,10 @@ func (h *Handler) GetGroupsStats(w http.ResponseWriter, r *http.Request) {
 
 // GetGroupsConfig handles getting the group service config
 func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-get-groups-config")
 	response, err := h.Service.GetGroupsConfig(r.Context(), &GetGroupsConfigRequest{})
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -553,14 +636,17 @@ func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
 // ValidateGroupName handles validating a proposed group name without persisting anything.
 // Front-end forms can call this to preview what RawName and Name will be stored.
 func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-validate-group-name")
 	request, err := MapRequestToValidateGroupNameRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ValidateGroupName(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -570,14 +656,17 @@ func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
 
 // EnableGroupAutoJoinByEmailDomain enables auto-join for a group
 func (h *Handler) EnableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-enable-group-auto-join-by-email-domain")
 	request, err := MapRequestToEnableGroupAutoJoinByEmailDomainRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.EnableGroupAutoJoinByEmailDomain(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -587,14 +676,17 @@ func (h *Handler) EnableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *htt
 
 // DisableGroupAutoJoinByEmailDomain disables auto-join for a group
 func (h *Handler) DisableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-disable-group-auto-join-by-email-domain")
 	request, err := MapRequestToDisableGroupAutoJoinByEmailDomainRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.DisableGroupAutoJoinByEmailDomain(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -604,14 +696,17 @@ func (h *Handler) DisableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *ht
 
 // EnableGroupAutoInviteByEmailDomain enables auto-invite for a group
 func (h *Handler) EnableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-enable-group-auto-invite-by-email-domain")
 	request, err := MapRequestToEnableGroupAutoInviteByEmailDomainRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.EnableGroupAutoInviteByEmailDomain(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -621,14 +716,17 @@ func (h *Handler) EnableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *h
 
 // DisableGroupAutoInviteByEmailDomain disables auto-invite for a group
 func (h *Handler) DisableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/group", "handle-disable-group-auto-invite-by-email-domain")
 	request, err := MapRequestToDisableGroupAutoInviteByEmailDomainRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.DisableGroupAutoInviteByEmailDomain(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

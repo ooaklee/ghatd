@@ -3,11 +3,12 @@ package spa
 import (
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // Handler manages request for spa
@@ -44,8 +45,10 @@ func NewSpaHandler(request *NewSpaHandlerRequest) *Handler {
 // while for other content types, it serves the root index page from the static assets.
 func (h *Handler) GetResourceNotFoundError(w http.ResponseWriter, r *http.Request) {
 	replier := reply.NewReplier(append([]reply.ErrorManifest{}, defaultErrorMap))
+	logger := logger.AcquireOperationFrom(r.Context(), "external/spa", "resource-not-found")
 
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		logger.Debug("spa-resource-not-found-json-response", zap.String("path", r.URL.Path))
 		//nolint will set up default fallback later
 		replier.NewHTTPErrorResponse(w, ErrResourceNotFound)
 		return
@@ -54,7 +57,7 @@ func (h *Handler) GetResourceNotFoundError(w http.ResponseWriter, r *http.Reques
 	// Create filesystem only holding dist dir assets
 	distDirFS, err := fs.Sub(h.embeddedFileSystem, fmt.Sprintf("%sdist", h.embeddedContentFilePathPrefix))
 	if err != nil {
-		log.Default().Panicln("unable-to-create-file-system-for-static-assets", err)
+		logger.Panic("spa-static-file-system-create-failed", zap.Error(err))
 		return
 	}
 
@@ -62,6 +65,7 @@ func (h *Handler) GetResourceNotFoundError(w http.ResponseWriter, r *http.Reques
 	// serve the default index page for non-existent resources
 	r = h.spaUpdatePathToIndexFunc(r)
 
+	logger.Debug("spa-fallback-index-response", zap.String("path", r.URL.Path))
 	http.FileServer(http.FS(distDirFS)).ServeHTTP(w, r)
 }
 

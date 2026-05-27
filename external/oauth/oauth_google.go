@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 
 	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -73,24 +73,24 @@ func NewGoogleProvider(r *NewGoogleProviderRequest) *GoogleProvider {
 
 func (p *GoogleProvider) ProviderGetUserData(ctx context.Context, requestUriEntries url.Values) (OauthUserInfo, error) {
 
-	loggr := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/oauth")
 	var userInfo GoogleProviderOauthUserInfo
 	var providerOauthCode string = requestUriEntries["code"][0]
 
 	if providerOauthCode == "" {
-		loggr.Error("provider-oauth-code-not-detected")
+		logger.Error("provider-oauth-code-not-detected")
 		return nil, ErrProviderCodeNotDetected
 	}
 
 	providerToken, err := p.config.Exchange(ctx, providerOauthCode)
 	if err != nil {
-		loggr.Error(fmt.Sprintf("provider-oauth-code-exchange-incorrect: %s", err.Error()))
+		logger.Error("provider-oauth-code-exchange-incorrect", zap.Error(err))
 		return nil, ErrProviderCodeExchangeIncorrect
 	}
 
 	userInfoResponse, err := http.Get(p.providerUserInfoEndpoint + providerToken.AccessToken)
 	if err != nil {
-		loggr.Error(fmt.Sprintf("provider-failed-getting-user-info: %s", err.Error()))
+		logger.Error("provider-failed-getting-user-info", zap.Error(err))
 		return nil, ErrProviderFailedGettingUserInfo
 	}
 
@@ -98,7 +98,7 @@ func (p *GoogleProvider) ProviderGetUserData(ctx context.Context, requestUriEntr
 
 	err = json.NewDecoder(userInfoResponse.Body).Decode(&userInfo)
 	if err != nil {
-		loggr.Error(fmt.Sprintf("provider-failed-to-marshall-user-info: %s", err.Error()))
+		logger.Error("provider-failed-to-marshall-user-info", zap.Error(err))
 		return nil, ErrProviderFailedToMarshallUserInfo
 	}
 

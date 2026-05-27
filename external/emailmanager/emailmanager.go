@@ -64,6 +64,9 @@ func NewEmailManager(templater emailTemplater, provider emailprovider.EmailProvi
 
 // SendVerificationEmail sends a verification email
 func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerificationEmailRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-verification-email")
+	logger.Debug("handling-send-verification-email-request")
+
 	// Generate template
 	templateReq := &emailtemplater.GenerateVerificationEmailRequest{
 		FirstName:          req.FirstName,
@@ -95,6 +98,9 @@ func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerif
 
 // SendLoginEmail sends a login email
 func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-login-email")
+	logger.Debug("handling-send-login-email-request")
+
 	// Generate template
 	templateReq := &emailtemplater.GenerateLoginEmailRequest{
 		Email:              req.Email,
@@ -124,6 +130,9 @@ func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRe
 
 // SendCustomEmail sends a custom email from the base template
 func (m *EmailManager) SendCustomEmail(ctx context.Context, req *SendCustomEmailRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-custom-email")
+	logger.Debug("handling-send-custom-email-request")
+
 	// Generate template
 	templateReq := &emailtemplater.GenerateFromBaseTemplateRequest{
 		EmailSubject:         req.EmailSubject,
@@ -155,6 +164,9 @@ func (m *EmailManager) SendCustomEmail(ctx context.Context, req *SendCustomEmail
 
 // SendEmail sends a pre-rendered email
 func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-email")
+	logger.Debug("handling-send-email-request")
+
 	// Create email from request
 	email := &emailprovider.Email{
 		To:       req.To,
@@ -188,11 +200,11 @@ func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) err
 
 // sendEmail is the internal method that handles sending and audit logging
 func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.RenderedEmail, emailInfo *EmailInfo) error {
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/emailmanager")
 
 	// Check if we should actually send or just log
 	if !m.config.ShouldSendEmail {
-		log.Info("email-outputted-locally-not-sent-disabled-by-config",
+		logger.Info("email-outputted-locally-not-sent-disabled-by-config",
 			zap.String("to", rendered.To),
 			zap.String("from", rendered.From),
 			zap.String("subject", rendered.Subject),
@@ -209,7 +221,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 
 	// Check if provider is healthy
 	if !m.provider.IsHealthy(ctx) {
-		log.Error("email-provider-is-not-healthy",
+		logger.Error("email-provider-is-not-healthy",
 			zap.String("provider", m.provider.Name()),
 		)
 		return ErrEmailMailerProviderUnavailable
@@ -227,7 +239,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 	// Send via provider
 	result, err := m.provider.Send(ctx, email)
 	if err != nil {
-		log.Error("failed-to-send-email",
+		logger.Error("failed-to-send-email",
 			zap.String("provider", m.provider.Name()),
 			zap.String("to", rendered.To),
 			zap.Error(err),
@@ -235,7 +247,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 		return ErrEmailMailerSendFailed
 	}
 
-	log.Info("email-sent-successfully",
+	logger.Info("email-sent-successfully",
 		zap.String("provider", result.Provider),
 		zap.String("message_id", result.MessageID),
 		zap.String("to", rendered.To),
@@ -252,7 +264,7 @@ func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.R
 
 // logAuditEvent logs an audit event for the sent email
 func (m *EmailManager) logAuditEvent(ctx context.Context, emailInfo *EmailInfo) {
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/emailmanager")
 
 	err := m.auditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 		ActorId:    audit.AuditActorIdSystem,
@@ -271,7 +283,7 @@ func (m *EmailManager) logAuditEvent(ctx context.Context, emailInfo *EmailInfo) 
 	})
 
 	if err != nil {
-		log.Warn("failed-to-log-audit-event",
+		logger.Warn("failed-to-log-audit-event",
 			zap.String("actor-id", audit.AuditActorIdSystem),
 			zap.String("user-id", emailInfo.UserId),
 			zap.String("event-type", string(audit.UserEmailOutbound)),

@@ -91,20 +91,20 @@ func (s *Service) WithPricerService(pricerSvc PricerService) *Service {
 // This is the main entry point for webhook processing
 func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *ProcessBillingProviderWebhooksRequest) error {
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/billingmanager")
 	var (
 		subscriptionId string
 	)
 
 	payload, err := s.ProviderRegistry.VerifyAndParseWebhookPayload(ctx, req.ProviderName, req.Request)
 	if err != nil {
-		log.Error("failed-to-verify-and-parse-webhook-payload", zap.String("provider", req.ProviderName), zap.Error(err))
+		logger.Error("failed-to-verify-and-parse-webhook-payload", zap.String("provider", req.ProviderName), zap.Error(err))
 		return err
 	}
 
 	userID, err := s.resolveUserID(ctx, payload)
 	if err != nil {
-		log.Error("failed-to-resolve-user-id", zap.String("provider", req.ProviderName), zap.Error(err))
+		logger.Error("failed-to-resolve-user-id", zap.String("provider", req.ProviderName), zap.Error(err))
 		return err
 	}
 
@@ -112,12 +112,12 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 
 		subscription, err := s.findOrCreateSubscription(ctx, req.ProviderName, payload, userID)
 		if err != nil {
-			log.Error("failed-to-find-or-create-subscription", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.Any("payload", payload), zap.Error(err))
+			logger.Error("failed-to-find-or-create-subscription", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.Error(err))...)
 			return err
 		}
 
 		if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
-			log.Error("failed-to-update-subscription-from-payload", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscription.ID), zap.Any("payload", payload), zap.Error(err))
+			logger.Error("failed-to-update-subscription-from-payload", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.String("subscription-id", subscription.ID), zap.Error(err))...)
 			return err
 		}
 
@@ -127,7 +127,7 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 	billingEventSuccessfullyCreated := true
 	if err := s.createBillingEvent(ctx, subscriptionId, userID, req.ProviderName, payload); err != nil {
 		billingEventSuccessfullyCreated = false
-		log.Warn("failed-to-create-billing-event", zap.String("provider", req.ProviderName), zap.String("user-id", userID), zap.String("subscription-id", subscriptionId), zap.Any("payload", payload), zap.Error(err))
+		logger.Warn("failed-to-create-billing-event", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.String("subscription-id", subscriptionId), zap.Error(err))...)
 	}
 
 	// Optional audit logging
@@ -172,14 +172,14 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 // GetPricingPlans retrieves pricing plans for external BMS clients.
 func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansRequest) (*GetPricingPlansResponse, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 
 	if s.PricerService == nil {
-		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
 		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, req.UserID, logger)
 	if !isAdmin {
 		// Non-admin users are not allowed to access pricing in certain states, i.e draft, archieved, etc
 		// we should override any queries to ensure they can only see active pricing plans
@@ -188,12 +188,12 @@ func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansReque
 		}
 		req.GetPricePlansRequest.IsNotDeleted = true
 		req.GetPricePlansRequest.IsPublished = true
-		log.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
+		logger.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
 	}
 
 	response, err := s.PricerService.GetPricePlans(ctx, req.GetPricePlansRequest)
 	if err != nil {
-		log.Error("failed-to-get-pricing-plans", zap.String("user-id", req.UserID), zap.Error(err))
+		logger.Error("failed-to-get-pricing-plans", zap.String("user-id", req.UserID), zap.Error(err))
 		return nil, err
 	}
 
@@ -202,10 +202,10 @@ func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansReque
 
 // GetPricePlanBySlug retrieves a pricing plan by slug for external BMS clients.
 func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 
 	if s.PricerService == nil {
-		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
 		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
@@ -214,12 +214,12 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 		return nil, err
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, req.UserID, logger)
 	if !isAdmin {
 		// Non-admin users are not allowed to access pricing in certain states, i.e draft, archieved, etc
 		// we should override any queries to ensure they can only see active pricing plans
 		if response.PricePlan.DeletedAt != "" || !isPricePlanPubliclyVisible(response.PricePlan.PublishedAt) {
-			log.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
+			logger.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
 			return nil, pricer.ErrPricePlanNotFound
 		}
 	}
@@ -229,14 +229,14 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 
 // GetPricingFeatures retrieves pricing feature catalog items for external BMS clients.
 func (s *Service) GetPricingFeatures(ctx context.Context, req *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 
 	if s.PricerService == nil {
-		log.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
 		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, req.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, req.UserID, logger)
 	if !isAdmin {
 		// Non-admin users are not allowed to access price features in certain states, i.e draft, archieved, etc
 		// we should override any queries to ensure they can only see active features
@@ -246,7 +246,7 @@ func (s *Service) GetPricingFeatures(ctx context.Context, req *GetPriceFeaturesR
 
 		req.GetFeaturesRequest.IsNotDeleted = true
 		req.GetFeaturesRequest.IsPublished = true
-		log.Debug("non-admin-user-requesting-pricing-features-only-returning-features-in-valid-state", zap.String("user-id", req.UserID))
+		logger.Debug("non-admin-user-requesting-pricing-features-only-returning-features-in-valid-state", zap.String("user-id", req.UserID))
 	}
 
 	response, err := s.PricerService.GetFeatures(ctx, req.GetFeaturesRequest)
@@ -277,15 +277,15 @@ func isPricePlanPubliclyVisible(publishedAt string) bool {
 func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSubscriptionStatusRequest) (*GetUserSubscriptionStatusResponse, error) {
 
 	var (
-		log                   = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(req.UserID, req.RequestingUserID)
 	)
 
-	log.Info("getting-subscription-status-for-user")
+	logger.Info("getting-subscription-status-for-user")
 
 	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.RequestingUserID)
 	if err != nil {
-		log.Error("failed-to-access-subscription-status-for-user", append(logFields, zap.Error(err))...)
+		logger.Error("failed-to-access-subscription-status-for-user", append(logFields, zap.Error(err))...)
 		return nil, err
 	}
 
@@ -297,18 +297,18 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 		Order:      "created_at_desc",
 	})
 	if err != nil {
-		log.Error("unexpected-error-while-attempting-to-get-user-subscription-status", append(logFields, zap.Error(err))...)
+		logger.Error("unexpected-error-while-attempting-to-get-user-subscription-status", append(logFields, zap.Error(err))...)
 		return nil, err
 	}
 
 	// Check if user has any subscriptions
 	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
-		log.Info("no-active-subscription-with-user-id-falling-back-to-user-email", logFields...)
+		logger.Info("no-active-subscription-with-user-id-falling-back-to-user-email", logFields...)
 		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: req.UserID})
 		if err == nil {
 			emailSubsResp, _ := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: userResp.User.Email})
 			if len(emailSubsResp.Subscriptions) > 0 {
-				log.Info("found-email-based-subscription-associating-with-user", append(logFields, zap.String("email", userResp.User.Email), zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)))...)
+				logger.Info("found-email-based-subscription-associating-with-user", append(logFields, zap.String("email", userResp.User.Email), zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)))...)
 				// Associate found subscriptions with user
 				_, _ = s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
 					UserID: req.UserID,
@@ -327,7 +327,7 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	}
 
 	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
-		log.Info("no-active-subscription-found", logFields...)
+		logger.Info("no-active-subscription-found", logFields...)
 		return &GetUserSubscriptionStatusResponse{
 			SubscriptionStatus: &SubscriptionStatus{
 				HasSubscription: false,
@@ -337,7 +337,7 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	}
 
 	subscription := subscriptionsResp.Subscriptions[0]
-	log.Info("subscription-status-retrieved", append(logFields, zap.String("subscription-id", subscription.ID))...)
+	logger.Info("subscription-status-retrieved", append(logFields, zap.String("subscription-id", subscription.ID))...)
 
 	return &GetUserSubscriptionStatusResponse{
 		SubscriptionStatus: &SubscriptionStatus{
@@ -361,15 +361,15 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingEventsRequest) (*GetUserBillingEventsResponse, error) {
 
 	var (
-		log                   = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(req.UserID, req.RequestingUserID)
 	)
 
-	log.Info("getting-billing-events-for-user")
+	logger.Info("getting-billing-events-for-user")
 
 	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.RequestingUserID)
 	if err != nil {
-		log.Error("failed-to-access-billing-events-for-user", append(logFields, zap.Error(err))...)
+		logger.Error("failed-to-access-billing-events-for-user", append(logFields, zap.Error(err))...)
 		return nil, err
 	}
 
@@ -381,7 +381,7 @@ func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingE
 		Order:      req.Order,
 	})
 	if err != nil {
-		log.Error("failed-to-retrieve-billing-events-for-user", append(logFields, zap.Error(err))...)
+		logger.Error("failed-to-retrieve-billing-events-for-user", append(logFields, zap.Error(err))...)
 		return nil, err
 	}
 
@@ -401,7 +401,7 @@ func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingE
 		}
 	}
 
-	log.Info("billing-events-retrieved-for-user", append(logFields, zap.Int("total-events", eventsResp.Total), zap.Int("returned-events", len(events)))...)
+	logger.Info("billing-events-retrieved-for-user", append(logFields, zap.Int("total-events", eventsResp.Total), zap.Int("returned-events", len(events)))...)
 
 	return &GetUserBillingEventsResponse{
 		Events: events,
@@ -413,15 +413,15 @@ func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingE
 func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingDetailRequest) (*GetUserBillingDetailResponse, error) {
 
 	var (
-		log                   = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(req.UserID, req.RequestingUserID)
 	)
 
-	log.Info("getting-billing-detail-for-user")
+	logger.Info("getting-billing-detail-for-user")
 
 	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.RequestingUserID)
 	if err != nil {
-		log.Error("failed-to-access-billing-detail-for-user", append(logFields, zap.Error(err))...)
+		logger.Error("failed-to-access-billing-detail-for-user", append(logFields, zap.Error(err))...)
 		return nil, err
 	}
 
@@ -433,13 +433,13 @@ func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingD
 		Order:      "created_at_desc",
 	})
 	if err != nil {
-		log.Error("unexpected-error-while-attempting-to-get-user-billing-detail", append(logFields, zap.Error(err))...)
+		logger.Error("unexpected-error-while-attempting-to-get-user-billing-detail", append(logFields, zap.Error(err))...)
 		return nil, err
 	}
 
 	// Check if user has any subscriptions
 	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
-		log.Info("no-active-subscription-found", logFields...)
+		logger.Info("no-active-subscription-found", logFields...)
 		return &GetUserBillingDetailResponse{
 			BillingDetail: &BillingDetail{
 				HasSubscription: false,
@@ -462,21 +462,21 @@ func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingD
 	// Generate human-readable summary
 	detail.Summary = s.generateSubscriptionSummary(&subscription)
 
-	log.Info("billing-detail-retrieved", logFields...)
+	logger.Info("billing-detail-retrieved", logFields...)
 	return &GetUserBillingDetailResponse{
 		BillingDetail: detail,
 	}, nil
 }
 
 // isRequesterAdmin safely checks if the requester has admin privileges
-func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.Logger) bool {
+func (s *Service) isRequesterAdmin(ctx context.Context, userID string, logger *zap.Logger) bool {
 	if s.UserService == nil {
 		return false
 	}
 
 	userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
 	if err != nil || userResp == nil || userResp.User == nil {
-		log.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
+		logger.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
 		return false
 	}
 
@@ -487,12 +487,12 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 // Returns an error if not authorised or prerequisites are not met.
 func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context, targetUserId, requestingUserId string) error {
 	var (
-		log                   = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(targetUserId, requestingUserId)
 	)
 
 	if targetUserId == "" {
-		log.Warn("failed-to-get-billing-detail-user-id-is-missing", logFields...)
+		logger.Warn("failed-to-get-billing-detail-user-id-is-missing", logFields...)
 		return ErrBillingManagerRequiresUserIdIsMissing
 	}
 
@@ -500,15 +500,15 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 
 		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: requestingUserId})
 		if err != nil {
-			log.Warn("failed-to-get-billing-detail-requesting-user-not-found", append(logFields, zap.Error(err))...)
+			logger.Warn("failed-to-get-billing-detail-requesting-user-not-found", append(logFields, zap.Error(err))...)
 			return ErrBillingManagerRequiresUserIdIsMissing
 		}
 		if !userResp.User.IsAdmin() {
-			log.Warn("failed-to-get-billing-detail-requesting-user-not-admin", logFields...)
+			logger.Warn("failed-to-get-billing-detail-requesting-user-not-admin", logFields...)
 			return ErrBillingManagerUserUnauthorisedToCarryOutOperation
 		}
 
-		log.Info("admin-user-requesting-billing-detail-for-another-user", logFields...)
+		logger.Info("admin-user-requesting-billing-detail-for-another-user", logFields...)
 	}
 	return nil
 }
@@ -519,8 +519,8 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.WebhookPayload) (string, error) {
 
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-		err error
+		logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
+		err    error
 	)
 
 	subResp, err := s.BillingService.GetSubscriptionByIntegratorID(ctx, &billing.GetSubscriptionByIntegratorIDRequest{
@@ -528,27 +528,27 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 		IntegratorSubscriptionID: payload.SubscriptionID,
 	})
 	if err == nil {
-		log.Info("found-existing-subscription-using-event-type-and-subscription-id", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("event-type", payload.EventType))
+		logger.Info("found-existing-subscription-using-event-type-and-subscription-id", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("event-type", payload.EventType))
 		return subResp.Subscription.UserID, nil
 	}
 
-	log.Info("unable-to-find-existing-subscription-using-event-type-and-subscription-id", zap.String("event-type", payload.EventType))
+	logger.Info("unable-to-find-existing-subscription-using-event-type-and-subscription-id", zap.String("event-type", payload.EventType))
 
 	if s.UserService != nil && payload.CustomerEmail != "" {
 		userResp, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: payload.CustomerEmail})
 		if err == nil {
-			log.Info("found-user-id-falling-back-to-payload-email", zap.String("user-id", userResp.User.GetUserId()), zap.String("payload-email", payload.CustomerEmail))
+			logger.Info("found-user-id-falling-back-to-payload-email", zap.String("user-id", userResp.User.GetUserId()), zap.String("payload-email", payload.CustomerEmail))
 			return userResp.User.GetUserId(), nil
 		}
 	}
 
 	// if email is missing we need to error out as we have no way to identify the user
 	if payload.CustomerEmail == "" {
-		log.Warn("unable-to-identify-user-no-email-in-payload", zap.String("subscription-id", payload.SubscriptionID), zap.String("customer-id", payload.CustomerID))
+		logger.Warn("unable-to-identify-user-no-email-in-payload", zap.String("subscription-id", payload.SubscriptionID), zap.String("customer-id", payload.CustomerID))
 		return "", ErrBillingManagerNoUserIdentifyingInformationInPayload
 	}
 
-	log.Info("no-user-found-will-store-subscription-with-email-only", zap.String("email", payload.CustomerEmail))
+	logger.Info("no-user-found-will-store-subscription-with-email-only", zap.String("email", payload.CustomerEmail))
 
 	return "", nil
 }
@@ -557,8 +557,8 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 func (s *Service) findOrCreateSubscription(ctx context.Context, providerName string, payload *paymentprovider.WebhookPayload, userID string) (*billing.Subscription, error) {
 
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-		err error
+		logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
+		err    error
 	)
 
 	// Try to find existing subscription by integrator ID
@@ -567,7 +567,7 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 		IntegratorSubscriptionID: payload.SubscriptionID,
 	})
 	if err == nil {
-		log.Info("found-existing-subscription-using-integrator-and-subscription-id", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("provider", providerName))
+		logger.Info("found-existing-subscription-using-integrator-and-subscription-id", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("provider", providerName))
 		return subResp.Subscription, nil
 	}
 
@@ -615,7 +615,7 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 		logFields = append(logFields, zap.String("available-until-date", "not-set"))
 	}
 
-	log.Info("attempting-to-create-new-subscription", logFields...)
+	logger.Info("attempting-to-create-new-subscription", logFields...)
 
 	createResp, err := s.BillingService.CreateSubscription(ctx, createReq)
 	if err != nil {
@@ -628,7 +628,7 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscription *billing.Subscription, payload *paymentprovider.WebhookPayload) error {
 
 	var (
-		log       = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger    = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 		logFields = []zap.Field{
 			zap.String("subscription-id", subscription.ID),
 		}
@@ -641,36 +641,36 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 
 	// Update dates if present
 	if payload.NextBillingDate != "" {
-		log.Debug("updating-next-billing-date", append(logFields, zap.String("next-billing-date", payload.NextBillingDate))...)
+		logger.Debug("updating-next-billing-date", append(logFields, zap.String("next-billing-date", payload.NextBillingDate))...)
 		nextBillingDate := parseTimeOrNil(payload.NextBillingDate)
 		updateReq.NextBillingDate = nextBillingDate
 	}
 
 	if payload.AvailableUntilDate != "" {
-		log.Debug("updating-available-until-date", append(logFields, zap.String("available-until-date", payload.AvailableUntilDate))...)
+		logger.Debug("updating-available-until-date", append(logFields, zap.String("available-until-date", payload.AvailableUntilDate))...)
 		availableUntilDate := parseTimeOrNil(payload.AvailableUntilDate)
 		updateReq.AvailableUntilDate = availableUntilDate
 	}
 
 	// Update plan name if present
 	if payload.PlanName != "" {
-		log.Debug("updating-plan-name", append(logFields, zap.String("plan-name", payload.PlanName))...)
+		logger.Debug("updating-plan-name", append(logFields, zap.String("plan-name", payload.PlanName))...)
 		updateReq.PlanName = &payload.PlanName
 	}
 
 	// Update URLs if present
 	if payload.CancelURL != "" {
-		log.Debug("updating-cancel-url", append(logFields, zap.String("cancel-url", payload.CancelURL))...)
+		logger.Debug("updating-cancel-url", append(logFields, zap.String("cancel-url", payload.CancelURL))...)
 		updateReq.CancelURL = &payload.CancelURL
 	}
 	if payload.UpdateURL != "" {
-		log.Debug("updating-update-url", append(logFields, zap.String("update-url", payload.UpdateURL))...)
+		logger.Debug("updating-update-url", append(logFields, zap.String("update-url", payload.UpdateURL))...)
 		updateReq.UpdateURL = &payload.UpdateURL
 	}
 
 	// Handle cancellation
 	if payload.EventType == paymentprovider.EventTypeSubscriptionCancelled {
-		log.Info("marking-subscription-as-cancelled", append(logFields, zap.String("user-id", payload.CustomerID))...)
+		logger.Info("marking-subscription-as-cancelled", append(logFields, zap.String("user-id", payload.CustomerID))...)
 		now := time.Now()
 		updateReq.CancelledAt = &now
 	}
@@ -682,12 +682,12 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 // createBillingEvent creates an audit trail event
 func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID, providerName string, payload *paymentprovider.WebhookPayload) error {
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/billingmanager")
 	logFields := []zap.Field{
 		zap.String("subscription-id", subscriptionID), zap.String("user-id", userID), zap.String("provider", providerName), zap.String("event-type", payload.EventType), zap.String("event-id", payload.EventID),
 	}
 
-	log.Info("creating-billing-event", logFields...)
+	logger.Info("creating-billing-event", logFields...)
 	eventTime := parseTimeOrNil(payload.EventTime)
 	if eventTime == nil {
 		now := time.Now()
@@ -714,11 +714,11 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 	_, err := s.BillingService.CreateBillingEvent(ctx, createReq)
 
 	if err != nil {
-		log.Error("failed-to-create-billing-event", append(logFields, zap.Error(err))...)
+		logger.Error("failed-to-create-billing-event", append(logFields, zap.Error(err))...)
 		return err
 	}
 
-	log.Info("billing-event-created", logFields...)
+	logger.Info("billing-event-created", logFields...)
 	return nil
 }
 
@@ -766,4 +766,22 @@ func initLogFieldsWithUserIdAndRequestingUserId(userId, requestingUserId string)
 		logFields = append(logFields, zap.String("requesting-user-id", requestingUserId))
 	}
 	return logFields
+}
+
+func webhookPayloadFieldsForLog(providerName string, userID string, payload *paymentprovider.WebhookPayload) []zap.Field {
+	fields := []zap.Field{
+		zap.String("provider", providerName),
+		zap.String("user-id", userID),
+	}
+	if payload == nil {
+		return fields
+	}
+
+	return append(fields,
+		zap.String("event-type", payload.EventType),
+		zap.String("event-id", payload.EventID),
+		zap.String("subscription-id", payload.SubscriptionID),
+		zap.String("customer-id", payload.CustomerID),
+		zap.Bool("is-subscription", payload.IsSubscription()),
+	)
 }

@@ -61,9 +61,7 @@ func Paginate[T any](
 	resources []T,
 	totalCount int,
 ) (*PaginationResponse[T], error) {
-	logger := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/toolbox")
 
 	// Set default values if needed
 	perPage := req.PerPage

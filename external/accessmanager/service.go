@@ -221,9 +221,7 @@ func (s *Service) WithGroupService(groupService GroupService) *Service {
 func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (bool, error) {
 
 	var (
-		log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 		// whether a change has taken place in this method which means that the user needs to be
 		// signed off of the client they are currently using to make the request
@@ -239,14 +237,14 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 			ID: r.UserId,
 		})
 		if err != nil {
-			log.Error("ams/failed-to-get-requesting-user-by-id", zap.Error(err))
+			logger.Error("failed-to-get-requesting-user-by-id", zap.Error(err))
 			return signUserOutOfPlatform, err
 		}
 
 		requestingUser = userByIdResponse.User
 
 		if !requestingUser.IsAdmin() {
-			log.Warn("ams/non-admin-user-attempted-to-update-another-user-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
+			logger.Warn("non-admin-user-attempted-to-update-another-user-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
 			return signUserOutOfPlatform, ErrForbiddenUnableToAction
 		}
 	}
@@ -256,7 +254,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		ID: r.TargetUserId,
 	})
 	if err != nil {
-		log.Error("ams/failed-to-get-target-user-by-id", zap.Error(err))
+		logger.Error("failed-to-get-target-user-by-id", zap.Error(err))
 		return signUserOutOfPlatform, err
 	}
 
@@ -267,7 +265,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	standardiseExistingEmail := toolbox.StringStandardisedToLower(targetUser.GetUserEmail())
 	standardiseNewEmail := toolbox.StringStandardisedToLower(r.Email)
 	if standardiseExistingEmail == standardiseNewEmail {
-		log.Warn("ams/user-attempted-to-update-email-to-same-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
+		logger.Warn("user-attempted-to-update-email-to-same-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
 		return signUserOutOfPlatform, ErrConflictingUserState
 	}
 
@@ -276,11 +274,11 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		Email: r.Email,
 	})
 	if newEmailInUseErr != nil && !errors.Is(newEmailInUseErr, userv2.ErrUserNotFound) {
-		log.Error("ams/failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
+		logger.Error("failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
 		return signUserOutOfPlatform, newEmailInUseErr
 	}
 	if newEmailInUseErr == nil {
-		log.Warn("ams/new-email-already-in-use", zap.String("existing-user-id", userByEmailResponse.User.ID), zap.String("target-user-id", r.TargetUserId), zap.String("user-id", r.UserId))
+		logger.Warn("new-email-already-in-use", zap.String("existing-user-id", userByEmailResponse.User.ID), zap.String("target-user-id", r.TargetUserId), zap.String("user-id", r.UserId))
 		return signUserOutOfPlatform, ErrConflictingUserState
 	}
 
@@ -299,7 +297,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		RecipientType: string(audit.User),
 	})
 	if err != nil {
-		log.Error("ams/unable-to-send-change-of-email-request-notification-email-for-to-old-email:", zap.String("user-id", r.TargetUserId))
+		logger.Error("unable-to-send-change-of-email-request-notification-email-for-to-old-email:", zap.String("user-id", r.TargetUserId))
 		return signUserOutOfPlatform, err
 	}
 
@@ -307,7 +305,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	// and unverify the email on the account
 	_, err = targetUser.UpdateStatus(userv2.AccountStatusValidOriginKeyEmailChange)
 	if err != nil {
-		log.Warn("ams/unable-to-update-status-of-user-to-provisioned-after-email-change", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
+		logger.Warn("unable-to-update-status-of-user-to-provisioned-after-email-change", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
 		return signUserOutOfPlatform, ErrConflictingUserState
 	}
 
@@ -320,7 +318,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		User: targetUser,
 	})
 	if err != nil {
-		log.Error("ams/failed-to-update-user-with-new-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
+		logger.Error("failed-to-update-user-with-new-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
 		return signUserOutOfPlatform, err
 	}
 
@@ -335,29 +333,29 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 		AuthToken:    r.AuthToken,
 	})
 	if wipeOldSessionsErr != nil {
-		log.Error("ams/failed-to-logout-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(wipeOldSessionsErr))
+		logger.Error("failed-to-logout-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(wipeOldSessionsErr))
 	}
 	if wipeOldSessionsErr == nil {
-		log.Info("ams/logged-out-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
+		logger.Info("logged-out-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
 	}
 
 	// log out of the current session (ignore errors)
 	logOutCurrentSessionErr := s.LogoutUser(ctx, r.Request)
 	if logOutCurrentSessionErr != nil {
-		log.Error("ams/failed-to-logout-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(logOutCurrentSessionErr))
+		logger.Error("failed-to-logout-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(logOutCurrentSessionErr))
 	}
 	if logOutCurrentSessionErr == nil {
-		log.Info("ams/logged-out-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
+		logger.Info("logged-out-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
 	}
 
 	// send a verification email to the new email address
-	log.Info(fmt.Sprintf("ams/initiate-verification-email-for-user-with-changed-email: %s", targetUser.ID))
+	logger.Info("initiate-verification-email-for-user-with-changed-email", zap.String("user-id", targetUser.ID))
 	_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
 		User:       targetUser,
 		RequestUrl: "",
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("ams/error-failed-to-initiate-verification-email-for-user-with-changed-emai: %s", targetUser.ID))
+		logger.Error("failed-to-initiate-verification-email-for-user-with-changed-email", zap.String("user-id", targetUser.ID), zap.Error(err))
 		return signUserOutOfPlatform, err
 	}
 
@@ -375,7 +373,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	})
 
 	if auditErr != nil {
-		log.Warn("ams/failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.String("event-type", string(auditEvent)))
+		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.String("event-type", string(auditEvent)))
 	}
 
 	return signUserOutOfPlatform, nil
@@ -383,6 +381,8 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 
 // LogoutUserOthers handles logic of managing the user's other log in session
 func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "logout-user-others")
+	logger.Debug("handling-logout-user-others-request")
 
 	var accessTokenId string
 	var refreshTokenId string
@@ -418,19 +418,17 @@ func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersReque
 // OauthCallback handles logic of managing the callback of a provider
 func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	if len(s.OauthServices) == 0 {
-		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-callback-requested", zap.String("requested-provider", r.Provider))
+		logger.Error("no-oauth-provider-passed-to-access-manager-but-oauth-callback-requested", zap.String("requested-provider", r.Provider))
 		return nil, ErrNoOauthProvidersDetected
 	}
 
 	for _, provider := range s.OauthServices {
 
 		if r.Provider != provider.ProviderGetName() {
-			log.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
+			logger.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
 			continue
 		}
 
@@ -469,7 +467,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 
 			decoded64RequestUrl, err := base64.StdEncoding.DecodeString(splitProtectionStateTokenCookieValue[1])
 			if err != nil {
-				log.Warn("failed-to-decode-detected-request-url-uri-for-sso-callback", zap.String("encoded-request-url", splitProtectionStateTokenCookieValue[1]))
+				logger.Warn("failed-to-decode-detected-request-url-uri-for-sso-callback", zap.String("encoded-request-url", splitProtectionStateTokenCookieValue[1]))
 			}
 
 			if err == nil && string(decoded64RequestUrl) != "" {
@@ -512,7 +510,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			// If user is verified by provider but not our platform, we should trust provider
 			if !persistentUser.Verification.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
 
-				log.Info("provider-login-user-email-verified-based-on-provider-records", zap.String("user-id", persistentUser.ID))
+				logger.Info("provider-login-user-email-verified-based-on-provider-records", zap.String("user-id", persistentUser.ID))
 				persistentUser.VerifyEmail()
 			}
 
@@ -520,7 +518,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 				User: persistentUser,
 			})
 			if err != nil {
-				log.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+				logger.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
@@ -528,7 +526,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 
 			err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
 			if err != nil {
-				log.Error("provider-login-ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+				logger.Error("provider-login-ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
@@ -548,7 +546,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			})
 
 			if auditErr != nil {
-				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", persistentUser.ID), zap.String("event-type", string(auditEvent)))
+				logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", persistentUser.ID), zap.String("event-type", string(auditEvent)))
 			}
 
 			return &OauthCallbackResponse{
@@ -568,7 +566,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 				Email:                    providerUserInfo.GetUserEmail(),
 			})
 			if err != nil {
-				log.Error("provider-signup-user-creation-failed-after-successful-login-initiation", zap.String("user-email:", providerUserInfo.GetUserEmail()))
+				logger.Error("provider-signup-user-creation-failed-after-successful-login-initiation", zap.String("user-email:", providerUserInfo.GetUserEmail()))
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
@@ -577,7 +575,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			// If user is verified by provider but not our platform, we should trust provider
 			if !newUserResp.User.Verification.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
 
-				log.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUserResp.User.ID))
+				logger.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUserResp.User.ID))
 				newUserResp.User.VerifyEmail()
 
 				// Update user with verification information
@@ -585,10 +583,10 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 					User: newUserResp.User,
 				})
 				if err != nil {
-					log.Error(fmt.Sprintf("ams/error-failed-to-save-new-user-verficaiton-by-provider: %s", newUserResp.User.ID))
+					logger.Error("failed-to-save-new-user-verification-by-provider", zap.String("user-id", newUserResp.User.ID), zap.Error(err))
+				} else {
+					logger.Info("successfully-saved-new-user-verification-by-provider", zap.String("user-id", updatedUser.User.ID))
 				}
-
-				log.Info(fmt.Sprintf("ams/successfully-saved-new-user-verficaiton-by-provider: %s", updatedUser.User.ID))
 
 			}
 
@@ -606,10 +604,10 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			})
 
 			if auditErr != nil {
-				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
+				logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
 			}
 
-			log.Info(fmt.Sprintf("ams/initiate-new-user-tokens: %s", newUserResp.User.ID))
+			logger.Info("initiate-new-user-tokens", zap.String("user-id", newUserResp.User.ID))
 
 			accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, err := s.UserEmailVerificationRevisions(ctx, &UserEmailVerificationRevisionsRequest{
 				UserID: newUserResp.User.ID})
@@ -631,7 +629,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 			})
 
 			if auditErr != nil {
-				log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
+				logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
 			}
 
 			return &OauthCallbackResponse{
@@ -652,19 +650,17 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 // OauthLogin handles logic of managing the initialisation of provider url
 func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	if len(s.OauthServices) == 0 {
-		log.Error("no-oauth-provider-passed-to-access-manager-but-oauth-login-requested", zap.String("requested-provider", r.Provider))
+		logger.Error("no-oauth-provider-passed-to-access-manager-but-oauth-login-requested", zap.String("requested-provider", r.Provider))
 		return nil, ErrNoOauthProvidersDetected
 	}
 
 	for _, provider := range s.OauthServices {
 
 		if r.Provider != provider.ProviderGetName() {
-			log.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
+			logger.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
 			continue
 		}
 
@@ -700,6 +696,8 @@ func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthL
 // GetSpecificUserAPITokens retrieves API token for a specific user
 // TODO: Create tests
 func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "get-specific-user-api-tokens")
+	logger.Debug("handling-get-specific-user-api-tokens-request")
 
 	userApiTokenResponse, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
 		ID:            r.UserID,
@@ -727,6 +725,8 @@ func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUs
 
 // GetUserAPITokenThreshold retrieves the thresholds applied to the user r. API tokens
 func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "get-user-api-token-threshold")
+	logger.Debug("handling-get-user-api-token-threshold-request")
 
 	// Check if user exist
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
@@ -755,6 +755,9 @@ func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITok
 // UpdateUserAPITokenStatus updates status on specified API token
 // TODO: Create tests
 func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "update-user-api-token-status")
+	logger.Debug("handling-update-user-api-token-status-request")
+
 	switch r.Status {
 	case apitoken.UserTokenStatusKeyActive:
 		return s.ApitokenService.ActivateAPIToken(ctx, &apitoken.ActivateAPITokenRequest{
@@ -769,6 +772,9 @@ func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenS
 // DeleteUserAPIToken delete specified API token for user
 // TODO: Create tests
 func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "delete-user-api-token")
+	logger.Debug("handling-delete-user-api-token-request")
+
 	// Check if user exist
 	_, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
 		ID: r.UserID,
@@ -809,9 +815,7 @@ func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenR
 // CreateUserAPIToken generates API token for user
 // TODO: Create tests
 func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	// Check if user exist
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
@@ -827,7 +831,7 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 	userHighestRankingRole := common.GetUsersHighestRankedRole(persistentUser.Roles)
 	getUserRoleThresholdAllocation := common.UserRolesThresholds.RolesDetails[common.UserRole(userHighestRankingRole)]
 	if !toolbox.StringInSlice(userHighestRankingRole, persistentUser.Roles) {
-		log.Error("highest-role-pulled-is-not-found-in-user-allocated-role", zap.String("user-id", persistentUser.ID), zap.String("role-pulled", userHighestRankingRole), zap.String("user-roles", strings.Join(persistentUser.Roles, ", ")))
+		logger.Error("highest-role-pulled-is-not-found-in-user-allocated-role", zap.String("user-id", persistentUser.ID), zap.String("role-pulled", userHighestRankingRole), zap.String("user-roles", strings.Join(persistentUser.Roles, ", ")))
 	}
 
 	// get user's apitokens count
@@ -871,26 +875,24 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 // allocated thresholds
 func (s *Service) verifyRequestIsWithinUserRoleTokenConstraints(ctx context.Context, userId string, tokenTtl int64, userRoleThresholds *common.UserRoleThresholds) error {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	if tokenTtl == 0 {
 		return nil
 	}
 
 	if tokenTtl < userRoleThresholds.ShortLivedMinimumAllowedTime {
-		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-short"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
+		logger.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-short"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
 		return ErrCreateUserAPITokenRequestTtlTooShort
 	}
 
 	if tokenTtl > userRoleThresholds.ShortLivedMaximumAllowedTime {
-		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-long"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
+		logger.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-too-long"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
 		return ErrCreateUserAPITokenRequestTtlTooLong
 	}
 
 	if tokenTtl%userRoleThresholds.ShortLivedMinimumIncrements != 0 {
-		log.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-outside-allowed-increment"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
+		logger.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-outside-allowed-increment"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
 		return ErrCreateUserAPITokenRequestTtlOutsideAllowedIncrement
 	}
 
@@ -904,9 +906,7 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	var (
 		userPermanentToken int
 		userEphemeralToken int
-		log                *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger             *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 	)
 
 	// get user api tokens
@@ -917,7 +917,7 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	})
 
 	if err != nil {
-		log.Error("error-fetching-user-auth-tokens", zap.Error(err))
+		logger.Error("error-fetching-user-auth-tokens", zap.Error(err))
 		return 0, 0, err
 	}
 
@@ -1103,6 +1103,9 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*Midd
 // checkActivenessOfUser verifies that the user account is currently in an ACTIVE status.
 // Returns the user ID if active, otherwise returns an error.
 func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (*MiddlewareAuthedUserResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "check-activeness-of-user")
+	logger.Debug("handling-check-activeness-of-user-request")
+
 	user, isActiveUser := s.isUserLiveStatusActive(ctx, tokenAuth.UserID)
 	if !isActiveUser {
 		return nil, ErrUnauthorizedNonActiveStatus
@@ -1118,9 +1121,7 @@ func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.Tok
 // TODO: Investigate best way to also delete corresponding refresh token
 // TODO: Create tests
 func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, r)
 	if err != nil {
@@ -1129,12 +1130,12 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 
 	deleted, err := s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(accessTokenDetails.UserID, accessTokenDetails.AccessUUID))
 	if err != nil {
-		log.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID), zap.Error(err))
+		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID), zap.Error(err))
 		return err
 	}
 
 	if deleted == 0 {
-		log.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID))
+		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID))
 		return ErrUnauthorizedAccessTokenCacheDeletionFailure
 	}
 
@@ -1150,7 +1151,7 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 	})
 
 	if auditErr != nil {
-		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", accessTokenDetails.UserID), zap.String("event-type", string(auditEvent)))
+		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", accessTokenDetails.UserID), zap.String("event-type", string(auditEvent)))
 	}
 
 	return nil
@@ -1160,9 +1161,7 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 // checks
 // TODO: Create tests
 func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	tokenUser, refreshTokenDetails, err := s.refreshTokenUserFromCookieValue(ctx, r.RefreshToken)
 	if err != nil {
@@ -1175,13 +1174,13 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	if response, err := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); err != nil {
 		return nil, err
 	} else if response != nil {
-		log.Info("refresh-token-rotation-replayed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		logger.Info("refresh-token-rotation-replayed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 		return response, nil
 	}
 
 	lockAcquired, err := s.EphemeralStore.AcquireRefreshTokenRotationLock(ctx, userID, refreshTokenUuid, refreshTokenRotationLockTTL)
 	if err != nil {
-		log.Error("refresh-token-rotation-lock-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+		logger.Error("refresh-token-rotation-lock-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
 		return nil, err
 	}
 	if !lockAcquired {
@@ -1190,16 +1189,16 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 			return nil, waitErr
 		}
 		if response != nil {
-			log.Info("refresh-token-rotation-replayed-after-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			logger.Info("refresh-token-rotation-replayed-after-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 			return response, nil
 		}
 
-		log.Error("refresh-token-rotation-lock-timeout-without-result", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		logger.Error("refresh-token-rotation-lock-timeout-without-result", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 	defer func() {
 		if _, releaseErr := s.EphemeralStore.ReleaseRefreshTokenRotationLock(ctx, userID, refreshTokenUuid); releaseErr != nil {
-			log.Warn("refresh-token-rotation-lock-release-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(releaseErr))
+			logger.Warn("refresh-token-rotation-lock-release-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(releaseErr))
 		}
 	}()
 
@@ -1209,26 +1208,26 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		if response, replayErr := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); replayErr != nil {
 			return nil, replayErr
 		} else if response != nil {
-			log.Info("refresh-token-rotation-replayed-after-delete-miss", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			logger.Info("refresh-token-rotation-replayed-after-delete-miss", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 			return response, nil
 		}
 
-		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userID), zap.Error(err))
+		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userID), zap.Error(err))
 		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
-	log.Info("refresh-token-successfully-removed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 
 	// check if access token is present and clean up along with it
 	if r.AccessToken != "" {
 
-		log.Info("access-token-present-in-refresh-token-request", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+		logger.Info("access-token-present-in-refresh-token-request", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 
 		err := s.RemoveAccessTokenWithCookieValue(ctx, userID, r.AccessToken)
 		if err != nil {
-			log.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.Error(err))
+			logger.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.Error(err))
 		} else {
-			log.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
+			logger.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid))
 		}
 
 	}
@@ -1242,7 +1241,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	// Save the tokens to ephemeralstore
 	err = s.EphemeralStore.CreateAuth(ctx, userID, newTokensDetails)
 	if err != nil {
-		log.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", userID), zap.Error(err))
+		logger.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", userID), zap.Error(err))
 		return nil, err
 	}
 
@@ -1254,7 +1253,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
 	}
 	if err := s.EphemeralStore.StoreRefreshTokenRotationResult(ctx, userID, refreshTokenUuid, rotationResult, refreshTokenRotationReplayTTL); err != nil {
-		log.Warn("refresh-token-rotation-result-store-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+		logger.Warn("refresh-token-rotation-result-store-failed", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
 	}
 
 	return &RefreshTokenResponse{
@@ -1267,6 +1266,9 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 
 // refreshTokenRotationResponse maps a cached rotation replay payload to the service response.
 func (s *Service) refreshTokenRotationResponse(ctx context.Context, userID, refreshTokenUuid string) (*RefreshTokenResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "refresh-token-rotation-response")
+	logger.Debug("handling-refresh-token-rotation-response-request")
+
 	result, err := s.EphemeralStore.GetRefreshTokenRotationResult(ctx, userID, refreshTokenUuid)
 	if err != nil || result == nil {
 		return nil, err
@@ -1282,9 +1284,7 @@ func (s *Service) refreshTokenRotationResponse(ctx context.Context, userID, refr
 
 // waitForRefreshTokenRotationResponse polls briefly for the winning refresh rotation result.
 func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userID, refreshTokenUuid string) (*RefreshTokenResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	timeout := time.NewTimer(refreshTokenRotationWaitTimeout)
 	defer timeout.Stop()
@@ -1300,7 +1300,7 @@ func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userI
 		}
 		if err != nil {
 			lastErr = err
-			log.Warn("refresh-token-rotation-result-fetch-failed-during-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
+			logger.Warn("refresh-token-rotation-result-fetch-failed-during-wait", zap.String("user-id", userID), zap.String("refresh-token", refreshTokenUuid), zap.Error(err))
 		}
 
 		select {
@@ -1315,11 +1315,9 @@ func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userI
 
 // RemoveAccessTokenWithCookieValue removes access token with the given cookie value
 func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, accessTokenCookieValue string) error {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
-	log.Info("processing-access-token-removal-by-cookie-value")
+	logger.Info("processing-access-token-removal-by-cookie-value")
 
 	tempRequest := &http.Request{
 		Header: http.Header{},
@@ -1329,40 +1327,38 @@ func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, 
 
 	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, tempRequest)
 	if err != nil {
-		log.Error("failed-to-extract-access-token-details-from-cookie-value", zap.Error(err))
+		logger.Error("failed-to-extract-access-token-details-from-cookie-value", zap.Error(err))
 		return err
 	}
 
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, accessTokenDetails.AccessUUID))
 	if err != nil || deleted == 0 {
-		log.Warn("access-token-removal-failed", zap.String("user-id", userId), zap.String("access-token", accessTokenDetails.AccessUUID), zap.Error(err))
+		logger.Warn("access-token-removal-failed", zap.String("user-id", userId), zap.String("access-token", accessTokenDetails.AccessUUID), zap.Error(err))
 		return err
 	}
 
-	log.Info("access-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", accessTokenDetails.AccessUUID))
+	logger.Info("access-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", accessTokenDetails.AccessUUID))
 
 	return nil
 }
 
 // refreshTokenUserFromCookieValue validates a refresh cookie and returns its user and token metadata.
 func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, *auth.TokenRefreshDetails, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
-	log.Info("processing-refresh-token-by-cookie-value")
+	logger.Info("processing-refresh-token-by-cookie-value")
 
 	// Check validity
 	refreshToken, err := s.AuthService.CheckRefreshTokenIsValid(ctx, refreshTokenCookieValue)
 	if err != nil {
-		log.Error("failed-to-check-if-refresh-token-is-valid", zap.Error(err))
+		logger.Error("failed-to-check-if-refresh-token-is-valid", zap.Error(err))
 		return nil, nil, err
 	}
 
 	// Get token details
 	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, refreshToken)
 	if err != nil {
-		log.Error("failed-to-get-refresh-token-by-its-uuid", zap.Error(err))
+		logger.Error("failed-to-get-refresh-token-by-its-uuid", zap.Error(err))
 		return nil, nil, err
 	}
 
@@ -1370,7 +1366,7 @@ func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTo
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
 		ID: refreshTokenDetails.UserID})
 	if err != nil {
-		log.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
+		logger.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
 		return nil, refreshTokenDetails, err
 	}
 
@@ -1384,12 +1380,10 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	var (
 		userId           string
 		refreshTokenUuid string
-		log              *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger           *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 	)
 
-	log.Info("processing-refresh-token-removal-by-cookie-value")
+	logger.Info("processing-refresh-token-removal-by-cookie-value")
 
 	tokenUser, refreshTokenDetails, err := s.refreshTokenUserFromCookieValue(ctx, refreshTokenCookieValue)
 	if err != nil {
@@ -1405,11 +1399,11 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, refreshTokenDetails.RefreshUUID))
 	if err != nil || deleted == 0 {
-		log.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userId), zap.Error(err))
+		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userId), zap.Error(err))
 		return nil, refreshTokenUuid, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
-	log.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
+	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token", refreshTokenDetails.RefreshUUID))
 	return tokenUser, refreshTokenUuid, nil
 }
 
@@ -1418,9 +1412,7 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 // TODO: Create tests
 func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUserResponse, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	if r.Code != "" {
 		resolvedToken, err := s.resolveTokenFromCode(ctx, r.Code)
@@ -1459,13 +1451,13 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 		User: persistentUser,
 	})
 	if err != nil {
-		log.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+		logger.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
 		return nil, err
 	}
 
 	err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
 	if err != nil {
-		log.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+		logger.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
 		return nil, err
 	}
 
@@ -1482,7 +1474,7 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	})
 
 	if auditErr != nil {
-		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", UpdateUserResponse.User.ID), zap.String("event-type", string(auditEvent)))
+		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", UpdateUserResponse.User.ID), zap.String("event-type", string(auditEvent)))
 	}
 
 	return &LoginUserResponse{
@@ -1496,6 +1488,9 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 // DeleteAuth removes token with matching ID metadata from emphemeral storage
 // TODO: Create tests
 func (s *Service) DeleteAuth(ctx context.Context, tokenID string) (int64, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "delete-auth")
+	logger.Debug("handling-delete-auth-request")
+
 	return s.EphemeralStore.DeleteAuth(ctx, tokenID)
 }
 
@@ -1506,9 +1501,7 @@ func (s *Service) DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 // admin user
 func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context, r *CreateInitalLoginOrVerificationTokenEmailRequest) error {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: r.Email})
 	if err != nil {
@@ -1531,7 +1524,7 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 			return err
 		}
 	default:
-		log.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID), zap.String("user-status", persistentUserResponse.User.Status))
+		logger.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID), zap.String("user-status", persistentUserResponse.User.Status))
 		return ErrUserStatusUncaught
 	}
 
@@ -1541,6 +1534,8 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 // ValidateEmailVerificationCode handles updating the system to illustrate a successful email verification
 // TODO: Create tests
 func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *ValidateEmailVerificationCodeRequest) (*ValidateEmailVerificationCodeResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "validate-email-verification-code")
+	logger.Debug("handling-validate-email-verification-code-request")
 
 	if r.Code != "" {
 		resolvedToken, err := s.resolveTokenFromCode(ctx, r.Code)
@@ -1578,9 +1573,7 @@ func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *Validate
 // TODO: Create tests
 func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEmailVerificationRevisionsRequest) (accessToken string, accessTokenExpiresAt int64, refreshToken string, refreshTokenExpiresAt int64, err error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserID})
 	if err != nil {
@@ -1594,7 +1587,7 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 	persistentUser.VerifyEmail()
 	revisionedUser, err := persistentUser.UpdateStatus(userv2.AccountStatusKeyActive)
 	if err != nil {
-		log.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
 	}
 
@@ -1602,19 +1595,19 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 		User: revisionedUser,
 	})
 	if err != nil {
-		log.Error("system-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("system-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
 	}
 
 	newTokenDetails, err := s.AuthService.CreateToken(ctx, UpdateUserResponse.User)
 	if err != nil {
-		log.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
 	}
 
 	err = s.EphemeralStore.CreateAuth(ctx, r.UserID, newTokenDetails)
 	if err != nil {
-		log.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
 		return "", 0, "", 0, err
 	}
 
@@ -1626,9 +1619,7 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 // conventional method (headers)
 // TODO: Create tests
 func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringValidatorRequest) (*TokenAsStringValidatorResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	token, err := s.AuthService.ParseAccessTokenFromString(ctx, r.Token)
 	if err != nil {
@@ -1643,7 +1634,7 @@ func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringVa
 	// Check to make sure ephemeral token in persistent storage
 	_, err = s.EphemeralStore.FetchAuth(ctx, td)
 	if err != nil {
-		log.Warn("unauthorized-token-not-found", zap.String("user-id", td.UserID))
+		logger.Warn("unauthorized-token-not-found", zap.String("user-id", td.UserID))
 		return nil, ErrUnauthorizedTokenNotFoundInStore
 	}
 
@@ -1659,9 +1650,7 @@ func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringVa
 // TODO: Create tests
 func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	response := &CreateUserResponse{}
 
@@ -1688,69 +1677,69 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		Domain:     "accessmanager",
 	})
 	if auditErr != nil {
-		log.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
+		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
 	}
 
 	// handle associating pre-registered subscriptions and billing events if any
 	if s.BillingService != nil {
-		log.Info("checking-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		logger.Info("checking-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
 		unassociatedSubResp, err := s.BillingService.GetUnassociatedSubscriptions(ctx, &billing.GetUnassociatedSubscriptionsRequest{
 			Email: newUser.User.Email,
 			Limit: 50,
 		})
 		if err != nil {
-			log.Error("failed-to-check-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(err))
+			logger.Error("failed-to-check-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(err))
 		} else {
 			if len(unassociatedSubResp.Subscriptions) > 0 {
-				log.Info("found-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
+				logger.Info("found-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
 				_, subscriptionAssociationErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
 					UserID: newUser.User.ID,
 					Email:  newUser.User.Email,
 				})
 				if subscriptionAssociationErr != nil {
-					log.Error("failed-to-associate-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(subscriptionAssociationErr))
+					logger.Error("failed-to-associate-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(subscriptionAssociationErr))
 				} else {
-					log.Info("successfully-associated-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
+					logger.Info("successfully-associated-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
 				}
 			} else {
-				log.Info("no-pre-registered-subscriptions-found", zap.String("user-id", newUser.User.ID))
+				logger.Info("no-pre-registered-subscriptions-found", zap.String("user-id", newUser.User.ID))
 			}
 		}
 
-		log.Info("checking-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		logger.Info("checking-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
 		unassociatedBillingEventsResp, err := s.BillingService.GetUnassociatedBillingEvents(ctx, &billing.GetUnassociatedBillingEventsRequest{
 			Email: newUser.User.Email,
 			Limit: 100,
 		})
 		if err != nil {
-			log.Error("failed-to-check-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(err))
+			logger.Error("failed-to-check-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(err))
 		} else {
 			if len(unassociatedBillingEventsResp.BillingEvents) > 0 {
-				log.Info("found-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
+				logger.Info("found-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
 				_, billingEventAssociationErr := s.BillingService.AssociateBillingEventsWithUser(ctx, &billing.AssociateBillingEventsWithUserRequest{
 					UserID: newUser.User.ID,
 					Email:  newUser.User.Email,
 				})
 				if billingEventAssociationErr != nil {
-					log.Error("failed-to-associate-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(billingEventAssociationErr))
+					logger.Error("failed-to-associate-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(billingEventAssociationErr))
 				} else {
-					log.Info("successfully-associated-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
+					logger.Info("successfully-associated-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
 				}
 			} else {
-				log.Info("no-pre-registered-billing-events-found", zap.String("user-id", newUser.User.ID))
+				logger.Info("no-pre-registered-billing-events-found", zap.String("user-id", newUser.User.ID))
 			}
 		}
 	}
 
 	// handle auto-join/auto-invite group membership if group service is available
 	if s.GroupService != nil {
-		log.Info("checking-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
+		logger.Info("checking-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.String("user-email", newUser.User.Email))
 		autoJoinGroupsResp, err := s.GroupService.GetParentGroupsWithAutoJoinForEmail(ctx, newUser.User.Email)
 		if err != nil {
-			log.Error("failed-to-check-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.Error(err))
+			logger.Error("failed-to-check-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.Error(err))
 		} else {
 			if autoJoinGroupsResp != nil && len(autoJoinGroupsResp.Groups) > 0 {
-				log.Info("found-groups-with-auto-join", zap.String("user-id", newUser.User.ID), zap.Int("group-count", len(autoJoinGroupsResp.Groups)))
+				logger.Info("found-groups-with-auto-join", zap.String("user-id", newUser.User.ID), zap.Int("group-count", len(autoJoinGroupsResp.Groups)))
 
 				for _, autoJoinGroup := range autoJoinGroupsResp.Groups {
 					if autoJoinGroup == nil || autoJoinGroup.Settings == nil {
@@ -1772,9 +1761,9 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 							Role:     memberRole,
 						})
 						if memberErr != nil {
-							log.Error("failed-to-auto-join-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(memberErr))
+							logger.Error("failed-to-auto-join-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(memberErr))
 						} else {
-							log.Info("successfully-auto-joined-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
+							logger.Info("successfully-auto-joined-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
 							// Audit log the auto-join
 							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 								ActorId:    audit.AuditActorIdSystem,
@@ -1803,9 +1792,9 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 							InvitedByID: audit.AuditActorIdSystem,
 						})
 						if inviteErr != nil {
-							log.Error("failed-to-auto-invite-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(inviteErr))
+							logger.Error("failed-to-auto-invite-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(inviteErr))
 						} else {
-							log.Info("successfully-auto-invited-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
+							logger.Info("successfully-auto-invited-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
 							// Audit log the auto-invite
 							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 								ActorId:    audit.AuditActorIdSystem,
@@ -1823,27 +1812,27 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 					}
 				}
 			} else {
-				log.Info("no-groups-with-auto-join-found", zap.String("user-id", newUser.User.ID))
+				logger.Info("no-groups-with-auto-join-found", zap.String("user-id", newUser.User.ID))
 			}
 		}
 	}
 
 	// handle verification email if not disabled
 	if !r.DisableVerificationEmail {
-		log.Info(fmt.Sprintf("ams/initiate-new-user-verification-email: %s", newUser.User.ID))
+		logger.Info("initiate-new-user-verification-email", zap.String("user-id", newUser.User.ID))
 		_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
 			User:       response.User,
 			RequestUrl: r.RequestUrl,
 		})
 		if err != nil {
-			log.Error(fmt.Sprintf("ams/error-failed-to-initiate-new-user-verification-email: %s", newUser.User.ID))
+			logger.Error("failed-to-initiate-new-user-verification-email", zap.String("user-id", newUser.User.ID), zap.Error(err))
 			return response, err
 		}
 
-		log.Info(fmt.Sprintf("ams/successfully-initiated-new-user-verification-email: %s", newUser.User.ID))
+		logger.Info("successfully-initiated-new-user-verification-email", zap.String("user-id", newUser.User.ID))
 	}
 
-	log.Info(fmt.Sprintf("ams/completed-new-user-creation: %s", newUser.User.ID))
+	logger.Info("completed-new-user-creation", zap.String("user-id", newUser.User.ID))
 
 	return response, nil
 }
@@ -1852,18 +1841,16 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 // TODO: Create tests
 func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.UniversalUser, isDashboardRequest bool, requestUrl string) (string, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	// cooldownAcquired is false when a recent accepted login email already exists for this user/context.
 	cooldownAcquired, err := s.EphemeralStore.AcquireLoginEmailCooldown(ctx, user.ID, isDashboardRequest, requestUrl, loginEmailCooldownTTL)
 	if err != nil {
-		log.Error("unable-to-acquire-login-email-cooldown:", zap.String("user-id", user.ID), zap.Error(err))
+		logger.Error("unable-to-acquire-login-email-cooldown:", zap.String("user-id", user.ID), zap.Error(err))
 		return "", err
 	}
 	if !cooldownAcquired {
-		log.Info("login-email-cooldown-active", zap.String("user-id", user.ID))
+		logger.Info("login-email-cooldown-active", zap.String("user-id", user.ID))
 		return "", nil
 	}
 
@@ -1875,31 +1862,31 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 		}
 
 		if _, releaseErr := s.EphemeralStore.ReleaseLoginEmailCooldown(ctx, user.ID, isDashboardRequest, requestUrl); releaseErr != nil {
-			log.Warn("login-email-cooldown-release-failed", zap.String("user-id", user.ID), zap.Error(releaseErr))
+			logger.Warn("login-email-cooldown-release-failed", zap.String("user-id", user.ID), zap.Error(releaseErr))
 		}
 	}()
 
 	tokenDetails, err := s.AuthService.CreateInitalToken(ctx, user)
 	if err != nil {
-		log.Error("unable-to-generate-initiate-login-email-token:", zap.String("user-id", user.ID))
+		logger.Error("unable-to-generate-initiate-login-email-token:", zap.String("user-id", user.ID))
 		return "", err
 	}
 
 	err = s.EphemeralStore.StoreToken(ctx, tokenDetails.EphemeralUUID, user.ID, tokenDetails.EtTTL)
 	if err != nil {
-		log.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
+		logger.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
 		return "", err
 	}
 
 	loginCode, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, tokenDetails.EtTTL)
 	if err != nil {
-		log.Error("unable-to-generate-login-code:", zap.String("user-id", user.ID), zap.Error(err))
+		logger.Error("unable-to-generate-login-code:", zap.String("user-id", user.ID), zap.Error(err))
 		return "", err
 	}
 
 	err = s.EphemeralStore.StoreCodeMapping(ctx, loginCode, tokenDetails.EphemeralToken, tokenDetails.EtTTL)
 	if err != nil {
-		log.Error("unable-to-store-login-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
+		logger.Error("unable-to-store-login-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
 		return "", err
 	}
 
@@ -1913,7 +1900,7 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 		UserId:             user.ID,
 	})
 	if err != nil {
-		log.Error("unable-to-send-initiate-login-email:", zap.String("user-id", user.ID))
+		logger.Error("unable-to-send-initiate-login-email:", zap.String("user-id", user.ID))
 		return "", err
 	}
 
@@ -1925,32 +1912,30 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 // CreateEmailVerificationToken create token used to validate email associated to user's accounts
 func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEmailVerificationTokenRequest) (string, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 	user := r.User
 
 	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, user)
 	if err != nil {
-		log.Error("unable-to-generate-verification-email-token:", zap.String("user-id", user.ID))
+		logger.Error("unable-to-generate-verification-email-token:", zap.String("user-id", user.ID))
 		return "", err
 	}
 
 	err = s.EphemeralStore.StoreToken(ctx, tokenDetails.EmailVerificationUUID, user.ID, tokenDetails.EvTTL)
 	if err != nil {
-		log.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
+		logger.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
 		return "", err
 	}
 
 	verificationCode, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, tokenDetails.EvTTL)
 	if err != nil {
-		log.Error("unable-to-generate-verification-code:", zap.String("user-id", user.ID), zap.Error(err))
+		logger.Error("unable-to-generate-verification-code:", zap.String("user-id", user.ID), zap.Error(err))
 		return "", err
 	}
 
 	err = s.EphemeralStore.StoreCodeMapping(ctx, verificationCode, tokenDetails.EmailVerificationToken, tokenDetails.EvTTL)
 	if err != nil {
-		log.Error("unable-to-store-verification-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
+		logger.Error("unable-to-store-verification-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
 		return "", err
 	}
 
@@ -1966,7 +1951,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 		UserId:             user.ID,
 	})
 	if err != nil {
-		log.Error("unable-to-send-verification-email:", zap.String("user-id", user.ID))
+		logger.Error("unable-to-send-verification-email:", zap.String("user-id", user.ID))
 		return "", err
 	}
 
@@ -1991,6 +1976,9 @@ func getValidRequestorIP(r *http.Request) string {
 // isUserLiveStatusActive checks if the user account with the given ID has an ACTIVE status.
 // Returns the user object and true if active, otherwise nil and false.
 func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) (*userv2.UniversalUser, bool) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "is-user-live-status-active")
+	logger.Debug("handling-is-user-live-status-active-request")
+
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx,
 		&userv2.GetUserByIDRequest{ID: userID},
 	)
@@ -2009,22 +1997,20 @@ func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) (*u
 // associated token. It returns an error if the code is not found or has expired.
 func (s *Service) resolveTokenFromCode(ctx context.Context, code string) (string, error) {
 
-	log := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	token, err := s.EphemeralStore.GetCodeMapping(ctx, code)
 	if err != nil {
-		log.Warn("ams/code-to-token-mapping-not-found", zap.String("code", code), zap.Error(err))
+		logger.Warn("code-to-token-mapping-not-found", zap.String("code", code), zap.Error(err))
 		return "", ErrInvalidVerificationCode
 	}
 
 	if token == "" {
-		log.Warn("ams/code-to-token-mapping-returned-empty-token", zap.String("code", code))
+		logger.Warn("code-to-token-mapping-returned-empty-token", zap.String("code", code))
 		return "", ErrInvalidVerificationCode
 	}
 
-	log.Info("ams/successfully-resolved-code-to-token", zap.String("code", code))
+	logger.Info("successfully-resolved-code-to-token", zap.String("code", code))
 
 	return token, nil
 }

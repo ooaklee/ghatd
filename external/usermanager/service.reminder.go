@@ -210,24 +210,24 @@ func (s *Service) ensureReminderService() error {
 
 // validateReminderRequester resolves the requesting user and reports whether the user is an admin.
 func (s *Service) validateReminderRequester(ctx context.Context, userID string) (*userv2.UniversalUser, bool, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 	requestingUserID := strings.TrimSpace(userID)
 	if requestingUserID == "" {
-		log.Warn("reminder-request-with-empty-requesting-user-id")
+		logger.Warn("reminder-request-with-empty-requesting-user-id")
 		return nil, false, ErrUnableToIdentifyUser
 	}
 	if s.UserService == nil {
-		log.Warn("reminder-request-without-user-service", zap.String("user-id", requestingUserID))
+		logger.Warn("reminder-request-without-user-service", zap.String("user-id", requestingUserID))
 		return nil, false, ErrUserManagerError
 	}
 
 	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: requestingUserID})
 	if err != nil {
-		log.Warn("unable-to-resolve-reminder-requester", zap.String("user-id", requestingUserID), zap.Error(err))
+		logger.Warn("unable-to-resolve-reminder-requester", zap.String("user-id", requestingUserID), zap.Error(err))
 		return nil, false, err
 	}
 	if requestingUser == nil || requestingUser.User == nil {
-		log.Warn("reminder-requester-not-found", zap.String("user-id", requestingUserID))
+		logger.Warn("reminder-requester-not-found", zap.String("user-id", requestingUserID))
 		return nil, false, ErrUserNotFound
 	}
 

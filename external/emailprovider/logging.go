@@ -41,7 +41,7 @@ func (p *LoggingEmailProvider) Send(ctx context.Context, email *Email) (*SendRes
 	}
 
 	// Get logger from context
-	log := logger.AcquireFrom(ctx)
+	logger := logger.AcquirePackageFrom(ctx, "external/emailprovider")
 
 	// Log the email details
 	var logFields []zap.Field = []zap.Field{
@@ -51,13 +51,13 @@ func (p *LoggingEmailProvider) Send(ctx context.Context, email *Email) (*SendRes
 		zap.String("subject", email.Subject),
 	}
 
-	if p.config != nil && p.config.DisableFullHtmlBodyPreview {
+	if p.config == nil || p.config.DisableFullHtmlBodyPreview {
 		logFields = append(logFields, zap.String("html_body_preview", truncateString(email.HTMLBody, 200)))
 	} else {
 		logFields = append(logFields, zap.String("html_body_preview", email.HTMLBody))
 	}
 
-	log.Info("email-outputted-locally--not-sent",
+	logger.Info("email-outputted-locally--not-sent",
 		logFields...,
 	)
 

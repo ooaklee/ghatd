@@ -51,9 +51,7 @@ func NewService(contenterRepository contenterRepository, validChangelogTags []st
 func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*CreatePostResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 
 		newPost                 *Post
 		standardiseTitle        string
@@ -63,7 +61,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 		err                     error
 	)
 
-	logger.Debug("initiating-create-post-request", zap.Any("request", req))
+	logger.Debug("initiating-create-post-request", zap.Any("request", safeLogValue(req)))
 
 	if req.UserId == "" {
 		logger.Warn("a-user-id-must-be-given-to-create-a-post")
@@ -83,7 +81,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	}
 
 	if standardiseTitle == "" {
-		logger.Warn("attempt-made-to-create-post-without-title", zap.Any("request", req))
+		logger.Warn("attempt-made-to-create-post-without-title", zap.Any("request", safeLogValue(req)))
 		return nil, ErrRequiredPostTitleIsMissing
 	}
 
@@ -92,7 +90,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	}
 
 	if standardisedText == "" {
-		logger.Warn("attempt-made-to-create-post-without-text", zap.Any("request", req))
+		logger.Warn("attempt-made-to-create-post-without-text", zap.Any("request", safeLogValue(req)))
 		return nil, ErrRequiredPostTextIsMissing
 	}
 
@@ -133,7 +131,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	// verify that  blog has header image and everything else does not
 	// if blog does not have one provided, bad request
 	if newPost.Type == PostTypeArticle && newPost.HeaderImage == "" {
-		logger.Warn("attempt-made-to-create-post-without-header-image", zap.Any("request", req))
+		logger.Warn("attempt-made-to-create-post-without-header-image", zap.Any("request", safeLogValue(req)))
 		return nil, ErrHeaderImageMissing
 	}
 
@@ -143,19 +141,19 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	_, err = newPost.SetHeaderImageType()
 	if err != nil {
-		logger.Warn("attempt-made-to-create-post-with-invalid-header-image", zap.Any("request", req))
+		logger.Warn("attempt-made-to-create-post-with-invalid-header-image", zap.Any("request", safeLogValue(req)))
 		return nil, err
 	}
 	err = newPost.ValidateHeaderImageHasRequiredAltTextAlternativeElementsForInlineSvg()
 	if err != nil {
-		logger.Warn("attempt-made-to-create-post-with-invalid-svg-header-image", zap.Any("request", req))
+		logger.Warn("attempt-made-to-create-post-with-invalid-svg-header-image", zap.Any("request", safeLogValue(req)))
 		return nil, err
 	}
 
 	// Verify that changelog can only be tagged with valid tag i.e.
 	// announcement, bug-fix, product-news, exciting-news
 	if newPost.Type == PostTypeChangelog && len(s.validChangelogTags) > 0 && len(newPost.Tags) == 0 {
-		logger.Warn("attempt-made-to-create-changelog-post-without-tags", zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
+		logger.Warn("attempt-made-to-create-changelog-post-without-tags", zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", safeLogValue(req)))
 		return nil, ErrChangelogPostMustHaveValidTagsSet
 	}
 
@@ -169,7 +167,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 		}
 
 		if len(invalidTags) > 0 {
-			logger.Warn("attempt-made-to-create-changelog-post-with-invalid-tags", zap.Strings("invalid-tags", invalidTags), zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
+			logger.Warn("attempt-made-to-create-changelog-post-with-invalid-tags", zap.Strings("invalid-tags", invalidTags), zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", safeLogValue(req)))
 			return nil, ErrChangelogPostMustHaveValidTagsSet
 		}
 	}
@@ -180,17 +178,17 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	// check to make sure url friendly is is not already being used
 	_, err = s.contenterRepository.GetPostByUrlFriendlyId(ctx, newPost.UrlFriendlyId)
 	if err == nil {
-		logger.Warn("attempt-made-to-create-post-with-existing-url-friendly-id", zap.Any("new-post", newPost))
+		logger.Warn("attempt-made-to-create-post-with-existing-url-friendly-id", zap.Any("new-post", safeLogValue(newPost)))
 		return nil, ErrPostAlreadyExistsWithGivenUrlFriendlyId
 	}
 
 	createdPost, err := s.contenterRepository.CreatePost(ctx, newPost)
 	if err != nil {
-		logger.Error("failed-to-create-post-error-creating-post", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-post-error-creating-post", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreatePostResponse{}, err
 	}
 
-	logger.Debug("create-post-request-successful", zap.Any("request", req), zap.Any("created-post", createdPost))
+	logger.Debug("create-post-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("created-post", safeLogValue(createdPost)))
 
 	return &CreatePostResponse{
 		Post: createdPost,
@@ -201,9 +199,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 func (s *Service) GetPosts(ctx context.Context, req *GetPostsRequest) (*GetPostsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
 	// default
@@ -270,16 +266,16 @@ func (s *Service) GetPosts(ctx context.Context, req *GetPostsRequest) (*GetPosts
 	}
 	totalPosts, err := s.contenterRepository.GetTotalPosts(ctx, getTotalPostsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-posts-request-error-getting-total-posts", zap.Any("request", req), zap.Any("get-total-posts-request", getTotalPostsRequest), zap.Error(err))
+		logger.Error("failed-to-get-posts-request-error-getting-total-posts", zap.Any("request", safeLogValue(req)), zap.Any("get-total-posts-request", safeLogValue(getTotalPostsRequest)), zap.Error(err))
 		return &GetPostsResponse{}, err
 	}
 
 	req.TotalCount = int(totalPosts)
-	logger.Debug("handling-get-posts-request-total-posts-found", zap.Int64("total", totalPosts), zap.Any("request", req))
+	logger.Debug("handling-get-posts-request-total-posts-found", zap.Int64("total", totalPosts), zap.Any("request", safeLogValue(req)))
 
 	posts, err := s.contenterRepository.GetPosts(ctx, req)
 	if err != nil {
-		logger.Error("failed-to-get-posts-request-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-posts-request-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetPostsResponse{}, err
 	}
 
@@ -307,6 +303,9 @@ func (s *Service) GetPosts(ctx context.Context, req *GetPostsRequest) (*GetPosts
 // TODO: how should we handle when target post is soft deleted?
 // normal users should not see this
 func (s *Service) GetPostByUrlFriendlyId(ctx context.Context, urlFriendlyId string) (*Post, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/post", "get-post-by-url-friendly-id")
+	logger.Debug("handling-get-post-by-url-friendly-id-request")
+
 	return s.contenterRepository.GetPostByUrlFriendlyId(ctx, urlFriendlyId)
 }
 
@@ -314,18 +313,16 @@ func (s *Service) GetPostByUrlFriendlyId(ctx context.Context, urlFriendlyId stri
 func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsRequest) (*GetChangelogItemsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-get-changelog-items-request", zap.Any("request", req))
+	logger.Debug("handling-get-changelog-items-request", zap.Any("request", safeLogValue(req)))
 
 	req.GetPostsRequest.WithTypes = string(PostTypeChangelog)
 
 	retrievedPosts, err := s.GetPosts(ctx, req.GetPostsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-changelog-items-request-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-changelog-items-request-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -339,18 +336,16 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsRequest) (*GetGlossaryItemsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-get-glossary-items-request", zap.Any("request", req))
+	logger.Debug("handling-get-glossary-items-request", zap.Any("request", safeLogValue(req)))
 
 	req.GetPostsRequest.WithTypes = string(PostTypeGlossary)
 
 	retrievedPosts, err := s.GetPosts(ctx, req.GetPostsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-glossary-items-request-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-glossary-items-request-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -364,18 +359,16 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*GetFaqItemsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-get-faq-items-request", zap.Any("request", req))
+	logger.Debug("handling-get-faq-items-request", zap.Any("request", safeLogValue(req)))
 
 	req.GetPostsRequest.WithTypes = string(PostTypeFaq)
 
 	retrievedPosts, err := s.GetPosts(ctx, req.GetPostsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-faq-items-request-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-faq-items-request-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -389,18 +382,16 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*GetArticlesResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-get-articles-request", zap.Any("request", req))
+	logger.Debug("handling-get-articles-request", zap.Any("request", safeLogValue(req)))
 
 	req.GetPostsRequest.WithTypes = string(PostTypeArticle)
 
 	retrievedPosts, err := s.GetPosts(ctx, req.GetPostsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-articles-request-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-articles-request-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -414,9 +405,7 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*UpdatePostResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 
 		postToUpdate        *Post
 		err                 error
@@ -424,7 +413,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 		urlFriendlyIdChange bool
 	)
 
-	logger.Debug("initiating-update-post-request", zap.Any("request", req))
+	logger.Debug("initiating-update-post-request", zap.Any("request", safeLogValue(req)))
 
 	if req.UserId == "" {
 		logger.Warn("a-user-id-must-be-given-to-update-a-post")
@@ -528,19 +517,19 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 
 	// Validate title is not empty
 	if strings.TrimSpace(postToUpdate.Title) == "" {
-		logger.Warn("attempt-made-to-update-post-with-empty-title", zap.Any("request", req))
+		logger.Warn("attempt-made-to-update-post-with-empty-title", zap.Any("request", safeLogValue(req)))
 		return nil, ErrRequiredPostTitleIsMissing
 	}
 
 	// Validate text is not empty
 	if strings.TrimSpace(postToUpdate.Text) == "" {
-		logger.Warn("attempt-made-to-update-post-with-empty-text", zap.Any("request", req))
+		logger.Warn("attempt-made-to-update-post-with-empty-text", zap.Any("request", safeLogValue(req)))
 		return nil, ErrRequiredPostTextIsMissing
 	}
 
 	// Validate header image requirements for articles
 	if postToUpdate.Type == PostTypeArticle && postToUpdate.HeaderImage == "" {
-		logger.Warn("attempt-made-to-update-article-post-without-header-image", zap.Any("request", req))
+		logger.Warn("attempt-made-to-update-article-post-without-header-image", zap.Any("request", safeLogValue(req)))
 		return nil, ErrHeaderImageMissing
 	}
 
@@ -552,19 +541,19 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 	if postToUpdate.HeaderImage != "" {
 		_, err = postToUpdate.SetHeaderImageType()
 		if err != nil {
-			logger.Warn("attempt-made-to-update-post-with-invalid-header-image", zap.Any("request", req))
+			logger.Warn("attempt-made-to-update-post-with-invalid-header-image", zap.Any("request", safeLogValue(req)))
 			return nil, err
 		}
 		err = postToUpdate.ValidateHeaderImageHasRequiredAltTextAlternativeElementsForInlineSvg()
 		if err != nil {
-			logger.Warn("attempt-made-to-update-post-with-invalid-svg-header-image", zap.Any("request", req))
+			logger.Warn("attempt-made-to-update-post-with-invalid-svg-header-image", zap.Any("request", safeLogValue(req)))
 			return nil, err
 		}
 	}
 
 	// Verify changelog tags if applicable
 	if postToUpdate.Type == PostTypeChangelog && len(s.validChangelogTags) > 0 && len(postToUpdate.Tags) == 0 {
-		logger.Warn("attempt-made-to-update-changelog-post-without-tags", zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
+		logger.Warn("attempt-made-to-update-changelog-post-without-tags", zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", safeLogValue(req)))
 		return nil, ErrChangelogPostMustHaveValidTagsSet
 	}
 
@@ -578,7 +567,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 		}
 
 		if len(invalidTags) > 0 {
-			logger.Warn("attempt-made-to-update-changelog-post-with-invalid-tags", zap.Strings("invalid-tags", invalidTags), zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", req))
+			logger.Warn("attempt-made-to-update-changelog-post-with-invalid-tags", zap.Strings("invalid-tags", invalidTags), zap.Strings("valid-tags", s.validChangelogTags), zap.Any("request", safeLogValue(req)))
 			return nil, ErrChangelogPostMustHaveValidTagsSet
 		}
 	}
@@ -604,11 +593,11 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 
 	updatedPost, err := s.contenterRepository.UpdatePost(ctx, postToUpdate)
 	if err != nil {
-		logger.Error("failed-to-update-post-error-updating-post", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-post-error-updating-post", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdatePostResponse{}, err
 	}
 
-	logger.Debug("update-post-request-successful", zap.Any("request", req), zap.Any("updated-post", updatedPost))
+	logger.Debug("update-post-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("updated-post", safeLogValue(updatedPost)))
 
 	return &UpdatePostResponse{
 		Post: updatedPost,
@@ -641,12 +630,10 @@ func (s *Service) parsePostPublishTime(publishAtUtc string, logger *zap.Logger) 
 func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-get-latest-posts-by-type-request", zap.Any("request", req))
+	logger.Debug("handling-get-latest-posts-by-type-request", zap.Any("request", safeLogValue(req)))
 
 	// Default to article,changelog if no types specified
 	types := req.Types
@@ -681,7 +668,7 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	// Get posts with unique type enforcement
 	retrievedPosts, err := s.GetPosts(ctx, getPostsReq)
 	if err != nil {
-		logger.Error("failed-to-get-latest-posts-by-type-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-latest-posts-by-type-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -699,7 +686,7 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 
 	logger.Debug("retrieved-posts-by-type", zap.Int("total-posts", len(retrievedPosts.Posts)), zap.Int("unique-types", len(postOverviews)))
 
-	logger.Debug("get-latest-posts-by-type-request-successful", zap.Any("request", req), zap.Int("types-count", len(postOverviews)))
+	logger.Debug("get-latest-posts-by-type-request-successful", zap.Any("request", safeLogValue(req)), zap.Int("types-count", len(postOverviews)))
 
 	return &GetLatestPostsByTypeResponse{
 		Overviews: postOverviews,
@@ -709,12 +696,10 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 // GetLatestNotificationOverviews returns the latest notification overviews for the given notification kinds
 func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error) {
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-get-latest-notification-overviews-request", zap.Any("request", req))
+	logger.Debug("handling-get-latest-notification-overviews-request", zap.Any("request", safeLogValue(req)))
 
 	limit := req.Limit
 	if limit <= 0 {
@@ -765,7 +750,7 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *commo
 		EnforceUniqueType: true,
 	})
 	if err != nil {
-		logger.Error("failed-to-get-latest-notification-overviews-error-getting-posts", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-latest-notification-overviews-error-getting-posts", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -786,12 +771,10 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *commo
 func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest) (*DeletePostByIdResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger   *zap.Logger             = logger.AcquirePackageFrom(ctx, "external/post")
 		response *DeletePostByIdResponse = &DeletePostByIdResponse{}
 	)
-	logger.Debug("handling-delete-post-by-id-request", zap.Any("request", req))
+	logger.Debug("handling-delete-post-by-id-request", zap.Any("request", safeLogValue(req)))
 
 	if req.Id == "" {
 		logger.Warn("attempt-made-to-delete-post-without-post-id")
@@ -814,7 +797,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 		// Perform hard delete
 		err := s.contenterRepository.DeletePost(ctx, postToDelete.Id)
 		if err != nil {
-			logger.Error("failed-to-delete-post-error-deleting-post", zap.Any("request", req), zap.Error(err))
+			logger.Error("failed-to-delete-post-error-deleting-post", zap.Any("request", safeLogValue(req)), zap.Error(err))
 			return nil, err
 		}
 		response.HardDelete = true
@@ -827,13 +810,13 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 
 		err = s.contenterRepository.SoftDeletePost(ctx, postToDelete, req.UserId)
 		if err != nil {
-			logger.Error("failed-to-soft-delete-post-error-soft-deleting-post", zap.Any("request", req), zap.Error(err))
+			logger.Error("failed-to-soft-delete-post-error-soft-deleting-post", zap.Any("request", safeLogValue(req)), zap.Error(err))
 			return nil, err
 		}
 		response.HardDelete = false
 	}
 
-	logger.Debug("delete-post-by-id-request-successful", zap.Any("request", req))
+	logger.Debug("delete-post-by-id-request-successful", zap.Any("request", safeLogValue(req)))
 
 	return response, nil
 }
@@ -841,12 +824,10 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 // RestorePostById restores a soft deleted post by its ID
 func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdRequest) (*RestorePostByIdResponse, error) {
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
 	)
 
-	logger.Debug("handling-restore-post-by-id-request", zap.Any("request", req))
+	logger.Debug("handling-restore-post-by-id-request", zap.Any("request", safeLogValue(req)))
 
 	if req.Id == "" {
 		logger.Warn("attempt-made-to-restore-post-without-post-id")
@@ -883,11 +864,11 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 
 	restoredPost, err := s.contenterRepository.UpdatePost(ctx, postToRestore)
 	if err != nil {
-		logger.Error("failed-to-restore-post-error-restoring-post", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-restore-post-error-restoring-post", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
-	logger.Info("restore-post-by-id-request-successful", zap.Any("request", req), zap.Any("restored-post", restoredPost))
+	logger.Info("restore-post-by-id-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("restored-post", safeLogValue(restoredPost)))
 
 	return &RestorePostByIdResponse{
 		Post: restoredPost,

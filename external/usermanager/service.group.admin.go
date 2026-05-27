@@ -12,16 +12,16 @@ import (
 
 // GetGroupsConfig retrieves the group service configuration capabilities.
 func (s *Service) GetGroupsConfig(ctx context.Context, _ *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled")
+		logger.Error("group-service-not-enabled")
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	resp, err := s.GroupService.GetGroupsConfig(ctx, &group.GetGroupsConfigRequest{})
 	if err != nil {
-		log.Error("failed-to-get-groups-config", zap.Error(err))
+		logger.Error("failed-to-get-groups-config", zap.Error(err))
 		return nil, err
 	}
 
@@ -34,10 +34,10 @@ func (s *Service) GetGroupsConfig(ctx context.Context, _ *GetGroupsConfigRequest
 // Admin requesters can validate directly. Non-admin requesters must have
 // access to the provided parent_group_id (when supplied).
 func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -45,13 +45,13 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 		return nil, ErrRequestFailedValidation
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 		parentGroupID := strings.TrimSpace(r.ParentGroupID)
 		if parentGroupID != "" {
 			hasAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, parentGroupID)
 			if accessErr != nil {
-				log.Error(
+				logger.Error(
 					"failed-to-resolve-requester-group-access-map",
 					zap.String("requester_user_id", r.UserID),
 					zap.String("group_id", parentGroupID),
@@ -68,7 +68,7 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 
 	resp, err := s.GroupService.ValidateGroupName(ctx, r.ValidateGroupNameRequest)
 	if err != nil {
-		log.Error("failed-to-validate-group-name", zap.Error(err))
+		logger.Error("failed-to-validate-group-name", zap.Error(err))
 		return nil, err
 	}
 
@@ -78,26 +78,26 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 // CreateGroup handles creating a new group with the provided details. Only admins or users with
 // access to the parent group (if specified) can create groups.
 func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
 	// has access to parent group (if specified)
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 
 		if r.ParentGroupID == "" {
-			log.Error("non-user-attempting-to-create-group-without-parent", zap.String("user-id", r.UserID))
+			logger.Error("non-user-attempting-to-create-group-without-parent", zap.String("user-id", r.UserID))
 			return nil, group.ErrInsufficientPermissions
 		}
 
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.ParentGroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.ParentGroupID),
@@ -121,7 +121,7 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 	// Create the group via group service
 	groupResp, err := s.GroupService.CreateGroup(ctx, r.CreateGroupRequest)
 	if err != nil {
-		log.Error("failed-to-create-group", zap.String("name", r.CreateGroupRequest.Name), zap.String("type", r.CreateGroupRequest.Type), zap.Error(err))
+		logger.Error("failed-to-create-group", zap.String("name", r.CreateGroupRequest.Name), zap.String("type", r.CreateGroupRequest.Type), zap.Error(err))
 		return nil, err
 	}
 
@@ -134,10 +134,10 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 // Non-admin users must have effective admin-level access to the target group,
 // which also covers admin/owner permissions inherited from parent groups.
 func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -145,11 +145,11 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 		return nil, ErrRequestFailedValidation
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, logger)
 	if !isAdmin {
 		accessMap, accessErr := s.GroupService.GetUserGroupAccessMap(ctx, r.UserId)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserId),
 				zap.String("group_id", r.UpdateGroupRequest.ID),
@@ -166,7 +166,7 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 
 	resp, err := s.GroupService.UpdateGroup(ctx, r.UpdateGroupRequest)
 	if err != nil {
-		log.Error("failed-to-update-group", zap.String("group_id", r.UpdateGroupRequest.ID), zap.Error(err))
+		logger.Error("failed-to-update-group", zap.String("group_id", r.UpdateGroupRequest.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -176,18 +176,18 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 // DeleteGroup handles deleting a group. Admin users may request hard/soft delete;
 // non-admin users must be the owner of the target group and are forced to hard-delete.
 func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 		accessMap, accessErr := s.GroupService.GetUserGroupAccessMap(ctx, r.UserID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.DeleteGroupRequest.ID),
@@ -203,7 +203,7 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 
 		groupResp, groupErr := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.DeleteGroupRequest.ID})
 		if groupErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-group-for-delete-ownership-check",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.DeleteGroupRequest.ID),
@@ -225,7 +225,7 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 
 	groupResp, err := s.GroupService.DeleteGroup(ctx, r.DeleteGroupRequest)
 	if err != nil {
-		log.Error("failed-to-delete-group", zap.String("group_id", r.DeleteGroupRequest.ID), zap.Error(err))
+		logger.Error("failed-to-delete-group", zap.String("group_id", r.DeleteGroupRequest.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -234,21 +234,21 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 
 // AddGroupMember adds a user to a group
 func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
 	// has access to parent group (if specified)
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.GroupID),
@@ -265,7 +265,7 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 	r.AddMemberRequest.Type = group.MemberTypeUser
 	_, err := s.GroupService.AddMember(ctx, r.AddMemberRequest)
 	if err != nil {
-		log.Error("add-group-member-failed",
+		logger.Error("add-group-member-failed",
 			zap.String("group-id", r.GroupID),
 			zap.String("member-id", r.MemberID),
 			zap.Error(err),
@@ -278,21 +278,21 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 
 // RemoveGroupMember removes a user from a group
 func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
 	// has access to parent group (if specified)
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.GroupID),
@@ -308,7 +308,7 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 
 	_, err := s.GroupService.RemoveMember(ctx, r.RemoveMemberRequest)
 	if err != nil {
-		log.Error("remove-group-member-failed",
+		logger.Error("remove-group-member-failed",
 			zap.String("group-id", r.GroupID),
 			zap.String("member-id", r.MemberID),
 			zap.Error(err),
@@ -321,19 +321,19 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 
 // UpdateGroupMember updates a user's role in a group
 func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberRequest) (*UpdateGroupMemberResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.GroupID),
@@ -349,7 +349,7 @@ func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberReq
 
 	_, err := s.GroupService.UpdateMemberRole(ctx, r.UpdateMemberRoleRequest)
 	if err != nil {
-		log.Error("update-group-member-failed",
+		logger.Error("update-group-member-failed",
 			zap.String("group-id", r.GroupID),
 			zap.String("member-id", r.MemberID),
 			zap.String("new-role", r.NewRole),
@@ -363,21 +363,21 @@ func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberReq
 
 // UpdateGroupOwner updates the owner of a group
 func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	// Auth check: only allow if requester is admin or
 	// has access to parent group (if specified)
-	isAdmin := s.isRequesterAdmin(ctx, r.UserID, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserID, logger)
 	if !isAdmin {
 
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserID, r.GroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
 				zap.String("requester_user_id", r.UserID),
 				zap.String("group_id", r.GroupID),
@@ -396,7 +396,7 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 		OwnerID: r.OwnerID,
 	})
 	if err != nil {
-		log.Error("update-group-owner-failed",
+		logger.Error("update-group-owner-failed",
 			zap.String("group-id", r.GroupID),
 			zap.Error(err),
 		)
