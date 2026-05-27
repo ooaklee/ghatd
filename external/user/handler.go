@@ -2,10 +2,12 @@ package user
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 type UserService interface {
@@ -41,10 +43,12 @@ func NewHandler(service UserService, validator UserValidator, errorMaps ...reply
 
 // GetProfile returns a user profile of the user that matches id
 func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-get-profile")
 
 	request, err := MapRequestToGetProfileRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -52,6 +56,7 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.GetProfile(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -63,10 +68,12 @@ func (h *Handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 // GetMicroProfile returns a user micro profile of the user that matches id
 func (h *Handler) GetMicroProfile(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-get-micro-profile")
 
 	request, err := MapRequestToGetMicroProfileRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -74,6 +81,7 @@ func (h *Handler) GetMicroProfile(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.GetMicroProfile(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -85,10 +93,12 @@ func (h *Handler) GetMicroProfile(w http.ResponseWriter, r *http.Request) {
 
 // CreateUser returns reponse from user creation
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-create-user")
 
 	request, err := MapRequestToCreateUserRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -96,6 +106,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.CreateUser(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -106,10 +117,12 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 // GetUsers returns all the users
 func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-get-users")
 
 	request, err := MapRequestToGetUsersRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -117,6 +130,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.Service.GetUsers(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -134,10 +148,12 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 
 // GetUserByID returns an user if it matches id
 func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-get-user-by-id")
 
 	request, err := MapRequestToGetUserByIdRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -145,6 +161,7 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.GetUserByID(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -156,10 +173,12 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 
 // UpdateUser returns reponse from user update request
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-update-user")
 
 	request, err := MapRequestToUpdateUserRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -167,6 +186,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.UpdateUser(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -177,10 +197,12 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 // DeleteUser returns reponse after user delete request
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/user", "handle-delete-user")
 
 	request, err := MapRequestToDeleteUserRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -188,6 +210,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	err = h.Service.DeleteUser(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

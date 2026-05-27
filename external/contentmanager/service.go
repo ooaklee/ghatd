@@ -67,25 +67,25 @@ func NewService(postService postService, userService userService) *Service {
 // CreatePost handles logic associate with creating a new post
 func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*CreatePostResponse, error) {
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Info("handling-create-post-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-create-post-request", zap.Any("request", safeLogValue(req)))
 
 	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 		ID: req.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-get-user-associated-with-post-creation-request", zap.String("user-id", req.UserId), zap.Error(err))
+		logger.Error("failed-to-get-user-associated-with-post-creation-request", zap.String("user-id", req.UserId), zap.Error(err))
 		return nil, err
 	}
 
 	if !requestingUser.User.IsAdmin() {
-		log.Warn("non-admin-user-attempting-to-create-post", zap.String("user-id", req.UserId), zap.Any("request", req))
+		logger.Warn("non-admin-user-attempting-to-create-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
 		return nil, ErrUnauthorisedCMUser
 	}
 
 	newPost, err := s.postService.CreatePost(ctx, req.CreatePostRequest)
 	if err != nil {
-		log.Error("failed-to-create-post", zap.Error(err))
+		logger.Error("failed-to-create-post", zap.Error(err))
 		return nil, err
 	}
 
@@ -97,25 +97,25 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 // UpdatePostById handles logic associated with updating an existing post by its ID
 func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest) (*UpdatePostByIdResponse, error) {
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Info("handling-update-post-by-id-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-update-post-by-id-request", zap.Any("request", safeLogValue(req)))
 
 	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 		ID: req.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-get-user-associated-with-post-update-request", zap.String("user-id", req.UserId), zap.Error(err))
+		logger.Error("failed-to-get-user-associated-with-post-update-request", zap.String("user-id", req.UserId), zap.Error(err))
 		return nil, err
 	}
 
 	if !requestingUser.User.IsAdmin() {
-		log.Warn("non-admin-user-attempting-to-update-post", zap.String("user-id", req.UserId), zap.Any("request", req))
+		logger.Warn("non-admin-user-attempting-to-update-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
 		return nil, ErrUnauthorisedCMUser
 	}
 
 	updatedPost, err := s.postService.UpdatePost(ctx, req.UpdatePostRequest)
 	if err != nil {
-		log.Error("failed-to-update-post", zap.Error(err))
+		logger.Error("failed-to-update-post", zap.Error(err))
 		return nil, err
 	}
 
@@ -127,25 +127,25 @@ func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest
 // DeletePostById handles logic associated with deleting an existing post by its ID
 func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest) (*DeletePostByIdResponse, error) {
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Info("handling-delete-post-by-id-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-delete-post-by-id-request", zap.Any("request", safeLogValue(req)))
 
 	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 		ID: req.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-get-user-associated-with-post-delete-request", zap.String("user-id", req.UserId), zap.Error(err))
+		logger.Error("failed-to-get-user-associated-with-post-delete-request", zap.String("user-id", req.UserId), zap.Error(err))
 		return nil, err
 	}
 
 	if !requestingUser.User.IsAdmin() {
-		log.Warn("non-admin-user-attempting-to-delete-post", zap.String("user-id", req.UserId), zap.Any("request", req))
+		logger.Warn("non-admin-user-attempting-to-delete-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
 		return nil, ErrUnauthorisedCMUser
 	}
 
 	deletedPostResponse, err := s.postService.DeletePostById(ctx, req.DeletePostByIdRequest)
 	if err != nil {
-		log.Error("failed-to-delete-post", zap.Error(err))
+		logger.Error("failed-to-delete-post", zap.Error(err))
 		return nil, err
 	}
 
@@ -157,25 +157,25 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 // RestorePostById handles logic associated with restoring a soft-deleted post by ID
 func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdRequest) (*RestorePostByIdResponse, error) {
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Info("handling-restore-post-by-id-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-restore-post-by-id-request", zap.Any("request", safeLogValue(req)))
 
 	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 		ID: req.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-get-user-associated-with-post-restore-request", zap.String("user-id", req.UserId), zap.Error(err))
+		logger.Error("failed-to-get-user-associated-with-post-restore-request", zap.String("user-id", req.UserId), zap.Error(err))
 		return nil, err
 	}
 
 	if !requestingUser.User.IsAdmin() {
-		log.Warn("non-admin-user-attempting-to-restore-post", zap.String("user-id", req.UserId), zap.Any("request", req))
+		logger.Warn("non-admin-user-attempting-to-restore-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
 		return nil, ErrUnauthorisedCMUser
 	}
 
 	restoredPostResponse, err := s.postService.RestorePostById(ctx, req.RestorePostByIdRequest)
 	if err != nil {
-		log.Error("failed-to-restore-post", zap.Error(err))
+		logger.Error("failed-to-restore-post", zap.Error(err))
 		return nil, err
 	}
 
@@ -188,18 +188,18 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error) {
 
 	var (
-		log            = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger         = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser *userV2.UniversalUser
 	)
 
-	log.Info("handling-get-latest-posts-by-type-request")
+	logger.Info("handling-get-latest-posts-by-type-request")
 
 	if req.UserId != "" {
 		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -208,7 +208,7 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 
 	matchingPostOverviewsResp, err := s.postService.GetLatestPostsByType(ctx, req.GetLatestPostsByTypeRequest)
 	if err != nil {
-		log.Error("failed-to-get-latest-posts-by-type", zap.Error(err))
+		logger.Error("failed-to-get-latest-posts-by-type", zap.Error(err))
 		return nil, err
 	}
 
@@ -227,6 +227,9 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 
 // GetLatestNotificationOverviews handles logic associated with getting the latest notification overviews for the user
 func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/contentmanager", "get-latest-notification-overviews")
+	logger.Debug("handling-get-latest-notification-overviews-request")
+
 	overviews, err := s.postService.GetLatestNotificationOverviews(ctx, req.GetLatestNotificationOverviewsRequest)
 	if err != nil {
 		return nil, err
@@ -242,12 +245,12 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *GetLa
 func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetChangelogItemByUrlFriendlyIdRequest) (*post.Post, error) {
 
 	var (
-		log                              = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
-	log.Info("handling-get-changelog-item-request")
+	logger.Info("handling-get-changelog-item-request")
 
 	if !strings.HasPrefix(req.UrlFriendlyId, "changelog-") {
 		// make sure only changelogs are returned
@@ -259,7 +262,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -271,7 +274,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 
 	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
 	if err != nil {
-		log.Error("failed-to-get-changelog-item", zap.Error(err))
+		logger.Error("failed-to-get-changelog-item", zap.Error(err))
 		return nil, err
 	}
 
@@ -288,7 +291,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 		},
 	}
 
-	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, postsResponse, userIdToUserFirstNameLastInitial, log)
+	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, postsResponse, userIdToUserFirstNameLastInitial, logger)
 
 	return &postsResponse.Posts[0], nil
 }
@@ -298,12 +301,12 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArticleItemByUrlFriendlyIdRequest) (*post.Post, error) {
 
 	var (
-		log                              = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
-	log.Info("handling-get-article-item-request")
+	logger.Info("handling-get-article-item-request")
 
 	if !strings.HasPrefix(req.UrlFriendlyId, "article-") {
 		// make sure only articles are returned
@@ -315,7 +318,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -327,7 +330,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 
 	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
 	if err != nil {
-		log.Error("failed-to-get-article-item", zap.Error(err))
+		logger.Error("failed-to-get-article-item", zap.Error(err))
 		return nil, err
 	}
 
@@ -344,7 +347,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 		},
 	}
 
-	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, postsResponse, userIdToUserFirstNameLastInitial, log)
+	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, postsResponse, userIdToUserFirstNameLastInitial, logger)
 
 	return &postsResponse.Posts[0], nil
 }
@@ -353,19 +356,19 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsRequest) (*GetChangelogItemsResponse, error) {
 
 	var (
-		log                              = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
-	log.Info("handling-get-changelog-items-request")
+	logger.Info("handling-get-changelog-items-request")
 
 	if req.UserId != "" {
 		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -383,11 +386,11 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 
 	matchingPosts, err := s.postService.GetChangelogItems(ctx, req.GetChangelogItemsRequest)
 	if err != nil {
-		log.Error("failed-to-get-changelog-items", zap.Error(err))
+		logger.Error("failed-to-get-changelog-items", zap.Error(err))
 		return nil, err
 	}
 
-	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, log)
+	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetChangelogItemsResponse{
 		GetChangelogItemsResponse: matchingPosts,
@@ -398,19 +401,19 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsRequest) (*GetGlossaryItemsResponse, error) {
 
 	var (
-		log                              = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
-	log.Info("handling-get-glossary-items-request")
+	logger.Info("handling-get-glossary-items-request")
 
 	if req.UserId != "" {
 		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -428,11 +431,11 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 
 	matchingPosts, err := s.postService.GetGlossaryItems(ctx, req.GetGlossaryItemsRequest)
 	if err != nil {
-		log.Error("failed-to-get-glossary-items", zap.Error(err))
+		logger.Error("failed-to-get-glossary-items", zap.Error(err))
 		return nil, err
 	}
 
-	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, log)
+	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetGlossaryItemsResponse{
 		GetGlossaryItemsResponse: matchingPosts,
@@ -443,19 +446,19 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*GetFaqItemsResponse, error) {
 
 	var (
-		log                              = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
-	log.Info("handling-get-faq-items-request")
+	logger.Info("handling-get-faq-items-request")
 
 	if req.UserId != "" {
 		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -473,11 +476,11 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 
 	matchingPosts, err := s.postService.GetFaqItems(ctx, req.GetFaqItemsRequest)
 	if err != nil {
-		log.Error("failed-to-get-faq-items", zap.Error(err))
+		logger.Error("failed-to-get-faq-items", zap.Error(err))
 		return nil, err
 	}
 
-	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, log)
+	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetFaqItemsResponse{
 		GetFaqItemsResponse: matchingPosts,
@@ -488,19 +491,19 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*GetArticlesResponse, error) {
 
 	var (
-		log                              = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
 		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
-	log.Info("handling-get-articles-request")
+	logger.Info("handling-get-articles-request")
 
 	if req.UserId != "" {
 		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 			ID: req.UserId,
 		})
 		if err != nil {
-			log.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
+			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
 			return nil, err
 		}
 
@@ -518,11 +521,11 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 
 	matchingPosts, err := s.postService.GetArticles(ctx, req.GetArticlesRequest)
 	if err != nil {
-		log.Error("failed-to-get-articles", zap.Error(err))
+		logger.Error("failed-to-get-articles", zap.Error(err))
 		return nil, err
 	}
 
-	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, log)
+	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetArticlesResponse{
 		GetArticlesResponse: matchingPosts,
@@ -531,7 +534,7 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 
 // handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet handles instances publish_as is not set but a publish_at is given,
 // we must try to set and default to user's first name and last name initial
-func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx context.Context, matchingPostsHolder ResponseHolder, userIdToUserFirstNameLastInitial map[string]string, log *zap.Logger) {
+func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx context.Context, matchingPostsHolder ResponseHolder, userIdToUserFirstNameLastInitial map[string]string, logger *zap.Logger) {
 	matchingPosts := matchingPostsHolder.GetEmbeddedPostsResponse()
 	for i, post := range matchingPosts.Posts {
 		if post.PublishedAs == "" && post.PublishedAt != "" {
@@ -542,7 +545,7 @@ func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(c
 					ID: post.PublishedByUserId,
 				})
 				if err != nil {
-					log.Error("failed-to-get-user-associated-with-post-publication", zap.String("user-id", post.PublishedByUserId), zap.Error(err))
+					logger.Error("failed-to-get-user-associated-with-post-publication", zap.String("user-id", post.PublishedByUserId), zap.Error(err))
 
 					userIdToUserFirstNameLastInitial[post.PublishedByUserId] = DefaultPostAuthor
 					continue

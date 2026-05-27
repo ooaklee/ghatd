@@ -3,6 +3,9 @@ package paymentprovider
 import (
 	"context"
 	"net/http"
+	"net/url"
+
+	"github.com/ooaklee/ghatd/external/logger"
 )
 
 // Provider defines the interface that all payment providers must implement
@@ -25,4 +28,20 @@ type Provider interface {
 	// GetSubscriptionInfo retrieves current subscription details from the provider's API
 	// This is useful for syncing state or retrieving information not in webhooks
 	GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error)
+}
+
+func endpointHostForLog(endpoint string) string {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
+}
+
+func emailPresentForLog(value string) bool {
+	return logger.EmailPresentForLog(value)
+}
+
+func emailDomainForLog(value string) string {
+	return logger.EmailDomainForLog(value)
 }

@@ -8,6 +8,9 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 var errMissingSource = errors.New("repository: source is required")
@@ -56,33 +59,46 @@ type CloneRequest struct {
 }
 
 func Clone(ctx context.Context, req CloneRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "internal/cli/repository", "clone")
 	req.Source = strings.TrimSpace(req.Source)
 	req.Destination = strings.TrimSpace(req.Destination)
 	req.Branch = strings.TrimSpace(req.Branch)
 
 	if strings.TrimSpace(req.Source) == "" {
+		logger.Warn("cli-repository-clone-missing-source")
 		return errMissingSource
 	}
 	if strings.TrimSpace(req.Destination) == "" {
+		logger.Warn("cli-repository-clone-missing-destination", zap.String("source", normaliseSource(req.Source)))
 		return errMissingDestination
 	}
 
+	logger.Info("cli-repository-clone-started", zap.String("source", normaliseSource(req.Source)), zap.Bool("github-source", isGitHubSource(req.Source)), zap.Bool("branch-set", req.Branch != ""), zap.Bool("recurse-submodules", req.RecurseSubmodules))
 	if isGitHubSource(req.Source) {
 		if _, err := runner.LookPath("gh"); err == nil {
 			if err := cloneWithGH(ctx, req); err == nil {
+				logger.Info("cli-repository-clone-completed", zap.String("tool", "gh"), zap.String("source", normaliseSource(req.Source)))
 				return nil
 			} else if gitErr := cloneWithGit(ctx, req); gitErr != nil {
+				logger.Error("cli-repository-clone-failed", zap.String("source", normaliseSource(req.Source)), zap.Error(gitErr))
 				return fmt.Errorf("repository: gh clone failed: %w; git clone fallback failed: %w", err, gitErr)
 			}
 
+			logger.Info("cli-repository-clone-completed", zap.String("tool", "git"), zap.String("source", normaliseSource(req.Source)))
 			return nil
 		}
 	}
 
-	return cloneWithGit(ctx, req)
+	if err := cloneWithGit(ctx, req); err != nil {
+		logger.Error("cli-repository-clone-failed", zap.String("source", normaliseSource(req.Source)), zap.Error(err))
+		return err
+	}
+	logger.Info("cli-repository-clone-completed", zap.String("tool", "git"), zap.String("source", normaliseSource(req.Source)))
+	return nil
 }
 
 func cloneWithGH(ctx context.Context, req CloneRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "internal/cli/repository", "clone-with-gh")
 	ownerRepo := normaliseSource(req.Source)
 
 	args := []string{"repo", "clone", ownerRepo, req.Destination}
@@ -100,12 +116,15 @@ func cloneWithGH(ctx context.Context, req CloneRequest) error {
 	}
 
 	if err := runner.RunCommand(ctx, "gh", args...); err != nil {
+		logger.Error("cli-repository-gh-clone-command-failed", zap.String("source", ownerRepo), zap.Error(err))
 		return fmt.Errorf("repository: gh clone failed: %w", err)
 	}
+	logger.Debug("cli-repository-gh-clone-command-completed", zap.String("source", ownerRepo))
 	return nil
 }
 
 func cloneWithGit(ctx context.Context, req CloneRequest) error {
+	logger := logger.AcquireOperationFrom(ctx, "internal/cli/repository", "clone-with-git")
 	args := []string{"clone"}
 	if req.Branch != "" {
 		args = append(args, "--branch", req.Branch)
@@ -116,8 +135,10 @@ func cloneWithGit(ctx context.Context, req CloneRequest) error {
 	args = append(args, gitCloneSource(req.Source), req.Destination)
 
 	if err := runner.RunCommand(ctx, "git", args...); err != nil {
+		logger.Error("cli-repository-git-clone-command-failed", zap.String("source", normaliseSource(req.Source)), zap.Error(err))
 		return fmt.Errorf("repository: git clone failed: %w", err)
 	}
+	logger.Debug("cli-repository-git-clone-command-completed", zap.String("source", normaliseSource(req.Source)))
 	return nil
 }
 

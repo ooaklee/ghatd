@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // NewAuthVerifyHandler returns a function that handles authentication verification requests.
@@ -21,12 +23,14 @@ import (
 func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl, frontendAppUrl string) func(http.ResponseWriter, *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		logger := logger.AcquireOperationFrom(r.Context(), "external/router", "auth-verify-handler")
 
 		nextStepParam := fmt.Sprintf("&%s=", common.WebNextStepsHttpQueryParam)
 
 		authVerifyRequest := getAuthVerifyRequest(r.URL.RawQuery)
 
 		if authVerifyRequest.VerificationToken == "" || authVerifyRequest.VerificationEmailType == "" {
+			logger.Warn("auth-verify-request-missing-required-query", zap.Bool("has-token", authVerifyRequest.VerificationToken != ""), zap.Bool("has-type", authVerifyRequest.VerificationEmailType != ""))
 			http.Redirect(w, r, frontendLoginUrl, http.StatusTemporaryRedirect)
 			return
 		}
@@ -37,21 +41,32 @@ func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl,
 		switch authVerifyRequest.VerificationEmailType {
 		// loginVerification
 		case "1":
+			logger.Debug("auth-verify-login-redirect", zap.String("next-step-host", hostForLog(nextStepParamValue)))
 			http.Redirect(w, r, fmt.Sprintf(apiLoginEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+encodedNextStepParamValue, http.StatusTemporaryRedirect)
 			return
 
 		// emailVerification
 		case "2":
+			logger.Debug("auth-verify-email-redirect", zap.String("next-step-host", hostForLog(nextStepParamValue)))
 			http.Redirect(w, r, fmt.Sprintf(apiVerifyEndpoint, authVerifyRequest.VerificationToken)+nextStepParam+encodedNextStepParamValue, http.StatusTemporaryRedirect)
 			return
 
 		default:
 			// Fix: previously called WriteHeader before setting the Location
 			// header, causing the redirect target to be silently dropped.
+			logger.Warn("auth-verify-unknown-email-type", zap.String("email-type", authVerifyRequest.VerificationEmailType))
 			http.Redirect(w, r, frontendLoginUrl, http.StatusTemporaryRedirect)
 			return
 		}
 	}
+}
+
+func hostForLog(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
 }
 
 // resolveFrontendNextStep normalises the optional request_url carried by an auth

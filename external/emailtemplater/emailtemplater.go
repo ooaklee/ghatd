@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/mailgun/raymond/v2"
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // EmailTemplater handles generating email templates
@@ -39,11 +41,16 @@ func NewEmailTemplater(config *Config) (*EmailTemplater, error) {
 
 // GenerateFromBaseTemplate generates a custom email from the base dynamic template
 func (t *EmailTemplater) GenerateFromBaseTemplate(ctx context.Context, req *GenerateFromBaseTemplateRequest) (*RenderedEmail, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailtemplater", "generate-from-base-template")
+	logger.Debug("email-template-render-started", zap.Bool("footer-enabled", req.WithFooter))
+
 	if err := req.Validate(); err != nil {
+		logger.Warn("email-template-validation-failed", zap.Error(err))
 		return nil, err
 	}
 
 	if t.dynamicTemplates == nil || t.dynamicTemplates[EmailTemplateTypeBase] == nil {
+		logger.Error("email-template-dynamic-template-not-found", zap.String("template-type", string(EmailTemplateTypeBase)))
 		return nil, ErrEmailTemplaterDynamicTemplateNotFound
 	}
 
@@ -72,6 +79,8 @@ func (t *EmailTemplater) GenerateFromBaseTemplate(ctx context.Context, req *Gene
 		t.config.BusinessEntityWebsite,
 	)
 
+	logger.Debug("email-template-render-completed", zap.String("template-type", string(EmailTemplateTypeBase)))
+
 	return &RenderedEmail{
 		To:       req.EmailTo,
 		From:     emailFrom,
@@ -84,11 +93,16 @@ func (t *EmailTemplater) GenerateFromBaseTemplate(ctx context.Context, req *Gene
 
 // GenerateVerificationEmail generates an email for email verification
 func (t *EmailTemplater) GenerateVerificationEmail(ctx context.Context, req *GenerateVerificationEmailRequest) (*RenderedEmail, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailtemplater", "generate-verification-email")
+	logger.Debug("email-template-render-started", zap.String("template-type", string(EmailTemplateTypeVerification)), zap.Bool("dashboard-request", req.IsDashboardRequest))
+
 	if err := req.Validate(); err != nil {
+		logger.Warn("email-template-validation-failed", zap.Error(err))
 		return nil, err
 	}
 
 	if t.templates == nil || t.templates[EmailTemplateTypeVerification] == "" {
+		logger.Error("email-template-not-found", zap.String("template-type", string(EmailTemplateTypeVerification)))
 		return nil, ErrEmailTemplaterTemplateNotFound
 	}
 
@@ -105,11 +119,14 @@ func (t *EmailTemplater) GenerateVerificationEmail(ctx context.Context, req *Gen
 	// Render template with substitutes
 	renderedHTML, err := t.renderTemplate(t.templates[EmailTemplateTypeVerification], substitutes)
 	if err != nil {
+		logger.Error("email-template-render-failed", zap.String("template-type", string(EmailTemplateTypeVerification)), zap.Error(err))
 		return nil, ErrEmailTemplaterTemplateRenderingFailed
 	}
 
 	// Adjust subject for environment
 	emailSubject := t.config.AdjustSubjectForEnvironment(t.config.WelcomeEmailSubject)
+
+	logger.Debug("email-template-render-completed", zap.String("template-type", string(EmailTemplateTypeVerification)))
 
 	return &RenderedEmail{
 		To:       req.Email,
@@ -123,11 +140,16 @@ func (t *EmailTemplater) GenerateVerificationEmail(ctx context.Context, req *Gen
 
 // GenerateLoginEmail generates an email for login
 func (t *EmailTemplater) GenerateLoginEmail(ctx context.Context, req *GenerateLoginEmailRequest) (*RenderedEmail, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailtemplater", "generate-login-email")
+	logger.Debug("email-template-render-started", zap.String("template-type", string(EmailTemplateTypeLogin)), zap.Bool("dashboard-request", req.IsDashboardRequest))
+
 	if err := req.Validate(); err != nil {
+		logger.Warn("email-template-validation-failed", zap.Error(err))
 		return nil, err
 	}
 
 	if t.templates == nil || t.templates[EmailTemplateTypeLogin] == "" {
+		logger.Error("email-template-not-found", zap.String("template-type", string(EmailTemplateTypeLogin)))
 		return nil, ErrEmailTemplaterTemplateNotFound
 	}
 
@@ -142,11 +164,14 @@ func (t *EmailTemplater) GenerateLoginEmail(ctx context.Context, req *GenerateLo
 	// Render template with substitutes
 	renderedHTML, err := t.renderTemplate(t.templates[EmailTemplateTypeLogin], substitutes)
 	if err != nil {
+		logger.Error("email-template-render-failed", zap.String("template-type", string(EmailTemplateTypeLogin)), zap.Error(err))
 		return nil, ErrEmailTemplaterTemplateRenderingFailed
 	}
 
 	// Adjust subject for environment
 	emailSubject := t.config.AdjustSubjectForEnvironment(t.config.LoginEmailSubject)
+
+	logger.Debug("email-template-render-completed", zap.String("template-type", string(EmailTemplateTypeLogin)))
 
 	return &RenderedEmail{
 		To:       req.Email,

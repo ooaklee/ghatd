@@ -147,6 +147,9 @@ func (s *WebPushSender) PublicKey() string {
 // The overall error returned to the caller is nil unless one or more
 // addresses experienced a transient failure OR the cleanup handler failed.
 func (s *WebPushSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "send")
+	logger.Debug("handling-send-request")
+
 	_, err := s.SendWithReport(ctx, subject, message, addresses, data)
 	return err
 }
@@ -156,14 +159,13 @@ func (s *WebPushSender) Send(ctx context.Context, subject, message string, addre
 // call and is safe for the service to use when senders are shared.
 func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error) {
 	report := channelSendReport{}
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(
-		zap.String("component", "notifier"),
+	logger := logger.AcquirePackageFrom(ctx, "external/notifier").With(
 		zap.String("operation", "webpush-send"),
 		zap.String("channel", string(NotificationChannelWebPush)),
 	)
 
 	if !s.Enabled() {
-		log.Warn(
+		logger.Warn(
 			"webpush-sender-not-enabled",
 			zap.Bool("enabled", s != nil && s.config.Enabled),
 			zap.Bool("has-vapid-public-key", s != nil && s.config.VAPIDPublicKey != ""),
@@ -181,18 +183,18 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 		}
 	}
 	if len(valid) == 0 {
-		log.Warn("webpush-send-no-valid-addresses", zap.Int("attempted-addresses", len(addresses)), zap.Error(ErrNotificationNoActiveAddresses))
+		logger.Warn("webpush-send-no-valid-addresses", zap.Int("attempted-addresses", len(addresses)), zap.Error(ErrNotificationNoActiveAddresses))
 		return report, ErrNotificationNoActiveAddresses
 	}
 
-	log.Info("webpush-send-started", zap.Int("attempted-addresses", len(addresses)), zap.Int("valid-addresses", len(valid)), zap.Strings("data-keys", notificationDataKeysForLog(data)))
+	logger.Info("webpush-send-started", zap.Int("attempted-addresses", len(addresses)), zap.Int("valid-addresses", len(valid)), zap.Strings("data-keys", notificationDataKeysForLog(data)))
 
 	var sendErrs []error
 	for _, address := range valid {
 		err := s.sendOne(ctx, subject, message, address, data)
 		if err == nil {
 			report.Delivered++
-			log.Debug(
+			logger.Debug(
 				"webpush-address-send-completed",
 				zap.String("address-id", address.ID),
 				zap.String("address-hash", address.AddressHash),
@@ -200,7 +202,7 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 			continue
 		}
 		if isPermanentWebPushError(err) {
-			log.Warn(
+			logger.Warn(
 				"webpush-address-permanent-failure",
 				zap.String("address-id", address.ID),
 				zap.String("address-hash", address.AddressHash),
@@ -208,7 +210,7 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 			)
 			if s.invalidAddressHandler != nil {
 				if cleanupErr := s.invalidAddressHandler(ctx, address.AddressHash); cleanupErr != nil {
-					log.Error(
+					logger.Error(
 						"webpush-address-cleanup-failed",
 						zap.String("address-id", address.ID),
 						zap.String("address-hash", address.AddressHash),
@@ -218,7 +220,7 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 					continue
 				}
 				report.Cleaned++
-				log.Info(
+				logger.Info(
 					"webpush-address-disabled-after-permanent-failure",
 					zap.String("address-id", address.ID),
 					zap.String("address-hash", address.AddressHash),
@@ -226,7 +228,7 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 			}
 			continue
 		}
-		log.Error(
+		logger.Error(
 			"webpush-address-transient-failure",
 			zap.String("address-id", address.ID),
 			zap.String("address-hash", address.AddressHash),
@@ -237,7 +239,7 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 
 	if len(sendErrs) > 0 {
 		joinedErr := errors.Join(sendErrs...)
-		log.Error(
+		logger.Error(
 			"webpush-send-failed",
 			zap.Int("delivered", report.Delivered),
 			zap.Int("cleaned", report.Cleaned),
@@ -246,12 +248,15 @@ func (s *WebPushSender) SendWithReport(ctx context.Context, subject, message str
 		)
 		return report, joinedErr
 	}
-	log.Info("webpush-send-completed", zap.Int("delivered", report.Delivered), zap.Int("cleaned", report.Cleaned))
+	logger.Info("webpush-send-completed", zap.Int("delivered", report.Delivered), zap.Int("cleaned", report.Cleaned))
 	return report, nil
 }
 
 // sendOne delivers the message to a single Web Push address.
 func (s *WebPushSender) sendOne(ctx context.Context, subject, message string, address NotificationAddress, data map[string]interface{}) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "send-one")
+	logger.Debug("handling-send-one-request")
+
 	subscription := notifywebpush.Subscription{
 		Endpoint: address.WebPush.Endpoint,
 		Keys: webpush.Keys{
@@ -379,6 +384,9 @@ func (s *FCMSender) Enabled() bool {
 // nikoksr/notify's FCM service to ensure credentials are applied
 // during client construction, not after.
 func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/notifier", "send")
+	logger.Debug("handling-send-request")
+
 	_, err := s.SendWithReport(ctx, subject, message, addresses, data)
 	return err
 }
@@ -391,14 +399,13 @@ func (s *FCMSender) Send(ctx context.Context, subject, message string, addresses
 // every token was rejected.
 func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error) {
 	report := channelSendReport{}
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(
-		zap.String("component", "notifier"),
+	logger := logger.AcquirePackageFrom(ctx, "external/notifier").With(
 		zap.String("operation", "fcm-send"),
 		zap.String("channel", string(NotificationChannelFCM)),
 	)
 
 	if !s.Enabled() {
-		log.Warn(
+		logger.Warn(
 			"fcm-sender-not-enabled",
 			zap.Bool("enabled", s != nil && s.config.Enabled),
 			zap.Bool("has-credentials-file", s != nil && s.config.CredentialsFile != ""),
@@ -418,11 +425,11 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 	}
 
 	if len(tokens) == 0 {
-		log.Warn("fcm-send-no-valid-tokens", zap.Int("attempted-addresses", len(addresses)), zap.Error(ErrNotificationNoActiveAddresses))
+		logger.Warn("fcm-send-no-valid-tokens", zap.Int("attempted-addresses", len(addresses)), zap.Error(ErrNotificationNoActiveAddresses))
 		return report, ErrNotificationNoActiveAddresses
 	}
 
-	log.Info("fcm-send-started", zap.Int("attempted-addresses", len(addresses)), zap.Int("valid-tokens", len(tokens)), zap.Strings("data-keys", notificationDataKeysForLog(data)))
+	logger.Info("fcm-send-started", zap.Int("attempted-addresses", len(addresses)), zap.Int("valid-tokens", len(tokens)), zap.Strings("data-keys", notificationDataKeysForLog(data)))
 
 	var opts []fcm.Option
 	if s.config.CredentialsFile != "" {
@@ -434,7 +441,7 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 
 	fcmClient, err := fcm.NewClient(ctx, opts...)
 	if err != nil {
-		log.Error(
+		logger.Error(
 			"fcm-client-initialisation-failed",
 			zap.Bool("has-credentials-file", s.config.CredentialsFile != ""),
 			zap.Bool("has-project-id", s.config.ProjectID != ""),
@@ -454,7 +461,7 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 		}
 		batchResponse, err = fcmClient.Send(ctx, msg)
 		if err != nil {
-			log.Error("fcm-single-send-failed", zap.Int("valid-tokens", len(tokens)), zap.Error(err))
+			logger.Error("fcm-single-send-failed", zap.Int("valid-tokens", len(tokens)), zap.Error(err))
 			return report, err
 		}
 	} else {
@@ -467,20 +474,20 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 		}
 		batchResponse, err = fcmClient.SendMulticast(ctx, msg)
 		if err != nil {
-			log.Error("fcm-multicast-send-failed", zap.Int("valid-tokens", len(tokens)), zap.Error(err))
+			logger.Error("fcm-multicast-send-failed", zap.Int("valid-tokens", len(tokens)), zap.Error(err))
 			return report, err
 		}
 	}
 
 	if batchResponse == nil {
-		log.Error("fcm-send-nil-batch-response", zap.Int("valid-tokens", len(tokens)))
+		logger.Error("fcm-send-nil-batch-response", zap.Int("valid-tokens", len(tokens)))
 		return report, errors.New("fcm delivery failed: nil batch response")
 	}
 
 	report.Delivered = batchResponse.SuccessCount
 	if batchResponse.FailureCount > 0 {
 		err := fcmBatchResponseError(batchResponse)
-		log.Error(
+		logger.Error(
 			"fcm-send-partial-failure",
 			zap.Int("valid-tokens", len(tokens)),
 			zap.Int("delivered", report.Delivered),
@@ -490,7 +497,7 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 		return report, err
 	}
 
-	log.Info("fcm-send-completed", zap.Int("valid-tokens", len(tokens)), zap.Int("delivered", report.Delivered))
+	logger.Info("fcm-send-completed", zap.Int("valid-tokens", len(tokens)), zap.Int("delivered", report.Delivered))
 	return report, nil
 }
 

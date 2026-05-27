@@ -51,8 +51,8 @@ func NewService(pricerRepository PricerRepository) *Service {
 
 // CreatePricePlan creates a new price plan.
 func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanRequest) (*CreatePricePlanResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("initiating-create-price-plan-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
+	logger.Debug("initiating-create-price-plan-request", zap.Any("request", safeLogValue(req)))
 
 	if req == nil {
 		return nil, ErrInvalidPricePlanPayload
@@ -106,13 +106,13 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 	}
 
 	if err := pricePlan.Validate(); err != nil {
-		log.Warn("attempt-made-to-create-invalid-price-plan", zap.Any("price_plan", pricePlan), zap.Error(err))
+		logger.Warn("attempt-made-to-create-invalid-price-plan", zap.Any("price-plan", safeLogValue(pricePlan)), zap.Error(err))
 		return nil, err
 	}
 
 	createdPricePlan, err := s.PricerRepository.CreatePricePlan(ctx, pricePlan)
 	if err != nil {
-		log.Error("failed-to-create-price-plan", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-price-plan", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreatePricePlanResponse{}, err
 	}
 
@@ -121,8 +121,8 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 
 // UpdatePricePlan updates an existing price plan.
 func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanRequest) (*UpdatePricePlanResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("initiating-update-price-plan-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
+	logger.Debug("initiating-update-price-plan-request", zap.Any("request", safeLogValue(req)))
 
 	if req == nil {
 		return nil, ErrInvalidPricePlanPayload
@@ -144,7 +144,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 			IncludeProviders: true,
 		})
 		if err != nil {
-			log.Warn("attempt-made-to-update-missing-price-plan", zap.String("price_plan_id", req.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", req.ID), zap.Error(err))
 			return nil, err
 		}
 
@@ -182,7 +182,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 		return nil, ErrPricePlanIDRequired
 	} else {
 		if _, err := s.PricerRepository.GetPricePlanByID(ctx, pricePlanToUpdate.ID, &GetPricePlanByIDRequest{}); err != nil {
-			log.Warn("attempt-made-to-update-missing-price-plan", zap.String("price_plan_id", pricePlanToUpdate.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", pricePlanToUpdate.ID), zap.Error(err))
 			return nil, err
 		}
 	}
@@ -200,13 +200,13 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 	}
 
 	if err := pricePlanToUpdate.Validate(); err != nil {
-		log.Warn("attempt-made-to-update-invalid-price-plan", zap.Any("price_plan", pricePlanToUpdate), zap.Error(err))
+		logger.Warn("attempt-made-to-update-invalid-price-plan", zap.Any("price-plan", safeLogValue(pricePlanToUpdate)), zap.Error(err))
 		return nil, err
 	}
 
 	updatedPricePlan, err := s.PricerRepository.UpdatePricePlan(ctx, pricePlanToUpdate)
 	if err != nil {
-		log.Error("failed-to-update-price-plan", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-price-plan", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdatePricePlanResponse{}, err
 	}
 
@@ -215,6 +215,9 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 
 // GetPricePlanByID returns a price plan by ID.
 func (s *Service) GetPricePlanByID(ctx context.Context, req *GetPricePlanByIDRequest) (*GetPricePlanByIDResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "get-price-plan-by-id")
+	logger.Debug("handling-get-price-plan-by-id-request")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	}
@@ -231,6 +234,9 @@ func (s *Service) GetPricePlanByID(ctx context.Context, req *GetPricePlanByIDReq
 
 // GetPricePlanBySlug returns a price plan by slug.
 func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "get-price-plan-by-slug")
+	logger.Debug("handling-get-price-plan-by-slug-request")
+
 	if req == nil || strings.TrimSpace(req.Slug) == "" {
 		return nil, ErrInvalidPriceSlug
 	}
@@ -248,7 +254,7 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 
 // GetPricePlans returns a list of price plans.
 func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) (*GetPricePlansResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil {
 		req = &GetPricePlansRequest{}
@@ -263,14 +269,14 @@ func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) 
 
 	total, err := s.PricerRepository.GetTotalPricePlans(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-price-plans-total", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-price-plans-total", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetPricePlansResponse{}, err
 	}
 	req.TotalCount = int(total)
 
 	pricePlans, err := s.PricerRepository.GetPricePlans(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-price-plans", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-price-plans", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetPricePlansResponse{}, err
 	}
 
@@ -293,6 +299,9 @@ func (s *Service) GetPricePlans(ctx context.Context, req *GetPricePlansRequest) 
 
 // ValidatePriceSlug returns the normalized slug and availability for a pricing resource.
 func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "validate-price-slug")
+	logger.Debug("handling-validate-price-slug-request")
+
 	if req == nil {
 		return nil, ErrInvalidPriceQueryParam
 	}
@@ -386,7 +395,7 @@ func normalisePriceSlugResourceType(value string) (string, string, error) {
 
 // PublishPricePlan publishes a price plan.
 func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanRequest) (*PublishPricePlanResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
@@ -406,7 +415,7 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 		IncludeProviders: true,
 	})
 	if err != nil {
-		log.Warn("attempt-made-to-publish-missing-price-plan", zap.String("price_plan_id", req.ID), zap.Error(err))
+		logger.Warn("attempt-made-to-publish-missing-price-plan", zap.String("price-plan-id", req.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -428,7 +437,7 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 
 	err = s.PricerRepository.PublishPricePlan(ctx, req.ID, req.UserID, pricePlan.PublishedAt)
 	if err != nil {
-		log.Error("failed-to-publish-price-plan", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-publish-price-plan", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &PublishPricePlanResponse{}, err
 	}
 
@@ -446,6 +455,9 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 
 // ArchivePricePlan archives a price plan.
 func (s *Service) ArchivePricePlan(ctx context.Context, req *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "archive-price-plan")
+	logger.Debug("handling-archive-price-plan-request")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	}
@@ -472,6 +484,9 @@ func (s *Service) ArchivePricePlan(ctx context.Context, req *ArchivePricePlanReq
 
 // DeletePricePlan soft-deletes a price plan.
 func (s *Service) DeletePricePlan(ctx context.Context, req *DeletePricePlanRequest) (*DeletePricePlanResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "delete-price-plan")
+	logger.Debug("handling-delete-price-plan-request")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	}
@@ -498,7 +513,7 @@ func (s *Service) DeletePricePlan(ctx context.Context, req *DeletePricePlanReque
 
 // CreateFeature creates a feature catalog item.
 func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) (*CreateFeatureResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil {
 		return nil, ErrInvalidPriceFeaturePayload
@@ -538,13 +553,13 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 	}
 
 	if err := feature.Validate(); err != nil {
-		log.Warn("attempt-made-to-create-invalid-price-feature", zap.Any("feature", feature), zap.Error(err))
+		logger.Warn("attempt-made-to-create-invalid-price-feature", zap.Any("feature", safeLogValue(feature)), zap.Error(err))
 		return nil, err
 	}
 
 	createdFeature, err := s.PricerRepository.CreateFeature(ctx, feature)
 	if err != nil {
-		log.Error("failed-to-create-price-feature", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-price-feature", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreateFeatureResponse{}, err
 	}
 
@@ -553,7 +568,7 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 
 // UpdateFeature updates a feature catalog item.
 func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) (*UpdateFeatureResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil {
 		return nil, ErrInvalidPriceFeaturePayload
@@ -571,7 +586,7 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 		var err error
 		featureToUpdate, err = s.PricerRepository.GetFeatureByID(ctx, req.ID)
 		if err != nil {
-			log.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature_id", req.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature-id", req.ID), zap.Error(err))
 			return nil, err
 		}
 
@@ -600,7 +615,7 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 		return nil, ErrPriceFeatureIDRequired
 	} else {
 		if _, err := s.PricerRepository.GetFeatureByID(ctx, featureToUpdate.ID); err != nil {
-			log.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature_id", featureToUpdate.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature-id", featureToUpdate.ID), zap.Error(err))
 			return nil, err
 		}
 	}
@@ -612,13 +627,13 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 	featureToUpdate.UpdatedByID = req.UserID
 
 	if err := featureToUpdate.Validate(); err != nil {
-		log.Warn("attempt-made-to-update-invalid-price-feature", zap.Any("feature", featureToUpdate), zap.Error(err))
+		logger.Warn("attempt-made-to-update-invalid-price-feature", zap.Any("feature", safeLogValue(featureToUpdate)), zap.Error(err))
 		return nil, err
 	}
 
 	updatedFeature, err := s.PricerRepository.UpdateFeature(ctx, featureToUpdate)
 	if err != nil {
-		log.Error("failed-to-update-price-feature", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-price-feature", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdateFeatureResponse{}, err
 	}
 
@@ -627,7 +642,7 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 
 // GetFeatures returns feature catalog items.
 func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*GetFeaturesResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil {
 		req = &GetFeaturesRequest{}
@@ -642,14 +657,14 @@ func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*Ge
 
 	total, err := s.PricerRepository.GetTotalFeatures(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-features-total", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-features-total", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetFeaturesResponse{}, err
 	}
 	req.TotalCount = int(total)
 
 	features, err := s.PricerRepository.GetFeatures(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-features", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-features", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetFeaturesResponse{}, err
 	}
 
@@ -672,6 +687,9 @@ func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*Ge
 
 // DeleteFeature soft-deletes a feature catalog item.
 func (s *Service) DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) (*DeleteFeatureResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "delete-feature")
+	logger.Debug("handling-delete-feature-request")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPriceFeatureIDRequired
 	}

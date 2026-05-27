@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/router"
+	"go.uber.org/zap"
 )
 
 // SpaHandler expected methods for valid spa handler
@@ -66,7 +68,9 @@ func AttachRoutes(request *AttachRoutesRequest) error {
 	fileMatcher := regexp.MustCompile(`\/([^\/?\s#]*)(?:[\?#].*)?`)
 
 	httpRouter.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger := logger.AcquireOperationFrom(r.Context(), "external/spa", "serve-static-asset")
 		if !fileMatcher.MatchString(r.URL.Path) {
+			logger.Error("spa-static-route-invalid-path", zap.String("path", r.URL.Path))
 			w.WriteHeader(http.StatusInternalServerError)
 			// TODO: Update to include anchor to mailto email passed in appSettings
 			w.Write([]byte("<h1>Internal Server Error</h1><br>"))
@@ -79,6 +83,7 @@ func AttachRoutes(request *AttachRoutesRequest) error {
 			applyStaticAssetCachePolicy(w, r)
 			r = handleUpdatePathToIndexFunc(r)
 
+			logger.Debug("spa-static-route-serving", zap.String("path", r.URL.Path))
 			fileServer.ServeHTTP(w, r)
 		}
 	})

@@ -40,37 +40,35 @@ type CodeStore interface {
 // retries with a new code if a collision is detected.
 func GenerateUniqueCode(ctx context.Context, store CodeStore, ttl time.Duration) (string, error) {
 
-	log := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/accessmanager/helpers")
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		code, err := generateRandomCode()
 		if err != nil {
-			log.Error("amh/failed-to-generate-random-code", zap.Int("attempt", attempt), zap.Error(err))
+			logger.Error("failed-to-generate-random-code", zap.Int("attempt", attempt), zap.Error(err))
 			return "", err
 		}
 
 		exists, err := store.CodeExists(ctx, code)
 		if err != nil {
-			log.Error("amh/failed-to-check-code-existence", zap.String("code", code), zap.Error(err))
+			logger.Error("failed-to-check-code-existence", zap.Int("attempt", attempt), zap.Bool("code-present", code != ""), zap.Int("code-length", len(code)), zap.Error(err))
 			return "", ErrCodeGenerationFailure
 		}
 
 		if !exists {
 			err = store.StoreCode(ctx, code, ttl)
 			if err != nil {
-				log.Error("amh/failed-to-store-code", zap.String("code", code), zap.Error(err))
+				logger.Error("failed-to-store-code", zap.Int("attempt", attempt), zap.Bool("code-present", code != ""), zap.Int("code-length", len(code)), zap.Error(err))
 				return "", ErrCodeGenerationFailure
 			}
 
 			return code, nil
 		}
 
-		log.Warn("amh/code-collision-detected-retrying", zap.Int("attempt", attempt))
+		logger.Warn("code-collision-detected-retrying", zap.Int("attempt", attempt))
 	}
 
-	log.Error("amh/exceeded-max-code-generation-retries", zap.Int("max-retries", maxRetries))
+	logger.Error("exceeded-max-code-generation-retries", zap.Int("max-retries", maxRetries))
 	return "", ErrCodeGenerationFailure
 }
 

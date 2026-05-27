@@ -58,6 +58,10 @@ func NewService(request *NewServiceRequest) *Service {
 // CreateInitalToken creates a short-lived JWT token for initial user verification.
 // The token is valid for 5 minutes and contains basic user information.
 func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "create-initial-token")
+	userID := user.GetUserId()
+	logger.Debug("auth-initial-token-create-started", zap.String("user-id", userID), zap.Bool("admin", user.IsAdmin()))
+
 	td := &TokenDetails{}
 	td.EtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(initialTokenDefaultTTL)
 	td.EtTTL = getTokenTimeToLive(td.EtExpires)
@@ -74,15 +78,21 @@ func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*Token
 	var err error
 	td.EphemeralToken, err = et.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
+		logger.Error("auth-initial-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
 		return nil, fmt.Errorf("signing ephemeral token: %w", err)
 	}
 
+	logger.Debug("auth-initial-token-created", zap.String("user-id", userID), zap.Duration("ttl", td.EtTTL))
 	return td, nil
 }
 
 // CreateEmailVerificationToken creates a short-lived JWT token for email verification.
 // The token is valid for 10 minutes and must be used to verify the user's email address.
 func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "create-email-verification-token")
+	userID := user.GetUserId()
+	logger.Debug("auth-email-verification-token-create-started", zap.String("user-id", userID))
+
 	td := &TokenDetails{}
 	td.EvExpires = toolbox.GenerateTimeOfExpiryAsSeconds(emailVerificationTokenDefaultTTL)
 	td.EvTTL = getTokenTimeToLive(td.EvExpires)
@@ -99,9 +109,11 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 	var err error
 	td.EmailVerificationToken, err = evt.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
+		logger.Error("auth-email-verification-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
 		return nil, fmt.Errorf("signing email verification token: %w", err)
 	}
 
+	logger.Debug("auth-email-verification-token-created", zap.String("user-id", userID), zap.Duration("ttl", td.EvTTL))
 	return td, nil
 }
 
@@ -110,6 +122,10 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 // Access tokens are valid for 15 minutes and contain user session information.
 // Refresh tokens are valid for 7 days and can be used to obtain new access tokens.
 func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "create-token")
+	userID := user.GetUserId()
+	logger.Debug("auth-token-create-started", zap.String("user-id", userID), zap.Bool("admin", user.IsAdmin()), zap.String("user-status", user.GetUserStatus()))
+
 	td := &TokenDetails{}
 	td.AtExpires = toolbox.GenerateTimeOfExpiryAsSeconds(accesstokenDefaultTTL)
 	td.AtTTL = getTokenTimeToLive(td.AtExpires)
@@ -129,6 +145,7 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 	var err error
 	td.AccessToken, err = at.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
+		logger.Error("auth-access-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
 		return nil, fmt.Errorf("signing access token: %w", err)
 	}
 
@@ -141,9 +158,11 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 
 	td.RefreshToken, err = rt.SignedString([]byte(s.refreshTokenSecret))
 	if err != nil {
+		logger.Error("auth-refresh-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
 		return nil, fmt.Errorf("signing refresh token: %w", err)
 	}
 
+	logger.Debug("auth-token-created", zap.String("user-id", userID), zap.Duration("access-token-ttl", td.AtTTL), zap.Duration("refresh-token-ttl", td.RtTTL))
 	return td, nil
 }
 
@@ -152,24 +171,37 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 // Returns an error if no Authorization header is present or if the header
 // format is invalid.
 func (s *Service) ExtractToken(ctx context.Context, r *http.Request) (string, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-token")
 	authorization := r.Header.Get(httpHeaderKeyAuthorization)
 	if authorization == "" {
+		logger.Warn("auth-bearer-header-missing", zap.String("path", r.URL.Path))
 		return "", ErrNoBearerHeaderFound
 	}
 
-	return getTokenFromHeaderBearerToken(authorization), nil
+	token := getTokenFromHeaderBearerToken(authorization)
+	logger.Debug("auth-bearer-token-extracted", zap.String("path", r.URL.Path), zap.Int("token-length", len(token)))
+	return token, nil
 }
 
 // VerifyToken extracts and verifies the JWT token from the request.
 //
 // It validates the token signature and returns the parsed token if valid.
 func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "verify-token")
 	tokenString, err := s.ExtractToken(ctx, r)
 	if err != nil {
+		logger.Warn("auth-token-extract-failed", zap.String("path", r.URL.Path), zap.Error(err))
 		return nil, err
 	}
 
-	return s.ParseAccessTokenFromString(ctx, tokenString)
+	token, err := s.ParseAccessTokenFromString(ctx, tokenString)
+	if err != nil {
+		logger.Warn("auth-token-parse-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		return nil, err
+	}
+
+	logger.Debug("auth-token-verified", zap.String("path", r.URL.Path))
+	return token, nil
 }
 
 // ParseAccessTokenFromString parses and validates a JWT token string.
@@ -177,11 +209,11 @@ func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token,
 // It ensures the token uses HMAC signing and returns detailed errors for
 // expiration, malformed tokens, and other validation failures.
 func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
-	log := logger.Get(ctx)
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "parse-access-token")
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			log.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
+			logger.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
 			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.accessTokenSecret), nil
@@ -190,15 +222,18 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 	if err != nil {
 		switch err.Error() {
 		case "Token is expired":
+			logger.Warn("access-token-expired")
 			return nil, ErrUnauthorizedParsedStringTokenExpired
 		case "token contains an invalid number of segments":
+			logger.Warn("access-token-malformatted")
 			return nil, ErrUnauthorizedMalformattedToken
 		default:
-			log.Error("token-parsing-error", zap.Error(err))
+			logger.Error("token-parsing-error", zap.Error(err))
 			return nil, ErrUnauthorizedParsedStringUnknown
 		}
 	}
 
+	logger.Debug("access-token-parsed")
 	return token, nil
 }
 
@@ -206,11 +241,11 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 //
 // Similar to ParseAccessTokenFromString but uses the refresh token secret.
 func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
-	log := logger.Get(ctx)
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "parse-refresh-token")
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			log.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
+			logger.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
 			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.refreshTokenSecret), nil
@@ -219,29 +254,36 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 	if err != nil {
 		switch err.Error() {
 		case "Token is expired":
+			logger.Warn("refresh-token-expired")
 			return nil, ErrUnauthorizedParsedStringTokenExpired
 		case "token contains an invalid number of segments":
+			logger.Warn("refresh-token-malformatted")
 			return nil, ErrUnauthorizedMalformattedToken
 		default:
-			log.Error("token-parsing-error", zap.Error(err))
+			logger.Error("token-parsing-error", zap.Error(err))
 			return nil, ErrUnauthorizedParsedStringUnknown
 		}
 	}
 
+	logger.Debug("refresh-token-parsed")
 	return token, nil
 }
 
 // CheckTokenIsValid verifies that the token is valid and has not expired.
 func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-token-is-valid")
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
+		logger.Warn("auth-token-validation-failed", zap.String("path", r.URL.Path), zap.Error(err))
 		return err
 	}
 
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		logger.Warn("auth-token-invalid-claims", zap.String("path", r.URL.Path))
 		return ErrUnauthorized
 	}
 
+	logger.Debug("auth-token-valid", zap.String("path", r.URL.Path))
 	return nil
 }
 
@@ -249,61 +291,94 @@ func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error 
 //
 // Returns TokenAccessDetails containing user ID, access UUID, and authorization status.
 func (s *Service) ExtractTokenMetadata(ctx context.Context, r *http.Request) (*TokenAccessDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-token-metadata")
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
+		logger.Warn("auth-token-metadata-verify-failed", zap.String("path", r.URL.Path), zap.Error(err))
 		return nil, err
 	}
 
-	return s.CheckAccessTokenValidityGetDetails(ctx, token)
+	details, err := s.CheckAccessTokenValidityGetDetails(ctx, token)
+	if err != nil {
+		logger.Warn("auth-token-metadata-extract-failed", zap.String("path", r.URL.Path), zap.Error(err))
+		return nil, err
+	}
+
+	logger.Debug("auth-token-metadata-extracted", zap.String("path", r.URL.Path), zap.String("user-id", details.UserID), zap.Bool("admin", details.IsAdmin), zap.Bool("authorized", details.IsAuthorized))
+	return details, nil
 }
 
 // ExtractRefreshTokenMetadataByString retrieves refresh token metadata from a token string.
 func (s *Service) ExtractRefreshTokenMetadataByString(ctx context.Context, tokenAsString string) (*TokenRefreshDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-refresh-token-metadata")
 	token, err := s.ParseRefreshTokenFromString(ctx, tokenAsString)
 	if err != nil {
+		logger.Warn("auth-refresh-token-metadata-parse-failed", zap.Error(err))
 		return nil, err
 	}
 
-	return s.GetRefreshTokenUUID(ctx, token)
+	details, err := s.GetRefreshTokenUUID(ctx, token)
+	if err != nil {
+		logger.Warn("auth-refresh-token-metadata-extract-failed", zap.Error(err))
+		return nil, err
+	}
+
+	logger.Debug("auth-refresh-token-metadata-extracted", zap.String("user-id", details.UserID))
+	return details, nil
 }
 
 // ExtractAccessTokenMetadataByString retrieves access token metadata from a token string.
 func (s *Service) ExtractAccessTokenMetadataByString(ctx context.Context, tokenAsString string) (*TokenAccessDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-access-token-metadata")
 	token, err := s.ParseAccessTokenFromString(ctx, tokenAsString)
 	if err != nil {
+		logger.Warn("auth-access-token-metadata-parse-failed", zap.Error(err))
 		return nil, err
 	}
 
-	return s.CheckAccessTokenValidityGetDetails(ctx, token)
+	details, err := s.CheckAccessTokenValidityGetDetails(ctx, token)
+	if err != nil {
+		logger.Warn("auth-access-token-metadata-extract-failed", zap.Error(err))
+		return nil, err
+	}
+
+	logger.Debug("auth-access-token-metadata-extracted", zap.String("user-id", details.UserID), zap.Bool("admin", details.IsAdmin), zap.Bool("authorized", details.IsAuthorized))
+	return details, nil
 }
 
 // CheckAccessTokenValidityGetDetails return details of a valid acess token
 // TODO: Create tests
 func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token *jwt.Token) (*TokenAccessDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-access-token-validity-get-details")
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
 		accessUUID, ok := claims[tokenClaimKeyAccessUUID].(string)
 		if !ok {
+			logger.Warn("auth-access-token-missing-access-uuid")
 			return nil, ErrUnauthorizedNoTokenUUID
 		}
 
 		userID, ok := claims[tokenClaimKeySub].(string)
 		if !ok {
+			logger.Warn("auth-access-token-missing-user-id")
 			return nil, ErrUnauthorizedNoUserIDFound
 		}
 
 		isAdmin, ok := claims[tokenClaimKeyAdmin].(bool)
 		if !ok {
+			logger.Warn("auth-access-token-missing-admin-claim", zap.String("user-id", userID))
 			return nil, ErrUnauthorizedNoAdminInfoFound
 		}
 
 		// Check user if active
 		isActive, ok := claims[tokenClaimKeyAuthorized].(bool)
 		if !ok {
+			logger.Warn("auth-access-token-missing-authorized-claim", zap.String("user-id", userID))
 			return nil, ErrUnauthorizedNoAuthorizationInfoFound
 		}
 
+		logger.Debug("auth-access-token-details-valid", zap.String("user-id", userID), zap.Bool("admin", isAdmin), zap.Bool("authorized", isActive))
 		return &TokenAccessDetails{
 			AccessUUID:   accessUUID,
 			UserID:       userID,
@@ -311,6 +386,7 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 			IsAuthorized: isActive,
 		}, nil
 	}
+	logger.Warn("auth-access-token-invalid")
 	return nil, ErrUnauthorized
 
 }
@@ -319,16 +395,20 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 // the token method conform to "SigningMethodHMAC"
 // TODO: Create tests
 func (s *Service) VerifyRefreshToken(ctx context.Context, t string) (*jwt.Token, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "verify-refresh-token")
 
 	token, err := jwt.Parse(t, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			logger.Error("refresh-token-unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
 			return nil, fmt.Errorf("unexpected-signing-method: %v", token.Header[tokenHeaderKeyAlg])
 		}
 		return []byte(s.refreshTokenSecret), nil
 	})
 	if err != nil {
+		logger.Warn("refresh-token-verification-failed", zap.Error(err))
 		return nil, ErrUnauthorizedRefreshTokenExpired
 	}
+	logger.Debug("refresh-token-verified")
 	return token, nil
 }
 
@@ -336,13 +416,17 @@ func (s *Service) VerifyRefreshToken(ctx context.Context, t string) (*jwt.Token,
 // usable
 // TODO: Create tests
 func (s *Service) CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.Token, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-refresh-token-is-valid")
 	token, err := s.VerifyRefreshToken(ctx, t)
 	if err != nil {
+		logger.Warn("refresh-token-validation-failed", zap.Error(err))
 		return nil, err
 	}
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
+		logger.Warn("refresh-token-invalid-claims")
 		return nil, err
 	}
+	logger.Debug("refresh-token-valid")
 	return token, nil
 }
 
@@ -350,6 +434,7 @@ func (s *Service) CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.
 // Only if the token is valid i.e. the token claims should conform to
 // TODO: Create tests
 func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*TokenRefreshDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/auth", "get-refresh-token-uuid")
 
 	var refreshDetails TokenRefreshDetails
 
@@ -357,12 +442,15 @@ func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*T
 	if ok && token.Valid {
 		refreshDetails.RefreshUUID, ok = claims[tokenClaimKeyRefreshUUID].(string)
 		if !ok {
+			logger.Warn("refresh-token-missing-refresh-uuid")
 			return nil, ErrUnauthorizedNoTokenUUID
 		}
 		refreshDetails.UserID, ok = claims[tokenClaimKeySub].(string)
 		if !ok {
+			logger.Warn("refresh-token-missing-user-id")
 			return nil, ErrUnauthorizedNoUserIDFound
 		}
+		logger.Debug("refresh-token-uuid-extracted", zap.String("user-id", refreshDetails.UserID))
 	}
 
 	return &refreshDetails, nil

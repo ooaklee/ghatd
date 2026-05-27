@@ -3,6 +3,9 @@ package blueprint
 import (
 	"context"
 	"strings"
+
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // BlueprintRepository defines the repository surface used by the service.
@@ -37,10 +40,14 @@ func NewService(blueprintRepository BlueprintRepository, registry ...*Registry) 
 
 // CreateBlueprint creates a blueprint record.
 func (s *Service) CreateBlueprint(ctx context.Context, req *CreateBlueprintRequest) (*BlueprintResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "create-blueprint")
+
 	if req == nil || normaliseBlueprintName(req.Name) == "" {
+		logger.Warn("blueprint-create-missing-name")
 		return nil, ErrBlueprintNameIsRequired
 	}
 	if normaliseBlueprintKind(req.Kind) == "" {
+		logger.Warn("blueprint-create-missing-kind", zap.String("name", normaliseBlueprintName(req.Name)))
 		return nil, ErrBlueprintKindIsRequired
 	}
 
@@ -51,69 +58,92 @@ func (s *Service) CreateBlueprint(ctx context.Context, req *CreateBlueprintReque
 
 	created, err := s.BlueprintRepository.CreateBlueprint(ctx, blueprint)
 	if err != nil {
+		logger.Error("blueprint-create-failed", zap.String("blueprint-id", blueprint.ID), zap.String("kind", blueprint.Kind), zap.Error(err))
 		return nil, err
 	}
 
+	logger.Info("blueprint-created", zap.String("blueprint-id", created.ID), zap.String("kind", created.Kind))
 	return &BlueprintResponse{Blueprint: created}, nil
 }
 
 // GetBlueprintByID retrieves a blueprint by ID.
 func (s *Service) GetBlueprintByID(ctx context.Context, req *GetBlueprintByIDRequest) (*BlueprintResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "get-blueprint-by-id")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
+		logger.Warn("blueprint-get-by-id-missing-id")
 		return nil, ErrBlueprintIDIsRequired
 	}
 	if strings.TrimSpace(req.UserID) == "" {
+		logger.Warn("blueprint-get-by-id-missing-user-id", zap.String("blueprint-id", strings.TrimSpace(req.ID)))
 		return nil, ErrBlueprintUserIDIsRequired
 	}
 
 	blueprint, err := s.BlueprintRepository.GetBlueprintByID(ctx, strings.TrimSpace(req.ID))
 	if err != nil {
+		logger.Error("blueprint-get-by-id-failed", zap.String("blueprint-id", strings.TrimSpace(req.ID)), zap.Error(err))
 		return nil, err
 	}
 
+	logger.Debug("blueprint-get-by-id-completed", zap.String("blueprint-id", blueprint.ID), zap.String("kind", blueprint.Kind))
 	return &BlueprintResponse{Blueprint: blueprint}, nil
 }
 
 // GetBlueprintByName retrieves a blueprint by name and kind.
 func (s *Service) GetBlueprintByName(ctx context.Context, req *GetBlueprintByNameRequest) (*BlueprintResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "get-blueprint-by-name")
+
 	if req == nil || normaliseBlueprintName(req.Name) == "" {
+		logger.Warn("blueprint-get-by-name-missing-name")
 		return nil, ErrBlueprintNameIsRequired
 	}
 	if normaliseBlueprintKind(req.Kind) == "" {
+		logger.Warn("blueprint-get-by-name-missing-kind", zap.String("name", normaliseBlueprintName(req.Name)))
 		return nil, ErrBlueprintKindIsRequired
 	}
 
 	blueprint, err := s.BlueprintRepository.GetBlueprintByNameAndKind(ctx, req.Name, req.Kind)
 	if err != nil {
+		logger.Error("blueprint-get-by-name-failed", zap.String("name", normaliseBlueprintName(req.Name)), zap.String("kind", normaliseBlueprintKind(req.Kind)), zap.Error(err))
 		return nil, err
 	}
 
+	logger.Debug("blueprint-get-by-name-completed", zap.String("blueprint-id", blueprint.ID), zap.String("kind", blueprint.Kind))
 	return &BlueprintResponse{Blueprint: blueprint}, nil
 }
 
 // GetBlueprints retrieves a filtered page of blueprints.
 func (s *Service) GetBlueprints(ctx context.Context, req *GetBlueprintsRequest) (*GetBlueprintsResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "get-blueprints")
+
 	blueprints, err := s.BlueprintRepository.GetBlueprints(ctx, req)
 	if err != nil {
+		logger.Error("blueprints-list-failed", zap.Error(err))
 		return nil, err
 	}
 
 	total, err := s.BlueprintRepository.GetTotalBlueprints(ctx, req)
 	if err != nil {
+		logger.Error("blueprints-count-failed", zap.Error(err))
 		return nil, err
 	}
 
+	logger.Debug("blueprints-list-completed", zap.Int("returned", len(blueprints)), zap.Int64("total", total))
 	return &GetBlueprintsResponse{Blueprints: blueprints, Total: total}, nil
 }
 
 // UpdateBlueprint updates mutable fields on a blueprint.
 func (s *Service) UpdateBlueprint(ctx context.Context, req *UpdateBlueprintRequest) (*BlueprintResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "update-blueprint")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
+		logger.Warn("blueprint-update-missing-id")
 		return nil, ErrBlueprintIDIsRequired
 	}
 
 	current, err := s.BlueprintRepository.GetBlueprintByID(ctx, strings.TrimSpace(req.ID))
 	if err != nil {
+		logger.Error("blueprint-update-current-lookup-failed", zap.String("blueprint-id", strings.TrimSpace(req.ID)), zap.Error(err))
 		return nil, err
 	}
 
@@ -137,22 +167,29 @@ func (s *Service) UpdateBlueprint(ctx context.Context, req *UpdateBlueprintReque
 
 	updated, err := s.BlueprintRepository.UpdateBlueprint(ctx, current)
 	if err != nil {
+		logger.Error("blueprint-update-failed", zap.String("blueprint-id", current.ID), zap.Error(err))
 		return nil, err
 	}
 
+	logger.Info("blueprint-updated", zap.String("blueprint-id", updated.ID), zap.String("kind", updated.Kind))
 	return &BlueprintResponse{Blueprint: updated}, nil
 }
 
 // DeleteBlueprint deletes a blueprint by ID.
 func (s *Service) DeleteBlueprint(ctx context.Context, req *DeleteBlueprintRequest) (*DeleteBlueprintResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "delete-blueprint")
+
 	if req == nil || strings.TrimSpace(req.ID) == "" {
+		logger.Warn("blueprint-delete-missing-id")
 		return nil, ErrBlueprintIDIsRequired
 	}
 
 	if err := s.BlueprintRepository.DeleteBlueprintByID(ctx, strings.TrimSpace(req.ID)); err != nil {
+		logger.Error("blueprint-delete-failed", zap.String("blueprint-id", strings.TrimSpace(req.ID)), zap.Error(err))
 		return nil, err
 	}
 
+	logger.Info("blueprint-deleted", zap.String("blueprint-id", strings.TrimSpace(req.ID)))
 	return &DeleteBlueprintResponse{Deleted: true}, nil
 }
 

@@ -20,27 +20,25 @@ import (
 // MapRequestToUpdateUserEmailRequest maps incoming UpdateUserEmail request to correct struct.
 func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthToken, cookiePrefixRefreshToken string, validator AccessmanagerValidator) (*UpdateUserEmailRequest, error) {
 	var (
-		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger        *zap.Logger             = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
 		parsedRequest *UpdateUserEmailRequest = &UpdateUserEmailRequest{}
 		err           error
 	)
 
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		log.Error("unable-decode-request-body-for-updating-user-email")
+		logger.Error("unable-decode-request-body-for-updating-user-email")
 		return nil, ErrInvalidUserEmail
 	}
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-requestor-user-id")
+		logger.Error("unable-get-requestor-user-id")
 		return nil, ErrUnauthorizedUnableToAttainRequestorID
 	}
 
 	parsedRequest.TargetUserId, err = getUserIDFromURI(request)
 	if err != nil {
-		log.Error("unable-get-target-user-id")
+		logger.Error("unable-get-target-user-id")
 		return nil, err
 	}
 
@@ -48,7 +46,7 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 	// check to see if request is coming with cookies
 	cookie, aTokenErr := request.Cookie(cookiePrefixAuthToken)
 	if aTokenErr != nil {
-		log.Error("unable-get-access-token-from-cookie", zap.String("user-id", parsedRequest.UserId), zap.String("target-user-id", parsedRequest.TargetUserId))
+		logger.Error("unable-get-access-token-from-cookie", zap.String("user-id", parsedRequest.UserId), zap.String("target-user-id", parsedRequest.TargetUserId))
 		return nil, aTokenErr
 	}
 
@@ -56,7 +54,7 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 
 	refreshTokenCookie, rAuthErr := request.Cookie(cookiePrefixRefreshToken)
 	if rAuthErr != nil {
-		log.Error("unable-get-access-token-from-cookie", zap.String("user-id", parsedRequest.UserId), zap.String("target-user-id", parsedRequest.TargetUserId))
+		logger.Error("unable-get-access-token-from-cookie", zap.String("user-id", parsedRequest.UserId), zap.String("target-user-id", parsedRequest.TargetUserId))
 		return nil, rAuthErr
 	}
 
@@ -67,7 +65,7 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
-		log.Error("unable-validate-request-for-updating-user-email")
+		logger.Error("unable-validate-request-for-updating-user-email")
 		return nil, ErrBadRequest
 	}
 
@@ -77,9 +75,7 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthT
 // MapRequestToLogoutUserOthersRequest maps incoming LogOutUserOthers request to correct struct.
 func MapRequestToLogoutUserOthersRequest(request *http.Request, validator AccessmanagerValidator, authCookiePrefix, refreshCookiePrefix string) (*LogoutUserOthersRequest, error) {
 	var (
-		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
 
 		parsedRequest *LogoutUserOthersRequest = &LogoutUserOthersRequest{}
 	)
@@ -88,13 +84,13 @@ func MapRequestToLogoutUserOthersRequest(request *http.Request, validator Access
 
 	authTokenCookie, err := request.Cookie(authCookiePrefix)
 	if err != nil {
-		log.Error("unable-to-get-auth-token-cookie", zap.String("user-id", parsedRequest.UserId))
+		logger.Error("unable-to-get-auth-token-cookie", zap.String("user-id", parsedRequest.UserId))
 		return nil, ErrInvalidAuthToken
 	}
 
 	refreshTokenCookie, err := request.Cookie(refreshCookiePrefix)
 	if err != nil {
-		log.Error("unable-to-get-refresh-token-cookie", zap.String("user-id", parsedRequest.UserId))
+		logger.Error("unable-to-get-refresh-token-cookie", zap.String("user-id", parsedRequest.UserId))
 		return nil, ErrInvalidRefreshToken
 	}
 
@@ -106,7 +102,7 @@ func MapRequestToLogoutUserOthersRequest(request *http.Request, validator Access
 	}
 
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrInvalidUserID
 	}
 
@@ -138,9 +134,7 @@ func MapRequestToOauthCallbackRequest(request *http.Request, validator Accessman
 // MapRequestToOauthLoginRequest maps incoming OauthLogin request to correct struct
 func MapRequestToOauthLoginRequest(request *http.Request, validator AccessmanagerValidator) (*OauthLoginRequest, error) {
 	var (
-		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
 
 		parsedRequest OauthLoginRequest = OauthLoginRequest{}
 	)
@@ -158,11 +152,11 @@ func MapRequestToOauthLoginRequest(request *http.Request, validator Accessmanage
 
 		decodedUriValue, err := url.PathUnescape(parsedRequest.RequestUrl)
 		if err != nil {
-			log.Warn("failed-to-decode-request-url-uri-for-sso-login", zap.String("encoded-request-url", parsedRequest.RequestUrl))
+			logger.Warn("failed-to-decode-request-url-uri-for-sso-login", requestURLLogFields(parsedRequest.RequestUrl)...)
 		}
 
 		if err == nil {
-			log.Info("request-url-uri-decoded-for-sso-login", zap.String("encoded-request-url", parsedRequest.RequestUrl))
+			logger.Info("request-url-uri-decoded-for-sso-login", requestURLLogFields(parsedRequest.RequestUrl)...)
 			parsedRequest.RequestUrl = decodedUriValue
 		}
 	}
@@ -363,9 +357,7 @@ func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator Acce
 func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*CreateUserAPITokenRequest, error) {
 
 	var (
-		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
 
 		parsedRequest *CreateUserAPITokenRequest = &CreateUserAPITokenRequest{}
 		err           error
@@ -383,11 +375,11 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator Acce
 	if err != nil {
 		bodyBytes, err := ioutil.ReadAll(request.Body)
 		if err != nil {
-			log.Error("unable-to-decode-create-user-api-token-request")
+			logger.Error("unable-to-decode-create-user-api-token-request")
 		}
 
 		if err == nil {
-			log.Error("unable-to-decode-create-user-api-token-request", zap.Any("request-body", bodyBytes))
+			logger.Error("unable-to-decode-create-user-api-token-request", zap.Int("request-body-bytes", len(bodyBytes)))
 		}
 		return nil, ErrInvalidCreateUserAPITokenBody
 	}
@@ -451,9 +443,7 @@ func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName, a
 func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.Request, validator AccessmanagerValidator) (*CreateInitalLoginOrVerificationTokenEmailRequest, error) {
 
 	var (
-		log *zap.Logger = logger.AcquireFrom(request.Context()).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
 
 		parsedRequest *CreateInitalLoginOrVerificationTokenEmailRequest = &CreateInitalLoginOrVerificationTokenEmailRequest{}
 	)
@@ -468,7 +458,7 @@ func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.
 		return nil, ErrInvalidUserEmail
 	}
 
-	log.Debug("login-request-submitted.", zap.String("email", parsedRequest.Email))
+	logger.Debug("login-request-submitted.", emailLogFields("email", parsedRequest.Email)...)
 
 	return parsedRequest, nil
 

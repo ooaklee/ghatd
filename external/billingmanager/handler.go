@@ -2,10 +2,12 @@ package billingmanager
 
 import (
 	"context"
+	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/reply/v2"
+	"go.uber.org/zap"
 )
 
 // BillingManagerService manages business logic around billingmanager request
@@ -44,9 +46,11 @@ func NewHandler(service BillingManagerService, validator BillingManagerValidator
 // ProcessBillingProviderWebhooks handles request to process
 // billing provider webhooks
 func (h *Handler) ProcessBillingProviderWebhooks(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-process-billing-provider-webhooks")
 	request, err := mapRequestToProcessBillingProviderWebhooksRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -54,6 +58,7 @@ func (h *Handler) ProcessBillingProviderWebhooks(w http.ResponseWriter, r *http.
 	err = h.Service.ProcessBillingProviderWebhooks(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -64,9 +69,11 @@ func (h *Handler) ProcessBillingProviderWebhooks(w http.ResponseWriter, r *http.
 
 // GetUserBillingEvents handles request to get user billing events
 func (h *Handler) GetUserBillingEvents(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-user-billing-events")
 	request, err := mapRequestToGetUserBillingEventsRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -74,6 +81,7 @@ func (h *Handler) GetUserBillingEvents(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.GetUserBillingEvents(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -90,9 +98,11 @@ func (h *Handler) GetUserBillingEvents(w http.ResponseWriter, r *http.Request) {
 
 // GetUserSubscriptionStatus handles request to get user subscription status
 func (h *Handler) GetUserSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-user-subscription-status")
 	request, err := mapRequestToGetUserSubscriptionStatusRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -100,6 +110,7 @@ func (h *Handler) GetUserSubscriptionStatus(w http.ResponseWriter, r *http.Reque
 	response, err := h.Service.GetUserSubscriptionStatus(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -110,9 +121,11 @@ func (h *Handler) GetUserSubscriptionStatus(w http.ResponseWriter, r *http.Reque
 
 // GetUserBillingDetail handles request to get user billing detail
 func (h *Handler) GetUserBillingDetail(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-user-billing-detail")
 	request, err := mapRequestToGetUserBillingDetailRequest(r, h.Validator)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -120,6 +133,7 @@ func (h *Handler) GetUserBillingDetail(w http.ResponseWriter, r *http.Request) {
 	response, err := h.Service.GetUserBillingDetail(r.Context(), request)
 	if err != nil {
 		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -130,14 +144,17 @@ func (h *Handler) GetUserBillingDetail(w http.ResponseWriter, r *http.Request) {
 
 // GetPricingPlans handles request to get pricing plans.
 func (h *Handler) GetPricingPlans(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-pricing-plans")
 	request, err := MapRequestToGetPricingPlansRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricingPlans(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -152,14 +169,17 @@ func (h *Handler) GetPricingPlans(w http.ResponseWriter, r *http.Request) {
 
 // GetPricePlanBySlug handles request to get a pricing plan by slug.
 func (h *Handler) GetPricePlanBySlug(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-price-plan-by-slug")
 	request, err := MapRequestToGetPricePlanBySlugRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricePlanBySlug(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
@@ -169,14 +189,17 @@ func (h *Handler) GetPricePlanBySlug(w http.ResponseWriter, r *http.Request) {
 
 // GetPricingFeatures handles request to get pricing feature catalog items.
 func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-pricing-features")
 	request, err := MapRequestToGetPriceFeaturesRequest(r, h.Validator)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricingFeatures(r.Context(), request)
 	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}

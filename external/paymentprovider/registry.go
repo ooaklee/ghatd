@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // ProviderRegistry manages multiple payment providers
@@ -50,18 +53,35 @@ func (r *ProviderRegistry) List() []string {
 // VerifyAndParseWebhookPayload is a convenience method that identifies the provider,
 // verifies the webhook, and parses the payload
 func (r *ProviderRegistry) VerifyAndParseWebhookPayload(ctx context.Context, providerName string, req *http.Request) (*WebhookPayload, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/paymentprovider", "verify-and-parse-webhook-payload", zap.String("provider", providerName))
+	logger.Info("payment-provider-webhook-processing-started")
+
 	provider, err := r.Get(providerName)
 	if err != nil {
+		logger.Warn("payment-provider-not-registered", zap.Error(err))
 		return nil, err
 	}
 
 	// Verify the webhook
 	if err := provider.VerifyWebhook(ctx, req); err != nil {
+		logger.Warn("payment-provider-webhook-verification-failed", zap.Error(err))
 		return nil, err
 	}
 
 	// Parse the payload
-	return provider.ParsePayload(ctx, req)
+	payload, err := provider.ParsePayload(ctx, req)
+	if err != nil {
+		logger.Warn("payment-provider-webhook-payload-parse-failed", zap.Error(err))
+		return nil, err
+	}
+
+	logger.Info("payment-provider-webhook-processing-completed",
+		zap.String("event-type", payload.EventType),
+		zap.String("event-id", payload.EventID),
+		zap.String("subscription-id", payload.SubscriptionID),
+		zap.Bool("is-subscription", payload.IsSubscription()),
+	)
+	return payload, nil
 }
 
 // CreateProviderFromConfig creates a provider instance from configuration

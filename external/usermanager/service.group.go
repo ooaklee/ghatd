@@ -13,10 +13,10 @@ import (
 
 // GetEnrichedUserProfile handles fetching an enriched user profile with group membership data
 func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -25,7 +25,7 @@ func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUser
 		ID: r.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-get-user-profile", zap.String("user-id", r.UserId), zap.Error(err))
+		logger.Error("failed-to-get-user-profile", zap.String("user-id", r.UserId), zap.Error(err))
 		return nil, err
 	}
 
@@ -46,7 +46,7 @@ func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUser
 	if r.IncludeAllGroups {
 		allGroups, err := s.getUserAllGroups(ctx, r.UserId, r.PrefixName)
 		if err != nil {
-			log.Warn("failed-to-fetch-all-group-memberships", zap.String("user-id", r.UserId), zap.Error(err))
+			logger.Warn("failed-to-fetch-all-group-memberships", zap.String("user-id", r.UserId), zap.Error(err))
 		} else {
 			enrichedProfile.Groups = allGroups
 		}
@@ -59,21 +59,21 @@ func (s *Service) GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUser
 
 // GetGroupLineage handles fetching the lineage for a group, gated by group access for non-admin requesters.
 func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, logger)
 	if !isAdmin {
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupLineageRequest.ID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GetGroupLineageRequest.ID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GetGroupLineageRequest.ID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -88,7 +88,7 @@ func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest
 
 	resp, err := s.GroupService.GetGroupLineage(ctx, r.GetGroupLineageRequest)
 	if err != nil {
-		log.Error("failed-to-get-group-lineage", zap.String("group-id", r.GetGroupLineageRequest.ID), zap.Error(err))
+		logger.Error("failed-to-get-group-lineage", zap.String("group-id", r.GetGroupLineageRequest.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -100,21 +100,21 @@ func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest
 // GetGroupsByUserID handles fetching groups for a user with filtering
 // GetGroupDescendants handles fetching group descendants with permission checks
 func (s *Service) GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, logger)
 	if !isAdmin {
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GetGroupDescendantsRequest.ID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GetGroupDescendantsRequest.ID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GetGroupDescendantsRequest.ID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -129,7 +129,7 @@ func (s *Service) GetGroupDescendants(ctx context.Context, r *GetGroupDescendant
 
 	resp, err := s.GroupService.GetGroupDescendants(ctx, r.GetGroupDescendantsRequest)
 	if err != nil {
-		log.Error("failed-to-get-group-descendants", zap.String("group-id", r.GetGroupDescendantsRequest.ID), zap.Error(err))
+		logger.Error("failed-to-get-group-descendants", zap.String("group-id", r.GetGroupDescendantsRequest.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -144,10 +144,10 @@ func (s *Service) GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDReq
 		return nil, ErrGroupServiceNotEnabled
 	}
 
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if r.ID != r.UserID {
-		isAdmin := s.isRequesterAdmin(ctx, r.ID, log)
+		isAdmin := s.isRequesterAdmin(ctx, r.ID, logger)
 		if !isAdmin {
 			return nil, group.ErrInsufficientPermissions
 		}
@@ -165,10 +165,10 @@ func (s *Service) GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDReq
 
 // GetUserGroups handles fetching groups for a user with filtering
 func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -200,7 +200,7 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 
 	groupsResp, err := s.GroupService.GetGroups(ctx, groupReq)
 	if err != nil {
-		log.Error("failed-to-get-user-groups", zap.String("user-id", r.UserId), zap.Error(err))
+		logger.Error("failed-to-get-user-groups", zap.String("user-id", r.UserId), zap.Error(err))
 		return nil, err
 	}
 
@@ -237,10 +237,10 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 
 // GetLatestNotificationOverviews fetches latest group notification overviews for the requester.
 func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -253,7 +253,7 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLate
 	if userEmail == "" {
 		userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: targetUserID})
 		if err != nil {
-			log.Error("failed-to-resolve-user-email-for-notifications", zap.String("user-id", targetUserID), zap.Error(err))
+			logger.Error("failed-to-resolve-user-email-for-notifications", zap.String("user-id", targetUserID), zap.Error(err))
 			return nil, err
 		}
 
@@ -267,7 +267,7 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLate
 		Limit:     r.Limit,
 	})
 	if err != nil {
-		log.Error("failed-to-get-group-notification-overviews", zap.String("user-id", targetUserID), zap.Error(err))
+		logger.Error("failed-to-get-group-notification-overviews", zap.String("user-id", targetUserID), zap.Error(err))
 		return nil, err
 	}
 
@@ -276,16 +276,16 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLate
 
 // GetMyGroupInvitations fetches outstanding group invitations for the requester.
 func (s *Service) GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvitationsRequest) (*GetMyGroupInvitationsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
 	if err != nil {
-		log.Error("failed-to-resolve-user-for-group-invitations", zap.String("user-id", r.UserId), zap.Error(err))
+		logger.Error("failed-to-resolve-user-for-group-invitations", zap.String("user-id", r.UserId), zap.Error(err))
 		return nil, err
 	}
 
@@ -299,7 +299,7 @@ func (s *Service) GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvita
 		PrefixName: r.PrefixName,
 	})
 	if err != nil {
-		log.Error("failed-to-get-my-group-invitations", zap.String("user-id", r.UserId), zap.Error(err))
+		logger.Error("failed-to-get-my-group-invitations", zap.String("user-id", r.UserId), zap.Error(err))
 		return nil, err
 	}
 
@@ -348,16 +348,16 @@ func (s *Service) GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvita
 
 // AcceptMyGroupInvitation accepts a pending group invitation for the requester.
 func (s *Service) AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupInvitationRequest) (*AcceptMyGroupInvitationResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
 	if err != nil {
-		log.Error("failed-to-resolve-user-for-accept-group-invitation", zap.String("user-id", r.UserId), zap.Error(err))
+		logger.Error("failed-to-resolve-user-for-accept-group-invitation", zap.String("user-id", r.UserId), zap.Error(err))
 		return nil, err
 	}
 
@@ -367,7 +367,7 @@ func (s *Service) AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupI
 		UserID:      r.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-accept-my-group-invitation", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID), zap.Error(err))
+		logger.Error("failed-to-accept-my-group-invitation", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID), zap.Error(err))
 		return nil, err
 	}
 
@@ -376,16 +376,16 @@ func (s *Service) AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupI
 
 // RejectMyGroupInvitation rejects a pending group invitation for the requester.
 func (s *Service) RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupInvitationRequest) (*RejectMyGroupInvitationResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
 	if err != nil {
-		log.Error("failed-to-resolve-user-for-reject-group-invitation", zap.String("user-id", r.UserId), zap.Error(err))
+		logger.Error("failed-to-resolve-user-for-reject-group-invitation", zap.String("user-id", r.UserId), zap.Error(err))
 		return nil, err
 	}
 
@@ -395,7 +395,7 @@ func (s *Service) RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupI
 		RejectedByID: r.UserId,
 	})
 	if err != nil {
-		log.Error("failed-to-reject-my-group-invitation", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID), zap.Error(err))
+		logger.Error("failed-to-reject-my-group-invitation", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID), zap.Error(err))
 		return nil, err
 	}
 
@@ -404,27 +404,27 @@ func (s *Service) RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupI
 
 // GetGroupDetail handles fetching a single group for a requester with membership/owner checks
 func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID, PrefixName: r.PrefixName})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
-		log.Warn("failed-to-get-group-detail", zap.String("group-id", r.GroupID), zap.Error(err))
+		logger.Warn("failed-to-get-group-detail", zap.String("group-id", r.GroupID), zap.Error(err))
 		return nil, ErrGroupNotFound
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, logger)
 	if !isAdmin {
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -484,27 +484,27 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 
 // GetGroupStats handles fetching group stats for a requester with membership/owner checks
 func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
+		logger.Error("group-service-not-enabled", zap.String("user-id", r.UserId))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
 	groupResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID, PrefixName: r.PrefixName})
 	if err != nil || groupResp == nil || groupResp.Group == nil {
-		log.Warn("failed-to-get-group-for-stats", zap.String("group-id", r.GroupID), zap.Error(err))
+		logger.Warn("failed-to-get-group-for-stats", zap.String("group-id", r.GroupID), zap.Error(err))
 		return nil, ErrGroupNotFound
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, r.UserId, log)
+	isAdmin := s.isRequesterAdmin(ctx, r.UserId, logger)
 	if !isAdmin {
 		hasGroupAccess, accessErr := s.hasRequesterGroupAccess(ctx, r.UserId, r.GroupID)
 		if accessErr != nil {
-			log.Error(
+			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -515,7 +515,7 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 		}
 	}
 
-	totalUsers, roleBreakdown := s.calculateGroupSeatUsage(ctx, groupResp.Group, log)
+	totalUsers, roleBreakdown := s.calculateGroupSeatUsage(ctx, groupResp.Group, logger)
 
 	capacity := 9999
 	if groupResp.Group.Settings != nil && groupResp.Group.Settings.MaxMembers > 0 {
@@ -606,10 +606,10 @@ func (s *Service) getUserAllGroups(ctx context.Context, userID string, prefixNam
 
 // GetUserGroupMemberships fetches user-referenced groups and maps them to user-facing memberships.
 func (s *Service) GetUserGroupMemberships(ctx context.Context, req *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error) {
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", req.UserID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", req.UserID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -662,14 +662,14 @@ func (s *Service) GetUserGroupMemberships(ctx context.Context, req *GetUserGroup
 }
 
 // isRequesterAdmin safely checks if the requester has admin privileges
-func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.Logger) bool {
+func (s *Service) isRequesterAdmin(ctx context.Context, userID string, logger *zap.Logger) bool {
 	if s.UserService == nil {
 		return false
 	}
 
 	userResp, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: userID})
 	if err != nil || userResp == nil || userResp.User == nil {
-		log.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
+		logger.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
 		return false
 	}
 
@@ -679,10 +679,10 @@ func (s *Service) isRequesterAdmin(ctx context.Context, userID string, log *zap.
 // hasRequesterGroupAccess checks if the requester has access to the group either as a member, admin or owner
 func (s *Service) hasRequesterGroupAccess(ctx context.Context, userID, groupID string) (*group.UserGroupAccessSummary, error) {
 
-	var log *zap.Logger = logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	if s.GroupService == nil {
-		log.Error("group-service-not-enabled", zap.String("user-id", userID))
+		logger.Error("group-service-not-enabled", zap.String("user-id", userID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
@@ -700,7 +700,7 @@ func (s *Service) hasRequesterGroupAccess(ctx context.Context, userID, groupID s
 }
 
 // calculateGroupSeatUsage computes total unique users including nested group members and owner
-func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.UniversalGroup, log *zap.Logger) (int, map[string]int) {
+func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.UniversalGroup, logger *zap.Logger) (int, map[string]int) {
 	seenGroups := make(map[string]struct{})
 	seenUsers := make(map[string]struct{})
 	roleBreakdown := make(map[string]int)
@@ -729,7 +729,7 @@ func (s *Service) calculateGroupSeatUsage(ctx context.Context, grp *group.Univer
 			case group.MemberTypeGroup:
 				childResp, err := s.GroupService.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: member.ID})
 				if err != nil || childResp == nil || childResp.Group == nil {
-					log.Warn("failed-to-get-nested-group", zap.String("child-group-id", member.ID), zap.Error(err))
+					logger.Warn("failed-to-get-nested-group", zap.String("child-group-id", member.ID), zap.Error(err))
 					continue
 				}
 				walk(childResp.Group)

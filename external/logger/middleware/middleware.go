@@ -64,6 +64,9 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 		// Log request data
 		reqLogger.Info(
 			fmt.Sprintf("concluded request for %s [correlation-id: %s]", req.URL.RequestURI(), fetchedCorrelationId),
+			zap.String(logger.FieldSource, logger.SourceGHATD),
+			zap.String(logger.FieldPackage, "external/logger/middleware"),
+			zap.String(logger.FieldOperation, "http-request"),
 			zap.Int("status", responseWriter.statusCode),
 			zap.String("method", req.Method),
 			zap.String("clientip", req.RemoteAddr),
@@ -106,6 +109,9 @@ func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler) htt
 		// Log request data
 		reqLogger.Info(
 			fmt.Sprintf("concluded request for %s [correlation-id: %s]", req.URL.RequestURI(), fetchedCorrelationId),
+			zap.String(logger.FieldSource, logger.SourceGHATD),
+			zap.String(logger.FieldPackage, "external/logger/middleware"),
+			zap.String(logger.FieldOperation, "http-request"),
 			zap.Int("status", responseWriter.statusCode),
 			zap.String("method", req.Method),
 			zap.String("clientip", req.RemoteAddr),

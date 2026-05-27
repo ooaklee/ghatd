@@ -158,24 +158,24 @@ func (s *Service) ensureStreakService() error {
 }
 
 func (s *Service) validateStreakRequester(ctx context.Context, userID string) (*userv2.UniversalUser, bool, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 	requestingUserID := strings.TrimSpace(userID)
 	if requestingUserID == "" {
-		log.Warn("streak-request-with-empty-requesting-user-id")
+		logger.Warn("streak-request-with-empty-requesting-user-id")
 		return nil, false, ErrUnableToIdentifyUser
 	}
 	if s.UserService == nil {
-		log.Warn("streak-request-without-user-service", zap.String("user-id", requestingUserID))
+		logger.Warn("streak-request-without-user-service", zap.String("user-id", requestingUserID))
 		return nil, false, ErrUserManagerError
 	}
 
 	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: requestingUserID})
 	if err != nil {
-		log.Warn("unable-to-resolve-streak-requester", zap.String("user-id", requestingUserID), zap.Error(err))
+		logger.Warn("unable-to-resolve-streak-requester", zap.String("user-id", requestingUserID), zap.Error(err))
 		return nil, false, err
 	}
 	if requestingUser == nil || requestingUser.User == nil {
-		log.Warn("streak-requester-not-found", zap.String("user-id", requestingUserID))
+		logger.Warn("streak-requester-not-found", zap.String("user-id", requestingUserID))
 		return nil, false, ErrUserNotFound
 	}
 

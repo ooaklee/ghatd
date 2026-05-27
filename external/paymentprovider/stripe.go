@@ -42,19 +42,19 @@ func (s *StripeProvider) GetProviderName() string {
 
 // VerifyWebhook verifies the Stripe webhook signature
 func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) error {
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "verify-webhook")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", s.name)).With(zap.String("operation", "verify-webhook"))
 
-	log.Debug("verifying-stripe-webhook")
+	logger.Debug("verifying-stripe-webhook")
 
 	signature := req.Header.Get("Stripe-Signature")
 	if signature == "" {
-		log.Error("missing-signature-from-webhook")
+		logger.Error("missing-signature-from-webhook")
 		return ErrPaymentProviderMissingSignature
 	}
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		log.Error("failed-to-read-webhook-body", zap.Error(err))
+		logger.Error("failed-to-read-webhook-body", zap.Error(err))
 		return ErrPaymentProviderInvalidPayload
 	}
 
@@ -78,20 +78,20 @@ func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) e
 	}
 
 	if timestamp == "" || v1Signature == "" {
-		log.Error("missing-timestamp-or-signature-from-webhook")
+		logger.Error("missing-timestamp-or-signature-from-webhook")
 		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	// Verify the timestamp is recent (within 5 minutes)
 	timestampInt, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
-		log.Error("invalid-timestamp-in-signature", zap.Error(err))
+		logger.Error("invalid-timestamp-in-signature", zap.Error(err))
 		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
 	var maxAge int64 = 300 // 5 minutes
 	if time.Now().Unix()-timestampInt > maxAge {
-		log.Error("timestamp-too-old", zap.Int64("timestamp", timestampInt), zap.Int64("allowed-age-in-seconds", maxAge))
+		logger.Error("timestamp-too-old", zap.Int64("timestamp", timestampInt), zap.Int64("allowed-age-in-seconds", maxAge))
 		return ErrPaymentProviderWebhookTimestampTooOld
 	}
 
@@ -101,11 +101,11 @@ func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) e
 	expectedSignature := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(expectedSignature), []byte(v1Signature)) {
-		log.Error("invalid-signature", zap.String("expected", expectedSignature), zap.String("received", v1Signature))
+		logger.Error("invalid-signature", zap.Int("received-signature-length", len(v1Signature)))
 		return ErrPaymentProviderInvalidWebhookSignature
 	}
 
-	log.Debug("stripe-webhook-verified-successfully")
+	logger.Debug("stripe-webhook-verified-successfully")
 
 	return nil
 }
@@ -113,13 +113,13 @@ func (s *StripeProvider) VerifyWebhook(ctx context.Context, req *http.Request) e
 // ParsePayload extracts and normalises Stripe webhook data
 func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*WebhookPayload, error) {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "parse-payload")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", s.name)).With(zap.String("operation", "parse-payload"))
 
-	log.Debug("parsing-stripe-webhook-payload")
+	logger.Debug("parsing-stripe-webhook-payload")
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		log.Error("failed-to-parse-webhook-payload", zap.Error(err))
+		logger.Error("failed-to-parse-webhook-payload", zap.Error(err))
 		return nil, ErrPaymentProviderInvalidPayload
 	}
 
@@ -134,7 +134,7 @@ func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*
 	}
 
 	if err := json.Unmarshal(body, &event); err != nil {
-		log.Error("failed-to-parse-webhook-payload", zap.Error(err))
+		logger.Error("failed-to-parse-webhook-payload", zap.Error(err))
 		return nil, ErrPaymentProviderPayloadParsing
 	}
 
@@ -189,7 +189,12 @@ func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*
 		nextBillingDate = time.Unix(int64(currentPeriodEnd), 0).Format(time.RFC3339)
 	}
 
-	log.Debug("parsed-stripe-webhook-payload", zap.String("raw-event-type", event.Type), zap.String("event-type", stripeEventToStandard(event.Type)), zap.String("email", email))
+	logger.Debug("parsed-stripe-webhook-payload",
+		zap.String("raw-event-type", event.Type),
+		zap.String("event-type", stripeEventToStandard(event.Type)),
+		zap.Bool("email-present", emailPresentForLog(email)),
+		zap.String("email-domain", emailDomainForLog(email)),
+	)
 
 	return &WebhookPayload{
 		EventType:          stripeEventToStandard(event.Type),
@@ -211,9 +216,9 @@ func (s *StripeProvider) ParsePayload(ctx context.Context, req *http.Request) (*
 // GetSubscriptionInfo retrieves subscription information from Stripe's API
 func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error) {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "get-subscription-info")).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", s.name)).With(zap.String("operation", "get-subscription-info"))
 
-	log.Info("handle-request-to-get-subscription-information")
+	logger.Info("handle-request-to-get-subscription-information")
 
 	baseURL := s.config.APIBaseURL
 	if baseURL == "" {
@@ -221,14 +226,14 @@ func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID
 	}
 
 	apiURL := baseURL + "/v1/subscriptions/" + subscriptionID
-	body, err := s.callStripeEndpoint(log, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := s.callStripeEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return nil, err
 	}
 
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
-		log.Error("failed-to-parse-api-response", zap.Error(err))
+		logger.Error("failed-to-parse-api-response", zap.Error(err))
 		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
@@ -258,7 +263,7 @@ func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID
 		if info.PlanID != "" {
 			planName, err := s.getPlanDetailsByPlanID(ctx, info.PlanID)
 			if err != nil {
-				log.Warn("unable-to-get-plan-name", zap.Error(err))
+				logger.Warn("unable-to-get-plan-name", zap.Error(err))
 			} else {
 				info.PlanName = planName
 			}
@@ -267,7 +272,7 @@ func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID
 		}
 	}
 
-	log.Info("retrieved-subscription-info")
+	logger.Info("retrieved-subscription-info")
 
 	return info, nil
 }
@@ -275,9 +280,9 @@ func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID
 // getProductDetailsByProductID retrieves product details from Stripe's API
 func (s *StripeProvider) getProductDetailsByProductID(ctx context.Context, productID string) (string, error) {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "get-product-details-by-product-id")).With(zap.String("stripe-product-id", productID)).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", s.name)).With(zap.String("operation", "get-product-details-by-product-id")).With(zap.String("stripe-product-id", productID))
 
-	log.Info("handle-request-to-get-product-details-by-product-id")
+	logger.Info("handle-request-to-get-product-details-by-product-id")
 
 	baseURL := s.config.APIBaseURL
 	if baseURL == "" {
@@ -285,18 +290,18 @@ func (s *StripeProvider) getProductDetailsByProductID(ctx context.Context, produ
 	}
 
 	apiURL := baseURL + "/v1/products/" + productID
-	body, err := s.callStripeEndpoint(log, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := s.callStripeEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return "", err
 	}
 
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
-		log.Error("failed-to-parse-api-response", zap.Error(err))
+		logger.Error("failed-to-parse-api-response", zap.Error(err))
 		return "", ErrPaymentProviderAPIResponseInvalid
 	}
 
-	log.Info("successfully-retrieved-product-details")
+	logger.Info("successfully-retrieved-product-details")
 
 	return getStringField(obj, "name"), nil
 }
@@ -304,9 +309,9 @@ func (s *StripeProvider) getProductDetailsByProductID(ctx context.Context, produ
 // getPlanDetailsByPlanID retrieves plan details from Stripe's API
 func (s *StripeProvider) getPlanDetailsByPlanID(ctx context.Context, planID string) (string, error) {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "get-plan-details-by-plan-id")).With(zap.String("stripe-plan-id", planID)).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", s.name)).With(zap.String("operation", "get-plan-details-by-plan-id")).With(zap.String("stripe-plan-id", planID))
 
-	log.Info("handle-request-to-get-plan-details-by-plan-id")
+	logger.Info("handle-request-to-get-plan-details-by-plan-id")
 
 	baseURL := s.config.APIBaseURL
 	if baseURL == "" {
@@ -314,18 +319,18 @@ func (s *StripeProvider) getPlanDetailsByPlanID(ctx context.Context, planID stri
 	}
 
 	apiURL := baseURL + "/v1/plans/" + planID
-	body, err := s.callStripeEndpoint(log, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := s.callStripeEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return "", err
 	}
 
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
-		log.Error("failed-to-parse-api-response", zap.Error(err))
+		logger.Error("failed-to-parse-api-response", zap.Error(err))
 		return "", ErrPaymentProviderAPIResponseInvalid
 	}
 
-	log.Info("successfully-retrieved-plan-details")
+	logger.Info("successfully-retrieved-plan-details")
 
 	return getStringField(obj, "usage_type"), nil
 }
@@ -333,9 +338,9 @@ func (s *StripeProvider) getPlanDetailsByPlanID(ctx context.Context, planID stri
 // getCustomerDetailsByCustomerID retrieves customer details from Stripe's API
 func (s *StripeProvider) getCustomerDetailsByCustomerID(ctx context.Context, customerID string) (string, error) {
 
-	log := logger.AcquireFrom(ctx).With(zap.String("provider", s.name)).With(zap.String("method", "get-customer-details-by-customer-id")).With(zap.String("stripe-customer-id", customerID)).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", s.name)).With(zap.String("operation", "get-customer-details-by-customer-id")).With(zap.String("stripe-customer-id", customerID))
 
-	log.Info("handle-request-to-get-customer-details-by-customer-id")
+	logger.Info("handle-request-to-get-customer-details-by-customer-id")
 
 	baseURL := s.config.APIBaseURL
 	if baseURL == "" {
@@ -343,18 +348,18 @@ func (s *StripeProvider) getCustomerDetailsByCustomerID(ctx context.Context, cus
 	}
 
 	apiURL := baseURL + "/v1/customers/" + customerID
-	body, err := s.callStripeEndpoint(log, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := s.callStripeEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return "", err
 	}
 
 	var obj map[string]interface{}
 	if err := json.Unmarshal(body, &obj); err != nil {
-		log.Error("failed-to-parse-api-response", zap.Error(err))
+		logger.Error("failed-to-parse-api-response", zap.Error(err))
 		return "", ErrPaymentProviderAPIResponseInvalid
 	}
 
-	log.Info("successfully-retrieved-customer-details")
+	logger.Info("successfully-retrieved-customer-details")
 
 	var customerEmail = getStringField(obj, "email")
 	if customerEmail == "" {
@@ -365,12 +370,12 @@ func (s *StripeProvider) getCustomerDetailsByCustomerID(ctx context.Context, cus
 }
 
 // callStripeEndpoint is a helper to call Stripe API endpoints
-func (s *StripeProvider) callStripeEndpoint(log *zap.Logger, method, endpoint string, body io.Reader, validHttpStatusCodes []int) ([]byte, error) {
-	log.Info("calling-stripe-endpoint", zap.String("method", method), zap.String("endpoint", endpoint))
+func (s *StripeProvider) callStripeEndpoint(logger *zap.Logger, method, endpoint string, body io.Reader, validHttpStatusCodes []int) ([]byte, error) {
+	logger.Info("calling-stripe-endpoint", zap.String("http-method", method), zap.String("endpoint-host", endpointHostForLog(endpoint)))
 
 	req, err := http.NewRequest(method, endpoint, body)
 	if err != nil {
-		log.Error("failed-to-create-http-request", zap.Error(err))
+		logger.Error("failed-to-create-http-request", zap.Error(err))
 		return nil, ErrPaymentProviderAPIRequestFailed
 	}
 
@@ -380,23 +385,23 @@ func (s *StripeProvider) callStripeEndpoint(log *zap.Logger, method, endpoint st
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Error("http-request-failed", zap.Error(err))
+		logger.Error("http-request-failed", zap.Error(err))
 		return nil, ErrPaymentProviderAPIRequestFailed
 	}
 	defer resp.Body.Close()
 
 	if !slices.Contains(validHttpStatusCodes, resp.StatusCode) {
-		log.Error("http-request-returned-invalid-status", zap.Int("status-code", resp.StatusCode), zap.Ints("valid-status-codes", validHttpStatusCodes))
+		logger.Error("http-request-returned-invalid-status", zap.Int("status-code", resp.StatusCode), zap.Ints("valid-status-codes", validHttpStatusCodes))
 		return nil, ErrPaymentProviderSubscriptionNotFound
 	}
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Error("failed-to-read-http-response-body", zap.Error(err))
+		logger.Error("failed-to-read-http-response-body", zap.Error(err))
 		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 
-	log.Info("successfully-called-lemon-squeezy-endpoint")
+	logger.Info("successfully-called-lemon-squeezy-endpoint")
 	return responseBody, nil
 }
 

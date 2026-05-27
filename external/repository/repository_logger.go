@@ -20,65 +20,57 @@ func NewZapRepositoryLogger() *ZapRepositoryLogger {
 
 // Error logs error level messages
 func (l *ZapRepositoryLogger) Error(ctx context.Context, message string, err error, fields ...Field) {
-	zapLogger := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/repository")
 
 	zapFields := l.convertFields(fields)
 	if err != nil {
 		zapFields = append(zapFields, zap.Error(err))
 	}
 
-	zapLogger.Error(message, zapFields...)
+	logger.Error(message, zapFields...)
 }
 
 // Warn logs warning level messages
 func (l *ZapRepositoryLogger) Warn(ctx context.Context, message string, err error, fields ...Field) {
-	zapLogger := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/repository")
 
 	zapFields := l.convertFields(fields)
 	if err != nil {
 		zapFields = append(zapFields, zap.Error(err))
 	}
 
-	zapLogger.Warn(message, zapFields...)
+	logger.Warn(message, zapFields...)
 }
 
 // Info logs info level messages
 func (l *ZapRepositoryLogger) Info(ctx context.Context, message string, err error, fields ...Field) {
-	zapLogger := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/repository")
 
 	zapFields := l.convertFields(fields)
 	if err != nil {
 		zapFields = append(zapFields, zap.Error(err))
 	}
 
-	zapLogger.Info(message, zapFields...)
+	logger.Info(message, zapFields...)
 }
 
 // Debug logs debug level messages
 func (l *ZapRepositoryLogger) Debug(ctx context.Context, message string, err error, fields ...Field) {
-	zapLogger := logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	logger := logger.AcquirePackageFrom(ctx, "external/repository")
 
 	zapFields := l.convertFields(fields)
 	if err != nil {
 		zapFields = append(zapFields, zap.Error(err))
 	}
 
-	zapLogger.Debug(message, zapFields...)
+	logger.Debug(message, zapFields...)
 }
 
 // convertFields converts Field slice to zap.Field slice
 func (l *ZapRepositoryLogger) convertFields(fields []Field) []zap.Field {
 	zapFields := make([]zap.Field, len(fields))
 	for i, field := range fields {
-		zapFields[i] = zap.Any(field.Key, field.Value)
+		zapFields[i] = zap.Any(field.Key, logger.SafeValue(field.Value))
 	}
 	return zapFields
 }

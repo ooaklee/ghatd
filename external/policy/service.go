@@ -45,6 +45,9 @@ func NewService(store PolicyStore) *Service {
 
 // GetPolicies retrieves all policies from the store.
 func (s *Service) GetPolicies(ctx context.Context, r *GetPoliciesRequest) ([]WebAppPolicy, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/policy", "get-policies")
+	logger.Debug("handling-get-policies-request")
+
 	return s.Store.GetPolicies(), nil
 }
 
@@ -53,7 +56,7 @@ func (s *Service) GetPolicies(ctx context.Context, r *GetPoliciesRequest) ([]Web
 // Policy names are normalized to lowercase with spaces replaced by hyphens
 // for consistent matching. Returns an error if no matching policy is found.
 func (s *Service) GetPolicyByName(ctx context.Context, r *GetPolicyByNameRequest) (*WebAppPolicy, error) {
-	log := logger.Get(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(ctx, "external/policy")
 
 	// Normalize requested policy name
 	standardizedName := standardisePolicyName(r.PolicyName)
@@ -61,7 +64,7 @@ func (s *Service) GetPolicyByName(ctx context.Context, r *GetPolicyByNameRequest
 	for _, policy := range s.Store.GetPolicies() {
 		policyName := standardisePolicyName(policy.Name)
 
-		log.Debug("comparing-policy-names",
+		logger.Debug("comparing-policy-names",
 			zap.String("policy", policyName),
 			zap.String("requested", standardizedName))
 

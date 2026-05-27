@@ -25,11 +25,11 @@ func MapRequestToUpdateUserProfileRequest(r *http.Request, validator Usermanager
 	var parsedRequest = UpdateUserProfileRequest{
 		UpdateUserRequest: &userv2.UpdateUserRequest{},
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -51,10 +51,10 @@ func MapRequestToUpdateUserProfileRequest(r *http.Request, validator Usermanager
 func MapRequestToGetUserMicroProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetUserMicroProfileRequest, error) {
 	var parsedRequest GetUserMicroProfileRequest
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -64,17 +64,17 @@ func MapRequestToGetUserMicroProfileRequest(r *http.Request, validator Usermanag
 // MapRequestToGetGroupsByUserIDRequest maps incoming GetGroupsByUserID request to correct struct
 func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupsByUserIDRequest, error) {
 	var parsedRequest GetGroupsByUserIDRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.ID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.ID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	targetUserId, err := toolbox.GetVariableValueFromUri(r, "userId")
 	if err != nil {
-		log.Error("unable-get-user-id-from-uri")
+		logger.Error("unable-get-user-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -92,7 +92,7 @@ func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator Usermanager
 	parsedRequest.GetGroupsByUserIDRequest = &baseRequest
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
-		log.Error("get-groups-by-user-id-request-validation-failed", zap.Error(err))
+		logger.Error("get-groups-by-user-id-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -103,19 +103,19 @@ func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator Usermanager
 func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValidator) (*GetUserByIDRequest, error) {
 	var parsedRequest GetUserByIDRequest
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := userv2.GetUserByIDRequest{}
 
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	// Extract target user ID from URL path
 	targetUserId, err := toolbox.GetVariableValueFromUri(r, "userId")
 	if err != nil {
-		log.Error("unable-get-user-id-from-uri")
+		logger.Error("unable-get-user-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -123,7 +123,7 @@ func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest.GetUserByIDRequest = &baseRequest
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
-		log.Error("get-user-by-id-request-validation-failed", zap.Error(err))
+		logger.Error("get-user-by-id-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -135,11 +135,11 @@ func MapRequestToGetUsersRequest(r *http.Request, validator UsermanagerValidator
 	var parsedRequest GetUsersRequest = GetUsersRequest{
 		GetUsersRequest: &userv2.GetUsersRequest{},
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -151,7 +151,7 @@ func MapRequestToGetUsersRequest(r *http.Request, validator UsermanagerValidator
 	}
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
-		log.Error("get-users-request-validation-failed", zap.Error(err))
+		logger.Error("get-users-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -160,7 +160,7 @@ func MapRequestToGetUsersRequest(r *http.Request, validator UsermanagerValidator
 
 // MapRequestToGetGroupLineageRequest maps incoming GetGroupLineage request to correct struct.
 func MapRequestToGetGroupLineageRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupLineageRequest, error) {
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := group.GetGroupLineageRequest{}
 	parsedRequest := GetGroupLineageRequest{
@@ -169,13 +169,13 @@ func MapRequestToGetGroupLineageRequest(r *http.Request, validator UsermanagerVa
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -192,7 +192,7 @@ func MapRequestToGetGroupLineageRequest(r *http.Request, validator UsermanagerVa
 // MapRequestToGetGroupsConfigRequest maps incoming GetGroupsConfig request to correct struct.
 // MapRequestToGetGroupDescendantsRequest maps incoming GetGroupDescendants request to correct struct.
 func MapRequestToGetGroupDescendantsRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupDescendantsRequest, error) {
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := group.GetGroupDescendantsRequest{}
 	parsedRequest := GetGroupDescendantsRequest{
@@ -201,13 +201,13 @@ func MapRequestToGetGroupDescendantsRequest(r *http.Request, validator Usermanag
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -224,11 +224,11 @@ func MapRequestToGetGroupDescendantsRequest(r *http.Request, validator Usermanag
 // MapRequestToGetGroupsConfigRequest maps incoming GetGroupsConfig request to correct struct.
 func MapRequestToGetGroupsConfigRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupsConfigRequest, error) {
 	var parsedRequest GetGroupsConfigRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -239,7 +239,7 @@ func MapRequestToGetGroupsConfigRequest(r *http.Request, validator UsermanagerVa
 // struct.
 func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetUserProfileRequest, error) {
 
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 	parsedRequest := GetUserProfileRequest{
 		GetUserProfileRequest: &userv2.GetUserProfileRequest{},
 	}
@@ -258,7 +258,7 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 	parsedRequest.GetUserProfileRequest = &baseRequest
 
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -270,10 +270,10 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator UsermanagerValidator) (*DeleteUserPermanentlyRequest, error) {
 	var parsedRequest DeleteUserPermanentlyRequest
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -281,12 +281,12 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 
 	err := toolbox.DecodeRequestBody(r, &parsedRequest)
 	if err != nil {
-		log.Error("unable-decode-request-body", zap.Error(err))
+		logger.Error("unable-decode-request-body", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
-		log.Error("delete-user-permanently-request-validation-failed", zap.Error(err))
+		logger.Error("delete-user-permanently-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -296,7 +296,7 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 // MapRequestToCreateCommsRequest maps the request to a CreateCommsRequest
 func MapRequestToCreateCommsRequest(r *http.Request, validator UsermanagerValidator) (*CreateCommsRequest, error) {
 
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest := &CreateCommsRequest{
 		CreateCommsRequest: &contacter.CreateCommsRequest{},
@@ -314,7 +314,7 @@ func MapRequestToCreateCommsRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest.CreateCommsRequest = &baseRequest
 
 	if err := validateParsedRequest(&baseRequest, validator); err != nil {
-		log.Error("create-comms-request-validation-failed", zap.Error(err))
+		logger.Error("create-comms-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -382,12 +382,12 @@ func validateParsedRequest(request interface{}, validator UsermanagerValidator) 
 func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValidator) (*UpdateCommsRequest, error) {
 
 	var parsedRequest UpdateCommsRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	// Extract comms ID from URL path
 	commsId, err := toolbox.GetVariableValueFromUri(r, "id")
 	if err != nil {
-		log.Error("unable-get-comms-id-from-uri")
+		logger.Error("unable-get-comms-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -403,7 +403,7 @@ func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest.UpdateCommsRequest = &baseRequest
 
 	if err := validateParsedRequest(&baseRequest, validator); err != nil {
-		log.Error("update-comms-request-validation-failed", zap.Error(err))
+		logger.Error("update-comms-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -413,11 +413,11 @@ func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValida
 // MapRequestToGetEnrichedUserProfileRequest maps incoming GetEnrichedUserProfile request to correct struct
 func MapRequestToGetEnrichedUserProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetEnrichedUserProfileRequest, error) {
 	var parsedRequest GetEnrichedUserProfileRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -437,11 +437,11 @@ func MapRequestToGetEnrichedUserProfileRequest(r *http.Request, validator Userma
 // MapRequestToGetUserGroupsRequest maps incoming GetUserGroups request to correct struct
 func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerValidator) (*GetUserGroupsRequest, error) {
 	var parsedRequest GetUserGroupsRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -452,7 +452,7 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("get-user-groups-request-validation-failed", zap.Error(err))
+		logger.Error("get-user-groups-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -462,11 +462,11 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 // MapRequestToGetLatestNotificationOverviewsRequest maps incoming latest notifications request to the correct struct.
 func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validator UsermanagerValidator) (*GetLatestNotificationOverviewsRequest, error) {
 	var parsedRequest GetLatestNotificationOverviewsRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if requesterUserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -489,7 +489,7 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("get-latest-notification-overviews-request-validation-failed", zap.Error(err))
+		logger.Error("get-latest-notification-overviews-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -499,11 +499,11 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 // MapRequestToGetNotifierConfigRequest maps incoming notifier config request to the correct struct.
 func MapRequestToGetNotifierConfigRequest(r *http.Request, validator UsermanagerValidator) (*GetNotifierConfigRequest, error) {
 	var parsedRequest GetNotifierConfigRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 	parsedRequest.GetNotifierConfigRequest = &notifier.GetNotifierConfigRequest{}
@@ -514,11 +514,11 @@ func MapRequestToGetNotifierConfigRequest(r *http.Request, validator Usermanager
 // MapRequestToRegisterNotificationAddressRequest maps incoming notification address registration to the correct struct.
 func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator UsermanagerValidator) (*RegisterNotificationAddressRequest, error) {
 	var parsedRequest RegisterNotificationAddressRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if requesterUserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -537,7 +537,7 @@ func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator U
 	parsedRequest.UserId = requesterUserID
 	parsedRequest.RegisterAddressRequest = &baseRequest
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("register-notification-address-request-validation-failed", zap.Error(err))
+		logger.Error("register-notification-address-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -547,11 +547,11 @@ func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator U
 // MapRequestToListNotificationAddressesRequest maps incoming notification address list request to the correct struct.
 func MapRequestToListNotificationAddressesRequest(r *http.Request, validator UsermanagerValidator) (*ListNotificationAddressesRequest, error) {
 	var parsedRequest ListNotificationAddressesRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if requesterUserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -580,17 +580,17 @@ func MapRequestToListNotificationAddressesRequest(r *http.Request, validator Use
 // MapRequestToDeleteNotificationAddressRequest maps incoming notification address delete request to the correct struct.
 func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator UsermanagerValidator) (*DeleteNotificationAddressRequest, error) {
 	var parsedRequest DeleteNotificationAddressRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if requesterUserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	addressID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableAddressID)
 	if err != nil {
-		log.Error("unable-get-notification-address-id-from-uri")
+		logger.Error("unable-get-notification-address-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -610,11 +610,11 @@ func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator Use
 // MapRequestToGetNotificationPreferencesRequest maps incoming notification preferences request to the correct struct.
 func MapRequestToGetNotificationPreferencesRequest(r *http.Request, validator UsermanagerValidator) (*GetNotificationPreferencesRequest, error) {
 	var parsedRequest GetNotificationPreferencesRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if requesterUserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -632,11 +632,11 @@ func MapRequestToGetNotificationPreferencesRequest(r *http.Request, validator Us
 // MapRequestToUpdateNotificationPreferencesRequest maps incoming notification preferences update to the correct struct.
 func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator UsermanagerValidator) (*UpdateNotificationPreferencesRequest, error) {
 	var parsedRequest UpdateNotificationPreferencesRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if requesterUserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -659,17 +659,17 @@ func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator
 // MapRequestToNotifyUserRequest maps incoming admin/service notification send request to the correct struct.
 func MapRequestToNotifyUserRequest(r *http.Request, validator UsermanagerValidator) (*NotifyUserRequest, error) {
 	var parsedRequest NotifyUserRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	targetUserID, err := toolbox.GetVariableValueFromUri(r, "userId")
 	if err != nil {
-		log.Error("unable-get-target-user-id-from-uri")
+		logger.Error("unable-get-target-user-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -681,7 +681,7 @@ func MapRequestToNotifyUserRequest(r *http.Request, validator UsermanagerValidat
 
 	parsedRequest.NotifyUserRequest = &baseRequest
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("notify-user-request-validation-failed", zap.Error(err))
+		logger.Error("notify-user-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -691,11 +691,11 @@ func MapRequestToNotifyUserRequest(r *http.Request, validator UsermanagerValidat
 // MapRequestToNotifyUsersRequest maps incoming admin notification dispatch request to the correct struct.
 func MapRequestToNotifyUsersRequest(r *http.Request, validator UsermanagerValidator) (*NotifyUsersRequest, error) {
 	var parsedRequest NotifyUsersRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -706,7 +706,7 @@ func MapRequestToNotifyUsersRequest(r *http.Request, validator UsermanagerValida
 
 	parsedRequest.NotifyUsersRequest = &baseRequest
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("notify-users-request-validation-failed", zap.Error(err))
+		logger.Error("notify-users-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -716,11 +716,11 @@ func MapRequestToNotifyUsersRequest(r *http.Request, validator UsermanagerValida
 // MapRequestToGetMyGroupInvitationsRequest maps incoming my-group-invitations request to the correct struct.
 func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator UsermanagerValidator) (*GetMyGroupInvitationsRequest, error) {
 	var parsedRequest GetMyGroupInvitationsRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -729,7 +729,7 @@ func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator Userman
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("get-my-group-invitations-request-validation-failed", zap.Error(err))
+		logger.Error("get-my-group-invitations-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -739,11 +739,11 @@ func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator Userman
 // MapRequestToAcceptMyGroupInvitationRequest maps incoming accept-my-group-invitation request to the correct struct.
 func MapRequestToAcceptMyGroupInvitationRequest(r *http.Request, validator UsermanagerValidator) (*AcceptMyGroupInvitationRequest, error) {
 	var parsedRequest AcceptMyGroupInvitationRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -754,7 +754,7 @@ func MapRequestToAcceptMyGroupInvitationRequest(r *http.Request, validator Userm
 	parsedRequest.GroupID = groupID
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("accept-my-group-invitation-request-validation-failed", zap.Error(err))
+		logger.Error("accept-my-group-invitation-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -764,11 +764,11 @@ func MapRequestToAcceptMyGroupInvitationRequest(r *http.Request, validator Userm
 // MapRequestToRejectMyGroupInvitationRequest maps incoming reject-my-group-invitation request to the correct struct.
 func MapRequestToRejectMyGroupInvitationRequest(r *http.Request, validator UsermanagerValidator) (*RejectMyGroupInvitationRequest, error) {
 	var parsedRequest RejectMyGroupInvitationRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -779,7 +779,7 @@ func MapRequestToRejectMyGroupInvitationRequest(r *http.Request, validator Userm
 	parsedRequest.GroupID = groupID
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("reject-my-group-invitation-request-validation-failed", zap.Error(err))
+		logger.Error("reject-my-group-invitation-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -792,11 +792,11 @@ func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validato
 		GroupType:          "",
 		IncludeDescendants: true,
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -807,7 +807,7 @@ func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validato
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("get-user-team-memberships-request-validation-failed", zap.Error(err))
+		logger.Error("get-user-team-memberships-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -817,17 +817,17 @@ func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validato
 // MapRequestToGetGroupDetailRequest maps incoming GetGroupDetail request to correct struct
 func MapRequestToGetGroupDetailRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupDetailRequest, error) {
 	var parsedRequest GetGroupDetailRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -849,17 +849,17 @@ func MapRequestToGetGroupDetailRequest(r *http.Request, validator UsermanagerVal
 // MapRequestToGetGroupStatsRequest maps incoming GetGroupStats request to correct struct
 func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerValidator) (*GetGroupStatsRequest, error) {
 	var parsedRequest GetGroupStatsRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -881,13 +881,13 @@ func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerVali
 // MapRequestToCreateGroupRequest maps incoming CreateGroup request to correct struct
 func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValidator) (*CreateGroupRequest, error) {
 	var parsedRequest CreateGroupRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := group.CreateGroupRequest{}
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -910,17 +910,17 @@ func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValida
 	var parsedRequest UpdateGroupRequest = UpdateGroupRequest{
 		UpdateGroupRequest: &group.UpdateGroupRequest{},
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserId == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.UpdateGroupRequest.ID = groupID
@@ -939,19 +939,19 @@ func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValida
 // MapRequestToDeleteGroupRequest  maps incoming DeleteGroup request to correct struct
 func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValidator) (*DeleteGroupRequest, error) {
 	var parsedRequest DeleteGroupRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := group.DeleteGroupRequest{}
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 	baseRequest.ID = groupID
@@ -976,17 +976,17 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 	var parsedRequest AddGroupMemberRequest = AddGroupMemberRequest{
 		AddMemberRequest: &group.AddMemberRequest{},
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
@@ -996,7 +996,7 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("add-group-member-request-validation-failed", zap.Error(err))
+		logger.Error("add-group-member-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1006,11 +1006,11 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 // MapRequestToRemoveGroupMemberRequest maps a remove-member request to the correct struct
 func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*RemoveGroupMemberRequest, error) {
 	var parsedRequest RemoveGroupMemberRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1025,14 +1025,14 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 	baseRequest.GroupID = groupID
 
 	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
 	if err != nil {
-		log.Error("unable-get-member-id-from-uri")
+		logger.Error("unable-get-member-id-from-uri")
 		return nil, ErrInvalidMemberID
 	}
 	baseRequest.MemberID = memberID
@@ -1047,24 +1047,24 @@ func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator Usermanager
 	var parsedRequest UpdateGroupMemberRequest = UpdateGroupMemberRequest{
 		UpdateMemberRoleRequest: &group.UpdateMemberRoleRequest{},
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
 
 	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
 	if err != nil {
-		log.Error("unable-get-member-id-from-uri")
+		logger.Error("unable-get-member-id-from-uri")
 		return nil, ErrInvalidMemberID
 	}
 	parsedRequest.MemberID = memberID
@@ -1074,7 +1074,7 @@ func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator Usermanager
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("update-group-member-request-validation-failed", zap.Error(err))
+		logger.Error("update-group-member-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1086,17 +1086,17 @@ func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerV
 	var parsedRequest UpdateGroupOwnerRequest = UpdateGroupOwnerRequest{
 		UpdateOwnerRequest: &group.UpdateOwnerRequest{},
 	}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	groupID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableGroupID)
 	if err != nil {
-		log.Error("unable-get-group-id-from-uri")
+		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 	parsedRequest.GroupID = groupID
@@ -1111,11 +1111,11 @@ func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerV
 // MapRequestToValidateGroupNameRequest maps incoming ValidateGroupName request to correct struct
 func MapRequestToValidateGroupNameRequest(r *http.Request, validator UsermanagerValidator) (*ValidateGroupNameRequest, error) {
 	var parsedRequest ValidateGroupNameRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1131,7 +1131,7 @@ func MapRequestToValidateGroupNameRequest(r *http.Request, validator Usermanager
 	parsedRequest.ValidateGroupNameRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		log.Error("validate-group-name-request-validation-failed", zap.Error(err))
+		logger.Error("validate-group-name-request-validation-failed", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1141,11 +1141,11 @@ func MapRequestToValidateGroupNameRequest(r *http.Request, validator Usermanager
 // MapRequestToCreateReminderRequest maps incoming create reminder request to the correct struct.
 func MapRequestToCreateReminderRequest(r *http.Request, validator UsermanagerValidator) (*CreateReminderRequest, error) {
 	var parsedRequest CreateReminderRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1164,17 +1164,17 @@ func MapRequestToCreateReminderRequest(r *http.Request, validator UsermanagerVal
 // MapRequestToGetReminderByIDRequest maps incoming get-reminder-by-ID request to the correct struct.
 func MapRequestToGetReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*GetReminderByIDRequest, error) {
 	var parsedRequest GetReminderByIDRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
 	if err != nil {
-		log.Error("unable-get-reminder-id-from-uri")
+		logger.Error("unable-get-reminder-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1187,11 +1187,11 @@ func MapRequestToGetReminderByIDRequest(r *http.Request, validator UsermanagerVa
 // MapRequestToListRemindersRequest maps incoming reminder list request to the correct struct.
 func MapRequestToListRemindersRequest(r *http.Request, validator UsermanagerValidator) (*ListRemindersRequest, error) {
 	var parsedRequest ListRemindersRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1207,17 +1207,17 @@ func MapRequestToListRemindersRequest(r *http.Request, validator UsermanagerVali
 // MapRequestToUpdateReminderByIDRequest maps incoming update-reminder-by-ID request to the correct struct.
 func MapRequestToUpdateReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*UpdateReminderByIDRequest, error) {
 	var parsedRequest UpdateReminderByIDRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
 	if err != nil {
-		log.Error("unable-get-reminder-id-from-uri")
+		logger.Error("unable-get-reminder-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1238,17 +1238,17 @@ func MapRequestToUpdateReminderByIDRequest(r *http.Request, validator Usermanage
 // MapRequestToDeleteReminderByIDRequest maps incoming delete-reminder-by-ID request to the correct struct.
 func MapRequestToDeleteReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*DeleteReminderByIDRequest, error) {
 	var parsedRequest DeleteReminderByIDRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
 	if err != nil {
-		log.Error("unable-get-reminder-id-from-uri")
+		logger.Error("unable-get-reminder-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1261,17 +1261,17 @@ func MapRequestToDeleteReminderByIDRequest(r *http.Request, validator Usermanage
 // MapRequestToDisableReminderByIDRequest maps incoming disable-reminder-by-ID request to the correct struct.
 func MapRequestToDisableReminderByIDRequest(r *http.Request, validator UsermanagerValidator) (*DisableReminderByIDRequest, error) {
 	var parsedRequest DisableReminderByIDRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
 	reminderID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableReminderID)
 	if err != nil {
-		log.Error("unable-get-reminder-id-from-uri")
+		logger.Error("unable-get-reminder-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
 
@@ -1284,11 +1284,11 @@ func MapRequestToDisableReminderByIDRequest(r *http.Request, validator Usermanag
 // MapRequestToGetReminderStatsRequest maps incoming reminder stats request to the correct struct.
 func MapRequestToGetReminderStatsRequest(r *http.Request, validator UsermanagerValidator) (*GetReminderStatsRequest, error) {
 	var parsedRequest GetReminderStatsRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1302,11 +1302,11 @@ func MapRequestToGetReminderStatsRequest(r *http.Request, validator UsermanagerV
 // MapRequestToGetDueRemindersRequest maps incoming due reminders request to the correct struct.
 func MapRequestToGetDueRemindersRequest(r *http.Request, validator UsermanagerValidator) (*GetDueRemindersRequest, error) {
 	var parsedRequest GetDueRemindersRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1324,11 +1324,11 @@ func MapRequestToGetDueRemindersRequest(r *http.Request, validator UsermanagerVa
 // MapRequestToRecordStreakRequest maps incoming record-streak request to the correct struct.
 func MapRequestToRecordStreakRequest(r *http.Request, validator UsermanagerValidator) (*RecordStreakRequest, error) {
 	var parsedRequest RecordStreakRequest
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	userID := accessmanagerhelpers.AcquireFrom(r.Context())
 	if userID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1348,11 +1348,11 @@ func MapRequestToRecordStreakRequest(r *http.Request, validator UsermanagerValid
 // MapRequestToListStreaksRequest maps incoming list-streaks request to the correct struct.
 func MapRequestToListStreaksRequest(r *http.Request, validator UsermanagerValidator) (*ListStreaksRequest, error) {
 	parsedRequest := ListStreaksRequest{ListStreaksRequest: &streaker.ListStreaksRequest{}}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1372,11 +1372,11 @@ func MapRequestToListStreaksRequest(r *http.Request, validator UsermanagerValida
 // MapRequestToGetCurrentStreakRequest maps incoming current-streak request to the correct struct.
 func MapRequestToGetCurrentStreakRequest(r *http.Request, validator UsermanagerValidator) (*GetCurrentStreakRequest, error) {
 	parsedRequest := GetCurrentStreakRequest{GetCurrentCountRequest: &streaker.GetCurrentCountRequest{}}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1396,11 +1396,11 @@ func MapRequestToGetCurrentStreakRequest(r *http.Request, validator UsermanagerV
 // MapRequestToGetLongestStreakRequest maps incoming longest-streak request to the correct struct.
 func MapRequestToGetLongestStreakRequest(r *http.Request, validator UsermanagerValidator) (*GetLongestStreakRequest, error) {
 	parsedRequest := GetLongestStreakRequest{GetLongestStreakRequest: &streaker.GetLongestStreakRequest{}}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -1420,11 +1420,11 @@ func MapRequestToGetLongestStreakRequest(r *http.Request, validator UsermanagerV
 // MapRequestToGetNumberOfStreaksRequest maps incoming streak-count request to the correct struct.
 func MapRequestToGetNumberOfStreaksRequest(r *http.Request, validator UsermanagerValidator) (*GetNumberOfStreaksRequest, error) {
 	parsedRequest := GetNumberOfStreaksRequest{GetNumberOfStreaksRequest: &streaker.GetNumberOfStreaksRequest{}}
-	log := logger.AcquireFrom(r.Context()).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
+	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
 	if parsedRequest.UserID == "" {
-		log.Error("unable-get-user-id")
+		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 

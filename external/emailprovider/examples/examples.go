@@ -61,8 +61,9 @@ func ExampleLoggingProvider() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Email logged via %s\n", result.Provider)
+	fmt.Printf("Email captured via %s\n", result.Provider)
 	fmt.Printf("Message ID: %s\n", result.MessageID)
+	fmt.Printf("Captured emails: %d\n", provider.Inbox().Count())
 }
 
 // Example 3: Provider health check

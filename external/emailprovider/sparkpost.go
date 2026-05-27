@@ -4,6 +4,8 @@ import (
 	"context"
 
 	sp "github.com/SparkPost/gosparkpost"
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 )
 
 // SparkPostClient is the interface for SparkPost email client
@@ -27,8 +29,12 @@ func NewSparkPostEmailProvider(client SparkPostClient) *SparkPostEmailProvider {
 
 // Send handles sending an email via SparkPost
 func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendResult, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/emailprovider", "sparkpost-send")
+	logger.Info("sparkpost-email-send-started", emailLogFields(p.Name(), email)...)
+
 	// Validate email
 	if err := validateEmail(email); err != nil {
+		logger.Warn("sparkpost-email-validation-failed", append(emailLogFields(p.Name(), email), zap.Error(err))...)
 		return &SendResult{
 			Provider: p.Name(),
 			Success:  false,
@@ -50,6 +56,7 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 	// Send via SparkPost
 	messageID, _, err := p.client.Send(transmission)
 	if err != nil {
+		logger.Error("sparkpost-email-send-failed", append(emailLogFields(p.Name(), email), zap.Error(err))...)
 		return &SendResult{
 			Provider: p.Name(),
 			Success:  false,
@@ -57,6 +64,7 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 		}, ErrEmailProviderSendFailed
 	}
 
+	logger.Info("sparkpost-email-sent", append(emailLogFields(p.Name(), email), zap.String("message-id", messageID))...)
 	return &SendResult{
 		MessageID: messageID,
 		Provider:  p.Name(),
@@ -73,7 +81,10 @@ func (p *SparkPostEmailProvider) Name() string {
 // IsHealthy handles health checks for the provider.
 // For SparkPost, we assume it's healthy if the client is initialised
 func (p *SparkPostEmailProvider) IsHealthy(ctx context.Context) bool {
-	return p.client != nil
+	logger := logger.AcquireOperationFrom(ctx, "external/emailprovider", "sparkpost-health")
+	healthy := p.client != nil
+	logger.Debug("sparkpost-health-checked", zap.String("provider", p.Name()), zap.Bool("healthy", healthy))
+	return healthy
 }
 
 // validateEmail validates that an email has all required fields

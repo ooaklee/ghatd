@@ -8,6 +8,7 @@ package logger
 
 import (
 	"context"
+	"strings"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
@@ -17,6 +18,18 @@ import (
 type contextKey string
 
 const loggerKey contextKey = "ContextLogger"
+
+const (
+	// FieldSource identifies logs emitted by GHATD framework code rather than
+	// host application code.
+	FieldSource = "source"
+	// FieldPackage identifies the GHATD package responsible for a log event.
+	FieldPackage = "ghatd-package"
+	// FieldOperation identifies the package operation responsible for a log event.
+	FieldOperation = "operation"
+	// SourceGHATD is the stable value used in FieldSource for GHATD logs.
+	SourceGHATD = "ghatd"
+)
 
 // NewLogger creates a structured logger with the specified level and configuration.
 //
@@ -77,4 +90,43 @@ func AcquireFrom(ctx context.Context) *zap.Logger {
 // It retrieves the current logger for the context.
 func Get(ctx context.Context) *zap.Logger {
 	return AcquireFrom(ctx)
+}
+
+// AcquirePackageFrom retrieves a logger from context and adds standard GHATD
+// package attribution fields. Use this inside GHATD package code when the
+// current operation is implied by the log message or surrounding helper.
+func AcquirePackageFrom(ctx context.Context, packageName string, fields ...zap.Field) *zap.Logger {
+	return AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(packageFields(packageName, "", fields...)...)
+}
+
+// AcquireOperationFrom retrieves a logger from context and adds standard
+// GHATD package and operation attribution fields.
+func AcquireOperationFrom(ctx context.Context, packageName string, operation string, fields ...zap.Field) *zap.Logger {
+	return AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel)).With(packageFields(packageName, operation, fields...)...)
+}
+
+// WithPackage returns a new context whose logger carries standard GHATD
+// package attribution fields.
+func WithPackage(ctx context.Context, packageName string, fields ...zap.Field) context.Context {
+	return TransitWith(ctx, AcquirePackageFrom(ctx, packageName, fields...))
+}
+
+// WithOperation returns a new context whose logger carries standard GHATD
+// package and operation attribution fields.
+func WithOperation(ctx context.Context, packageName string, operation string, fields ...zap.Field) context.Context {
+	return TransitWith(ctx, AcquireOperationFrom(ctx, packageName, operation, fields...))
+}
+
+func packageFields(packageName string, operation string, fields ...zap.Field) []zap.Field {
+	result := []zap.Field{zap.String(FieldSource, SourceGHATD)}
+
+	if packageName = strings.TrimSpace(packageName); packageName != "" {
+		result = append(result, zap.String(FieldPackage, packageName))
+	}
+
+	if operation = strings.TrimSpace(operation); operation != "" {
+		result = append(result, zap.String(FieldOperation, operation))
+	}
+
+	return append(result, fields...)
 }

@@ -72,9 +72,7 @@ func (s *Service) WithAuditService(audit AuditService) *Service {
 // CreateSubscription creates a new subscription
 func (s *Service) CreateSubscription(ctx context.Context, req *CreateSubscriptionRequest) (*CreateSubscriptionResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 
 		newSubscription = &Subscription{
 			UserID:                   req.UserID,
@@ -97,18 +95,18 @@ func (s *Service) CreateSubscription(ctx context.Context, req *CreateSubscriptio
 		}
 	)
 
-	log.Debug("initiating-create-subscription-request", zap.Any("request", req))
+	logger.Debug("initiating-create-subscription-request", zap.Any("request", safeLogValue(req)))
 
 	// Generate ID and timestamps
 	newSubscription.GenerateId().SetCreatedAtTimeToNow().SetUpdatedAtTimeToNow()
 
 	createdSubscription, err := s.subscriptionRepository.CreateSubscription(ctx, newSubscription)
 	if err != nil {
-		log.Error("failed-to-create-subscription-error-creating-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-subscription-error-creating-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreateSubscriptionResponse{}, err
 	}
 
-	log.Debug("create-subscription-request-successful", zap.Any("request", req), zap.Any("created-subscription", createdSubscription))
+	logger.Debug("create-subscription-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("created-subscription", safeLogValue(createdSubscription)))
 
 	return &CreateSubscriptionResponse{
 		Subscription: createdSubscription,
@@ -118,17 +116,15 @@ func (s *Service) CreateSubscription(ctx context.Context, req *CreateSubscriptio
 // UpdateSubscription updates an existing subscription
 func (s *Service) UpdateSubscription(ctx context.Context, req *UpdateSubscriptionRequest) (*UpdateSubscriptionResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-update-subscription-request", zap.Any("request", req))
+	logger.Debug("initiating-update-subscription-request", zap.Any("request", safeLogValue(req)))
 
 	// Get existing subscription
 	subscription, err := s.subscriptionRepository.GetSubscriptionByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-update-subscription-error-getting-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-subscription-error-getting-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdateSubscriptionResponse{}, err
 	}
 
@@ -177,11 +173,11 @@ func (s *Service) UpdateSubscription(ctx context.Context, req *UpdateSubscriptio
 
 	updatedSubscription, err := s.subscriptionRepository.UpdateSubscription(ctx, subscription)
 	if err != nil {
-		log.Error("failed-to-update-subscription-error-updating-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-subscription-error-updating-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdateSubscriptionResponse{}, err
 	}
 
-	log.Debug("update-subscription-request-successful", zap.Any("request", req), zap.Any("updated-subscription", updatedSubscription))
+	logger.Debug("update-subscription-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("updated-subscription", safeLogValue(updatedSubscription)))
 
 	return &UpdateSubscriptionResponse{
 		Subscription: updatedSubscription,
@@ -191,9 +187,7 @@ func (s *Service) UpdateSubscription(ctx context.Context, req *UpdateSubscriptio
 // GetSubscriptions returns a list of subscriptions
 func (s *Service) GetSubscriptions(ctx context.Context, req *GetSubscriptionsRequest) (*GetSubscriptionsResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
 	// Set defaults
@@ -228,16 +222,16 @@ func (s *Service) GetSubscriptions(ctx context.Context, req *GetSubscriptionsReq
 
 	totalSubscriptions, err := s.subscriptionRepository.GetTotalSubscriptions(ctx, getTotalSubscriptionsRequest)
 	if err != nil {
-		log.Error("failed-to-get-subscriptions-request-error-getting-total-subscriptions", zap.Any("request", req), zap.Any("get-total-subscriptions-request", getTotalSubscriptionsRequest), zap.Error(err))
+		logger.Error("failed-to-get-subscriptions-request-error-getting-total-subscriptions", zap.Any("request", safeLogValue(req)), zap.Any("get-total-subscriptions-request", safeLogValue(getTotalSubscriptionsRequest)), zap.Error(err))
 		return &GetSubscriptionsResponse{}, err
 	}
 
 	req.TotalCount = int(totalSubscriptions)
-	log.Debug("handling-get-subscriptions-request-total-subscriptions-found", zap.Int64("total", totalSubscriptions), zap.Any("request", req))
+	logger.Debug("handling-get-subscriptions-request-total-subscriptions-found", zap.Int64("total", totalSubscriptions), zap.Any("request", safeLogValue(req)))
 
 	subscriptions, err := s.subscriptionRepository.GetSubscriptions(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-subscriptions-request-error-getting-subscriptions", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-subscriptions-request-error-getting-subscriptions", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetSubscriptionsResponse{}, err
 	}
 
@@ -262,20 +256,18 @@ func (s *Service) GetSubscriptions(ctx context.Context, req *GetSubscriptionsReq
 // GetSubscriptionByID retrieves a subscription by its internal ID
 func (s *Service) GetSubscriptionByID(ctx context.Context, req *GetSubscriptionByIDRequest) (*GetSubscriptionByIDResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-get-subscription-by-id-request", zap.Any("request", req))
+	logger.Debug("initiating-get-subscription-by-id-request", zap.Any("request", safeLogValue(req)))
 
 	subscription, err := s.subscriptionRepository.GetSubscriptionByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-get-subscription-by-id-error-getting-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-subscription-by-id-error-getting-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetSubscriptionByIDResponse{}, err
 	}
 
-	log.Debug("get-subscription-by-id-request-successful", zap.Any("request", req), zap.Any("subscription", subscription))
+	logger.Debug("get-subscription-by-id-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("subscription", safeLogValue(subscription)))
 
 	return &GetSubscriptionByIDResponse{
 		Subscription: subscription,
@@ -285,20 +277,18 @@ func (s *Service) GetSubscriptionByID(ctx context.Context, req *GetSubscriptionB
 // GetSubscriptionByIntegratorID retrieves a subscription by integrator subscription ID
 func (s *Service) GetSubscriptionByIntegratorID(ctx context.Context, req *GetSubscriptionByIntegratorIDRequest) (*GetSubscriptionByIntegratorIDResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-get-subscription-by-integrator-id-request", zap.Any("request", req))
+	logger.Debug("initiating-get-subscription-by-integrator-id-request", zap.Any("request", safeLogValue(req)))
 
 	subscription, err := s.subscriptionRepository.GetSubscriptionByIntegratorID(ctx, req.IntegratorName, req.IntegratorSubscriptionID)
 	if err != nil {
-		log.Error("failed-to-get-subscription-by-integrator-id-error-getting-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-subscription-by-integrator-id-error-getting-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetSubscriptionByIntegratorIDResponse{}, err
 	}
 
-	log.Debug("get-subscription-by-integrator-id-request-successful", zap.Any("request", req), zap.Any("subscription", subscription))
+	logger.Debug("get-subscription-by-integrator-id-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("subscription", safeLogValue(subscription)))
 
 	return &GetSubscriptionByIntegratorIDResponse{
 		Subscription: subscription,
@@ -308,17 +298,15 @@ func (s *Service) GetSubscriptionByIntegratorID(ctx context.Context, req *GetSub
 // CancelSubscription cancels a subscription
 func (s *Service) CancelSubscription(ctx context.Context, req *CancelSubscriptionRequest) (*CancelSubscriptionResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-cancel-subscription-request", zap.Any("request", req))
+	logger.Debug("initiating-cancel-subscription-request", zap.Any("request", safeLogValue(req)))
 
 	// Get existing subscription
 	subscription, err := s.subscriptionRepository.GetSubscriptionByID(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-cancel-subscription-error-getting-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-cancel-subscription-error-getting-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CancelSubscriptionResponse{}, err
 	}
 
@@ -331,11 +319,11 @@ func (s *Service) CancelSubscription(ctx context.Context, req *CancelSubscriptio
 
 	updatedSubscription, err := s.subscriptionRepository.UpdateSubscription(ctx, subscription)
 	if err != nil {
-		log.Error("failed-to-cancel-subscription-error-updating-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-cancel-subscription-error-updating-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CancelSubscriptionResponse{}, err
 	}
 
-	log.Debug("cancel-subscription-request-successful", zap.Any("request", req), zap.Any("cancelled-subscription", updatedSubscription))
+	logger.Debug("cancel-subscription-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("cancelled-subscription", safeLogValue(updatedSubscription)))
 
 	return &CancelSubscriptionResponse{
 		Subscription: updatedSubscription,
@@ -345,20 +333,18 @@ func (s *Service) CancelSubscription(ctx context.Context, req *CancelSubscriptio
 // DeleteSubscription deletes a subscription
 func (s *Service) DeleteSubscription(ctx context.Context, req *DeleteSubscriptionRequest) (*DeleteSubscriptionResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-delete-subscription-request", zap.Any("request", req))
+	logger.Debug("initiating-delete-subscription-request", zap.Any("request", safeLogValue(req)))
 
 	err := s.subscriptionRepository.DeleteSubscription(ctx, req.ID)
 	if err != nil {
-		log.Error("failed-to-delete-subscription-error-deleting-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-delete-subscription-error-deleting-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &DeleteSubscriptionResponse{}, err
 	}
 
-	log.Debug("delete-subscription-request-successful", zap.Any("request", req))
+	logger.Debug("delete-subscription-request-successful", zap.Any("request", safeLogValue(req)))
 
 	return &DeleteSubscriptionResponse{
 		Success: true,
@@ -368,9 +354,7 @@ func (s *Service) DeleteSubscription(ctx context.Context, req *DeleteSubscriptio
 // CreateBillingEvent creates a new billing event
 func (s *Service) CreateBillingEvent(ctx context.Context, req *CreateBillingEventRequest) (*CreateBillingEventResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 
 		newEvent = &BillingEvent{
 			SubscriptionID:           req.SubscriptionID,
@@ -390,18 +374,18 @@ func (s *Service) CreateBillingEvent(ctx context.Context, req *CreateBillingEven
 		}
 	)
 
-	log.Debug("initiating-create-billing-event-request", zap.Any("request", req))
+	logger.Debug("initiating-create-billing-event-request", zap.Any("request", safeLogValue(req)))
 
 	// Generate ID and timestamps
 	newEvent.GenerateId().SetCreatedAtTimeToNow().SetUpdatedAtTimeToNow()
 
 	createdEvent, err := s.billingEventsRepository.CreateBillingEvent(ctx, newEvent)
 	if err != nil {
-		log.Error("failed-to-create-billing-event-error-creating-event", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-billing-event-error-creating-event", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreateBillingEventResponse{}, err
 	}
 
-	log.Debug("create-billing-event-request-successful", zap.Any("request", req), zap.Any("created-event", createdEvent))
+	logger.Debug("create-billing-event-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("created-event", safeLogValue(createdEvent)))
 
 	return &CreateBillingEventResponse{
 		BillingEvent: createdEvent,
@@ -411,9 +395,7 @@ func (s *Service) CreateBillingEvent(ctx context.Context, req *CreateBillingEven
 // GetBillingEvents returns a list of billing events
 func (s *Service) GetBillingEvents(ctx context.Context, req *GetBillingEventsRequest) (*GetBillingEventsResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
 	// Set defaults
@@ -447,16 +429,16 @@ func (s *Service) GetBillingEvents(ctx context.Context, req *GetBillingEventsReq
 
 	totalEvents, err := s.billingEventsRepository.GetTotalBillingEvents(ctx, getTotalBillingEventsRequest)
 	if err != nil {
-		log.Error("failed-to-get-billing-events-request-error-getting-total-events", zap.Any("request", req), zap.Any("get-total-events-request", getTotalBillingEventsRequest), zap.Error(err))
+		logger.Error("failed-to-get-billing-events-request-error-getting-total-events", zap.Any("request", safeLogValue(req)), zap.Any("get-total-events-request", safeLogValue(getTotalBillingEventsRequest)), zap.Error(err))
 		return &GetBillingEventsResponse{}, err
 	}
 
 	req.TotalCount = int(totalEvents)
-	log.Debug("handling-get-billing-events-request-total-events-found", zap.Int64("total", totalEvents), zap.Any("request", req))
+	logger.Debug("handling-get-billing-events-request-total-events-found", zap.Int64("total", totalEvents), zap.Any("request", safeLogValue(req)))
 
 	events, err := s.billingEventsRepository.GetBillingEvents(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-billing-events-request-error-getting-events", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-billing-events-request-error-getting-events", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetBillingEventsResponse{}, err
 	}
 
@@ -481,31 +463,29 @@ func (s *Service) GetBillingEvents(ctx context.Context, req *GetBillingEventsReq
 // GetSubscriptionsByEmail retrieves all subscriptions for a given email address
 func (s *Service) GetSubscriptionsByEmail(ctx context.Context, req *GetSubscriptionsByEmailRequest) (*GetSubscriptionsByEmailResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-get-subscriptions-by-email-request", zap.Any("request", req))
+	logger.Debug("initiating-get-subscriptions-by-email-request", zap.Any("request", safeLogValue(req)))
 
 	// Standardise email to lowercase
 	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
 
 	subscriptions, err := s.subscriptionRepository.GetSubscriptionsByEmail(ctx, standardisedEmail)
 	if err != nil {
-		log.Error("failed-to-get-subscriptions-by-email-error-getting-subscriptions", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-subscriptions-by-email-error-getting-subscriptions", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetSubscriptionsByEmailResponse{}, err
 	}
 
 	if len(subscriptions) == 0 {
-		log.Debug("get-subscriptions-by-email-no-subscriptions-found", zap.Any("request", req))
+		logger.Debug("get-subscriptions-by-email-no-subscriptions-found", zap.Any("request", safeLogValue(req)))
 		return &GetSubscriptionsByEmailResponse{
 			Subscriptions: []Subscription{},
 			Total:         0,
 		}, nil
 	}
 
-	log.Debug("get-subscriptions-by-email-request-successful", zap.Any("request", req), zap.Int("count", len(subscriptions)))
+	logger.Debug("get-subscriptions-by-email-request-successful", zap.Any("request", safeLogValue(req)), zap.Int("count", len(subscriptions)))
 
 	return &GetSubscriptionsByEmailResponse{
 		Subscriptions: subscriptions,
@@ -516,31 +496,29 @@ func (s *Service) GetSubscriptionsByEmail(ctx context.Context, req *GetSubscript
 // GetBillingEventsByEmail retrieves all billing events for a given email address
 func (s *Service) GetBillingEventsByEmail(ctx context.Context, req *GetBillingEventsByEmailRequest) (*GetBillingEventsByEmailResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-get-billing-events-by-email-request", zap.Any("request", req))
+	logger.Debug("initiating-get-billing-events-by-email-request", zap.Any("request", safeLogValue(req)))
 
 	// Standardise email to lowercase
 	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
 
 	events, err := s.billingEventsRepository.GetBillingEventsByEmail(ctx, standardisedEmail)
 	if err != nil {
-		log.Error("failed-to-get-billing-events-by-email-error-getting-events", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-billing-events-by-email-error-getting-events", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetBillingEventsByEmailResponse{}, err
 	}
 
 	if len(events) == 0 {
-		log.Debug("get-billing-events-by-email-no-events-found", zap.Any("request", req))
+		logger.Debug("get-billing-events-by-email-no-events-found", zap.Any("request", safeLogValue(req)))
 		return &GetBillingEventsByEmailResponse{
 			BillingEvents: []BillingEvent{},
 			Total:         0,
 		}, nil
 	}
 
-	log.Debug("get-billing-events-by-email-request-successful", zap.Any("request", req), zap.Int("count", len(events)))
+	logger.Debug("get-billing-events-by-email-request-successful", zap.Any("request", safeLogValue(req)), zap.Int("count", len(events)))
 
 	return &GetBillingEventsByEmailResponse{
 		BillingEvents: events,
@@ -551,25 +529,24 @@ func (s *Service) GetBillingEventsByEmail(ctx context.Context, req *GetBillingEv
 // AssociateSubscriptionsWithUser associates all subscriptions with a given email to a user ID
 func (s *Service) AssociateSubscriptionsWithUser(ctx context.Context, req *AssociateSubscriptionsWithUserRequest) (*AssociateSubscriptionsWithUserResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-associate-subscriptions-with-user-request", zap.Any("request", req))
+	logger.Debug("initiating-associate-subscriptions-with-user-request", zap.Any("request", safeLogValue(req)))
 
 	// Standardise email to lowercase
 	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
 
 	count, err := s.subscriptionRepository.AssociateSubscriptionsWithUser(ctx, req.UserID, standardisedEmail)
 	if err != nil {
-		log.Error("failed-to-associate-subscriptions-with-user-error-associating-subscriptions", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-associate-subscriptions-with-user-error-associating-subscriptions", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &AssociateSubscriptionsWithUserResponse{}, err
 	}
 
-	log.Info("associate-subscriptions-with-user-request-successful",
+	logger.Info("associate-subscriptions-with-user-request-successful",
 		zap.String("user-id", req.UserID),
-		zap.String("email", req.Email),
+		zap.Bool("email-present", emailPresentForLog(req.Email)),
+		zap.String("email-domain", emailDomainForLog(req.Email)),
 		zap.Int("associated-count", count))
 
 	return &AssociateSubscriptionsWithUserResponse{
@@ -581,25 +558,24 @@ func (s *Service) AssociateSubscriptionsWithUser(ctx context.Context, req *Assoc
 // AssociateBillingEventsWithUser associates all billing events with a given email to a user ID
 func (s *Service) AssociateBillingEventsWithUser(ctx context.Context, req *AssociateBillingEventsWithUserRequest) (*AssociateBillingEventsWithUserResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-associate-billing-events-with-user-request", zap.Any("request", req))
+	logger.Debug("initiating-associate-billing-events-with-user-request", zap.Any("request", safeLogValue(req)))
 
 	// Standardise email to lowercase
 	standardisedEmail := toolbox.StringStandardisedToLower(req.Email)
 
 	count, err := s.billingEventsRepository.AssociateBillingEventsWithUser(ctx, req.UserID, standardisedEmail)
 	if err != nil {
-		log.Error("failed-to-associate-billing-events-with-user-error-associating-events", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-associate-billing-events-with-user-error-associating-events", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &AssociateBillingEventsWithUserResponse{}, err
 	}
 
-	log.Info("associate-billing-events-with-user-request-successful",
+	logger.Info("associate-billing-events-with-user-request-successful",
 		zap.String("user-id", req.UserID),
-		zap.String("email", req.Email),
+		zap.Bool("email-present", emailPresentForLog(req.Email)),
+		zap.String("email-domain", emailDomainForLog(req.Email)),
 		zap.Int("associated-count", count))
 
 	return &AssociateBillingEventsWithUserResponse{
@@ -612,12 +588,10 @@ func (s *Service) AssociateBillingEventsWithUser(ctx context.Context, req *Assoc
 // Useful for monitoring and reporting orphaned subscriptions
 func (s *Service) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) (*GetUnassociatedSubscriptionsResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-get-unassociated-subscriptions-request", zap.Any("request", req))
+	logger.Debug("initiating-get-unassociated-subscriptions-request", zap.Any("request", safeLogValue(req)))
 
 	// Set default limit if not provided
 	if req.Limit == 0 {
@@ -626,20 +600,20 @@ func (s *Service) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnas
 
 	subscriptions, err := s.subscriptionRepository.GetUnassociatedSubscriptions(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-unassociated-subscriptions-error-getting-subscriptions", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-unassociated-subscriptions-error-getting-subscriptions", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetUnassociatedSubscriptionsResponse{}, err
 	}
 
 	if len(subscriptions) == 0 {
-		log.Debug("get-unassociated-subscriptions-no-subscriptions-found", zap.Any("request", req))
+		logger.Debug("get-unassociated-subscriptions-no-subscriptions-found", zap.Any("request", safeLogValue(req)))
 		return &GetUnassociatedSubscriptionsResponse{
 			Subscriptions: []Subscription{},
 			Total:         0,
 		}, nil
 	}
 
-	log.Info("get-unassociated-subscriptions-request-successful",
-		zap.Any("request", req),
+	logger.Info("get-unassociated-subscriptions-request-successful",
+		zap.Any("request", safeLogValue(req)),
 		zap.Int("count", len(subscriptions)))
 
 	return &GetUnassociatedSubscriptionsResponse{
@@ -652,12 +626,10 @@ func (s *Service) GetUnassociatedSubscriptions(ctx context.Context, req *GetUnas
 // Useful for monitoring and reporting orphaned billing events
 func (s *Service) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) (*GetUnassociatedBillingEventsResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-get-unassociated-billing-events-request", zap.Any("request", req))
+	logger.Debug("initiating-get-unassociated-billing-events-request", zap.Any("request", safeLogValue(req)))
 
 	// Set default limit if not provided
 	if req.Limit == 0 {
@@ -666,20 +638,20 @@ func (s *Service) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnas
 
 	events, err := s.billingEventsRepository.GetUnassociatedBillingEvents(ctx, req)
 	if err != nil {
-		log.Error("failed-to-get-unassociated-billing-events-error-getting-events", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-unassociated-billing-events-error-getting-events", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetUnassociatedBillingEventsResponse{}, err
 	}
 
 	if len(events) == 0 {
-		log.Debug("get-unassociated-billing-events-no-events-found", zap.Any("request", req))
+		logger.Debug("get-unassociated-billing-events-no-events-found", zap.Any("request", safeLogValue(req)))
 		return &GetUnassociatedBillingEventsResponse{
 			BillingEvents: []BillingEvent{},
 			Total:         0,
 		}, nil
 	}
 
-	log.Info("get-unassociated-billing-events-request-successful",
-		zap.Any("request", req),
+	logger.Info("get-unassociated-billing-events-request-successful",
+		zap.Any("request", safeLogValue(req)),
 		zap.Int("count", len(events)))
 
 	return &GetUnassociatedBillingEventsResponse{
@@ -692,16 +664,14 @@ func (s *Service) GetUnassociatedBillingEvents(ctx context.Context, req *GetUnas
 // Used for manual association by admins
 func (s *Service) UpdateSubscriptionUserID(ctx context.Context, req *UpdateSubscriptionUserIDRequest) (*UpdateSubscriptionUserIDResponse, error) {
 	var (
-		log = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger = logger.AcquirePackageFrom(ctx, "external/billing")
 	)
 
-	log.Debug("initiating-update-subscription-user-id-request", zap.Any("request", req))
+	logger.Debug("initiating-update-subscription-user-id-request", zap.Any("request", safeLogValue(req)))
 
 	updatedSubscription, oldSubscription, err := s.subscriptionRepository.UpdateSubscriptionUserID(ctx, req.SubscriptionID, req.UserID)
 	if err != nil {
-		log.Error("failed-to-update-subscription-user-id-error-updating-subscription", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-subscription-user-id-error-updating-subscription", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdateSubscriptionUserIDResponse{}, err
 	}
 
@@ -722,11 +692,11 @@ func (s *Service) UpdateSubscriptionUserID(ctx context.Context, req *UpdateSubsc
 			},
 		})
 		if err != nil {
-			log.Error("failed-to-log-audit-event-after-updating-subscription-user-id", zap.Any("request", req), zap.Error(err))
+			logger.Error("failed-to-log-audit-event-after-updating-subscription-user-id", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		}
 	}
 
-	log.Info("update-subscription-user-id-request-successful",
+	logger.Info("update-subscription-user-id-request-successful",
 		zap.String("subscription-id", req.SubscriptionID),
 		zap.String("user-id", req.UserID))
 

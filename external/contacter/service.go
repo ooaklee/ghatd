@@ -38,9 +38,7 @@ func NewService(contacterRepository contacterRepository) *Service {
 func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/contacter")
 
 		newComms *Comms = &Comms{
 			Message: req.Message,
@@ -49,7 +47,7 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 		}
 	)
 
-	logger.Debug("initiating-create-comms-request", zap.Any("request", req))
+	logger.Debug("initiating-create-comms-request", zap.Any("request", safeLogValue(req)))
 
 	newComms = newComms.SetCommsType(string(req.Type)).SetStandardisedEmail(req.Email).SetStandardisedFullName(req.FullName)
 
@@ -73,11 +71,11 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 
 	createdComms, err := s.contacterRepository.CreateComms(ctx, newComms)
 	if err != nil {
-		logger.Error("failed-to-create-comms-error-creating-comms", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-comms-error-creating-comms", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &CreateCommsResponse{}, err
 	}
 
-	logger.Debug("create-comms-request-successful", zap.Any("request", req), zap.Any("created-comms", createdComms))
+	logger.Debug("create-comms-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("created-comms", safeLogValue(createdComms)))
 
 	return &CreateCommsResponse{
 		Comms: createdComms,
@@ -88,9 +86,7 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/contacter")
 	)
 
 	// default
@@ -129,16 +125,16 @@ func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetComms
 	}
 	totalComms, err := s.contacterRepository.GetTotalComms(ctx, getTotalCommsRequest)
 	if err != nil {
-		logger.Error("failed-to-get-comms-request-error-getting-total-comms", zap.Any("request", req), zap.Any("get-total-comms-request", getTotalCommsRequest), zap.Error(err))
+		logger.Error("failed-to-get-comms-request-error-getting-total-comms", zap.Any("request", safeLogValue(req)), zap.Any("get-total-comms-request", safeLogValue(getTotalCommsRequest)), zap.Error(err))
 		return &GetCommsResponse{}, err
 	}
 
 	req.TotalCount = int(totalComms)
-	logger.Debug("handling-get-comms-request-total-comms-found", zap.Int64("total", totalComms), zap.Any("request", req))
+	logger.Debug("handling-get-comms-request-total-comms-found", zap.Int64("total", totalComms), zap.Any("request", safeLogValue(req)))
 
 	comms, err := s.contacterRepository.GetComms(ctx, req)
 	if err != nil {
-		logger.Error("failed-to-get-comms-request-error-getting-comms", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-get-comms-request-error-getting-comms", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &GetCommsResponse{}, err
 	}
 
@@ -165,12 +161,10 @@ func (s *Service) GetComms(ctx context.Context, req *GetCommsRequest) (*GetComms
 func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error) {
 
 	var (
-		logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-			zap.AddStacktrace(zap.DPanicLevel),
-		)
+		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/contacter")
 	)
 
-	logger.Debug("initiating-update-comms-request", zap.Any("request", req))
+	logger.Debug("initiating-update-comms-request", zap.Any("request", safeLogValue(req)))
 
 	if req.CommsId == "" {
 		return nil, ErrCommsIdRequired
@@ -179,7 +173,7 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 	// Fetch existing comms to preserve existing data
 	existingCommsSlice, err := s.contacterRepository.GetCommsByIds(ctx, []string{req.CommsId})
 	if err != nil {
-		logger.Error("failed-to-update-comms-error-fetching-existing-comms", zap.String("comms_id", req.CommsId), zap.Error(err))
+		logger.Error("failed-to-update-comms-error-fetching-existing-comms", zap.String("comms-id", req.CommsId), zap.Error(err))
 		return &UpdateCommsResponse{}, err
 	}
 
@@ -209,11 +203,11 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 
 	updatedComms, err := s.contacterRepository.UpdateComms(ctx, &comms)
 	if err != nil {
-		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-update-comms-error-updating-comms", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return &UpdateCommsResponse{}, err
 	}
 
-	logger.Debug("update-comms-request-successful", zap.Any("request", req), zap.Any("updated-comms", updatedComms))
+	logger.Debug("update-comms-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("updated-comms", safeLogValue(updatedComms)))
 
 	return &UpdateCommsResponse{
 		Comms: updatedComms,
@@ -223,11 +217,9 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 // GetCommsStats retrieves aggregated stats about platform comms
 func (s *Service) GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error) {
 
-	var logger *zap.Logger = logger.AcquireFrom(ctx).WithOptions(
-		zap.AddStacktrace(zap.DPanicLevel),
-	)
+	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/contacter")
 
-	logger.Debug("initiating-get-comms-stats-request", zap.Any("request", req))
+	logger.Debug("initiating-get-comms-stats-request", zap.Any("request", safeLogValue(req)))
 
 	stats, err := s.contacterRepository.GetCommsStatsCounts(ctx, req)
 	if err != nil {

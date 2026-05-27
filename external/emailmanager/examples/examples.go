@@ -374,7 +374,7 @@ func createExampleManager() *emailmanager.EmailManager {
 	tmplr, _ := emailtemplater.NewEmailTemplater(templaterConfig)
 
 	provider := emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{
-		DisableFullHtmlBodyPreview: true,
+		MaxStoredEmails: 50,
 	})
 
 	auditService := &MockAuditService{}

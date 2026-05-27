@@ -47,46 +47,46 @@ func NewService(streakRepository StreakRepository) *Service {
 // GetStreakByScopeAndPeriodOrCreate returns the streak entry for the resolved
 // scope and period, creating it when it does not already exist.
 func (s *Service) GetStreakByScopeAndPeriodOrCreate(ctx context.Context, req *RecordStreakRequest) (*RecordStreakResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("initiating-get-streak-by-scope-and-period-or-create-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/streaker")
+	logger.Debug("initiating-get-streak-by-scope-and-period-or-create-request", zap.Any("request", safeLogValue(req)))
 
-	resolvedReq, existingRes, err := s.getStreakByScopeAndPeriodFromRecordRequest(ctx, req, log)
+	resolvedReq, existingRes, err := s.getStreakByScopeAndPeriodFromRecordRequest(ctx, req, logger)
 	if err != nil || existingRes != nil {
 		return existingRes, err
 	}
 
-	createdRes, err := s.createResolvedStreak(ctx, req, resolvedReq, log)
+	createdRes, err := s.createResolvedStreak(ctx, req, resolvedReq, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Debug("get-streak-by-scope-and-period-or-create-request-successful", zap.Any("request", req), zap.Any("created-streak", createdRes.Streak))
+	logger.Debug("get-streak-by-scope-and-period-or-create-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("created-streak", safeLogValue(createdRes.Streak)))
 	return createdRes, nil
 }
 
 // RecordStreak records a completion and computes the streak count for its scope.
 func (s *Service) RecordStreak(ctx context.Context, req *RecordStreakRequest) (*RecordStreakResponse, error) {
-	log := logger.AcquireFrom(ctx).WithOptions(zap.AddStacktrace(zap.DPanicLevel))
-	log.Debug("initiating-record-streak-request", zap.Any("request", req))
+	logger := logger.AcquirePackageFrom(ctx, "external/streaker")
+	logger.Debug("initiating-record-streak-request", zap.Any("request", safeLogValue(req)))
 
-	resolvedReq, existingRes, err := s.getStreakByScopeAndPeriodFromRecordRequest(ctx, req, log)
+	resolvedReq, existingRes, err := s.getStreakByScopeAndPeriodFromRecordRequest(ctx, req, logger)
 	if err != nil || existingRes != nil {
 		return existingRes, err
 	}
 
-	createdRes, err := s.createResolvedStreak(ctx, req, resolvedReq, log)
+	createdRes, err := s.createResolvedStreak(ctx, req, resolvedReq, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Debug("record-streak-request-successful", zap.Any("request", req), zap.Any("created-streak", createdRes.Streak))
+	logger.Debug("record-streak-request-successful", zap.Any("request", safeLogValue(req)), zap.Any("created-streak", safeLogValue(createdRes.Streak)))
 	return createdRes, nil
 }
 
 // getStreakByScopeAndPeriodFromRecordRequest validates and resolves a record
 // request, returning an existing streak response when the period was already
 // recorded.
-func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context, req *RecordStreakRequest, log *zap.Logger) (*resolvedRecordStreakRequest, *RecordStreakResponse, error) {
+func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context, req *RecordStreakRequest, logger *zap.Logger) (*resolvedRecordStreakRequest, *RecordStreakResponse, error) {
 	if req == nil {
 		return nil, nil, ErrStreakTypeIsRequired
 	}
@@ -156,7 +156,7 @@ func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context
 		return resolvedReq, &RecordStreakResponse{Streak: existing}, nil
 	}
 	if err != nil && !errors.Is(err, ErrResourceNotFound) {
-		log.Error("failed-to-resolve-streak-error-checking-period", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-resolve-streak-error-checking-period", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, nil, err
 	}
 
@@ -166,13 +166,13 @@ func (s *Service) getStreakByScopeAndPeriodFromRecordRequest(ctx context.Context
 // createResolvedStreak creates a streak from a previously validated and
 // resolved record request, carrying forward consecutive count and previous
 // streak metadata when available.
-func (s *Service) createResolvedStreak(ctx context.Context, req *RecordStreakRequest, resolvedReq *resolvedRecordStreakRequest, log *zap.Logger) (*RecordStreakResponse, error) {
+func (s *Service) createResolvedStreak(ctx context.Context, req *RecordStreakRequest, resolvedReq *resolvedRecordStreakRequest, logger *zap.Logger) (*RecordStreakResponse, error) {
 	var previous *Streak
 	previous, err := s.StreakRepository.GetLatestStreak(ctx, &GetLatestStreakRequest{
 		StreakStatsRequest: resolvedReq.statsReq,
 	})
 	if err != nil && !errors.Is(err, ErrResourceNotFound) {
-		log.Error("failed-to-create-streak-error-getting-latest-streak", zap.Any("request", req), zap.Error(err))
+		logger.Error("failed-to-create-streak-error-getting-latest-streak", zap.Any("request", safeLogValue(req)), zap.Error(err))
 		return nil, err
 	}
 
@@ -202,7 +202,7 @@ func (s *Service) createResolvedStreak(ctx context.Context, req *RecordStreakReq
 
 	createdStreak, err := s.StreakRepository.CreateStreak(ctx, newStreak)
 	if err != nil {
-		log.Error("failed-to-create-streak-error-creating-streak", zap.Any("request", req), zap.Any("new-streak", newStreak), zap.Error(err))
+		logger.Error("failed-to-create-streak-error-creating-streak", zap.Any("request", safeLogValue(req)), zap.Any("new-streak", safeLogValue(newStreak)), zap.Error(err))
 		return nil, err
 	}
 
@@ -211,6 +211,9 @@ func (s *Service) createResolvedStreak(ctx context.Context, req *RecordStreakReq
 
 // CreateRawStreak creates a precomputed streak entry.
 func (s *Service) CreateRawStreak(ctx context.Context, req *CreateRawStreakRequest) (*RecordStreakResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "create-raw-streak")
+	logger.Debug("handling-create-raw-streak-request")
+
 	if req == nil || req.Streak == nil {
 		return nil, ErrStreakTypeIsRequired
 	}
@@ -239,6 +242,9 @@ func (s *Service) CreateRawStreak(ctx context.Context, req *CreateRawStreakReque
 
 // GetLongestStreak gets the longest streak matching the request filters.
 func (s *Service) GetLongestStreak(ctx context.Context, req *GetLongestStreakRequest) (*GetLongestStreakResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "get-longest-streak")
+	logger.Debug("handling-get-longest-streak-request")
+
 	var sourceReq *StreakStatsRequest
 	if req != nil {
 		sourceReq = &req.StreakStatsRequest
@@ -265,11 +271,17 @@ func (s *Service) GetLongestStreak(ctx context.Context, req *GetLongestStreakReq
 
 // GetLongestStreakByStreakTypeAndUserID gets the longest streak for a user and type.
 func (s *Service) GetLongestStreakByStreakTypeAndUserID(ctx context.Context, req *GetLongestStreakRequest) (*GetLongestStreakResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "get-longest-streak-by-streak-type-and-user-id")
+	logger.Debug("handling-get-longest-streak-by-streak-type-and-user-id-request")
+
 	return s.GetLongestStreak(ctx, req)
 }
 
 // GetCurrentCount gets the latest current count matching the request filters.
 func (s *Service) GetCurrentCount(ctx context.Context, req *GetCurrentCountRequest) (*GetCurrentCountResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "get-current-count")
+	logger.Debug("handling-get-current-count-request")
+
 	var sourceReq *StreakStatsRequest
 	if req != nil {
 		sourceReq = &req.StreakStatsRequest
@@ -296,11 +308,17 @@ func (s *Service) GetCurrentCount(ctx context.Context, req *GetCurrentCountReque
 
 // GetCurrentCountByStreakTypeAndUserID gets the current count for a user and type.
 func (s *Service) GetCurrentCountByStreakTypeAndUserID(ctx context.Context, req *GetCurrentCountRequest) (*GetCurrentCountResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "get-current-count-by-streak-type-and-user-id")
+	logger.Debug("handling-get-current-count-by-streak-type-and-user-id-request")
+
 	return s.GetCurrentCount(ctx, req)
 }
 
 // GetNumberOfStreaks gets the number of streak entries matching the request filters.
 func (s *Service) GetNumberOfStreaks(ctx context.Context, req *GetNumberOfStreaksRequest) (*GetNumberOfStreaksResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "get-number-of-streaks")
+	logger.Debug("handling-get-number-of-streaks-request")
+
 	var sourceReq *StreakStatsRequest
 	if req != nil {
 		sourceReq = &req.StreakStatsRequest
@@ -321,11 +339,17 @@ func (s *Service) GetNumberOfStreaks(ctx context.Context, req *GetNumberOfStreak
 
 // GetNumberOfStreaksByStreakTypeAndUserID gets the number of streak entries for a user and type.
 func (s *Service) GetNumberOfStreaksByStreakTypeAndUserID(ctx context.Context, req *GetNumberOfStreaksRequest) (*GetNumberOfStreaksResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "get-number-of-streaks-by-streak-type-and-user-id")
+	logger.Debug("handling-get-number-of-streaks-by-streak-type-and-user-id-request")
+
 	return s.GetNumberOfStreaks(ctx, req)
 }
 
 // ListStreaks lists streak entries matching the provided filters.
 func (s *Service) ListStreaks(ctx context.Context, req *ListStreaksRequest) (*ListStreaksResponse, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/streaker", "list-streaks")
+	logger.Debug("handling-list-streaks-request")
+
 	listReq, err := normaliseListStreaksRequest(req)
 	if err != nil {
 		return nil, err

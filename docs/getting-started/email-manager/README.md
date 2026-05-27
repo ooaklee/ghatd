@@ -159,24 +159,35 @@ The email templates use Handlebars (`{{FieldName}}`) for variable substitution. 
 
 ### 3. Development Environment Setup
 
-If you don't want to use your email provider's allowance when running your code locally, you can use the `LoggingEmailProvider` to log the email content instead of sending it.
+If you don't want to use your email provider's allowance when running your code locally, use the `LoggingEmailProvider` to capture emails in memory and attach the local inbox routes. The inbox lets you open rendered emails, click magic links, and copy login or verification codes without writing raw email HTML to structured logs.
 
 ```go
-// Use logging provider to see emails in logs instead of sending
-provider := emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{
-    DisableFullHtmlBodyPreview: false, // The login and verification token by default contain the token/magic link URL for you to sign in
-}) 
+localEmailProvider := emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{
+    MaxStoredEmails: 50,
+})
 
 manager := emailmanager.NewEmailManager(
     emailtemplater.NewEmailTemplater(templaterConfig),
-    provider,
+    localEmailProvider,
     auditService,
     &emailmanager.Config{
-        ShouldSendEmail:    true, // The LoggingProvider logs despite this being true
+        ShouldSendEmail:    false,
         EnableAuditLogging: true,
     },
 )
+
+err := emailprovider.AttachLocalInboxRoutes(&emailprovider.AttachLocalInboxRoutesRequest{
+    Router:   ghatdRouter,
+    Provider: localEmailProvider,
+})
+if err != nil {
+    return err
+}
 ```
+
+By default, the local inbox is available at `/_ghatd/local/emails` and rejects non-loopback clients. Set a custom `Prefix` or `AllowRemote` only when another trusted local proxy protects the route.
+
+This local inbox workflow is described in [ADR014](../../adr/adr014-local-email-inbox-for-development.md).
 
 > **Note on Environments:** The `emailtemplater` is also **environment-aware**; for example, setting the `Environment` config to `"staging"` will add `[staging]` to the email subject line.
 
