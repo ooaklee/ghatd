@@ -213,7 +213,7 @@ func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDReque
 
 	user, err := s.UserRepository.GetUserByNanoID(ctx, req.NanoID)
 	if err != nil {
-		logger.Error("failed to get user by nano ID", zap.Error(err), zap.String("nano_id", req.NanoID))
+		logger.Error("failed to get user by nano ID", zap.Error(err), zap.String("nano-id", req.NanoID))
 		return nil, ErrUserNotFound
 	}
 

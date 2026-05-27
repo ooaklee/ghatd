@@ -72,8 +72,8 @@ func (s *Service) GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GetGroupLineageRequest.ID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GetGroupLineageRequest.ID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -113,8 +113,8 @@ func (s *Service) GetGroupDescendants(ctx context.Context, r *GetGroupDescendant
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GetGroupDescendantsRequest.ID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GetGroupDescendantsRequest.ID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -423,8 +423,8 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -503,8 +503,8 @@ func (s *Service) GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap

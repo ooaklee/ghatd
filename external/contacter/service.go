@@ -173,7 +173,7 @@ func (s *Service) UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*Up
 	// Fetch existing comms to preserve existing data
 	existingCommsSlice, err := s.contacterRepository.GetCommsByIds(ctx, []string{req.CommsId})
 	if err != nil {
-		logger.Error("failed-to-update-comms-error-fetching-existing-comms", zap.String("comms_id", req.CommsId), zap.Error(err))
+		logger.Error("failed-to-update-comms-error-fetching-existing-comms", zap.String("comms-id", req.CommsId), zap.Error(err))
 		return &UpdateCommsResponse{}, err
 	}
 

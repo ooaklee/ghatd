@@ -106,7 +106,7 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 	}
 
 	if err := pricePlan.Validate(); err != nil {
-		logger.Warn("attempt-made-to-create-invalid-price-plan", zap.Any("price_plan", safeLogValue(pricePlan)), zap.Error(err))
+		logger.Warn("attempt-made-to-create-invalid-price-plan", zap.Any("price-plan", safeLogValue(pricePlan)), zap.Error(err))
 		return nil, err
 	}
 
@@ -144,7 +144,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 			IncludeProviders: true,
 		})
 		if err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price_plan_id", req.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", req.ID), zap.Error(err))
 			return nil, err
 		}
 
@@ -182,7 +182,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 		return nil, ErrPricePlanIDRequired
 	} else {
 		if _, err := s.PricerRepository.GetPricePlanByID(ctx, pricePlanToUpdate.ID, &GetPricePlanByIDRequest{}); err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price_plan_id", pricePlanToUpdate.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", pricePlanToUpdate.ID), zap.Error(err))
 			return nil, err
 		}
 	}
@@ -200,7 +200,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 	}
 
 	if err := pricePlanToUpdate.Validate(); err != nil {
-		logger.Warn("attempt-made-to-update-invalid-price-plan", zap.Any("price_plan", safeLogValue(pricePlanToUpdate)), zap.Error(err))
+		logger.Warn("attempt-made-to-update-invalid-price-plan", zap.Any("price-plan", safeLogValue(pricePlanToUpdate)), zap.Error(err))
 		return nil, err
 	}
 
@@ -415,7 +415,7 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 		IncludeProviders: true,
 	})
 	if err != nil {
-		logger.Warn("attempt-made-to-publish-missing-price-plan", zap.String("price_plan_id", req.ID), zap.Error(err))
+		logger.Warn("attempt-made-to-publish-missing-price-plan", zap.String("price-plan-id", req.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -586,7 +586,7 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 		var err error
 		featureToUpdate, err = s.PricerRepository.GetFeatureByID(ctx, req.ID)
 		if err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature_id", req.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature-id", req.ID), zap.Error(err))
 			return nil, err
 		}
 
@@ -615,7 +615,7 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 		return nil, ErrPriceFeatureIDRequired
 	} else {
 		if _, err := s.PricerRepository.GetFeatureByID(ctx, featureToUpdate.ID); err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature_id", featureToUpdate.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature-id", featureToUpdate.ID), zap.Error(err))
 			return nil, err
 		}
 	}

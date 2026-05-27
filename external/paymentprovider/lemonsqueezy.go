@@ -196,7 +196,7 @@ func (l *LemonSqueezyProvider) GetSubscriptionInfo(ctx context.Context, subscrip
 // getPriceByPriceID retrieves price details by price ID from Lemon Squeezy's API
 func (l *LemonSqueezyProvider) getPriceByPriceID(ctx context.Context, priceID string, quantity int64) (*PriceInfo, error) {
 
-	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", l.name)).With(zap.String("operation", "get-price-by-id")).With(zap.String("price_id", priceID))
+	logger := logger.AcquirePackageFrom(ctx, "external/paymentprovider").With(zap.String("provider", l.name)).With(zap.String("operation", "get-price-by-id")).With(zap.String("price-id", priceID))
 
 	logger.Info("handle-request-to-get-price-information-by-id")
 
@@ -219,7 +219,7 @@ func (l *LemonSqueezyProvider) getPriceByPriceID(ctx context.Context, priceID st
 	}
 
 	unitPrice := calculateLemonSqueezyUnitPrice(&apiResp, quantity)
-	logger.Info("retrived-price-info-by-id", zap.Int64("unit_price", unitPrice), zap.String("scheme", apiResp.Data.Attributes.Scheme))
+	logger.Info("retrived-price-info-by-id", zap.Int64("unit-price", unitPrice), zap.String("scheme", apiResp.Data.Attributes.Scheme))
 
 	return &PriceInfo{
 		UnitPrice: unitPrice,

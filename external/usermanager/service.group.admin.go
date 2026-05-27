@@ -53,8 +53,8 @@ func (s *Service) ValidateGroupName(ctx context.Context, r *ValidateGroupNameReq
 			if accessErr != nil {
 				logger.Error(
 					"failed-to-resolve-requester-group-access-map",
-					zap.String("requester_user_id", r.UserID),
-					zap.String("group_id", parentGroupID),
+					zap.String("requester-user-id", r.UserID),
+					zap.String("group-id", parentGroupID),
 					zap.Error(accessErr),
 				)
 				return nil, ErrFailedToResolveGroupAccessMap
@@ -99,8 +99,8 @@ func (s *Service) CreateGroup(ctx context.Context, r *CreateGroupRequest) (*Crea
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.ParentGroupID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.ParentGroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -151,8 +151,8 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserId),
-				zap.String("group_id", r.UpdateGroupRequest.ID),
+				zap.String("requester-user-id", r.UserId),
+				zap.String("group-id", r.UpdateGroupRequest.ID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -166,7 +166,7 @@ func (s *Service) UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*Upda
 
 	resp, err := s.GroupService.UpdateGroup(ctx, r.UpdateGroupRequest)
 	if err != nil {
-		logger.Error("failed-to-update-group", zap.String("group_id", r.UpdateGroupRequest.ID), zap.Error(err))
+		logger.Error("failed-to-update-group", zap.String("group-id", r.UpdateGroupRequest.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -189,8 +189,8 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.DeleteGroupRequest.ID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.DeleteGroupRequest.ID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -205,8 +205,8 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 		if groupErr != nil {
 			logger.Error(
 				"failed-to-resolve-group-for-delete-ownership-check",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.DeleteGroupRequest.ID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.DeleteGroupRequest.ID),
 				zap.Error(groupErr),
 			)
 			return nil, groupErr
@@ -225,7 +225,7 @@ func (s *Service) DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*Dele
 
 	groupResp, err := s.GroupService.DeleteGroup(ctx, r.DeleteGroupRequest)
 	if err != nil {
-		logger.Error("failed-to-delete-group", zap.String("group_id", r.DeleteGroupRequest.ID), zap.Error(err))
+		logger.Error("failed-to-delete-group", zap.String("group-id", r.DeleteGroupRequest.ID), zap.Error(err))
 		return nil, err
 	}
 
@@ -250,8 +250,8 @@ func (s *Service) AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) 
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -294,8 +294,8 @@ func (s *Service) RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberReq
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -335,8 +335,8 @@ func (s *Service) UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberReq
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap
@@ -379,8 +379,8 @@ func (s *Service) UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerReque
 		if accessErr != nil {
 			logger.Error(
 				"failed-to-resolve-requester-group-access-map",
-				zap.String("requester_user_id", r.UserID),
-				zap.String("group_id", r.GroupID),
+				zap.String("requester-user-id", r.UserID),
+				zap.String("group-id", r.GroupID),
 				zap.Error(accessErr),
 			)
 			return nil, ErrFailedToResolveGroupAccessMap

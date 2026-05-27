@@ -518,7 +518,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 				User: persistentUser,
 			})
 			if err != nil {
-				logger.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+				logger.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
@@ -526,7 +526,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 
 			err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
 			if err != nil {
-				logger.Error("provider-login-ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+				logger.Error("provider-login-ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
 				return &OauthCallbackResponse{
 					ProviderStateCookieKey: providerCookieKey,
 				}, err
@@ -1130,12 +1130,12 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 
 	deleted, err := s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(accessTokenDetails.UserID, accessTokenDetails.AccessUUID))
 	if err != nil {
-		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID), zap.Error(err))
+		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id", accessTokenDetails.UserID), zap.Error(err))
 		return err
 	}
 
 	if deleted == 0 {
-		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id:", accessTokenDetails.UserID))
+		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id", accessTokenDetails.UserID))
 		return ErrUnauthorizedAccessTokenCacheDeletionFailure
 	}
 
@@ -1212,7 +1212,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 			return response, nil
 		}
 
-		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userID), zap.Error(err))
+		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id", userID), zap.Error(err))
 		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
@@ -1241,7 +1241,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	// Save the tokens to ephemeralstore
 	err = s.EphemeralStore.CreateAuth(ctx, userID, newTokensDetails)
 	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id:", userID), zap.Error(err))
+		logger.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id", userID), zap.Error(err))
 		return nil, err
 	}
 
@@ -1399,7 +1399,7 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, refreshTokenDetails.RefreshUUID))
 	if err != nil || deleted == 0 {
-		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id:", userId), zap.Error(err))
+		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id", userId), zap.Error(err))
 		return nil, refreshTokenUuid, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
@@ -1451,13 +1451,13 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 		User: persistentUser,
 	})
 	if err != nil {
-		logger.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+		logger.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
 		return nil, err
 	}
 
 	err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
 	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id:", persistentUser.ID))
+		logger.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
 		return nil, err
 	}
 
@@ -1587,7 +1587,7 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 	persistentUser.VerifyEmail()
 	revisionedUser, err := persistentUser.UpdateStatus(userv2.AccountStatusKeyActive)
 	if err != nil {
-		logger.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
 		return "", 0, "", 0, err
 	}
 
@@ -1595,19 +1595,19 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 		User: revisionedUser,
 	})
 	if err != nil {
-		logger.Error("system-update-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("system-update-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
 		return "", 0, "", 0, err
 	}
 
 	newTokenDetails, err := s.AuthService.CreateToken(ctx, UpdateUserResponse.User)
 	if err != nil {
-		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
 		return "", 0, "", 0, err
 	}
 
 	err = s.EphemeralStore.CreateAuth(ctx, r.UserID, newTokenDetails)
 	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id:", r.UserID))
+		logger.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
 		return "", 0, "", 0, err
 	}
 
