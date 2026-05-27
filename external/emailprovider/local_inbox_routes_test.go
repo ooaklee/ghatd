@@ -47,6 +47,9 @@ func TestAttachLocalInboxRoutes(t *testing.T) {
 	if got := index.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
 		t.Fatalf("index Cache-Control = %q, want no-store", got)
 	}
+	if got := index.Header().Get("X-Cache-Skip"); got != "true" {
+		t.Fatalf("index X-Cache-Skip = %q, want true", got)
+	}
 	if body := index.Body.String(); !strings.Contains(body, "GHATD Local Email Inbox") || !strings.Contains(body, result.MessageID) {
 		t.Fatalf("index body did not include inbox title and message ID: %s", body)
 	}
@@ -68,6 +71,9 @@ func TestAttachLocalInboxRoutes(t *testing.T) {
 	if got := raw.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
 		t.Fatalf("raw Cache-Control = %q, want no-store", got)
 	}
+	if got := raw.Header().Get("X-Cache-Skip"); got != "true" {
+		t.Fatalf("raw X-Cache-Skip = %q, want true", got)
+	}
 	if got := raw.Header().Get("Content-Security-Policy"); !strings.Contains(got, "sandbox") || strings.Contains(got, "allow-scripts") {
 		t.Fatalf("raw Content-Security-Policy = %q, want sandbox without script allowance", got)
 	}
@@ -82,6 +88,9 @@ func TestAttachLocalInboxRoutes(t *testing.T) {
 	}
 	if got := api.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
 		t.Fatalf("api Cache-Control = %q, want no-store", got)
+	}
+	if got := api.Header().Get("X-Cache-Skip"); got != "true" {
+		t.Fatalf("api X-Cache-Skip = %q, want true", got)
 	}
 	var summaries []localInboxEmailSummary
 	if err := json.Unmarshal(api.Body.Bytes(), &summaries); err != nil {

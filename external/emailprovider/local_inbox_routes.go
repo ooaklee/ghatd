@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/router"
+	"go.uber.org/zap"
 )
 
 const DefaultLocalInboxRoutePrefix = "/_ghatd/local/emails"
@@ -109,6 +112,13 @@ type localInboxEmailSummary struct {
 // index renders the local email inbox list page.
 func (h *localInboxHandlers) index(w http.ResponseWriter, r *http.Request) {
 	emails := h.emailSummaries()
+	logger := logger.AcquirePackageFrom(r.Context(), "external/emailprovider")
+	logger.Debug("local-email-inbox-index-rendered",
+		zap.String("operation", "local-email-inbox-index"),
+		zap.Int("local-email-count", len(emails)),
+		zap.String("prefix", h.prefix),
+	)
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = localInboxIndexTemplate.Execute(w, localInboxIndexView{
 		Prefix: h.prefix,
@@ -122,6 +132,16 @@ func (h *localInboxHandlers) detail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	logger := logger.AcquirePackageFrom(r.Context(), "external/emailprovider")
+	links := extractEmailLinks(email.HTMLBody)
+	logger.Debug("local-email-inbox-detail-rendered",
+		zap.String("operation", "local-email-inbox-detail"),
+		zap.String("message-id", email.MessageID),
+		zap.Bool("has-html-body", strings.TrimSpace(email.HTMLBody) != ""),
+		zap.Bool("has-text-body", strings.TrimSpace(email.TextBody) != ""),
+		zap.Int("link-count", len(links)),
+		zap.String("prefix", h.prefix),
+	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = localInboxDetailTemplate.Execute(w, localInboxDetailView{
@@ -129,7 +149,7 @@ func (h *localInboxHandlers) detail(w http.ResponseWriter, r *http.Request) {
 		Email:       email,
 		CreatedAt:   formatLocalEmailTime(email.CreatedAt),
 		RawHTMLPath: h.rawHTMLPath(email.MessageID),
-		Links:       extractEmailLinks(email.HTMLBody),
+		Links:       links,
 	})
 }
 
@@ -139,6 +159,14 @@ func (h *localInboxHandlers) rawHTML(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	logger := logger.AcquirePackageFrom(r.Context(), "external/emailprovider")
+	logger.Debug("local-email-inbox-raw-html-rendered",
+		zap.String("operation", "local-email-inbox-raw-html"),
+		zap.String("message-id", email.MessageID),
+		zap.Bool("has-html-body", strings.TrimSpace(email.HTMLBody) != ""),
+		zap.Bool("has-text-body", strings.TrimSpace(email.TextBody) != ""),
+		zap.String("prefix", h.prefix),
+	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy", localInboxRawHTMLContentSecurityPolicy)
@@ -152,14 +180,30 @@ func (h *localInboxHandlers) rawHTML(w http.ResponseWriter, r *http.Request) {
 
 // clear removes all captured local emails and redirects back to the inbox list.
 func (h *localInboxHandlers) clear(w http.ResponseWriter, r *http.Request) {
+	previousCount := h.provider.Inbox().Count()
 	h.provider.Inbox().Clear()
+	logger := logger.AcquirePackageFrom(r.Context(), "external/emailprovider")
+	logger.Debug("local-email-inbox-cleared",
+		zap.String("operation", "local-email-inbox-clear"),
+		zap.Int("previous-local-email-count", previousCount),
+		zap.String("prefix", h.prefix),
+	)
+
 	http.Redirect(w, r, h.prefix, http.StatusSeeOther)
 }
 
 // apiList writes JSON summaries for the captured local emails.
 func (h *localInboxHandlers) apiList(w http.ResponseWriter, r *http.Request) {
+	emails := h.emailSummaries()
+	logger := logger.AcquirePackageFrom(r.Context(), "external/emailprovider")
+	logger.Debug("local-email-inbox-api-listed",
+		zap.String("operation", "local-email-inbox-api-list"),
+		zap.Int("local-email-count", len(emails)),
+		zap.String("prefix", h.prefix),
+	)
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(h.emailSummaries())
+	_ = json.NewEncoder(w).Encode(emails)
 }
 
 // emailByRequest resolves the route message ID to a captured local email.
@@ -167,6 +211,13 @@ func (h *localInboxHandlers) emailByRequest(w http.ResponseWriter, r *http.Reque
 	messageID := mux.Vars(r)["messageID"]
 	email, ok := h.provider.Inbox().Get(messageID)
 	if !ok {
+		logger := logger.AcquirePackageFrom(r.Context(), "external/emailprovider")
+		logger.Debug("local-email-inbox-email-not-found",
+			zap.String("operation", "local-email-inbox-email-lookup"),
+			zap.String("message-id", messageID),
+			zap.String("prefix", h.prefix),
+		)
+
 		http.NotFound(w, r)
 		return LocalEmail{}, false
 	}
@@ -241,6 +292,7 @@ func setLocalInboxNoStoreHeaders(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
+	w.Header().Set(common.CacheSkipHttpResponseHeader, "true")
 }
 
 // isLocalInboxRequest reports whether a request remote address is localhost or loopback.
