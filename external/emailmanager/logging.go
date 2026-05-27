@@ -7,6 +7,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// emailLogFields returns safe email metadata fields using the supplied prefix.
+// It records address presence and domain without logging the full address.
 func emailLogFields(prefix, value string) []zap.Field {
 	return []zap.Field{
 		zap.Bool(prefix+"-present", logger.EmailPresentForLog(value)),
@@ -14,6 +16,7 @@ func emailLogFields(prefix, value string) []zap.Field {
 	}
 }
 
+// subjectLogFields returns safe subject metadata without logging subject text.
 func subjectLogFields(value string) []zap.Field {
 	trimmed := strings.TrimSpace(value)
 	return []zap.Field{
@@ -22,6 +25,8 @@ func subjectLogFields(value string) []zap.Field {
 	}
 }
 
+// outboundEmailLogFields returns the standard safe field set for outbound email logs.
+// It includes provider, optional message ID, recipient/sender domains, and subject metadata.
 func outboundEmailLogFields(provider, messageID, to, from, subject string) []zap.Field {
 	fields := []zap.Field{
 		zap.String("provider", provider),
