@@ -28,6 +28,9 @@ type contentManagerService interface {
 	GetArticles(ctx context.Context, req *GetArticlesRequest) (*GetArticlesResponse, error)
 	GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArticleItemByUrlFriendlyIdRequest) (*post.Post, error)
 
+	// GetArticleSitemapItems returns sitemap-ready article URL entries.
+	GetArticleSitemapItems(ctx context.Context, req *GetArticleSitemapItemsRequest) (*GetArticleSitemapItemsResponse, error)
+
 	GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error)
 	GetLatestNotificationOverviews(ctx context.Context, req *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error)
 }
@@ -313,6 +316,29 @@ func (h *Handler) GetArticleItemByUrlFriendlyId(w http.ResponseWriter, r *http.R
 
 	//nolint will set up default fallback later
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, post)
+}
+
+// GetArticleSitemapItems handles the request for getting article sitemap entries.
+func (h *Handler) GetArticleSitemapItems(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contentmanager", "handle-get-article-sitemap-items")
+	request, err := mapRequestToGetArticleSitemapItemsRequest(r, h.validator)
+	if err != nil {
+		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	response, err := h.service.GetArticleSitemapItems(r.Context(), request)
+	if err != nil {
+		//nolint will set up default fallback later
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	//nolint will set up default fallback later
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // GetLatestPostsByType handles the request for getting the latest posts by type

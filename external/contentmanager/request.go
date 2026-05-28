@@ -85,6 +85,25 @@ type GetArticleItemByUrlFriendlyIdRequest struct {
 	UrlFriendlyId string
 }
 
+// GetArticleSitemapItemsRequest represents the request payload for building
+// sitemap entries from published article posts.
+type GetArticleSitemapItemsRequest struct {
+	// UserId is the user making the request.
+	UserId string
+
+	// CreatedAtFrom filters article posts created from the provided timestamp.
+	CreatedAtFrom string `json:"created_at_from,omitempty" query:"created_at_from"`
+
+	// Limit optionally caps the number of articles processed in this run.
+	Limit int `json:"limit,omitempty" query:"limit"`
+
+	// PerPage optionally controls the post-service page size. Defaults to 100.
+	PerPage int `json:"per_page,omitempty" query:"per_page"`
+
+	// URIPathPrefix is the public route prefix used for article sitemap entries.
+	URIPathPrefix string `json:"uri_path_prefix,omitempty" query:"uri_path_prefix"`
+}
+
 // GetLatestPostsByTypeRequest represents the request payload for getting
 // the latest posts by type
 type GetLatestPostsByTypeRequest struct {

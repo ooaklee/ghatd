@@ -264,6 +264,39 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 	return &parsedRequest, nil
 }
 
+// mapRequestToGetArticleSitemapItemsRequest maps the http request to the article sitemap items request.
+func mapRequestToGetArticleSitemapItemsRequest(r *http.Request, validator contentManagerValidator) (*GetArticleSitemapItemsRequest, error) {
+	var (
+		err           error
+		logger        = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
+		parsedRequest = &GetArticleSitemapItemsRequest{}
+	)
+
+	if r.Body != nil && r.ContentLength != 0 {
+		err = toolbox.DecodeRequestBody(r, parsedRequest)
+		if err != nil {
+			logger.Warn("failed-to-decode-body-for-get-article-sitemap-items-request", zap.Error(err))
+			return nil, post.ErrInvalidPostQueryParam
+		}
+	}
+
+	err = querydecoder.New(r.URL.Query()).Decode(parsedRequest)
+	if err != nil {
+		logger.Warn("failed-to-decode-query-for-get-article-sitemap-items-request", zap.Error(err))
+		return nil, post.ErrInvalidPostQueryParam
+	}
+
+	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+
+	err = validateParsedRequest(parsedRequest, validator)
+	if err != nil {
+		logger.Warn("validation-failed-for-get-article-sitemap-items-request", zap.Error(err))
+		return nil, post.ErrPostBadRequest
+	}
+
+	return parsedRequest, nil
+}
+
 // mapRequestToGetChangelogItemsRequest maps the http request to the get changelog items request
 func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentManagerValidator) (*GetChangelogItemsRequest, error) {
 

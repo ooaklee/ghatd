@@ -49,6 +49,45 @@ type GetArticlesResponse struct {
 	*post.GetArticlesResponse
 }
 
+// ArticleSitemapItem describes one public article URL ready for sitemap storage.
+type ArticleSitemapItem struct {
+	// PostID is the source article post identifier.
+	PostID string `json:"post_id,omitempty"`
+
+	// URLFriendlyID is the internal post URL-friendly identifier.
+	URLFriendlyID string `json:"url_friendly_id,omitempty"`
+
+	// PublicSlug is the public blog slug after removing the article prefix.
+	PublicSlug string `json:"public_slug,omitempty"`
+
+	// URI is the site-relative public sitemap URI.
+	URI string `json:"uri"`
+
+	// LastMod is the timestamp to use for the sitemap lastmod value.
+	LastMod string `json:"last_mod,omitempty"`
+
+	// PublishedAt is the source article publication timestamp.
+	PublishedAt string `json:"published_at,omitempty"`
+
+	// UpdatedAt is the source article update timestamp.
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+// GetArticleSitemapItemsResponse describes sitemap entries built from articles.
+type GetArticleSitemapItemsResponse struct {
+	// Items is the collection of sitemap-ready article URL entries.
+	Items []ArticleSitemapItem `json:"items"`
+
+	// ProcessedArticles is the total number of article posts inspected.
+	ProcessedArticles int `json:"processed_articles"`
+
+	// SeedableArticles is the number of article posts with sitemap-ready URLs.
+	SeedableArticles int `json:"seedable_articles"`
+
+	// SkippedMissingURLFriendlyID is the number of article posts skipped for missing slugs.
+	SkippedMissingURLFriendlyID int `json:"skipped_missing_url_friendly_id"`
+}
+
 // GetLatestPostsByTypeResponse represents the response payload for getting
 // the latest posts by type
 type GetLatestPostsByTypeResponse struct {

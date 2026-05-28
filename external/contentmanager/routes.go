@@ -23,6 +23,9 @@ type contentManagerHandler interface {
 	GetArticles(w http.ResponseWriter, r *http.Request)
 	GetArticleItemByUrlFriendlyId(w http.ResponseWriter, r *http.Request)
 
+	// GetArticleSitemapItems writes sitemap-ready article URL entries.
+	GetArticleSitemapItems(w http.ResponseWriter, r *http.Request)
+
 	GetLatestPostsByType(w http.ResponseWriter, r *http.Request)
 	GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request)
 }
@@ -55,6 +58,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}", request.Handler.UpdatePostById).Methods(http.MethodPatch, http.MethodOptions)
 	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}", request.Handler.DeletePostById).Methods(http.MethodDelete, http.MethodOptions)
 	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}/restore", request.Handler.RestorePostById).Methods(http.MethodPatch, http.MethodOptions)
+	contentManagerAdminOnlyRoutes.HandleFunc("/seo/posts/articles/sitemap-items", request.Handler.GetArticleSitemapItems).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
 	if request.MiddlewareAdminApiTokenOrJwtRequired != nil {
 		contentManagerAdminOnlyRoutes.Use(request.MiddlewareAdminApiTokenOrJwtRequired)
 	}
