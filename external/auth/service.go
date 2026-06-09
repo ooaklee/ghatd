@@ -8,12 +8,13 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
@@ -225,11 +226,11 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 	})
 
 	if err != nil {
-		switch err.Error() {
-		case "Token is expired":
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
 			logger.Warn("access-token-expired")
 			return nil, ErrUnauthorizedParsedStringTokenExpired
-		case "token contains an invalid number of segments":
+		case errors.Is(err, jwt.ErrTokenMalformed):
 			logger.Warn("access-token-malformatted")
 			return nil, ErrUnauthorizedMalformattedToken
 		default:
@@ -257,11 +258,11 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 	})
 
 	if err != nil {
-		switch err.Error() {
-		case "Token is expired":
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
 			logger.Warn("refresh-token-expired")
 			return nil, ErrUnauthorizedParsedStringTokenExpired
-		case "token contains an invalid number of segments":
+		case errors.Is(err, jwt.ErrTokenMalformed):
 			logger.Warn("refresh-token-malformatted")
 			return nil, ErrUnauthorizedMalformattedToken
 		default:

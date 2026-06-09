@@ -15,8 +15,8 @@ import (
 	_ "github.com/ooaklee/ghatd/migrations/mongo"
 	"github.com/spf13/cobra"
 	migrate "github.com/xakep666/mongo-migrate"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const (
@@ -99,9 +99,14 @@ func runMigrator(args []string) error {
 	defer cancel()
 
 	opt := options.Client().ApplyURI(mongoHostUri)
-	client, err := mongo.Connect(ctx, opt)
+	client, err := mongo.Connect(opt)
 	if err != nil {
 		return fmt.Errorf("migrator/unable-to-create-mongo-client: %v", err)
+	}
+	defer client.Disconnect(ctx)
+
+	if err := client.Ping(ctx, nil); err != nil {
+		return fmt.Errorf("migrator/unable-to-connect-to-mongo: %v", err)
 	}
 
 	db := client.Database(appSettings.MongoDatabaseName)
@@ -138,9 +143,9 @@ func runMigrator(args []string) error {
 		}
 		log.Printf("New migration created: %s\n", fName)
 	case "up":
-		err = migrate.Up(migrate.AllAvailable)
+		err = migrate.Up(ctx, migrate.AllAvailable)
 	case "down":
-		err = migrate.Down(migrate.AllAvailable)
+		err = migrate.Down(ctx, migrate.AllAvailable)
 	}
 
 	if err != nil {
