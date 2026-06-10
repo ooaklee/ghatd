@@ -97,14 +97,22 @@ GHAT(D) supports a dual-channel verification flow for login and email verificati
 
 ## Starting locally
 
-Before getting started please make sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [ASDF](https://github.com/asdf-vm/asdf) to install it with the following command. **Minimum required Go version: 1.25.0** (older versions such as 1.23.x will fail to resolve dependencies like `golang.org/x/net@v0.52.0`).
+Before getting started please make sure you have the correct version of [Go installed](https://go.dev/doc/install) or you can use [asdf](https://github.com/asdf-vm/asdf) to install the pinned toolchain from `.tool-versions`. **Minimum required Go version: 1.26.4**.
 
 ```sh
 # Add the plugin for Go
-asdf plugin-add golang
+asdf plugin add golang
 
-# Install required version
+# Install the pinned version
 asdf install
+```
+
+Use `asdf exec` when running maintenance commands so local validation uses the same Go toolchain as the repository:
+
+```sh
+asdf exec go test ./...
+asdf exec go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
+asdf exec go mod tidy
 ```
 
 ### Using the CLI (WIP)

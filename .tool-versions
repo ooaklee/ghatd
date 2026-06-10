@@ -1,2 +1,2 @@
-# asdf plugin-add golang
-golang 1.25.9
+# asdf plugin add golang
+golang 1.26.4
