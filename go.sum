@@ -238,8 +238,6 @@ github.com/onsi/ginkgo v1.16.5/go.mod h1:+E8gABHa3K6zRBolWtd+ROzc/U5bkGt0FwiG042
 github.com/onsi/gomega v1.7.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/onsi/gomega v1.34.1 h1:EUMJIKUjM8sKjYbtxQI9A4z2o+rruxnzNvpknOXie6k=
 github.com/onsi/gomega v1.34.1/go.mod h1:kU1QgUvBDLXBJq618Xvm2LUX6rSAfRaFRTcdOeDLwwY=
-github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3 h1:FPRKlK8DDxRPz7BKoxF3rTR3GLQnC79hjdai0zrXd2Q=
-github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3/go.mod h1:UYlF1u5v8Wa/r71LbdnL1SVtBtlTs2fAGRuhrDwdvjY=
 github.com/ooaklee/reply/v2 v2.0.0 h1:w3ngI5q1B9vscbKT8vBB7O3HiuMPRbIL7LjYYXtqsJI=
 github.com/ooaklee/reply/v2 v2.0.0/go.mod h1:ChVayTRDg8HXByDKUeEVvofxypDVDJMqGeAge0ldsN8=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
@@ -297,6 +295,8 @@ github.com/tdewolff/parse v2.3.4+incompatible/go.mod h1:8oBwCsVmUkgHO8M5iCzSIDtp
 github.com/tdewolff/test v1.0.11-0.20240106005702-7de5f7df4739 h1:IkjBCtQOOjIn03u/dMQK9g+Iw9ewps4mCl1nB8Sscbo=
 github.com/tdewolff/test v1.0.11-0.20240106005702-7de5f7df4739/go.mod h1:XPuWBzvdUzhCuxWO1ojpXsyzsA5bFoS3tO/Q3kFuTG8=
 github.com/tidwall/pretty v1.0.0/go.mod h1:XNkn88O1ChpSDQmQeStsy+sBenx6DDtFZJxhVysOjyk=
+github.com/victorspringer/http-cache v0.0.0-20260522121926-bfc21b538fdd h1:QI5lzIrg8sKtHqBGHReKVqK15MTfkpp1+if3sArHBJE=
+github.com/victorspringer/http-cache v0.0.0-20260522121926-bfc21b538fdd/go.mod h1:HUTeRNVL5tMwNG0HP6+Ybx/brgQ2ZEPIrfC+orPHE4U=
 github.com/xakep666/mongo-migrate v0.4.1 h1:uxFdoHPvzdtsgpFk5HWZf4NmZpscQzENy0d1mGkvutc=
 github.com/xakep666/mongo-migrate v0.4.1/go.mod h1:WzQLsqhykoKLV+xdBRL1x/IZY4CIYlcPJSoHa2Y9L7A=
 github.com/xdg-go/pbkdf2 v1.0.0 h1:Su7DPu48wXMwC3bs7MCNG+z4FhcyEuz5dlvchbq0B0c=

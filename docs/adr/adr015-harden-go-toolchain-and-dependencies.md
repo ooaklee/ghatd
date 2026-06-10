@@ -15,7 +15,7 @@ The direct dependency graph also still used `github.com/dgrijalva/jwt-go`, which
 
 Some dependencies have important provenance or migration considerations:
 
-- `github.com/ooaklee/http-cache` has a newer pseudo-version candidate, but that revision declares a different module path. Accepting it would break Go module provenance checks, so the existing pinned revision remains the safest compatible version until the module path is corrected or the dependency is replaced.
+- `github.com/ooaklee/http-cache` was pinned to a forked pseudo-version because the upstream module had not yet accepted the skip-cache controls GHATD needs. The upstream maintainer later accepted the behaviour and [reimplemented it in `github.com/victorspringer/http-cache`](https://github.com/victorspringer/http-cache/pull/21#issuecomment-4499679232), preserving the response-writer path while adding tests for skipping storage by response header and skipping lookup and storage by URI path regex.
 - `go.mongodb.org/mongo-driver` v1 is deprecated by MongoDB in favour of `go.mongodb.org/mongo-driver/v2`. GHATD imports the v1 driver across many repository packages, while the updated `github.com/xakep666/mongo-migrate` package now uses v2. A full repository-wide MongoDB v2 migration is larger than this hardening pass.
 
 ## Decision
@@ -30,7 +30,7 @@ We will update `github.com/xakep666/mongo-migrate` and adapt the `cmd/mongo-migr
 
 We will keep the wider GHATD repository packages on `go.mongodb.org/mongo-driver` v1.17.x for this change and treat a repository-wide MongoDB v2 migration as a separate breaking-change project.
 
-We will keep `github.com/ooaklee/http-cache` at the current pinned pseudo-version because the newer candidate fails Go module path provenance validation.
+We will replace `github.com/ooaklee/http-cache` with upstream `github.com/victorspringer/http-cache` now that upstream provides the required skip-cache response-header and URI-path-regex options.
 
 ## Consequences
 
@@ -44,4 +44,4 @@ The Mongo migrator now uses MongoDB driver v2 through `mongo-migrate`, while the
 
 The MongoDB v1 package deprecation remains a known follow-up. Moving all repository packages to driver v2 should be planned separately because it affects many public package imports, repository helpers, tests, examples, and host application integration expectations.
 
-The `http-cache` dependency remains pinned to a provenance-valid revision. Future updates should either use a module version that declares the expected path or replace the dependency with a maintained alternative.
+The `http-cache` dependency now resolves from the upstream module path. The fork can be archived after downstream applications have migrated, while preserving it for provenance of older builds.

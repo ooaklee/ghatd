@@ -10,9 +10,9 @@ require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/ettle/strcase v0.2.0
-	github.com/ooaklee/http-cache v0.0.0-20240308024722-18826df341f3
 	github.com/ritwickdey/querydecoder v1.2.0
 	github.com/spf13/cobra v1.10.2
+	github.com/victorspringer/http-cache v0.0.0-20260522121926-bfc21b538fdd
 	github.com/xakep666/mongo-migrate v0.4.1
 //>ghatd {{ block .WebDetailGoModRequirePackages }}{{ end }}
 //>ghatd {{ block .ApiDetailGoModRequirePackages }}{{ end }}

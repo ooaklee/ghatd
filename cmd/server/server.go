@@ -23,8 +23,8 @@ import (
 	"github.com/tdewolff/minify/svg"
 	"go.uber.org/zap"
 
-	cache "github.com/ooaklee/http-cache"
-	"github.com/ooaklee/http-cache/adapter/memory"
+	cache "github.com/victorspringer/http-cache"
+	"github.com/victorspringer/http-cache/adapter/memory"
 
 	"github.com/ooaklee/ghatd/cmd/server/settings"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -278,7 +278,7 @@ func initialiseRouterMiddlewares(appSettings *settings.Settings, appLogger *zap.
 		cache.ClientWithRefreshKey(appSettings.CacheRefreshParameterKey),
 		cache.ClientWithExpiresHeader(),
 		cache.ClientWithSkipCacheResponseHeader(appSettings.CacheSkipHttpHeader),
-		cache.ClientWithSkipCacheUriPathRegex(apiPathRegex),
+		cache.ClientWithSkipCacheURIPathRegex(apiPathRegex),
 	)
 	if err != nil {
 		return []mux.MiddlewareFunc{}, fmt.Errorf("unable-to-initialise-cache-memory-middleware: %v", err)
