@@ -7,9 +7,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/seo"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const sitemapItemsURIIndexName = "sitemap_items_uri_unique"
@@ -44,7 +44,7 @@ func InitSitemapItemIndexesDown(db *mongo.Database) error {
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "rolling-back-task-to-create-sitemap-item-indexes"))
 
-	if _, err := collection.Indexes().DropOne(ctx, sitemapItemsURIIndexName); err != nil && !strings.Contains(err.Error(), "index not found") {
+	if err := collection.Indexes().DropOne(ctx, sitemapItemsURIIndexName); err != nil && !strings.Contains(err.Error(), "index not found") {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-to-drop-sitemap-item-uri-index"))
 		return err
 	}

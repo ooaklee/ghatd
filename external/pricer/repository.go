@@ -8,9 +8,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const (
@@ -28,9 +28,9 @@ const (
 
 // MongoDbStore represents the datastore to hold pricer data.
 type MongoDbStore interface {
-	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
@@ -289,8 +289,8 @@ func (r *Repository) GetPricePlans(ctx context.Context, req *GetPricePlansReques
 	var results []PricePlan
 	findOptions := options.Find()
 	paginationLimit := repository.GetPaginationLimit(int64(req.PerPage))
-	findOptions.Limit = paginationLimit
-	findOptions.Skip = repository.GetPaginationSkip(int64(req.Page), paginationLimit)
+	findOptions.SetLimit(*paginationLimit)
+	findOptions.SetSkip(*repository.GetPaginationSkip(int64(req.Page), paginationLimit))
 	findOptions.SetSort(buildPricerSortOptions(req.Order))
 	applyPricePlanFindProjection(findOptions, pricePlanIncludeOptions{
 		includeFeatures:  req.IncludeFeatures,
@@ -481,8 +481,8 @@ func (r *Repository) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (
 	var results []PriceFeature
 	findOptions := options.Find()
 	paginationLimit := repository.GetPaginationLimit(int64(req.PerPage))
-	findOptions.Limit = paginationLimit
-	findOptions.Skip = repository.GetPaginationSkip(int64(req.Page), paginationLimit)
+	findOptions.SetLimit(*paginationLimit)
+	findOptions.SetSkip(*repository.GetPaginationSkip(int64(req.Page), paginationLimit))
 	findOptions.SetSort(buildPricerSortOptions(req.Order))
 
 	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, buildPriceFeatureQueryFilter(req), findOptions)
@@ -673,7 +673,7 @@ func buildPricerSortOptions(order string) bson.D {
 	}
 }
 
-func applyPricePlanFindProjection(findOptions *options.FindOptions, includeOptions pricePlanIncludeOptions) {
+func applyPricePlanFindProjection(findOptions *options.FindOptionsBuilder, includeOptions pricePlanIncludeOptions) {
 	projection := buildPricePlanProjection(includeOptions)
 	if len(projection) > 0 {
 		findOptions.SetProjection(projection)

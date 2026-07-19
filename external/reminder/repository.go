@@ -7,17 +7,17 @@ import (
 	"sync"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore describes the MongoDB helper operations the reminder repository uses.
 type MongoDbStore interface {
-	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, resultObjectName string) error
@@ -264,7 +264,7 @@ func buildReminderExecutionFilter(req *ReminderExecutionFilter) bson.M {
 	return queryFilter
 }
 
-func buildReminderPaginationOptions(page, perPage int) *options.FindOptions {
+func buildReminderPaginationOptions(page, perPage int) *options.FindOptionsBuilder {
 	if page <= 0 {
 		page = 1
 	}

@@ -7,9 +7,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/seo"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const defaultIdentityTagSystem = "system"
@@ -134,7 +134,7 @@ func initDefaultSitemapItemsUp(db *mongo.Database, paths Paths) error {
 					"created_at":       now,
 				},
 			},
-			options.Update().SetUpsert(true),
+			options.UpdateOne().SetUpsert(true),
 		)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-to-seed-default-sitemap-item: "+uri))

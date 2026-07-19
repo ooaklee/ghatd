@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // MongoDbStore describes the MongoDB operations that the notifier repository
@@ -18,8 +18,8 @@ import (
 // This is a subset of the full data store interface – only the read, write,
 // and collection-management methods that notifier actually uses.
 type MongoDbStore interface {
-	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
@@ -292,7 +292,7 @@ func buildAddressListFilter(req *ListNotificationAddressesRequest) bson.M {
 	return filter
 }
 
-func buildAddressListOptions(req *ListNotificationAddressesRequest) *options.FindOptions {
+func buildAddressListOptions(req *ListNotificationAddressesRequest) *options.FindOptionsBuilder {
 	findOptions := options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}})
 	if req == nil {
 		return findOptions
@@ -312,14 +312,14 @@ func buildAddressListOptions(req *ListNotificationAddressesRequest) *options.Fin
 
 // findAddresses runs a find query against the notification_addresses
 // collection and returns the results sorted by most-recently-updated first.
-func (r *Repository) findAddresses(ctx context.Context, filter bson.M, opts ...*options.FindOptions) ([]NotificationAddress, error) {
+func (r *Repository) findAddresses(ctx context.Context, filter bson.M, opts ...options.Lister[options.FindOptions]) ([]NotificationAddress, error) {
 	collection, err := r.GetNotificationAddressesCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(opts) == 0 {
-		opts = []*options.FindOptions{options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}})}
+		opts = []options.Lister[options.FindOptions]{options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}})}
 	}
 
 	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, filter, opts...)

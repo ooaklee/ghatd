@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"testing"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type mockMongoStore struct {
@@ -23,7 +23,7 @@ type mockMongoStore struct {
 	lastFilter            interface{}
 }
 
-func (m *mockMongoStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func (m *mockMongoStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	m.countDocumentsCalls++
 	m.lastCollectionName = collection.Name()
 	m.lastFilter = filter
@@ -36,7 +36,7 @@ func (m *mockMongoStore) ExecuteDeleteOneCommand(ctx context.Context, collection
 	return nil
 }
 
-func (m *mockMongoStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (m *mockMongoStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	m.lastCollectionName = collection.Name()
 	m.lastFilter = filter
 	return nil, nil
@@ -70,7 +70,7 @@ func (m *mockMongoStore) GetDatabase(ctx context.Context, dbName string) (*mongo
 		return nil, m.getDatabaseErrs[callIndex]
 	}
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (m *mockMongoStore) InitialiseClient(ctx context.Context) (*mongo.Client, e
 		return nil, m.initialiseClientErrs[callIndex]
 	}
 
-	return mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	return mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 }
 
 func (m *mockMongoStore) MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {

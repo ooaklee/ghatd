@@ -7,23 +7,32 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type mockMongoDbStore struct {
 	initialiseClientFunc func(ctx context.Context) (*mongo.Client, error)
 	getDatabaseFunc      func(ctx context.Context, dbName string) (*mongo.Database, error)
-	executeFindFunc      func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	executeFindFunc      func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	mapAllFunc           func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
-func (m *mockMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func materializeFindOptions(t *testing.T, lister options.Lister[options.FindOptions]) *options.FindOptions {
+	t.Helper()
+	opts := &options.FindOptions{}
+	for _, setter := range lister.List() {
+		require.NoError(t, setter(opts))
+	}
+	return opts
+}
+
+func (m *mockMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	return 0, errors.New("not implemented")
 }
 
-func (m *mockMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (m *mockMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	if m.executeFindFunc != nil {
 		return m.executeFindFunc(ctx, collection, filter, opts...)
 	}
@@ -70,7 +79,7 @@ func (m *mockMongoDbStore) MapOneInCursorToResult(ctx context.Context, cursor *m
 func TestRepository_GetStreakCollectionRetriesFailuresAndCachesSuccess(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	initialiseAttempts := 0
@@ -143,16 +152,16 @@ func TestRepository_WithCollectionInitMaxAttemptsLimitOverridesDefault(t *testin
 func TestRepository_ListStreaksBuildsHistoryFilter(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	var capturedFilter bson.M
 	var capturedOptions *options.FindOptions
 	store := &mockMongoDbStore{
-		executeFindFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+		executeFindFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 			capturedFilter = filter.(bson.M)
 			require.Len(t, opts, 1)
-			capturedOptions = opts[0]
+			capturedOptions = materializeFindOptions(t, opts[0])
 			return nil, nil
 		},
 		mapAllFunc: func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {

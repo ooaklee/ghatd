@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // mockNotifierMongoDbStore is a small repository double used to test the
@@ -18,8 +18,8 @@ import (
 type mockNotifierMongoDbStore struct {
 	initialiseClientFunc func(ctx context.Context) (*mongo.Client, error)
 	getDatabaseFunc      func(ctx context.Context, dbName string) (*mongo.Database, error)
-	countFunc            func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
-	findFunc             func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	countFunc            func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	findFunc             func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	findOneFunc          func(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 	deleteOneFunc        func(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	deleteManyFunc       func(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
@@ -27,14 +27,23 @@ type mockNotifierMongoDbStore struct {
 	mapAllFunc           func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
-func (m *mockNotifierMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func materializeFindOptions(t *testing.T, lister options.Lister[options.FindOptions]) *options.FindOptions {
+	t.Helper()
+	opts := &options.FindOptions{}
+	for _, setter := range lister.List() {
+		require.NoError(t, setter(opts))
+	}
+	return opts
+}
+
+func (m *mockNotifierMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	if m.countFunc != nil {
 		return m.countFunc(ctx, collection, filter, opts...)
 	}
 	return 0, errors.New("not implemented")
 }
 
-func (m *mockNotifierMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (m *mockNotifierMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	if m.findFunc != nil {
 		return m.findFunc(ctx, collection, filter, opts...)
 	}
@@ -96,7 +105,7 @@ func (m *mockNotifierMongoDbStore) MapAllInCursorToResult(ctx context.Context, c
 func TestRepository_GetNotificationAddressesCollectionRetriesFailuresAndCachesSuccess(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	initialiseAttempts := 0
@@ -132,7 +141,7 @@ func TestRepository_GetNotificationAddressesCollectionRetriesFailuresAndCachesSu
 func TestRepository_GetNotificationPreferencesCollectionRetriesFailuresAndCachesSuccess(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	initialiseAttempts := 0
@@ -215,7 +224,7 @@ func TestRepository_WithCollectionInitMaxAttemptsLimitOverridesDefault(t *testin
 func TestRepository_DeleteAddressByIDForUserUsesRepositoryHelpers(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	findOneCalls := 0
@@ -254,7 +263,7 @@ func TestRepository_DeleteAddressByIDForUserUsesRepositoryHelpers(t *testing.T) 
 func TestRepository_GetAddressesBuildsAdminFilter(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	findCalls := 0
@@ -265,7 +274,7 @@ func TestRepository_GetAddressesBuildsAdminFilter(t *testing.T) {
 		getDatabaseFunc: func(ctx context.Context, dbName string) (*mongo.Database, error) {
 			return client.Database("notifier_test"), nil
 		},
-		findFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+		findFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 			findCalls++
 			assert.Equal(t, NotificationAddressesCollection, collection.Name())
 			assert.Equal(t, bson.M{
@@ -274,10 +283,11 @@ func TestRepository_GetAddressesBuildsAdminFilter(t *testing.T) {
 				"status":  NotificationAddressStatusActive,
 			}, filter)
 			require.Len(t, opts, 1)
-			require.NotNil(t, opts[0].Limit)
-			require.NotNil(t, opts[0].Skip)
-			assert.Equal(t, int64(25), *opts[0].Limit)
-			assert.Equal(t, int64(50), *opts[0].Skip)
+			findOptions := materializeFindOptions(t, opts[0])
+			require.NotNil(t, findOptions.Limit)
+			require.NotNil(t, findOptions.Skip)
+			assert.Equal(t, int64(25), *findOptions.Limit)
+			assert.Equal(t, int64(50), *findOptions.Skip)
 			return mongo.NewCursorFromDocuments([]interface{}{}, nil, nil)
 		},
 		mapAllFunc: func(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error {
@@ -303,7 +313,7 @@ func TestRepository_GetAddressesBuildsAdminFilter(t *testing.T) {
 func TestRepository_CountAddressesBuildsAdminFilter(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	countCalls := 0
@@ -314,7 +324,7 @@ func TestRepository_CountAddressesBuildsAdminFilter(t *testing.T) {
 		getDatabaseFunc: func(ctx context.Context, dbName string) (*mongo.Database, error) {
 			return client.Database("notifier_test"), nil
 		},
-		countFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+		countFunc: func(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 			countCalls++
 			assert.Equal(t, NotificationAddressesCollection, collection.Name())
 			assert.Equal(t, bson.M{
@@ -343,7 +353,7 @@ func TestRepository_CountAddressesBuildsAdminFilter(t *testing.T) {
 func TestRepository_DeleteAddressByIDForUserStopsWhenAddressIsNotFound(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	deleteOneCalls := 0
@@ -375,7 +385,7 @@ func TestRepository_DeleteAddressByIDForUserStopsWhenAddressIsNotFound(t *testin
 func TestRepository_DeleteAddressesByUserIDUsesDeleteManyHelper(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	deleteManyCalls := 0
@@ -408,7 +418,7 @@ func TestRepository_DeleteAddressesByUserIDUsesDeleteManyHelper(t *testing.T) {
 func TestRepository_DisableAddressByHashUsesExecuteUpdateOneCommand(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	updateOneCalls := 0
@@ -446,7 +456,7 @@ func TestRepository_DisableAddressByHashUsesExecuteUpdateOneCommand(t *testing.T
 func TestRepository_DisableAddressByHashWrapsExecutorError(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	store := &mockNotifierMongoDbStore{

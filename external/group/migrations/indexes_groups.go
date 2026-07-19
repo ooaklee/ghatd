@@ -6,9 +6,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // InitGroupsIndexesUp initializes indexes for the groups collection
@@ -200,7 +200,7 @@ func InitGroupsIndexesDown(db *mongo.Database) error { //Down
 	}
 
 	for _, indexName := range indexNames {
-		_, err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err

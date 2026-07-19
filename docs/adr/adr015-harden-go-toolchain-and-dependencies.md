@@ -16,7 +16,7 @@ The direct dependency graph also still used `github.com/dgrijalva/jwt-go`, which
 Some dependencies have important provenance or migration considerations:
 
 - `github.com/ooaklee/http-cache` was pinned to a forked pseudo-version because the upstream module had not yet accepted the skip-cache controls GHATD needs. The upstream maintainer later accepted the behaviour and [reimplemented it in `github.com/victorspringer/http-cache`](https://github.com/victorspringer/http-cache/pull/21#issuecomment-4499679232), preserving the response-writer path while adding tests for skipping storage by response header and skipping lookup and storage by URI path regex.
-- `go.mongodb.org/mongo-driver` v1 is deprecated by MongoDB in favour of `go.mongodb.org/mongo-driver/v2`. GHATD imports the v1 driver across many repository packages, while the updated `github.com/xakep666/mongo-migrate` package now uses v2. A full repository-wide MongoDB v2 migration is larger than this hardening pass.
+- `go.mongodb.org/mongo-driver` v1 was deprecated by MongoDB in favour of `go.mongodb.org/mongo-driver/v2`. GHATD subsequently migrated its repository packages and MongoDB migrator to v2.
 
 ## Decision
 
@@ -28,7 +28,7 @@ We will replace direct `github.com/dgrijalva/jwt-go` usage with `github.com/gola
 
 We will update `github.com/xakep666/mongo-migrate` and adapt the `cmd/mongo-migrator` command to the package's context-aware API and MongoDB driver v2 connection type.
 
-We will keep the wider GHATD repository packages on `go.mongodb.org/mongo-driver` v1.17.x for this change and treat a repository-wide MongoDB v2 migration as a separate breaking-change project.
+The original hardening pass retained `go.mongodb.org/mongo-driver` v1.17.x. The later repository-wide migration moved GHATD's MongoDB integrations to v2.
 
 We will replace `github.com/ooaklee/http-cache` with upstream `github.com/victorspringer/http-cache` now that upstream provides the required skip-cache response-header and URI-path-regex options.
 
