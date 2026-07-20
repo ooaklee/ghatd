@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
 // Config holds all configuration for MongoDB connection
@@ -22,7 +22,10 @@ type Config struct {
 	// Timeout Settings
 	ConnectTimeout         *time.Duration
 	ServerSelectionTimeout *time.Duration
-	SocketTimeout          *time.Duration
+	OperationTimeout       *time.Duration
+	// SocketTimeout is retained for source compatibility with v1-era config.
+	// Deprecated: the v2 driver uses OperationTimeout instead.
+	SocketTimeout *time.Duration
 
 	// Retry Settings
 	RetryWrites  *bool
@@ -77,12 +80,12 @@ func WithConnectionPool(maxPool, minPool uint64, maxIdleTime time.Duration) Conf
 	}
 }
 
-// WithTimeouts sets various timeout options
-func WithTimeouts(connect, serverSelection, socket time.Duration) ConfigOption {
+// WithTimeouts sets connect, server selection, and operation timeouts.
+func WithTimeouts(connect, serverSelection, operation time.Duration) ConfigOption {
 	return func(c *Config) {
 		c.ConnectTimeout = &connect
 		c.ServerSelectionTimeout = &serverSelection
-		c.SocketTimeout = &socket
+		c.OperationTimeout = &operation
 	}
 }
 
@@ -138,8 +141,10 @@ func (c *Config) BuildClientOptions() *options.ClientOptions {
 	if c.ServerSelectionTimeout != nil {
 		clientOpts.SetServerSelectionTimeout(*c.ServerSelectionTimeout)
 	}
-	if c.SocketTimeout != nil {
-		clientOpts.SetSocketTimeout(*c.SocketTimeout)
+	if c.OperationTimeout != nil {
+		clientOpts.SetTimeout(*c.OperationTimeout)
+	} else if c.SocketTimeout != nil {
+		clientOpts.SetTimeout(*c.SocketTimeout)
 	}
 	if c.RetryWrites != nil {
 		clientOpts.SetRetryWrites(*c.RetryWrites)

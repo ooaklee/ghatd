@@ -6,9 +6,9 @@ package migrations
 
 // 	"github.com/ooaklee/ghatd/external/toolbox"
 // 	migrate "github.com/xakep666/mongo-migrate"
-// 	"go.mongodb.org/mongo-driver/bson"
-// 	"go.mongodb.org/mongo-driver/mongo"
-// 	"go.mongodb.org/mongo-driver/mongo/options"
+// 	"go.mongodb.org/mongo-driver/v2/bson"
+// 	"go.mongodb.org/mongo-driver/v2/mongo"
+// 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 // )
 
 func init() {
@@ -36,7 +36,7 @@ func init() {
 	// }, func(db *mongo.Database) error { //Down
 	// 	log.Default().Println(toolbox.OutputBasicLogString("info", "rolling-back-task-to-create-users-created-at-index"))
 
-	// 	_, err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), "users-created-at-index")
+	// 	err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), "users-created-at-index")
 	// 	if err != nil {
 	// 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-task-to-create-users-created-at-index"))
 	// 		return err

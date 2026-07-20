@@ -6,10 +6,10 @@ import (
 	"time"
 
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
 // Example: How to migrate from old to new structure
@@ -194,7 +194,7 @@ func (m *MockRepositoryHelper) Stats() repositoryhelpers.ConnectionStats {
 	return repositoryhelpers.ConnectionStats{}
 }
 
-func (m *MockRepositoryHelper) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func (m *MockRepositoryHelper) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	return 0, nil
 }
 func (m *MockRepositoryHelper) ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
@@ -215,7 +215,7 @@ func (m *MockRepositoryHelper) ExecuteFindOneCommandDecodeResult(ctx context.Con
 func (m *MockRepositoryHelper) ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error {
 	return nil
 }
-func (m *MockRepositoryHelper) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (m *MockRepositoryHelper) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	return nil, nil
 }
 func (m *MockRepositoryHelper) ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error) {

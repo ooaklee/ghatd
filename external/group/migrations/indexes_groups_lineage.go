@@ -6,9 +6,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // InitGroupsLineageIndexUp adds the lineage index used by descendants queries.
@@ -40,7 +40,7 @@ func InitGroupsLineageIndexDown(db *mongo.Database) error { //Down
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "rolling-back-task-to-add-groups-lineage-index"))
 
-	_, err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), "idx_groups_lineage")
+	err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), "idx_groups_lineage")
 	if err != nil {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-groups-lineage-index"))
 		return err

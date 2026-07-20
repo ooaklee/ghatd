@@ -16,8 +16,8 @@ import (
 	"github.com/benweissmann/memongo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/ooaklee/ghatd/external/pricer"
 	pricermigrations "github.com/ooaklee/ghatd/external/pricer/migrations"

@@ -6,10 +6,9 @@ import (
 	"sync"
 
 	"github.com/ooaklee/ghatd/external/repository"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const (
@@ -25,9 +24,9 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
-	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
@@ -150,14 +149,14 @@ func (r *Repository) GetTotalApiTokens(ctx context.Context, userId, userNanoId, 
 	}
 
 	if descriptionFilter != "" {
-		apiTokenFilter["description"] = primitive.Regex{
+		apiTokenFilter["description"] = bson.Regex{
 			Pattern: fmt.Sprintf(MongoRegexStringFormat, descriptionFilter),
 			Options: "i",
 		}
 	}
 
 	if statusFilter != "" {
-		apiTokenFilter["status"] = primitive.Regex{
+		apiTokenFilter["status"] = bson.Regex{
 			Pattern: fmt.Sprintf(MongoRegexStringFormat, statusFilter),
 			Options: "i",
 		}
@@ -273,12 +272,12 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 
 	findOptions := options.Find()
 
-	findOptions.Limit = paginationLimit
-	findOptions.Skip = repository.GetPaginationSkip(int64(req.Page), paginationLimit)
+	findOptions.SetLimit(*paginationLimit)
+	findOptions.SetSkip(*repository.GetPaginationSkip(int64(req.Page), paginationLimit))
 
 	// generate query filter from request
 	if req.Description != "" {
-		queryFilter = append(queryFilter, bson.E{Key: "description", Value: primitive.Regex{
+		queryFilter = append(queryFilter, bson.E{Key: "description", Value: bson.Regex{
 			Pattern: fmt.Sprintf(MongoRegexStringFormat, req.Description),
 			Options: "i",
 		},
@@ -286,7 +285,7 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 	}
 
 	if req.Status != "" {
-		queryFilter = append(queryFilter, bson.E{Key: "status", Value: primitive.Regex{
+		queryFilter = append(queryFilter, bson.E{Key: "status", Value: bson.Regex{
 			Pattern: fmt.Sprintf(MongoRegexStringFormat, req.Status),
 			Options: "i",
 		},

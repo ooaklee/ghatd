@@ -90,13 +90,13 @@ The billing package uses two MongoDB collections:
 
 - MongoDB 4.2 or higher.
 - `mongo-migrate` library: `github.com/xakep666/mongo-migrate`.
-- Go mongo driver: `go.mongodb.org/mongo-driver/mongo`.
+- Go mongo driver: `go.mongodb.org/mongo-driver/v2/mongo`.
 
 ### Installing Dependencies
 
 ```bash
 go get github.com/xakep666/mongo-migrate
-go get go.mongodb.org/mongo-driver/mongo
+go get go.mongodb.org/mongo-driver/v2/mongo
 ```
 
 ### Running Migrations
@@ -113,8 +113,8 @@ import (
     
     billingMigration "github.com/ooaklee/ghatd/external/billing/migrations"
     migrate "github.com/xakep666/mongo-migrate"
-    "go.mongodb.org/mongo-driver/mongo"
-    "go.mongodb.org/mongo-driver/mongo/options"
+    "go.mongodb.org/mongo-driver/v2/mongo"
+    "go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func main() {

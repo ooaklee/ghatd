@@ -7,9 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type mockMongoDbStore struct {
@@ -17,11 +17,20 @@ type mockMongoDbStore struct {
 	getDatabaseFunc      func(ctx context.Context, dbName string) (*mongo.Database, error)
 }
 
-func (m *mockMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func materializeFindOptions(t *testing.T, lister options.Lister[options.FindOptions]) *options.FindOptions {
+	t.Helper()
+	opts := &options.FindOptions{}
+	for _, setter := range lister.List() {
+		require.NoError(t, setter(opts))
+	}
+	return opts
+}
+
+func (m *mockMongoDbStore) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	return 0, errors.New("not implemented")
 }
 
-func (m *mockMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (m *mockMongoDbStore) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -66,7 +75,7 @@ func (m *mockMongoDbStore) MapOneInCursorToResult(ctx context.Context, cursor *m
 func TestRepository_GetReminderCollectionRetriesFailuresAndCachesSuccess(t *testing.T) {
 	t.Parallel()
 
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(options.Client().ApplyURI("mongodb://localhost:27017"))
 	require.NoError(t, err)
 
 	initialiseAttempts := 0
@@ -215,7 +224,7 @@ func TestBuildReminderPaginationOptions(t *testing.T) {
 	t.Parallel()
 
 	t.Run("default pagination", func(t *testing.T) {
-		opts := buildReminderPaginationOptions(0, 0)
+		opts := materializeFindOptions(t, buildReminderPaginationOptions(0, 0))
 		skip := opts.Skip
 		limit := opts.Limit
 		require.NotNil(t, skip)
@@ -225,7 +234,7 @@ func TestBuildReminderPaginationOptions(t *testing.T) {
 	})
 
 	t.Run("custom pagination", func(t *testing.T) {
-		opts := buildReminderPaginationOptions(2, 10)
+		opts := materializeFindOptions(t, buildReminderPaginationOptions(2, 10))
 		skip := opts.Skip
 		limit := opts.Limit
 		require.NotNil(t, skip)

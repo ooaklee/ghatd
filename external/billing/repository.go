@@ -7,9 +7,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // BillingEventsCollection collection name for billing events
@@ -22,9 +22,9 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
-	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
@@ -227,8 +227,8 @@ func (r *Repository) GetSubscriptions(ctx context.Context, req *GetSubscriptions
 
 	findOptions := options.Find()
 
-	findOptions.Limit = paginationLimit
-	findOptions.Skip = repository.GetPaginationSkip(int64(req.Page), paginationLimit)
+	findOptions.SetLimit(*paginationLimit)
+	findOptions.SetSkip(*repository.GetPaginationSkip(int64(req.Page), paginationLimit))
 
 	// generate query filter from request
 	if req.IntegratorName != "" {
@@ -493,8 +493,8 @@ func (r *Repository) GetBillingEvents(ctx context.Context, req *GetBillingEvents
 
 	findOptions := options.Find()
 
-	findOptions.Limit = paginationLimit
-	findOptions.Skip = repository.GetPaginationSkip(int64(req.Page), paginationLimit)
+	findOptions.SetLimit(*paginationLimit)
+	findOptions.SetSkip(*repository.GetPaginationSkip(int64(req.Page), paginationLimit))
 
 	// generate query filter from request
 	if req.IntegratorName != "" {

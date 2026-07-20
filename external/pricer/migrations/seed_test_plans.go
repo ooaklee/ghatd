@@ -6,8 +6,8 @@ import (
 
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // TestPlansSeedCreatedByID identifies all documents inserted by the test plans

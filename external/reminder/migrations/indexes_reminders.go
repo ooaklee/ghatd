@@ -6,9 +6,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // InitRemindersIndexesUp creates indexes for reminder declarations and execution tracking.
@@ -177,7 +177,7 @@ func InitRemindersIndexesDown(db *mongo.Database) error {
 	}
 
 	for _, indexName := range indexNames {
-		_, err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err
@@ -191,7 +191,7 @@ func InitRemindersIndexesDown(db *mongo.Database) error {
 		"idx_reminder_executions_status_scheduled",
 	}
 	for _, indexName := range executionIndexNames {
-		_, err := db.Collection(reminder.ReminderExecutionsCollection).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(reminder.ReminderExecutionsCollection).Indexes().DropOne(context.TODO(), indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err

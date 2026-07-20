@@ -113,7 +113,7 @@ This example illustrates how to utilise the core repository's helper methods to 
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error

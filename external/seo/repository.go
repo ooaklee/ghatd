@@ -8,18 +8,18 @@ import (
 	"strings"
 	"sync"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore methods needed by seo.
 type MongoDbStore interface {
-	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error)
+	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
-	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error)
+	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
@@ -222,7 +222,7 @@ func (r *Repository) UpsertSitemapItemByURI(ctx context.Context, item *SitemapIt
 		},
 	}
 
-	result, err := collection.UpdateOne(ctx, bson.M{"uri": item.URI}, update, options.Update().SetUpsert(true))
+	result, err := collection.UpdateOne(ctx, bson.M{"uri": item.URI}, update, options.UpdateOne().SetUpsert(true))
 	if err != nil {
 		return nil, false, err
 	}

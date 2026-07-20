@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/external/logger"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.uber.org/zap"
 )
 
@@ -88,7 +88,7 @@ func (h *Handler) connect(ctx context.Context) (*mongo.Client, error) {
 
 	clientOptions := h.config.BuildClientOptions()
 
-	client, err := mongo.Connect(ctx, clientOptions)
+	client, err := mongo.Connect(clientOptions)
 	if err != nil {
 		h.handleError(ctx, err, "connect")
 		logger.Error("mongo-connect-failed", zap.Error(err))

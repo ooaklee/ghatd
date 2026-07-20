@@ -15,9 +15,9 @@ import (
 	"context"
 
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // MongoDbRepository uses the new extensible pattern
@@ -117,7 +117,7 @@ func (r *MongoDbRepository) MapOneInCursorToResult(ctx context.Context, cursor *
 }
 
 // ExecuteCountDocuments executes a count documents command
-func (r *MongoDbRepository) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.CountOptions) (int64, error) {
+func (r *MongoDbRepository) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	return r.helper.ExecuteCountDocuments(ctx, collection, filter, opts...)
 }
 
@@ -152,7 +152,7 @@ func (r *MongoDbRepository) ExecuteReplaceOneCommand(ctx context.Context, collec
 }
 
 // ExecuteFindCommand executes a find command
-func (r *MongoDbRepository) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...*options.FindOptions) (*mongo.Cursor, error) {
+func (r *MongoDbRepository) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	return r.helper.ExecuteFindCommand(ctx, collection, filter, opts...)
 }
 

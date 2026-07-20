@@ -32,9 +32,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // InitNotifierIndexesUp creates all the indexes the notifier package needs.
@@ -100,13 +100,13 @@ func InitNotifierIndexesDown(db *mongo.Database) error { //Down
 		"idx_notification_addresses_updated_at",
 	}
 	for _, indexName := range addressIndexNames {
-		if _, err := db.Collection(notifier.NotificationAddressesCollection).Indexes().DropOne(context.TODO(), indexName); err != nil {
+		if err := db.Collection(notifier.NotificationAddressesCollection).Indexes().DropOne(context.TODO(), indexName); err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err
 		}
 	}
 
-	if _, err := db.Collection(notifier.NotificationPreferencesCollection).Indexes().DropOne(context.TODO(), "idx_notification_preferences_enabled"); err != nil {
+	if err := db.Collection(notifier.NotificationPreferencesCollection).Indexes().DropOne(context.TODO(), "idx_notification_preferences_enabled"); err != nil {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: idx_notification_preferences_enabled"))
 		return err
 	}

@@ -6,9 +6,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func InitPricingIndexesUp(db *mongo.Database) error { //Up
@@ -97,7 +97,7 @@ func InitPricingIndexesDown(db *mongo.Database) error { //Down
 	}
 
 	for _, indexName := range planIndexNames {
-		_, err := db.Collection(pricer.PricePlansCollection).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(pricer.PricePlansCollection).Indexes().DropOne(context.TODO(), indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err
@@ -111,7 +111,7 @@ func InitPricingIndexesDown(db *mongo.Database) error { //Down
 	}
 
 	for _, indexName := range featureIndexNames {
-		_, err := db.Collection(pricer.PriceFeaturesCollection).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(pricer.PriceFeaturesCollection).Indexes().DropOne(context.TODO(), indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err
