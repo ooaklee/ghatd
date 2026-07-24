@@ -187,24 +187,11 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 // GetLatestPostsByType handles logic associated with getting the latest posts by type
 func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error) {
 
-	var (
-		logger         = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser *userV2.UniversalUser
-	)
-
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
 	logger.Info("handling-get-latest-posts-by-type-request")
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		requestingUser = getRequestingUserResp.User
-	}
+	// No name cache is needed here; pass nil.
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, nil, logger)
 
 	matchingPostOverviewsResp, err := s.postService.GetLatestPostsByType(ctx, req.GetLatestPostsByTypeRequest)
 	if err != nil {
@@ -246,7 +233,6 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
@@ -257,20 +243,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 		return nil, ErrUnauthorisedCMUser
 	}
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		userFirstNameLastInital := getRequestingUserResp.User.PersonalInfo.FirstName + " " + string(getRequestingUserResp.User.PersonalInfo.LastName[0]) + "."
-		userIdToUserFirstNameLastInitial[getRequestingUserResp.User.ID] = userFirstNameLastInital
-
-		requestingUser = getRequestingUserResp.User
-	}
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
 
 	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
 	if err != nil {
@@ -279,7 +252,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 	}
 
 	if (requestingUser == nil || !requestingUser.IsAdmin()) && matchingPost.PublishedAt == "" {
-		// make sure unauthed/ non-admon users can only see published content
+		// make sure unauthed/ non-admin users can only see published content
 		return nil, ErrUnauthorisedCMUser
 	}
 
@@ -302,7 +275,6 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
@@ -313,20 +285,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 		return nil, ErrUnauthorisedCMUser
 	}
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		userFirstNameLastInital := getRequestingUserResp.User.PersonalInfo.FirstName + " " + string(getRequestingUserResp.User.PersonalInfo.LastName[0]) + "."
-		userIdToUserFirstNameLastInitial[getRequestingUserResp.User.ID] = userFirstNameLastInital
-
-		requestingUser = getRequestingUserResp.User
-	}
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
 
 	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
 	if err != nil {
@@ -335,7 +294,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 	}
 
 	if (requestingUser == nil || !requestingUser.IsAdmin()) && matchingPost.PublishedAt == "" {
-		// make sure unauthed/ non-admon users can only see published content
+		// make sure unauthed/ non-admin users can only see published content
 		return nil, ErrUnauthorisedCMUser
 	}
 
@@ -357,29 +316,15 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
 	logger.Info("handling-get-changelog-items-request")
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		userFirstNameLastInital := getRequestingUserResp.User.PersonalInfo.FirstName + " " + string(getRequestingUserResp.User.PersonalInfo.LastName[0]) + "."
-		userIdToUserFirstNameLastInitial[getRequestingUserResp.User.ID] = userFirstNameLastInital
-
-		requestingUser = getRequestingUserResp.User
-	}
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admon users can only see published content
+		// make sure unauthed/ non-admin users can only see published content
 		req.GetChangelogItemsRequest.GetPostsRequest.IsPublished = true
 		req.GetChangelogItemsRequest.GetPostsRequest.IsNotDeleted = true
 	}
@@ -402,29 +347,15 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
 	logger.Info("handling-get-glossary-items-request")
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		userFirstNameLastInital := getRequestingUserResp.User.PersonalInfo.FirstName + " " + string(getRequestingUserResp.User.PersonalInfo.LastName[0]) + "."
-		userIdToUserFirstNameLastInitial[getRequestingUserResp.User.ID] = userFirstNameLastInital
-
-		requestingUser = getRequestingUserResp.User
-	}
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admon users can only see published content
+		// make sure unauthed/ non-admin users can only see published content
 		req.GetGlossaryItemsRequest.GetPostsRequest.IsPublished = true
 		req.GetGlossaryItemsRequest.GetPostsRequest.IsNotDeleted = true
 	}
@@ -447,29 +378,15 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
 	logger.Info("handling-get-faq-items-request")
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		userFirstNameLastInital := getRequestingUserResp.User.PersonalInfo.FirstName + " " + string(getRequestingUserResp.User.PersonalInfo.LastName[0]) + "."
-		userIdToUserFirstNameLastInitial[getRequestingUserResp.User.ID] = userFirstNameLastInital
-
-		requestingUser = getRequestingUserResp.User
-	}
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admon users can only see published content
+		// make sure unauthed/ non-admin users can only see published content
 		req.GetFaqItemsRequest.GetPostsRequest.IsPublished = true
 		req.GetFaqItemsRequest.GetPostsRequest.IsNotDeleted = true
 	}
@@ -492,29 +409,15 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
-		requestingUser                   *userV2.UniversalUser
 		userIdToUserFirstNameLastInitial = make(map[string]string)
 	)
 
 	logger.Info("handling-get-articles-request")
 
-	if req.UserId != "" {
-		getRequestingUserResp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-			ID: req.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", req.UserId), zap.Error(err))
-			return nil, err
-		}
-
-		userFirstNameLastInital := getRequestingUserResp.User.PersonalInfo.FirstName + " " + string(getRequestingUserResp.User.PersonalInfo.LastName[0]) + "."
-		userIdToUserFirstNameLastInitial[getRequestingUserResp.User.ID] = userFirstNameLastInital
-
-		requestingUser = getRequestingUserResp.User
-	}
+	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admon users can only see published content
+		// make sure unauthed/ non-admin users can only see published content
 		req.GetArticlesRequest.GetPostsRequest.IsPublished = true
 		req.GetArticlesRequest.GetPostsRequest.IsNotDeleted = true
 	}
@@ -532,33 +435,83 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 	}, nil
 }
 
+// optionalRequestingUser resolves the optional requesting user for read/list
+// methods. It returns nil when userID is empty. When lookup fails, it logs a
+// warning and returns nil so the caller falls back to the fail-closed
+// unauthenticated path that only exposes published content. It defensively
+// handles a nil response or nil User without panicking. When nameCache is
+// non-nil it safely caches the user's display name keyed by user ID.
+func (s *Service) optionalRequestingUser(ctx context.Context, userID string, nameCache map[string]string, logger *zap.Logger) *userV2.UniversalUser {
+	if userID == "" {
+		return nil
+	}
+
+	resp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
+		ID: userID,
+	})
+	if err != nil {
+		logger.Warn("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", userID), zap.Error(err))
+		return nil
+	}
+	if resp == nil || resp.User == nil {
+		logger.Warn("user-lookup-returned-empty-user", zap.String("user-id", userID))
+		return nil
+	}
+
+	user := resp.User
+	if nameCache != nil {
+		nameCache[user.ID] = displayNameForUser(user)
+	}
+	return user
+}
+
+// displayNameForUser returns a safe display name for a user: the FirstName
+// followed by the first Unicode rune of the LastName and a period when both
+// pieces are present, otherwise DefaultPostAuthor. It tolerates nil users and
+// nil PersonalInfo without panicking.
+func displayNameForUser(user *userV2.UniversalUser) string {
+	if user == nil || user.PersonalInfo == nil {
+		return DefaultPostAuthor
+	}
+
+	firstName := strings.TrimSpace(user.PersonalInfo.FirstName)
+	lastName := strings.TrimSpace(user.PersonalInfo.LastName)
+	if firstName == "" || lastName == "" {
+		return DefaultPostAuthor
+	}
+
+	return firstName + " " + string([]rune(lastName)[0]) + "."
+}
+
 // handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet handles instances publish_as is not set but a publish_at is given,
 // we must try to set and default to user's first name and last name initial
 func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx context.Context, matchingPostsHolder ResponseHolder, userIdToUserFirstNameLastInitial map[string]string, logger *zap.Logger) {
+	if matchingPostsHolder == nil {
+		return
+	}
 	matchingPosts := matchingPostsHolder.GetEmbeddedPostsResponse()
-	for i, post := range matchingPosts.Posts {
-		if post.PublishedAs == "" && post.PublishedAt != "" {
-			matchingPosts.Posts[i].PublishedAs = DefaultPostAuthor
+	if matchingPosts == nil {
+		return
+	}
 
-			if userIdToUserFirstNameLastInitial[post.PublishedByUserId] == "" {
-				postPublishingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-					ID: post.PublishedByUserId,
-				})
-				if err != nil {
-					logger.Error("failed-to-get-user-associated-with-post-publication", zap.String("user-id", post.PublishedByUserId), zap.Error(err))
-
-					userIdToUserFirstNameLastInitial[post.PublishedByUserId] = DefaultPostAuthor
-					continue
-				}
-
-				userFirstNameLastInital := postPublishingUser.User.PersonalInfo.FirstName + " " + string(postPublishingUser.User.PersonalInfo.LastName[0]) + "."
-				userIdToUserFirstNameLastInitial[post.PublishedByUserId] = userFirstNameLastInital
-				matchingPosts.Posts[i].PublishedAs = userFirstNameLastInital
-				continue
-			}
-
-			matchingPosts.Posts[i].PublishedAs = userIdToUserFirstNameLastInitial[post.PublishedByUserId]
+	for i, p := range matchingPosts.Posts {
+		if p.PublishedAs != "" || p.PublishedAt == "" {
 			continue
 		}
+
+		matchingPosts.Posts[i].PublishedAs = DefaultPostAuthor
+
+		if cached, ok := userIdToUserFirstNameLastInitial[p.PublishedByUserId]; ok && cached != "" {
+			matchingPosts.Posts[i].PublishedAs = cached
+			continue
+		}
+
+		publishingUser := s.optionalRequestingUser(ctx, p.PublishedByUserId, userIdToUserFirstNameLastInitial, logger)
+		if publishingUser == nil {
+			userIdToUserFirstNameLastInitial[p.PublishedByUserId] = DefaultPostAuthor
+			continue
+		}
+
+		matchingPosts.Posts[i].PublishedAs = displayNameForUser(publishingUser)
 	}
 }
