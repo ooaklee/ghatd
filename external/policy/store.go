@@ -277,3 +277,39 @@ func (s *Store) GenerateStaticPolicies() {
 func (s *Store) AddPolicy(policy WebAppPolicy) {
 	s.Policies = append(s.Policies, policy)
 }
+
+// RemovePolicyByType removes the first policy with the provided type.
+// It reports whether a matching policy was found.
+func (s *Store) RemovePolicyByType(policyType PolicyType) bool {
+	for i, policy := range s.Policies {
+		if policy.Type == policyType {
+			s.removePolicyAt(i)
+			return true
+		}
+	}
+
+	return false
+}
+
+// RemovePolicyByName removes the first policy with the provided name.
+// Names are normalised using the same rules as Service.GetPolicyByName.
+// It reports whether a matching policy was found.
+func (s *Store) RemovePolicyByName(policyName string) bool {
+	standardisedName := standardisePolicyName(policyName)
+
+	for i, policy := range s.Policies {
+		if standardisePolicyName(policy.Name) == standardisedName {
+			s.removePolicyAt(i)
+			return true
+		}
+	}
+
+	return false
+}
+
+// removePolicyAt removes the policy at index while preserving the order of the remaining policies.
+func (s *Store) removePolicyAt(index int) {
+	copy(s.Policies[index:], s.Policies[index+1:])
+	s.Policies[len(s.Policies)-1] = WebAppPolicy{}
+	s.Policies = s.Policies[:len(s.Policies)-1]
+}

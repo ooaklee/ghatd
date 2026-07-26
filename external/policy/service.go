@@ -26,6 +26,12 @@ type PolicyStore interface {
 
 	// AddPolicy adds a new policy to the store.
 	AddPolicy(policy WebAppPolicy)
+
+	// RemovePolicyByType removes the first policy with the provided type.
+	RemovePolicyByType(policyType PolicyType) bool
+
+	// RemovePolicyByName removes the first policy matching the normalized name.
+	RemovePolicyByName(policyName string) bool
 }
 
 // Service manages policy business logic and provides access to policy data.

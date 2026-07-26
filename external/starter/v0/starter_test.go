@@ -18,6 +18,7 @@ import (
 	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/streaker"
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -1303,6 +1304,37 @@ func (f *fakePolicyStore) GetPolicies() []policy.WebAppPolicy {
 
 func (f *fakePolicyStore) AddPolicy(p policy.WebAppPolicy) {
 	f.policies = append(f.policies, p)
+}
+
+func (f *fakePolicyStore) RemovePolicyByType(policyType policy.PolicyType) bool {
+	for i, p := range f.policies {
+		if p.Type == policyType {
+			f.policies = append(f.policies[:i], f.policies[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakePolicyStore) RemovePolicyByName(policyName string) bool {
+	standardizedName := strings.ReplaceAll(
+		toolbox.StringStandardisedToLower(policyName),
+		" ",
+		"-",
+	)
+
+	for i, p := range f.policies {
+		name := strings.ReplaceAll(
+			toolbox.StringStandardisedToLower(p.Name),
+			" ",
+			"-",
+		)
+		if name == standardizedName {
+			f.policies = append(f.policies[:i], f.policies[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 type fakeEmailManager struct{}
