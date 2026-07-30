@@ -12,6 +12,9 @@ const (
 
 	// UserManagerURIVariableMemberID is the URI variable for member ID
 	UserManagerURIVariableMemberID = "memberID"
+
+	// UserManagerURIVariableVisionNanoID is the URI variable for a vision item.
+	UserManagerURIVariableVisionNanoID = "visionNanoID"
 )
 
 const (
@@ -86,4 +89,7 @@ const (
 
 	// ErrKeyStreakServiceNotEnabled is returned when streak features are requested but StreakService is not configured
 	ErrKeyStreakServiceNotEnabled = "StreakServiceNotEnabled"
+
+	// ErrKeyVisionServiceNotEnabled is returned when vision features are requested but VisionService is not configured.
+	ErrKeyVisionServiceNotEnabled = "VisionServiceNotEnabled"
 )

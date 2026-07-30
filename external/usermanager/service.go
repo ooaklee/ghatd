@@ -15,6 +15,7 @@ import (
 	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
+	"github.com/ooaklee/ghatd/external/vision"
 	"go.uber.org/zap"
 )
 
@@ -98,6 +99,18 @@ type StreakService interface {
 	ListStreaks(ctx context.Context, r *streaker.ListStreaksRequest) (*streaker.ListStreaksResponse, error)
 }
 
+// VisionService exposes raw vision operations for user-facing enrichment.
+type VisionService interface {
+	CreateVision(ctx context.Context, r *vision.CreateVisionRequest) (*vision.VisionResponse, error)
+	GetVisionByNanoID(ctx context.Context, r *vision.GetVisionByNanoIDRequest) (*vision.VisionResponse, error)
+	GetVisions(ctx context.Context, r *vision.GetVisionsRequest) (*vision.GetVisionsResponse, error)
+	SetVisionVote(ctx context.Context, r *vision.SetVisionVoteRequest) (*vision.VisionResponse, error)
+	RemoveVisionVote(ctx context.Context, r *vision.RemoveVisionVoteRequest) (*vision.VisionResponse, error)
+	AddVisionComment(ctx context.Context, r *vision.AddVisionCommentRequest) (*vision.VisionResponse, error)
+	SetVisionCommentVote(ctx context.Context, r *vision.SetVisionCommentVoteRequest) (*vision.VisionResponse, error)
+	RemoveVisionCommentVote(ctx context.Context, r *vision.RemoveVisionCommentVoteRequest) (*vision.VisionResponse, error)
+}
+
 // NotifierService expected methods of a valid notifier service.
 type NotifierService interface {
 	RegisterAddress(ctx context.Context, r *notifier.RegisterAddressRequest) (*notifier.RegisterAddressResponse, error)
@@ -122,6 +135,7 @@ type Service struct {
 	NotifierService  NotifierService
 	ReminderService  ReminderService
 	StreakService    StreakService
+	VisionService    VisionService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
@@ -171,6 +185,12 @@ func (s *Service) WithStreakService(streakSvc StreakService) *Service {
 // WithNotifierService adds notifier service integration.
 func (s *Service) WithNotifierService(notifierSvc NotifierService) *Service {
 	s.NotifierService = notifierSvc
+	return s
+}
+
+// WithVisionService adds vision feedback and roadmap integration.
+func (s *Service) WithVisionService(visionSvc VisionService) *Service {
+	s.VisionService = visionSvc
 	return s
 }
 

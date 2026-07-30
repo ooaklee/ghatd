@@ -10,6 +10,7 @@ import (
 	"github.com/ooaklee/ghatd/external/pricer"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
+	"github.com/ooaklee/ghatd/external/vision"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -28,6 +29,7 @@ type Handlers struct {
 	Pricer         *pricer.Handler
 	User           *userv2.Handler
 	UserManager    *usermanager.Handler
+	Vision         *vision.Handler
 }
 
 // HandlerErrorMaps allows callers to override or clear default cross-package
@@ -42,6 +44,7 @@ type HandlerErrorMaps struct {
 	Pricer         []reply.ErrorManifest
 	User           []reply.ErrorManifest
 	UserManager    []reply.ErrorManifest
+	Vision         []reply.ErrorManifest
 }
 
 // NewHandlersRequest holds dependencies for handler construction.
@@ -107,6 +110,11 @@ func NewHandlers(r *NewHandlersRequest) (*Handlers, error) {
 			CookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
 			CookieDomain:             r.CookieDomain,
 		}),
+		Vision: vision.NewHandler(
+			r.Services.Vision,
+			r.Validator,
+			resolveHandlerErrorMaps(errorMaps.Vision, nil)...,
+		),
 	}, nil
 }
 
@@ -122,7 +130,8 @@ func validateServicesForHandlers(services *Services) error {
 		services.Policy == nil ||
 		services.Pricer == nil ||
 		services.User == nil ||
-		services.UserManager == nil {
+		services.UserManager == nil ||
+		services.Vision == nil {
 		return ErrNilServices
 	}
 

@@ -115,6 +115,10 @@ var (
 	// ErrMissingBillingManagerHandler is returned when the billingmanager route
 	// group is not skipped but Stack.Handlers.BillingManager is nil.
 	ErrMissingBillingManagerHandler = errors.New("starter/billingmanager-handler-required")
+
+	// ErrMissingVisionHandler is returned when the vision route group is not
+	// skipped but Stack.Handlers.Vision is nil.
+	ErrMissingVisionHandler = errors.New("starter/vision-handler-required")
 )
 
 // newErrMissingMiddleware returns a descriptive error for a nil middleware field

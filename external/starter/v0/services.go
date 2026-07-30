@@ -22,6 +22,7 @@ import (
 	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
+	"github.com/ooaklee/ghatd/external/vision"
 )
 
 // Services groups the standard GHATD business services and manager services.
@@ -43,6 +44,7 @@ type Services struct {
 	Streaker                *streaker.Service
 	User                    *userv2.Service
 	UserManager             *usermanager.Service
+	Vision                  *vision.Service
 	EphemeralStore          accessmanager.EphemeralStore
 	EmailManager            accessmanager.EmailManager
 	PaymentProviderRegistry billingmanager.ProviderRegistry
@@ -76,6 +78,7 @@ type NewServicesRequest struct {
 	UserConfig                 *userv2.UserConfig
 	UserConfigs                []*userv2.UserConfig
 	GroupConfig                *group.GroupConfig
+	VisionConfig               *vision.VisionConfig
 	// ValidPostTags uses post.DefaultValidPostTags when nil. Pass an empty
 	// slice to intentionally disable starter's default changelog tag set.
 	ValidPostTags []string
@@ -180,13 +183,20 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	if err != nil {
 		return nil, fmt.Errorf("starter/group-service: %w", err)
 	}
+	visionService, err := vision.NewService(r.Repositories.Vision, r.VisionConfig)
+	if err != nil {
+		return nil, fmt.Errorf("starter/vision-service: %w", err)
+	}
 
 	userManagerService := usermanager.NewService(&usermanager.NewServiceRequest{
 		UserService:      userService,
 		ApiTokenService:  apiTokenService,
 		AuditService:     auditService,
 		ContacterService: contacterService,
-	}).WithGroupService(groupService).WithNotifierService(notifierService)
+	}).
+		WithGroupService(groupService).
+		WithNotifierService(notifierService).
+		WithVisionService(visionService)
 	if reminderService != nil {
 		userManagerService.WithReminderService(reminderService)
 	}
@@ -233,6 +243,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		Streaker:                streakerService,
 		User:                    userService,
 		UserManager:             userManagerService,
+		Vision:                  visionService,
 		EphemeralStore:          r.EphemeralStore,
 		EmailManager:            r.EmailManager,
 		PaymentProviderRegistry: paymentProviderRegistry,

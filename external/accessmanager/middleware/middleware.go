@@ -321,6 +321,8 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 	})
 }
 
+// handleRateLimitOrActiveUnauthenticated downgrades a failed auth request to
+// rate-limited access, optionally clearing stale cookies.
 func (m *Middleware) handleRateLimitOrActiveUnauthenticated(
 	w http.ResponseWriter,
 	req *http.Request,
@@ -389,6 +391,7 @@ func handleTransmittingAuthenticatedUserDetails(req *http.Request, authedUserRes
 
 	req = req.WithContext(accessmanagerhelpers.TransitUserWith(req.Context(), authedUserResp.User))
 	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), authedUserResp.User.GetUserId()))
+	req = req.WithContext(accessmanagerhelpers.TransitAuthenticatedWith(req.Context(), authedUserResp.Authenticated))
 
 	return req
 }

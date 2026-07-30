@@ -25,4 +25,6 @@ var (
 	ErrReminderServiceNotEnabled = errors.New(ErrKeyReminderServiceNotEnabled)
 	// ErrStreakServiceNotEnabled means streak features were requested but no streak service is configured.
 	ErrStreakServiceNotEnabled = errors.New(ErrKeyStreakServiceNotEnabled)
+	// ErrVisionServiceNotEnabled means vision features were requested but no vision service is configured.
+	ErrVisionServiceNotEnabled = errors.New(ErrKeyVisionServiceNotEnabled)
 )

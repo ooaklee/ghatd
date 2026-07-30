@@ -967,8 +967,9 @@ func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (*MiddlewareA
 	})
 
 	return &MiddlewareAuthedUserResponse{
-		UserID: persistentUserResponse.User.GetUserId(),
-		User:   persistentUserResponse.User,
+		Authenticated: true,
+		UserID:        persistentUserResponse.User.GetUserId(),
+		User:          persistentUserResponse.User,
 	}, nil
 }
 
@@ -1001,8 +1002,9 @@ func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (*MiddlewareA
 	})
 
 	return &MiddlewareAuthedUserResponse{
-		UserID: persistentUserResponse.User.GetUserId(),
-		User:   persistentUserResponse.User,
+		Authenticated: true,
+		UserID:        persistentUserResponse.User.GetUserId(),
+		User:          persistentUserResponse.User,
 	}, nil
 }
 
@@ -1026,8 +1028,9 @@ func (s *Service) MiddlewareJWTRequired(r *http.Request) (*MiddlewareAuthedUserR
 	}
 
 	return &MiddlewareAuthedUserResponse{
-		UserID: persistentUserResponse.User.GetUserId(),
-		User:   persistentUserResponse.User,
+		Authenticated: true,
+		UserID:        persistentUserResponse.User.GetUserId(),
+		User:          persistentUserResponse.User,
 	}, nil
 }
 
@@ -1070,8 +1073,9 @@ func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthed
 	}
 
 	return &MiddlewareAuthedUserResponse{
-		UserID: persistentUserResponse.User.GetUserId(),
-		User:   persistentUserResponse.User,
+		Authenticated: true,
+		UserID:        persistentUserResponse.User.GetUserId(),
+		User:          persistentUserResponse.User,
 	}, nil
 }
 
@@ -1086,7 +1090,8 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*Midd
 		}
 
 		return &MiddlewareAuthedUserResponse{
-			UserID: s.StaticPlaceholderUuid,
+			Authenticated: false,
+			UserID:        s.StaticPlaceholderUuid,
 			User: &userv2.UniversalUser{
 				ID: s.StaticPlaceholderUuid,
 			},
@@ -1112,8 +1117,9 @@ func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.Tok
 	}
 
 	return &MiddlewareAuthedUserResponse{
-		UserID: user.GetUserId(),
-		User:   user,
+		Authenticated: true,
+		UserID:        user.GetUserId(),
+		User:          user,
 	}, nil
 }
 
