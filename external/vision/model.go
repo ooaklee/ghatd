@@ -130,6 +130,7 @@ func NewVisionComment(userID, message, parentCommentID string) *VisionComment {
 	}
 }
 
+// newVisionVoteBuckets returns initialised, empty vote buckets.
 func newVisionVoteBuckets() map[VisionVote][]string {
 	return map[VisionVote][]string{
 		VisionVoteDownvote: {},
@@ -137,18 +138,22 @@ func newVisionVoteBuckets() map[VisionVote][]string {
 	}
 }
 
+// normaliseVisionTitle trims whitespace from a vision title.
 func normaliseVisionTitle(value string) string {
 	return strings.TrimSpace(value)
 }
 
+// normaliseVisionType lowercases and trims a vision type.
 func normaliseVisionType(value VisionType) VisionType {
 	return VisionType(toolbox.StringStandardisedToLower(strings.TrimSpace(string(value))))
 }
 
+// normaliseVisionStatus uppercases and trims a vision status.
 func normaliseVisionStatus(value VisionStatus) VisionStatus {
 	return VisionStatus(toolbox.StringStandardisedToUpper(strings.TrimSpace(string(value))))
 }
 
+// isValidVisionVote reports whether the value is a recognised vote type.
 func isValidVisionVote(value VisionVote) bool {
 	return value == VisionVoteDownvote || value == VisionVoteUpvote
 }

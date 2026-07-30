@@ -182,6 +182,8 @@ func (h *Handler) RemoveVisionCommentVote(w http.ResponseWriter, r *http.Request
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
+// setVisionReadCacheHeaders sets Cache-Control headers appropriate for the
+// requestor's authentication state.
 func setVisionReadCacheHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Vary", "Cookie, Authorization")
 	if accessmanagerhelpers.AcquireAuthenticatedFrom(r.Context()) {

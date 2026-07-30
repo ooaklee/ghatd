@@ -14,6 +14,8 @@ type VisionUser struct {
 	Avatar   string `json:"avatar,omitempty"`
 }
 
+// newVisionUser constructs a public user summary from a UniversalUser,
+// excluding raw UUIDs and email addresses.
 func newVisionUser(user *userv2.UniversalUser) VisionUser {
 	if user == nil {
 		return VisionUser{}

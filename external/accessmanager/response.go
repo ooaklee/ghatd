@@ -91,6 +91,7 @@ type GetSpecificUserAPITokensResponse struct {
 	Page int
 }
 
+// GetMetaData returns pagination metadata for the API token list response.
 func (g *GetSpecificUserAPITokensResponse) GetMetaData() map[string]interface{} {
 	var responseMap = make(map[string]interface{})
 

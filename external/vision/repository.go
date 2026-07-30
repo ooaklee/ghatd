@@ -384,6 +384,7 @@ func (r *Repository) DeleteVisionByID(ctx context.Context, id string) error {
 	return r.Store.ExecuteDeleteOneCommand(ctx, collection, bson.M{"_id": strings.TrimSpace(id)}, "vision")
 }
 
+// buildVisionListFilter constructs a Mongo filter from the request's query params.
 func buildVisionListFilter(req *GetVisionsRequest) bson.M {
 	filter := bson.M{"_id": bson.M{"$exists": true}}
 	if req == nil {
@@ -409,6 +410,7 @@ func buildVisionListFilter(req *GetVisionsRequest) bson.M {
 	return filter
 }
 
+// normalisePagination applies the default and maximum list pagination limits.
 func normalisePagination(req *GetVisionsRequest) (int64, int64) {
 	if req == nil {
 		return 1, defaultVisionPageSize
@@ -428,6 +430,7 @@ func normalisePagination(req *GetVisionsRequest) (int64, int64) {
 	return page, pageSize
 }
 
+// normaliseStoredVision restores empty collections omitted by older documents.
 func normaliseStoredVision(vision *Vision) {
 	normaliseVoteBuckets(&vision.Voters)
 	if vision.Comments == nil {
@@ -438,6 +441,7 @@ func normaliseStoredVision(vision *Vision) {
 	}
 }
 
+// normaliseVoteBuckets ensures both supported vote buckets are initialised.
 func normaliseVoteBuckets(voters *map[VisionVote][]string) {
 	if *voters == nil {
 		*voters = newVisionVoteBuckets()

@@ -337,6 +337,7 @@ func (s *Service) GetVisionConfig(context.Context) (*GetVisionConfigResponse, er
 	return &GetVisionConfigResponse{Config: s.Config.toCapabilities()}, nil
 }
 
+// getVisionByNanoID retrieves a vision and attaches this service's configuration.
 func (s *Service) getVisionByNanoID(ctx context.Context, nanoID string) (*Vision, error) {
 	vision, err := s.VisionRepository.GetVisionByNanoID(ctx, strings.TrimSpace(nanoID))
 	if err != nil {
@@ -346,10 +347,12 @@ func (s *Service) getVisionByNanoID(ctx context.Context, nanoID string) (*Vision
 	return vision, nil
 }
 
+// newUpdatedAt returns the current UTC timestamp in the platform format.
 func newUpdatedAt() string {
 	return toolbox.TimeNowUTC()
 }
 
+// visionHasComment reports whether a vision contains the supplied comment ID.
 func visionHasComment(item *Vision, commentID string) bool {
 	commentID = strings.TrimSpace(commentID)
 	if item == nil || commentID == "" {

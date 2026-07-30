@@ -183,6 +183,7 @@ func AttachDefaultRoutes(r *AttachDefaultRoutesRequest) error {
 	return nil
 }
 
+// newRouteGroupSkipSet deduplicates the skip list and validates each group is known.
 func newRouteGroupSkipSet(groups []RouteGroup) (map[RouteGroup]bool, error) {
 	skip := make(map[RouteGroup]bool, len(groups))
 	for _, group := range groups {
@@ -195,6 +196,7 @@ func newRouteGroupSkipSet(groups []RouteGroup) (map[RouteGroup]bool, error) {
 	return skip, nil
 }
 
+// isKnownRouteGroup reports whether the given group is a valid RouteGroup.
 func isKnownRouteGroup(group RouteGroup) bool {
 	switch group {
 	case RouteGroupPricer,
@@ -212,6 +214,7 @@ func isKnownRouteGroup(group RouteGroup) bool {
 	}
 }
 
+// validateAttachDefaultRouteHandlers checks that non-skipped route groups have a non-nil handler.
 func validateAttachDefaultRouteHandlers(handlers *Handlers, skip map[RouteGroup]bool) error {
 	if !skip[RouteGroupPricer] && handlers.Pricer == nil {
 		return ErrMissingPricerHandler
@@ -256,6 +259,8 @@ type routeMiddlewareRequirements struct {
 	customMeEndpointValidApiTokenOrJWT bool
 }
 
+// newRouteMiddlewareRequirements computes which middleware types are needed
+// based on the set of skipped route groups.
 func newRouteMiddlewareRequirements(skip map[RouteGroup]bool) routeMiddlewareRequirements {
 	return routeMiddlewareRequirements{
 		adminOnly:                          !skip[RouteGroupPricer] || !skip[RouteGroupUser] || !skip[RouteGroupGroup] || !skip[RouteGroupUserManager] || !skip[RouteGroupVision],
@@ -270,6 +275,7 @@ func newRouteMiddlewareRequirements(skip map[RouteGroup]bool) routeMiddlewareReq
 	}
 }
 
+// any reports whether at least one middleware type is required.
 func (r routeMiddlewareRequirements) any() bool {
 	return r.adminOnly ||
 		r.authenticated ||
@@ -282,6 +288,7 @@ func (r routeMiddlewareRequirements) any() bool {
 		r.customMeEndpointValidApiTokenOrJWT
 }
 
+// validateAttachDefaultRouteMiddleware ensures every required middleware is set on the suite.
 func validateAttachDefaultRouteMiddleware(requirements routeMiddlewareRequirements, mw *amiddleware.Suite) error {
 	checks := []struct {
 		required bool

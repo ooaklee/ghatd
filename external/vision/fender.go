@@ -192,6 +192,7 @@ func MapRequestToDeleteVisionRequest(request *http.Request, validator visionVali
 	return parsed, nil
 }
 
+// visionNanoIDFromRequest extracts the vision NanoID from the request URI.
 func visionNanoIDFromRequest(request *http.Request) (string, error) {
 	nanoID, err := toolbox.GetVariableValueFromUri(request, VisionURIVariableNanoID)
 	if err != nil || nanoID == "" {
@@ -200,6 +201,7 @@ func visionNanoIDFromRequest(request *http.Request) (string, error) {
 	return nanoID, nil
 }
 
+// visionCommentIDFromRequest extracts the comment ID from the request URI.
 func visionCommentIDFromRequest(request *http.Request) (string, error) {
 	id, err := toolbox.GetVariableValueFromUri(request, VisionURIVariableCommentID)
 	if err != nil || id == "" {
@@ -208,6 +210,7 @@ func visionCommentIDFromRequest(request *http.Request) (string, error) {
 	return id, nil
 }
 
+// validateParsedRequest runs the request through the validator when present.
 func validateParsedRequest(request interface{}, validator visionValidator) error {
 	if validator == nil {
 		return nil
