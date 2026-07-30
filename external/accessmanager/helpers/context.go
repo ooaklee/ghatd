@@ -17,6 +17,11 @@ const RequestorKey contextKey = "ContextRequestor"
 // RequestorUserKey stores the full authenticated user object in the request context.
 const RequestorUserKey contextKey = "ContextRequestorUser"
 
+// RequestorAuthenticatedKey stores whether the requestor was authenticated.
+// This is intentionally separate from RequestorKey because optional-auth
+// middleware assigns a placeholder user ID to public requests.
+const RequestorAuthenticatedKey contextKey = "ContextRequestorAuthenticated"
+
 // TransitWith returns a new context derived from ctx that carries the
 // authenticated user's ID.
 func TransitWith(ctx context.Context, userID string) context.Context {
@@ -47,4 +52,18 @@ func AcquireUserFrom(ctx context.Context) *userv2.UniversalUser {
 		return user
 	}
 	return nil
+}
+
+// TransitAuthenticatedWith returns a new context carrying the requestor's
+// authentication state.
+func TransitAuthenticatedWith(ctx context.Context, authenticated bool) context.Context {
+	return context.WithValue(ctx, RequestorAuthenticatedKey, authenticated)
+}
+
+// AcquireAuthenticatedFrom reports whether the requestor was authenticated.
+// A missing value is treated as unauthenticated so privacy-sensitive response
+// projections fail closed.
+func AcquireAuthenticatedFrom(ctx context.Context) bool {
+	authenticated, ok := ctx.Value(RequestorAuthenticatedKey).(bool)
+	return ok && authenticated
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/ooaklee/ghatd/external/router"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
+	"github.com/ooaklee/ghatd/external/vision"
 )
 
 // RouteGroup identifies a set of standard API routes that can be skipped
@@ -35,6 +36,8 @@ const (
 	RouteGroupContentManager RouteGroup = "contentmanager"
 	// RouteGroupBillingManager identifies the /api/v1/bms route group.
 	RouteGroupBillingManager RouteGroup = "billingmanager"
+	// RouteGroupVision identifies the /api/v1/visions route group.
+	RouteGroupVision RouteGroup = "vision"
 )
 
 // AttachDefaultRoutesRequest holds the router and starter Stack needed to
@@ -168,6 +171,15 @@ func AttachDefaultRoutes(r *AttachDefaultRoutesRequest) error {
 		})
 	}
 
+	if !skip[RouteGroupVision] {
+		vision.AttachRoutes(&vision.AttachRoutesRequest{
+			Router:                  r.Router,
+			Handler:                 r.Stack.Handlers.Vision,
+			AdminOnlyMiddleware:     mw.AdminOnly,
+			AuthenticatedMiddleware: mw.Authenticated,
+		})
+	}
+
 	return nil
 }
 
@@ -192,7 +204,8 @@ func isKnownRouteGroup(group RouteGroup) bool {
 		RouteGroupAccessManager,
 		RouteGroupUserManager,
 		RouteGroupContentManager,
-		RouteGroupBillingManager:
+		RouteGroupBillingManager,
+		RouteGroupVision:
 		return true
 	default:
 		return false
@@ -224,6 +237,9 @@ func validateAttachDefaultRouteHandlers(handlers *Handlers, skip map[RouteGroup]
 	if !skip[RouteGroupBillingManager] && handlers.BillingManager == nil {
 		return ErrMissingBillingManagerHandler
 	}
+	if !skip[RouteGroupVision] && handlers.Vision == nil {
+		return ErrMissingVisionHandler
+	}
 
 	return nil
 }
@@ -242,8 +258,8 @@ type routeMiddlewareRequirements struct {
 
 func newRouteMiddlewareRequirements(skip map[RouteGroup]bool) routeMiddlewareRequirements {
 	return routeMiddlewareRequirements{
-		adminOnly:                          !skip[RouteGroupPricer] || !skip[RouteGroupUser] || !skip[RouteGroupGroup] || !skip[RouteGroupUserManager],
-		authenticated:                      !skip[RouteGroupUserManager],
+		adminOnly:                          !skip[RouteGroupPricer] || !skip[RouteGroupUser] || !skip[RouteGroupGroup] || !skip[RouteGroupUserManager] || !skip[RouteGroupVision],
+		authenticated:                      !skip[RouteGroupUserManager] || !skip[RouteGroupVision],
 		activeOnly:                         !skip[RouteGroupAccessManager] || !skip[RouteGroupUserManager],
 		activeValidApiTokenOrJWT:           !skip[RouteGroupAccessManager] || !skip[RouteGroupUserManager] || !skip[RouteGroupContentManager] || !skip[RouteGroupBillingManager],
 		hardenedRateLimit:                  !skip[RouteGroupAccessManager],

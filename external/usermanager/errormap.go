@@ -28,6 +28,7 @@ var UsermanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrNotifierServiceNotEnabled:   {Title: "Service Unavailable", Detail: "Notification features have not been enabled for this service.", StatusCode: 503, Code: "USM00-018"},
 	ErrReminderServiceNotEnabled:   {Title: "Service Unavailable", Detail: "Reminder features have not been enabled for this service.", StatusCode: 503, Code: "USM00-019"},
 	ErrStreakServiceNotEnabled:     {Title: "Service Unavailable", Detail: "Streak features have not been enabled for this service.", StatusCode: 503, Code: "USM00-020"},
+	ErrVisionServiceNotEnabled:     {Title: "Service Unavailable", Detail: "Vision features have not been enabled for this service.", StatusCode: 503, Code: "USM00-021"},
 	ErrFailedToResolveGroupAccessMap: {
 		Title:      "Internal Error",
 		Detail:     "Failed to resolve user access for the requested group. Please try again.",

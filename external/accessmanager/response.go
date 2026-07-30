@@ -151,6 +151,9 @@ type OauthCallbackResponse struct {
 
 // MiddlewareAuthedUserResponse holds the data returned for authenticated user
 type MiddlewareAuthedUserResponse struct {
+	// Authenticated distinguishes a real user from the placeholder assigned to
+	// public requests handled by optional-auth middleware.
+	Authenticated bool
 
 	// UserID is the authenticated user's ID
 	UserID string

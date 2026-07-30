@@ -389,6 +389,7 @@ func handleTransmittingAuthenticatedUserDetails(req *http.Request, authedUserRes
 
 	req = req.WithContext(accessmanagerhelpers.TransitUserWith(req.Context(), authedUserResp.User))
 	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), authedUserResp.User.GetUserId()))
+	req = req.WithContext(accessmanagerhelpers.TransitAuthenticatedWith(req.Context(), authedUserResp.Authenticated))
 
 	return req
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
+	"github.com/ooaklee/ghatd/external/vision"
 )
 
 // Repositories groups the standard GHATD Mongo-backed repositories.
@@ -29,6 +30,7 @@ type Repositories struct {
 	Reminder  *reminder.Repository
 	Streaker  *streaker.Repository
 	User      *userv2.Repository
+	Vision    *vision.Repository
 }
 
 // NewRepositoriesRequest holds the dependencies and optional overrides for
@@ -47,6 +49,7 @@ type NewRepositoriesRequest struct {
 	Reminder  *reminder.Repository
 	Streaker  *streaker.Repository
 	User      *userv2.Repository
+	Vision    *vision.Repository
 }
 
 // NewRepositories creates the standard repository container. Core is required;
@@ -72,6 +75,7 @@ func NewRepositories(r *NewRepositoriesRequest) (*Repositories, error) {
 		Reminder:  r.Reminder,
 		Streaker:  r.Streaker,
 		User:      r.User,
+		Vision:    r.Vision,
 	}
 
 	if repos.APIToken == nil {
@@ -107,6 +111,9 @@ func NewRepositories(r *NewRepositoriesRequest) (*Repositories, error) {
 	if repos.User == nil {
 		repos.User = userv2.NewRepository(r.Core)
 	}
+	if repos.Vision == nil {
+		repos.Vision = vision.NewRepository(r.Core)
+	}
 
 	return repos, nil
 }
@@ -124,7 +131,8 @@ func validateRepositoriesForServices(repos *Repositories) error {
 		repos.Notifier == nil ||
 		repos.Post == nil ||
 		repos.Pricer == nil ||
-		repos.User == nil {
+		repos.User == nil ||
+		repos.Vision == nil {
 		return ErrNilRepositories
 	}
 

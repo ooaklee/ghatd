@@ -5,159 +5,129 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/toolbox"
 	"go.uber.org/zap"
 )
 
-// VisionRepository defines the repository surface used by the service.
+// VisionRepository defines the persistence surface used by Service.
 type VisionRepository interface {
 	CreateVision(ctx context.Context, vision *Vision) (*Vision, error)
 	DeleteVisionByID(ctx context.Context, id string) error
-	GetVisionByID(ctx context.Context, id string) (*Vision, error)
-	GetVisionByNameAndKind(ctx context.Context, name, kind string) (*Vision, error)
+	GetVisionByNanoID(ctx context.Context, nanoID string) (*Vision, error)
 	GetVisions(ctx context.Context, req *GetVisionsRequest) ([]Vision, error)
 	GetTotalVisions(ctx context.Context, req *GetVisionsRequest) (int64, error)
-	UpdateVision(ctx context.Context, vision *Vision) (*Vision, error)
+	UpdateVision(ctx context.Context, vision *Vision) error
+	UpdateVisionStatus(ctx context.Context, id string, status VisionStatus, updatedByUserID, updatedAt string) error
+	SetVisionVote(ctx context.Context, id, userID string, vote VisionVote, updatedAt string) error
+	RemoveVisionVote(ctx context.Context, id, userID, updatedAt string) error
+	AddVisionComment(ctx context.Context, id string, comment *VisionComment) error
+	SetVisionCommentVote(ctx context.Context, id, commentID, userID string, vote VisionVote, updatedAt string) error
+	RemoveVisionCommentVote(ctx context.Context, id, commentID, userID, updatedAt string) error
 }
 
-// Service holds and manages vision business logic.
+// Service holds vision business logic.
 type Service struct {
 	VisionRepository VisionRepository
-	Registry         *Registry
+	Config           *VisionConfig
 }
 
-// NewService creates a vision service.
-func NewService(visionRepository VisionRepository, registry ...*Registry) *Service {
-	resolvedRegistry := MustRegistry()
-	if len(registry) > 0 && registry[0] != nil {
-		resolvedRegistry = registry[0]
+// NewService creates a configured vision service.
+func NewService(visionRepository VisionRepository, configs ...*VisionConfig) (*Service, error) {
+	config := DefaultVisionConfig()
+	if len(configs) > 0 && configs[0] != nil {
+		config = configs[0]
+	}
+	if err := config.Validate(); err != nil {
+		return nil, err
 	}
 
 	return &Service{
 		VisionRepository: visionRepository,
-		Registry:         resolvedRegistry,
-	}
+		Config:           config,
+	}, nil
 }
 
-// CreateVision creates a vision record.
+// CreateVision creates feedback or a bug report with no roadmap status.
 func (s *Service) CreateVision(ctx context.Context, req *CreateVisionRequest) (*VisionResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "create-vision")
-
-	if req == nil || normaliseVisionName(req.Name) == "" {
-		logger.Warn("vision-create-missing-name")
-		return nil, ErrVisionNameIsRequired
+	logger := logger.AcquireOperationFrom(ctx, "external/vision", "create-vision")
+	if req == nil || normaliseVisionTitle(req.Title) == "" {
+		return nil, ErrVisionTitleIsRequired
 	}
-	if normaliseVisionKind(req.Kind) == "" {
-		logger.Warn("vision-create-missing-kind", zap.String("name", normaliseVisionName(req.Name)))
-		return nil, ErrVisionKindIsRequired
+	if !s.Config.IsValidType(req.Type) {
+		return nil, ErrVisionInvalidType
 	}
-
-	vision := NewVision(req)
-	vision.GenerateID()
-	vision.GenerateNanoID()
-	vision.SetCreatedAtTimeToNow()
-
-	created, err := s.VisionRepository.CreateVision(ctx, vision)
-	if err != nil {
-		logger.Error("vision-create-failed", zap.String("vision-id", vision.ID), zap.String("kind", vision.Kind), zap.Error(err))
-		return nil, err
-	}
-
-	logger.Info("vision-created", zap.String("vision-id", created.ID), zap.String("kind", created.Kind))
-	return &VisionResponse{Vision: created}, nil
-}
-
-// GetVisionByID retrieves a vision by ID.
-func (s *Service) GetVisionByID(ctx context.Context, req *GetVisionByIDRequest) (*VisionResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-vision-by-id")
-
-	if req == nil || strings.TrimSpace(req.ID) == "" {
-		logger.Warn("vision-get-by-id-missing-id")
-		return nil, ErrVisionIDIsRequired
-	}
-	if strings.TrimSpace(req.UserID) == "" {
-		logger.Warn("vision-get-by-id-missing-user-id", zap.String("vision-id", strings.TrimSpace(req.ID)))
+	if strings.TrimSpace(req.CreatedByUserID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 
-	vision, err := s.VisionRepository.GetVisionByID(ctx, strings.TrimSpace(req.ID))
+	vision := NewVision(req, s.Config)
+	vision.GenerateID().GenerateNanoID().SetCreatedAtTimeToNow()
+
+	created, err := s.VisionRepository.CreateVision(ctx, vision)
 	if err != nil {
-		logger.Error("vision-get-by-id-failed", zap.String("vision-id", strings.TrimSpace(req.ID)), zap.Error(err))
+		logger.Error("vision-create-failed", zap.String("vision-id", vision.ID), zap.Error(err))
 		return nil, err
 	}
+	created.SetConfig(s.Config)
+	return &VisionResponse{Vision: created}, nil
+}
 
-	logger.Debug("vision-get-by-id-completed", zap.String("vision-id", vision.ID), zap.String("kind", vision.Kind))
+// GetVisionByNanoID retrieves a full vision, including comments.
+func (s *Service) GetVisionByNanoID(ctx context.Context, req *GetVisionByNanoIDRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+
+	vision, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
 	return &VisionResponse{Vision: vision}, nil
 }
 
-// GetVisionByName retrieves a vision by name and kind.
-func (s *Service) GetVisionByName(ctx context.Context, req *GetVisionByNameRequest) (*VisionResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-vision-by-name")
-
-	if req == nil || normaliseVisionName(req.Name) == "" {
-		logger.Warn("vision-get-by-name-missing-name")
-		return nil, ErrVisionNameIsRequired
-	}
-	if normaliseVisionKind(req.Kind) == "" {
-		logger.Warn("vision-get-by-name-missing-kind", zap.String("name", normaliseVisionName(req.Name)))
-		return nil, ErrVisionKindIsRequired
-	}
-
-	vision, err := s.VisionRepository.GetVisionByNameAndKind(ctx, req.Name, req.Kind)
-	if err != nil {
-		logger.Error("vision-get-by-name-failed", zap.String("name", normaliseVisionName(req.Name)), zap.String("kind", normaliseVisionKind(req.Kind)), zap.Error(err))
-		return nil, err
-	}
-
-	logger.Debug("vision-get-by-name-completed", zap.String("vision-id", vision.ID), zap.String("kind", vision.Kind))
-	return &VisionResponse{Vision: vision}, nil
-}
-
-// GetVisions retrieves a filtered page of visions.
+// GetVisions retrieves a filtered page of vision summaries.
 func (s *Service) GetVisions(ctx context.Context, req *GetVisionsRequest) (*GetVisionsResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-visions")
+	if req != nil {
+		if req.Type != "" && !s.Config.IsValidType(req.Type) {
+			return nil, ErrVisionInvalidType
+		}
+		if req.Status != "" && !s.Config.IsValidStatus(req.Status) {
+			return nil, ErrVisionInvalidStatus
+		}
+	}
 
 	visions, err := s.VisionRepository.GetVisions(ctx, req)
 	if err != nil {
-		logger.Error("visions-list-failed", zap.Error(err))
 		return nil, err
 	}
-
 	total, err := s.VisionRepository.GetTotalVisions(ctx, req)
 	if err != nil {
-		logger.Error("visions-count-failed", zap.Error(err))
 		return nil, err
 	}
-
-	logger.Debug("visions-list-completed", zap.Int("returned", len(visions)), zap.Int64("total", total))
+	for i := range visions {
+		visions[i].SetConfig(s.Config)
+	}
 	return &GetVisionsResponse{Visions: visions, Total: total}, nil
 }
 
-// UpdateVision updates mutable fields on a vision.
+// UpdateVision updates descriptive fields without changing type or status.
 func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*VisionResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "update-vision")
-
-	if req == nil || strings.TrimSpace(req.ID) == "" {
-		logger.Warn("vision-update-missing-id")
-		return nil, ErrVisionIDIsRequired
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.UpdatedByUserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
 	}
 
-	current, err := s.VisionRepository.GetVisionByID(ctx, strings.TrimSpace(req.ID))
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
 	if err != nil {
-		logger.Error("vision-update-current-lookup-failed", zap.String("vision-id", strings.TrimSpace(req.ID)), zap.Error(err))
 		return nil, err
 	}
-
-	if name := normaliseVisionName(req.Name); name != "" {
-		current.Name = name
-	}
-	if kind := normaliseVisionKind(req.Kind); kind != "" {
-		current.Kind = kind
+	if title := normaliseVisionTitle(req.Title); title != "" {
+		current.Title = title
 	}
 	if req.Description != "" {
 		current.Description = strings.TrimSpace(req.Description)
-	}
-	if status := normaliseVisionStatus(req.Status); status != "" {
-		current.Status = status
 	}
 	if req.Metadata != nil {
 		current.Metadata = req.Metadata
@@ -165,40 +135,230 @@ func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*
 	current.UpdatedByUserID = strings.TrimSpace(req.UpdatedByUserID)
 	current.SetUpdatedAtTimeToNow()
 
-	updated, err := s.VisionRepository.UpdateVision(ctx, current)
-	if err != nil {
-		logger.Error("vision-update-failed", zap.String("vision-id", current.ID), zap.Error(err))
+	if err = s.VisionRepository.UpdateVision(ctx, current); err != nil {
 		return nil, err
 	}
-
-	logger.Info("vision-updated", zap.String("vision-id", updated.ID), zap.String("kind", updated.Kind))
-	return &VisionResponse{Vision: updated}, nil
+	return &VisionResponse{Vision: current}, nil
 }
 
-// DeleteVision deletes a vision by ID.
-func (s *Service) DeleteVision(ctx context.Context, req *DeleteVisionRequest) (*DeleteVisionResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "delete-vision")
-
-	if req == nil || strings.TrimSpace(req.ID) == "" {
-		logger.Warn("vision-delete-missing-id")
-		return nil, ErrVisionIDIsRequired
+// UpdateVisionStatus validates and persists a roadmap transition.
+func (s *Service) UpdateVisionStatus(ctx context.Context, req *UpdateVisionStatusRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.UpdatedByUserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
 	}
 
-	if err := s.VisionRepository.DeleteVisionByID(ctx, strings.TrimSpace(req.ID)); err != nil {
-		logger.Error("vision-delete-failed", zap.String("vision-id", strings.TrimSpace(req.ID)), zap.Error(err))
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
 		return nil, err
 	}
+	if err = current.UpdateStatus(req.Status); err != nil {
+		return nil, err
+	}
+	current.UpdatedByUserID = strings.TrimSpace(req.UpdatedByUserID)
 
-	logger.Info("vision-deleted", zap.String("vision-id", strings.TrimSpace(req.ID)))
+	if err = s.VisionRepository.UpdateVisionStatus(
+		ctx,
+		current.ID,
+		current.Status,
+		current.UpdatedByUserID,
+		current.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &VisionResponse{Vision: current}, nil
+}
+
+// SetVisionVote atomically sets or changes the requestor's vote.
+func (s *Service) SetVisionVote(ctx context.Context, req *SetVisionVoteRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
+	}
+	if !isValidVisionVote(req.Vote) {
+		return nil, ErrVisionInvalidVote
+	}
+	if req.Vote == VisionVoteDownvote && !s.Config.EnableDownvoting {
+		return nil, ErrVisionDownvotingDisabled
+	}
+
+	// Check existence before issuing an update because the shared repository
+	// helper does not expose Mongo's matched count.
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
+	now := newUpdatedAt()
+	if err := s.VisionRepository.SetVisionVote(ctx, current.ID, strings.TrimSpace(req.UserID), req.Vote, now); err != nil {
+		return nil, err
+	}
+	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+}
+
+// RemoveVisionVote removes the requestor from both vote buckets.
+func (s *Service) RemoveVisionVote(ctx context.Context, req *RemoveVisionVoteRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
+	}
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.VisionRepository.RemoveVisionVote(ctx, current.ID, strings.TrimSpace(req.UserID), newUpdatedAt()); err != nil {
+		return nil, err
+	}
+	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+}
+
+// AddVisionComment appends a raw user comment. Mention tokens are stored
+// verbatim and are intentionally not resolved in the core package.
+func (s *Service) AddVisionComment(ctx context.Context, req *AddVisionCommentRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
+	}
+	if strings.TrimSpace(req.Message) == "" {
+		return nil, ErrVisionCommentMessageIsRequired
+	}
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
+	parentCommentID := strings.TrimSpace(req.ParentCommentID)
+	if parentCommentID != "" && !visionHasComment(current, parentCommentID) {
+		return nil, ErrVisionCommentNotFound
+	}
+
+	comment := NewVisionComment(req.UserID, req.Message, parentCommentID)
+	if err := s.VisionRepository.AddVisionComment(ctx, current.ID, comment); err != nil {
+		return nil, err
+	}
+	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+}
+
+// SetVisionCommentVote atomically sets or changes the requestor's vote on a comment.
+func (s *Service) SetVisionCommentVote(ctx context.Context, req *SetVisionCommentVoteRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.CommentID) == "" {
+		return nil, ErrVisionCommentNotFound
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
+	}
+	if !isValidVisionVote(req.Vote) {
+		return nil, ErrVisionInvalidVote
+	}
+	if req.Vote == VisionVoteDownvote && !s.Config.EnableDownvoting {
+		return nil, ErrVisionDownvotingDisabled
+	}
+
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
+	if !visionHasComment(current, req.CommentID) {
+		return nil, ErrVisionCommentNotFound
+	}
+	if err = s.VisionRepository.SetVisionCommentVote(
+		ctx,
+		current.ID,
+		strings.TrimSpace(req.CommentID),
+		strings.TrimSpace(req.UserID),
+		req.Vote,
+		newUpdatedAt(),
+	); err != nil {
+		return nil, err
+	}
+	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+}
+
+// RemoveVisionCommentVote removes the requestor from both comment vote buckets.
+func (s *Service) RemoveVisionCommentVote(ctx context.Context, req *RemoveVisionCommentVoteRequest) (*VisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	if strings.TrimSpace(req.CommentID) == "" {
+		return nil, ErrVisionCommentNotFound
+	}
+	if strings.TrimSpace(req.UserID) == "" {
+		return nil, ErrVisionUserIDIsRequired
+	}
+
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
+	if !visionHasComment(current, req.CommentID) {
+		return nil, ErrVisionCommentNotFound
+	}
+	if err = s.VisionRepository.RemoveVisionCommentVote(
+		ctx,
+		current.ID,
+		strings.TrimSpace(req.CommentID),
+		strings.TrimSpace(req.UserID),
+		newUpdatedAt(),
+	); err != nil {
+		return nil, err
+	}
+	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+}
+
+// DeleteVision deletes a vision addressed by public NanoID.
+func (s *Service) DeleteVision(ctx context.Context, req *DeleteVisionRequest) (*DeleteVisionResponse, error) {
+	if req == nil || strings.TrimSpace(req.NanoID) == "" {
+		return nil, ErrVisionNanoIDIsRequired
+	}
+	current, err := s.getVisionByNanoID(ctx, req.NanoID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.VisionRepository.DeleteVisionByID(ctx, current.ID); err != nil {
+		return nil, err
+	}
 	return &DeleteVisionResponse{Deleted: true}, nil
 }
 
-// RegisterVision adds a vision registration to the package registry.
-func (s *Service) RegisterVision(entry Registration) error {
-	return s.Registry.Register(entry)
+// GetVisionConfig returns the client-safe configuration.
+func (s *Service) GetVisionConfig(context.Context) (*GetVisionConfigResponse, error) {
+	if s.Config == nil {
+		return nil, ErrVisionConfigNotSet
+	}
+	return &GetVisionConfigResponse{Config: s.Config.toCapabilities()}, nil
 }
 
-// GetVisionRegistration retrieves a vision registration by key.
-func (s *Service) GetVisionRegistration(key string) (Registration, error) {
-	return s.Registry.MustGet(key)
+func (s *Service) getVisionByNanoID(ctx context.Context, nanoID string) (*Vision, error) {
+	vision, err := s.VisionRepository.GetVisionByNanoID(ctx, strings.TrimSpace(nanoID))
+	if err != nil {
+		return nil, err
+	}
+	vision.SetConfig(s.Config)
+	return vision, nil
+}
+
+func newUpdatedAt() string {
+	return toolbox.TimeNowUTC()
+}
+
+func visionHasComment(item *Vision, commentID string) bool {
+	commentID = strings.TrimSpace(commentID)
+	if item == nil || commentID == "" {
+		return false
+	}
+	for i := range item.Comments {
+		if item.Comments[i].ID == commentID {
+			return true
+		}
+	}
+	return false
 }

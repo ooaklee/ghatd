@@ -1166,6 +1166,11 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 			mutate:  func(r *Repositories) { r.User = nil },
 			wantErr: ErrNilRepositories,
 		},
+		{
+			name:    "FAILURE - nil Vision",
+			mutate:  func(r *Repositories) { r.Vision = nil },
+			wantErr: ErrNilRepositories,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1183,6 +1188,7 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 				Reminder:  fullRepos.Reminder,
 				Streaker:  fullRepos.Streaker,
 				User:      fullRepos.User,
+				Vision:    fullRepos.Vision,
 			}
 			if tt.name == "FAILURE - nil repositories" {
 				err := validateRepositoriesForServices(nil)

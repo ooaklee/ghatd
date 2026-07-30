@@ -78,7 +78,8 @@ func (m *mockAccessManagerService) RefreshToken(ctx context.Context, r *accessma
 // helper to build a mock authenticated user response with a minimal user object
 func mockAuthedResp(userID, status string, roles []string) *accessmanager.MiddlewareAuthedUserResponse {
 	return &accessmanager.MiddlewareAuthedUserResponse{
-		UserID: userID,
+		Authenticated: true,
+		UserID:        userID,
 		User: &userv2.UniversalUser{
 			ID:     userID,
 			Email:  userID + "@example.com",
@@ -86,6 +87,12 @@ func mockAuthedResp(userID, status string, roles []string) *accessmanager.Middle
 			Roles:  roles,
 		},
 	}
+}
+
+func mockPublicResp(userID string) *accessmanager.MiddlewareAuthedUserResponse {
+	response := mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser})
+	response.Authenticated = false
+	return response
 }
 
 // createTestMiddleware creates a middleware instance for testing
@@ -573,12 +580,17 @@ func TestRateLimitOrActiveJWTRequired_NoCookies(t *testing.T) {
 	userID := "rate-limited-user"
 	mockService := &mockAccessManagerService{
 		middlewareRateLimitOrActiveJWTRequiredFunc: func(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error) {
-			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+			return mockPublicResp(userID), nil
 		},
 	}
 
 	middleware := createTestMiddleware(mockService)
-	handler := createTestHandler()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if accessmanagerhelpers.AcquireAuthenticatedFrom(r.Context()) {
+			t.Error("public fallback should transmit unauthenticated state")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
 
 	req := httptest.NewRequest("GET", "/public", nil)
@@ -600,12 +612,17 @@ func TestRateLimitOrActiveJWTRequired_EmptyCookiesFallsBackToPublicFlowAndClears
 			if got := r.Header.Get("Authorization"); got != "" {
 				t.Errorf("Expected empty cookies to be removed from Authorization fallback, got %q", got)
 			}
-			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+			return mockPublicResp(userID), nil
 		},
 	}
 
 	middleware := createTestMiddleware(mockService)
-	handler := createTestHandler()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if accessmanagerhelpers.AcquireAuthenticatedFrom(r.Context()) {
+			t.Error("empty-cookie fallback should transmit unauthenticated state")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
 
 	req := httptest.NewRequest("GET", "/public", nil)
@@ -638,12 +655,17 @@ func TestRateLimitOrActiveJWTRequired_MissingRefreshCookieFallsBackToPublicFlowA
 			if got := r.Header.Get("Authorization"); got != "" {
 				t.Errorf("Expected missing refresh fallback to remove Authorization, got %q", got)
 			}
-			return mockAuthedResp(userID, userv2.AccountStatusKeyActive, []string{userv2.UserRoleUser}), nil
+			return mockPublicResp(userID), nil
 		},
 	}
 
 	middleware := createTestMiddleware(mockService)
-	handler := createTestHandler()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if accessmanagerhelpers.AcquireAuthenticatedFrom(r.Context()) {
+			t.Error("missing-refresh fallback should transmit unauthenticated state")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
 
 	req := httptest.NewRequest("GET", "/public", nil)
@@ -754,7 +776,12 @@ func TestRateLimitOrActiveJWTRequired_WithValidJWT(t *testing.T) {
 	}
 
 	middleware := createTestMiddleware(mockService)
-	handler := createTestHandler()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !accessmanagerhelpers.AcquireAuthenticatedFrom(r.Context()) {
+			t.Error("valid JWT should transmit authenticated state")
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	wrappedHandler := middleware.RateLimitOrActiveJWTRequired(handler)
 
 	req := httptest.NewRequest("GET", "/public", nil)

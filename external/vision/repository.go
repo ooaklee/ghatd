@@ -14,7 +14,11 @@ import (
 	"go.uber.org/zap"
 )
 
-const defaultCollectionInitMaxAttemptsLimit = 3
+const (
+	defaultCollectionInitMaxAttemptsLimit = 3
+	defaultVisionPageSize                 = 25
+	maxVisionPageSize                     = 100
+)
 
 // MongoDbStore represents the datastore methods needed by vision.
 type MongoDbStore interface {
@@ -47,35 +51,32 @@ func NewRepository(store MongoDbStore) *Repository {
 	}
 }
 
-// WithCollectionInitMaxAttemptsLimit overrides the number of collection initialisation attempts.
+// WithCollectionInitMaxAttemptsLimit overrides collection initialisation retries.
 func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
 	if limit > 0 {
 		r.collectionInitMaxAttemptsLimit = limit
 	}
-
 	return r
 }
 
 // GetVisionCollection returns the collection used for vision records.
 func (r *Repository) GetVisionCollection(ctx context.Context) (*mongo.Collection, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-vision-collection")
+	logger := logger.AcquireOperationFrom(ctx, "external/vision", "get-vision-collection")
 	r.collectionMutex.Lock()
 	defer r.collectionMutex.Unlock()
 
 	if r.collection != nil {
-		logger.Debug("vision-collection-cache-hit")
 		return r.collection, nil
 	}
 
-	var lastErr error
-	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
-	if collectionInitMaxAttemptsLimit <= 0 {
-		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
+	limit := r.collectionInitMaxAttemptsLimit
+	if limit <= 0 {
+		limit = defaultCollectionInitMaxAttemptsLimit
 	}
 
-	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
-		_, err := r.Store.InitialiseClient(ctx)
-		if err != nil {
+	var lastErr error
+	for attempt := 1; attempt <= limit; attempt++ {
+		if _, err := r.Store.InitialiseClient(ctx); err != nil {
 			lastErr = err
 			logger.Warn("vision-collection-client-init-failed", zap.Int("attempt", attempt), zap.Error(err))
 			continue
@@ -89,88 +90,60 @@ func (r *Repository) GetVisionCollection(ctx context.Context) (*mongo.Collection
 		}
 
 		r.collection = db.Collection(VisionCollection)
-		logger.Info("vision-collection-ready", zap.Int("attempt", attempt), zap.String("collection", VisionCollection))
 		return r.collection, nil
 	}
 
-	logger.Error("vision-collection-initialisation-failed", zap.Int("max-attempts", collectionInitMaxAttemptsLimit), zap.Error(lastErr))
-	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrVisionDatabaseError, VisionCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrVisionDatabaseError, VisionCollection, limit, lastErr)
 }
 
-// CreateVision creates a new vision in the repository.
+// CreateVision creates a vision record.
 func (r *Repository) CreateVision(ctx context.Context, vision *Vision) (*Vision, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "create-vision")
 	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-create-collection-unavailable", zap.Error(err))
 		return nil, err
 	}
 
-	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, vision, "vision")
-	if err != nil {
-		logger.Error("vision-repository-create-failed", zap.String("vision-id", vision.ID), zap.Error(err))
+	if _, err = r.Store.ExecuteInsertOneCommand(ctx, collection, vision, "vision"); err != nil {
 		return nil, err
 	}
-
-	logger.Debug("vision-repository-create-completed", zap.String("vision-id", vision.ID))
 	return vision, nil
 }
 
-// GetVisionByID retrieves a vision by ID.
-func (r *Repository) GetVisionByID(ctx context.Context, id string) (*Vision, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-vision-by-id")
+// GetVisionByNanoID retrieves a vision by its public NanoID.
+func (r *Repository) GetVisionByNanoID(ctx context.Context, nanoID string) (*Vision, error) {
 	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-get-by-id-collection-unavailable", zap.String("vision-id", id), zap.Error(err))
 		return nil, err
 	}
 
 	var result Vision
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"_id": id}, &result, "vision", true, ErrVisionResourceNotFound)
-	if err != nil {
-		logger.Error("vision-repository-get-by-id-failed", zap.String("vision-id", id), zap.Error(err))
+	if err = r.Store.ExecuteFindOneCommandDecodeResult(
+		ctx,
+		collection,
+		bson.M{"_nano_id": strings.TrimSpace(nanoID)},
+		&result,
+		"vision",
+		true,
+		ErrVisionResourceNotFound,
+	); err != nil {
 		return nil, err
 	}
 
-	logger.Debug("vision-repository-get-by-id-completed", zap.String("vision-id", result.ID))
+	normaliseStoredVision(&result)
 	return &result, nil
 }
 
-// GetVisionByNameAndKind retrieves a vision by its natural key.
-func (r *Repository) GetVisionByNameAndKind(ctx context.Context, name, kind string) (*Vision, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-vision-by-name-and-kind")
-	collection, err := r.GetVisionCollection(ctx)
-	if err != nil {
-		logger.Error("vision-repository-get-by-name-collection-unavailable", zap.Error(err))
-		return nil, err
-	}
-
-	var result Vision
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{
-		"name": normaliseVisionName(name),
-		"kind": normaliseVisionKind(kind),
-	}, &result, "vision", true, ErrVisionResourceNotFound)
-	if err != nil {
-		logger.Error("vision-repository-get-by-name-failed", zap.String("name", normaliseVisionName(name)), zap.String("kind", normaliseVisionKind(kind)), zap.Error(err))
-		return nil, err
-	}
-
-	logger.Debug("vision-repository-get-by-name-completed", zap.String("vision-id", result.ID))
-	return &result, nil
-}
-
-// GetVisions retrieves visions by filter.
+// GetVisions retrieves a filtered page. Comments are omitted from list rows;
+// callers can use GetVisionByNanoID for the full discussion.
 func (r *Repository) GetVisions(ctx context.Context, req *GetVisionsRequest) ([]Vision, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-visions")
 	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-list-collection-unavailable", zap.Error(err))
 		return nil, err
 	}
 
-	filter := buildVisionListFilter(req)
 	findOptions := options.Find().
-		SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "name", Value: 1}})
+		SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "title", Value: 1}}).
+		SetProjection(bson.M{"comments": 0})
 
 	page, pageSize := normalisePagination(req)
 	if pageSize > 0 {
@@ -178,75 +151,237 @@ func (r *Repository) GetVisions(ctx context.Context, req *GetVisionsRequest) ([]
 		findOptions.SetSkip((page - 1) * pageSize)
 	}
 
-	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, filter, findOptions)
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, buildVisionListFilter(req), findOptions)
 	if err != nil {
-		logger.Error("vision-repository-list-cursor-failed", zap.Error(err))
 		return nil, err
 	}
 
 	var result []Vision
 	if err = r.Store.MapAllInCursorToResult(ctx, cursor, &result, "visions"); err != nil {
-		logger.Error("vision-repository-list-decode-failed", zap.Error(err))
 		return nil, err
 	}
-
-	logger.Debug("vision-repository-list-completed", zap.Int("returned", len(result)))
+	for i := range result {
+		normaliseStoredVision(&result[i])
+	}
 	return result, nil
 }
 
-// GetTotalVisions counts visions by filter.
+// GetTotalVisions counts visions matching a filter.
 func (r *Repository) GetTotalVisions(ctx context.Context, req *GetVisionsRequest) (int64, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "get-total-visions")
 	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-count-collection-unavailable", zap.Error(err))
 		return 0, err
 	}
-
-	total, err := r.Store.ExecuteCountDocuments(ctx, collection, buildVisionListFilter(req))
-	if err != nil {
-		logger.Error("vision-repository-count-failed", zap.Error(err))
-		return 0, err
-	}
-	logger.Debug("vision-repository-count-completed", zap.Int64("total", total))
-	return total, nil
+	return r.Store.ExecuteCountDocuments(ctx, collection, buildVisionListFilter(req))
 }
 
-// UpdateVision updates an existing vision.
-func (r *Repository) UpdateVision(ctx context.Context, vision *Vision) (*Vision, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "update-vision")
+// UpdateVision updates mutable descriptive fields without replacing votes,
+// comments, or roadmap status.
+func (r *Repository) UpdateVision(ctx context.Context, vision *Vision) error {
 	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-update-collection-unavailable", zap.String("vision-id", vision.ID), zap.Error(err))
-		return nil, err
+		return err
 	}
 
-	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": vision.ID}, bson.M{"$set": vision}, "vision")
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{"_id": vision.ID},
+		bson.M{"$set": bson.M{
+			"title":              vision.Title,
+			"description":        vision.Description,
+			"metadata":           vision.Metadata,
+			"updated_at":         vision.UpdatedAt,
+			"updated_by_user_id": vision.UpdatedByUserID,
+		}},
+		"vision",
+	)
+}
+
+// UpdateVisionStatus stores a validated roadmap transition.
+func (r *Repository) UpdateVisionStatus(
+	ctx context.Context,
+	id string,
+	status VisionStatus,
+	updatedByUserID string,
+	updatedAt string,
+) error {
+	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-update-failed", zap.String("vision-id", vision.ID), zap.Error(err))
-		return nil, err
+		return err
 	}
 
-	logger.Debug("vision-repository-update-completed", zap.String("vision-id", vision.ID))
-	return vision, nil
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{
+			"status":             status,
+			"updated_at":         updatedAt,
+			"updated_by_user_id": updatedByUserID,
+		}},
+		"vision",
+	)
+}
+
+// SetVisionVote atomically moves a user into the selected vote bucket.
+func (r *Repository) SetVisionVote(
+	ctx context.Context,
+	id string,
+	userID string,
+	vote VisionVote,
+	updatedAt string,
+) error {
+	collection, err := r.GetVisionCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	targetBucket := "voters.1"
+	otherBucket := "voters.0"
+	if vote == VisionVoteDownvote {
+		targetBucket, otherBucket = otherBucket, targetBucket
+	}
+
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{"_id": id},
+		bson.M{
+			"$addToSet": bson.M{targetBucket: userID},
+			"$pull":     bson.M{otherBucket: userID},
+			"$set": bson.M{
+				"updated_at":         updatedAt,
+				"updated_by_user_id": userID,
+			},
+		},
+		"vision",
+	)
+}
+
+// RemoveVisionVote atomically removes a user from both vote buckets.
+func (r *Repository) RemoveVisionVote(ctx context.Context, id, userID, updatedAt string) error {
+	collection, err := r.GetVisionCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{"_id": id},
+		bson.M{
+			"$pull": bson.M{
+				"voters.0": userID,
+				"voters.1": userID,
+			},
+			"$set": bson.M{
+				"updated_at":         updatedAt,
+				"updated_by_user_id": userID,
+			},
+		},
+		"vision",
+	)
+}
+
+// AddVisionComment atomically appends a comment.
+func (r *Repository) AddVisionComment(ctx context.Context, id string, comment *VisionComment) error {
+	collection, err := r.GetVisionCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{"_id": id},
+		bson.M{
+			"$push": bson.M{"comments": comment},
+			"$set": bson.M{
+				"updated_at":         comment.CreatedAt,
+				"updated_by_user_id": comment.UserID,
+			},
+		},
+		"vision",
+	)
+}
+
+// SetVisionCommentVote atomically moves a user between a comment's vote buckets.
+func (r *Repository) SetVisionCommentVote(
+	ctx context.Context,
+	id, commentID, userID string,
+	vote VisionVote,
+	updatedAt string,
+) error {
+	collection, err := r.GetVisionCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	otherVote := VisionVoteUpvote
+	if vote == VisionVoteUpvote {
+		otherVote = VisionVoteDownvote
+	}
+	targetPath := fmt.Sprintf("comments.$.voters.%d", vote)
+	otherPath := fmt.Sprintf("comments.$.voters.%d", otherVote)
+
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{
+			"_id":         strings.TrimSpace(id),
+			"comments.id": strings.TrimSpace(commentID),
+		},
+		bson.M{
+			"$addToSet": bson.M{targetPath: strings.TrimSpace(userID)},
+			"$pull":     bson.M{otherPath: strings.TrimSpace(userID)},
+			"$set": bson.M{
+				"updated_at":         updatedAt,
+				"updated_by_user_id": strings.TrimSpace(userID),
+			},
+		},
+		"vision comment",
+	)
+}
+
+// RemoveVisionCommentVote removes a user from both vote buckets atomically.
+func (r *Repository) RemoveVisionCommentVote(
+	ctx context.Context,
+	id, commentID, userID, updatedAt string,
+) error {
+	collection, err := r.GetVisionCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	return r.Store.ExecuteUpdateOneCommand(
+		ctx,
+		collection,
+		bson.M{
+			"_id":         strings.TrimSpace(id),
+			"comments.id": strings.TrimSpace(commentID),
+		},
+		bson.M{
+			"$pull": bson.M{
+				"comments.$.voters.0": strings.TrimSpace(userID),
+				"comments.$.voters.1": strings.TrimSpace(userID),
+			},
+			"$set": bson.M{
+				"updated_at":         updatedAt,
+				"updated_by_user_id": strings.TrimSpace(userID),
+			},
+		},
+		"vision comment",
+	)
 }
 
 // DeleteVisionByID deletes a vision by ID.
 func (r *Repository) DeleteVisionByID(ctx context.Context, id string) error {
-	logger := logger.AcquireOperationFrom(ctx, "internal/vision", "delete-vision-by-id")
 	collection, err := r.GetVisionCollection(ctx)
 	if err != nil {
-		logger.Error("vision-repository-delete-collection-unavailable", zap.String("vision-id", id), zap.Error(err))
 		return err
 	}
-
-	if err := r.Store.ExecuteDeleteOneCommand(ctx, collection, bson.M{"_id": id}, "vision"); err != nil {
-		logger.Error("vision-repository-delete-failed", zap.String("vision-id", id), zap.Error(err))
-		return err
-	}
-
-	logger.Debug("vision-repository-delete-completed", zap.String("vision-id", id))
-	return nil
+	return r.Store.ExecuteDeleteOneCommand(ctx, collection, bson.M{"_id": strings.TrimSpace(id)}, "vision")
 }
 
 func buildVisionListFilter(req *GetVisionsRequest) bson.M {
@@ -255,17 +390,18 @@ func buildVisionListFilter(req *GetVisionsRequest) bson.M {
 		return filter
 	}
 
-	if kind := normaliseVisionKind(req.Kind); kind != "" {
-		filter["kind"] = kind
+	if visionType := normaliseVisionType(req.Type); visionType != "" {
+		filter["type"] = visionType
 	}
 	if status := normaliseVisionStatus(req.Status); status != "" {
 		filter["status"] = status
+	} else if req.RoadmapOnly {
+		filter["status"] = bson.M{"$exists": true, "$ne": ""}
 	}
 	if query := strings.TrimSpace(req.Query); query != "" {
 		regex := bson.M{"$regex": regexp.QuoteMeta(query), "$options": "i"}
 		filter["$or"] = []bson.M{
-			{"name": regex},
-			{"kind": regex},
+			{"title": regex},
 			{"description": regex},
 		}
 	}
@@ -275,18 +411,42 @@ func buildVisionListFilter(req *GetVisionsRequest) bson.M {
 
 func normalisePagination(req *GetVisionsRequest) (int64, int64) {
 	if req == nil {
-		return 1, 0
+		return 1, defaultVisionPageSize
 	}
 
 	page := req.Page
 	if page <= 0 {
 		page = 1
 	}
-
 	pageSize := req.PageSize
-	if pageSize < 0 {
-		pageSize = 0
+	if pageSize <= 0 {
+		pageSize = defaultVisionPageSize
 	}
-
+	if pageSize > maxVisionPageSize {
+		pageSize = maxVisionPageSize
+	}
 	return page, pageSize
+}
+
+func normaliseStoredVision(vision *Vision) {
+	normaliseVoteBuckets(&vision.Voters)
+	if vision.Comments == nil {
+		vision.Comments = []VisionComment{}
+	}
+	for i := range vision.Comments {
+		normaliseVoteBuckets(&vision.Comments[i].Voters)
+	}
+}
+
+func normaliseVoteBuckets(voters *map[VisionVote][]string) {
+	if *voters == nil {
+		*voters = newVisionVoteBuckets()
+		return
+	}
+	if (*voters)[VisionVoteDownvote] == nil {
+		(*voters)[VisionVoteDownvote] = []string{}
+	}
+	if (*voters)[VisionVoteUpvote] == nil {
+		(*voters)[VisionVoteUpvote] = []string{}
+	}
 }

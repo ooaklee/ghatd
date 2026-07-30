@@ -166,6 +166,14 @@ func TestAttachDefaultRoutes_BadMissingHandler(t *testing.T) {
 			},
 			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager},
 		},
+		{
+			name:    "FAILURE - missing vision handler",
+			wantErr: ErrMissingVisionHandler,
+			mutate: func(h *Handlers) {
+				h.Vision = nil
+			},
+			skipRest: []RouteGroup{RouteGroupPricer, RouteGroupPolicy, RouteGroupUser, RouteGroupGroup, RouteGroupAccessManager, RouteGroupUserManager, RouteGroupContentManager, RouteGroupBillingManager},
+		},
 	}
 
 	for _, tt := range tests {
@@ -347,6 +355,7 @@ func TestAttachDefaultRoutes_GoodPolicyOnlyWithoutMiddleware(t *testing.T) {
 			RouteGroupUserManager,
 			RouteGroupContentManager,
 			RouteGroupBillingManager,
+			RouteGroupVision,
 		},
 	})
 	if err != nil {
@@ -385,6 +394,7 @@ func TestAttachDefaultRoutes_GoodGroupOnlyWithoutAuthenticatedMiddleware(t *test
 			RouteGroupUserManager,
 			RouteGroupContentManager,
 			RouteGroupBillingManager,
+			RouteGroupVision,
 		},
 	})
 	if err != nil {
@@ -482,6 +492,7 @@ func TestAttachDefaultRoutes_GoodSkipAll(t *testing.T) {
 			RouteGroupUserManager,
 			RouteGroupContentManager,
 			RouteGroupBillingManager,
+			RouteGroupVision,
 		},
 	})
 	if err != nil {
@@ -548,6 +559,7 @@ func TestAttachDefaultRoutes_GoodSkippedGroupHandlerNotRequired(t *testing.T) {
 		AccessManager:  handlers.AccessManager,
 		ContentManager: handlers.ContentManager,
 		BillingManager: handlers.BillingManager,
+		Vision:         handlers.Vision,
 	}
 
 	err = AttachDefaultRoutes(&AttachDefaultRoutesRequest{

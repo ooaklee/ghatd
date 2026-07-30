@@ -1,57 +1,92 @@
 # Vision
 
-`internal/vision` is a small reference package for GHATD package structure. It is intentionally simple, but it should look and behave like production packages such as `external/group` and `external/streaker`.
+Vision stores product feedback and bug reports, then promotes selected items
+into roadmap work by assigning a status.
 
-Use it as a guide for:
+The package deliberately keeps user data at arm's length:
 
-- domain constants, errors, and reply error maps
-- request, response, and model boundaries
-- service-level validation and repository orchestration
-- MongoDB repository setup with cached collection initialisation and retry behaviour
-- package-owned migrations for collection indexes
-- package-owned registries for reusable examples or extension points
-- table tests that cover good and bad behaviour
-- HTTP routes, handlers, and fender request mapping
+- vision records, voters, and comment authors store raw user UUIDs
+- comment messages are stored verbatim and may contain tokens such as
+  `<@USER_NANO_ID>`
+- replies use an optional `parent_comment_id` that must refer to a comment on
+  the same vision item
+- `external/usermanager` converts those records into privacy-safe,
+  NanoID-based user-facing responses
 
-## Repository Pattern
+Each Vision has an internal UUID for persistence and a public NanoID for API
+requests and shareable links. HTTP routes accept only the public NanoID.
 
-`Repository.GetVisionCollection` follows the standard GHATD MongoDB connection pattern:
+## Model
 
-1. lock collection initialisation
-2. reuse the cached collection when it already exists
-3. call `InitialiseClient`
-4. resolve the configured database with `GetDatabase(ctx, "")`
-5. cache `db.Collection(VisionCollection)`
-6. retry transient initialisation failures up to the configured limit
+`Vision.Type` supports `bugs` and `feedback`. New items have an empty status.
+An item becomes a roadmap item once it receives a configured, non-empty status.
+The default workflow is:
 
-This keeps host applications from repeating connection-management code in every feature package.
+```text
+feedback/bug -> UNDER_REVIEW -> PLANNING -> PLANNED -> IN_PROGRESS -> COMPLETE
+                                    \-------> REJECTED
+```
 
-## Registry Pattern
+Host applications can replace this workflow with `VisionConfig`.
 
-`Registry` owns vision registrations by key. The service receives a registry, or creates an empty one by default, so host applications can choose between:
+Votes use two numeric buckets:
 
-- the package-created empty registry
-- a custom registry
-- registrations added during application composition
+```go
+map[vision.VisionVote][]string{
+	vision.VisionVoteDownvote: {"<user-uuid>"},
+	vision.VisionVoteUpvote:   {"<user-uuid>"},
+}
+```
 
-Registrations normalise keys, names, and kinds before storage. Duplicate keys return a package error instead of silently replacing existing entries.
+Setting a vote atomically moves the requestor between buckets. Downvoting can
+be disabled through configuration. Comments use the same two vote buckets, so
+users can agree or disagree without adding a reply.
 
-## Endpoint Pattern
+## Routes
 
-Vision exposes a small v1 route set:
+Raw vision routes use `/api/v1/visions`.
 
-- `GET /api/v1/visions`
+Admin-only management routes:
+
+- `GET /api/v1/visions/config`
+- `PATCH /api/v1/visions/{visionNanoID}`
+- `PATCH /api/v1/visions/{visionNanoID}/status`
+- `DELETE /api/v1/visions/{visionNanoID}`
+
+Authenticated interaction routes:
+
 - `POST /api/v1/visions`
-- `GET /api/v1/visions/{visionID}`
+- `GET /api/v1/visions`
+- `GET /api/v1/visions/{visionNanoID}`
+- `PUT /api/v1/visions/{visionNanoID}/votes`
+- `DELETE /api/v1/visions/{visionNanoID}/votes`
+- `POST /api/v1/visions/{visionNanoID}/comments`
+- `PUT /api/v1/visions/{visionNanoID}/comments/{commentID}/votes`
+- `DELETE /api/v1/visions/{visionNanoID}/comments/{commentID}/votes`
 
-The list endpoint demonstrates query decoding through `query` tags. The authenticated get-by-ID endpoint demonstrates pulling the requestor ID from middleware-populated context in fender code before passing the request to the service.
+The usermanager package exposes privacy-safe views under `/api/v1/ums`:
 
-## Migration Pattern
+- `GET /api/v1/ums/visions`
+- `GET /api/v1/ums/visions/{visionNanoID}`
 
-`internal/vision/migrations` contains the indexes owned by this package. Host applications can import and register these migration functions as part of their application migration setup.
+These two read routes use optional authentication. Guests receive the same
+feedback and discussion content as signed-in users, with aggregate vote counts
+and public user NanoIDs. Signed-in users additionally receive `viewer_vote`
+when they have voted. Raw user UUIDs, voter buckets, and internal metadata are
+never included in UMS responses.
 
-## Testing Pattern
+All UMS mutation routes remain authenticated. `{visionNanoID}` is the public
+Vision NanoID used for reads, shareable links, and subsequent vote or comment
+requests. Internal UUIDs are not accepted by HTTP routes.
 
-The tests are table-driven and cover both successful and failing behaviour. When adding new package behaviour, prefer adding focused table cases before adding broad integration tests.
+## Persistence
 
-Remove unused layers when creating a smaller package. The goal is a clean package boundary, not a required file checklist.
+Votes, comments, replies, and comment votes are embedded in the vision
+document. Vote changes use MongoDB `$addToSet` and `$pull` operations so one
+UUID cannot appear twice in a bucket and changing direction is atomic. List
+queries exclude comment bodies; the detail endpoint returns the full
+discussion. The internal UUID is stored as `_id`; the public NanoID is stored
+as `_nano_id`.
+
+Host applications should register `migrations.InitVisionIndexesUp` and
+`migrations.InitVisionIndexesDown` with their Mongo migration runner.

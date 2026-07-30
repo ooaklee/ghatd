@@ -3,205 +3,264 @@ package vision
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 )
 
-type mockVisionRepository struct {
-	createFunc func(ctx context.Context, vision *Vision) (*Vision, error)
-	getFunc    func(ctx context.Context, id string) (*Vision, error)
-	listFunc   func(ctx context.Context, req *GetVisionsRequest) ([]Vision, error)
-	countFunc  func(ctx context.Context, req *GetVisionsRequest) (int64, error)
-	updateFunc func(ctx context.Context, vision *Vision) (*Vision, error)
-	deleteFunc func(ctx context.Context, id string) error
-
-	created *Vision
+type memoryVisionRepository struct {
+	item *Vision
 }
 
-func (m *mockVisionRepository) CreateVision(ctx context.Context, vision *Vision) (*Vision, error) {
-	m.created = vision
-	if m.createFunc != nil {
-		return m.createFunc(ctx, vision)
+func (m *memoryVisionRepository) CreateVision(_ context.Context, item *Vision) (*Vision, error) {
+	m.item = item
+	return item, nil
+}
+func (m *memoryVisionRepository) DeleteVisionByID(context.Context, string) error {
+	m.item = nil
+	return nil
+}
+func (m *memoryVisionRepository) GetVisionByNanoID(context.Context, string) (*Vision, error) {
+	if m.item == nil {
+		return nil, ErrVisionResourceNotFound
 	}
-	return vision, nil
+	return m.item, nil
 }
-
-func (m *mockVisionRepository) DeleteVisionByID(ctx context.Context, id string) error {
-	if m.deleteFunc != nil {
-		return m.deleteFunc(ctx, id)
+func (m *memoryVisionRepository) GetVisions(context.Context, *GetVisionsRequest) ([]Vision, error) {
+	if m.item == nil {
+		return []Vision{}, nil
+	}
+	return []Vision{*m.item}, nil
+}
+func (m *memoryVisionRepository) GetTotalVisions(context.Context, *GetVisionsRequest) (int64, error) {
+	if m.item == nil {
+		return 0, nil
+	}
+	return 1, nil
+}
+func (m *memoryVisionRepository) UpdateVision(_ context.Context, item *Vision) error {
+	m.item = item
+	return nil
+}
+func (m *memoryVisionRepository) UpdateVisionStatus(_ context.Context, _ string, status VisionStatus, userID, updatedAt string) error {
+	m.item.Status = status
+	m.item.UpdatedByUserID = userID
+	m.item.UpdatedAt = updatedAt
+	return nil
+}
+func (m *memoryVisionRepository) SetVisionVote(_ context.Context, _ string, userID string, vote VisionVote, _ string) error {
+	other := VisionVoteUpvote
+	if vote == VisionVoteUpvote {
+		other = VisionVoteDownvote
+	}
+	m.item.Voters[other] = slices.DeleteFunc(m.item.Voters[other], func(id string) bool { return id == userID })
+	if !slices.Contains(m.item.Voters[vote], userID) {
+		m.item.Voters[vote] = append(m.item.Voters[vote], userID)
+	}
+	return nil
+}
+func (m *memoryVisionRepository) RemoveVisionVote(_ context.Context, _, userID, _ string) error {
+	for vote := range m.item.Voters {
+		m.item.Voters[vote] = slices.DeleteFunc(m.item.Voters[vote], func(id string) bool { return id == userID })
+	}
+	return nil
+}
+func (m *memoryVisionRepository) AddVisionComment(_ context.Context, _ string, comment *VisionComment) error {
+	m.item.Comments = append(m.item.Comments, *comment)
+	return nil
+}
+func (m *memoryVisionRepository) SetVisionCommentVote(_ context.Context, _, commentID, userID string, vote VisionVote, _ string) error {
+	for i := range m.item.Comments {
+		if m.item.Comments[i].ID != commentID {
+			continue
+		}
+		other := VisionVoteUpvote
+		if vote == VisionVoteUpvote {
+			other = VisionVoteDownvote
+		}
+		m.item.Comments[i].Voters[other] = slices.DeleteFunc(
+			m.item.Comments[i].Voters[other],
+			func(id string) bool { return id == userID },
+		)
+		if !slices.Contains(m.item.Comments[i].Voters[vote], userID) {
+			m.item.Comments[i].Voters[vote] = append(m.item.Comments[i].Voters[vote], userID)
+		}
+	}
+	return nil
+}
+func (m *memoryVisionRepository) RemoveVisionCommentVote(_ context.Context, _, commentID, userID, _ string) error {
+	for i := range m.item.Comments {
+		if m.item.Comments[i].ID != commentID {
+			continue
+		}
+		for vote := range m.item.Comments[i].Voters {
+			m.item.Comments[i].Voters[vote] = slices.DeleteFunc(
+				m.item.Comments[i].Voters[vote],
+				func(id string) bool { return id == userID },
+			)
+		}
 	}
 	return nil
 }
 
-func (m *mockVisionRepository) GetVisionByID(ctx context.Context, id string) (*Vision, error) {
-	if m.getFunc != nil {
-		return m.getFunc(ctx, id)
-	}
-	return &Vision{ID: id, Name: "Example", Kind: "demo"}, nil
-}
-
-func (m *mockVisionRepository) GetVisionByNameAndKind(ctx context.Context, name, kind string) (*Vision, error) {
-	return &Vision{ID: "bp-1", Name: name, Kind: kind}, nil
-}
-
-func (m *mockVisionRepository) GetVisions(ctx context.Context, req *GetVisionsRequest) ([]Vision, error) {
-	if m.listFunc != nil {
-		return m.listFunc(ctx, req)
-	}
-	return []Vision{{ID: "bp-1", Name: "Example", Kind: "demo"}}, nil
-}
-
-func (m *mockVisionRepository) GetTotalVisions(ctx context.Context, req *GetVisionsRequest) (int64, error) {
-	if m.countFunc != nil {
-		return m.countFunc(ctx, req)
-	}
-	return 1, nil
-}
-
-func (m *mockVisionRepository) UpdateVision(ctx context.Context, vision *Vision) (*Vision, error) {
-	if m.updateFunc != nil {
-		return m.updateFunc(ctx, vision)
-	}
-	return vision, nil
-}
-
-func TestServiceCreateVision(t *testing.T) {
-	repoErr := errors.New("repo error")
-	tests := []struct {
-		name       string
-		req        *CreateVisionRequest
-		createFunc func(ctx context.Context, vision *Vision) (*Vision, error)
-		wantErr    error
-		wantKind   string
-	}{
-		{
-			name:     "SUCCESS - creates normalised vision",
-			req:      &CreateVisionRequest{Name: " Example ", Kind: " Demo ", CreatedByUserID: "user-1"},
-			wantKind: "demo",
-		},
-		{
-			name:    "FAILURE - nil request",
-			req:     nil,
-			wantErr: ErrVisionNameIsRequired,
-		},
-		{
-			name:    "FAILURE - missing name",
-			req:     &CreateVisionRequest{Kind: "demo"},
-			wantErr: ErrVisionNameIsRequired,
-		},
-		{
-			name:    "FAILURE - missing kind",
-			req:     &CreateVisionRequest{Name: "Example"},
-			wantErr: ErrVisionKindIsRequired,
-		},
-		{
-			name: "FAILURE - repository error",
-			req:  &CreateVisionRequest{Name: "Example", Kind: "demo"},
-			createFunc: func(ctx context.Context, vision *Vision) (*Vision, error) {
-				return nil, repoErr
-			},
-			wantErr: repoErr,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := &mockVisionRepository{createFunc: tt.createFunc}
-			svc := NewService(repo)
-
-			resp, err := svc.CreateVision(context.Background(), tt.req)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("CreateVision() error = %v, want %v", err, tt.wantErr)
-			}
-			if tt.wantErr != nil {
-				return
-			}
-			if resp == nil || resp.Vision == nil {
-				t.Fatal("CreateVision() returned nil response")
-			}
-			if resp.Vision.ID == "" || resp.Vision.NanoID == "" || resp.Vision.CreatedAt == "" {
-				t.Fatalf("CreateVision() did not set generated fields: %+v", resp.Vision)
-			}
-			if repo.created.Kind != tt.wantKind {
-				t.Fatalf("created kind = %s, want %s", repo.created.Kind, tt.wantKind)
-			}
-		})
-	}
-}
-
-func TestServiceGetVisions(t *testing.T) {
-	svc := NewService(&mockVisionRepository{})
-
-	resp, err := svc.GetVisions(context.Background(), &GetVisionsRequest{Kind: "demo"})
+func mustVisionService(t *testing.T, repo VisionRepository, config ...*VisionConfig) *Service {
+	t.Helper()
+	service, err := NewService(repo, config...)
 	if err != nil {
-		t.Fatalf("GetVisions() error = %v", err)
+		t.Fatalf("NewService() error = %v", err)
 	}
-	if resp.Total != 1 || len(resp.Visions) != 1 {
-		t.Fatalf("GetVisions() = %+v, want total and one vision", resp)
-	}
+	return service
 }
 
-func TestServiceGetVisionByID(t *testing.T) {
-	repoErr := errors.New("repo error")
-	tests := []struct {
-		name    string
-		req     *GetVisionByIDRequest
-		getFunc func(ctx context.Context, id string) (*Vision, error)
-		wantErr error
-	}{
-		{
-			name: "SUCCESS - gets vision by ID",
-			req:  &GetVisionByIDRequest{ID: "bp-1", UserID: "user-1"},
-		},
-		{
-			name:    "FAILURE - missing ID",
-			req:     &GetVisionByIDRequest{UserID: "user-1"},
-			wantErr: ErrVisionIDIsRequired,
-		},
-		{
-			name:    "FAILURE - missing user ID",
-			req:     &GetVisionByIDRequest{ID: "bp-1"},
-			wantErr: ErrVisionUserIDIsRequired,
-		},
-		{
-			name: "FAILURE - repository error",
-			req:  &GetVisionByIDRequest{ID: "bp-1", UserID: "user-1"},
-			getFunc: func(ctx context.Context, id string) (*Vision, error) {
-				return nil, repoErr
-			},
-			wantErr: repoErr,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			svc := NewService(&mockVisionRepository{getFunc: tt.getFunc})
-
-			resp, err := svc.GetVisionByID(context.Background(), tt.req)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("GetVisionByID() error = %v, want %v", err, tt.wantErr)
-			}
-			if tt.wantErr != nil {
-				return
-			}
-			if resp == nil || resp.Vision == nil || resp.Vision.ID != tt.req.ID {
-				t.Fatalf("GetVisionByID() response = %+v, want vision ID %s", resp, tt.req.ID)
-			}
-		})
-	}
-}
-
-func TestServiceRegistry(t *testing.T) {
-	svc := NewService(&mockVisionRepository{})
-
-	if err := svc.RegisterVision(Registration{Key: "demo", Name: "Demo", Kind: "Example"}); err != nil {
-		t.Fatalf("RegisterVision() error = %v", err)
-	}
-
-	entry, err := svc.GetVisionRegistration(" demo ")
+func createTestVision(t *testing.T, service *Service) *Vision {
+	t.Helper()
+	response, err := service.CreateVision(context.Background(), &CreateVisionRequest{
+		Title:           " Better search ",
+		Type:            VisionTypeFeedback,
+		Description:     "Search all records",
+		CreatedByUserID: "user-1",
+	})
 	if err != nil {
-		t.Fatalf("GetVisionRegistration() error = %v", err)
+		t.Fatalf("CreateVision() error = %v", err)
 	}
-	if entry.Key != "demo" || entry.Kind != "example" {
-		t.Fatalf("registration = %+v, want normalised fields", entry)
+	return response.Vision
+}
+
+func TestServiceCreateVisionInitialisesFeedback(t *testing.T) {
+	service := mustVisionService(t, &memoryVisionRepository{})
+	item := createTestVision(t, service)
+
+	if item.Title != "Better search" || item.Status != "" || item.IsRoadmapItem() {
+		t.Fatalf("created vision = %+v", item)
+	}
+	if item.ID == "" || item.NanoID == "" || item.CreatedAt == "" {
+		t.Fatalf("generated fields missing: %+v", item)
+	}
+	if item.Voters[VisionVoteUpvote] == nil || item.Voters[VisionVoteDownvote] == nil {
+		t.Fatalf("vote buckets not initialised: %#v", item.Voters)
+	}
+}
+
+func TestServiceStatusTransitionsPromoteToRoadmap(t *testing.T) {
+	service := mustVisionService(t, &memoryVisionRepository{})
+	item := createTestVision(t, service)
+
+	response, err := service.UpdateVisionStatus(context.Background(), &UpdateVisionStatusRequest{
+		NanoID:          item.NanoID,
+		Status:          VisionStatusUnderReview,
+		UpdatedByUserID: "admin-1",
+	})
+	if err != nil {
+		t.Fatalf("UpdateVisionStatus() error = %v", err)
+	}
+	if !response.Vision.IsRoadmapItem() {
+		t.Fatal("non-empty status should make the vision a roadmap item")
+	}
+
+	_, err = service.UpdateVisionStatus(context.Background(), &UpdateVisionStatusRequest{
+		NanoID:          item.NanoID,
+		Status:          VisionStatusInProgress,
+		UpdatedByUserID: "admin-1",
+	})
+	if !errors.Is(err, ErrVisionInvalidStatusTransition) {
+		t.Fatalf("invalid transition error = %v", err)
+	}
+}
+
+func TestServiceVotingHonoursConfigAndMovesBuckets(t *testing.T) {
+	repo := &memoryVisionRepository{}
+	config := DefaultVisionConfig().WithDownvoting(false)
+	service := mustVisionService(t, repo, config)
+	item := createTestVision(t, service)
+
+	_, err := service.SetVisionVote(context.Background(), &SetVisionVoteRequest{
+		NanoID: item.NanoID, UserID: "user-2", Vote: VisionVoteDownvote,
+	})
+	if !errors.Is(err, ErrVisionDownvotingDisabled) {
+		t.Fatalf("downvote error = %v", err)
+	}
+
+	response, err := service.SetVisionVote(context.Background(), &SetVisionVoteRequest{
+		NanoID: item.NanoID, UserID: "user-2", Vote: VisionVoteUpvote,
+	})
+	if err != nil {
+		t.Fatalf("upvote error = %v", err)
+	}
+	if !slices.Contains(response.Vision.Voters[VisionVoteUpvote], "user-2") {
+		t.Fatalf("upvote bucket = %#v", response.Vision.Voters)
+	}
+
+	commented, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
+		NanoID: item.NanoID, UserID: "user-3", Message: "same",
+	})
+	if err != nil {
+		t.Fatalf("AddVisionComment() error = %v", err)
+	}
+	_, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{
+		NanoID:    item.NanoID,
+		CommentID: commented.Vision.Comments[0].ID,
+		UserID:    "user-2",
+		Vote:      VisionVoteDownvote,
+	})
+	if !errors.Is(err, ErrVisionDownvotingDisabled) {
+		t.Fatalf("comment downvote error = %v", err)
+	}
+}
+
+func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
+	service := mustVisionService(t, &memoryVisionRepository{})
+	item := createTestVision(t, service)
+	message := "Please check with <@nano-user>"
+
+	root, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
+		NanoID: item.NanoID, UserID: "user-2", Message: message,
+	})
+	if err != nil {
+		t.Fatalf("AddVisionComment() error = %v", err)
+	}
+	if len(root.Vision.Comments) != 1 || root.Vision.Comments[0].Message != message {
+		t.Fatalf("comments = %#v", root.Vision.Comments)
+	}
+	rootCommentID := root.Vision.Comments[0].ID
+
+	response, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
+		NanoID:          item.NanoID,
+		ParentCommentID: rootCommentID,
+		UserID:          "user-3",
+		Message:         "Agreed, <@nano-user>",
+	})
+	if err != nil {
+		t.Fatalf("AddVisionComment(reply) error = %v", err)
+	}
+	if response.Vision.Comments[1].ParentCommentID != rootCommentID {
+		t.Fatalf("reply = %#v", response.Vision.Comments[1])
+	}
+	if response.Vision.Comments[1].Voters[VisionVoteUpvote] == nil {
+		t.Fatalf("reply vote buckets = %#v", response.Vision.Comments[1].Voters)
+	}
+
+	response, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{
+		NanoID: item.NanoID, CommentID: rootCommentID, UserID: "user-4", Vote: VisionVoteUpvote,
+	})
+	if err != nil {
+		t.Fatalf("SetVisionCommentVote() error = %v", err)
+	}
+	if !slices.Contains(response.Vision.Comments[0].Voters[VisionVoteUpvote], "user-4") {
+		t.Fatalf("comment voters = %#v", response.Vision.Comments[0].Voters)
+	}
+
+	_, err = service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
+		NanoID: item.NanoID, ParentCommentID: "missing", UserID: "user-3", Message: "orphan",
+	})
+	if !errors.Is(err, ErrVisionCommentNotFound) {
+		t.Fatalf("missing parent error = %v", err)
+	}
+}
+
+func TestVisionConfigValidation(t *testing.T) {
+	invalid := NewCustomVisionConfig().
+		WithValidTypes(VisionTypeFeedback).
+		WithStatusTransition(VisionStatusPlanned, VisionStatus("UNKNOWN"))
+	if _, err := NewService(&memoryVisionRepository{}, invalid); !errors.Is(err, ErrVisionConfigInvalid) {
+		t.Fatalf("NewService() error = %v, want ErrVisionConfigInvalid", err)
 	}
 }
