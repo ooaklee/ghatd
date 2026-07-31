@@ -29,7 +29,7 @@ GHAT(D) offers modular packages that can be used both together and independently
 ### Authentication & Verification
 A dual-channel verification system providing both magic link and human-readable code entry.
 
-- **[Access Manager](./docs/getting-started/access-manager/)** - Complete authentication and authorisation with email-based verification, login, OAuth, and API token management
+- **[Access Manager](./external/accessmanager/README.md)** - Complete authentication and authorisation with email-based verification, login, OAuth, and API token management
   - `accessmanager` - User creation, login, registration, email verification, OAuth, API token management
   - `accessmanager/middleware` - JWT, API token, rate-limiting, and hardened code-verification middleware
   - `accessmanager/helpers` - Context-transmission utilities and unique code generation
@@ -39,7 +39,7 @@ A dual-channel verification system providing both magic link and human-readable 
 ### Email System
 A complete email solution split into three composable packages for maximum flexibility and testability.
 
-- **[Email Manager](./docs/getting-started/email-manager/)** - Complete email system with templating, sending, and audit logging
+- **[Email Manager](./external/emailmanager/README.md)** - Complete email system with templating, sending, and audit logging
   - `emailtemplater` - Generate HTML email templates with variable substitution
   - `emailprovider` - Abstract email sending across providers (SparkPost, logging, custom)
   - `emailmanager` - High-level orchestration with audit integration
@@ -47,26 +47,35 @@ A complete email solution split into three composable packages for maximum flexi
 ### Billing System
 A complete billing solution split into three composable packages for maximum flexibility and testability.
 
-- **[Billing Manager](./docs/getting-started/billing-manager/)** - Complete billing system with webhook processing, subscription management, and audit logging
+- **[Billing Manager](./external/billingmanager/README.md)** - Complete billing system with webhook processing, subscription management, and audit logging
   - `paymentprovider` - Abstract payment provider webhook verification and payload normalisation (Stripe, Lemon Squeezy, Ko-fi)
-  - `billing` - Manage subscription and billing event data persistence with repository pattern
+  - **[`billing`](./external/billing/README.md)** - Manage subscription and billing event data persistence with repository pattern
   - `billingmanager` - High-level orchestration with webhook processing and audit integration
-- **[Pricer](./docs/getting-started/pricer/)** - Source-of-truth pricing catalog with plans, feature entitlements, provider refs, Mongo migrations, and pricing-card E2E fixtures
+- **[Pricer](./external/pricer/README.md)** - Source-of-truth pricing catalog with plans, feature entitlements, provider refs, Mongo migrations, and pricing-card E2E fixtures
   - `pricer` - Manage pricing plans, costs, features, and provider-linked catalog metadata
 
 ### Additional Packages
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging
+- **[Content Manager](./external/contentmanager/README.md)** - HTTP orchestration for CMS-style content
+- **[Group](./external/group/README.md)** - User groups, memberships, and hierarchical organisations
 - **[Logger](./external/logger/)** - Structured logging with middleware support
-- **[Notifier](./external/notifier/)** - Push notification registration, preferences, and delivery
-- **[Reminder](./docs/getting-started/reminder/)** - User-owned scheduled reminders with target-based lookups and execution tracking
-- **[Streaker](./docs/getting-started/streaker/)** - Generic idempotent streak completions, current/best stats, and history listing
-- **[Repository](./external/repository/)** - MongoDB repository patterns and utilities
-- **[Server](./external/http/server/)** - Ejectable HTTP server lifecycle helper with graceful shutdown
-- **[Starter/v0](./external/starter/v0/)** - Ejectable lazy composition layer for GHATD application wiring
+- **[Notifier](./external/notifier/README.md)** - Push notification registration, preferences, and delivery
+- **[Post](./external/post/README.md)** - Reusable content models, persistence, and publication rules
+- **[Reminder](./external/reminder/README.md)** - User-owned scheduled reminders with target-based lookups and execution tracking
+- **[Router](./external/router/README.md)** - Shared HTTP routing and route attachment
+- **[SEO](./external/seo/README.md)** - Sitemap generation and persistence
+- **[SPA](./external/spa/README.md)** - Single-page application serving and fallback routing
+- **[Streaker](./external/streaker/README.md)** - Generic idempotent streak completions, current/best stats, and history listing
+- **[Repository](./external/repository/README.md)** - MongoDB repository patterns and utilities
+- **[Server](./external/http/server/README.md)** - Ejectable HTTP server lifecycle helper with graceful shutdown
+- **[Starter/v0](./external/starter/v0/README.md)** - Ejectable lazy composition layer for GHATD application wiring
+- **[User v2](./external/user/v2/README.md)** - Configurable universal user model and persistence
+- **[User Manager](./external/usermanager/README.md)** - User-facing orchestration across user, group, reminder, and related services
+- **[Vision](./external/vision/README.md)** - Feedback and roadmap management
 - **[Error Manifest](./external/errormanifest/)** - Cross-package error mapping and bundle composition
 - **`TBC`**
 
-**Note on Core Packages:** This Core Package and sub-sections will be updated as more core packages are added and the refactoring work is completed on legacy packages. The goal is to ensure that each package includes a getting-started guide accompanied by working examples to help you integrate them into your projects.
+**Note on Core Packages:** This section will be updated as more core packages are added and legacy packages are modernised. The goal is for each package to provide a canonical package README with working examples that help you integrate it into your project.
 
 ## Dual-Channel Verification
 

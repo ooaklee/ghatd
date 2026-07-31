@@ -853,11 +853,11 @@ func reportOrphanedSubscriptions() {
 
 ## Further Reading
 
-- [Billing Manager Documentation](../billing-manager/README.md) - High-level billing system overview
-- [Email-Based Subscriptions](../billing-manager/EMAIL_BASED_SUBSCRIPTIONS.md) - Detailed pre-registration flow
-- [Service Implementation](../../../external/billing/service.go) - Complete service code
-- [Repository Implementation](../../../external/billing/repository.go) - MongoDB implementation details
-- [Migration Files](../../../external/billing/migrations/) - Index migration code
+- [Billing Manager Documentation](../billingmanager/README.md) - High-level billing system overview
+- [Email-Based Subscriptions (ADR004)](../../docs/adr/adr004-email-based-subscriptions-for-pre-registration-purchases.md) - Pre-registration purchase flow
+- [Service Implementation](service.go) - Complete service code
+- [Repository Implementation](repository.go) - MongoDB implementation details
+- [Migration Files](migrations/) - Index migration code
 
 ## Support
 

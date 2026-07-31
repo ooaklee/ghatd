@@ -73,6 +73,11 @@ bootstrap noise without locking in the full starter API:
 - Starter documentation is added under both the package and
   `docs/getting-started`.
 
+> Documentation placement note (2026-07-31):
+> [ADR017](./adr017-colocate-package-documentation.md) supersedes this
+> dual-location approach. The canonical starter guide now lives at
+> `external/starter/v0/README.md`.
+
 After this foundation is reviewed and committed, the next phase will wire
 starter-owned constructors for common GHATD repositories, services, handlers,
 and middleware. Once that API is stable, the host application's server entry

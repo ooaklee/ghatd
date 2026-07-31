@@ -54,7 +54,7 @@ The access manager supports a dual-channel verification flow: users receive both
 - **Magic link flow**: The email includes `/v0/auth/verify?type=<verification-type>&__t=<jwt-token>`. The bridge redirects to `/api/v1/ams/login?t=<jwt-token>` or `/api/v1/ams/verify/email?t=<jwt-token>`, and the API validates the token before issuing the session cookies.
 - **Code flow**: The email also includes an 8-character A-Z/0-9 code. The app submits the code to `/api/v1/ams/login?c=<code>` for login or `/api/v1/ams/verify/email?c=<code>` for signup/email verification. Access Manager resolves the code to the same ephemeral token, validates it, and then issues the same session cookies.
 
-See the [Email Manager](../email-manager/) documentation for details on the email templates that deliver both channels.
+See the [Email Manager](../emailmanager/README.md) documentation for details on the email templates that deliver both channels.
 
 ## Authentication Flows
 
@@ -110,7 +110,7 @@ OAuth support is provider-based. A host application creates one or more provider
 
 Host applications that want a browser-only final redirect can wrap or customise the callback behavior. Applications that call the callback through an HTTP client can read `X-Web-Location` and route the user after the cookies have been stored.
 
-For an app-facing checklist that applies these flows from a client perspective, see [Authenticating the App](../../how-to/authenticating-the-app.md).
+For an app-facing checklist that applies these flows from a client perspective, see [Authenticating the App](../../docs/how-to/authenticating-the-app.md).
 
 ## Security Measures
 
@@ -210,7 +210,7 @@ When using `starter/v0`, pass the same dependencies to `starter.NewServices`, `s
 >     Build()
 > ```
 >
-> See [package errormanifest](../../../external/errormanifest/) for the full convention docs.
+> See [package errormanifest](../errormanifest/) for the full convention docs.
 
 For a complete setup guide, see the [Router documentation](../router/README.md).
 

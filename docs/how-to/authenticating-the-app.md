@@ -1,6 +1,6 @@
 # Authenticating the App
 
-Use this guide when wiring a web, native, or hybrid app to GHATD authentication. For the package-level API reference, see [Access Manager](../getting-started/access-manager/).
+Use this guide when wiring a web, native, or hybrid app to GHATD authentication. For the package-level API reference, see [Access Manager](../../external/accessmanager/README.md).
 
 ## Server Setup
 
@@ -167,7 +167,7 @@ If a client calls `/api/v1/ams/login` or `/api/v1/ams/verify/email` directly wit
 
 ## Related Docs
 
-- [Access Manager](../getting-started/access-manager/)
-- [Email Manager](../getting-started/email-manager/)
-- [User Manager](../getting-started/user-manager/)
-- [starter/v0](../getting-started/starter-v0.md)
+- [Access Manager](../../external/accessmanager/README.md)
+- [Email Manager](../../external/emailmanager/README.md)
+- [User Manager](../../external/usermanager/README.md)
+- [starter/v0](../../external/starter/v0/README.md)

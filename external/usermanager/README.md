@@ -1,6 +1,6 @@
 # User Manager
 
-The `usermanager` package is a high-level, full-stack service designed to simplify managing users and their associated data. It acts as an orchestrator, integrating with various other packages like `user`, `group`, and `contacter` to provide a unified API for common user-centric operations.
+The `usermanager` package is a high-level, full-stack service designed to simplify managing users and their associated data. It acts as an orchestrator, integrating with packages such as `user/v2`, `group`, and `contacter` to provide a unified API for common user-centric operations.
 
 This guide gives an overview of the `usermanager` architecture, its key features, and how to interact with its API.
 
@@ -62,7 +62,7 @@ These require a valid JWT or API token.
 
 This is useful when `/me` needs endpoint-specific auth error response handling while the rest of authenticated routes continue to use the standard middleware.
 
-For implementation details and usage examples, see [`external/accessmanager/middleware/custom_middleware.go`](../../external/accessmanager/middleware/custom_middleware.go).
+For implementation details and usage examples, see [`external/accessmanager/middleware/custom_middleware.go`](../accessmanager/middleware/custom_middleware.go).
 
 ### Quick note on `prefix_name`
 
@@ -117,9 +117,10 @@ import (
 
 	"github.com/ooaklee/ghatd/external/reminder"
 	"github.com/ooaklee/ghatd/external/router"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/ghatd/external/validator"
-	// ... import other required services (user, group, etc.)
+	// ... import other required services (group, audit, etc.)
 )
 
 func main() {
@@ -130,7 +131,7 @@ func main() {
 	validator := validator.New()
 
 	// Initialise downstream services
-	userService := user.NewService(...)
+userService := userv2.NewService(...)
 	groupService := group.NewService(...)
 	contacterService := contacter.NewService(...)
 	auditService := audit.NewService(...)

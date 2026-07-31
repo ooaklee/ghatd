@@ -10,9 +10,9 @@ Here's an overview of the core packages:
 
 | Package | Purpose | Recommended Use Case | Examples |
 |---|---|---|---|
-| `paymentprovider` | Abstracts payment provider webhook verification and payload normalisation (e.g., Stripe, Lemon Squeezy). | Building custom webhook handlers or testing provider integrations. | [`paymentprovider/examples`](../../../external/paymentprovider/examples/examples.go) |
-| `billing` | Manages subscription and billing event data persistence with a repository pattern. | Direct database operations or building custom billing workflows. | [`billing/examples`](../../../external/billing/examples/examples.go) |
-| `billingmanager` | Orchestrates `paymentprovider` and `billing` with high-level API methods for webhook processing. | Building application features (Standard)—provides the full workflow and audit logging. | [`billingmanager/examples`](../../../external/billingmanager/examples/examples.go) |
+| `paymentprovider` | Abstracts payment provider webhook verification and payload normalisation (e.g., Stripe, Lemon Squeezy). | Building custom webhook handlers or testing provider integrations. | [`paymentprovider/examples`](../paymentprovider/examples/examples.go) |
+| `billing` | Manages subscription and billing event data persistence with a repository pattern. | Direct database operations or building custom billing workflows. | [`billing/examples`](../billing/examples/examples.go) |
+| `billingmanager` | Orchestrates `paymentprovider` and `billing` with high-level API methods for webhook processing. | Building application features (Standard)—provides the full workflow and audit logging. | [`billingmanager/examples`](examples/examples.go) |
 
 ### Usage Overview
 

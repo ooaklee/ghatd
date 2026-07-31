@@ -8,9 +8,9 @@ Here's an overview of the core packages:
 
 | Package | Purpose | Recommended Use Case | Examples |
 |---|---|---|---|
-| `emailtemplater` | Generates HTML email templates (e.g., login, verification) with variable substitution. | Generating email previews or testing template rendering. | [`emailtemplater/examples`](../../../external/emailtemplater/examples/examples.go) |
-| `emailprovider` | Abstracts the logic for sending an email through a service (e.g., SparkPost). | Sending pre-rendered HTML or custom email workflows. | [`emailprovider/examples`](../../../external/emailprovider/examples/examples.go) |
-| `emailmanager` | Orchestrates the templater and email provider with high-level API methods. | Building application features (Standard)—provides the full workflow and audit logging. | [`emailmanager/examples`](../../../external/emailmanager/examples/examples.go) |
+| `emailtemplater` | Generates HTML email templates (e.g., login, verification) with variable substitution. | Generating email previews or testing template rendering. | [`emailtemplater/examples`](../emailtemplater/examples/examples.go) |
+| `emailprovider` | Abstracts the logic for sending an email through a service (e.g., SparkPost). | Sending pre-rendered HTML or custom email workflows. | [`emailprovider/examples`](../emailprovider/examples/examples.go) |
+| `emailmanager` | Orchestrates the templater and email provider with high-level API methods. | Building application features (Standard)—provides the full workflow and audit logging. | [`emailmanager/examples`](examples/examples.go) |
 
 ### Usage Overview
 
@@ -59,7 +59,7 @@ The lower-level setup remains available when a project needs custom templates.
 
 ### 1. Import Packages and Configure
 
-You'll need configuration for the `emailtemplater`, an `emailprovider` instance, and an [`audit` service](../../../external/audit).
+You'll need configuration for the `emailtemplater`, an `emailprovider` instance, and an [`audit` service](../audit).
 
 ```go
 import (
@@ -187,7 +187,7 @@ if err != nil {
 
 By default, the local inbox is available at `/_ghatd/local/emails` and rejects non-loopback clients. Set a custom `Prefix` or `AllowRemote` only when another trusted local proxy protects the route.
 
-This local inbox workflow is described in [ADR014](../../adr/adr014-local-email-inbox-for-development.md).
+This local inbox workflow is described in [ADR014](../../docs/adr/adr014-local-email-inbox-for-development.md).
 
 > **Note on Environments:** The `emailtemplater` is also **environment-aware**; for example, setting the `Environment` config to `"staging"` will add `[staging]` to the email subject line.
 

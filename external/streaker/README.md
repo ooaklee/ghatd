@@ -5,6 +5,9 @@ It is intentionally generic: the package does not know what an app check-in,
 lesson completion, saved item, or playback means. Host applications define those
 domain events and pass a stable streak scope into Streaker.
 
+Use Streaker when a host application needs idempotent "completed this period"
+tracking plus current count, best count, and history.
+
 ## Core Concepts
 
 A streak entry is unique per:
@@ -36,6 +39,23 @@ uses `UTC` for backward compatibility. For `custom`, callers must provide
 `period_timezone` must be an IANA timezone such as `Europe/London` or
 `America/New_York`. Streaker stores the effective timezone on each entry so host
 applications can audit which local boundary created the period key.
+
+## Consecutive Behaviour
+
+When the latest previous entry is in the immediately preceding period,
+`current_count` increments. If there is a gap, the new entry resets to `1`.
+
+Examples for a daily streak:
+
+| Action | Result |
+|--------|--------|
+| Record Monday | `current_count = 1` |
+| Record Tuesday | `current_count = 2` |
+| Record Tuesday again | existing Tuesday entry is returned |
+| Skip Wednesday, record Thursday | `current_count = 1` |
+
+The package stores a lightweight `previous` reference on new entries so callers
+can inspect how a count was calculated without an extra query.
 
 ## Service Setup
 
@@ -153,22 +173,26 @@ lexicographically sortable because the generated keys are zero-padded.
 
 When Streaker is attached to User Manager, authenticated users can access:
 
-- `GET /api/v1/ums/me/streaks`
-- `POST /api/v1/ums/me/streaks/record`
-- `GET /api/v1/ums/me/streaks/current`
-- `GET /api/v1/ums/me/streaks/longest`
-- `GET /api/v1/ums/me/streaks/count`
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/ums/me/streaks` | List the authenticated user's streak history. |
+| `POST /api/v1/ums/me/streaks/record` | Record a streak for the authenticated user. |
+| `GET /api/v1/ums/me/streaks/current` | Get the authenticated user's current count. |
+| `GET /api/v1/ums/me/streaks/longest` | Get the authenticated user's best count. |
+| `GET /api/v1/ums/me/streaks/count` | Count streak entries for the authenticated user. |
 
-Admin/service routes are also available for read operations:
+Admin/service read endpoints are also available:
 
-- `GET /api/v1/ums/streaks`
-- `GET /api/v1/ums/streaks/current`
-- `GET /api/v1/ums/streaks/longest`
-- `GET /api/v1/ums/streaks/count`
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/ums/streaks` | List streak history, optionally filtered by `user_id`. |
+| `GET /api/v1/ums/streaks/current` | Read current count for a target user and scope. |
+| `GET /api/v1/ums/streaks/longest` | Read best count for a target user and scope. |
+| `GET /api/v1/ums/streaks/count` | Count entries for a target user and scope. |
 
 The `/me` routes always scope `owner_id` to the authenticated requester.
-Admin/service routes may pass `user_id` as a query parameter when querying a
-target user.
+Admin/service routes may use `user_id` to inspect one target user after the
+caller has passed User Manager's access checks.
 
 ## Optional Integration Guidance
 

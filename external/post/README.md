@@ -150,4 +150,4 @@ For most HTTP/API use-cases, call the `contentmanager` package and let it orches
 - migration seeding
 - lower-level service composition
 
-See: [Content Manager Getting Started](../content-manager/README.md)
+See: [Content Manager Getting Started](../contentmanager/README.md)
