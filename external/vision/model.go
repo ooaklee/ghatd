@@ -43,9 +43,10 @@ type VisionComment struct {
 // NewVision returns a normalised vision with empty vote buckets.
 func NewVision(req *CreateVisionRequest, config *VisionConfig) *Vision {
 	vision := &Vision{
-		Voters:   newVisionVoteBuckets(),
-		Comments: []VisionComment{},
-		config:   config,
+		Voters:       newVisionVoteBuckets(),
+		Comments:     []VisionComment{},
+		CommentCount: 0,
+		config:       config,
 	}
 	if req == nil {
 		return vision

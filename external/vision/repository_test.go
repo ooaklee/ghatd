@@ -193,7 +193,7 @@ func TestBuildVisionListFilter(t *testing.T) {
 	}
 }
 
-func TestNormaliseStoredVisionPreservesProjectedCommentCount(t *testing.T) {
+func TestNormaliseStoredVisionPreservesStoredCommentCount(t *testing.T) {
 	projected := &Vision{CommentCount: 7}
 	normaliseStoredVision(projected)
 	if projected.CommentCount != 7 {
@@ -201,15 +201,15 @@ func TestNormaliseStoredVisionPreservesProjectedCommentCount(t *testing.T) {
 	}
 
 	detailed := &Vision{
-		CommentCount: 0,
+		CommentCount: 7,
 		Comments: []VisionComment{
 			{ID: "comment-1"},
 			{ID: "comment-2"},
 		},
 	}
 	normaliseStoredVision(detailed)
-	if detailed.CommentCount != 2 {
-		t.Fatalf("detailed CommentCount = %d, want 2", detailed.CommentCount)
+	if detailed.CommentCount != 7 {
+		t.Fatalf("detailed CommentCount = %d, want 7", detailed.CommentCount)
 	}
 }
 

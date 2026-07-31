@@ -431,12 +431,10 @@ func normalisePagination(req *GetVisionsRequest) (int64, int64) {
 	return page, pageSize
 }
 
-// normaliseStoredVision restores empty collections omitted by older documents.
+// normaliseStoredVision ensures collection fields are ready for callers after
+// persistence reads without changing stored counters.
 func normaliseStoredVision(vision *Vision) {
 	normaliseVoteBuckets(&vision.Voters)
-	if vision.Comments != nil {
-		vision.CommentCount = len(vision.Comments)
-	}
 	if vision.Comments == nil {
 		vision.Comments = []VisionComment{}
 	}
