@@ -2,13 +2,11 @@ package user
 
 import (
 	"crypto/rand"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	gonanoid "github.com/matoous/go-nanoid/v2"
-	"github.com/ooaklee/ghatd/external/user"
 )
 
 // Default implementations of the interfaces for immediate use
@@ -87,77 +85,4 @@ func (s *DefaultStringUtils) InSlice(item string, slice []string) bool {
 		}
 	}
 	return false
-}
-
-// Migration helpers for existing projects
-
-// MigrateFromLegacyUser converts your existing User to UniversalUser
-func MigrateFromLegacyUser(legacyUser *user.User, factory *UserFactory) *UniversalUser {
-	user := factory.CreateUser(legacyUser.Email)
-
-	// Copy core fields
-	user.ID = legacyUser.ID
-	user.NanoID = legacyUser.NanoId
-	user.Status = legacyUser.Status
-	user.Roles = legacyUser.Roles
-
-	// Copy personal info
-	if legacyUser.FirstName != "" || legacyUser.LastName != "" {
-		user.PersonalInfo.FirstName = legacyUser.FirstName
-		user.PersonalInfo.LastName = legacyUser.LastName
-		user.PersonalInfo.FullName = fmt.Sprintf("%s %s", legacyUser.FirstName, legacyUser.LastName)
-	}
-
-	// Copy verification status
-	user.Verification.EmailVerified = legacyUser.Verified.EmailVerified
-	user.Verification.EmailVerifiedAt = legacyUser.Verified.EmailVerifiedAt
-
-	// Copy metadata
-	user.Metadata.CreatedAt = legacyUser.Meta.CreatedAt
-	user.Metadata.UpdatedAt = legacyUser.Meta.UpdatedAt
-	user.Metadata.LastLoginAt = legacyUser.Meta.LastLoginAt
-	user.Metadata.ActivatedAt = legacyUser.Meta.ActivatedAt
-	user.Metadata.StatusChangedAt = legacyUser.Meta.StatusChangedAt
-	user.Metadata.LastFreshLoginAt = legacyUser.Meta.LastFreshLoginAt
-
-	return user
-}
-
-// MigrateToLegacyUser converts UniversalUser back to your existing User (for gradual migration)
-func MigrateToLegacyUser(universalUser *UniversalUser) *user.User {
-	legacyUser := &user.User{
-		ID:     universalUser.ID,
-		NanoId: universalUser.NanoID,
-		Email:  universalUser.Email,
-		Status: universalUser.Status,
-		Roles:  universalUser.Roles,
-	}
-
-	// Copy personal info
-	if universalUser.PersonalInfo != nil {
-		legacyUser.FirstName = universalUser.PersonalInfo.FirstName
-		legacyUser.LastName = universalUser.PersonalInfo.LastName
-	}
-
-	// Copy verification
-	if universalUser.Verification != nil {
-		legacyUser.Verified = user.UserVerifcationStatus{
-			EmailVerified:   universalUser.Verification.EmailVerified,
-			EmailVerifiedAt: universalUser.Verification.EmailVerifiedAt,
-		}
-	}
-
-	// Copy metadata
-	if universalUser.Metadata != nil {
-		legacyUser.Meta = user.UserMeta{
-			CreatedAt:        universalUser.Metadata.CreatedAt,
-			UpdatedAt:        universalUser.Metadata.UpdatedAt,
-			LastLoginAt:      universalUser.Metadata.LastLoginAt,
-			ActivatedAt:      universalUser.Metadata.ActivatedAt,
-			StatusChangedAt:  universalUser.Metadata.StatusChangedAt,
-			LastFreshLoginAt: universalUser.Metadata.LastFreshLoginAt,
-		}
-	}
-
-	return legacyUser
 }
