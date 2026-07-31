@@ -27,8 +27,8 @@ type GetVisionsRequest struct {
 // UpdateVisionRequest holds mutable descriptive fields.
 type UpdateVisionRequest struct {
 	NanoID          string                 `json:"-" validate:"required"`
-	Title           string                 `json:"title,omitempty"`
-	Description     string                 `json:"description,omitempty"`
+	Title           *string                `json:"title,omitempty"`
+	Description     *string                `json:"description,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 	UpdatedByUserID string                 `json:"-"`
 }

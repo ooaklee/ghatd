@@ -92,4 +92,10 @@ const (
 
 	// ErrKeyVisionServiceNotEnabled is returned when vision features are requested but VisionService is not configured.
 	ErrKeyVisionServiceNotEnabled = "VisionServiceNotEnabled"
+
+	// ErrKeyVisionEditForbidden is returned when a requester cannot edit a vision item.
+	ErrKeyVisionEditForbidden = "VisionEditForbidden"
+
+	// ErrKeyVisionDeleteForbidden is returned when a requester cannot delete a vision item.
+	ErrKeyVisionDeleteForbidden = "VisionDeleteForbidden"
 )

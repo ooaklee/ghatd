@@ -13,11 +13,93 @@ type visionUsermanagerService interface {
 	CreateVision(ctx context.Context, r *vision.CreateVisionRequest) (*GetVisionResponse, error)
 	GetVisionByNanoID(ctx context.Context, r *vision.GetVisionByNanoIDRequest) (*GetVisionResponse, error)
 	GetVisions(ctx context.Context, r *vision.GetVisionsRequest) (*GetVisionsResponse, error)
+	GetVisionConfig(ctx context.Context) (*vision.GetVisionConfigResponse, error)
+	UpdateVision(ctx context.Context, r *vision.UpdateVisionRequest) (*GetVisionResponse, error)
+	UpdateVisionStatus(ctx context.Context, r *vision.UpdateVisionStatusRequest) (*GetVisionResponse, error)
+	DeleteVision(ctx context.Context, r *vision.DeleteVisionRequest) (*vision.DeleteVisionResponse, error)
 	SetVisionVote(ctx context.Context, r *vision.SetVisionVoteRequest) (*GetVisionResponse, error)
 	RemoveVisionVote(ctx context.Context, r *vision.RemoveVisionVoteRequest) (*GetVisionResponse, error)
 	AddVisionComment(ctx context.Context, r *vision.AddVisionCommentRequest) (*GetVisionResponse, error)
 	SetVisionCommentVote(ctx context.Context, r *vision.SetVisionCommentVoteRequest) (*GetVisionResponse, error)
 	RemoveVisionCommentVote(ctx context.Context, r *vision.RemoveVisionCommentVoteRequest) (*GetVisionResponse, error)
+}
+
+// UpdateVision handles owner-or-admin edits to descriptive vision fields.
+func (h *Handler) UpdateVision(w http.ResponseWriter, r *http.Request) {
+	req, err := vision.MapRequestToUpdateVisionRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	// The usermanager edit surface intentionally excludes internal metadata.
+	req.Metadata = nil
+	service, ok := h.Service.(visionUsermanagerService)
+	if !ok {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		return
+	}
+	response, err := service.UpdateVision(r.Context(), req)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// GetVisionConfig handles client-safe vision configuration.
+func (h *Handler) GetVisionConfig(w http.ResponseWriter, r *http.Request) {
+	service, ok := h.Service.(visionUsermanagerService)
+	if !ok {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		return
+	}
+	response, err := service.GetVisionConfig(r.Context())
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	setVisionReadCacheHeaders(w, r)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
+}
+
+// UpdateVisionStatus handles an admin roadmap transition and returns an enriched vision.
+func (h *Handler) UpdateVisionStatus(w http.ResponseWriter, r *http.Request) {
+	req, err := vision.MapRequestToUpdateVisionStatusRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	service, ok := h.Service.(visionUsermanagerService)
+	if !ok {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		return
+	}
+	response, err := service.UpdateVisionStatus(r.Context(), req)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// DeleteVision handles owner-or-admin deletion of a vision.
+func (h *Handler) DeleteVision(w http.ResponseWriter, r *http.Request) {
+	req, err := vision.MapRequestToDeleteVisionRequest(r, h.Validator)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	service, ok := h.Service.(visionUsermanagerService)
+	if !ok {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		return
+	}
+	response, err := service.DeleteVision(r.Context(), req)
+	if err != nil {
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
 // CreateVision handles authenticated feedback or bug submission.

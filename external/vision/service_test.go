@@ -66,6 +66,7 @@ func (m *memoryVisionRepository) RemoveVisionVote(_ context.Context, _, userID, 
 }
 func (m *memoryVisionRepository) AddVisionComment(_ context.Context, _ string, comment *VisionComment) error {
 	m.item.Comments = append(m.item.Comments, *comment)
+	m.item.CommentCount++
 	return nil
 }
 func (m *memoryVisionRepository) SetVisionCommentVote(_ context.Context, _, commentID, userID string, vote VisionVote, _ string) error {
@@ -138,6 +139,9 @@ func TestServiceCreateVisionInitialisesFeedback(t *testing.T) {
 	if item.Voters[VisionVoteUpvote] == nil || item.Voters[VisionVoteDownvote] == nil {
 		t.Fatalf("vote buckets not initialised: %#v", item.Voters)
 	}
+	if item.CommentCount != 0 {
+		t.Fatalf("CommentCount = %d, want 0", item.CommentCount)
+	}
 }
 
 func TestServiceStatusTransitionsPromoteToRoadmap(t *testing.T) {
@@ -163,6 +167,49 @@ func TestServiceStatusTransitionsPromoteToRoadmap(t *testing.T) {
 	})
 	if !errors.Is(err, ErrVisionInvalidStatusTransition) {
 		t.Fatalf("invalid transition error = %v", err)
+	}
+}
+
+func TestServiceUpdateVisionChangesOnlyRequestedDescriptiveFields(t *testing.T) {
+	service := mustVisionService(t, &memoryVisionRepository{})
+	item := createTestVision(t, service)
+	item.Description = "Original description"
+	item.Status = VisionStatusUnderReview
+	title := "  Updated title  "
+	description := ""
+
+	response, err := service.UpdateVision(context.Background(), &UpdateVisionRequest{
+		NanoID:          item.NanoID,
+		Title:           &title,
+		Description:     &description,
+		UpdatedByUserID: "user-1",
+	})
+	if err != nil {
+		t.Fatalf("UpdateVision() error = %v", err)
+	}
+	if response.Vision.Title != "Updated title" {
+		t.Fatalf("Title = %q, want %q", response.Vision.Title, "Updated title")
+	}
+	if response.Vision.Description != "" {
+		t.Fatalf("Description = %q, want empty", response.Vision.Description)
+	}
+	if response.Vision.Status != VisionStatusUnderReview {
+		t.Fatalf("Status = %q, want %q", response.Vision.Status, VisionStatusUnderReview)
+	}
+}
+
+func TestServiceUpdateVisionRejectsEmptyTitle(t *testing.T) {
+	service := mustVisionService(t, &memoryVisionRepository{})
+	item := createTestVision(t, service)
+	title := "   "
+
+	_, err := service.UpdateVision(context.Background(), &UpdateVisionRequest{
+		NanoID:          item.NanoID,
+		Title:           &title,
+		UpdatedByUserID: "user-1",
+	})
+	if !errors.Is(err, ErrVisionTitleIsRequired) {
+		t.Fatalf("UpdateVision() error = %v, want %v", err, ErrVisionTitleIsRequired)
 	}
 }
 
@@ -220,6 +267,9 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	if len(root.Vision.Comments) != 1 || root.Vision.Comments[0].Message != message {
 		t.Fatalf("comments = %#v", root.Vision.Comments)
 	}
+	if root.Vision.CommentCount != 1 {
+		t.Fatalf("CommentCount = %d, want 1", root.Vision.CommentCount)
+	}
 	rootCommentID := root.Vision.Comments[0].ID
 
 	response, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
@@ -233,6 +283,9 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	}
 	if response.Vision.Comments[1].ParentCommentID != rootCommentID {
 		t.Fatalf("reply = %#v", response.Vision.Comments[1])
+	}
+	if response.Vision.CommentCount != 2 {
+		t.Fatalf("CommentCount = %d, want 2", response.Vision.CommentCount)
 	}
 	if response.Vision.Comments[1].Voters[VisionVoteUpvote] == nil {
 		t.Fatalf("reply vote buckets = %#v", response.Vision.Comments[1].Voters)

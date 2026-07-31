@@ -27,4 +27,8 @@ var (
 	ErrStreakServiceNotEnabled = errors.New(ErrKeyStreakServiceNotEnabled)
 	// ErrVisionServiceNotEnabled means vision features were requested but no vision service is configured.
 	ErrVisionServiceNotEnabled = errors.New(ErrKeyVisionServiceNotEnabled)
+	// ErrVisionEditForbidden means the requester is neither the vision owner nor a platform administrator.
+	ErrVisionEditForbidden = errors.New(ErrKeyVisionEditForbidden)
+	// ErrVisionDeleteForbidden means the requester is neither the vision owner nor a platform administrator.
+	ErrVisionDeleteForbidden = errors.New(ErrKeyVisionDeleteForbidden)
 )

@@ -156,6 +156,22 @@ func TestRepositorySetVisionCommentVoteUsesAtomicPositionalBuckets(t *testing.T)
 	}
 }
 
+func TestRepositoryAddVisionCommentAtomicallyIncrementsCount(t *testing.T) {
+	store := &mockMongoStore{}
+	repo := NewRepository(store)
+	comment := NewVisionComment("user-1", "Hello", "")
+
+	if err := repo.AddVisionComment(context.Background(), "vision-1", comment); err != nil {
+		t.Fatalf("AddVisionComment() error = %v", err)
+	}
+	update := store.lastUpdate.(bson.M)
+	push := update["$push"].(bson.M)
+	increment := update["$inc"].(bson.M)
+	if push["comments"] != comment || increment["comment_count"] != 1 {
+		t.Fatalf("atomic comment update = %#v", update)
+	}
+}
+
 func TestBuildVisionListFilter(t *testing.T) {
 	got := buildVisionListFilter(&GetVisionsRequest{
 		Query:       " search ",
@@ -174,6 +190,26 @@ func TestBuildVisionListFilter(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got["$or"], wantQuery) {
 		t.Fatalf("query filter = %#v", got["$or"])
+	}
+}
+
+func TestNormaliseStoredVisionPreservesProjectedCommentCount(t *testing.T) {
+	projected := &Vision{CommentCount: 7}
+	normaliseStoredVision(projected)
+	if projected.CommentCount != 7 {
+		t.Fatalf("projected CommentCount = %d, want 7", projected.CommentCount)
+	}
+
+	detailed := &Vision{
+		CommentCount: 0,
+		Comments: []VisionComment{
+			{ID: "comment-1"},
+			{ID: "comment-2"},
+		},
+	}
+	normaliseStoredVision(detailed)
+	if detailed.CommentCount != 2 {
+		t.Fatalf("detailed CommentCount = %d, want 2", detailed.CommentCount)
 	}
 }
 

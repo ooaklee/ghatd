@@ -118,16 +118,23 @@ func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*
 	if strings.TrimSpace(req.UpdatedByUserID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
+	if req.Title == nil && req.Description == nil && req.Metadata == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 
 	current, err := s.getVisionByNanoID(ctx, req.NanoID)
 	if err != nil {
 		return nil, err
 	}
-	if title := normaliseVisionTitle(req.Title); title != "" {
+	if req.Title != nil {
+		title := normaliseVisionTitle(*req.Title)
+		if title == "" {
+			return nil, ErrVisionTitleIsRequired
+		}
 		current.Title = title
 	}
-	if req.Description != "" {
-		current.Description = strings.TrimSpace(req.Description)
+	if req.Description != nil {
+		current.Description = strings.TrimSpace(*req.Description)
 	}
 	if req.Metadata != nil {
 		current.Metadata = req.Metadata

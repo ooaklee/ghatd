@@ -31,17 +31,21 @@ type VisionView struct {
 	Votes               VisionVoteSummary   `json:"votes"`
 	ViewerVote          *vision.VisionVote  `json:"viewer_vote,omitempty"`
 	Comments            []VisionCommentView `json:"comments,omitempty"`
+	CommentCount        int                 `json:"comment_count"`
 	CreatedAt           string              `json:"created_at"`
 	CreatedByUserNanoID string              `json:"created_by_user_nano_id,omitempty"`
 	UpdatedAt           string              `json:"updated_at,omitempty"`
 	UpdatedByUserNanoID string              `json:"updated_by_user_nano_id,omitempty"`
+	CanEdit             bool                `json:"can_edit"`
+	CanDelete           bool                `json:"can_delete"`
 }
 
 // GetVisionResponse combines a safe vision projection with user summaries
 // keyed by public NanoID.
 type GetVisionResponse struct {
-	Vision *VisionView           `json:"vision"`
-	Users  map[string]VisionUser `json:"users,omitempty"`
+	Vision           *VisionView           `json:"vision"`
+	Users            map[string]VisionUser `json:"users,omitempty"`
+	ViewerUserNanoID string                `json:"viewer_user_nano_id,omitempty"`
 }
 
 // GetVisionsResponse combines safe vision summaries with public user

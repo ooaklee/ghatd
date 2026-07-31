@@ -72,6 +72,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, commented.Vision.Comments, 2)
+	assert.Equal(t, 2, commented.Vision.CommentCount)
 	assert.Equal(t, rootCommentID, commented.Vision.Comments[1].ParentCommentID)
 
 	commented, err = service.SetVisionCommentVote(ctx, &vision.SetVisionCommentVoteRequest{
@@ -105,6 +106,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list.Visions, 1)
 	assert.Empty(t, list.Visions[0].Comments, "list projection should omit comments")
+	assert.Equal(t, 2, list.Visions[0].CommentCount)
 
 	deleted, err := service.DeleteVision(ctx, &vision.DeleteVisionRequest{NanoID: created.Vision.NanoID})
 	require.NoError(t, err)

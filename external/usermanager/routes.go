@@ -69,6 +69,10 @@ type UsermanagerHandler interface {
 	CreateVision(w http.ResponseWriter, r *http.Request)
 	GetVisions(w http.ResponseWriter, r *http.Request)
 	GetVisionByNanoID(w http.ResponseWriter, r *http.Request)
+	GetVisionConfig(w http.ResponseWriter, r *http.Request)
+	UpdateVision(w http.ResponseWriter, r *http.Request)
+	UpdateVisionStatus(w http.ResponseWriter, r *http.Request)
+	DeleteVision(w http.ResponseWriter, r *http.Request)
 	SetVisionVote(w http.ResponseWriter, r *http.Request)
 	RemoveVisionVote(w http.ResponseWriter, r *http.Request)
 	AddVisionComment(w http.ResponseWriter, r *http.Request)
@@ -128,6 +132,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
 	userManagerOpenRoutes.HandleFunc("/visions", request.Handler.GetVisions).Methods(http.MethodGet, http.MethodOptions)
+	userManagerOpenRoutes.HandleFunc("/visions/config", request.Handler.GetVisionConfig).Methods(http.MethodGet, http.MethodOptions)
 	userManagerOpenRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.GetVisionByNanoID).Methods(http.MethodGet, http.MethodOptions)
 	if request.RateLimitOrActiveMiddleware != nil {
 		userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
@@ -186,6 +191,8 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/descendants", request.Handler.GetGroupDescendants).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/visions", request.Handler.CreateVision).Methods(http.MethodPost, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.UpdateVision).Methods(http.MethodPatch, http.MethodOptions)
+	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.DeleteVision).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/votes", request.Handler.SetVisionVote).Methods(http.MethodPut, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/votes", request.Handler.RemoveVisionVote).Methods(http.MethodDelete, http.MethodOptions)
 	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/comments", request.Handler.AddVisionComment).Methods(http.MethodPost, http.MethodOptions)
@@ -208,6 +215,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/preferences", request.Handler.GetNotificationPreferences).Methods(http.MethodGet, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/preferences", request.Handler.UpdateNotificationPreferences).Methods(http.MethodPatch, http.MethodOptions)
 	usermanagerAdminRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
+	usermanagerAdminRoutes.HandleFunc("/visions/{visionNanoID}/status", request.Handler.UpdateVisionStatus).Methods(http.MethodPatch, http.MethodOptions)
 	if request.AdminOnlyMiddleware != nil {
 		usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
 	}

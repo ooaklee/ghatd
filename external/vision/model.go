@@ -10,15 +10,16 @@ import (
 // Vision represents feedback or a bug report. A non-empty Status makes the
 // item part of the roadmap.
 type Vision struct {
-	ID          string                  `json:"id" bson:"_id"`
-	NanoID      string                  `json:"nano_id" bson:"_nano_id"`
-	Title       string                  `json:"title" bson:"title"`
-	Type        VisionType              `json:"type" bson:"type"`
-	Description string                  `json:"description,omitempty" bson:"description,omitempty"`
-	Status      VisionStatus            `json:"status,omitempty" bson:"status,omitempty"`
-	Voters      map[VisionVote][]string `json:"voters" bson:"voters"`
-	Comments    []VisionComment         `json:"comments,omitempty" bson:"comments,omitempty"`
-	Metadata    map[string]interface{}  `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	ID           string                  `json:"id" bson:"_id"`
+	NanoID       string                  `json:"nano_id" bson:"_nano_id"`
+	Title        string                  `json:"title" bson:"title"`
+	Type         VisionType              `json:"type" bson:"type"`
+	Description  string                  `json:"description,omitempty" bson:"description,omitempty"`
+	Status       VisionStatus            `json:"status,omitempty" bson:"status,omitempty"`
+	Voters       map[VisionVote][]string `json:"voters" bson:"voters"`
+	Comments     []VisionComment         `json:"comments,omitempty" bson:"comments,omitempty"`
+	CommentCount int                     `json:"comment_count" bson:"comment_count"`
+	Metadata     map[string]interface{}  `json:"metadata,omitempty" bson:"metadata,omitempty"`
 
 	CreatedAt       string `json:"created_at" bson:"created_at"`
 	CreatedByUserID string `json:"created_by_user_id" bson:"created_by_user_id"`

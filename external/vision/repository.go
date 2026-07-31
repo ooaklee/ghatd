@@ -297,6 +297,7 @@ func (r *Repository) AddVisionComment(ctx context.Context, id string, comment *V
 		bson.M{"_id": id},
 		bson.M{
 			"$push": bson.M{"comments": comment},
+			"$inc":  bson.M{"comment_count": 1},
 			"$set": bson.M{
 				"updated_at":         comment.CreatedAt,
 				"updated_by_user_id": comment.UserID,
@@ -433,6 +434,9 @@ func normalisePagination(req *GetVisionsRequest) (int64, int64) {
 // normaliseStoredVision restores empty collections omitted by older documents.
 func normaliseStoredVision(vision *Vision) {
 	normaliseVoteBuckets(&vision.Voters)
+	if vision.Comments != nil {
+		vision.CommentCount = len(vision.Comments)
+	}
 	if vision.Comments == nil {
 		vision.Comments = []VisionComment{}
 	}
