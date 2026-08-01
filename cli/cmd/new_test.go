@@ -1,15 +1,78 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ooaklee/ghatd/internal/cli/config"
 
 	cp "github.com/otiai10/copy"
 )
+
+func TestInitNewAppRepoKeepsMigratorHostOwned(t *testing.T) {
+	baseDirectory := t.TempDir()
+	defaultModule := "github.com/ooaklee/ghatd"
+	appModule := "github.com/example/generated-app"
+	appName := fmt.Sprintf("ghatd-migrator-test-%d", time.Now().UnixNano())
+	generatedDirectory := filepath.Join(os.TempDir(), appName)
+	if _, err := os.Stat(generatedDirectory); !os.IsNotExist(err) {
+		t.Fatalf("generated test directory already exists: %s", generatedDirectory)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(generatedDirectory) })
+
+	files := map[string]string{
+		"cmd/server/server.go":           "package server\n",
+		"cmd/mongo-migrator/migrator.go": "package migrator\nimport (\n shared \"github.com/ooaklee/ghatd/external/migrator/mongo\"\n _ \"github.com/ooaklee/ghatd/migrations/mongo\"\n)\nvar _ = shared.NewCommand\n",
+		"migrations/mongo/template.go":   "package migrations\n",
+		"internal/example/example.go":    "package example\n",
+		"testing/example/example.go":     "package example\n",
+		"main.go":                        "package main\nimport (\n \"github.com/ooaklee/ghatd/cmd/mongo-migrator\"\n \"github.com/ooaklee/ghatd/cmd/server\"\n)\n",
+		"go.mod":                         "module github.com/ooaklee/ghatd\n",
+	}
+	for name, contents := range files {
+		path := filepath.Join(baseDirectory, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("create parent for %s: %v", name, err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
+	gotDirectory, _, err := initNewAppRepo(appName, appModule, baseDirectory, defaultModule)
+	if err != nil {
+		t.Fatalf("initNewAppRepo() error = %v", err)
+	}
+	if gotDirectory != generatedDirectory {
+		t.Fatalf("generated directory = %q, want %q", gotDirectory, generatedDirectory)
+	}
+
+	mainContents, err := os.ReadFile(filepath.Join(generatedDirectory, "main.go"))
+	if err != nil {
+		t.Fatalf("read generated main.go: %v", err)
+	}
+	if !strings.Contains(string(mainContents), appModule+"/cmd/mongo-migrator") || !strings.Contains(string(mainContents), appModule+"/cmd/server") {
+		t.Fatalf("generated main.go has stale command imports:\n%s", mainContents)
+	}
+
+	migratorContents, err := os.ReadFile(filepath.Join(generatedDirectory, "cmd/mongo-migrator/migrator.go"))
+	if err != nil {
+		t.Fatalf("read generated migrator.go: %v", err)
+	}
+	if !strings.Contains(string(migratorContents), appModule+"/migrations/mongo") {
+		t.Fatalf("generated migrator does not import host migrations:\n%s", migratorContents)
+	}
+	if !strings.Contains(string(migratorContents), defaultModule+"/external/migrator/mongo") {
+		t.Fatalf("generated migrator does not use the shared implementation:\n%s", migratorContents)
+	}
+	if _, err := os.Stat(filepath.Join(generatedDirectory, "migrations/mongo/template.go")); err != nil {
+		t.Fatalf("generated migration template missing: %v", err)
+	}
+}
 
 func TestIsSupportedDetailRepoSource(t *testing.T) {
 	tests := []struct {

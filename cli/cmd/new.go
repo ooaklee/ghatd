@@ -444,10 +444,11 @@ func getDetailRepo(detailsRepoUrl string) (string, *config.DetailConfig, error) 
 
 // initNewAppRepo creates the temporary application tree from the GHAT(D) base.
 //
-// It copies the server, internal packages, testing support, main entrypoint, and
-// go.mod into a temporary app directory while excluding CLI internals that should
-// not be shipped in generated projects. It also rewrites the server import path
-// from the GHAT(D) module to the generated app module.
+// It copies the commands, migration scaffold, internal packages, testing
+// support, main entrypoint, and go.mod into a temporary app directory while
+// excluding CLI internals that should not be shipped in generated projects. It
+// also rewrites host-owned command and migration imports to the generated app
+// module.
 //
 // Example of command (pre-compiled):
 //
@@ -455,6 +456,7 @@ func getDetailRepo(detailsRepoUrl string) (string, *config.DetailConfig, error) 
 //
 // from ghatd:
 //   - cmd
+//   - migrations
 //   - internal (exclude internal/cli)
 //   - testing (exclude anything to do with cli)
 //   - main.go
@@ -488,6 +490,12 @@ func initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultG
 		return "", nil, err
 	}
 
+	err = cp.Copy(fmt.Sprintf("%s/migrations", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/migrations", newAppRepoPath), opt)
+	if err != nil {
+		log.Default().Println("unable to copy migrations directory to new destination")
+		return "", nil, err
+	}
+
 	err = cp.Copy(fmt.Sprintf("%s/internal", pathToDirectoryOfBaseFiles), fmt.Sprintf("%s/internal", newAppRepoPath), opt)
 	if err != nil {
 		log.Default().Println("unable to copy directory to new destination")
@@ -510,6 +518,18 @@ func initNewAppRepo(appName, appModuleName, pathToDirectoryOfBaseFiles, defaultG
 	err = toolbox.Refactor(true, fmt.Sprintf("%s/cmd/server", defaultGhatdModule), fmt.Sprintf("%s/cmd/server", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
 	if err != nil {
 		log.Default().Println("unable to replace server found")
+		return "", nil, err
+	}
+
+	err = toolbox.Refactor(true, fmt.Sprintf("%s/cmd/mongo-migrator", defaultGhatdModule), fmt.Sprintf("%s/cmd/mongo-migrator", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "main.go")
+	if err != nil {
+		log.Default().Println("unable to replace mongo migrator command import")
+		return "", nil, err
+	}
+
+	err = toolbox.Refactor(true, fmt.Sprintf("%s/migrations/mongo", defaultGhatdModule), fmt.Sprintf("%s/migrations/mongo", appModuleName), fmt.Sprintf("%s/.", newAppRepoPath), "migrator.go")
+	if err != nil {
+		log.Default().Println("unable to replace mongo migrations import")
 		return "", nil, err
 	}
 

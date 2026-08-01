@@ -180,12 +180,12 @@ Run that host-owned migration entry point before starting the application:
 asdf exec go run ./cmd/migrations
 ```
 
-The GHATD package exposes migration functions, not a standalone executable at
-`cmd/mongo-migrator/migrator.go`. Applications that register
-`migrator.NewCommand()` on their own Cobra root may instead expose the
-`mongo-migrator up`, `mongo-migrator down`, and `mongo-migrator new <name>`
-actions. The current command does not provide partial rollback or status
-actions.
+GHATD provides a shared command implementation in `external/migrator/mongo`.
+Applications can keep a small command adapter that blank-imports their migration
+package and returns `mongo.NewCommand()`, then register that adapter on their
+Cobra root. This exposes `mongo-migrator up`, `mongo-migrator down`, and
+`mongo-migrator new <name>`. The current command does not provide partial
+rollback or status actions.
 
 ### Subscription Indexes
 
