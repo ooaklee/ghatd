@@ -79,6 +79,18 @@ The downgrade does not grant private access. When auth validation fails, the
 request proceeds only with the anonymous placeholder user produced by the
 rate-limited flow.
 
+The placeholder ID is deliberately non-empty, so downstream consumers cannot
+use the presence of a requestor ID as proof of authentication. Consumers must
+use `AcquireAuthenticatedFrom` when branching on authentication state and
+`AcquireAuthenticatedUserIDFrom` before using a context-derived actor ID for a
+database lookup, authorization decision, or attribution. A false or missing
+authentication state fails closed and yields no authenticated user ID.
+
+This rule applies to the request actor rather than every user ID handled during
+the request. IDs loaded from persisted domain records, such as a content author
+used for display-name enrichment, remain independent of the viewer's
+authentication state.
+
 Host applications can rely on public-or-active routes for public content without
 letting stale auth cookies turn those routes into hard auth failures. They
 should still use protected middleware for endpoints that require a real user.

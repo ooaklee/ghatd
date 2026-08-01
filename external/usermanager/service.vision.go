@@ -81,8 +81,8 @@ func (s *Service) UpdateVision(ctx context.Context, req *vision.UpdateVisionRequ
 	if req == nil {
 		return nil, vision.ErrVisionInvalidPayload
 	}
-	requesterID := strings.TrimSpace(accessmanagerhelpers.AcquireFrom(ctx))
-	if !accessmanagerhelpers.AcquireAuthenticatedFrom(ctx) || requesterID == "" {
+	requesterID := strings.TrimSpace(accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx))
+	if requesterID == "" {
 		return nil, ErrVisionEditForbidden
 	}
 	req.UpdatedByUserID = requesterID
@@ -223,10 +223,7 @@ func (s *Service) enrichedVisionResponse(ctx context.Context, item *vision.Visio
 // visionViewerNanoID resolves the current authenticated participant to their
 // public NanoID without exposing a raw user UUID.
 func visionViewerNanoID(ctx context.Context, usersByID map[string]VisionUser) string {
-	if !accessmanagerhelpers.AcquireAuthenticatedFrom(ctx) {
-		return ""
-	}
-	return usersByID[accessmanagerhelpers.AcquireFrom(ctx)].NanoID
+	return usersByID[accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)].NanoID
 }
 
 type visionUserLookup struct {
@@ -300,11 +297,7 @@ func projectVision(
 		return nil
 	}
 
-	authenticated := accessmanagerhelpers.AcquireAuthenticatedFrom(ctx)
-	viewerID := ""
-	if authenticated {
-		viewerID = accessmanagerhelpers.AcquireFrom(ctx)
-	}
+	viewerID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)
 
 	result := &VisionView{
 		NanoID:       item.NanoID,
@@ -352,10 +345,10 @@ func projectVision(
 // visionViewerCanManage reports whether the authenticated viewer owns the
 // vision or is a platform administrator.
 func visionViewerCanManage(ctx context.Context, item *vision.Vision) bool {
-	if item == nil || !accessmanagerhelpers.AcquireAuthenticatedFrom(ctx) {
+	if item == nil {
 		return false
 	}
-	viewerID := strings.TrimSpace(accessmanagerhelpers.AcquireFrom(ctx))
+	viewerID := strings.TrimSpace(accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx))
 	if viewerID == "" {
 		return false
 	}

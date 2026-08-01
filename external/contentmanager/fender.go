@@ -170,7 +170,7 @@ func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManag
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -206,7 +206,7 @@ func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerVal
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -242,7 +242,7 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -311,7 +311,7 @@ func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentMana
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -343,7 +343,7 @@ func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validat
 		parsedRequest = GetChangelogItemByUrlFriendlyIdRequest{}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// Add urlFriendlyId from uri
 	parsedRequest.UrlFriendlyId, err = tctcToolbox.GetVariableValueFromUri(r, "urlFriendlyId")
@@ -371,7 +371,7 @@ func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator
 		parsedRequest = GetArticleItemByUrlFriendlyIdRequest{}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// Add urlFriendlyId from uri
 	parsedRequest.UrlFriendlyId, err = tctcToolbox.GetVariableValueFromUri(r, "urlFriendlyId")
@@ -401,7 +401,7 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetLatestPostsByTypeRequest{}
 
@@ -442,7 +442,7 @@ func mapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
-	baseRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	baseRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
 
 	err = validateParsedRequest(parsedRequest, validator)
