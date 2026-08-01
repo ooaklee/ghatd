@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"regexp"
 
 	"github.com/ooaklee/ghatd/external/audit"
@@ -240,6 +241,38 @@ func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest
 	// Reinject dependencies
 	s.setUserDependencies(user)
 
+	return &GetUserByEmailResponse{User: user}, nil
+}
+
+// FindUserByEmail looks up a user for workflows where absence is an expected
+// outcome, such as availability checks and optional account association. A
+// missing user returns ErrUserNotFound without emitting repository or service
+// diagnostics. Unexpected repository failures emit one root diagnostic and
+// return ErrDatabaseError.
+//
+// GetUserByEmail remains the strict public lookup for callers that expect the
+// user to exist.
+func (s *Service) FindUserByEmail(ctx context.Context, req *GetUserByEmailRequest) (*GetUserByEmailResponse, error) {
+	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "find-user-by-email"))
+
+	if req.Email == "" {
+		return nil, ErrInvalidEmail
+	}
+
+	user, err := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), false)
+	if errors.Is(err, ErrUserNotFound) {
+		return nil, ErrUserNotFound
+	}
+	if err != nil {
+		logger.Error("failed to find user by email", append(emailLogFields("email", req.Email), zap.Error(err))...)
+		return nil, ErrDatabaseError
+	}
+	if user == nil {
+		logger.Error("user lookup by email returned an empty user", emailLogFields("email", req.Email)...)
+		return nil, ErrDatabaseError
+	}
+
+	s.setUserDependencies(user)
 	return &GetUserByEmailResponse{User: user}, nil
 }
 

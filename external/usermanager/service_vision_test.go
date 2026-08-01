@@ -10,13 +10,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
+	ghatdlogger "github.com/ooaklee/ghatd/external/logger"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/ghatd/external/vision"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type mockVisionUserService struct {
-	users map[string]userv2.UniversalUser
+	users         map[string]userv2.UniversalUser
+	getUsersError error
+	getUsersCalls [][]string
 }
 
 func (*mockVisionUserService) GetUserMicroProfile(context.Context, *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error) {
@@ -29,6 +35,10 @@ func (*mockVisionUserService) GetUserByID(context.Context, *userv2.GetUserByIDRe
 	return nil, errors.New("not implemented")
 }
 func (m *mockVisionUserService) GetUsers(_ context.Context, req *userv2.GetUsersRequest) (*userv2.GetUsersResponse, error) {
+	m.getUsersCalls = append(m.getUsersCalls, append([]string(nil), req.IDsFilter...))
+	if m.getUsersError != nil {
+		return nil, m.getUsersError
+	}
 	users := make([]userv2.UniversalUser, 0, len(req.IDsFilter))
 	for _, id := range req.IDsFilter {
 		if user, ok := m.users[id]; ok {
@@ -363,6 +373,51 @@ func TestVisionIntegrationRequiresService(t *testing.T) {
 	service := usermanager.NewService(&usermanager.NewServiceRequest{UserService: &mockVisionUserService{}})
 	_, err := service.GetVisions(context.Background(), &vision.GetVisionsRequest{})
 	assert.ErrorIs(t, err, usermanager.ErrVisionServiceNotEnabled)
+}
+
+func TestVisionReadReturnsCoreResponseWhenUserEnrichmentFails(t *testing.T) {
+	item := &vision.Vision{
+		ID:              "vision-1",
+		NanoID:          "vision-nano",
+		Title:           "Still available",
+		CreatedByUserID: "user-1",
+	}
+	userService := &mockVisionUserService{getUsersError: errors.New("database unavailable")}
+	service := usermanager.NewService(&usermanager.NewServiceRequest{UserService: userService}).
+		WithVisionService(&mockVisionService{item: item})
+	core, logs := observer.New(zapcore.DebugLevel)
+	ctx := ghatdlogger.TransitWith(context.Background(), zap.New(core))
+
+	response, err := service.GetVisionByNanoID(ctx, &vision.GetVisionByNanoIDRequest{NanoID: item.NanoID})
+
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, response.Vision)
+	assert.Equal(t, item.NanoID, response.Vision.NanoID)
+	assert.Empty(t, response.Users)
+	assert.Len(t, userService.getUsersCalls, 1)
+	assert.Equal(t, 1, logs.FilterMessage("user-enrichment-batch-unavailable").Len())
+}
+
+func TestVisionMutationReturnsStoredResultWhenUserEnrichmentFails(t *testing.T) {
+	item := &vision.Vision{
+		ID:              "vision-1",
+		NanoID:          "vision-nano",
+		CreatedByUserID: "user-1",
+	}
+	userService := &mockVisionUserService{getUsersError: errors.New("database unavailable")}
+	service := usermanager.NewService(&usermanager.NewServiceRequest{UserService: userService}).
+		WithVisionService(&mockVisionService{item: item})
+	core, logs := observer.New(zapcore.DebugLevel)
+	ctx := ghatdlogger.TransitWith(context.Background(), zap.New(core))
+
+	response, err := service.CreateVision(ctx, &vision.CreateVisionRequest{})
+
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, response.Vision)
+	assert.Equal(t, item.NanoID, response.Vision.NanoID)
+	assert.Equal(t, 1, logs.FilterMessage("user-enrichment-batch-unavailable").Len())
 }
 
 func TestVisionAdminOperationsReturnSafeConfigAndEnrichedProjection(t *testing.T) {

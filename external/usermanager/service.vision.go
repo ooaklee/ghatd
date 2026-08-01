@@ -6,11 +6,8 @@ import (
 	"strings"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
-	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/vision"
 )
-
-const visionUserBatchSize = 100
 
 // CreateVision stores authenticated feedback or a bug report, then enriches it.
 func (s *Service) CreateVision(ctx context.Context, req *vision.CreateVisionRequest) (*GetVisionResponse, error) {
@@ -33,10 +30,7 @@ func (s *Service) GetVisionByNanoID(ctx context.Context, req *vision.GetVisionBy
 	if err != nil {
 		return nil, err
 	}
-	users, err := s.enrichVisionUsers(ctx, []vision.Vision{*response.Vision})
-	if err != nil {
-		return nil, err
-	}
+	users := s.enrichVisionUsers(ctx, []vision.Vision{*response.Vision})
 	return &GetVisionResponse{
 		Vision:           projectVision(ctx, response.Vision, users.byID),
 		Users:            users.public,
@@ -53,10 +47,7 @@ func (s *Service) GetVisions(ctx context.Context, req *vision.GetVisionsRequest)
 	if err != nil {
 		return nil, err
 	}
-	users, err := s.enrichVisionUsers(ctx, response.Visions)
-	if err != nil {
-		return nil, err
-	}
+	users := s.enrichVisionUsers(ctx, response.Visions)
 	items := make([]VisionView, 0, len(response.Visions))
 	for i := range response.Visions {
 		items = append(items, *projectVision(ctx, &response.Visions[i], users.byID))
@@ -209,10 +200,7 @@ func (s *Service) enrichedVisionResponse(ctx context.Context, item *vision.Visio
 	if item == nil {
 		return &GetVisionResponse{}, nil
 	}
-	users, err := s.enrichVisionUsers(ctx, []vision.Vision{*item})
-	if err != nil {
-		return nil, err
-	}
+	users := s.enrichVisionUsers(ctx, []vision.Vision{*item})
 	return &GetVisionResponse{
 		Vision:           projectVision(ctx, item, users.byID),
 		Users:            users.public,
@@ -231,35 +219,27 @@ type visionUserLookup struct {
 	public map[string]VisionUser
 }
 
-// enrichVisionUsers loads the public user summaries referenced by the given visions.
-func (s *Service) enrichVisionUsers(ctx context.Context, visions []vision.Vision) (*visionUserLookup, error) {
+// enrichVisionUsers loads public summaries for users referenced by the given
+// visions. Enrichment is best effort: missing users and failed batches are
+// omitted so profile decoration cannot make a core vision operation fail.
+func (s *Service) enrichVisionUsers(ctx context.Context, visions []vision.Vision) *visionUserLookup {
 	ids := visionUserIDs(visions)
 	result := &visionUserLookup{
 		byID:   make(map[string]VisionUser, len(ids)),
 		public: make(map[string]VisionUser, len(ids)),
 	}
 
-	for start := 0; start < len(ids); start += visionUserBatchSize {
-		end := min(start+visionUserBatchSize, len(ids))
-		response, err := s.UserService.GetUsers(ctx, &userv2.GetUsersRequest{
-			IDsFilter: ids[start:end],
-			Page:      1,
-			PerPage:   visionUserBatchSize,
-		})
-		if err != nil {
-			return nil, err
+	usersByID := s.loadUsersForEnrichment(ctx, ids, "vision-user-enrichment")
+	for userID, persistedUser := range usersByID {
+		user := newVisionUser(persistedUser)
+		if user.NanoID == "" {
+			continue
 		}
-		for i := range response.Users {
-			user := newVisionUser(&response.Users[i])
-			if user.NanoID == "" {
-				continue
-			}
-			result.byID[response.Users[i].ID] = user
-			result.public[user.NanoID] = user
-		}
+		result.byID[userID] = user
+		result.public[user.NanoID] = user
 	}
 
-	return result, nil
+	return result
 }
 
 // visionUserIDs returns the sorted unique user IDs referenced by the given visions.

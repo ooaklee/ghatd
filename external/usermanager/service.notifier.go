@@ -90,21 +90,37 @@ func (s *Service) ListNotificationAddresses(ctx context.Context, r *ListNotifica
 		return nil, err
 	}
 
-	addresses := make([]NotificationAddressWithUser, 0, len(response.Addresses))
-	userCache := map[string]*EnrichedUserProfile{}
-	for _, address := range response.Addresses {
-		item := NotificationAddressWithUser{NotificationAddressSummary: address}
-		if r.IncludeUsers {
-			item.User = s.resolveNotificationUser(ctx, address.UserID, userCache)
-		}
-		addresses = append(addresses, item)
-	}
+	addresses := s.enrichNotificationAddresses(ctx, response.Addresses, r.IncludeUsers)
 
 	return &ListNotificationAddressesResponse{
 		Addresses:                         addresses,
 		Meta:                              response.GetMetaData(),
 		ListNotificationAddressesResponse: response,
 	}, nil
+}
+
+// enrichNotificationAddresses decorates notification address summaries with
+// corresponding user profiles when includeUsers is true. Owner IDs are
+// deduplicated and resolved through bounded batches; missing profiles remain
+// nil and do not prevent the addresses from being returned.
+func (s *Service) enrichNotificationAddresses(ctx context.Context, summaries []notifier.NotificationAddressSummary, includeUsers bool) []NotificationAddressWithUser {
+	addresses := make([]NotificationAddressWithUser, 0, len(summaries))
+	usersByID := map[string]*userv2.UniversalUser{}
+	if includeUsers {
+		userIDs := make([]string, 0, len(summaries))
+		for _, address := range summaries {
+			userIDs = append(userIDs, address.UserID)
+		}
+		usersByID = s.loadUsersForEnrichment(ctx, userIDs, "list-notification-address-user-enrichment")
+	}
+	for _, address := range summaries {
+		item := NotificationAddressWithUser{NotificationAddressSummary: address}
+		if includeUsers {
+			item.User = buildNotificationEnrichedUserProfile(usersByID[strings.TrimSpace(address.UserID)])
+		}
+		addresses = append(addresses, item)
+	}
+	return addresses
 }
 
 // DeleteNotificationAddress removes a single registered push destination
@@ -241,35 +257,22 @@ func (s *Service) wrapNotificationPreferences(ctx context.Context, preferences *
 
 	item := &NotificationPreferencesWithUser{NotificationPreferences: preferences}
 	if includeUser {
-		item.User = s.resolveNotificationUser(ctx, preferences.UserID, nil)
+		item.User = s.resolveNotificationUser(ctx, preferences.UserID)
 	}
 	return item
 }
 
-func (s *Service) resolveNotificationUser(ctx context.Context, userID string, cache map[string]*EnrichedUserProfile) *EnrichedUserProfile {
+// resolveNotificationUser performs best-effort profile enrichment for a single
+// notification preference owner. It returns nil for an empty, missing, or
+// temporarily unavailable user and must not be used for authorization.
+func (s *Service) resolveNotificationUser(ctx context.Context, userID string) *EnrichedUserProfile {
 	userID = strings.TrimSpace(userID)
 	if userID == "" || s.UserService == nil {
 		return nil
 	}
-	if cache != nil {
-		if profile, ok := cache[userID]; ok {
-			return profile
-		}
-	}
 
-	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: userID})
-	if err != nil || userResponse == nil || userResponse.User == nil {
-		if cache != nil {
-			cache[userID] = nil
-		}
-		return nil
-	}
-
-	profile := buildNotificationEnrichedUserProfile(userResponse.User)
-	if cache != nil {
-		cache[userID] = profile
-	}
-	return profile
+	usersByID := s.loadUsersForEnrichment(ctx, []string{userID}, "notification-preference-user-enrichment")
+	return buildNotificationEnrichedUserProfile(usersByID[userID])
 }
 
 func buildNotificationEnrichedUserProfile(user *userv2.UniversalUser) *EnrichedUserProfile {

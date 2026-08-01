@@ -444,7 +444,31 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 		membersSource = membersResp.Members
 	}
 
-	// Enrich members — resolve user profile for each USER-type member
+	enrichedMembers, owner := s.enrichGroupDetailUsers(ctx, membersSource, g.OwnerID)
+
+	return &GetGroupDetailResponse{
+		Detail: &GroupDetail{
+			Group:   g,
+			Members: enrichedMembers,
+			Owner:   owner,
+		},
+	}, nil
+}
+
+// enrichGroupDetailUsers resolves the owner and USER member profiles through
+// bounded, deduplicated enrichment batches. Non-USER members retain their
+// group metadata, while missing or unavailable users become ID-only stubs so
+// optional profile enrichment cannot prevent group details from being returned.
+func (s *Service) enrichGroupDetailUsers(ctx context.Context, membersSource []group.Member, ownerID string) ([]EnrichedMember, *EnrichedOwner) {
+	userIDs := make([]string, 0, len(membersSource)+1)
+	for _, member := range membersSource {
+		if member.Type == group.MemberTypeUser {
+			userIDs = append(userIDs, member.ID)
+		}
+	}
+	userIDs = append(userIDs, ownerID)
+	usersByID := s.loadUsersForEnrichment(ctx, userIDs, "get-group-detail-user-enrichment")
+
 	enrichedMembers := make([]EnrichedMember, 0, len(membersSource))
 	for _, m := range membersSource {
 		em := EnrichedMember{
@@ -454,12 +478,14 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 			JoinedAt: m.JoinedAt,
 		}
 		if m.Type == group.MemberTypeUser {
-			if u := s.resolveUserToEnrichedMember(ctx, m.ID); u != nil {
+			if u := enrichedMemberFromUser(m.ID, usersByID[strings.TrimSpace(m.ID)]); u != nil {
 				em.FullName = u.FullName
 				em.Initials = u.Initials
 				em.Email = u.Email
 				em.Roles = u.Roles
-				em.Type = u.Type
+				if u.Type != "" {
+					em.Type = u.Type
+				}
 			}
 		}
 		enrichedMembers = append(enrichedMembers, em)
@@ -467,19 +493,13 @@ func (s *Service) GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) 
 
 	// Enrich owner details
 	var owner *EnrichedOwner
-	if g.OwnerID != "" {
+	if ownerID != "" {
 		owner = &EnrichedOwner{
-			Owner: s.resolveUserToEnrichedMember(ctx, g.OwnerID),
+			Owner: enrichedMemberFromUser(ownerID, usersByID[strings.TrimSpace(ownerID)]),
 		}
 	}
 
-	return &GetGroupDetailResponse{
-		Detail: &GroupDetail{
-			Group:   g,
-			Members: enrichedMembers,
-			Owner:   owner,
-		},
-	}, nil
+	return enrichedMembers, owner
 }
 
 // GetGroupStats handles fetching group stats for a requester with membership/owner checks
