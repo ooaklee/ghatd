@@ -32,7 +32,7 @@ group/
 
 The package follows a standard layered architecture common throughout this project:
 
-1.  **Routes (`routes.go`)**: Defines the HTTP API endpoints (e.g., `POST /v1/groups`, `GET /v1/groups/{id}`). It maps URLs to specific handlers.
+1.  **Routes (`routes.go`)**: Defines the HTTP API endpoints (e.g., `POST /api/v1/groups`, `GET /api/v1/groups/{id}`). It maps URLs to specific handlers.
 2.  **Handler (`handler.go`)**: Receives HTTP requests, parses them, and validates input. It acts as the bridge between the transport layer (HTTP) and the business logic.
 3.  **Fender (`fender.go`)**: An authorisation layer that checks if the authenticated user has the necessary permissions to perform an action on a group.
 4.  **Service (`service.go`)**: Contains the core business logic. It orchestrates operations like creating, updating, and retrieving groups, and it interacts with the repository.
@@ -46,7 +46,7 @@ The package follows a standard layered architecture common throughout this proje
 No external dependencies required:
 
 ```sh
-go test ./external/group -count=1
+asdf exec go test ./external/group -count=1
 ```
 
 ### Integration Tests
@@ -63,20 +63,20 @@ docker run --rm -p 47027:27017 mongo:7
 
 ```sh
 export GROUP_IT_MONGO_URI=mongodb://localhost:47027
-go test ./external/group -count=1
+asdf exec go test ./external/group -count=1
 ```
 
 **Run a specific integration test:**
 
 ```sh
 export GROUP_IT_MONGO_URI=mongodb://localhost:47027
-go test ./external/group -run TestIntegration_GroupService_GetGroupsByUserID_WithSampleDataset -v -count=1
+asdf exec go test ./external/group -run TestIntegration_GroupService_GetGroupsByUserID_WithSampleDataset -v -count=1
 ```
 
 **Skip integration tests:**
 
 ```sh
-go test ./external/group -short -count=1
+asdf exec go test ./external/group -short -count=1
 ```
 
 ### Integration Test Caveats
@@ -122,8 +122,11 @@ To apply these indexes, you must integrate the provided migration functions into
 ```go
 // In your main application setup
 import (
+    "context"
+
     "github.com/xakep666/mongo-migrate"
     groupMigrations "github.com/ooaklee/ghatd/external/group/migrations"
+    "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 func main() {
@@ -131,20 +134,24 @@ func main() {
     db := client.Database("your_db_name")
     migrate.SetDatabase(db)
 
-    // Add the group migrations in order
-    migrate.Add(migrate.NewMigration(
-        "initial_groups_indexes",
-        groupMigrations.InitGroupsIndexesUp,
-        groupMigrations.InitGroupsIndexesDown,
-    ))
-    migrate.Add(migrate.NewMigration(
-        "groups_lineage_index",
-        groupMigrations.InitGroupsLineageIndexUp,
-        groupMigrations.InitGroupsLineageIndexDown,
-    ))
+    // Register the group migrations in order. The package migration helpers
+    // use the legacy func(*mongo.Database) error shape, so adapt them to the
+    // context-aware mongo-migrate API.
+    register := func(up, down func(*mongo.Database) error) error {
+        return migrate.Register(
+            func(_ context.Context, db *mongo.Database) error { return up(db) },
+            func(_ context.Context, db *mongo.Database) error { return down(db) },
+        )
+    }
+    if err := register(groupMigrations.InitGroupsIndexesUp, groupMigrations.InitGroupsIndexesDown); err != nil {
+        log.Fatalf("Failed to register group indexes: %v", err)
+    }
+    if err := register(groupMigrations.InitGroupsLineageIndexUp, groupMigrations.InitGroupsLineageIndexDown); err != nil {
+        log.Fatalf("Failed to register group lineage index: %v", err)
+    }
 
     // Apply migrations
-    if err := migrate.Up(migrate.AllAvailable); err != nil {
+    if err := migrate.Up(context.Background(), migrate.AllAvailable); err != nil {
         log.Fatalf("Migration failed: %v", err)
     }
 }
@@ -152,7 +159,9 @@ func main() {
 
 ## API Endpoints
 
-All group endpoints are admin-only and sit under the `/api/v1/groups` prefix. The table below covers the full surface area:
+Group routes sit under the `/api/v1/groups` prefix. `AttachRoutes` applies the
+provided `AdminOnlyMiddleware` to this surface; without it, the caller is
+responsible for equivalent protection. The list below covers the full surface.
 
 **Group CRUD**
 -   `POST /api/v1/groups`: Create a new group.
@@ -172,6 +181,12 @@ All group endpoints are admin-only and sit under the `/api/v1/groups` prefix. Th
 -   `DELETE /api/v1/groups/{groupID}/members/{memberID}`: Remove a member from a group.
 -   `PUT /api/v1/groups/{groupID}/members/{memberID}/role`: Update a member's role within a group.
 
+**Invitations**
+-   `GET /api/v1/groups/invitations/{memberID}`: List groups awaiting an invitation response from a member.
+-   `POST|DELETE /api/v1/groups/{groupID}/invitations`: Invite or uninvite a user.
+-   `POST /api/v1/groups/{groupID}/invitations/accept`: Accept an invitation.
+-   `POST /api/v1/groups/{groupID}/invitations/reject`: Reject an invitation.
+
 **Ownership**
 -   `PUT /api/v1/groups/{groupID}/owner`: Update the owner of a group.
 
@@ -186,6 +201,12 @@ All group endpoints are admin-only and sit under the `/api/v1/groups` prefix. Th
 -   `GET /api/v1/groups/validate-name`: Validate and preview a group name before creating it.
 -   `POST /api/v1/groups/repairs/members`: Repair groups with invalid member states (useful for recovering from data inconsistencies).
 -   `GET /api/v1/groups/users/{userID}`: Get all groups a specific user belongs to. Supports `include_descendants` and `prefix_name`.
+
+**Email-domain Automation**
+-   `POST /api/v1/groups/{groupID}/auto-join/enable`: Enable automatic joining for an email domain.
+-   `POST /api/v1/groups/{groupID}/auto-join/disable`: Disable automatic joining.
+-   `POST /api/v1/groups/{groupID}/auto-invite/enable`: Enable automatic invitations for an email domain.
+-   `POST /api/v1/groups/{groupID}/auto-invite/disable`: Disable automatic invitations.
 
 ## Name Prefixing (`prefix_name`)
 

@@ -169,8 +169,8 @@ dept, exists := user.GetExtension("department")
 ### Installing Dependencies
 
 ```bash
-go get github.com/xakep666/mongo-migrate
-go get go.mongodb.org/mongo-driver/v2/mongo
+asdf exec go get github.com/xakep666/mongo-migrate
+asdf exec go get go.mongodb.org/mongo-driver/v2/mongo
 ```
 
 ### Running Migrations
@@ -198,13 +198,13 @@ func main() {
         mongoURI = "mongodb://localhost:27017"
     }
     
-    client, err := mongo.Connect(context.Background(), 
-        options.Client().ApplyURI(mongoURI))
+    ctx := context.Background()
+    client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
     if err != nil {
         log.Fatalf("Failed to connect to MongoDB: %v", err)
     }
     defer func() {
-        if err := client.Disconnect(context.Background()); err != nil {
+        if err := client.Disconnect(ctx); err != nil {
             log.Printf("Error disconnecting: %v", err)
         }
     }()
@@ -216,14 +216,20 @@ func main() {
     migrate.SetDatabase(db)
     
     // Register user v2 indexes migration
-    migrate.Register(
-        userMigration.InitUsersIndexesUp,
-        userMigration.InitUsersIndexesDown,
-    )
+    if err := migrate.Register(
+        func(_ context.Context, db *mongo.Database) error {
+            return userMigration.InitUsersIndexesUp(db)
+        },
+        func(_ context.Context, db *mongo.Database) error {
+            return userMigration.InitUsersIndexesDown(db)
+        },
+    ); err != nil {
+        log.Fatalf("Failed to register user migration: %v", err)
+    }
     
     // Run migrations
     log.Println("Running user v2 indexes migrations...")
-    if err := migrate.Up(migrate.AllAvailable); err != nil {
+    if err := migrate.Up(ctx, migrate.AllAvailable); err != nil {
         log.Fatalf("Migration failed: %v", err)
     }
     
@@ -299,15 +305,8 @@ if err := userMigration.InitUsersIndexesDown(db); err != nil {
 }
 ```
 
-Or use the migration CLI:
-
-```bash
-# Rollback last migration set
-go run cmd/mongo-migrator/migrator.go down 1
-
-# Rollback all migrations
-go run cmd/mongo-migrator/migrator.go down all
-```
+The package-level down function is the supported rollback API. Host migration
+tooling may wrap it in an explicit rollback command where required.
 
 ### Performance Considerations
 

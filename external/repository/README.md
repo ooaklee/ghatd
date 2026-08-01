@@ -8,7 +8,8 @@ The [**repository**](./mongo_repository.go) and [**repositoryhelpers**](./helper
 
 The core of the new structure is the **RepositoryHelper** interface, which handles all database access (client/database retrieval) and utility functions (logging, mapping).
 
-> To see various examples of how these packages can be leverated
+See [`mongo_examples.go`](./mongo_examples.go) for additional executable
+examples of the repository and monitoring APIs.
 
 ### **1. Use the Mongo runtime helper**
 
@@ -64,7 +65,8 @@ For lower-level composition, use `GenerateGenericMongoURI` or
 
 ### **3. Initialise the Repository Helper**
 
-You create a handler with and configuration as required using the options and then use it to create your core repository.
+Create a handler with the required configuration options, then use it to create
+the core repository.
 
 ```Go
 func main() {  
@@ -79,7 +81,7 @@ func main() {
 		// Enable retry and monitoring policies  
 		repositoryhelpers.WithRetryPolicy(true, true, 10*time.Second),  
 		repositoryhelpers.WithMonitoring(  
-			repositoryhelpers.NewLoggingHook(log.Default()),  
+			repositoryhelpers.NewLoggingHook(log.Default(), []string{}),
 			repositoryhelpers.NewMetricsHook(),  
 		),  
 	)  
@@ -117,6 +119,7 @@ type MongoDbStore interface {
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	LogInfo(ctx context.Context, message string, err error, fields ...repository.Field)
 }
 
 // UserRepository represents the datastore to hold resource data
@@ -157,8 +160,8 @@ func (r *UserRepository) FindUsers(ctx context.Context) ([]User, error) {
  
 	// Log success with metrics  
 	r.Store.LogInfo(ctx, "Successfully retrieved users", nil,  
-		Field{Key: "operation", Value: "find_users"},  
-		Field{Key: "count", Value: len(users)},  
+		repository.Field{Key: "operation", Value: "find_users"},
+		repository.Field{Key: "count", Value: len(users)},
 	)
 
 	return users, nil  

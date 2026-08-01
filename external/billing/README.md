@@ -95,13 +95,14 @@ The billing package uses two MongoDB collections:
 ### Installing Dependencies
 
 ```bash
-go get github.com/xakep666/mongo-migrate
-go get go.mongodb.org/mongo-driver/v2/mongo
+asdf exec go get github.com/xakep666/mongo-migrate
+asdf exec go get go.mongodb.org/mongo-driver/v2/mongo
 ```
 
 ### Running Migrations
 
-Create a migration runner to set up the indexes:
+Create a migration runner to set up the indexes. For example, save the
+following as `cmd/migrations/main.go` in the host application:
 
 ```go
 package main
@@ -124,13 +125,13 @@ func main() {
         mongoURI = "mongodb://localhost:27017"
     }
     
-    client, err := mongo.Connect(context.Background(), 
-        options.Client().ApplyURI(mongoURI))
+    ctx := context.Background()
+    client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
     if err != nil {
         log.Fatalf("Failed to connect to MongoDB: %v", err)
     }
     defer func() {
-        if err := client.Disconnect(context.Background()); err != nil {
+        if err := client.Disconnect(ctx); err != nil {
             log.Printf("Error disconnecting: %v", err)
         }
     }()
@@ -142,68 +143,60 @@ func main() {
     migrate.SetDatabase(db)
     
     // Register billing indexes migrations
-    migrate.Register(
-        billingMigration.InitBillingSubscriptionIndexesUp,
-        billingMigration.InitBillingSubscriptionIndexesDown,
-    )
-    migrate.Register(
-        billingMigration.InitBillingEventsIndexesUp,
-        billingMigration.InitBillingEventsIndexesDown,
-    )
+    if err := migrate.Register(
+        func(_ context.Context, db *mongo.Database) error {
+            return billingMigration.InitBillingSubscriptionIndexesUp(db)
+        },
+        func(_ context.Context, db *mongo.Database) error {
+            return billingMigration.InitBillingSubscriptionIndexesDown(db)
+        },
+    ); err != nil {
+        log.Fatalf("Failed to register subscription migration: %v", err)
+    }
+    if err := migrate.Register(
+        func(_ context.Context, db *mongo.Database) error {
+            return billingMigration.InitBillingEventsIndexesUp(db)
+        },
+        func(_ context.Context, db *mongo.Database) error {
+            return billingMigration.InitBillingEventsIndexesDown(db)
+        },
+    ); err != nil {
+        log.Fatalf("Failed to register billing-event migration: %v", err)
+    }
     
     // Run migrations
     log.Println("Running billing indexes migrations...")
-    if err := migrate.Up(migrate.AllAvailable); err != nil {
+    if err := migrate.Up(ctx, migrate.AllAvailable); err != nil {
         log.Fatalf("Migration failed: %v", err)
     }
     
-    log.Println("✓ Migrations completed successfully")
+    log.Println("Migrations completed successfully")
 }
 ```
 
-### Migration Commands
+Run that host-owned migration entry point before starting the application:
 
 ```bash
-# Run all migrations
-go run cmd/mongo-migrator/migrator.go up
-
-# Rollback one migration
-go run cmd/mongo-migrator/migrator.go down 1
-
-# Rollback all migrations
-go run cmd/mongo-migrator/migrator.go down all
-
-# Check migration status
-go run cmd/mongo-migrator/migrator.go status
+asdf exec go run ./cmd/migrations
 ```
+
+The GHATD package exposes migration functions, not a standalone executable at
+`cmd/mongo-migrator/migrator.go`. Applications that register
+`migrator.NewCommand()` on their own Cobra root may instead expose the
+`mongo-migrator up`, `mongo-migrator down`, and `mongo-migrator new <name>`
+actions. The current command does not provide partial rollback or status
+actions.
 
 ### Subscription Indexes
 
-Five indexes are created for the `billing_subscriptions` collection:
+Four indexes are created for the `billing_subscriptions` collection:
 
 | Index Name | Fields | Type | Purpose | Example Query |
 |------------|--------|------|---------|---------------|
 | `idx_subscriptions_user_id` | `user_id` | Standard | Fetch all subscriptions for a user. | `db.billing_subscriptions.find({user_id: "user-123"})` |
 | `idx_subscriptions_email` | `email` | Standard | Query subscriptions by email. | `db.billing_subscriptions.find({email: "user@example.com"})` |
-| `idx_subscriptions_email_no_user` | `email` | Partial | Find orphaned subscriptions (no user ID). | `db.billing_subscriptions.find({email: "user@example.com", user_id: {$in: ["", null]}})` |
 | `idx_subscriptions_integrator` | `integrator`, `integrator_subscription_id` | Unique Compound | Prevent duplicate subscriptions from the same provider. | Used internally by MongoDB for uniqueness. |
 | `idx_subscriptions_created_at` | `created_at` | Standard (Descending) | Sort/filter by date. | `db.billing_subscriptions.find().sort({created_at: -1})` |
-
-**Partial Index Details:**
-
-The `idx_subscriptions_email_no_user` index uses a partial filter expression to only index subscriptions without a user ID:
-
-```javascript
-{
-  $or: [
-    { user_id: "" },
-    { user_id: { $exists: false } },
-    { user_id: null }
-  ]
-}
-```
-
-This optimises queries for orphaned subscriptions while keeping the index size minimal.
 
 ### Billing Events Indexes
 
@@ -252,12 +245,8 @@ if err := billingMigration.InitBillingEventsIndexesDown(db); err != nil {
 }
 ```
 
-Or use the migration CLI:
-
-```bash
-# Rollback last migration set
-go run cmd/mongo-migrator/migrator.go down 1
-```
+Host migration tooling may wrap these down functions when an explicit rollback
+command is required.
 
 ## Email-Based Subscriptions
 
@@ -563,10 +552,9 @@ response, err := billingService.CreateSubscription(ctx,
         Status:                   billing.StatusActive,
         Amount:                   2999,           // In cents
         Currency:                 "USD",
-        BillingPeriod:            "month",
+        BillingInterval:          "month",
         NextBillingDate:          nextMonth,
-        CancelAtPeriodEnd:        false,
-        TrialEndDate:             nil,
+        TrialEndsAt:              nil,
     })
 ```
 
@@ -577,12 +565,12 @@ Query subscriptions with filters:
 ```go
 response, err := billingService.GetSubscriptions(ctx, 
     &billing.GetSubscriptionsRequest{
-        ForUserIDs:  []string{"user-123", "user-456"},  // Filter by users
-        Statuses:    []string{"active", "trialing"},    // Filter by status
-        Integrators: []string{"stripe", "lemonsqueezy"}, // Filter by provider
-        PerPage:     25,                                 // Pagination
-        Page:        1,                                  // Page number
-        Order:       "created_at_desc",                  // Sort order
+        ForUserIDs:    []string{"user-123", "user-456"}, // Filter by users
+        Statuses:      []string{"active", "trialing"},   // Filter by status
+        IntegratorName: "stripe",                         // Filter by one provider
+        PerPage:       25,                                 // Pagination
+        Page:          1,                                  // Page number
+        Order:         "created_at_desc",                  // Sort order
     })
 
 for _, sub := range response.Subscriptions {
@@ -596,12 +584,11 @@ for _, sub := range response.Subscriptions {
 Update subscription details:
 
 ```go
-response, err := billingService.UpdateSubscription(ctx, 
+cancelled := billing.StatusCancelled
+response, err := billingService.UpdateSubscription(ctx,
     &billing.UpdateSubscriptionRequest{
-        SubscriptionID:    "sub-123",
-        Status:            "cancelled",
-        CancelAtPeriodEnd: true,
-        UpdatedAt:         time.Now(),
+        ID:     "sub-123",
+        Status: &cancelled,
     })
 ```
 
@@ -626,7 +613,6 @@ response, err := billingService.CreateBillingEvent(ctx,
         Currency:                 "USD",
         PlanName:                 "Pro Plan",
         Status:                   billing.EventStatusProcessed,
-        Description:              "Monthly subscription payment",
     })
 ```
 
@@ -637,12 +623,12 @@ Query billing events:
 ```go
 response, err := billingService.GetBillingEvents(ctx, 
     &billing.GetBillingEventsRequest{
-        ForUserIDs:      []string{"user-123"},
-        SubscriptionIDs: []string{"sub-123"},
-        EventTypes:      []string{"payment.succeeded"},
-        PerPage:         50,
-        Page:            1,
-        Order:           "created_at_desc",
+        ForUserIDs:              []string{"user-123"},
+        IntegratorSubscriptionID: "stripe_sub_abc123",
+        EventTypes:              []string{"payment.succeeded"},
+        PerPage:                 50,
+        Page:                    1,
+        Order:                   "created_at_desc",
     })
 
 for _, event := range response.Events {
@@ -755,7 +741,7 @@ func TestAssociateSubscriptions(t *testing.T) {
 
 ```bash
 # In your CI/CD pipeline
-go run cmd/mongo-migrator/migrator.go up
+asdf exec go run ./cmd/migrations
 ```
 
 **Monitor index usage:**

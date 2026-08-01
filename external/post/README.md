@@ -92,9 +92,11 @@ If you plan to pre-load changelog/FAQ/glossary/article content, use migration fi
 
 ### 1. Create a New Migration
 
-```bash
-go run main.go start-migrator new add-initial-faq-items
-```
+Create a timestamp-prefixed Go file in the host application's
+`migrations/mongo` package, for example
+`20260801120000_add_initial_faq_items.go`. Use
+`migrations/mongo/template.go` as the scaffold, or use the host application's
+own migration generator when it has one.
 
 ### 2. Add Up/Down Logic in Generated Migration
 
@@ -112,8 +114,8 @@ import (
 )
 
 func init() {
-    migrate.Register(func(db *mongo.Database) error { // Up
-        _, err := db.Collection("posts").InsertMany(context.Background(), []interface{}{
+    if err := migrate.Register(func(ctx context.Context, db *mongo.Database) error { // Up
+        _, err := db.Collection("posts").InsertMany(ctx, []interface{}{
             bson.M{
                 "_id":              "post-seed-1",
                 "_nano_id":         "postseed1",
@@ -127,19 +129,25 @@ func init() {
             },
         })
         return err
-    }, func(db *mongo.Database) error { // Down
-        _, err := db.Collection("posts").DeleteMany(context.Background(), bson.M{
+    }, func(ctx context.Context, db *mongo.Database) error { // Down
+        _, err := db.Collection("posts").DeleteMany(ctx, bson.M{
             "_id": bson.M{"$in": []string{"post-seed-1"}},
         })
         return err
-    })
+    }); err != nil {
+        panic(err)
+    }
 }
 ```
 
 ### 3. Apply Migrations
 
+Ensure the host migration runner imports its `migrations/mongo` package so the
+registration above executes, then run that host-owned entry point. For example,
+if it is saved at `cmd/migrations/main.go`:
+
 ```bash
-go run main.go start-migrator up
+asdf exec go run ./cmd/migrations
 ```
 
 ## Relationship to Content Manager

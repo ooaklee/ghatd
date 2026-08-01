@@ -1,6 +1,6 @@
 # Pricer
 
-Pricer is the **source of truth for the pricing catalogue**. It defines plans, feature entitlements, monetary costs, and provider references that describe what your product costs and what end users get at each tier. The `pricer` package provides a full CRUD API for managing these records, and is designed to be composed into your application or exposed through the Billing Manager Service (BMS) for read-only access by your frontend or Companion app.
+Pricer is the **source of truth for the pricing catalogue**. It defines plans, feature entitlements, monetary costs, and provider references that describe what your product costs and what end users get at each tier. The `pricer` package provides a full CRUD API for managing these records, and is designed to be composed into your application or exposed through the Billing Manager Service (BMS) for read-only access by frontend and other client applications.
 
 ## Core Packages Overview
 
@@ -9,7 +9,7 @@ The pricer package is self-contained, but integrates with other packages in the 
 | Package | Purpose | Role with Pricer |
 |---|---|---|
 | `pricer` | Source of truth for pricing plans, features, costs, and provider refs. | Core catalogue management |
-| `billingmanager` | Exposes read-only pricing endpoints for consumer-facing apps. | External consumers (Companion app) |
+| `billingmanager` | Exposes read-only pricing endpoints for consumer-facing apps. | External client applications |
 
 ## Data Model Overview
 
@@ -204,7 +204,7 @@ Features do not have a formal lifecycle — they are always available once creat
 
 ## BMS Read Endpoints for Client integration
 
-The billing manager service exposes **read-only** pricing endpoints designed for frontend and Companion app consumption. These endpoints require no authentication.
+The billing manager service exposes **read-only** pricing endpoints designed for frontend and other client applications. These endpoints require no authentication.
 
 ### GET `/api/v1/bms/pricing/plans`
 
@@ -595,7 +595,7 @@ The BMS will automatically expose the pricing read endpoints at:
 
 ```
 ┌─────────────────────┐     ┌─────────────────────────┐
-│   Admin Console     │     │    Companion App / FE    │
+│   Admin Console     │     │  Client App / Frontend  │
 │   (Write Access)    │     │    (Read-Only Access)    │
 └─────────┬───────────┘     └───────────┬─────────────┘
           │                             │
@@ -668,37 +668,42 @@ Register these migrations during server bootstrap using the `migrate.Register` p
 
 ```go
 import (
+    "context"
+
     pricerMigrations "github.com/ooaklee/ghatd/external/pricer/migrations"
     migrate "github.com/xakep666/mongo-migrate"
+    "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-migrate.Register(
-    pricerMigrations.InitPricingIndexesUp,
-    pricerMigrations.InitPricingIndexesDown,
-)
+func registerPricingMigrations() error {
+    register := func(up, down func(*mongo.Database) error) error {
+        return migrate.Register(
+            func(_ context.Context, db *mongo.Database) error { return up(db) },
+            func(_ context.Context, db *mongo.Database) error { return down(db) },
+        )
+    }
 
-migrate.Register(
-    pricerMigrations.InitPricingSeedUp,
-    pricerMigrations.InitPricingSeedDown,
-)
-
-migrate.Register(
-    pricerMigrations.InitTestPlansSeedUp,
-    pricerMigrations.InitTestPlansSeedDown,
-)
+    if err := register(pricerMigrations.InitPricingIndexesUp, pricerMigrations.InitPricingIndexesDown); err != nil {
+        return err
+    }
+    if err := register(pricerMigrations.InitPricingSeedUp, pricerMigrations.InitPricingSeedDown); err != nil {
+        return err
+    }
+    return register(pricerMigrations.InitTestPlansSeedUp, pricerMigrations.InitTestPlansSeedDown)
+}
 ```
 
 Seed migrations are also provided:
 
 - `external/pricer/migrations/seed_pricing.go` inserts a starter feature catalogue and starter plan.
-- `external/pricer/migrations/seed_test_plans.go` inserts Fireflies-style comparison plans (`free`, `pro`, `enterprise`) for pricing-card E2E verification.
+- `external/pricer/migrations/seed_test_plans.go` inserts comparison plans (`free`, `pro`, `enterprise`) for pricing-card E2E verification.
 
 ## Local E2E Testing
 
 The pricer migration test suite includes a golden-card regression test and a rollback test under `external/pricer/migrations/e2e_pricing_cards_test.go`.
 
 - `TestE2E_PricingCardsGolden` exercises the public pricing HTTP endpoints and compares the response projection to `external/pricer/migrations/testdata/pricing_cards.golden.json`.
-- `TestE2E_PricingTestPlansSeedDownRollsBackCleanly` verifies that the Fireflies-style test seed rolls back cleanly without deleting the starter seed.
+- `TestE2E_PricingTestPlansSeedDownRollsBackCleanly` verifies that the pricing-card test seed rolls back cleanly without deleting the starter seed.
 
 By default these tests try to start [memongo](https://github.com/benweissmann/memongo). On ARM Macs, or anywhere memongo cannot download a local `mongod`, set `PRICER_E2E_MONGO_URI` to a real MongoDB instance.
 
@@ -716,16 +721,16 @@ This exposes MongoDB on `mongodb://localhost:47027`.
 
 ```sh
 export PRICER_E2E_MONGO_URI=mongodb://localhost:47027
-go test -count=1 -v -run 'TestE2E_Pricing' ./external/pricer/migrations/...
+asdf exec go test -count=1 -v -run 'TestE2E_Pricing' ./external/pricer/migrations/...
 ```
 
 ### Update the pricing-card golden fixture
 
-If you intentionally change the Fireflies-style seed data or the card projection, regenerate the golden fixture with:
+If you intentionally change the pricing-card seed data or the card projection, regenerate the golden fixture with:
 
 ```sh
 export PRICER_E2E_MONGO_URI=mongodb://localhost:47027
-go test -count=1 -run TestE2E_PricingCardsGolden ./external/pricer/migrations/... -update
+asdf exec go test -count=1 -run TestE2E_PricingCardsGolden ./external/pricer/migrations/... -update
 ```
 
 Then rerun the same test without `-update` to confirm the new fixture matches runtime output.
@@ -734,7 +739,7 @@ Then rerun the same test without `-update` to confirm the new fixture matches ru
 
 - The `PRICER_E2E_MONGO_URI` database does not need to be empty. Each run creates a random database name and drops it during cleanup.
 - The pricing-card golden test requests `include_costs=true`, `include_features=true`, and `include_providers=true` on the single-plan endpoint so the response matches what a frontend pricing-card view needs.
-- To skip the E2E tests in fast local runs, use `go test -short ./external/pricer/...`.
+- To skip the E2E tests in fast local runs, use `asdf exec go test -short ./external/pricer/...`.
 
 ## Potential Future Improvements
 

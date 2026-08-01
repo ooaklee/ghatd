@@ -45,3 +45,11 @@ The Mongo migrator now uses MongoDB driver v2 through `mongo-migrate`, while the
 The MongoDB v1 package deprecation remains a known follow-up. Moving all repository packages to driver v2 should be planned separately because it affects many public package imports, repository helpers, tests, examples, and host application integration expectations.
 
 The `http-cache` dependency now resolves from the upstream module path. The fork can be archived after downstream applications have migrated, while preserving it for provenance of older builds.
+
+## Follow-up status (2026-08-01)
+
+The repository-wide MongoDB migration is complete. GHATD's Go packages and
+MongoDB migrator now import `go.mongodb.org/mongo-driver/v2`; driver v1 remains
+only as an indirect transitive dependency in `go.mod`. The earlier consequence
+describing v1 as the active repository surface is retained above as historical
+context and no longer describes the current codebase.

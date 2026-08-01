@@ -40,13 +40,15 @@ func NewCommand() *cobra.Command {
 	migratorCmd := &cobra.Command{
 		Use:   "mongo-migrator",
 		Short: "Start the mongo migrations",
-		Long: `Start the mongo migrations
+		Long: `Run MongoDB migrations registered by the host application.
 
-Create a new migration using the 'new' argument, i.e: go run main.go start-migrator new <hyphen-seperated-migration-name> 
+Register NewCommand on the host application's Cobra root, then use:
+  <host-command> mongo-migrator new <hyphen-separated-migration-name>
+  <host-command> mongo-migrator up
+  <host-command> mongo-migrator down
 
-Run migrations using 'up' or 'down' arguments, i.e: go run main.go start-migrator up
 
-> "up" will create misssing migrations and migrate "down" will revert migrations
+"up" applies all available migrations and "down" reverts all applied migrations.
 		`,
 	}
 

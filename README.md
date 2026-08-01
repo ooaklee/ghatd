@@ -4,9 +4,9 @@
 
 # GHAT(D)
 
-GHAT(D) is an open-source, opinionated, and free full-stack web application foundation based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI, which originally formed the foundational stack. Over time, for improved usability, it has also been extended to support most Vite-compatible front-end stacks (tested with Vue). The aim is to make GHAT(D) a solid base for creating highly portable, scalable, and performant full-stack projects. Whether you need just a backend, a landing page, or even a blog (coming soon), you can still utilise GHAT(D) without committing to a hidden application container.
+GHAT(D) is an open-source, opinionated, and free full-stack web application foundation based on the Go programming language. Its name is an acronym that stands for Go, HTMX, Alpine.js, Tailwind, and DaisyUI, which originally formed the foundational stack. Over time, for improved usability, it has also been extended to support most Vite-compatible front-end stacks (tested with Vue). The aim is to make GHAT(D) a solid base for creating highly portable, scalable, and performant full-stack projects. Whether you need just a backend, a landing page, or a content-driven application, you can still utilise GHAT(D) without committing to a hidden application container.
 
-We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "builder blocks" which we call `Details`. A `Detail` is an independent application that can function both within a GHAT(D) project and on its own. At present, we only support `api`, `web`, `web-vite` (WIP) typed `Details`.
+We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "building blocks" which we call `Details`. A `Detail` is an independent application that can function both within a GHAT(D) project and on its own. GHAT(D) supports `api`, `web`, and `web-vite` Detail types.
 
 ## Motivation
 
@@ -24,7 +24,7 @@ This will be an exciting experience, and I look forward to building out this pro
 
 ## Core Packages
 
-GHAT(D) offers modular packages that can be used both together and independently. Our goal is for each package to adhere to clean architecture principles, featuring comprehensive documentation and examples. We are committed to implementing these practices on both new and legacy package, especially those that are less extensible for other projects.
+GHAT(D) offers modular packages that can be used both together and independently. Our goal is for each package to adhere to clean architecture principles, featuring comprehensive documentation and examples. We are committed to implementing these practices in both new and legacy packages, especially those that are less extensible for other projects.
 
 ### Authentication & Verification
 A dual-channel verification system providing both magic link and human-readable code entry.
@@ -73,9 +73,7 @@ A complete billing solution split into three composable packages for maximum fle
 - **[User Manager](./external/usermanager/README.md)** - User-facing orchestration across user, group, reminder, and related services
 - **[Vision](./external/vision/README.md)** - Feedback and roadmap management
 - **[Error Manifest](./external/errormanifest/)** - Cross-package error mapping and bundle composition
-- **`TBC`**
-
-**Note on Core Packages:** This section will be updated as more core packages are added and legacy packages are modernised. The goal is for each package to provide a canonical package README with working examples that help you integrate it into your project.
+**Note on Core Packages:** This is a curated overview rather than an exhaustive package inventory. Each documented package keeps its canonical README alongside the package code.
 
 ## Dual-Channel Verification
 
@@ -97,7 +95,7 @@ GHAT(D) supports a dual-channel verification flow for login and email verificati
 | **Brute-force protection** | `HardenedRateLimitProtection` middleware tracks attempts per IP and per code within a configurable window (default: 5/hr per IP, 5/hr per code) |
 | **Auto-blocking** | IPs exceeding the threshold are temporarily blocked (default: 1 hour) |
 | **One-time use** | Codes and tokens are invalidated after successful verification |
-| **Time-bounded** | All codes and tokens have TTLs (default: 10 minutes for login/verification) |
+| **Time-bounded** | Login tokens default to 5 minutes; email-verification tokens default to 10 minutes |
 | **Refresh rotation tolerance** | Near-concurrent duplicate refreshes can reuse the winning rotation result instead of consuming the same refresh token twice |
 | **Login email cooldown** | Duplicate login email sends for the same active user/context are suppressed during a short cooldown window |
 | **Audit logging** | All verification attempts (pass and fail) and rate-limit blocks are logged for monitoring |
@@ -124,51 +122,45 @@ asdf exec go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
 asdf exec go mod tidy
 ```
 
-### Using the CLI (WIP)
+### Using the CLI (experimental)
 
-To start using the CLI you can use the code:
-
-```sh
-go run cli/cli.go
-```
-
-You can then pass your desired cli command with:
+Run the source version of the CLI with the repository's pinned toolchain:
 
 ```sh
-go run cli/cli.go <desired-command>
+asdf exec go run cli/cli.go --help
 ```
 
-#### TODO: Implementing the `new` command
+Inspect a command before using it:
 
-We are currently implementing the `new` command, which will create a base folder for a new ghat(d) compatible file.
+```sh
+asdf exec go run cli/cli.go <desired-command> --help
+```
 
-`Example local command`
+The `new` command can assemble a host application from one or more Details, but the generator remains experimental and its defaults may target development branches or module versions. Review the generated application and run `asdf exec go mod tidy` before relying on it.
+
+Example local command:
 
 ```shell
-go run cli/cli.go new -n "awesome-service" -w "github.com/ooaklee/ghatd-detail-web-demo-landing-dash-and-more,github.com/ooaklee/ghatd-detail-api-demo-endpoints"
+asdf exec go run cli/cli.go new \
+  -n "awesome-service" \
+  -m "github.com/example/awesome-service" \
+  -w "github.com/example/ghatd-detail-api"
 ```
 
-`Prerequisites`
-- [ ] Detail repo for demo-endpoints
-- [ ] Detail repo for demo-dash
-
-`Success Criteria`
-- The implementation will be considered successful once the user can run the command below and get an output directory with a working app (after running `go mod tidy`)
-  - Once tidied, the user should be able to run `go run cmd/server.go start-server` in the output directory and access http://localhost:4000/.  
- 
+See [About Details](./docs/about-details.md) and [Getting Started With A New Project](./docs/how-to/local-development/a-new-project-it-s-in-the-detail.md) for the supported Detail types and generated-app workflow.
 
 ### Starting the server
 
 To start the server you can use the code:
 
 ```sh
-go run main.go start-server
+asdf exec go run main.go start-server
 ```
 
-However, for a better development expierence, please install the package [`reflex`](https://github.com/cespare/reflex) which will enable you to hot-reload by rerun a specified command on file change, and running the command:
+For a better development experience, install [`reflex`](https://github.com/cespare/reflex) to rerun the server command when files change:
 
 ```sh
-reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main.go start-server
+reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- asdf exec go run main.go start-server
 ```
 
 > More [information on hot-reloading can be found below](#hot-reloading)
@@ -176,13 +168,13 @@ reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main
 
 ## Good to know
 
-### ASCI Art
+### ASCII Art
 
-All ASCI related code in this template was created using [PatorJK](https://patorjk.com/software/taag/#p=display&h=2&f=Isometric3)
+All ASCII art in this template was created using [PatorJK](https://patorjk.com/software/taag/#p=display&h=2&f=Isometric3).
 
 ### Curl Examples
 
-- Making `GET` resquest: `curl -i -X GET "http://localhost:4000/v0/health/check"`
+- Making a `GET` request: `curl -i -X GET "http://localhost:4000/v0/health/check"`
 
 ### How to stop file server showing directory listing?
 
@@ -198,14 +190,14 @@ touch internal/web/ui/static/index.html
 
 Install reflex
 
-`go install github.com/cespare/reflex@latest`
+`asdf exec go install github.com/cespare/reflex@latest`
 
 > You can find more information in the repo https://github.com/cespare/reflex
 
 Once installed, run the server
 
 ```sh
-reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- go run main.go start-server
+reflex -r '\.(html|go|css|png|svg|ico|js|woff2|woff|ttf|eot)$' -s -- asdf exec go run main.go start-server
 ```
 
 ### How to build binaries
@@ -223,28 +215,28 @@ To build a binary for the GHATDCLI for your desired system architecture, please 
 
 ```sh
 export BINARY_NAME=ghatdcli
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
 ```
 
 ##### Mac OS (AMD64)
 
 ```sh
 export BINARY_NAME=ghatdcli
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
 ```
 
 ##### Linux (ARM64)
 
 ```sh
 export BINARY_NAME=ghatdcli
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
 ```
 
 ##### Linux (AMD64)
 
 ```sh
 export BINARY_NAME=ghatdcli
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME cli/cli.go
 ```
 
 
@@ -258,28 +250,28 @@ To build a binary for web app to your desired system architecture, please follow
 
 ```sh
 export BINARY_NAME=ghatd
-CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
 ##### Mac OS (AMD64)
 
 ```sh
 export BINARY_NAME=ghatd
-CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
 ##### Linux (ARM64)
 
 ```sh
 export BINARY_NAME=ghatd
-CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
 ##### Linux (AMD64)
 
 ```sh
 export BINARY_NAME=ghatd
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 asdf exec go build -a -installsuffix cgo -ldflags="-w -s" -o ./$BINARY_NAME main.go
 ```
 
 ## License

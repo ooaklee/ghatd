@@ -5,13 +5,13 @@ With [**`Details`**](../../about-details.md), you can transform your ideas and h
 
 ## Prerequisites
 
-- Go installed and available on your `PATH`.
-- The [**`GHATD CLI`**](#) installed.
+- The repository's pinned Go toolchain installed with `asdf`.
+- The [GHATD CLI](../../../README.md#using-the-cli-experimental), either built locally or run from source.
 - For `web-vite` details, Node.js and the package manager used by the detail.
 
 ## Steps
 
-- Discover the power of the [Detail Library](#). It's a good place to find the foundation for your project.
+- Choose one or more compatible Detail repositories. See [About Details](../../about-details.md) for the supported types and repository formats.
   
 - Generate a new web app based on your chosen **detail(s)** (`GHAT(D)` gives you the option to merge multiple details into one web app (feature still in alpha)). In the terminal, run:
 
@@ -29,8 +29,8 @@ ghatdcli new -n [PROJECT_NAME] -m [PROJECT_MODULE_PATH] -w [COMMA_SEPARATED_LINK
 
 ```shell
 cd [PROJECT_NAME]
-go mod tidy
-go run main.go start-server
+asdf exec go mod tidy
+asdf exec go run main.go start-server
 ```
 
 - When a generated app includes a `web-vite` detail, build the SPA before running a production-style Go binary:
@@ -39,10 +39,9 @@ go run main.go start-server
 cd [PROJECT_NAME]
 npm install
 npm run build
-go run main.go start-server
+asdf exec go run main.go start-server
 ```
 
 > For the best developer experience we recommend using [`reflex`](https://github.com/cespare/reflex).
 
 ## Additional context
-

@@ -85,7 +85,8 @@ You can use the high-level methods on the `billingmanager` to process incoming w
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
     ctx := r.Context()
     
-    // Extract provider name from URL path: /api/v1/bms/billing/stripe
+    // Extract provider name from URL path:
+    // /api/v1/bms/billings/stripe/webhooks
     providerName := extractProviderFromPath(r.URL.Path) // e.g., "stripe"
     
     err := manager.ProcessBillingProviderWebhooks(ctx, &billingmanager.ProcessBillingProviderWebhooksRequest{
@@ -385,9 +386,9 @@ Application Code
 The system expects webhooks at provider-specific endpoints. Here's the recommended URL pattern:
 
 ```
-POST /api/v1/bms/billing/stripe
-POST /api/v1/bms/billing/lemonsqueezy
-POST /api/v1/bms/billing/kofi
+POST /api/v1/bms/billings/stripe/webhooks
+POST /api/v1/bms/billings/lemonsqueezy/webhooks
+POST /api/v1/bms/billings/kofi/webhooks
 ```
 
 ### Example Router Setup
@@ -403,9 +404,9 @@ import (
 )
 
 func SetupBillingRoutes(r *mux.Router, manager *billingmanager.Service) {
-    r.HandleFunc("/api/v1/bms/billing/{provider}", func(w http.ResponseWriter, r *http.Request) {
+    r.HandleFunc("/api/v1/bms/billings/{providerName}/webhooks", func(w http.ResponseWriter, r *http.Request) {
         vars := mux.Vars(r)
-        providerName := vars["provider"]
+        providerName := vars["providerName"]
         
         err := manager.ProcessBillingProviderWebhooks(r.Context(), &billingmanager.ProcessBillingProviderWebhooksRequest{
             ProviderName: providerName,
@@ -440,10 +441,9 @@ import (
 // configure respective middleware - look at external/accessmanager/middleware
 
 billingmanager.AttachRoutes(&billingmanager.AttachRoutesRequest{
-    Router:                             httpRouter,
-    Handler:                            billingHandler,
-    AdminOnlyMiddleware:                adminMiddleware,
-    ActiveValidApiTokenOrJWTMiddleware: authMiddleware,
+    Router:                                  httpRouter,
+    Handler:                                 billingHandler,
+    MiddlewareActiveValidApiTokenOrJWTMiddleware: authMiddleware,
 })
 
 ```
@@ -461,10 +461,10 @@ This sets up the following routes automatically:
 - `GET /api/v1/bms/users/{userId}/details/subscription` - Get a user's subscription status.
 - `GET /api/v1/bms/users/{userId}/details/billing` - Get a user's billing details.
 
-**Admin Only Routes:**
-- `GET /api/v1/bms/admin/billings/users/{userId}/events` - Get any user's billing events.
-- `GET /api/v1/bms/admin/users/{userId}/details/subscription` - Get any user's subscription status.
-- `GET /api/v1/bms/admin/users/{userId}/details/billing` - Get any user's billing details.
+`AttachRoutesRequest` retains a `MiddlewareAdminOnlyMiddleware` field for
+compatibility, but the current route attachment does not register a separate
+`/admin` route group or apply that field. Add explicit host routes if a distinct
+admin surface is required.
 
 ## Subscription Lifecycle
 
@@ -475,7 +475,7 @@ Understanding the subscription lifecycle helps you work effectively with the bil
 ```
 1. Payment Provider Event
    │
-   ├──► Webhook received at /api/v1/bms/billing/{provider}
+   ├──► Webhook received at /api/v1/bms/billings/{providerName}/webhooks
    │
 2. Verification & Parsing
    │

@@ -32,7 +32,7 @@ project setup and generated files remain outside this ADR.
 
 ---
 
-## Current state summary
+## Current state at the time of the decision
 
 | Concern | ghatd | host application | mobile client |
 |---------|-------|------------------|---------------|
@@ -45,6 +45,18 @@ project setup and generated files remain outside this ADR.
 | Config endpoint | `FCMClientConfig{Enabled}` — returns `false` | — | reads from `GET /me/notifications/config` |
 | Test coverage | No FCM `Send` tests | — | No FCM token provider tests |
 | Production secrets | — | deployment does not set FCM vars | No `.env` entries for Firebase |
+
+### Implementation update (2026-08-01)
+
+GHATD now provides `NewStandardSenders`, which activates FCM only when it is
+explicitly enabled, resolves file or base64 credentials, and returns a cleanup
+function for temporary credential files. Environment-variable names remain a
+host-application concern rather than part of the notifier package API.
+
+FCM batch responses now retain per-token failure detail in the returned error,
+but automatic invalid-address cleanup is still incomplete: `FCMSender` does not
+invoke its installed invalid-address handler. The sender continues to use
+multicast delivery when more than one token is present.
 
 ---
 
@@ -63,9 +75,10 @@ type FCMSenderConfig struct {
 ```
 
 **No change to this struct.** The two-path design (file OR project ID) covers
-both local dev (file-based) and cloud deployments (ADC/metadata). The existing
-env vars (`NOTIFIER_FCM_CREDENTIALS_FILE`, `NOTIFIER_FCM_PROJECT_ID`) are
-sufficient.
+both local dev (file-based) and cloud deployments (ADC/metadata). The host
+application environment mappings shown here (`NOTIFIER_FCM_CREDENTIALS_FILE`,
+`NOTIFIER_FCM_PROJECT_ID`) are sufficient for that deployment; GHATD itself
+does not prescribe those variable names.
 
 ### 2. Firebase credential shape (mobile client)
 
@@ -159,6 +172,10 @@ returns the credentials file path to use. If the base64 variant
 (`NOTIFIER_FCM_CREDENTIALS_FILE_B64`) is set, it decodes the payload
 into a temp file; otherwise it returns the file-path variant as-is.
 
+This snippet records the original wiring decision. New integrations should use
+`NewStandardSenders` and call its returned `Cleanup` function; callers that use
+`ResolveCredentialsFile` directly own removal of any temporary file it creates.
+
 If you prefer, you can provide `NOTIFIER_FCM_CREDENTIALS_FILE` and 
 `NOTIFIER_FCM_PROJECT_ID` in the deployment environment. you will have to
 make sure `NOTIFIER_FCM_CREDENTIALS_FILE` is accessible to be read.
@@ -186,9 +203,9 @@ notifierService.WithSender(notifier.NewFCMSender(notifier.FCMSenderConfig{
   inside the Firebase Admin SDK response. The sender currently uses `go-fcm`
   directly (rather than `nikoksr/notify/service/fcm`) to ensure credentials are
   applied during `NewClient` construction. The sender sends single-token
-  messages individually so per-token errors can be detected. Multicast is used
-  when there are multiple tokens, but per-token error extraction from the
-  multicast response is not yet wired.
+  messages individually when one token is present. Multicast is used when there
+  are multiple tokens. Per-token errors are included in the returned batch
+  error, but they are not yet mapped back to stored address hashes for cleanup.
 
 ### 6. Config endpoint updates
 
@@ -243,11 +260,11 @@ The `firebase_messaging` Flutter package requires these platform changes
 | **Existing indexes** | None needed. The unique index on `(channel, address_hash)` already covers FCM tokens. |
 | **Existing preferences** | None. `DefaultNotificationPreferences` already enables FCM by default (`channels.FCM: true`). Existing users see mobile push enabled automatically when they register a device. |
 | **Token deduplication** | Already handled by `hashAddress()` — same token from same device produces same hash, so re-registration after token refresh is an upsert. |
-| **Stale tokens** | None as a migration concern. Stale tokens are handled reactively: when FCM returns an invalid-token error, the address is disabled. Old tokens from before the upgrade remain in the database but are never delivered to (they produce no valid addresses when queried). |
+| **Stale tokens** | None as a schema-migration concern. Until automatic FCM invalid-address cleanup is completed, stale tokens remain active and may be retried; hosts should remove them through the address API or an application-specific cleanup flow. |
 
 ---
 
-## Tests
+## Planned tests
 
 ### ghatd (Go)
 
@@ -290,7 +307,7 @@ The `firebase_messaging` Flutter package requires these platform changes
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | **Firebase credentials leaked** | Low | Critical | Store credentials in secrets manager (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault), never in env files or git. |
-| **FCM quota exceeded** | Low | Medium | Firebase offers 1M messages/day on the Spark (free) plan. Monitor usage in Firebase Console; upgrade to Blaze plan if needed. |
+| **FCM quota exceeded** | Low | Medium | Monitor current usage and limits in Firebase Console and adjust the deployment plan when needed. |
 | **Token invalidation not triggered** (notifyfcm batch error swallows per-token failures) | Medium | High | Refactor to send per-token (option a). Without this, stale tokens accumulate and every `NotifyUser` call wastes time trying invalid tokens. |
 | **`firebase_messaging` Flutter package API changes** | Low | Medium | Pin to a known-good version in `pubspec.yaml`. The interface is mature and has been stable for several years. |
 | **Users not prompted for notification permission** | Medium | Low | `requestPermission()` is called at registration time, not at startup. The system dialogue only appears when the user taps "Register". The store already guards with `isAvailable`. |
@@ -301,7 +318,7 @@ The `firebase_messaging` Flutter package requires these platform changes
 
 ---
 
-## Summary of changes per repository
+## Planned changes per repository
 
 ### ghatd
 - Wire `SetInvalidAddressHandler` → `DisableAddressByHash` in `FCMSender`.

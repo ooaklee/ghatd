@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for implementation on the `ghatd-x-streak-logic` branch.
+Implemented. The requirements below remain the behavioural contract for the
+Streaker and Reminder packages.
 
 ## Problem
 
@@ -12,8 +13,9 @@ though it may still be the previous day in UTC. A user who asks for reminders at
 09:00 in their local timezone expects scheduler queries to become due at that
 local wall-clock time, not at 09:00 UTC.
 
-GHATD currently stores UTC timestamps consistently, which is still the right
-storage rule. The missing layer is explicit timezone-aware derivation for:
+GHATD stored UTC timestamps consistently, which remains the right storage rule.
+The missing layer at the time of this proposal was explicit timezone-aware
+derivation for:
 
 - streak period keys such as daily, weekly, and monthly keys;
 - reminder next-due timestamps derived from local wall-clock target times;

@@ -163,7 +163,7 @@ The default email-link path normalises `request_url` before it becomes `next_ste
 - same-origin absolute frontend URLs are reduced to frontend paths;
 - malformed or external URLs fall back to the configured frontend root.
 
-If a client calls `/api/v1/ams/login` or `/api/v1/ams/verify/email` directly with `next_step`, the client or host application should apply the same same-origin rules before sending it.
+If a client calls `/api/v1/ams/login` or `/api/v1/ams/verify/email` directly with `next_step`, the client or host application should apply the same-origin rules before sending it.
 
 ## Related Docs
 

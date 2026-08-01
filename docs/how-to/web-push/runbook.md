@@ -8,11 +8,10 @@ you are running a GHATD host application that wires `external/notifier` into UMS
 
 ## Prerequisites
 
-- a GHATD host application running locally (for example via its `Makefile` or Docker Compose setup)
-- `mongo` and `redis` available (many local Docker Compose setups include both)
-- A browser that supports the Push API: Chrome 50+, Firefox 44+,
-  Edge 17+, or Safari 16+ (macOS only)
-- `openssl` or `webpush-go` CLI for VAPID key generation
+- a GHATD host application that wires `external/notifier` into User Manager
+- MongoDB and any other backing services required by the host application
+- a browser with Push API and service-worker support
+- `openssl`, or a small Go program that calls `webpush.GenerateVAPIDKeys`, for VAPID key generation
 
 ---
 
@@ -39,11 +38,18 @@ openssl ec -in vapid_private.pem -outform DER 2>/dev/null |
 echo
 ```
 
-### Option B – Go (if you have the toolchain)
+### Option B – Go API
 
-```bash
-go run github.com/SherClockHolmes/webpush-go/cmd/vapid-gen@latest
+```go
+privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
+if err != nil {
+    return err
+}
 ```
+
+The helper is provided by `github.com/SherClockHolmes/webpush-go`, which is
+already a GHATD dependency. Print or store the returned keys using a local,
+one-off program; do not add the private key to source control.
 
 **Save both keys.**  The public key is shared with browsers; the private
 key stays on the server and **must never be committed to version control**.
@@ -52,9 +58,13 @@ key stays on the server and **must never be committed to version control**.
 
 ## 2. Set Environment Variables
 
-### Example envconfig mapping
+GHATD does not define environment-variable names for notifier configuration.
+The host application owns that mapping and passes the resolved values to
+`notifier.NewStandardSenders`.
 
-| Setting struct field              | Env var                                 | Default  | Notes |
+### Suggested host mapping
+
+| Host setting                      | Suggested env var                        | Default  | Notes |
 |-----------------------------------|-----------------------------------------|----------|-------|
 | `NotifierWebPushEnabled`          | `NOTIFIER_WEBPUSH_ENABLED`             | `false`  | Set to `true` after keys are provided |
 | `NotifierWebPushVAPIDPublicKey`   | `NOTIFIER_WEBPUSH_VAPID_PUBLIC_KEY`    | (empty)  | The public key from step 1 |
@@ -64,30 +74,33 @@ key stays on the server and **must never be committed to version control**.
 | `NotifierFCMCredentialsFileB64`   | `NOTIFIER_FCM_CREDENTIALS_FILE_B64`   | (empty)  | Base64-encoded Firebase credentials; takes precedence over the file path |
 | `NotifierFCMProjectID`            | `NOTIFIER_FCM_PROJECT_ID`             | (empty)  | Firebase project ID |
 
-### Docker Compose (development)
+Map the values into the notifier factory in the host application's composition
+layer:
 
-Add these lines to the `x_environments` block in
-`docker/compose/docker-compose.yaml`:
-
-```yaml
-# NOTIFICATIONS — WEB PUSH
-- NOTIFIER_WEBPUSH_ENABLED=${NOTIFIER_WEBPUSH_ENABLED-true}
-- NOTIFIER_WEBPUSH_VAPID_PUBLIC_KEY=${NOTIFIER_WEBPUSH_VAPID_PUBLIC_KEY-}
-- NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY=${NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY-}
-- NOTIFIER_FCM_ENABLED=${NOTIFIER_FCM_ENABLED-false}
-- NOTIFIER_FCM_CREDENTIALS_FILE=${NOTIFIER_FCM_CREDENTIALS_FILE-}
-- NOTIFIER_FCM_CREDENTIALS_FILE_B64=${NOTIFIER_FCM_CREDENTIALS_FILE_B64-}
-- NOTIFIER_FCM_PROJECT_ID=${NOTIFIER_FCM_PROJECT_ID-}
+```go
+senders, err := notifier.NewStandardSenders(&notifier.StandardSendersRequest{
+    WebPush: &notifier.WebPushSenderConfig{
+        Enabled:         cfg.NotifierWebPushEnabled,
+        VAPIDPublicKey:  cfg.NotifierWebPushVAPIDPublicKey,
+        VAPIDPrivateKey: cfg.NotifierWebPushVAPIDPrivateKey,
+    },
+    FCM: &notifier.FCMSenderConfig{
+        Enabled:         cfg.NotifierFCMEnabled,
+        CredentialsFile: cfg.NotifierFCMCredentialsFile,
+        ProjectID:       cfg.NotifierFCMProjectID,
+    },
+    FCMCredentialsBase64: cfg.NotifierFCMCredentialsFileB64,
+})
+if err != nil {
+    return err
+}
+defer senders.Cleanup()
 ```
 
-Then export the keys before starting:
-
-```bash
-export NOTIFIER_WEBPUSH_ENABLED=true
-export NOTIFIER_WEBPUSH_VAPID_PUBLIC_KEY="<your-public-key>"
-export NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY="<your-private-key>"
-make dev
-```
+The setting names above are illustrative host fields, not types exported by
+GHATD. Configure your process manager, container platform, or local shell using
+the names chosen by the host application, then start that application with its
+documented command.
 
 ### Production Deployment
 
@@ -97,8 +110,8 @@ Add these values through your deployment environment or secret manager. Do not c
 
 ## 3. Verify the Notifier Is Wired
 
-Start the host application with the env vars set.  Check the **notifier config**
-endpoint to confirm the server is advertising Web Push:
+Start the host application with its notifier configuration set. Check the
+**notifier config** endpoint to confirm the server is advertising Web Push:
 
 ```bash
 # This route is authenticated because it is under /me.
@@ -124,16 +137,17 @@ curl -s http://localhost:4000/api/v1/ums/me/notifications/config \
 ```
 
 If `"supported_channels"` is empty or `"webpush.enabled"` is `false`,
-the env vars are not being picked up — re-check step 2.
+the sender configuration was not applied — re-check step 2 and the host's
+composition layer.
 
 ---
 
 ## 4. Sign In and Enable Browser Notifications
 
-1. Open the frontend (for example: `http://localhost:5173`).
-2. Sign in with an existing account or create one.
-3. Navigate to **Settings** → **Notifications** tab.
-4. In the **Web Push** card, click **Enable**.
+The exact interface belongs to the host application. Its notification settings
+flow should sign the user in, request browser permission, register a service
+worker, subscribe through `PushManager`, and send the resulting subscription to
+GHATD.
 
 **What happens behind the scenes:**
 1. The browser fetches `/me/notifications/config` to get the VAPID
@@ -148,11 +162,8 @@ the env vars are not being picked up — re-check step 2.
    `channel:endpoint` so the same browser always points to the
    current user.
 
-**Visual signals in the UI:**
-- An **Enabled** badge on the Web Push card
-- The device name (e.g. "Chrome on MacIntel") and last-seen timestamp
-- Permission status card shows "Granted"
-- Backend status card shows "Enabled"
+Expose enough state in the host UI to distinguish browser permission, service
+worker registration, and backend registration failures.
 
 ---
 
@@ -267,7 +278,7 @@ UMS also returns:
 
 ## 7. Troubleshooting
 
-### "Web Push is unsupported" in Settings
+### "Web Push is unsupported" in the host UI
 
 The browser doesn't expose `PushManager` or `serviceWorker`.  Check:
 - Are you on `http://localhost` (not a plain IP address)?  The Push
@@ -300,19 +311,18 @@ in `event.notification.data.url`.  Verify:
 
 ### Stale service worker still running
 
-After changing `service-worker.ts`, the old worker may still be active:
+After changing the host application's service-worker source, the old worker may still be active:
 - DevTools → Application → Service Workers → "Unregister"
 - Refresh the page; the new worker will register automatically.
 - Or check "Update on reload" to force-reload the worker on each
   page refresh during development.
 
-### "NTF00-005 — Sender not enabled" even with env vars set
+### "NTF00-005 — Sender not enabled" even with configuration set
 
-The Web Push sender is only enabled when **all three** conditions are
-true:
-1. `NOTIFIER_WEBPUSH_ENABLED=true`
-2. `NOTIFIER_WEBPUSH_VAPID_PUBLIC_KEY` is non-empty
-3. `NOTIFIER_WEBPUSH_VAPID_PRIVATE_KEY` is non-empty
+The Web Push sender is enabled when it is explicitly enabled **or** when both
+VAPID keys are non-empty. Delivery still requires both a public and a private
+key, so confirm that the host application passed both values into
+`WebPushSenderConfig`.
 
 Double-check the values are actually making it to the server (see
 step 3 — the `/config` response tells you).
@@ -326,13 +336,13 @@ cannot create or deliver through the Firebase client. Common causes:
    name (e.g. `<firebase-project-id>`), not the storage bucket domain
    (e.g. `<firebase-project-id>.firebasestorage.app`).
 
-2. **Credentials file path** — if using `NOTIFIER_FCM_CREDENTIALS_FILE`,
-   ensure the file is readable at the specified path inside the container.
+2. **Credentials file path** — if the host uses the suggested
+   `NOTIFIER_FCM_CREDENTIALS_FILE` name, ensure the file is readable at the
+   resolved path inside the container.
 
-3. **Base64 credentials** — when using `NOTIFIER_FCM_CREDENTIALS_FILE_B64`,
-   the server decodes the base64 payload and writes it to a temp file. If
-   the base64 is malformed, check the server logs for
-   `server/decode-fcm-credentials-b64`.
+3. **Base64 credentials** — when the host passes base64 credentials through
+   `FCMCredentialsBase64`, GHATD decodes the payload into a temporary file.
+   Malformed base64 is returned to the host as a notifier configuration error.
 
 4. **FCM token mismatch** — the device's FCM token must belong to the
    same Firebase project the server is authenticating against. Re-register
@@ -363,9 +373,10 @@ To simulate different users on the same machine:
 
 ### Checking the service worker in production
 
-The service worker must be served from the **root of the app domain**
-(`/sw.js` or similar).  The `vite-plugin-pwa` generates this during
-build.  In production, make sure the generated service worker is served from the same origin and scope as the frontend assets.
+The service worker must be served from a scope that covers the pages receiving
+notifications, commonly the root of the app domain (`/sw.js` or similar). In
+production, make sure the generated worker is served from the intended origin
+and scope. The build and registration mechanism belongs to the host frontend.
 
 ---
 

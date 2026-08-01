@@ -83,12 +83,14 @@ curl -X POST http://localhost:8080/api/v1/cms/posts \
   }'
 ```
 
-### Query Latest by Type
+### Query the Latest Notification Feed
 
-Use the `types` and `limit` query parameters to retrieve a latest mixed feed.
+Use the `kinds` and `limit` query parameters to retrieve a mixed feed. Supported
+kinds include `post_article`, `post_changelog`, `post_faq`, and
+`post_glossary`.
 
 ```bash
-curl "http://localhost:8080/api/v1/cms/latest?types=article,changelog&limit=5"
+curl "http://localhost:8080/api/v1/cms/latest?kinds=post_article,post_changelog&limit=5"
 ```
 
 ### Paginated Content Queries

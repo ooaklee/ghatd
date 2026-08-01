@@ -1,6 +1,6 @@
 ---
 id: adrs-adr003
-title: 'ADR003: Separation of Billing System with Webhook-Based Provider Abstractio'
+title: 'ADR003: Separation of Billing System with Webhook-Based Provider Abstraction'
 description: |
   Design and build a billing system with three separate packages with clear architectural boundaries and responsibilities.
 ---
@@ -58,3 +58,8 @@ Each package will have its own models, errors, and configurations, ensuring test
 * Users of GHAT(d) will need to understand the separation of concerns and know which package to use for different scenarios.
 * The `billingmanager` package provides optional integration with audit and user services, allowing flexibility in how billing events are logged and how users are resolved.
 
+## Implementation status (2026-08-01)
+
+The shared provider interface is implemented, with built-in adapters for Stripe,
+Lemon Squeezy, and Ko-fi. Paddle remains an example of an adapter that a host
+application can add; GHATD does not currently ship a Paddle implementation.
