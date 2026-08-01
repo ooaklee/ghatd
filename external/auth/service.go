@@ -179,7 +179,7 @@ func (s *Service) ExtractToken(ctx context.Context, r *http.Request) (string, er
 		authorization = r.Header.Get(httpHeaderKeyAuthorization)
 	}
 	if authorization == "" {
-		logger.Warn("auth-bearer-header-missing", zap.String("path", path))
+		logger.Debug("auth-bearer-header-missing", zap.String("path", path))
 		return "", ErrNoBearerHeaderFound
 	}
 
@@ -196,13 +196,11 @@ func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token,
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "verify-token")
 	tokenString, err := s.ExtractToken(ctx, r)
 	if err != nil {
-		logger.Warn("auth-token-extract-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
 	token, err := s.ParseAccessTokenFromString(ctx, tokenString)
 	if err != nil {
-		logger.Warn("auth-token-parse-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
@@ -216,10 +214,11 @@ func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token,
 // expiration, malformed tokens, and other validation failures.
 func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "parse-access-token")
+	unexpectedAlgorithm := ""
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			logger.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
+			unexpectedAlgorithm = token.Method.Alg()
 			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.accessTokenSecret), nil
@@ -233,6 +232,12 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 		case errors.Is(err, jwt.ErrTokenMalformed):
 			logger.Warn("access-token-malformatted")
 			return nil, ErrUnauthorizedMalformattedToken
+		case errors.Is(err, ErrUnauthorizedTokenUnexpectedSigningMethod):
+			logger.Warn("access-token-unexpected-signing-method", zap.String("algorithm", unexpectedAlgorithm))
+			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
+		case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+			logger.Warn("access-token-signature-invalid")
+			return nil, ErrUnauthorizedParsedStringUnknown
 		default:
 			logger.Error("token-parsing-error", zap.Error(err))
 			return nil, ErrUnauthorizedParsedStringUnknown
@@ -248,10 +253,11 @@ func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString 
 // Similar to ParseAccessTokenFromString but uses the refresh token secret.
 func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "parse-refresh-token")
+	unexpectedAlgorithm := ""
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			logger.Error("unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
+			unexpectedAlgorithm = token.Method.Alg()
 			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.refreshTokenSecret), nil
@@ -265,6 +271,12 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 		case errors.Is(err, jwt.ErrTokenMalformed):
 			logger.Warn("refresh-token-malformatted")
 			return nil, ErrUnauthorizedMalformattedToken
+		case errors.Is(err, ErrUnauthorizedTokenUnexpectedSigningMethod):
+			logger.Warn("refresh-token-unexpected-signing-method", zap.String("algorithm", unexpectedAlgorithm))
+			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
+		case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+			logger.Warn("refresh-token-signature-invalid")
+			return nil, ErrUnauthorizedParsedStringUnknown
 		default:
 			logger.Error("token-parsing-error", zap.Error(err))
 			return nil, ErrUnauthorizedParsedStringUnknown
@@ -281,7 +293,6 @@ func (s *Service) CheckTokenIsValid(ctx context.Context, r *http.Request) error 
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-token-is-valid")
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
-		logger.Warn("auth-token-validation-failed", zap.String("path", path), zap.Error(err))
 		return err
 	}
 
@@ -302,13 +313,11 @@ func (s *Service) ExtractTokenMetadata(ctx context.Context, r *http.Request) (*T
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-token-metadata")
 	token, err := s.VerifyToken(ctx, r)
 	if err != nil {
-		logger.Warn("auth-token-metadata-verify-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
 	details, err := s.CheckAccessTokenValidityGetDetails(ctx, token)
 	if err != nil {
-		logger.Warn("auth-token-metadata-extract-failed", zap.String("path", path), zap.Error(err))
 		return nil, err
 	}
 
@@ -321,13 +330,11 @@ func (s *Service) ExtractRefreshTokenMetadataByString(ctx context.Context, token
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-refresh-token-metadata")
 	token, err := s.ParseRefreshTokenFromString(ctx, tokenAsString)
 	if err != nil {
-		logger.Warn("auth-refresh-token-metadata-parse-failed", zap.Error(err))
 		return nil, err
 	}
 
 	details, err := s.GetRefreshTokenUUID(ctx, token)
 	if err != nil {
-		logger.Warn("auth-refresh-token-metadata-extract-failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -340,13 +347,11 @@ func (s *Service) ExtractAccessTokenMetadataByString(ctx context.Context, tokenA
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "extract-access-token-metadata")
 	token, err := s.ParseAccessTokenFromString(ctx, tokenAsString)
 	if err != nil {
-		logger.Warn("auth-access-token-metadata-parse-failed", zap.Error(err))
 		return nil, err
 	}
 
 	details, err := s.CheckAccessTokenValidityGetDetails(ctx, token)
 	if err != nil {
-		logger.Warn("auth-access-token-metadata-extract-failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -404,16 +409,8 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 // TODO: Create tests
 func (s *Service) VerifyRefreshToken(ctx context.Context, t string) (*jwt.Token, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "verify-refresh-token")
-
-	token, err := jwt.Parse(t, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			logger.Error("refresh-token-unexpected-signing-method", zap.Any("method", token.Header[tokenHeaderKeyAlg]))
-			return nil, fmt.Errorf("unexpected-signing-method: %v", token.Header[tokenHeaderKeyAlg])
-		}
-		return []byte(s.refreshTokenSecret), nil
-	})
+	token, err := s.ParseRefreshTokenFromString(ctx, t)
 	if err != nil {
-		logger.Warn("refresh-token-verification-failed", zap.Error(err))
 		return nil, ErrUnauthorizedRefreshTokenExpired
 	}
 	logger.Debug("refresh-token-verified")
@@ -427,7 +424,6 @@ func (s *Service) CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-refresh-token-is-valid")
 	token, err := s.VerifyRefreshToken(ctx, t)
 	if err != nil {
-		logger.Warn("refresh-token-validation-failed", zap.Error(err))
 		return nil, err
 	}
 	if _, ok := token.Claims.(jwt.Claims); !ok && !token.Valid {
