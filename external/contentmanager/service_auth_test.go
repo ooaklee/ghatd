@@ -2,6 +2,8 @@ package contentmanager
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,13 +15,24 @@ import (
 )
 
 type countingContentManagerUserService struct {
-	user  *userV2.UniversalUser
-	calls []string
+	user       *userV2.UniversalUser
+	calls      []string
+	batchUsers []userV2.UniversalUser
+	batchCalls [][]string
+	batchError error
 }
 
 func (s *countingContentManagerUserService) GetUserByID(_ context.Context, req *userV2.GetUserByIDRequest) (*userV2.GetUserByIDResponse, error) {
 	s.calls = append(s.calls, req.ID)
 	return &userV2.GetUserByIDResponse{User: s.user}, nil
+}
+
+func (s *countingContentManagerUserService) GetUsers(_ context.Context, req *userV2.GetUsersRequest) (*userV2.GetUsersResponse, error) {
+	s.batchCalls = append(s.batchCalls, append([]string(nil), req.IDsFilter...))
+	if s.batchError != nil {
+		return nil, s.batchError
+	}
+	return &userV2.GetUsersResponse{Users: append([]userV2.UniversalUser(nil), s.batchUsers...)}, nil
 }
 
 type contentManagerAuthTestValidator struct{}
@@ -169,7 +182,7 @@ func TestAnonymousViewerStillResolvesPersistedPublishingUser(t *testing.T) {
 		ID:           "author-123",
 		PersonalInfo: &userV2.PersonalInfo{FirstName: "Jane", LastName: "Doe"},
 	}
-	userService := &countingContentManagerUserService{user: author}
+	userService := &countingContentManagerUserService{batchUsers: []userV2.UniversalUser{*author}}
 	service := NewService(nil, userService)
 	posts := &post.GetArticlesResponse{GetPostsResponse: &post.GetPostsResponse{
 		Posts: []post.Post{{
@@ -185,11 +198,93 @@ func TestAnonymousViewerStillResolvesPersistedPublishingUser(t *testing.T) {
 		zap.NewNop(),
 	)
 
-	if len(userService.calls) != 1 || userService.calls[0] != author.ID {
-		t.Fatalf("GetUserByID calls = %v, want persisted author lookup", userService.calls)
+	if len(userService.calls) != 0 {
+		t.Fatalf("GetUserByID calls = %v, want no per-author lookups", userService.calls)
+	}
+	if len(userService.batchCalls) != 1 || len(userService.batchCalls[0]) != 1 || userService.batchCalls[0][0] != author.ID {
+		t.Fatalf("GetUsers calls = %v, want one persisted author batch", userService.batchCalls)
 	}
 	if got := posts.Posts[0].PublishedAs; got != "Jane D." {
 		t.Fatalf("PublishedAs = %q, want Jane D.", got)
+	}
+}
+
+func TestMissingPublishingUserFallsBackWithoutPerUserLookup(t *testing.T) {
+	userService := &countingContentManagerUserService{}
+	service := NewService(nil, userService)
+	posts := &post.GetArticlesResponse{GetPostsResponse: &post.GetPostsResponse{
+		Posts: []post.Post{
+			{PublishedAt: "2026-08-01T10:00:00Z", PublishedByUserId: "deleted-author"},
+			{PublishedAt: "2026-08-01T11:00:00Z", PublishedByUserId: "deleted-author"},
+		},
+	}}
+
+	service.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(
+		contentManagerRequestContext("anonymous-placeholder", false),
+		posts,
+		make(map[string]string),
+		zap.NewNop(),
+	)
+
+	if len(userService.calls) != 0 {
+		t.Fatalf("GetUserByID calls = %v, want none", userService.calls)
+	}
+	if len(userService.batchCalls) != 1 {
+		t.Fatalf("GetUsers calls = %v, want one deduplicated batch", userService.batchCalls)
+	}
+	for i := range posts.Posts {
+		if got := posts.Posts[i].PublishedAs; got != DefaultPostAuthor {
+			t.Fatalf("Posts[%d].PublishedAs = %q, want %q", i, got, DefaultPostAuthor)
+		}
+	}
+}
+
+func TestPostAuthorLookupBatchesAtUserServiceLimit(t *testing.T) {
+	userService := &countingContentManagerUserService{}
+	service := NewService(nil, userService)
+	posts := make([]post.Post, postAuthorLookupBatchSize+1)
+	for i := range posts {
+		posts[i] = post.Post{
+			PublishedAt:       "2026-08-01T10:00:00Z",
+			PublishedByUserId: fmt.Sprintf("author-%03d", i),
+		}
+	}
+	holder := &post.GetArticlesResponse{GetPostsResponse: &post.GetPostsResponse{Posts: posts}}
+
+	service.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(
+		context.Background(),
+		holder,
+		make(map[string]string),
+		zap.NewNop(),
+	)
+
+	if len(userService.batchCalls) != 2 {
+		t.Fatalf("GetUsers calls = %d, want 2", len(userService.batchCalls))
+	}
+	if len(userService.batchCalls[0]) != postAuthorLookupBatchSize || len(userService.batchCalls[1]) != 1 {
+		t.Fatalf("GetUsers batch sizes = [%d %d], want [%d 1]", len(userService.batchCalls[0]), len(userService.batchCalls[1]), postAuthorLookupBatchSize)
+	}
+}
+
+func TestPostAuthorLookupFailureFallsBackToDefault(t *testing.T) {
+	userService := &countingContentManagerUserService{batchError: errors.New("database unavailable")}
+	service := NewService(nil, userService)
+	posts := &post.GetArticlesResponse{GetPostsResponse: &post.GetPostsResponse{
+		Posts: []post.Post{{
+			PublishedAt:       "2026-08-01T10:00:00Z",
+			PublishedByUserId: "author-123",
+		}},
+	}}
+
+	service.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(
+		context.Background(),
+		posts,
+		make(map[string]string),
+		zap.NewNop(),
+	)
+
+	if got := posts.Posts[0].PublishedAs; got != DefaultPostAuthor {
+		t.Fatalf("PublishedAs = %q, want %q", got, DefaultPostAuthor)
 	}
 }
 

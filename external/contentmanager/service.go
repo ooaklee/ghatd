@@ -3,6 +3,7 @@ package contentmanager
 import (
 	"context"
 	"slices"
+	"sort"
 	"strings"
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
@@ -17,6 +18,8 @@ const (
 	// DefaultPostAuthor is the entity to assign to post if user cannot
 	// be found
 	DefaultPostAuthor = "Team"
+
+	postAuthorLookupBatchSize = 100
 )
 
 // ResponseHolder represents a valid post type response
@@ -27,6 +30,7 @@ type ResponseHolder interface {
 // userService represents the user service
 type userService interface {
 	GetUserByID(ctx context.Context, req *userV2.GetUserByIDRequest) (*userV2.GetUserByIDResponse, error)
+	GetUsers(ctx context.Context, req *userV2.GetUsersRequest) (*userV2.GetUsersResponse, error)
 }
 
 // postService represents the post service
@@ -445,17 +449,6 @@ func (s *Service) optionalAuthenticatedRequestingUser(ctx context.Context, nameC
 		return nil
 	}
 
-	return s.optionalUserByID(ctx, userID, nameCache, logger)
-}
-
-// optionalUserByID resolves domain user data independently of the viewer's
-// authentication state. Use it for persisted IDs such as a post author, not
-// for a context-derived requestor ID on an optional-auth route.
-func (s *Service) optionalUserByID(ctx context.Context, userID string, nameCache map[string]string, logger *zap.Logger) *userV2.UniversalUser {
-	if userID == "" {
-		return nil
-	}
-
 	resp, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
 		ID: userID,
 	})
@@ -493,6 +486,68 @@ func displayNameForUser(user *userV2.UniversalUser) string {
 	return firstName + " " + string([]rune(lastName)[0]) + "."
 }
 
+// cachePostAuthorDisplayNames batch-resolves uncached persisted author IDs.
+// Missing users are expected for historical content and retain
+// DefaultPostAuthor without producing a per-user not-found error. Actual batch
+// failures remain observable in user/v2 and degrade this cosmetic enrichment
+// to the same safe fallback.
+func (s *Service) cachePostAuthorDisplayNames(ctx context.Context, posts []post.Post, nameCache map[string]string, logger *zap.Logger) {
+	if len(posts) == 0 || s.userService == nil || nameCache == nil {
+		return
+	}
+
+	uniqueIDs := make(map[string]struct{})
+	for _, item := range posts {
+		if item.PublishedAs != "" || item.PublishedAt == "" || item.PublishedByUserId == "" {
+			continue
+		}
+		if _, cached := nameCache[item.PublishedByUserId]; !cached {
+			uniqueIDs[item.PublishedByUserId] = struct{}{}
+		}
+	}
+
+	userIDs := make([]string, 0, len(uniqueIDs))
+	for userID := range uniqueIDs {
+		userIDs = append(userIDs, userID)
+	}
+	sort.Strings(userIDs)
+
+	for start := 0; start < len(userIDs); start += postAuthorLookupBatchSize {
+		end := min(start+postAuthorLookupBatchSize, len(userIDs))
+		batch := userIDs[start:end]
+		response, err := s.userService.GetUsers(ctx, &userV2.GetUsersRequest{
+			IDsFilter: batch,
+			Page:      1,
+			PerPage:   len(batch),
+		})
+		if err != nil {
+			logger.Debug("post-author-display-name-enrichment-unavailable", zap.Int("author-count", len(batch)), zap.Error(err))
+			for _, userID := range batch {
+				nameCache[userID] = DefaultPostAuthor
+			}
+			continue
+		}
+
+		requested := make(map[string]struct{}, len(batch))
+		for _, userID := range batch {
+			requested[userID] = struct{}{}
+		}
+		if response != nil {
+			for i := range response.Users {
+				user := &response.Users[i]
+				if _, ok := requested[user.ID]; ok {
+					nameCache[user.ID] = displayNameForUser(user)
+				}
+			}
+		}
+		for _, userID := range batch {
+			if _, found := nameCache[userID]; !found {
+				nameCache[userID] = DefaultPostAuthor
+			}
+		}
+	}
+}
+
 // handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet handles instances publish_as is not set but a publish_at is given,
 // we must try to set and default to user's first name and last name initial
 func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx context.Context, matchingPostsHolder ResponseHolder, userIdToUserFirstNameLastInitial map[string]string, logger *zap.Logger) {
@@ -503,6 +558,7 @@ func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(c
 	if matchingPosts == nil {
 		return
 	}
+	s.cachePostAuthorDisplayNames(ctx, matchingPosts.Posts, userIdToUserFirstNameLastInitial, logger)
 
 	for i, p := range matchingPosts.Posts {
 		if p.PublishedAs != "" || p.PublishedAt == "" {
@@ -516,12 +572,5 @@ func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(c
 			continue
 		}
 
-		publishingUser := s.optionalUserByID(ctx, p.PublishedByUserId, userIdToUserFirstNameLastInitial, logger)
-		if publishingUser == nil {
-			userIdToUserFirstNameLastInitial[p.PublishedByUserId] = DefaultPostAuthor
-			continue
-		}
-
-		matchingPosts.Posts[i].PublishedAs = displayNameForUser(publishingUser)
 	}
 }
