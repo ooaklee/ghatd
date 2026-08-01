@@ -135,9 +135,9 @@ func Example5_HTTPWebhookHandler() {
 	service := setupService()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract provider from path: /api/v1/bms/billing/paddle
+		// Extract provider from path: /api/v1/bms/billings/paddle/webhooks
 		pathParts := strings.Split(r.URL.Path, "/")
-		providerName := pathParts[len(pathParts)-1]
+		providerName := pathParts[len(pathParts)-2]
 
 		// Process webhook
 		err := service.ProcessBillingProviderWebhooks(r.Context(), &billingmanager.ProcessBillingProviderWebhooksRequest{
@@ -158,7 +158,7 @@ func Example5_HTTPWebhookHandler() {
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
-	fmt.Println("Webhook endpoint:", ts.URL+"/api/v1/bms/billing/paddle")
+	fmt.Println("Webhook endpoint:", ts.URL+"/api/v1/bms/billings/paddle/webhooks")
 }
 
 // Example6_WithAuditService demonstrates adding audit logging

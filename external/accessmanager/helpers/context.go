@@ -1,3 +1,11 @@
+// Package accessmanagerhelpers provides request-context helpers shared by
+// authentication middleware and downstream request handlers.
+//
+// On optional-auth routes, a non-empty requestor ID does not prove that the
+// request was authenticated. Rate-limited anonymous requests may carry a
+// placeholder ID. Use AcquireAuthenticatedFrom when branching on authentication
+// state, or AcquireAuthenticatedUserIDFrom when an authenticated user ID is
+// required for a lookup or actor-specific operation.
 package accessmanagerhelpers
 
 import (
@@ -62,8 +70,25 @@ func TransitAuthenticatedWith(ctx context.Context, authenticated bool) context.C
 
 // AcquireAuthenticatedFrom reports whether the requestor was authenticated.
 // A missing value is treated as unauthenticated so privacy-sensitive response
-// projections fail closed.
+// projections and database lookups fail closed. Callers must not infer
+// authentication from AcquireFrom returning a non-empty ID because
+// optional-auth middleware may attach a placeholder ID to anonymous requests.
 func AcquireAuthenticatedFrom(ctx context.Context) bool {
 	authenticated, ok := ctx.Value(RequestorAuthenticatedKey).(bool)
 	return ok && authenticated
+}
+
+// AcquireAuthenticatedUserIDFrom returns the requestor ID only when ctx
+// explicitly records an authenticated request. It returns an empty string for
+// anonymous requests, missing authentication state, and missing user IDs.
+//
+// Use this helper when a context-derived ID will drive a user lookup,
+// authorization decision, or actor attribution on an optional-auth route. Use
+// AcquireFrom directly on routes whose middleware strictly requires a user, or
+// when the placeholder ID is intentionally part of rate-limit bookkeeping.
+func AcquireAuthenticatedUserIDFrom(ctx context.Context) string {
+	if !AcquireAuthenticatedFrom(ctx) {
+		return ""
+	}
+	return AcquireFrom(ctx)
 }

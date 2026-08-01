@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -326,16 +327,34 @@ func (r *MongoRepositoryHelper) ExecuteFindOneCommandDecodeResult(ctx context.Co
 	resultObjectName = strings.ToLower(resultObjectName)
 
 	err := collection.FindOne(ctx, filter).Decode(result)
-	if err != nil {
+	return r.handleFindOneDecodeError(ctx, err, collection.Name(), filter, resultObjectName, logError, onFailureErr)
+}
+
+// handleFindOneDecodeError classifies FindOne decode errors into missing-document
+// and database-failure cases. When logging is enabled, missing documents emit a
+// warning while unexpected failures emit an error. Missing documents may be
+// mapped to onFailureErr; every other failure is returned unchanged.
+func (r *MongoRepositoryHelper) handleFindOneDecodeError(ctx context.Context, err error, collectionName string, filter interface{}, resultObjectName string, logError bool, onFailureErr error) error {
+	if errors.Is(err, mongo.ErrNoDocuments) {
 		if logError {
 			r.LogWarn(ctx, fmt.Sprintf("unable-to-find-and-decode-%s-matching-provided-filter", resultObjectName), err,
 				Field{Key: "operation", Value: "find_one_decode"},
-				Field{Key: "collection", Value: collection.Name()},
+				Field{Key: "collection", Value: collectionName},
 				Field{Key: "query_filter", Value: filter},
 			)
 		}
 		if onFailureErr != nil {
 			return onFailureErr
+		}
+		return err
+	}
+	if err != nil {
+		if logError {
+			r.LogError(ctx, fmt.Sprintf("failed-to-find-and-decode-%s-matching-provided-filter", resultObjectName), err,
+				Field{Key: "operation", Value: "find_one_decode"},
+				Field{Key: "collection", Value: collectionName},
+				Field{Key: "query_filter", Value: filter},
+			)
 		}
 		return err
 	}

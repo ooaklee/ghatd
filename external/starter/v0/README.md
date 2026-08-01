@@ -83,8 +83,22 @@ ephemeral-store contract; the middleware layer can additionally accept a
 `HardenedRateLimitStore` override when hardened rate limiting uses a different
 store.
 
+## Constructor Flow
+
+The common lazy path is:
+
+1. Build third-party and app-specific dependencies in `main`.
+2. Call `starter.NewRepositories` with a core Mongo repository.
+3. Call `starter.NewServices` with repositories plus explicit Redis/email/OAuth/policy/notification/payment inputs.
+4. Call `starter.NewHandlers` with services and a validator.
+5. Call `starter.NewMiddleware` with services.
+6. Group the results with `starter.NewStack`.
+7. (Optional) Call `starter.AttachDefaultRoutes` with the stack and router to
+   attach every standard GHATD API route group in one call, or attach routes
+   individually per package.
+
 For a fuller GHATD host application server-command walkthrough, see
-[`docs/getting-started/starter-v0-host-application-style.md`](../../../docs/getting-started/starter-v0-host-application-style.md).
+[starter/v0 Host Application Setup](docs/host-application-style.md).
 
 `NewStack` intentionally accepts nil layer fields so teams can adopt starter/v0
 incrementally. Treat nil layers as "not wired yet" and check them before use.
@@ -248,6 +262,36 @@ group depends on it. If the remaining groups do not need access middleware
   they are attached and how middleware is ordered.
 - Router bootstrap — the host creates the `*router.Router` and starts the HTTP server.
 
+## Escape Hatches
+
+Each constructor accepts a request struct so projects can override only the
+piece they need:
+
+- `NewRepositoriesRequest` accepts per-repository overrides.
+- `NewServicesRequest` accepts custom policy stores, group/user config,
+  audit services, notifier senders, OAuth services, payment registries, payment
+  providers, custom UMS reminder/streak service overrides, and post tag
+  configuration. `ValidPostTags: nil` uses GHATD defaults, while
+  `ValidPostTags: []string{}` intentionally disables them.
+- `NewHandlersRequest` accepts `HandlerErrorMaps`; `nil` uses starter defaults,
+  while an empty slice intentionally clears a bundle.
+- `NewMiddlewareRequest` accepts custom error maps, rate-limit tuning, and an
+  optional `HardenedRateLimitStore` override for middleware-specific storage.
+
+`NewStack` accepts nil layer fields so projects can adopt starter/v0
+incrementally. Nil means "not wired yet"; check a layer before dereferencing it.
+
+## Config Validation
+
+`Config.Validate()` uses simple built-in validation so starter/v0 does not
+introduce hidden global state or a validation framework dependency.
+
+| Field      | Rule                                  |
+|------------|---------------------------------------|
+| `Port`     | Required, 1-65535                     |
+| `Environment` | Required, `local`/`development`/`staging`/`production` |
+| `LogLevel` | Required, `debug`/`info`/`warn`/`error`       |
+
 ## Ejection
 
 When the skeleton no longer serves your needs:
@@ -258,3 +302,9 @@ When the skeleton no longer serves your needs:
 
 No part of the GHATD runtime depends on starter/v0. Removing the import is
 always safe.
+
+## Related
+
+- [Host application setup](docs/host-application-style.md)
+- [ADR007: Add starter/v0 as an ejectable Lazy composition layer](../../../docs/adr/adr007-starter-v0-lazy-composition-layer.md)
+- [ADR017: Colocate package documentation](../../../docs/adr/adr017-colocate-package-documentation.md)

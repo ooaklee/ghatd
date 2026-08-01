@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ooaklee/ghatd/external/user"
 	userV2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -106,44 +105,7 @@ func ExampleCustomDependencies() {
 	fmt.Printf("User with custom dependencies: %s\n", user.ID)
 }
 
-// Example 5: Migration from existing User model
-func ExampleMigration() {
-	// Existing user from your current model
-	existingUser := &user.User{
-		ID:        "existing-uuid",
-		NanoId:    "existing-nano",
-		FirstName: "John",
-		LastName:  "Doe",
-		Email:     "john@example.com",
-		Status:    "ACTIVE",
-		Roles:     []string{"ADMIN"},
-		Verified: user.UserVerifcationStatus{
-			EmailVerified:   true,
-			EmailVerifiedAt: "2025-01-01T00:00:00Z",
-		},
-		Meta: user.UserMeta{
-			CreatedAt:   "2025-01-01T00:00:00Z",
-			UpdatedAt:   "2025-01-02T00:00:00Z",
-			ActivatedAt: "2025-01-01T12:00:00Z",
-		},
-	}
-
-	// Convert to universal user
-	factory := userV2.NewUserFactory(userV2.DefaultUserConfig())
-	universalUser := userV2.MigrateFromLegacyUser(existingUser, factory)
-
-	// Now you can use new features
-	universalUser.SetExtension("migrated_from", "legacy_system")
-	universalUser.SetCustomTimestamp("migration_completed_at")
-
-	fmt.Printf("Migrated user: %s\n", universalUser.ID)
-
-	// Convert back to legacy format if needed (for gradual migration)
-	backToLegacy := userV2.MigrateToLegacyUser(universalUser)
-	fmt.Printf("Back to legacy: %s\n", backToLegacy.ID)
-}
-
-// Example 6: Working with extensions
+// Example 5: Working with extensions
 func ExampleExtensions() {
 	factory := userV2.NewUserFactory(nil)
 	user := factory.CreateUser("extensible@example.com")
@@ -171,7 +133,7 @@ func ExampleExtensions() {
 	user.SetCustomTimestamp("subscription_renewed_at")
 }
 
-// Example 7: Testing with mock dependencies
+// Example 6: Testing with mock dependencies
 func ExampleTesting() {
 	// Mock implementations for testing
 	mockIDGen := &MockIDGenerator{fixedUUID: "test-uuid-123"}
@@ -241,7 +203,7 @@ func (s *CustomStringUtils) InSlice(item string, slice []string) bool {
 	return false
 }
 
-// Mock implementations for testing (example 7)
+// Mock implementations for testing (example 6)
 
 type MockIDGenerator struct {
 	fixedUUID string

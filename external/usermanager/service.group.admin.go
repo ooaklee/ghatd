@@ -423,28 +423,47 @@ func (s *Service) resolveUserToEnrichedMember(ctx context.Context, userID string
 	if userID == "" {
 		return nil
 	}
-	em := &EnrichedMember{ID: userID}
 	if s.UserService == nil {
-		return em
+		return enrichedMemberFromUser(userID, nil)
 	}
 	userResp, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: userID})
-	if err == nil && userResp != nil && userResp.User != nil {
-		em.Email = userResp.User.Email
-		if userResp.User.Type != "" {
-			em.Type = userResp.User.Type
-		}
-		em.Roles = userResp.User.Roles
-		if userResp.User.PersonalInfo != nil {
-			em.FullName = userResp.User.PersonalInfo.FullName
-			if em.FullName == "" {
-				em.FullName = strings.TrimSpace(strings.TrimSpace(userResp.User.PersonalInfo.FirstName) + " " + strings.TrimSpace(userResp.User.PersonalInfo.LastName))
-			}
-		}
-		if em.FullName == "" {
-			em.FullName = em.Email
-		}
-		em.Initials = deriveInitials(em.FullName)
+	if err != nil || userResp == nil {
+		return enrichedMemberFromUser(userID, nil)
 	}
+	return enrichedMemberFromUser(userID, userResp.User)
+}
+
+// enrichedMemberFromUser builds an EnrichedMember from a user ID and optional
+// persisted user. A nil user produces a minimal stub containing only the ID,
+// which is useful for deleted or unresolvable members. FullName falls back
+// from PersonalInfo.FullName to a concatenation of first and last name, and
+// finally to Email.
+func enrichedMemberFromUser(userID string, user *userv2.UniversalUser) *EnrichedMember {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil
+	}
+
+	em := &EnrichedMember{ID: userID}
+	if user == nil {
+		return em
+	}
+
+	em.Email = user.Email
+	if user.Type != "" {
+		em.Type = user.Type
+	}
+	em.Roles = user.Roles
+	if user.PersonalInfo != nil {
+		em.FullName = user.PersonalInfo.FullName
+		if em.FullName == "" {
+			em.FullName = strings.TrimSpace(strings.TrimSpace(user.PersonalInfo.FirstName) + " " + strings.TrimSpace(user.PersonalInfo.LastName))
+		}
+	}
+	if em.FullName == "" {
+		em.FullName = em.Email
+	}
+	em.Initials = deriveInitials(em.FullName)
 	return em
 }
 

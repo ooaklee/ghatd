@@ -25,4 +25,3 @@ repository so that the community can maintain a consistent standard.
 * There is no guarantee `Details` will be updated once released/ created.
 * People need to be persuaded to support GHAT(D)'s vision.
 * We will split maintenance across multiple repos, growing inline with features/types. For a small team, it might become daunting.
-   

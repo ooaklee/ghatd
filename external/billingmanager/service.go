@@ -2,6 +2,7 @@ package billingmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,6 +31,12 @@ type AuditService interface {
 type UserService interface {
 	GetUserByEmail(ctx context.Context, req *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
 	GetUserByID(ctx context.Context, req *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error)
+}
+
+// userByEmailFinder is an optional capability implemented by user/v2 for
+// association flows where no matching user is an expected outcome.
+type userByEmailFinder interface {
+	FindUserByEmail(ctx context.Context, req *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
 }
 
 // BillingService interface for valid billing service
@@ -539,14 +546,17 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 	logger.Info("unable-to-find-existing-subscription-using-event-type-and-subscription-id", zap.String("event-type", payload.EventType))
 
 	if s.UserService != nil && payload.CustomerEmail != "" {
-		userResp, err := s.UserService.GetUserByEmail(ctx, &user.GetUserByEmailRequest{Email: payload.CustomerEmail})
-		if err == nil {
+		userResp, userErr := findUserByEmail(ctx, s.UserService, &user.GetUserByEmailRequest{Email: payload.CustomerEmail})
+		if userErr == nil {
 			logger.Info("found-user-id-falling-back-to-payload-email",
 				zap.String("user-id", userResp.User.GetUserId()),
 				zap.Bool("payload-email-present", emailPresentForLog(payload.CustomerEmail)),
 				zap.String("payload-email-domain", emailDomainForLog(payload.CustomerEmail)),
 			)
 			return userResp.User.GetUserId(), nil
+		}
+		if !errors.Is(userErr, user.ErrUserNotFound) {
+			return "", userErr
 		}
 	}
 
@@ -562,6 +572,17 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 	)
 
 	return "", nil
+}
+
+// findUserByEmail prefers the optional userByEmailFinder capability when the
+// underlying user service implements it, so callers receive expected-absence
+// semantics. Otherwise it falls back to the strict GetUserByEmail lookup for
+// backward compatibility.
+func findUserByEmail(ctx context.Context, userService UserService, req *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error) {
+	if finder, ok := userService.(userByEmailFinder); ok {
+		return finder.FindUserByEmail(ctx, req)
+	}
+	return userService.GetUserByEmail(ctx, req)
 }
 
 // findOrCreateSubscription finds an existing subscription or creates a new one

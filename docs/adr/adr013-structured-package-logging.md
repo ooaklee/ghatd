@@ -6,12 +6,12 @@ description: >
   Architecture Decision Record (ADR) for adding consistent GHATD package
   attribution, operation fields, and sensitive-data rules to framework logs.
 date: 2026-05-27
-status: proposed
+status: accepted
 ---
 
 ## Status
 
-Proposed.
+Accepted.
 
 ## Context
 
@@ -113,15 +113,11 @@ Applications that query logs by field names should add filters for
 
 ## Rollout
 
-The initial GHATD rollout introduces the package helpers and migrates existing
-package logger acquisition to include GHATD attribution. It also adds targeted
-logs for previously quiet package paths such as HTTP server lifecycle, SPA
-fallbacks, repository connection helpers, blueprint, cleanup, and CLI clone
-flows. HTTP handlers and context-bearing service methods should emit at least a
-debug-level operation boundary so host applications can trace a request through
-GHATD even when the failure happens in a downstream dependency.
+The initial GHATD rollout introduced the package helpers, migrated package
+logger acquisition to include GHATD attribution, and added targeted diagnostics
+for previously quiet paths such as HTTP server lifecycle, SPA fallbacks,
+repository connection helpers, blueprint, cleanup, and CLI clone flows.
 
-After this ADR is accepted and the GHATD changes are released, host
-applications should update to the released GHATD version, verify that request
-middleware still propagates the logger through context, and review log queries
-or dashboards for the new fields.
+Host applications adopting the release should verify that request middleware
+still propagates the logger through context and review log queries or dashboards
+for the new fields.

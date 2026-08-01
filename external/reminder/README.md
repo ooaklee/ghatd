@@ -4,6 +4,20 @@ The `external/reminder` package stores user reminder declarations and tracks
 scheduler or notification execution attempts. It is intentionally generic: a
 reminder can point at any platform target by using `target_type` and
 `target_id`, such as a course, task, checklist, lesson, or onboarding action.
+It pairs naturally with `notifier`: reminders decide what is due, and notifier
+delivers the push message.
+
+## When To Use It
+
+Use reminders when a product needs to ask a user to come back to a specific
+task, target, or workflow at a chosen time.
+
+Examples:
+
+- A course app reminds a user to finish today's lesson.
+- A habit app reminds a user to complete a daily check-in.
+- A team tool reminds a user to review one task or checklist.
+- An admin overview needs to see reminder volume by time and status.
 
 ## Quick Start
 

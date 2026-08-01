@@ -3,8 +3,10 @@ package contentmanager
 import (
 	"context"
 	"slices"
+	"sort"
 	"strings"
 
+	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/post"
@@ -16,6 +18,8 @@ const (
 	// DefaultPostAuthor is the entity to assign to post if user cannot
 	// be found
 	DefaultPostAuthor = "Team"
+
+	postAuthorLookupBatchSize = 100
 )
 
 // ResponseHolder represents a valid post type response
@@ -26,6 +30,7 @@ type ResponseHolder interface {
 // userService represents the user service
 type userService interface {
 	GetUserByID(ctx context.Context, req *userV2.GetUserByIDRequest) (*userV2.GetUserByIDResponse, error)
+	GetUsers(ctx context.Context, req *userV2.GetUsersRequest) (*userV2.GetUsersResponse, error)
 }
 
 // postService represents the post service
@@ -191,7 +196,7 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	logger.Info("handling-get-latest-posts-by-type-request")
 
 	// No name cache is needed here; pass nil.
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, nil, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, nil, logger)
 
 	matchingPostOverviewsResp, err := s.postService.GetLatestPostsByType(ctx, req.GetLatestPostsByTypeRequest)
 	if err != nil {
@@ -243,7 +248,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 		return nil, ErrUnauthorisedCMUser
 	}
 
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
 
 	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
 	if err != nil {
@@ -285,7 +290,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 		return nil, ErrUnauthorisedCMUser
 	}
 
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
 
 	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
 	if err != nil {
@@ -321,7 +326,7 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 
 	logger.Info("handling-get-changelog-items-request")
 
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
 		// make sure unauthed/ non-admin users can only see published content
@@ -352,7 +357,7 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 
 	logger.Info("handling-get-glossary-items-request")
 
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
 		// make sure unauthed/ non-admin users can only see published content
@@ -383,7 +388,7 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 
 	logger.Info("handling-get-faq-items-request")
 
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
 		// make sure unauthed/ non-admin users can only see published content
@@ -414,7 +419,7 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 
 	logger.Info("handling-get-articles-request")
 
-	requestingUser := s.optionalRequestingUser(ctx, req.UserId, userIdToUserFirstNameLastInitial, logger)
+	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
 
 	if requestingUser == nil || !requestingUser.IsAdmin() {
 		// make sure unauthed/ non-admin users can only see published content
@@ -435,13 +440,11 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 	}, nil
 }
 
-// optionalRequestingUser resolves the optional requesting user for read/list
-// methods. It returns nil when userID is empty. When lookup fails, it logs a
-// warning and returns nil so the caller falls back to the fail-closed
-// unauthenticated path that only exposes published content. It defensively
-// handles a nil response or nil User without panicking. When nameCache is
-// non-nil it safely caches the user's display name keyed by user ID.
-func (s *Service) optionalRequestingUser(ctx context.Context, userID string, nameCache map[string]string, logger *zap.Logger) *userV2.UniversalUser {
+// optionalAuthenticatedRequestingUser resolves the authenticated viewer for
+// optional-auth read methods. Anonymous requests fail closed before any user
+// lookup, even when middleware attached a non-empty rate-limit placeholder ID.
+func (s *Service) optionalAuthenticatedRequestingUser(ctx context.Context, nameCache map[string]string, logger *zap.Logger) *userV2.UniversalUser {
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)
 	if userID == "" {
 		return nil
 	}
@@ -483,6 +486,68 @@ func displayNameForUser(user *userV2.UniversalUser) string {
 	return firstName + " " + string([]rune(lastName)[0]) + "."
 }
 
+// cachePostAuthorDisplayNames batch-resolves uncached persisted author IDs.
+// Missing users are expected for historical content and retain
+// DefaultPostAuthor without producing a per-user not-found error. Actual batch
+// failures remain observable in user/v2 and degrade this cosmetic enrichment
+// to the same safe fallback.
+func (s *Service) cachePostAuthorDisplayNames(ctx context.Context, posts []post.Post, nameCache map[string]string, logger *zap.Logger) {
+	if len(posts) == 0 || s.userService == nil || nameCache == nil {
+		return
+	}
+
+	uniqueIDs := make(map[string]struct{})
+	for _, item := range posts {
+		if item.PublishedAs != "" || item.PublishedAt == "" || item.PublishedByUserId == "" {
+			continue
+		}
+		if _, cached := nameCache[item.PublishedByUserId]; !cached {
+			uniqueIDs[item.PublishedByUserId] = struct{}{}
+		}
+	}
+
+	userIDs := make([]string, 0, len(uniqueIDs))
+	for userID := range uniqueIDs {
+		userIDs = append(userIDs, userID)
+	}
+	sort.Strings(userIDs)
+
+	for start := 0; start < len(userIDs); start += postAuthorLookupBatchSize {
+		end := min(start+postAuthorLookupBatchSize, len(userIDs))
+		batch := userIDs[start:end]
+		response, err := s.userService.GetUsers(ctx, &userV2.GetUsersRequest{
+			IDsFilter: batch,
+			Page:      1,
+			PerPage:   len(batch),
+		})
+		if err != nil {
+			logger.Debug("post-author-display-name-enrichment-unavailable", zap.Int("author-count", len(batch)), zap.Error(err))
+			for _, userID := range batch {
+				nameCache[userID] = DefaultPostAuthor
+			}
+			continue
+		}
+
+		requested := make(map[string]struct{}, len(batch))
+		for _, userID := range batch {
+			requested[userID] = struct{}{}
+		}
+		if response != nil {
+			for i := range response.Users {
+				user := &response.Users[i]
+				if _, ok := requested[user.ID]; ok {
+					nameCache[user.ID] = displayNameForUser(user)
+				}
+			}
+		}
+		for _, userID := range batch {
+			if _, found := nameCache[userID]; !found {
+				nameCache[userID] = DefaultPostAuthor
+			}
+		}
+	}
+}
+
 // handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet handles instances publish_as is not set but a publish_at is given,
 // we must try to set and default to user's first name and last name initial
 func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx context.Context, matchingPostsHolder ResponseHolder, userIdToUserFirstNameLastInitial map[string]string, logger *zap.Logger) {
@@ -493,6 +558,7 @@ func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(c
 	if matchingPosts == nil {
 		return
 	}
+	s.cachePostAuthorDisplayNames(ctx, matchingPosts.Posts, userIdToUserFirstNameLastInitial, logger)
 
 	for i, p := range matchingPosts.Posts {
 		if p.PublishedAs != "" || p.PublishedAt == "" {
@@ -506,12 +572,5 @@ func (s *Service) handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(c
 			continue
 		}
 
-		publishingUser := s.optionalRequestingUser(ctx, p.PublishedByUserId, userIdToUserFirstNameLastInitial, logger)
-		if publishingUser == nil {
-			userIdToUserFirstNameLastInitial[p.PublishedByUserId] = DefaultPostAuthor
-			continue
-		}
-
-		matchingPosts.Posts[i].PublishedAs = displayNameForUser(publishingUser)
 	}
 }

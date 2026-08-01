@@ -1,6 +1,6 @@
 # Authenticating the App
 
-Use this guide when wiring a web, native, or hybrid app to GHATD authentication. For the package-level API reference, see [Access Manager](../getting-started/access-manager/).
+Use this guide when wiring a web, native, or hybrid app to GHATD authentication. For the package-level API reference, see [Access Manager](../../external/accessmanager/README.md).
 
 ## Server Setup
 
@@ -163,11 +163,11 @@ The default email-link path normalises `request_url` before it becomes `next_ste
 - same-origin absolute frontend URLs are reduced to frontend paths;
 - malformed or external URLs fall back to the configured frontend root.
 
-If a client calls `/api/v1/ams/login` or `/api/v1/ams/verify/email` directly with `next_step`, the client or host application should apply the same same-origin rules before sending it.
+If a client calls `/api/v1/ams/login` or `/api/v1/ams/verify/email` directly with `next_step`, the client or host application should apply the same-origin rules before sending it.
 
 ## Related Docs
 
-- [Access Manager](../getting-started/access-manager/)
-- [Email Manager](../getting-started/email-manager/)
-- [User Manager](../getting-started/user-manager/)
-- [starter/v0](../getting-started/starter-v0.md)
+- [Access Manager](../../external/accessmanager/README.md)
+- [Email Manager](../../external/emailmanager/README.md)
+- [User Manager](../../external/usermanager/README.md)
+- [starter/v0](../../external/starter/v0/README.md)

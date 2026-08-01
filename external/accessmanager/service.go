@@ -100,6 +100,13 @@ type UserService interface {
 	CreateUser(ctx context.Context, r *userv2.CreateUserRequest) (*userv2.CreateUserResponse, error)
 }
 
+// userByEmailFinder is an optional capability implemented by user/v2 for
+// workflows where a missing email is an expected result. Keeping it separate
+// preserves compatibility with existing UserService implementations.
+type userByEmailFinder interface {
+	FindUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
+}
+
 // ApitokenService expected methods of a valid apitoken service
 type ApitokenService interface {
 	ExtractValidateUserAPITokenMetadata(ctx context.Context, r *http.Request) (*apitoken.APITokenRequester, error)
@@ -270,11 +277,11 @@ func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest
 	}
 
 	// check if the new email is already in use
-	userByEmailResponse, newEmailInUseErr := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{
+	userByEmailResponse, newEmailInUseErr := findUserByEmail(ctx, s.UserService, &userv2.GetUserByEmailRequest{
 		Email: r.Email,
 	})
 	if newEmailInUseErr != nil && !errors.Is(newEmailInUseErr, userv2.ErrUserNotFound) {
-		logger.Error("failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
+		logger.Error("failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(newEmailInUseErr))
 		return signUserOutOfPlatform, newEmailInUseErr
 	}
 	if newEmailInUseErr == nil {
@@ -484,7 +491,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		}
 
 		// Manage flow with user information
-		persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
+		persistentUserResponse, err := findUserByEmail(ctx, s.UserService, &userv2.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
 		// Check if there is an error outside of user not being found
 		if persistentUserResponse == nil && !errors.Is(err, userv2.ErrUserNotFound) {
 			return &OauthCallbackResponse{
@@ -1503,6 +1510,8 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
+	// This is intentionally a strict lookup: token delivery requires an
+	// existing account and a missing user is an actionable failure.
 	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: r.Email})
 	if err != nil {
 		return err
@@ -1971,6 +1980,17 @@ func getValidRequestorIP(r *http.Request) string {
 	}
 
 	return r.RemoteAddr
+}
+
+// findUserByEmail prefers the optional userByEmailFinder capability when the
+// underlying user service implements it, so callers receive expected-absence
+// semantics. Otherwise it falls back to the strict GetUserByEmail lookup for
+// backward compatibility.
+func findUserByEmail(ctx context.Context, userService UserService, req *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error) {
+	if finder, ok := userService.(userByEmailFinder); ok {
+		return finder.FindUserByEmail(ctx, req)
+	}
+	return userService.GetUserByEmail(ctx, req)
 }
 
 // isUserLiveStatusActive checks if the user account with the given ID has an ACTIVE status.

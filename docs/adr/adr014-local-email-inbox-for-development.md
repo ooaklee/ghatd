@@ -7,12 +7,12 @@ description: >
   an opt-in development inbox instead of writing raw rendered email bodies to
   structured logs.
 date: 2026-05-27
-status: proposed
+status: accepted
 ---
 
 ## Status
 
-Proposed.
+Accepted.
 
 ## Context
 
@@ -106,7 +106,7 @@ access layer protects the route.
 
 ## Rollout
 
-GHATD will document the local inbox workflow in the Email Manager guide and
+GHATD documents the local inbox workflow in the Email Manager guide and
 examples. Host applications that currently rely on raw local email logs should
 switch to `LoggingEmailProvider`, set real provider sending to disabled in local
 development, attach `AttachLocalInboxRoutes`, and open

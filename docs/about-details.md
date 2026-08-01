@@ -15,7 +15,7 @@ GHATD currently supports these detail types:
 Details should be able to function independently, allowing users to work on them without considering other components. To get started, find the **detail** you need and clone it to your local machine. Depending on the type of detail you choose, as specified in the `ghatd-conf.yaml`, you should be able to run the equivalent of:
 
 ```shell
-go run [DETAIL_TYPE].go
+asdf exec go run [DETAIL_TYPE].go
 ```
 
 For `web-vite` details, install the frontend dependencies and run the package's Vite scripts from the detail root.

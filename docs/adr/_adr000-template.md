@@ -20,4 +20,4 @@ This section describes the forces at play, including technological, political, s
 
 <!-- This section describes the resulting context, after applying the decision. All consequences should be listed here, not just the "positive" ones. A particular decision may have positive, negative, and neutral consequences, but all of them affect the team and project in the future. -->
 
-<!-- This template is taken from a blog post by Michael Nygard http://thinkrelevance.com/blog/2011/11/15/documenting-architecture-decisions -->
+<!-- This template is based on Michael Nygard's article: https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions -->

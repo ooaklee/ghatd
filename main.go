@@ -6,6 +6,7 @@ import (
 
 	_ "embed"
 
+	migrator "github.com/ooaklee/ghatd/cmd/mongo-migrator"
 	"github.com/ooaklee/ghatd/cmd/server"
 	"github.com/spf13/cobra"
 )
@@ -19,16 +20,18 @@ func main() {
 
 	// Highest Level Command
 	rootCmd := cobra.Command{
-		Use:   "ghatd",
-		Short: "The entry point of the ghatd application",
-		Long:  "The entry point of the ghatd application",
+		Use:           "ghatd",
+		Short:         "The entry point of the ghatd application",
+		Long:          "The entry point of the ghatd application",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 
 	rootCmd.AddCommand(server.NewCommand(&content, "internal/"))
-	// rootCmd.AddCommand(migrator.NewCommand())
+	rootCmd.AddCommand(migrator.NewCommand())
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal("ghatd/error-executing-command-tree")
+		log.Fatal(err)
 	}
 
 }

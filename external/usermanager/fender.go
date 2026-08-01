@@ -304,7 +304,7 @@ func MapRequestToCreateCommsRequest(r *http.Request, validator UsermanagerValida
 
 	baseRequest := contacter.CreateCommsRequest{}
 
-	baseRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	baseRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	err := toolbox.DecodeRequestBody(r, &baseRequest)
 	if err != nil {

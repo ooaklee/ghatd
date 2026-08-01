@@ -1,0 +1,369 @@
+# Email Manager
+
+The recommended email functionality comes in three independent, composable packages: `emailtemplater`, `emailprovider`, and `emailmanager`. For most application features, you should use the high-level `emailmanager` package, which handles both templating and sending with integrated audit logging.
+
+## Core Packages Overview
+
+Here's an overview of the core packages:
+
+| Package | Purpose | Recommended Use Case | Examples |
+|---|---|---|---|
+| `emailtemplater` | Generates HTML email templates (e.g., login, verification) with variable substitution. | Generating email previews or testing template rendering. | [`emailtemplater/examples`](../emailtemplater/examples/examples.go) |
+| `emailprovider` | Abstracts the logic for sending an email through a service (e.g., SparkPost). | Sending pre-rendered HTML or custom email workflows. | [`emailprovider/examples`](../emailprovider/examples/examples.go) |
+| `emailmanager` | Orchestrates the templater and email provider with high-level API methods. | Building application features (Standard)—provides the full workflow and audit logging. | [`emailmanager/examples`](examples/examples.go) |
+
+### Usage Overview
+
+For a high-level overview of how this might fit into your project, please [**visit this section**](#high-level-overview).
+
+## Quick Start: Setup and Sending
+
+This section shows how to set up the `emailmanager` and send a verification email. This is the recommended way to use the system for standard operations. For more examples, [check out the reference examples above](#core-packages-overview).
+
+For the standard GHATD host-application setup, prefer
+`emailprovider.NewSparkPostClient` and `emailmanager.NewStandardEmailManager`.
+They keep the common SparkPost client and email template wiring in the packages
+that own those concepts.
+
+```go
+sparkpostClient, err := emailprovider.NewSparkPostClient(&emailprovider.NewSparkPostClientRequest{
+    BaseURL:    sparkpostURL,
+    APIKey:     sparkpostAPIKey,
+    APIVersion: 1,
+})
+if err != nil {
+    return err
+}
+
+provider := emailprovider.NewSparkPostEmailProvider(sparkpostClient)
+manager, err := emailmanager.NewStandardEmailManager(&emailmanager.NewStandardEmailManagerRequest{
+    Provider:                      provider,
+    AuditService:                  auditService,
+    FrontendBaseURL:               "https://app.example.com",
+    EmailVerificationFullEndpoint: "https://api.example.com/v0/auth/verify",
+    DashboardVerificationURIPath:  "https://api.example.com/v0/auth/verify",
+    Environment:                   "production",
+    BusinessEntityName:            "Example",
+    BusinessEntityWebsite:         "https://example.com",
+    WelcomeEmailSubject:           "Welcome",
+    LoginEmailSubject:             "Your login link",
+    FromEmailAddress:              "noreply@example.com",
+    NoReplyEmailAddress:           "noreply@example.com",
+})
+if err != nil {
+    return err
+}
+```
+
+The lower-level setup remains available when a project needs custom templates.
+
+### 1. Import Packages and Configure
+
+You'll need configuration for the `emailtemplater`, an `emailprovider` instance, and an [`audit` service](../audit).
+
+```go
+import (
+    "context"
+    "github.com/ooaklee/ghatd/external/emailtemplater"
+    "github.com/ooaklee/ghatd/external/emailprovider"
+    "github.com/ooaklee/ghatd/external/emailmanager"
+)
+
+// Assume sparkpostClient and auditService are initialised dependencies
+
+// 1. Configure templater
+templaterConfig := &emailtemplater.Config{
+		FrontEndDomainName:            "https://app.example.com",
+		EmailVerificationFullEndpoint: "https://app.example.com/v0/auth/verify",
+		DashboardDomainName:           "https://app.example.com",
+		DashboardVerificationURIPath:  "/v0/auth/verify",
+		Environment:                   "production",
+		BusinessEntityName:            "MyApp Inc.",
+		BusinessEntityWebsite:         "https://example.com",
+		WelcomeEmailSubject:           "Welcome to MyApp!",
+		LoginEmailSubject:             "Your MyApp Login Link",
+		FromEmailAddress:              "noreply@example.com",
+		NoReplyEmailAddress:           "noreply@example.com",
+		TimeProvider:                  time.Now,
+		Templates: map[emailtemplater.EmailTemplateType]string{
+			emailtemplater.EmailTemplateTypeLogin:        templates.NewLoginEmailTemplate(time.Now().Year(), "MyApp Inc.", "https://example.com"),
+			emailtemplater.EmailTemplateTypeVerification: templates.NewVerificationEmailTemplate(time.Now().Year(), "MyApp Inc.", "https://example.com"),
+		},
+		DynamicTemplates: map[emailtemplater.EmailTemplateType]func(emailPreview string, emailSubject string, emailMainContent string, footerEnabled bool, footerYear int, footerEntityName string, footerEntityUrl string) string{
+			emailtemplater.EmailTemplateTypeBase: templates.NewBaseHtmlEmailTemplate,
+		},
+	}
+tmpltr := emailtemplater.NewEmailTemplater(templaterConfig)
+
+// 2. Create email provider (using SparkPost for Production)
+provider := emailprovider.NewSparkPostEmailProvider(sparkpostClient)
+
+// 3. Create email manager (Orchestration layer)
+manager := emailmanager.NewEmailManager(tmpltr, provider, auditService, &emailmanager.Config{
+    ShouldSendEmail:    true,         // Allows sending
+    EnableAuditLogging: true,         // Logs email metadata
+})
+```
+
+### 2. Send an Email
+
+You can use the high-level methods on the `emailmanager`.
+
+```go
+// 4. Send a verification email
+ctx := context.Background()
+err := manager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailRequest{
+    FirstName:          "John",
+    LastName:           "Doe",
+    Email:              "john@example.com",
+    Token:              "verification-token-xyz",
+    Code:               "ABC123DE", // 8-character alphanumeric code for manual entry
+    IsDashboardRequest: false,
+    RequestUrl:         "https://app.example.com/dashboard",
+    UserId:             "user-123",
+})
+```
+
+```go
+// 5. Send a login email
+ctx := context.Background()
+err := manager.SendLoginEmail(ctx, &emailmanager.SendLoginEmailRequest{
+    Email:              "john@example.com",
+    Token:              "login-token-xyz",
+    Code:               "XYZ789AB", // 8-character alphanumeric code for manual entry
+    IsDashboardRequest: false,
+    RequestUrl:         "https://app.example.com/dashboard",
+    UserId:             "user-123",
+})
+```
+
+> **Dual Verification Flow**: Both login and verification emails now include a magic link (token) AND an 8-character alphanumeric code. The code is displayed prominently below the main button with the note: _"Alternatively, enter this code in the app or web by clicking "I already have a session code""_. This allows users who open the email on a different device to manually enter the code instead of clicking the link.
+
+### Template Substitution
+
+The email templates use Handlebars (`{{FieldName}}`) for variable substitution. Available fields:
+
+**Verification email:**
+| Variable | Description |
+|---|---|
+| `{{FullName}}` | User's full name |
+| `{{Code}}` | 8-character alphanumeric code |
+| `{{VerificationURL}}` | Magic link with embedded token |
+| `{{LoginURL}}` | Link to request a new verification email |
+
+**Login email:**
+| Variable | Description |
+|---|---|
+| `{{Code}}` | 8-character alphanumeric code |
+| `{{LoginURL}}` | Magic link with embedded token |
+
+### 3. Development Environment Setup
+
+If you don't want to use your email provider's allowance when running your code locally, use the `LoggingEmailProvider` to capture emails in memory and attach the local inbox routes. The inbox lets you open rendered emails, click magic links, and copy login or verification codes without writing raw email HTML to structured logs.
+
+```go
+localEmailProvider := emailprovider.NewLoggingEmailProvider(&emailprovider.LoggingEmailProviderConfig{
+    MaxStoredEmails: 50,
+})
+
+manager := emailmanager.NewEmailManager(
+    emailtemplater.NewEmailTemplater(templaterConfig),
+    localEmailProvider,
+    auditService,
+    &emailmanager.Config{
+        ShouldSendEmail:    false,
+        EnableAuditLogging: true,
+    },
+)
+
+err := emailprovider.AttachLocalInboxRoutes(&emailprovider.AttachLocalInboxRoutesRequest{
+    Router:   ghatdRouter,
+    Provider: localEmailProvider,
+})
+if err != nil {
+    return err
+}
+```
+
+By default, the local inbox is available at `/_ghatd/local/emails` and rejects non-loopback clients. Set a custom `Prefix` or `AllowRemote` only when another trusted local proxy protects the route.
+
+This local inbox workflow is described in [ADR014](../../docs/adr/adr014-local-email-inbox-for-development.md).
+
+> **Note on Environments:** The `emailtemplater` is also **environment-aware**; for example, setting the `Environment` config to `"staging"` will add `[staging]` to the email subject line.
+
+## Advanced Use Cases
+
+While `emailmanager` is recommended, the packages can be used independently for specialised needs.
+
+### Template Only (e.g., Email Preview)
+
+You can generate the HTML body without sending an email.
+
+```go
+// Use templater alone
+rendered, err := tmpltr.GenerateVerificationEmail(&emailtemplater.GenerateVerificationEmailRequest{
+    FirstName: "Test",
+    // ...
+})
+// Use rendered.HTMLBody for preview or external systems
+```
+
+### Custom Provider
+
+Adding a new provider (e.g., SendGrid, AWS SES) only requires implementing the `emailprovider.EmailProvider` interface and integrating it with the `emailmanager`.
+
+```go
+type MyCustomProvider struct{}
+
+func (p *MyCustomProvider) Send(ctx context.Context, email *emailprovider.Email) (*emailprovider.SendResult, error) {
+    // Custom sending logic here
+    return &emailprovider.SendResult{Success: true}, nil
+}
+
+func (p *MyCustomProvider) Name() string {
+    return "CUSTOM_PROVIDER"
+}
+
+func (p *MyCustomProvider) IsHealthy() bool {
+    var isHealthy bool
+    // Custom health check logic here and update isHealthy
+    return isHealthy
+}
+
+// Use it with the manager
+provider := &MyCustomProvider{}
+manager := emailmanager.NewEmailManager(tmpl, provider, audit, config)
+```
+
+## High-level Overview
+
+Here are some high-level overviews of this email solution and its packages, with examples of how it can be used in your application for different use-cases.
+
+### Usage Patterns
+
+#### Pattern 1: Full Stack (Recommended for Applications)
+
+```
+Application Code
+       │
+       ▼
+   emailmanager ──────► Handles everything
+       │
+       ├──► emailtemplater ──► Generates HTML
+       │
+       ├──► emailprovider ──► Sends email
+       │
+       └──► auditService ──► Logs events
+```
+
+#### Pattern 2: Template Only (For Previews/Testing)
+
+```
+Application Code
+       │
+       ▼
+   emailtemplater ──────► Returns HTML
+       │
+       └──► No sending, just HTML generation
+```
+
+#### Pattern 3: Custom Workflow
+
+```
+Application Code
+       │
+       ├──► emailtemplater ──────► Generate HTML
+       │         │
+       │         ▼
+       │    [Custom Logic]
+       │         │
+       │         ▼
+       └──► emailprovider ──► Send when ready
+```
+
+### Environment Usage & Outputs Flow
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Production                              │
+│                                                              │
+│  ┌─────────────┐         ┌──────────────┐                    │
+│  │ Application │────────►│ emailmanager │                    │
+│  └─────────────┘         └──────┬───────┘                    │
+│                                 │                            │ 
+│                   ┌─────────────┼──────────────┐             │
+│                   │             │              │             │
+│                   ▼             ▼              ▼             │
+│         ┌──────────────┐  ┌──────────┐  ┌──────────┐         │
+│         │    email     │  │SparkPost │  │  Audit   │         │
+│         |   templater  |  │ Provider │  │ Service  │         │
+│         └──────────────┘  └────┬─────┘  └────┬─────┘         │
+│                                │             │               │
+└────────────────────────────────┼─────────────┼───────────────┘
+                                 │             │
+                                 ▼             ▼
+                       ┌──────────────┐  ┌──────────┐
+                       │  SparkPost   │  │ MongoDB  │
+                       │     API      │  │          │
+                       └──────────────┘  └──────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Local Development                       │
+│                                                              │
+│  ┌─────────────┐         ┌──────────────┐                    │
+│  │ Application │────────►│ emailmanager │                    │
+│  └─────────────┘         └──────┬───────┘                    │
+│                                 │                            │
+│                   ┌─────────────┼──────────────┐             │
+│                   │             │              │             │
+│                   ▼             ▼              ▼             │
+│         ┌──────────────┐  ┌──────────┐  ┌──────────┐         │
+│         │    email     │  │ Logging  │  │  Audit   │         │
+│         |   templater  |  │ Provider │  │ Service  │         │
+│         └──────────────┘  └────┬─────┘  └────┬─────┘         │
+│                                │             │               │
+└────────────────────────────────┼─────────────┼───────────────┘
+                                 │             │
+                                 ▼             ▼
+                         ┌──────────────┐  ┌──────────┐
+                         │   Console    │  │ MongoDB  │
+                         │   Logs       │  │          │
+                         └──────────────┘  └──────────┘
+```
+
+## Potential Future Improvements
+
+Here's a list of areas for improvement in future iterations of `emailmanager`, `emailtemplater`, and `emailprovider`. Please note that these suggestions are not prioritised.
+
+### Additional Providers
+- [ ] SendGrid provider
+- [ ] AWS SES provider
+- [ ] Mailgun provider
+- [ ] Brevo provider
+- [ ] SMTP provider
+
+### Advanced Features
+- [x] Dual-channel verification (magic link + 8-character code)
+- [x] Hardened rate limiting for code verification endpoints
+- [x] Brute-force IP blocking on repeated failed attempts
+- [ ] Email templating with layouts
+- [ ] Multi-language support
+- [ ] Email preview generation
+- [ ] Batch sending optimisation
+- [ ] Rate limiting
+- [ ] Retry mechanisms
+- [ ] Email queueing
+
+### Testing
+- [x] Unit tests for unique code generation (`GenerateUniqueCode`)
+- [x] Unit tests for hardened rate limit middleware
+- [ ] Unit tests for templater
+- [ ] Unit tests for emailprovider
+- [ ] Unit tests for emailmanager
+- [ ] Integration tests
+- [ ] Performance benchmarks
+
+### Monitoring
+- [ ] Metrics collection
+- [ ] Provider failover
+- [ ] Send rate tracking
+- [ ] Error rate monitoring

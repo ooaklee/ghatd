@@ -73,3 +73,10 @@ content automatically indexable.
 The package currently uses the framework's MongoDB driver v1 repository surface.
 Migration to a newer driver must be coordinated with the shared repository and
 migration APIs rather than performed by an individual host application.
+
+## Follow-up status (2026-08-01)
+
+The coordinated repository migration has since completed. The SEO package,
+its migrations, and the shared repository surface now use MongoDB driver v2.
+The original consequence above records the constraint at the time this ADR was
+accepted; it is not the package's current dependency state.
