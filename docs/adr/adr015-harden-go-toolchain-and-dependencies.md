@@ -53,3 +53,11 @@ MongoDB migrator now import `go.mongodb.org/mongo-driver/v2`; driver v1 remains
 only as an indirect transitive dependency in `go.mod`. The earlier consequence
 describing v1 as the active repository surface is retained above as historical
 context and no longer describes the current codebase.
+
+The migration command implementation has also moved from
+`cmd/mongo-migrator` into the reusable `external/migrator/mongo` package. The
+root command is now a thin adapter that blank-imports host registrations. This
+relocation removes `cmd/mongo-migrator/settings` and moves settings and default
+constants into the shared package. [ADR018](./adr018-shared-mongodb-migrator-command.md)
+records the current ownership, execution, generation, and compatibility
+boundaries.

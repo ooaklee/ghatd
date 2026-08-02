@@ -693,6 +693,20 @@ func registerPricingMigrations() error {
 }
 ```
 
+Call `registerPricingMigrations` from the host's `migrations/mongo` package so
+its registrations run before the shared command. Apply all pending migrations
+with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+`InitTestPlansSeedUp` creates comparison fixtures intended for E2E verification;
+register it in environments where that data is appropriate. The shared `down`
+action reverts every applied registered migration, so review the seed and index
+down functions before rollback. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md).
+
 Seed migrations are also provided:
 
 - `external/pricer/migrations/seed_pricing.go` inserts a starter feature catalogue and starter plan.

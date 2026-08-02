@@ -59,6 +59,7 @@ A complete billing solution split into three composable packages for maximum fle
 - **[Content Manager](./external/contentmanager/README.md)** - HTTP orchestration for CMS-style content
 - **[Group](./external/group/README.md)** - User groups, memberships, and hierarchical organisations
 - **[Logger](./external/logger/)** - Structured logging with middleware support
+- **[MongoDB Migrator](./external/migrator/mongo/README.md)** - Shared migration command with host-owned registrations and templates
 - **[Notifier](./external/notifier/README.md)** - Push notification registration, preferences, and delivery
 - **[Post](./external/post/README.md)** - Reusable content models, persistence, and publication rules
 - **[Reminder](./external/reminder/README.md)** - User-owned scheduled reminders with target-based lookups and execution tracking
@@ -136,7 +137,7 @@ Inspect a command before using it:
 asdf exec go run cli/cli.go <desired-command> --help
 ```
 
-The `new` command can assemble a host application from one or more Details, but the generator remains experimental and its defaults may target development branches or module versions. Review the generated application and run `asdf exec go mod tidy` before relying on it.
+The `new` command can assemble a host application from one or more Details, but the generator remains experimental and its defaults may target development branches or module versions. Review the generated application and run `asdf exec go mod tidy` before relying on it. Generated applications include a host-owned `cmd/mongo-migrator` adapter and `migrations/mongo/template.go`; the adapter keeps using GHATD's shared migration implementation while its host imports are rewritten to the new module.
 
 Example local command:
 
@@ -147,7 +148,7 @@ asdf exec go run cli/cli.go new \
   -w "github.com/example/ghatd-detail-api"
 ```
 
-See [About Details](./docs/about-details.md) and [Getting Started With A New Project](./docs/how-to/local-development/a-new-project-it-s-in-the-detail.md) for the supported Detail types and generated-app workflow.
+See [About Details](./docs/about-details.md) and [Getting Started With A New Project](./docs/how-to/local-development/a-new-project-it-s-in-the-detail.md) for the supported Detail types and generated-app workflow. See [Managing MongoDB Migrations](./docs/how-to/manage-mongodb-migrations.md) before adding or applying migrations.
 
 ### Starting the server
 

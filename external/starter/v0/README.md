@@ -306,5 +306,7 @@ always safe.
 ## Related
 
 - [Host application setup](docs/host-application-style.md)
+- [Managing MongoDB migrations](../../../docs/how-to/manage-mongodb-migrations.md)
+- [MongoDB migrator](../../migrator/mongo/README.md)
 - [ADR007: Add starter/v0 as an ejectable Lazy composition layer](../../../docs/adr/adr007-starter-v0-lazy-composition-layer.md)
 - [ADR017: Colocate package documentation](../../../docs/adr/adr017-colocate-package-documentation.md)

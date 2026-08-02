@@ -89,4 +89,14 @@ discussion. The internal UUID is stored as `_id`; the public NanoID is stored
 as `_nano_id`.
 
 Host applications should register `migrations.InitVisionIndexesUp` and
-`migrations.InitVisionIndexesDown` with their Mongo migration runner.
+`migrations.InitVisionIndexesDown` from their `migrations/mongo` package, then
+apply the registration with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The host adapter must blank-import its migration package. The shared `down`
+action reverts all applied registered migrations, not only Vision indexes. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for registration adapters, configuration, and rollback precautions.

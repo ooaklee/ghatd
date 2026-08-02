@@ -26,4 +26,11 @@ For `web-vite` details, install the frontend dependencies and run the package's 
 
 By using the `ghatdcli new` command, it will handle cloning referenced **detail** boilerplate, configuring dependencies, and merging details into a consolidated GHATD host application. GitHub detail sources can use `owner/repo`, `github.com/owner/repo`, `https://github.com/owner/repo`, or SSH-style GitHub sources.
 
+The generated host also receives its own `cmd/mongo-migrator` adapter and
+`migrations/mongo/template.go`. The generator rewrites host-owned command and
+migration imports to the new module while retaining GHATD's shared migrator
+dependency. Existing generated applications are not updated automatically; see
+[Managing MongoDB Migrations](./how-to/manage-mongodb-migrations.md) when
+adopting the scaffold manually.
+
 When the GitHub CLI is available, GHATD prefers it for cloning so private repositories can use the developer's existing `gh auth login` session. It falls back to `git clone` for non-GitHub sources or when the GitHub CLI is unavailable.

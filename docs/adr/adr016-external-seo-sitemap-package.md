@@ -79,4 +79,7 @@ migration APIs rather than performed by an individual host application.
 The coordinated repository migration has since completed. The SEO package,
 its migrations, and the shared repository surface now use MongoDB driver v2.
 The original consequence above records the constraint at the time this ADR was
-accepted; it is not the package's current dependency state.
+accepted; it is not the package's current dependency state. Host applications
+retain ownership of SEO registration and seed customisation, and execute those
+registrations through the shared MongoDB command recorded in
+[ADR018](./adr018-shared-mongodb-migrator-command.md).

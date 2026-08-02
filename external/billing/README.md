@@ -101,91 +101,55 @@ asdf exec go get go.mongodb.org/mongo-driver/v2/mongo
 
 ### Running Migrations
 
-Create a migration runner to set up the indexes. For example, save the
-following as `cmd/migrations/main.go` in the host application:
+Register the billing index helpers from the host application's
+`migrations/mongo` package:
 
 ```go
-package main
+package migrations
 
 import (
     "context"
-    "log"
-    "os"
-    
-    billingMigration "github.com/ooaklee/ghatd/external/billing/migrations"
+
+    billingmigrations "github.com/ooaklee/ghatd/external/billing/migrations"
     migrate "github.com/xakep666/mongo-migrate"
     "go.mongodb.org/mongo-driver/v2/mongo"
-    "go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func main() {
-    // Connect to MongoDB
-    mongoURI := os.Getenv("MONGODB_URI")
-    if mongoURI == "" {
-        mongoURI = "mongodb://localhost:27017"
-    }
-    
-    ctx := context.Background()
-    client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
-    if err != nil {
-        log.Fatalf("Failed to connect to MongoDB: %v", err)
-    }
-    defer func() {
-        if err := client.Disconnect(ctx); err != nil {
-            log.Printf("Error disconnecting: %v", err)
-        }
-    }()
-    
-    // Select database
-    db := client.Database("your_database_name")
-    
-    // Initialise migration system
-    migrate.SetDatabase(db)
-    
-    // Register billing indexes migrations
+func init() {
     if err := migrate.Register(
         func(_ context.Context, db *mongo.Database) error {
-            return billingMigration.InitBillingSubscriptionIndexesUp(db)
+            return billingmigrations.InitBillingSubscriptionIndexesUp(db)
         },
         func(_ context.Context, db *mongo.Database) error {
-            return billingMigration.InitBillingSubscriptionIndexesDown(db)
+            return billingmigrations.InitBillingSubscriptionIndexesDown(db)
         },
     ); err != nil {
-        log.Fatalf("Failed to register subscription migration: %v", err)
+        panic(err)
     }
     if err := migrate.Register(
         func(_ context.Context, db *mongo.Database) error {
-            return billingMigration.InitBillingEventsIndexesUp(db)
+            return billingmigrations.InitBillingEventsIndexesUp(db)
         },
         func(_ context.Context, db *mongo.Database) error {
-            return billingMigration.InitBillingEventsIndexesDown(db)
+            return billingmigrations.InitBillingEventsIndexesDown(db)
         },
     ); err != nil {
-        log.Fatalf("Failed to register billing-event migration: %v", err)
+        panic(err)
     }
-    
-    // Run migrations
-    log.Println("Running billing indexes migrations...")
-    if err := migrate.Up(ctx, migrate.AllAvailable); err != nil {
-        log.Fatalf("Migration failed: %v", err)
-    }
-    
-    log.Println("Migrations completed successfully")
 }
 ```
 
-Run that host-owned migration entry point before starting the application:
+Ensure the host's command adapter blank-imports its migration package, then run:
 
-```bash
-asdf exec go run ./cmd/migrations
+```sh
+asdf exec go run main.go mongo-migrator up
 ```
 
-GHATD provides a shared command implementation in `external/migrator/mongo`.
-Applications can keep a small command adapter that blank-imports their migration
-package and returns `mongo.NewCommand()`, then register that adapter on their
-Cobra root. This exposes `mongo-migrator up`, `mongo-migrator down`, and
-`mongo-migrator new <name>`. The current command does not provide partial
-rollback or status actions.
+The shared command applies every pending registered migration. Its `down`
+action reverts all applied registered migrations and does not support partial
+rollback or status actions. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for command wiring, configuration, and rollback precautions.
 
 ### Subscription Indexes
 
@@ -741,8 +705,13 @@ func TestAssociateSubscriptions(t *testing.T) {
 
 ```bash
 # In your CI/CD pipeline
-asdf exec go run ./cmd/migrations
+asdf exec go run main.go mongo-migrator up
 ```
+
+The host application must register the billing migrations as described in
+[Running Migrations](#running-migrations). Keep rollback as an explicit,
+reviewed operation: `mongo-migrator down` reverts every applied registered
+migration rather than only the latest billing change.
 
 **Monitor index usage:**
 

@@ -51,6 +51,22 @@ notifier/
     └── indexes_notifier.go  # Database index setup and rollback
 ```
 
+## Migration Setup
+
+Register `migrations.InitNotifierIndexesUp` and
+`migrations.InitNotifierIndexesDown` from the host application's
+`migrations/mongo` package. Ensure the `cmd/mongo-migrator` adapter
+blank-imports that host package, then apply all pending registrations with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The shared `down` action reverts every applied registered migration, not only
+Notifier indexes. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for the registration adapter, settings, and rollback precautions.
+
 ## How to Use
 
 ### 1. Create a notifier service

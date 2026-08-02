@@ -63,6 +63,13 @@ if err != nil {
 For lower-level composition, use `GenerateGenericMongoURI` or
 `GenerateAtlasMongoURI` directly.
 
+MongoDB migrations use the same URI helpers but intentionally create an
+isolated client and lifecycle through the shared
+[`external/migrator/mongo`](../migrator/mongo/README.md) command. They do not
+reuse an application's `MongoRuntime` or repository client. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for host registration, configuration, deployment, and rollback guidance.
+
 ### **3. Initialise the Repository Helper**
 
 Create a handler with the required configuration options, then use it to create

@@ -115,47 +115,48 @@ The second migration script, located at `external/group/migrations/indexes_group
 
 ### Running Migrations
 
-To apply these indexes, you must integrate the provided migration functions into your application's startup process using a migration tool like `mongo-migrate`.
-
-**Example Integration:**
+Register the provided functions from the host application's
+`migrations/mongo` package. The helpers use `func(*mongo.Database) error`, so
+adapt them to the context-aware `mongo-migrate` registration signature:
 
 ```go
-// In your main application setup
+package migrations
+
 import (
     "context"
 
-    "github.com/xakep666/mongo-migrate"
-    groupMigrations "github.com/ooaklee/ghatd/external/group/migrations"
+    groupmigrations "github.com/ooaklee/ghatd/external/group/migrations"
+    migrate "github.com/xakep666/mongo-migrate"
     "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func main() {
-    // ... database connection setup ...
-    db := client.Database("your_db_name")
-    migrate.SetDatabase(db)
-
-    // Register the group migrations in order. The package migration helpers
-    // use the legacy func(*mongo.Database) error shape, so adapt them to the
-    // context-aware mongo-migrate API.
+func init() {
     register := func(up, down func(*mongo.Database) error) error {
         return migrate.Register(
             func(_ context.Context, db *mongo.Database) error { return up(db) },
             func(_ context.Context, db *mongo.Database) error { return down(db) },
         )
     }
-    if err := register(groupMigrations.InitGroupsIndexesUp, groupMigrations.InitGroupsIndexesDown); err != nil {
-        log.Fatalf("Failed to register group indexes: %v", err)
+    if err := register(groupmigrations.InitGroupsIndexesUp, groupmigrations.InitGroupsIndexesDown); err != nil {
+        panic(err)
     }
-    if err := register(groupMigrations.InitGroupsLineageIndexUp, groupMigrations.InitGroupsLineageIndexDown); err != nil {
-        log.Fatalf("Failed to register group lineage index: %v", err)
-    }
-
-    // Apply migrations
-    if err := migrate.Up(context.Background(), migrate.AllAvailable); err != nil {
-        log.Fatalf("Migration failed: %v", err)
+    if err := register(groupmigrations.InitGroupsLineageIndexUp, groupmigrations.InitGroupsLineageIndexDown); err != nil {
+        panic(err)
     }
 }
 ```
+
+Ensure the host's `cmd/mongo-migrator` adapter blank-imports that migration
+package, then apply both registrations in order:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The shared `down` action reverts all applied registered migrations. It is not a
+lineage-only rollback. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+before using it.
 
 ## API Endpoints
 

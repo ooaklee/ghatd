@@ -73,7 +73,10 @@ managers and handlers. Reminder keeps its existing package APIs and UMS
 integration, with starter wiring available as the lazy path.
 
 Package migrations remain host-owned. Starter may construct repositories and
-services, but it does not run Mongo migrations or background schedulers.
+services, but it does not run Mongo migrations or background schedulers. Hosts
+register reminder and streaker indexes in their migration package and may
+execute them through the shared command defined in
+[ADR018](./adr018-shared-mongodb-migrator-command.md).
 
 ## Consequences
 

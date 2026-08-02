@@ -61,7 +61,10 @@ bootstrap noise without locking in the full starter API:
 
 - `external/repository/helpers` gets MongoDB URI helpers:
   `GenerateMongoURI`, `GenerateGenericMongoURI`, and `GenerateAtlasMongoURI`.
-- `cmd/mongo-migrator` uses the shared URI helper.
+- `cmd/mongo-migrator` initially used the shared URI helper directly. It is now
+  a thin host adapter over `external/migrator/mongo`, which owns URI generation
+  and execution while the host owns registration; see
+  [ADR018](./adr018-shared-mongodb-migrator-command.md).
 - `external/errormanifest/bundles` provides named cross-package error manifest
   bundles for common GHATD wiring. It is a subpackage to avoid import cycles
   with domain packages that already import `external/errormanifest`.
@@ -151,8 +154,9 @@ A follow-up slice adds package support for `external/reminder` and
   product-specific streak workflows and schedulers.
 - `NewServicesRequest.StreakService` remains an escape hatch for callers that
   want UMS to use a custom streak implementation.
-- Starter does not run package migrations; consuming applications keep their
-  Mongo migration flow and include reminder/streaker indexes there.
+- Starter does not run package migrations; consuming applications register
+  reminder/streaker indexes in their host migration package and execute them
+  through the shared MongoDB migrator described by ADR018.
 
 ADR010 records the follow-up decision for optional reminder and streaker
 manager integrations, including the nil-service behaviour and product-workflow

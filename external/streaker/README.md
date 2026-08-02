@@ -85,6 +85,22 @@ if services.Streaker != nil {
 Starter also attaches Streaker to User Manager when available, enabling the UMS
 streak endpoints.
 
+## Migration Setup
+
+Register `migrations.InitStreaksIndexesUp` and
+`migrations.InitStreaksIndexesDown` from the host application's
+`migrations/mongo` package. Ensure the `cmd/mongo-migrator` adapter
+blank-imports that host package, then apply all pending registrations with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The shared `down` action reverts every applied registered migration, not only
+Streaker indexes. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for the registration adapter, settings, and rollback precautions.
+
 ## Recording A Streak
 
 Use stable target IDs for aggregate action streaks. Put event-specific resource

@@ -94,9 +94,12 @@ If you plan to pre-load changelog/FAQ/glossary/article content, use migration fi
 
 Create a timestamp-prefixed Go file in the host application's
 `migrations/mongo` package, for example
-`20260801120000_add_initial_faq_items.go`. Use
-`migrations/mongo/template.go` as the scaffold, or use the host application's
-own migration generator when it has one.
+`20260801120000_add_initial_faq_items.go`. When the shared MongoDB migrator is
+attached, generate the file from the host template:
+
+```sh
+asdf exec go run main.go mongo-migrator new add-initial-faq-items
+```
 
 ### 2. Add Up/Down Logic in Generated Migration
 
@@ -143,12 +146,16 @@ func init() {
 ### 3. Apply Migrations
 
 Ensure the host migration runner imports its `migrations/mongo` package so the
-registration above executes, then run that host-owned entry point. For example,
-if it is saved at `cmd/migrations/main.go`:
+registration above executes, then apply every pending registered migration:
 
-```bash
-asdf exec go run ./cmd/migrations
+```sh
+asdf exec go run main.go mongo-migrator up
 ```
+
+The shared `down` action reverts all applied registered migrations, including
+seed removals. Review and test every down function before using it. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for the complete host workflow.
 
 ## Relationship to Content Manager
 

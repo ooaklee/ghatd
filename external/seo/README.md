@@ -22,3 +22,19 @@ The `migrations` subpackage provides the sitemap-item index and a configurable
 starter-route seed. Host applications can add or remove paths when registering
 the seed migration. Product-specific content discovery and crawler policy stay
 in the host application and feed the generic batch-ingestion service.
+
+Register `InitSitemapItemIndexesUp` and `InitSitemapItemIndexesDown` in the
+host application's `migrations/mongo` package before the matching seed
+functions. Use `InitDefaultSitemapItemsUpWithPaths` and
+`InitDefaultSitemapItemsDownWithPaths` when the host needs to customise the
+starter routes. Apply all pending registrations with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The host command adapter must blank-import its migration package. The shared
+`down` action reverts every applied registered migration, including seeded
+sitemap items, so review the resolved paths before rollback. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for the registration adapter, settings, and rollback workflow.

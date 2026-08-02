@@ -42,6 +42,26 @@ npm run build
 asdf exec go run main.go start-server
 ```
 
+- Review the generated MongoDB migration scaffold:
+
+```text
+cmd/mongo-migrator/migrator.go
+migrations/mongo/template.go
+```
+
+The adapter blank-imports the generated application's migration package and
+uses GHATD's shared runner. Create and apply a migration from the generated
+repository root with:
+
+```sh
+asdf exec go run main.go mongo-migrator new add-initial-indexes
+asdf exec go run main.go mongo-migrator up
+```
+
+Do not use `mongo-migrator down` casually: it currently reverts all applied
+registered migrations. See [Managing MongoDB Migrations](../manage-mongodb-migrations.md)
+for registration, configuration, rollback, and troubleshooting guidance.
+
 > For the best developer experience we recommend using [`reflex`](https://github.com/cespare/reflex).
 
 ## Additional context

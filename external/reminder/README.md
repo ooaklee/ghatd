@@ -200,6 +200,19 @@ reminderMigrations.InitRemindersIndexesDown(db)
 The indexes cover user/status lists, user target lookups, due reminder polling,
 created-at sorting, and execution history lookups.
 
+Register the up/down pair from the host application's `migrations/mongo`
+package, ensure the command adapter blank-imports that package, and apply all
+pending registrations with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The shared `down` action reverts every applied registered migration rather
+than only the reminder indexes. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for the registration adapter, configuration, and rollback precautions.
+
 ## Error Codes
 
 | Code | Meaning | HTTP |

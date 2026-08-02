@@ -48,7 +48,20 @@ The list endpoint demonstrates query decoding through `query` tags. The authenti
 
 ## Migration Pattern
 
-`internal/blueprint/migrations` contains the indexes owned by this package. Host applications can import and register these migration functions as part of their application migration setup.
+`internal/blueprint/migrations` contains the indexes owned by this package. A
+host application can register `InitBlueprintIndexesUp` and
+`InitBlueprintIndexesDown` from its `migrations/mongo` package, ensure the
+`cmd/mongo-migrator` adapter blank-imports that host package, and apply pending
+registrations with:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The shared `down` action reverts every applied registered migration, not only
+Blueprint indexes. See
+[Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md)
+for the reusable registration adapter and rollback precautions.
 
 ## Testing Pattern
 

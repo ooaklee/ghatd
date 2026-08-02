@@ -175,67 +175,45 @@ asdf exec go get go.mongodb.org/mongo-driver/v2/mongo
 
 ### Running Migrations
 
-Create a migration runner to set up indexes for the users collection:
+Register the user index helpers from the host application's
+`migrations/mongo` package:
 
 ```go
-package main
+package migrations
 
 import (
     "context"
-    "log"
-    "os"
-    
-    userMigration "github.com/ooaklee/ghatd/external/user/v2/migrations"
+
+    usermigrations "github.com/ooaklee/ghatd/external/user/v2/migrations"
     migrate "github.com/xakep666/mongo-migrate"
     "go.mongodb.org/mongo-driver/v2/mongo"
-    "go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func main() {
-    // Connect to MongoDB
-    mongoURI := os.Getenv("MONGODB_URI")
-    if mongoURI == "" {
-        mongoURI = "mongodb://localhost:27017"
-    }
-    
-    ctx := context.Background()
-    client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
-    if err != nil {
-        log.Fatalf("Failed to connect to MongoDB: %v", err)
-    }
-    defer func() {
-        if err := client.Disconnect(ctx); err != nil {
-            log.Printf("Error disconnecting: %v", err)
-        }
-    }()
-    
-    // Select database
-    db := client.Database("your_database_name")
-    
-    // Initialise migration system
-    migrate.SetDatabase(db)
-    
-    // Register user v2 indexes migration
+func init() {
     if err := migrate.Register(
         func(_ context.Context, db *mongo.Database) error {
-            return userMigration.InitUsersIndexesUp(db)
+            return usermigrations.InitUsersIndexesUp(db)
         },
         func(_ context.Context, db *mongo.Database) error {
-            return userMigration.InitUsersIndexesDown(db)
+            return usermigrations.InitUsersIndexesDown(db)
         },
     ); err != nil {
-        log.Fatalf("Failed to register user migration: %v", err)
+        panic(err)
     }
-    
-    // Run migrations
-    log.Println("Running user v2 indexes migrations...")
-    if err := migrate.Up(ctx, migrate.AllAvailable); err != nil {
-        log.Fatalf("Migration failed: %v", err)
-    }
-    
-    log.Println("✓ Migrations completed successfully")
 }
 ```
+
+Ensure the host's `cmd/mongo-migrator` adapter blank-imports its migration
+package, then apply every pending registration:
+
+```sh
+asdf exec go run main.go mongo-migrator up
+```
+
+The shared `down` action reverts all applied registered migrations, not only
+the user indexes. See
+[Managing MongoDB Migrations](../../../docs/how-to/manage-mongodb-migrations.md)
+for command wiring, settings, and rollback precautions.
 
 ### User Indexes
 

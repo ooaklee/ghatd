@@ -58,6 +58,9 @@ repositories are available and attaches both to `Services.UserManager` by
 default. UMS reminder and streak routes then work through
 `AttachDefaultRoutes`. Host applications still own product-specific streak
 workflows, reminder schedulers, and Mongo migrations for both packages.
+Run those host-owned registrations separately through the shared
+[MongoDB migrator](../../../migrator/mongo/README.md); starter does not apply
+migrations during service construction or route attachment.
 
 ## Trimmed Example
 
