@@ -79,6 +79,9 @@ type NewServicesRequest struct {
 	UserConfigs                []*userv2.UserConfig
 	GroupConfig                *group.GroupConfig
 	VisionConfig               *vision.VisionConfig
+	// CommsTypes uses contacter.DefaultCommsTypeMap when nil. Supply a map to
+	// select or extend the communication types accepted by this application.
+	CommsTypes contacter.CommsTypeMap
 	// ValidPostTags uses post.DefaultValidPostTags when nil. Pass an empty
 	// slice to intentionally disable starter's default changelog tag set.
 	ValidPostTags []string
@@ -150,7 +153,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	}
 
 	apiTokenService := apitoken.NewService(r.Repositories.APIToken)
-	contacterService := contacter.NewService(r.Repositories.Contacter)
+	contacterService := contacter.NewService(r.Repositories.Contacter, r.CommsTypes)
 	postService := post.NewService(r.Repositories.Post, resolvePostTags(r.ValidPostTags))
 	billingService := billing.NewService(r.Repositories.Billing, r.Repositories.Billing)
 	pricerService := pricer.NewService(r.Repositories.Pricer)

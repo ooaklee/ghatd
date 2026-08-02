@@ -2,9 +2,9 @@ package contacter
 
 import (
 	"context"
-	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
@@ -15,6 +15,7 @@ type ContacterService interface {
 	GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error)
 	UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error)
 	GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error)
+	GetAvailableCommsTypes(ctx context.Context) (*GetAvailableCommsTypesResponse, error)
 }
 
 // ContacterValidator interface defines expected methods of a valid validator
@@ -36,6 +37,21 @@ func NewHandler(service ContacterService, validator ContacterValidator, errorMap
 		Validator: validator,
 		ErrorMaps: errorMaps,
 	}
+}
+
+// GetAvailableCommsTypes handles retrieving the communication types accepted
+// by the service. This endpoint intentionally contains no user-specific data.
+func (h *Handler) GetAvailableCommsTypes(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/contacter", "handle-get-available-comms-types")
+
+	response, err := h.Service.GetAvailableCommsTypes(r.Context())
+	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.CommsTypes)
 }
 
 // GetCommsStats handles retrieving aggregated stats about platform comms

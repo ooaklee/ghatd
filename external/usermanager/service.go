@@ -48,6 +48,7 @@ type ContacterService interface {
 	GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error)
 	UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error)
 	GetCommsStats(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error)
+	GetAvailableCommsTypes(ctx context.Context) (*contacter.GetAvailableCommsTypesResponse, error)
 }
 
 // GroupService expected methods of a valid group service
@@ -507,6 +508,19 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 
 	return &CreateCommsResponse{
 		Comms: createdCommsResponse.Comms,
+	}, nil
+}
+
+// GetAvailableCommsTypes returns the contact categories configured by the
+// underlying contacter service.
+func (s *Service) GetAvailableCommsTypes(ctx context.Context) (*GetAvailableCommsTypesResponse, error) {
+	response, err := s.ContacterService.GetAvailableCommsTypes(ctx)
+	if err != nil {
+		return &GetAvailableCommsTypesResponse{}, err
+	}
+
+	return &GetAvailableCommsTypesResponse{
+		CommsTypes: response.CommsTypes,
 	}, nil
 }
 

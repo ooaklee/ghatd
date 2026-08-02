@@ -10,6 +10,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/billingmanager"
+	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/emailmanager"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
@@ -416,6 +417,26 @@ func TestNewServices(t *testing.T) {
 				}
 				if got.UserManager.StreakService != got.Streaker {
 					t.Fatalf("expected user manager to receive starter streak service")
+				}
+			},
+		},
+		{
+			name: "Success - custom communication types reach contacter",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				req.CommsTypes = contacter.CommsTypeMap{
+					contacter.CommsType("service-question"): "Service Question",
+				}
+				return req
+			},
+			assert: func(t *testing.T, got *Services) {
+				t.Helper()
+				types := got.Contacter.CommsTypes()
+				if types[contacter.CommsType("service-question")] != "Service Question" {
+					t.Fatalf("expected custom communication types to reach contacter: %#v", types)
+				}
+				if _, ok := types[contacter.CommsTypeFeedback]; ok {
+					t.Fatalf("expected custom communication types to replace defaults: %#v", types)
 				}
 			},
 		},

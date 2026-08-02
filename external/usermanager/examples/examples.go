@@ -397,6 +397,10 @@ func (m *MockContacterService) GetCommsStats(ctx context.Context, req *contacter
 	return &contacter.GetCommsStatsResponse{}, nil
 }
 
+func (m *MockContacterService) GetAvailableCommsTypes(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
+	return &contacter.GetAvailableCommsTypesResponse{CommsTypes: contacter.DefaultCommsTypeMap()}, nil
+}
+
 type MockGroupService struct{}
 
 func (m *MockGroupService) GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error) {

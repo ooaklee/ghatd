@@ -1,6 +1,7 @@
 package contacter
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -50,6 +51,63 @@ const (
 	// CommsTypeOther represents a other comms
 	CommsTypeOther CommsType = "other"
 )
+
+// CommsTypeMap defines the communication types accepted by a contacter
+// service. The map value is a client-facing label so host applications can
+// keep their contact taxonomy and presentation copy together.
+//
+// Maps passed to NewService are normalised and copied before use. This lets a
+// host select a subset of the defaults or add application-specific types
+// without changing the contacter package.
+type CommsTypeMap map[CommsType]string
+
+// DefaultCommsTypeMap returns a fresh copy of the communication types that
+// contacter historically accepted.
+func DefaultCommsTypeMap() CommsTypeMap {
+	return CommsTypeMap{
+		CommsTypeGeneralInquiry:                "General Inquiry",
+		CommsTypeCustomerSupport:               "Customer Support",
+		CommsTypeTechnicalSupport:              "Technical Support",
+		CommsTypeFeatureRequest:                "Feature Request",
+		CommsTypeFeedback:                      "Feedback",
+		CommsTypeFeedbackCompanion:             "Companion Feedback",
+		CommsTypeProductInformation:            "Product Information",
+		CommsTypePressInquiry:                  "Press Inquiry",
+		CommsTypePartnershipOpportunities:      "Partnership Opportunities",
+		CommsTypeComplaints:                    "Complaints",
+		CommsTypeWebsiteIssues:                 "Website Issues",
+		CommsTypeDonatingSupportingUsQuestions: "Donating/Supporting Us Questions",
+		CommsTypeOther:                         "Other",
+	}
+}
+
+// Has reports whether the map contains the provided communication type.
+func (m CommsTypeMap) Has(commsType CommsType) bool {
+	_, ok := m[normaliseCommsType(string(commsType))]
+	return ok
+}
+
+// Clone returns a normalised defensive copy. Other is always present because
+// it remains contacter's lossless fallback for an unrecognised provided type.
+func (m CommsTypeMap) Clone() CommsTypeMap {
+	if m == nil {
+		m = DefaultCommsTypeMap()
+	}
+
+	cloned := make(CommsTypeMap, len(m)+1)
+	for commsType, displayName := range m {
+		normalised := normaliseCommsType(string(commsType))
+		if normalised == "" {
+			continue
+		}
+		cloned[normalised] = strings.TrimSpace(displayName)
+	}
+	if _, ok := cloned[CommsTypeOther]; !ok {
+		cloned[CommsTypeOther] = "Other"
+	}
+
+	return cloned
+}
 
 // Comms represents a comms from a user
 //
@@ -122,44 +180,30 @@ type Comms struct {
 }
 
 // take string, sanitize, and set correct comms type
-func (c *Comms) SetCommsType(providedType string) *Comms {
-
-	var err error
-
-	// make provided type kebab case
-	providedType, err = toolbox.StringConvertToKebabCase(providedType)
-	if err != nil {
-		providedType = strings.ReplaceAll(
-			strings.ToLower(providedType),
-			" ",
-			"-",
-		)
+func (c *Comms) SetCommsType(providedType string, configuredTypes ...CommsTypeMap) *Comms {
+	types := DefaultCommsTypeMap()
+	if len(configuredTypes) > 0 {
+		types = configuredTypes[0].Clone()
 	}
 
-	// convert to comms type
-	commType := CommsType(providedType)
-
-	// make sure the comms type is valid
-	if commType != CommsTypeGeneralInquiry &&
-		commType != CommsTypeCustomerSupport &&
-		commType != CommsTypeTechnicalSupport &&
-		commType != CommsTypeFeatureRequest &&
-		commType != CommsTypeFeedback &&
-		commType != CommsTypeFeedbackCompanion &&
-		commType != CommsTypeProductInformation &&
-		commType != CommsTypePressInquiry &&
-		commType != CommsTypePartnershipOpportunities &&
-		commType != CommsTypeComplaints &&
-		commType != CommsTypeWebsiteIssues &&
-		commType != CommsTypeDonatingSupportingUsQuestions &&
-		commType != CommsTypeOther {
+	commType := normaliseCommsType(providedType)
+	c.ProvidedType = ""
+	if !types.Has(commType) {
+		c.ProvidedType = string(commType)
 		commType = CommsTypeOther
-		c.ProvidedType = providedType
 	}
 
 	c.Type = commType
 
 	return c
+}
+
+func normaliseCommsType(providedType string) CommsType {
+	normalised, err := toolbox.StringConvertToKebabCase(providedType)
+	if err != nil {
+		normalised = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(providedType)), " ", "-")
+	}
+	return CommsType(normalised)
 }
 
 // GenerateNanoId generates a new Nano Id for the comms
@@ -249,21 +293,143 @@ type CommsStats struct {
 	ByStatus CommsStatusStats `json:"by_status"`
 }
 
-// CommsTypeStats holds counts of comms by type
+// CommsTypeStats holds counts of comms by type. The named fields preserve the
+// existing Go API, while Additional allows configured custom types to appear
+// in the same flat JSON object.
 type CommsTypeStats struct {
-	GeneralInquiry                int64 `json:"general_inquiry"`
-	CustomerSupport               int64 `json:"customer_support"`
-	TechnicalSupport              int64 `json:"technical_support"`
-	FeatureRequest                int64 `json:"feature_request"`
-	Feedback                      int64 `json:"feedback"`
-	FeedbackCompanion             int64 `json:"feedback_companion"`
-	ProductInformation            int64 `json:"product_information"`
-	PressInquiry                  int64 `json:"press_inquiry"`
-	PartnershipOpportunities      int64 `json:"partnership_opportunities"`
-	Complaints                    int64 `json:"complaints"`
-	WebsiteIssues                 int64 `json:"website_issues"`
-	DonatingSupportingUsQuestions int64 `json:"donating_supporting_us_questions"`
-	Other                         int64 `json:"other"`
+	GeneralInquiry                int64            `json:"general_inquiry"`
+	CustomerSupport               int64            `json:"customer_support"`
+	TechnicalSupport              int64            `json:"technical_support"`
+	FeatureRequest                int64            `json:"feature_request"`
+	Feedback                      int64            `json:"feedback"`
+	FeedbackCompanion             int64            `json:"feedback_companion"`
+	ProductInformation            int64            `json:"product_information"`
+	PressInquiry                  int64            `json:"press_inquiry"`
+	PartnershipOpportunities      int64            `json:"partnership_opportunities"`
+	Complaints                    int64            `json:"complaints"`
+	WebsiteIssues                 int64            `json:"website_issues"`
+	DonatingSupportingUsQuestions int64            `json:"donating_supporting_us_questions"`
+	Other                         int64            `json:"other"`
+	Additional                    map[string]int64 `json:"-"`
+}
+
+// Count returns the count for a communication type.
+func (s CommsTypeStats) Count(commsType CommsType) int64 {
+	switch normaliseCommsType(string(commsType)) {
+	case CommsTypeGeneralInquiry:
+		return s.GeneralInquiry
+	case CommsTypeCustomerSupport:
+		return s.CustomerSupport
+	case CommsTypeTechnicalSupport:
+		return s.TechnicalSupport
+	case CommsTypeFeatureRequest:
+		return s.FeatureRequest
+	case CommsTypeFeedback:
+		return s.Feedback
+	case CommsTypeFeedbackCompanion:
+		return s.FeedbackCompanion
+	case CommsTypeProductInformation:
+		return s.ProductInformation
+	case CommsTypePressInquiry:
+		return s.PressInquiry
+	case CommsTypePartnershipOpportunities:
+		return s.PartnershipOpportunities
+	case CommsTypeComplaints:
+		return s.Complaints
+	case CommsTypeWebsiteIssues:
+		return s.WebsiteIssues
+	case CommsTypeDonatingSupportingUsQuestions:
+		return s.DonatingSupportingUsQuestions
+	case CommsTypeOther:
+		return s.Other
+	default:
+		return s.Additional[commsTypeStatsKey(commsType)]
+	}
+}
+
+// Set records a count for a default or application-specific communication
+// type.
+func (s *CommsTypeStats) Set(commsType CommsType, count int64) {
+	switch normaliseCommsType(string(commsType)) {
+	case CommsTypeGeneralInquiry:
+		s.GeneralInquiry = count
+	case CommsTypeCustomerSupport:
+		s.CustomerSupport = count
+	case CommsTypeTechnicalSupport:
+		s.TechnicalSupport = count
+	case CommsTypeFeatureRequest:
+		s.FeatureRequest = count
+	case CommsTypeFeedback:
+		s.Feedback = count
+	case CommsTypeFeedbackCompanion:
+		s.FeedbackCompanion = count
+	case CommsTypeProductInformation:
+		s.ProductInformation = count
+	case CommsTypePressInquiry:
+		s.PressInquiry = count
+	case CommsTypePartnershipOpportunities:
+		s.PartnershipOpportunities = count
+	case CommsTypeComplaints:
+		s.Complaints = count
+	case CommsTypeWebsiteIssues:
+		s.WebsiteIssues = count
+	case CommsTypeDonatingSupportingUsQuestions:
+		s.DonatingSupportingUsQuestions = count
+	case CommsTypeOther:
+		s.Other = count
+	default:
+		if s.Additional == nil {
+			s.Additional = make(map[string]int64)
+		}
+		s.Additional[commsTypeStatsKey(commsType)] = count
+	}
+}
+
+// AsMap returns every default and application-specific count using the
+// established snake_case response keys.
+func (s CommsTypeStats) AsMap() map[string]int64 {
+	counts := map[string]int64{
+		"general_inquiry":                  s.GeneralInquiry,
+		"customer_support":                 s.CustomerSupport,
+		"technical_support":                s.TechnicalSupport,
+		"feature_request":                  s.FeatureRequest,
+		"feedback":                         s.Feedback,
+		"feedback_companion":               s.FeedbackCompanion,
+		"product_information":              s.ProductInformation,
+		"press_inquiry":                    s.PressInquiry,
+		"partnership_opportunities":        s.PartnershipOpportunities,
+		"complaints":                       s.Complaints,
+		"website_issues":                   s.WebsiteIssues,
+		"donating_supporting_us_questions": s.DonatingSupportingUsQuestions,
+		"other":                            s.Other,
+	}
+	for key, count := range s.Additional {
+		counts[key] = count
+	}
+	return counts
+}
+
+// MarshalJSON keeps custom type counts in the same flat by_type object as the
+// default counts.
+func (s CommsTypeStats) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.AsMap())
+}
+
+// UnmarshalJSON restores both default and custom type counts.
+func (s *CommsTypeStats) UnmarshalJSON(data []byte) error {
+	counts := make(map[string]int64)
+	if err := json.Unmarshal(data, &counts); err != nil {
+		return err
+	}
+	*s = CommsTypeStats{}
+	for key, count := range counts {
+		s.Set(CommsType(strings.ReplaceAll(key, "_", "-")), count)
+	}
+	return nil
+}
+
+func commsTypeStatsKey(commsType CommsType) string {
+	return strings.ReplaceAll(string(normaliseCommsType(string(commsType))), "-", "_")
 }
 
 // CommsStatusStats holds status information for comms

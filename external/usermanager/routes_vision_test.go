@@ -34,6 +34,10 @@ func (h *mockUsermanagerVisionRouteHandler) GetVisionConfig(w http.ResponseWrite
 	h.mark("config", w)
 }
 
+func (h *mockUsermanagerVisionRouteHandler) GetAvailableCommsTypes(w http.ResponseWriter, _ *http.Request) {
+	h.mark("comms-types", w)
+}
+
 func (h *mockUsermanagerVisionRouteHandler) UpdateVision(w http.ResponseWriter, _ *http.Request) {
 	h.mark("edit", w)
 }
@@ -56,6 +60,7 @@ func TestVisionReadRoutesUseOptionalAuthAndWritesRemainStrict(t *testing.T) {
 		{method: http.MethodGet, path: "/api/v1/ums/visions", wantCall: "list", wantAccess: "optional"},
 		{method: http.MethodGet, path: "/api/v1/ums/visions/config", wantCall: "config", wantAccess: "optional"},
 		{method: http.MethodGet, path: "/api/v1/ums/visions/public-nano", wantCall: "detail", wantAccess: "optional"},
+		{method: http.MethodGet, path: "/api/v1/ums/comms/types", wantCall: "comms-types", wantAccess: "optional"},
 		{method: http.MethodPost, path: "/api/v1/ums/visions", wantCall: "create", wantAccess: "strict"},
 		{method: http.MethodPatch, path: "/api/v1/ums/visions/public-nano", wantCall: "edit", wantAccess: "strict"},
 		{method: http.MethodPatch, path: "/api/v1/ums/visions/public-nano/status", wantCall: "status", wantAccess: "admin"},

@@ -23,8 +23,12 @@ type AttachRoutesRequest struct {
 func AttachRoutes(request *AttachRoutesRequest) {
 	httpRouter := request.Router.GetRouter()
 
+	// Public capability discovery. This exposes labels and accepted values only;
+	// comms records and statistics remain protected below.
+	httpRouter.HandleFunc("/api/v1/comms/types", request.Handler.GetAvailableCommsTypes).Methods(http.MethodGet, http.MethodOptions)
+
 	// Admin-only routes for comms management
-	commsAdminOnlyRoutes := httpRouter.PathPrefix("/api/v1/ums/comms").Subrouter()
+	commsAdminOnlyRoutes := httpRouter.PathPrefix("/api/v1/comms").Subrouter()
 	commsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
 	if request.AdminOnlyMiddleware != nil {
 		commsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)

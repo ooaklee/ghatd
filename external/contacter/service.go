@@ -25,13 +25,34 @@ type contacterRepository interface {
 // Service represents the contacter service
 type Service struct {
 	contacterRepository contacterRepository
+	commsTypes          CommsTypeMap
 }
 
 // NewService returns a new instance of the contacter service
-func NewService(contacterRepository contacterRepository) *Service {
+func NewService(contacterRepository contacterRepository, configuredTypes ...CommsTypeMap) *Service {
+	commsTypes := DefaultCommsTypeMap()
+	if len(configuredTypes) > 0 {
+		commsTypes = configuredTypes[0].Clone()
+	}
+
 	return &Service{
 		contacterRepository: contacterRepository,
+		commsTypes:          commsTypes,
 	}
+}
+
+// CommsTypes returns a defensive copy of the communication types accepted by
+// this service.
+func (s *Service) CommsTypes() CommsTypeMap {
+	return s.commsTypes.Clone()
+}
+
+// GetAvailableCommsTypes returns the communication types accepted by this
+// service for clients that need to build a contact form dynamically.
+func (s *Service) GetAvailableCommsTypes(_ context.Context) (*GetAvailableCommsTypesResponse, error) {
+	return &GetAvailableCommsTypesResponse{
+		CommsTypes: s.CommsTypes(),
+	}, nil
 }
 
 // CreateComms creates a new comms
@@ -49,7 +70,7 @@ func (s *Service) CreateComms(ctx context.Context, req *CreateCommsRequest) (*Cr
 
 	logger.Debug("initiating-create-comms-request", zap.Any("request", safeLogValue(req)))
 
-	newComms = newComms.SetCommsType(string(req.Type)).SetStandardisedEmail(req.Email).SetStandardisedFullName(req.FullName)
+	newComms = newComms.SetCommsType(string(req.Type), s.commsTypes).SetStandardisedEmail(req.Email).SetStandardisedFullName(req.FullName)
 
 	// If UserId is not provided, FullName and Email are required
 	if req.UserId == "" {
