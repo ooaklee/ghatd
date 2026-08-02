@@ -169,6 +169,54 @@ func TestService_CreateComms(t *testing.T) {
 	}
 }
 
+func TestService_ConfigurableCommsTypes(t *testing.T) {
+	configuredTypes := contacter.CommsTypeMap{
+		contacter.CommsType("service-question"): "Service Question",
+	}
+	created := make([]*contacter.Comms, 0, 2)
+	repo := &serviceMockRepository{
+		createCommsFunc: func(ctx context.Context, comms *contacter.Comms) (*contacter.Comms, error) {
+			created = append(created, comms)
+			return comms, nil
+		},
+	}
+
+	svc := contacter.NewService(repo, configuredTypes)
+
+	// Mutating the caller's map or a returned map must not change service
+	// validation after construction.
+	delete(configuredTypes, contacter.CommsType("service-question"))
+	serviceTypes := svc.CommsTypes()
+	assert.Equal(t, "Service Question", serviceTypes[contacter.CommsType("service-question")])
+	delete(serviceTypes, contacter.CommsType("service-question"))
+	availableTypes, err := svc.GetAvailableCommsTypes(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "Service Question", availableTypes.CommsTypes[contacter.CommsType("service-question")])
+	delete(availableTypes.CommsTypes, contacter.CommsType("service-question"))
+	assert.Equal(t, "Service Question", svc.CommsTypes()[contacter.CommsType("service-question")])
+
+	_, err = svc.CreateComms(context.Background(), &contacter.CreateCommsRequest{
+		FullName: "Jane Doe",
+		Email:    "jane@example.com",
+		Type:     contacter.CommsType("Service Question"),
+		Message:  "How does this work?",
+	})
+	require.NoError(t, err)
+
+	_, err = svc.CreateComms(context.Background(), &contacter.CreateCommsRequest{
+		FullName: "John Doe",
+		Email:    "john@example.com",
+		Type:     contacter.CommsTypeFeedback,
+		Message:  "A type not enabled for this service",
+	})
+	require.NoError(t, err)
+	require.Len(t, created, 2)
+	assert.Equal(t, contacter.CommsType("service-question"), created[0].Type)
+	assert.Empty(t, created[0].ProvidedType)
+	assert.Equal(t, contacter.CommsTypeOther, created[1].Type)
+	assert.Equal(t, "feedback", created[1].ProvidedType)
+}
+
 func TestService_GetComms_DefaultsAndPaging(t *testing.T) {
 	t.Parallel()
 
@@ -355,7 +403,7 @@ func TestService_GetCommsStats(t *testing.T) {
 			require.NotNil(t, resp)
 			require.NotNil(t, resp.CommsStats)
 			assert.Equal(t, int64(10), resp.Total)
-			assert.Equal(t, int64(4), resp.ByType.FeedbackCompanion)
+			assert.Equal(t, int64(4), resp.ByType.Count(contacter.CommsTypeFeedbackCompanion))
 		})
 	}
 }

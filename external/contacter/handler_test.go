@@ -2,6 +2,7 @@ package contacter_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,15 @@ import (
 )
 
 type handlerMockContacterService struct {
-	getCommsStatsFunc func(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error)
+	getCommsStatsFunc          func(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error)
+	getAvailableCommsTypesFunc func(ctx context.Context) (*contacter.GetAvailableCommsTypesResponse, error)
+}
+
+func (m *handlerMockContacterService) GetAvailableCommsTypes(ctx context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
+	if m.getAvailableCommsTypesFunc != nil {
+		return m.getAvailableCommsTypesFunc(ctx)
+	}
+	return &contacter.GetAvailableCommsTypesResponse{CommsTypes: contacter.DefaultCommsTypeMap()}, nil
 }
 
 func (m *handlerMockContacterService) CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error) {
@@ -112,7 +121,7 @@ func TestHandler_GetCommsStats(t *testing.T) {
 			}
 
 			h := contacter.NewHandler(svc, validator)
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/ums/comms/stats"+tt.query, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/comms/stats"+tt.query, nil)
 			rec := httptest.NewRecorder()
 
 			require.NotPanics(t, func() {
@@ -127,4 +136,30 @@ func TestHandler_GetCommsStats(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandler_GetAvailableCommsTypes(t *testing.T) {
+	t.Parallel()
+
+	svc := &handlerMockContacterService{
+		getAvailableCommsTypesFunc: func(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
+			return &contacter.GetAvailableCommsTypesResponse{
+				CommsTypes: contacter.CommsTypeMap{
+					contacter.CommsType("service-question"): "Service Question",
+				},
+			}, nil
+		},
+	}
+	h := contacter.NewHandler(svc, &handlerMockValidator{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/comms/types", nil)
+	rec := httptest.NewRecorder()
+
+	h.GetAvailableCommsTypes(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var envelope struct {
+		Data map[string]string `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	assert.Equal(t, map[string]string{"service-question": "Service Question"}, envelope.Data)
 }

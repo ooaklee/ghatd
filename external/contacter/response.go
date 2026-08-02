@@ -61,6 +61,13 @@ type GetCommsStatsResponse struct {
 	*CommsStats
 }
 
+// GetAvailableCommsTypesResponse holds the communication types accepted by
+// this contacter service. The map key is submitted as the comms type and the
+// value is its user-facing label.
+type GetAvailableCommsTypesResponse struct {
+	CommsTypes CommsTypeMap `json:"comms_types"`
+}
+
 // GetBaseResponseHandler returns response handler with ContacterErrorMap as base
 // and caller-supplied maps as overrides.
 func (h *Handler) GetBaseResponseHandler() *reply.Replier {

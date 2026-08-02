@@ -72,6 +72,11 @@ type GetCommsStatsResponse struct {
 	Stats *contacter.CommsStats `json:"stats"`
 }
 
+// GetAvailableCommsTypesResponse holds the configured contact categories.
+type GetAvailableCommsTypesResponse struct {
+	CommsTypes contacter.CommsTypeMap `json:"comms_types"`
+}
+
 // GetEnrichedUserProfileResponse holds the response for an enriched user profile
 type GetEnrichedUserProfileResponse struct {
 	Profile *EnrichedUserProfile `json:"profile"`

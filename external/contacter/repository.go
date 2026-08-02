@@ -544,37 +544,11 @@ func (r *Repository) GetCommsStatsCounts(ctx context.Context, req *GetCommsStats
 		return docs[0].AvgMs / (1000 * 60)
 	}
 
-	// Build type stats
+	// Build type stats dynamically so application-specific communication types
+	// are not dropped from the aggregate response.
 	typeStats := CommsTypeStats{}
 	for _, typeCount := range result.ByType {
-		switch typeCount.Type {
-		case "general-inquiry":
-			typeStats.GeneralInquiry = typeCount.Count
-		case "customer-support":
-			typeStats.CustomerSupport = typeCount.Count
-		case "technical-support":
-			typeStats.TechnicalSupport = typeCount.Count
-		case "feature-request":
-			typeStats.FeatureRequest = typeCount.Count
-		case "feedback":
-			typeStats.Feedback = typeCount.Count
-		case "feedback-companion":
-			typeStats.FeedbackCompanion = typeCount.Count
-		case "product-information":
-			typeStats.ProductInformation = typeCount.Count
-		case "press-inquiry":
-			typeStats.PressInquiry = typeCount.Count
-		case "partnership-opportunities":
-			typeStats.PartnershipOpportunities = typeCount.Count
-		case "complaints":
-			typeStats.Complaints = typeCount.Count
-		case "website-issues":
-			typeStats.WebsiteIssues = typeCount.Count
-		case "donating-supporting-us-questions":
-			typeStats.DonatingSupportingUsQuestions = typeCount.Count
-		case "other":
-			typeStats.Other = typeCount.Count
-		}
+		typeStats.Set(CommsType(typeCount.Type), typeCount.Count)
 	}
 
 	totalComms := extractCount(result.Total)

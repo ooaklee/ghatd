@@ -34,6 +34,7 @@ type mockUmsService struct {
 	getNotificationPreferencesFunc     func(ctx context.Context, r *usermanager.GetNotificationPreferencesRequest) (*usermanager.GetNotificationPreferencesResponse, error)
 	updateNotificationPreferencesFunc  func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error)
 	getLatestNotificationOverviewsFunc func(ctx context.Context, r *usermanager.GetLatestNotificationOverviewsRequest) (*usermanager.GetLatestNotificationOverviewsResponse, error)
+	getAvailableCommsTypesFunc         func(ctx context.Context) (*usermanager.GetAvailableCommsTypesResponse, error)
 	notifyUserFunc                     func(ctx context.Context, r *usermanager.NotifyUserRequest) (*usermanager.NotifyUserResponse, error)
 	notifyUsersFunc                    func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error)
 }
@@ -126,6 +127,12 @@ func (m *mockUmsService) UpdateComms(ctx context.Context, req *usermanager.Updat
 	return nil, stubErr
 }
 func (m *mockUmsService) GetCommsStats(ctx context.Context, req *usermanager.GetCommsStatsRequest) (*usermanager.GetCommsStatsResponse, error) {
+	return nil, stubErr
+}
+func (m *mockUmsService) GetAvailableCommsTypes(ctx context.Context) (*usermanager.GetAvailableCommsTypesResponse, error) {
+	if m.getAvailableCommsTypesFunc != nil {
+		return m.getAvailableCommsTypesFunc(ctx)
+	}
 	return nil, stubErr
 }
 func (m *mockUmsService) GetEnrichedUserProfile(ctx context.Context, r *usermanager.GetEnrichedUserProfileRequest) (*usermanager.GetEnrichedUserProfileResponse, error) {

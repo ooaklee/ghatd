@@ -2,11 +2,11 @@ package usermanager
 
 import (
 	"context"
-	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/errormanifest"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
@@ -24,6 +24,7 @@ type UsermanagerService interface {
 	GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error)
 	UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error)
 	GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error)
+	GetAvailableCommsTypes(ctx context.Context) (*GetAvailableCommsTypesResponse, error)
 	// Group/Team management methods
 	GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error)
 	GetUserGroupMemberships(ctx context.Context, r *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error)
@@ -111,6 +112,21 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 		Environment:              r.Environment,
 		CookieDomain:             r.CookieDomain,
 	}
+}
+
+// GetAvailableCommsTypes handles public discovery of configured contact
+// categories. It returns configuration only and does not expose comms records.
+func (h *Handler) GetAvailableCommsTypes(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-available-comms-types")
+
+	response, err := h.Service.GetAvailableCommsTypes(r.Context())
+	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.CommsTypes)
 }
 
 // GetGroupLineage handles the request to get a group's lineage

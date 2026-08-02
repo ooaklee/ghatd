@@ -19,6 +19,7 @@ type UsermanagerHandler interface {
 	GetComms(w http.ResponseWriter, r *http.Request)
 	UpdateComms(w http.ResponseWriter, r *http.Request)
 	GetCommsStats(w http.ResponseWriter, r *http.Request)
+	GetAvailableCommsTypes(w http.ResponseWriter, r *http.Request)
 	// Group/Team management methods
 	GetEnrichedUserProfile(w http.ResponseWriter, r *http.Request)
 	GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.Request)
@@ -131,6 +132,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
 	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
+	userManagerOpenRoutes.HandleFunc("/comms/types", request.Handler.GetAvailableCommsTypes).Methods(http.MethodGet, http.MethodOptions)
 	userManagerOpenRoutes.HandleFunc("/visions", request.Handler.GetVisions).Methods(http.MethodGet, http.MethodOptions)
 	userManagerOpenRoutes.HandleFunc("/visions/config", request.Handler.GetVisionConfig).Methods(http.MethodGet, http.MethodOptions)
 	userManagerOpenRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.GetVisionByNanoID).Methods(http.MethodGet, http.MethodOptions)

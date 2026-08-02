@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	testCommsStatsEndpoint = "/api/v1/ums/comms/stats"
+	testCommsStatsEndpoint = "/api/v1/comms/stats"
+	testCommsTypesEndpoint = "/api/v1/comms/types"
 )
 
 type routesMockContacterService struct {
@@ -40,6 +41,10 @@ func (m *routesMockContacterService) GetCommsStats(ctx context.Context, req *con
 		return m.getCommsStatsFunc(ctx, req)
 	}
 	return &contacter.GetCommsStatsResponse{CommsStats: &contacter.CommsStats{}}, nil
+}
+
+func (m *routesMockContacterService) GetAvailableCommsTypes(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
+	return &contacter.GetAvailableCommsTypesResponse{CommsTypes: contacter.DefaultCommsTypeMap()}, nil
 }
 
 type routesMockValidator struct {
@@ -149,10 +154,37 @@ func TestAttachRoutes_OnlyExpectedRouteRegistered(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ums/comms/unknown", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/comms/unknown", nil)
 	rec := httptest.NewRecorder()
 
 	r.GetRouter().ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestAttachRoutes_CommsTypesRouteIsPublic(t *testing.T) {
+	t.Parallel()
+
+	svc := &routesMockContacterService{}
+	h := contacter.NewHandler(svc, &routesMockValidator{})
+	r := router.NewRouter(nil, nil)
+	adminMiddlewareCalled := false
+
+	contacter.AttachRoutes(&contacter.AttachRoutesRequest{
+		Router:  r,
+		Handler: h,
+		AdminOnlyMiddleware: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				adminMiddlewareCalled = true
+				next.ServeHTTP(w, r)
+			})
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, testCommsTypesEndpoint, nil)
+	rec := httptest.NewRecorder()
+	r.GetRouter().ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, adminMiddlewareCalled)
 }
