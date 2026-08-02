@@ -18,7 +18,9 @@ import (
 // refreshEphemeralStoreMock records and controls ephemeral storage behavior for refresh tests.
 type refreshEphemeralStoreMock struct {
 	createAuthFunc                       func(ctx context.Context, userID string, tokenDetails ephemeral.TokenDetailsAuth) error
+	fetchAuthFunc                        func(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error)
 	deleteAuthFunc                       func(ctx context.Context, tokenID string) (int64, error)
+	getCodeMappingFunc                   func(ctx context.Context, code string) (string, error)
 	acquireRefreshTokenRotationLockFunc  func(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error)
 	releaseRefreshTokenRotationLockFunc  func(ctx context.Context, userID, refreshTokenUUID string) (int64, error)
 	storeRefreshTokenRotationResultFunc  func(ctx context.Context, userID, refreshTokenUUID string, result *ephemeral.RefreshTokenRotationResult, ttl time.Duration) error
@@ -40,6 +42,9 @@ func (m *refreshEphemeralStoreMock) StoreToken(ctx context.Context, accessTokenU
 }
 
 func (m *refreshEphemeralStoreMock) FetchAuth(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error) {
+	if m.fetchAuthFunc != nil {
+		return m.fetchAuthFunc(ctx, accessDetails)
+	}
 	return "", nil
 }
 
@@ -110,13 +115,18 @@ func (m *refreshEphemeralStoreMock) StoreCodeMapping(ctx context.Context, code, 
 }
 
 func (m *refreshEphemeralStoreMock) GetCodeMapping(ctx context.Context, code string) (string, error) {
+	if m.getCodeMappingFunc != nil {
+		return m.getCodeMappingFunc(ctx, code)
+	}
 	return "", nil
 }
 
 // refreshAuthServiceMock supplies controllable auth-token behavior for refresh tests.
 type refreshAuthServiceMock struct {
-	createInitalTokenFunc func(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
-	createTokenFunc       func(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	createInitalTokenFunc              func(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	createTokenFunc                    func(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	checkAccessTokenValidityGetDetails func(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error)
+	parseAccessTokenFromStringFunc     func(ctx context.Context, tokenAsString string) (*jwt.Token, error)
 }
 
 func (m *refreshAuthServiceMock) CreateInitalToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error) {
@@ -149,10 +159,16 @@ func (m *refreshAuthServiceMock) GetRefreshTokenUUID(ctx context.Context, token 
 }
 
 func (m *refreshAuthServiceMock) CheckAccessTokenValidityGetDetails(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error) {
+	if m.checkAccessTokenValidityGetDetails != nil {
+		return m.checkAccessTokenValidityGetDetails(ctx, token)
+	}
 	return nil, nil
 }
 
 func (m *refreshAuthServiceMock) ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
+	if m.parseAccessTokenFromStringFunc != nil {
+		return m.parseAccessTokenFromStringFunc(ctx, tokenAsString)
+	}
 	return nil, nil
 }
 
@@ -170,7 +186,9 @@ func (m *refreshAuthServiceMock) ExtractAccessTokenMetadataByString(ctx context.
 
 // refreshUserServiceMock returns a fixed user for refresh-service tests.
 type refreshUserServiceMock struct {
-	user *userv2.UniversalUser
+	user            *userv2.UniversalUser
+	getUserByIDFunc func(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	updateUserFunc  func(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
 }
 
 func (m *refreshUserServiceMock) GetUserByNanoID(ctx context.Context, r *userv2.GetUserByNanoIDRequest) (*userv2.GetUserByNanoIDResponse, error) {
@@ -178,6 +196,9 @@ func (m *refreshUserServiceMock) GetUserByNanoID(ctx context.Context, r *userv2.
 }
 
 func (m *refreshUserServiceMock) GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error) {
+	if m.getUserByIDFunc != nil {
+		return m.getUserByIDFunc(ctx, r)
+	}
 	return &userv2.GetUserByIDResponse{User: m.user}, nil
 }
 
@@ -186,6 +207,9 @@ func (m *refreshUserServiceMock) GetUserByEmail(ctx context.Context, r *userv2.G
 }
 
 func (m *refreshUserServiceMock) UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error) {
+	if m.updateUserFunc != nil {
+		return m.updateUserFunc(ctx, r)
+	}
 	return nil, nil
 }
 

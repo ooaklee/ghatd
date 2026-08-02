@@ -1414,9 +1414,10 @@ func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refresh
 	return tokenUser, refreshTokenUuid, nil
 }
 
-// LoginUser handies verifying initial login token token, and  actioning all surrounding steps in
-// login flow
-// TODO: Create tests
+// LoginUser handles an initial login token or code and actions the surrounding
+// login flow. A valid email-verification credential also proves ownership of a
+// provisioned user's email, so the account is verified and activated before
+// session tokens are created.
 func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUserResponse, error) {
 
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
@@ -1445,43 +1446,56 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 
 	persistentUser := gIDResponse.User
 
-	tokenDetails, err := s.AuthService.CreateToken(ctx, persistentUser)
-	if err != nil {
-		return nil, err
-	}
+	var tokenDetails *auth.TokenDetails
 
-	// update users logged in time
-	persistentUser.SetLastLoginAtNow()
-	persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
+	switch persistentUser.Status {
+	case userv2.AccountStatusKeyProvisioned:
+		tokenDetails, err = s.verifyEmailAndCreateSession(ctx, persistentUser)
+		if err != nil {
+			return nil, err
+		}
+	case userv2.AccountStatusKeyActive:
+		tokenDetails, err = s.AuthService.CreateToken(ctx, persistentUser)
+		if err != nil {
+			return nil, err
+		}
 
-	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		User: persistentUser,
-	})
-	if err != nil {
-		logger.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
-		return nil, err
-	}
+		// Update the user's login timestamps.
+		persistentUser.SetLastLoginAtNow()
+		persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
 
-	err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
-	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
-		return nil, err
+		updateUserResponse, updateErr := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+			User: persistentUser,
+		})
+		if updateErr != nil {
+			logger.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
+			return nil, updateErr
+		}
+
+		err = s.EphemeralStore.CreateAuth(ctx, updateUserResponse.User.ID, tokenDetails)
+		if err != nil {
+			logger.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
+			return nil, err
+		}
+	default:
+		logger.Warn("login-rejected-for-non-active-user", zap.String("user-id", persistentUser.ID), zap.String("user-status", persistentUser.Status))
+		return nil, ErrUnauthorizedNonActiveStatus
 	}
 
 	// Invalidate initiate login token
-	_, _ = s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(UpdateUserResponse.User.ID, initiateLoginTokenDetails.TokenID))
+	_, _ = s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(persistentUser.ID, initiateLoginTokenDetails.TokenID))
 
 	auditEvent := audit.UserLogin
 	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 		ActorId:    audit.AuditActorIdSystem,
 		Action:     auditEvent,
-		TargetId:   UpdateUserResponse.User.ID,
+		TargetId:   persistentUser.ID,
 		TargetType: audit.User,
 		Domain:     "accessmanager",
 	})
 
 	if auditErr != nil {
-		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", UpdateUserResponse.User.ID), zap.String("event-type", string(auditEvent)))
+		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", persistentUser.ID), zap.String("event-type", string(auditEvent)))
 	}
 
 	return &LoginUserResponse{
@@ -1566,8 +1580,8 @@ func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *Validate
 		return nil, err
 	}
 
-	// Invalidate ephemeral token (one time click)
-	_, _ = s.DeleteAuth(ctx, verifiedTokenDetails.TokenID)
+	// Invalidate ephemeral token (one time click).
+	_, _ = s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(verifiedTokenDetails.UserID, verifiedTokenDetails.TokenID))
 
 	return &ValidateEmailVerificationCodeResponse{
 		AccessToken:           accessToken,
@@ -1581,47 +1595,63 @@ func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *Validate
 // UserEmailVerificationRevisions handles updating the system to illustrate a successful email verification
 // TODO: Create tests
 func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEmailVerificationRevisionsRequest) (accessToken string, accessTokenExpiresAt int64, refreshToken string, refreshTokenExpiresAt int64, err error) {
-
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserID})
 	if err != nil {
 		return "", 0, "", 0, err
 	}
 
-	persistentUser := persistentUserResponse.User
+	tokenDetails, err := s.verifyEmailAndCreateSession(ctx, persistentUserResponse.User)
+	if err != nil {
+		return "", 0, "", 0, err
+	}
 
-	// Update user's verificaiton data, metadata and state
+	return tokenDetails.AccessToken, tokenDetails.AtExpires, tokenDetails.RefreshToken, tokenDetails.RtExpires, nil
+}
+
+// verifyEmailAndCreateSession applies the only implicit account-state
+// transition supported by email credentials: PROVISIONED to ACTIVE. Explicitly
+// checking the source state prevents old verification credentials from
+// reactivating suspended, locked, or deactivated accounts.
+func (s *Service) verifyEmailAndCreateSession(ctx context.Context, persistentUser *userv2.UniversalUser) (*auth.TokenDetails, error) {
+	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "verify-email-and-create-session")
+
+	if persistentUser.Status != userv2.AccountStatusKeyProvisioned {
+		logger.Warn("email-verification-rejected-for-non-provisioned-user", zap.String("user-id", persistentUser.ID), zap.String("user-status", persistentUser.Status))
+		return nil, ErrUserStatusUncaught
+	}
+
+	// Update the user's verification data, login metadata, and state before
+	// creating tokens so the resulting access token is authorised.
 	persistentUser.SetLastLoginAtNow()
+	persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
 	persistentUser.VerifyEmail()
 	revisionedUser, err := persistentUser.UpdateStatus(userv2.AccountStatusKeyActive)
 	if err != nil {
-		logger.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
-		return "", 0, "", 0, err
+		logger.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
+		return nil, err
 	}
 
-	UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
+	updateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
 		User: revisionedUser,
 	})
 	if err != nil {
-		logger.Error("system-update-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
-		return "", 0, "", 0, err
+		logger.Error("system-update-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
+		return nil, err
 	}
 
-	newTokenDetails, err := s.AuthService.CreateToken(ctx, UpdateUserResponse.User)
+	newTokenDetails, err := s.AuthService.CreateToken(ctx, updateUserResponse.User)
 	if err != nil {
-		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
-		return "", 0, "", 0, err
+		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
+		return nil, err
 	}
 
-	err = s.EphemeralStore.CreateAuth(ctx, r.UserID, newTokenDetails)
+	err = s.EphemeralStore.CreateAuth(ctx, persistentUser.ID, newTokenDetails)
 	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id", r.UserID))
-		return "", 0, "", 0, err
+		logger.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
+		return nil, err
 	}
 
-	return newTokenDetails.AccessToken, newTokenDetails.AtExpires, newTokenDetails.RefreshToken, newTokenDetails.RtExpires, nil
-
+	return newTokenDetails, nil
 }
 
 // TokenAsStringValidator actions the validation process on tokens that aren't passed through the
