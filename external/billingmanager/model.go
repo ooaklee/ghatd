@@ -8,10 +8,22 @@ import (
 
 // SubscriptionStatus represents a user's subscription status
 type SubscriptionStatus struct {
+	HasAccess          bool       `json:"has_access"`
 	HasSubscription    bool       `json:"has_subscription"`
+	BillingKind        string     `json:"billing_kind,omitempty"`
+	PaymentType        string     `json:"payment_type,omitempty"`
+	IsOneOff           bool       `json:"is_one_off"`
+	PaymentStatus      string     `json:"payment_status,omitempty"`
 	Status             string     `json:"status"`
 	PlanName           string     `json:"plan_name,omitempty"`
+	PlanID             string     `json:"plan_id,omitempty"`
+	PlanSlug           string     `json:"plan_slug,omitempty"`
+	CostID             string     `json:"cost_id,omitempty"`
+	ProviderPriceID    string     `json:"provider_price_id,omitempty"`
 	Provider           string     `json:"provider,omitempty"`
+	TransactionID      string     `json:"transaction_id,omitempty"`
+	CustomerID         string     `json:"customer_id,omitempty"`
+	UserReference      string     `json:"user_reference,omitempty"`
 	Amount             int64      `json:"amount,omitempty"`
 	Currency           string     `json:"currency,omitempty"`
 	NextBillingDate    *time.Time `json:"next_billing_date,omitempty"`
@@ -24,9 +36,22 @@ type SubscriptionStatus struct {
 
 // BillingDetail represents detailed billing information
 type BillingDetail struct {
+	HasAccess       bool   `json:"has_access"`
 	HasSubscription bool   `json:"has_subscription"`
+	BillingKind     string `json:"billing_kind,omitempty"`
+	PaymentType     string `json:"payment_type,omitempty"`
+	IsOneOff        bool   `json:"is_one_off"`
+	PaymentStatus   string `json:"payment_status,omitempty"`
 	Provider        string `json:"provider,omitempty"`
 	Plan            string `json:"plan,omitempty"`
+	PlanName        string `json:"plan_name,omitempty"`
+	PlanID          string `json:"plan_id,omitempty"`
+	PlanSlug        string `json:"plan_slug,omitempty"`
+	CostID          string `json:"cost_id,omitempty"`
+	ProviderPriceID string `json:"provider_price_id,omitempty"`
+	TransactionID   string `json:"transaction_id,omitempty"`
+	CustomerID      string `json:"customer_id,omitempty"`
+	UserReference   string `json:"user_reference,omitempty"`
 	Status          string `json:"status,omitempty"`
 	Summary         string `json:"summary"`
 	CancelURL       string `json:"cancel_url,omitempty"`
@@ -35,15 +60,27 @@ type BillingDetail struct {
 
 // EventSummary represents a billing event summary
 type EventSummary struct {
-	EventID     string    `json:"event_id"`
-	EventType   string    `json:"event_type"`
-	EventTime   time.Time `json:"event_time"`
-	Amount      int64     `json:"amount"`
-	Currency    string    `json:"currency"`
-	PlanName    string    `json:"plan_name"`
-	Status      string    `json:"status"`
-	ReceiptURL  string    `json:"receipt_url,omitempty"`
-	Description string    `json:"description"`
+	EventID         string    `json:"event_id"`
+	ProviderEventID string    `json:"provider_event_id,omitempty"`
+	EventType       string    `json:"event_type"`
+	EventTime       time.Time `json:"event_time"`
+	BillingKind     string    `json:"billing_kind,omitempty"`
+	PaymentType     string    `json:"payment_type,omitempty"`
+	IsOneOff        bool      `json:"is_one_off"`
+	PaymentStatus   string    `json:"payment_status,omitempty"`
+	TransactionID   string    `json:"transaction_id,omitempty"`
+	CustomerID      string    `json:"customer_id,omitempty"`
+	UserReference   string    `json:"user_reference,omitempty"`
+	Amount          int64     `json:"amount"`
+	Currency        string    `json:"currency"`
+	PlanName        string    `json:"plan_name"`
+	PlanID          string    `json:"plan_id,omitempty"`
+	PlanSlug        string    `json:"plan_slug,omitempty"`
+	CostID          string    `json:"cost_id,omitempty"`
+	ProviderPriceID string    `json:"provider_price_id,omitempty"`
+	Status          string    `json:"status"`
+	ReceiptURL      string    `json:"receipt_url,omitempty"`
+	Description     string    `json:"description"`
 }
 
 // AuditEvent represents an audit log entry

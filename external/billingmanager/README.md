@@ -1,6 +1,6 @@
 # Billing Manager
 
-The recommended billing functionality comes in three independent, composable packages: `paymentprovider`, `billing`, and `billingmanager`. For most application features, you should use the high-level `billingmanager` package, which handles webhook processing, subscription management, billing event tracking, and **read-only pricing catalogue endpoints** — all with integrated audit logging.
+The recommended billing functionality comes in three independent, composable packages: `paymentprovider`, `billing`, and `billingmanager`. For most application features, use the high-level `billingmanager` package. It handles authenticated checkout orchestration, webhook processing, access management, billing event tracking, and read-only pricing catalogue endpoints with integrated audit logging.
 
 The billing manager can also expose the pricer package's read-only pricing endpoints through `WithPricerService()`, making plans and features available to frontend and client applications at `/api/v1/bms/pricing/plans`, `/api/v1/bms/pricing/plans/{slug}`, and `/api/v1/bms/pricing/features`.
 
@@ -10,9 +10,9 @@ Here's an overview of the core packages:
 
 | Package | Purpose | Recommended Use Case | Examples |
 |---|---|---|---|
-| `paymentprovider` | Abstracts payment provider webhook verification and payload normalisation (e.g., Stripe, Lemon Squeezy). | Building custom webhook handlers or testing provider integrations. | [`paymentprovider/examples`](../paymentprovider/examples/examples.go) |
+| `paymentprovider` | Abstracts provider API capabilities, webhook verification, and payload normalisation (for example, Stripe and Lemon Squeezy). | Implementing or testing provider adapters. | [`paymentprovider/examples`](../paymentprovider/examples/examples.go) |
 | `billing` | Manages subscription and billing event data persistence with a repository pattern. | Direct database operations or building custom billing workflows. | [`billing/examples`](../billing/examples/examples.go) |
-| `billingmanager` | Orchestrates `paymentprovider` and `billing` with high-level API methods for webhook processing. | Building application features (Standard)—provides the full workflow and audit logging. | [`billingmanager/examples`](examples/examples.go) |
+| `billingmanager` | Orchestrates `paymentprovider`, `pricer`, users, and `billing` for checkout, webhooks, and billing reads. | Building application billing features with one trusted workflow. | [`billingmanager/examples`](examples/examples.go) |
 
 ### Usage Overview
 
@@ -24,24 +24,30 @@ This section shows how to set up the `billingmanager` and process payment provid
 
 ### 1. Import Packages and Configure
 
-You'll need configuration for the `paymentprovider`, a `billing` service instance, and an `audit` service.
+You'll need configuration for `paymentprovider` and a `billing` service
+instance. Shared checkout additionally requires user and pricing services;
+audit logging remains optional.
 
 ```go
 import (
     "context"
+    "fmt"
     "net/http"
-    "github.com/ooaklee/ghatd/external/paymentprovider"
+
     "github.com/ooaklee/ghatd/external/billing"
     "github.com/ooaklee/ghatd/external/billingmanager"
+    "github.com/ooaklee/ghatd/external/paymentprovider"
 )
 
-// Assume auditService and userService are initialised dependencies
+// Assume auditService, userService, and pricerService are initialised dependencies.
 
 // 1. Configure payment providers
 stripeConfig := &paymentprovider.Config{
-    ProviderName:  "stripe",
-    WebhookSecret: "whsec_your_stripe_webhook_secret",
-    APIKey:        "sk_test_your_stripe_api_key",
+    ProviderName:   "stripe",
+    WebhookSecret:  "whsec_your_stripe_webhook_secret",
+    APIKey:         "sk_test_your_stripe_api_key",
+    PublishableKey: "pk_test_your_stripe_publishable_key",
+    ReturnURL:      "https://app.example.test/app/plan?checkout=pending&session_id={CHECKOUT_SESSION_ID}",
 }
 
 lemonSqueezyConfig := &paymentprovider.Config{
@@ -56,9 +62,18 @@ kofiConfig := &paymentprovider.Config{
 }
 
 // 2. Create payment providers
-stripeProvider, _ := paymentprovider.NewStripeProvider(stripeConfig)
-lemonSqueezyProvider, _ := paymentprovider.NewLemonSqueezyProvider(lemonSqueezyConfig)
-kofiProvider, _ := paymentprovider.NewKofiProvider(kofiConfig)
+stripeProvider, err := paymentprovider.NewStripeProvider(stripeConfig)
+if err != nil {
+    return fmt.Errorf("configure Stripe provider: %w", err)
+}
+lemonSqueezyProvider, err := paymentprovider.NewLemonSqueezyProvider(lemonSqueezyConfig)
+if err != nil {
+    return fmt.Errorf("configure Lemon Squeezy provider: %w", err)
+}
+kofiProvider, err := paymentprovider.NewKofiProvider(kofiConfig)
+if err != nil {
+    return fmt.Errorf("configure Ko-fi provider: %w", err)
+}
 
 // 3. Create provider registry
 registry := paymentprovider.NewProviderRegistry()
@@ -72,11 +87,63 @@ billingService := billing.NewService(repo, repo)
 
 // 5. Create billing manager (Orchestration layer)
 manager := billingmanager.NewService(registry, billingService)
-manager.WithAuditService(auditService)  // Optional: Enables audit logging
-manager.WithUserService(userService)    // Optional: Enables email->user ID resolution
+manager.WithAuditService(auditService)   // Optional: enables audit logging.
+manager.WithUserService(userService)     // Required for shared checkout.
+manager.WithPricerService(pricerService) // Required for shared checkout.
 ```
 
-### 2. Process Webhook
+`NewService` automatically discovers checkout capabilities when the supplied
+registry supports them. A checkout-capable provider exposes its trusted
+`Config.ReturnURL` through the optional
+`paymentprovider.CheckoutReturnURLProvider` capability. The same registered
+provider therefore owns webhook handling, checkout API calls, and checkout
+configuration; the browser cannot override the return destination.
+
+Provider construction intentionally remains valid for webhook-only and
+provider API-sync integrations, so an empty checkout `ReturnURL` does not cause
+construction to fail. A non-empty `ReturnURL` implicitly opts the provider into
+shared checkout. Starter validates opted-in providers during service
+construction. Manual compositions should call
+`paymentprovider.ValidateCheckoutProviderConfig` at startup and fail fast when
+the API key, browser publishable key, or absolute HTTP(S) return URL is
+incomplete. Shared checkout also requires both `UserService` and
+`PricerService`; webhook-only flows do not.
+
+### 2. Create a Checkout Session
+
+When the default Billing Manager routes are attached, an authenticated client
+can create a session for one exact provider Price:
+
+```http
+POST /api/v1/bms/billings/stripe/checkout?price=price_example
+Idempotency-Key: checkout-attempt-7dd8d61f
+Accept: application/json
+```
+
+The request mapper takes the provider from the route and the user from the
+authenticated request context. Billing Manager resolves the authoritative
+email and published catalogue cost, scopes the attempt key, and then calls the
+registered checkout capability. It does not accept identity, amount, cadence,
+mode, metadata, or a return URL from the client.
+
+A successful embedded-session response uses the standard data envelope and is
+never cacheable:
+
+```json
+{
+  "data": {
+    "id": "cs_example",
+    "client_secret": "cs_example_secret_example",
+    "publishable_key": "pk_example"
+  }
+}
+```
+
+The response means only that a provider session exists. The client should show
+a pending state after completion and read Billing Manager's billing projection
+until a signed webhook confirms access.
+
+### 3. Process Webhook
 
 You can use the high-level methods on the `billingmanager` to process incoming webhooks.
 
@@ -104,7 +171,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### 3. Query Subscription Status
+### 4. Query Subscription Status
 
 After webhooks are processed, you can query subscription and billing information.
 
@@ -149,7 +216,7 @@ for _, event := range eventsResp.Events {
 }
 ```
 
-### 4. Development Environment Setup
+### 5. Development Environment Setup
 
 If you don't want to use your payment provider's webhook endpoints when running locally, you can use the `MockProvider` to simulate webhook payloads for testing.
 
@@ -457,6 +524,7 @@ This sets up the following routes automatically:
 - `GET /api/v1/bms/pricing/features` - List published feature catalogue items
 
 **Authenticated User Routes:**
+- `POST /api/v1/bms/billings/{providerName}/checkout` - Create a checkout session for `?price={providerPriceID}`.
 - `GET /api/v1/bms/billings/users/{userId}/events` - Get a user's billing events.
 - `GET /api/v1/bms/users/{userId}/details/subscription` - Get a user's subscription status.
 - `GET /api/v1/bms/users/{userId}/details/billing` - Get a user's billing details.
@@ -465,6 +533,44 @@ This sets up the following routes automatically:
 compatibility, but the current route attachment does not register a separate
 `/admin` route group or apply that field. Add explicit host routes if a distinct
 admin surface is required.
+
+## Checkout Ownership and Fulfilment
+
+Checkout is provider-neutral at the HTTP and service layers, while browser
+rendering and provider API calls remain provider-specific. The registered
+provider must implement the optional `paymentprovider.CheckoutProvider`
+capability. Providers that use shared Billing Manager checkout should also
+implement `paymentprovider.CheckoutReturnURLProvider`; Stripe exposes
+`paymentprovider.Config.ReturnURL` automatically. Webhook-only providers
+continue to work without either optional capability.
+
+```mermaid
+flowchart LR
+    Browser["Authenticated browser"] -->|"provider + Price + attempt key"| BMS["Billing Manager checkout"]
+    BMS --> User["Authoritative user lookup"]
+    BMS --> Catalogue["Published catalogue selection"]
+    Catalogue --> Guard["Amount, cadence, terms, and ambiguity checks"]
+    Registry["Shared provider registry"] --> Adapter["Named checkout capability"]
+    Registry -.-> Config["Provider-owned trusted ReturnURL"]
+    Config --> BMS
+    Guard --> Adapter
+    Adapter --> Provider["Provider API and live Price check"]
+    Provider -->|"browser-safe session"| Browser
+    Provider -->|"signed webhook"| Webhooks["Billing Manager webhook flow"]
+    Webhooks --> Access["Billing event and access projection"]
+    Access --> Browser
+```
+
+The shared checkout contract currently supports positive one-time costs and
+weekly, monthly, or yearly recurring costs. Setup fees, catalogue discounts,
+and custom payment terms fail closed until the provider-neutral request can
+represent and verify them. Provider adapters may impose additional limits,
+such as a maximum trial duration.
+
+The provider Price ID must appear on exactly one cost-level provider reference
+among all currently published plans. Billing Manager passes the catalogue
+amount, currency, and cadence to the adapter so a capable provider can verify
+that its live Price has not drifted before creating a session.
 
 ## Subscription Lifecycle
 
@@ -515,6 +621,27 @@ The billing system tracks various subscription states:
 - **`unpaid`** - The subscription is unpaid.
 
 ## Authorisation & Security
+
+### Checkout Security
+
+The checkout route is attached only to the active authenticated route group.
+Its fender uses the authenticated-context helper rather than trusting a user ID
+from the request. Billing Manager then resolves the account through its
+configured user service before passing an email to a provider.
+
+Each checkout provider has a trusted return destination configured by the host
+application on the registered provider instance. Billing Manager reads that
+value through `paymentprovider.CheckoutReturnURLProvider`, enriches it with
+server-owned catalogue identifiers, and passes it explicitly to the same
+provider. Browser requests with a cross-site Fetch Metadata value or an
+`Origin` that does not match that destination are rejected. Deployments must
+also keep credentialed CORS allowlists and cookie policy narrow.
+
+`Idempotency-Key` is treated as untrusted attempt material. Billing Manager
+hashes it with the authenticated user, provider, and Price before sending a key
+to the adapter. Provider idempotency reduces duplicate sessions; it does not
+replace a persisted application workflow when durable response replay is
+required.
 
 ### User Authorisation
 

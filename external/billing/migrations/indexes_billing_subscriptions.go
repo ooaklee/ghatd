@@ -38,7 +38,8 @@ func InitBillingSubscriptionIndexesUp(db *mongo.Database) error { //Up
 		},
 		Options: options.Index().
 			SetName("idx_subscriptions_integrator").
-			SetUnique(true),
+			SetUnique(true).
+			SetPartialFilterExpression(bson.M{"integrator_subscription_id": bson.M{"$gt": ""}}),
 	}
 
 	// Index on created_at for sorting/filtering

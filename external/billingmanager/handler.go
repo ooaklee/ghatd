@@ -2,10 +2,10 @@ package billingmanager
 
 import (
 	"context"
-	"github.com/ooaklee/ghatd/external/logger"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
@@ -19,6 +19,50 @@ type BillingManagerService interface {
 	GetPricingPlans(ctx context.Context, r *GetPricingPlansRequest) (*GetPricingPlansResponse, error)
 	GetPricePlanBySlug(ctx context.Context, r *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
 	GetPricingFeatures(ctx context.Context, r *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error)
+}
+
+// billingManagerCheckoutService is an additive handler capability so existing
+// BillingManagerService implementations and test doubles remain compatible.
+type billingManagerCheckoutService interface {
+	ProcessBillingProviderCheckout(ctx context.Context, req *ProcessBillingProviderCheckoutRequest) (*ProcessBillingProviderCheckoutResponse, error)
+}
+
+// ProcessBillingProviderCheckout creates a provider checkout session from an
+// authenticated, catalogue-backed request.
+func (h *Handler) ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-process-billing-provider-checkout")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodOptions {
+		h.getBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusNoContent)
+		return
+	}
+	request, err := mapRequestToProcessBillingProviderCheckoutRequest(r, h.Validator)
+	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	checkoutService, ok := h.Service.(billingManagerCheckoutService)
+	if !ok {
+		logger.Error("checkout-service-capability-not-configured")
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerCheckoutConfigurationInvalid)
+		return
+	}
+
+	response, err := checkoutService.ProcessBillingProviderCheckout(r.Context(), request)
+	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	if response == nil || response.Session == nil {
+		logger.Warn("handler-returning-error-response", zap.Error(ErrBillingManagerCheckoutSessionInvalid))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerCheckoutSessionInvalid)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Session)
 }
 
 // BillingManagerValidator expected methods of a valid

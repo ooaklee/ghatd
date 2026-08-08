@@ -163,6 +163,7 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 		EventID:                    payload.MessageID,
 		EventTime:                  payload.Timestamp,
 		PaymentType:                paymentType,
+		BillingKind:                billingKindForPayment(paymentType, isOneOff),
 		IsOneOff:                   isOneOff,
 		SubscriptionID:             subscriptionID,
 		TransactionID:              payload.KofiTransactionID,
@@ -170,6 +171,7 @@ func (k *KofiProvider) ParsePayload(ctx context.Context, req *http.Request) (*We
 		CustomerEmail:              payload.Email,
 		CustomerName:               payload.FromName,
 		Status:                     status,
+		PaymentStatus:              paymentStatusForEvent(eventType),
 		PlanName:                   planName,
 		Amount:                     amount,
 		Currency:                   payload.Currency,
@@ -282,7 +284,7 @@ func kofiTypeToStandardPaymentType(kofiType string, isSubscription bool, isFirst
 	case "Subscription":
 		// Monthly subscription
 		if isFirst {
-			return PaymentTypeSubscription, EventTypeSubscriptionCreated, true
+			return PaymentTypeSubscription, EventTypeSubscriptionCreated, false
 		}
 		return PaymentTypeSubscription, EventTypePaymentSucceeded, false
 

@@ -12,8 +12,17 @@ type CreateSubscriptionRequest struct {
 	Integrator               string
 	IntegratorSubscriptionID string
 	IntegratorCustomerID     string
+	IntegratorTransactionID  string
+	UserReference            string
+	BillingKind              string
+	PaymentType              string
+	IsOneOff                 bool
+	PaymentStatus            string
 	PlanName                 string
 	PlanID                   string
+	PlanSlug                 string
+	CostID                   string
+	ProviderPriceID          string
 	Amount                   int64
 	Currency                 string
 	BillingInterval          string
@@ -27,20 +36,32 @@ type CreateSubscriptionRequest struct {
 
 // UpdateSubscriptionRequest contains data for updating a subscription
 type UpdateSubscriptionRequest struct {
-	ID                 string
-	Status             *string
-	PlanName           *string
-	PlanID             *string
-	Amount             *int64
-	Currency           *string
-	BillingInterval    *string
-	NextBillingDate    *time.Time
-	AvailableUntilDate *time.Time
-	TrialEndsAt        *time.Time
-	CancelledAt        *time.Time
-	CancelURL          *string
-	UpdateURL          *string
-	Metadata           map[string]interface{}
+	ID                      string
+	UserID                  *string
+	Email                   *string
+	Status                  *string
+	BillingKind             *string
+	PaymentType             *string
+	IsOneOff                *bool
+	PaymentStatus           *string
+	IntegratorTransactionID *string
+	IntegratorCustomerID    *string
+	UserReference           *string
+	PlanName                *string
+	PlanID                  *string
+	PlanSlug                *string
+	CostID                  *string
+	ProviderPriceID         *string
+	Amount                  *int64
+	Currency                *string
+	BillingInterval         *string
+	NextBillingDate         *time.Time
+	AvailableUntilDate      *time.Time
+	TrialEndsAt             *time.Time
+	CancelledAt             *time.Time
+	CancelURL               *string
+	UpdateURL               *string
+	Metadata                map[string]interface{}
 }
 
 // GetTotalSubscriptionsRequest holds everything needed to make
@@ -198,8 +219,14 @@ type GetTotalBillingEventsRequest struct {
 	// IntegratorName is the provider name to filter by
 	IntegratorName string
 
-	// IntegratorUserID is the provider's user ID to filter by
+	// IntegratorUserID is retained as a compatibility alias for IntegratorCustomerID.
 	IntegratorUserID string
+
+	// IntegratorCustomerID is the provider's customer ID to filter by.
+	IntegratorCustomerID string
+
+	// IntegratorTransactionID is the provider's transaction ID to filter by.
+	IntegratorTransactionID string
 
 	// IntegratorSubscriptionID is the provider subscription ID to filter by
 	IntegratorSubscriptionID string
@@ -262,8 +289,14 @@ type GetBillingEventsRequest struct {
 	// IntegratorName is the provider name to filter by
 	IntegratorName string `query:"integrator_name"`
 
-	// IntegratorUserID is the provider's user ID to filter by
+	// IntegratorUserID is retained as a compatibility alias for IntegratorCustomerID.
 	IntegratorUserID string `query:"integrator_user_id"`
+
+	// IntegratorCustomerID is the provider's customer ID to filter by.
+	IntegratorCustomerID string `query:"integrator_customer_id"`
+
+	// IntegratorTransactionID is the provider's transaction ID to filter by.
+	IntegratorTransactionID string `query:"transaction_id"`
 
 	// IntegratorSubscriptionID is the provider subscription ID to filter by
 	IntegratorSubscriptionID string `query:"integrator_subscription_id"`
@@ -271,6 +304,9 @@ type GetBillingEventsRequest struct {
 	// ForUserIDs is the list of user IDs to filter by
 	// comma-separated list of user IDs
 	ForUserIDs []string `query:"for_user_ids"`
+
+	// ForEmails is the list of customer emails to filter by.
+	ForEmails []string `query:"for_emails"`
 
 	// EventTypes is the list of billing event types to filter by
 	// comma-separated list of event types
@@ -395,10 +431,21 @@ type CreateBillingEventRequest struct {
 	Integrator               string
 	IntegratorEventID        string
 	IntegratorSubscriptionID string
+	IntegratorTransactionID  string
+	IntegratorCustomerID     string
+	UserReference            string
+	BillingKind              string
+	PaymentType              string
+	IsOneOff                 bool
+	PaymentStatus            string
 	Status                   string
 	Amount                   int64
 	Currency                 string
 	PlanName                 string
+	PlanID                   string
+	PlanSlug                 string
+	CostID                   string
+	ProviderPriceID          string
 	ReceiptURL               string
 	RawPayload               string
 	EventTime                time.Time

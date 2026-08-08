@@ -42,6 +42,10 @@ func formatEventDescription(eventType, planName, status string) string {
 		return fmt.Sprintf("Payment failed for %s", planName)
 	case paymentprovider.EventTypePaymentRefunded:
 		return fmt.Sprintf("Payment refunded for %s", planName)
+	case paymentprovider.EventTypePaymentPartiallyRefunded:
+		return fmt.Sprintf("Payment partially refunded for %s", planName)
+	case paymentprovider.EventTypePaymentRefundFailed:
+		return fmt.Sprintf("Payment refund failed for %s", planName)
 	case paymentprovider.EventTypeSubscriptionCreated:
 		return fmt.Sprintf("Subscription created: %s", planName)
 	case paymentprovider.EventTypeSubscriptionCancelled:

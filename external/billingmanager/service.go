@@ -22,6 +22,21 @@ type ProviderRegistry interface {
 	VerifyAndParseWebhookPayload(ctx context.Context, providerName string, req *http.Request) (*paymentprovider.WebhookPayload, error)
 }
 
+// CheckoutProviderRegistry resolves optional provider checkout capabilities.
+// It remains separate from ProviderRegistry so webhook-only custom registries
+// retain source compatibility.
+type CheckoutProviderRegistry interface {
+	GetCheckoutProvider(name string) (paymentprovider.CheckoutProvider, error)
+}
+
+// CheckoutProviderConfig contains legacy application-owned checkout settings.
+//
+// Deprecated: configure ReturnURL on paymentprovider.Config so the registered
+// provider remains the single source of checkout capability and configuration.
+type CheckoutProviderConfig struct {
+	ReturnURL string
+}
+
 // AuditService interface for logging billing events (optional)
 type AuditService interface {
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
@@ -61,19 +76,31 @@ type PricerService interface {
 // Service orchestrates webhook processing and billing operations
 // It uses paymentprovider for webhook verification and billingstore for persistence
 type Service struct {
-	ProviderRegistry ProviderRegistry
-	BillingService   BillingService
-	AuditService     AuditService // Optional audit logging
-	UserService      UserService  // Optional user service integration
-	PricerService    PricerService
+	ProviderRegistry         ProviderRegistry
+	CheckoutProviderRegistry CheckoutProviderRegistry
+	// CheckoutProviderConfigs is retained as a compatibility fallback for
+	// providers that do not yet implement paymentprovider.CheckoutReturnURLProvider.
+	// New integrations should configure the registered provider instead.
+	//
+	// Deprecated: configure paymentprovider.Config.ReturnURL.
+	CheckoutProviderConfigs map[string]CheckoutProviderConfig
+	BillingService          BillingService
+	AuditService            AuditService // Optional audit logging
+	UserService             UserService  // Optional user service integration
+	PricerService           PricerService
 }
 
 // NewService creates a new billing manager service
 func NewService(registry ProviderRegistry, billingService BillingService) *Service {
-	return &Service{
+	service := &Service{
 		ProviderRegistry: registry,
 		BillingService:   billingService,
 	}
+	if checkoutRegistry, ok := registry.(CheckoutProviderRegistry); ok {
+		service.CheckoutProviderRegistry = checkoutRegistry
+	}
+
+	return service
 }
 
 // WithAuditService adds audit logging capability
@@ -94,54 +121,92 @@ func (s *Service) WithPricerService(pricerSvc PricerService) *Service {
 	return s
 }
 
+// WithCheckoutProviderRegistry supplies checkout lookup for custom webhook
+// registries that do not expose the optional capability themselves.
+func (s *Service) WithCheckoutProviderRegistry(registry CheckoutProviderRegistry) *Service {
+	s.CheckoutProviderRegistry = registry
+	return s
+}
+
+// WithCheckoutProviderConfig adds a legacy trusted return-URL fallback.
+// Provider-owned configuration takes precedence when the registered checkout
+// provider implements paymentprovider.CheckoutReturnURLProvider.
+//
+// Deprecated: configure paymentprovider.Config.ReturnURL on the registered
+// provider and rely on registry capability discovery.
+func (s *Service) WithCheckoutProviderConfig(providerName string, config *CheckoutProviderConfig) *Service {
+	if s.CheckoutProviderConfigs == nil {
+		s.CheckoutProviderConfigs = make(map[string]CheckoutProviderConfig)
+	}
+	if config == nil {
+		s.CheckoutProviderConfigs[normaliseCheckoutProviderName(providerName)] = CheckoutProviderConfig{}
+		return s
+	}
+	s.CheckoutProviderConfigs[normaliseCheckoutProviderName(providerName)] = *config
+	return s
+}
+
 // ProcessBillingProviderWebhooks handles incoming webhooks from payment providers
 // This is the main entry point for webhook processing
 func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *ProcessBillingProviderWebhooksRequest) error {
 
 	logger := logger.AcquirePackageFrom(ctx, "external/billingmanager")
-	var (
-		subscriptionId string
-	)
+	if s == nil || s.ProviderRegistry == nil || s.BillingService == nil || req == nil {
+		return ErrInvalidBillingManagerRequestPayload
+	}
+	var subscriptionID string
 
 	payload, err := s.ProviderRegistry.VerifyAndParseWebhookPayload(ctx, req.ProviderName, req.Request)
 	if err != nil {
 		logger.Error("failed-to-verify-and-parse-webhook-payload", zap.String("provider", req.ProviderName), zap.Error(err))
 		return err
 	}
+	normaliseLegacyWebhookPayload(payload)
 
-	userID, err := s.resolveUserID(ctx, payload)
+	userID, err := s.resolveUserID(ctx, req.ProviderName, payload)
 	if err != nil {
 		logger.Error("failed-to-resolve-user-id", zap.String("provider", req.ProviderName), zap.Error(err))
 		return err
 	}
 
-	if payload.IsSubscription() {
-
+	shouldCreateOrUpdateAccess := payload.IsRecurring() || isSuccessfulOneOffAccess(payload)
+	if shouldCreateOrUpdateAccess {
 		subscription, err := s.findOrCreateSubscription(ctx, req.ProviderName, payload, userID)
 		if err != nil {
 			logger.Error("failed-to-find-or-create-subscription", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.Error(err))...)
 			return err
 		}
 
-		if err := s.updateSubscriptionFromPayload(ctx, subscription, payload); err != nil {
+		if err := s.updateSubscriptionFromPayload(ctx, subscription, payload, userID); err != nil {
 			logger.Error("failed-to-update-subscription-from-payload", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.String("subscription-id", subscription.ID), zap.Error(err))...)
 			return err
 		}
 
-		subscriptionId = subscription.ID
+		subscriptionID = subscription.ID
+	} else if payload.GrantsPlanAccess() && payload.EventType == paymentprovider.EventTypePaymentRefunded {
+		subscription, lookupErr := s.findPlanAccess(ctx, req.ProviderName, payload)
+		if lookupErr != nil && !errors.Is(lookupErr, billing.ErrBillingSubscriptionNotFound) {
+			return lookupErr
+		}
+		if subscription != nil {
+			if err := s.updateSubscriptionFromPayload(ctx, subscription, payload, userID); err != nil {
+				return err
+			}
+			subscriptionID = subscription.ID
+		}
 	}
 
-	billingEventSuccessfullyCreated := true
-	if err := s.createBillingEvent(ctx, subscriptionId, userID, req.ProviderName, payload); err != nil {
-		billingEventSuccessfullyCreated = false
-		logger.Warn("failed-to-create-billing-event", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.String("subscription-id", subscriptionId), zap.Error(err))...)
+	if err := s.createBillingEvent(ctx, subscriptionID, userID, req.ProviderName, payload); err != nil {
+		logger.Error("failed-to-create-billing-event", append(webhookPayloadFieldsForLog(req.ProviderName, userID, payload), zap.String("subscription-id", subscriptionID), zap.Error(err))...)
+		return err
 	}
+	billingEventSuccessfullyCreated := true
 
 	// Optional audit logging
 	if s.AuditService != nil {
 
 		eventMessageDetails := ""
-		if payload.IsSubscription() {
+		if payload.IsRecurring() {
 			eventMessageDetails = fmt.Sprintf("Processed %s webhook for subscription %s", req.ProviderName, payload.SubscriptionID)
 		} else {
 			eventMessageDetails = fmt.Sprintf("Processed %s webhook for non-subscription event", req.ProviderName)
@@ -152,7 +217,7 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 			UserID:                          userID,
 			Details:                         eventMessageDetails,
 			OccurredAt:                      time.Now(),
-			BillingSubscriptionId:           subscriptionId,
+			BillingSubscriptionId:           subscriptionID,
 			Provider:                        req.ProviderName,
 			BillingEventSuccessfullyCreated: billingEventSuccessfullyCreated,
 		}
@@ -299,7 +364,7 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	// Get subscriptions for the user
 	subscriptionsResp, err := s.BillingService.GetSubscriptions(ctx, &billing.GetSubscriptionsRequest{
 		ForUserIDs: []string{req.UserID},
-		PerPage:    1,
+		PerPage:    100,
 		Page:       1,
 		Order:      "created_at_desc",
 	})
@@ -309,27 +374,29 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	}
 
 	// Check if user has any subscriptions
-	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
+	if (subscriptionsResp == nil || subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0) && s.UserService != nil {
 		logger.Info("no-active-subscription-with-user-id-falling-back-to-user-email", logFields...)
 		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: req.UserID})
 		if err == nil {
 			emailSubsResp, _ := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: userResp.User.Email})
-			if len(emailSubsResp.Subscriptions) > 0 {
+			if emailSubsResp != nil && len(emailSubsResp.Subscriptions) > 0 {
 				logger.Info("found-email-based-subscription-associating-with-user", append(logFields,
 					zap.Bool("email-present", emailPresentForLog(userResp.User.Email)),
 					zap.String("email-domain", emailDomainForLog(userResp.User.Email)),
 					zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)),
 				)...)
 				// Associate found subscriptions with user
-				_, _ = s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
+				if _, associateErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
 					UserID: req.UserID,
 					Email:  userResp.User.Email,
-				})
+				}); associateErr != nil {
+					return nil, associateErr
+				}
 
 				// Re-query to get updated results
 				subscriptionsResp, err = s.BillingService.GetSubscriptions(ctx, &billing.GetSubscriptionsRequest{
 					ForUserIDs: []string{req.UserID},
-					PerPage:    1,
+					PerPage:    100,
 					Page:       1,
 					Order:      "created_at_desc",
 				})
@@ -337,25 +404,41 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 		}
 	}
 
-	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
+	if subscriptionsResp == nil || subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
 		logger.Info("no-active-subscription-found", logFields...)
 		return &GetUserSubscriptionStatusResponse{
 			SubscriptionStatus: &SubscriptionStatus{
+				HasAccess:       false,
 				HasSubscription: false,
 				Status:          "none",
 			},
 		}, nil
 	}
 
-	subscription := subscriptionsResp.Subscriptions[0]
+	subscription := selectPlanAccessRecord(subscriptionsResp.Subscriptions)
+	if subscription == nil {
+		return &GetUserSubscriptionStatusResponse{SubscriptionStatus: &SubscriptionStatus{Status: "none"}}, nil
+	}
 	logger.Info("subscription-status-retrieved", append(logFields, zap.String("subscription-id", subscription.ID))...)
 
 	return &GetUserSubscriptionStatusResponse{
 		SubscriptionStatus: &SubscriptionStatus{
-			HasSubscription:    true,
+			HasAccess:          subscription.HasAccess(),
+			HasSubscription:    subscription.IsRecurring(),
+			BillingKind:        subscriptionBillingKind(subscription),
+			PaymentType:        subscriptionPaymentType(subscription),
+			IsOneOff:           !subscription.IsRecurring(),
+			PaymentStatus:      subscription.PaymentStatus,
 			Status:             subscription.Status,
 			PlanName:           subscription.PlanName,
+			PlanID:             subscription.PlanID,
+			PlanSlug:           subscription.PlanSlug,
+			CostID:             subscription.CostID,
+			ProviderPriceID:    subscription.ProviderPriceID,
 			Provider:           subscription.Integrator,
+			TransactionID:      subscription.IntegratorTransactionID,
+			CustomerID:         subscription.IntegratorCustomerID,
+			UserReference:      subscription.UserReference,
 			Amount:             subscription.Amount,
 			Currency:           subscription.Currency,
 			NextBillingDate:    subscription.NextBillingDate,
@@ -400,23 +483,38 @@ func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingE
 	events := make([]EventSummary, len(eventsResp.BillingEvents))
 	for i, e := range eventsResp.BillingEvents {
 		events[i] = EventSummary{
-			EventID:     e.ID,
-			EventType:   e.EventType,
-			EventTime:   e.ProviderEventTime,
-			Amount:      e.Amount,
-			Currency:    e.Currency,
-			PlanName:    e.PlanName,
-			Status:      e.Status,
-			ReceiptURL:  e.ReceiptURL,
-			Description: formatEventDescription(e.EventType, e.PlanName, e.Status),
+			EventID:         e.ID,
+			ProviderEventID: e.IntegratorEventID,
+			EventType:       e.EventType,
+			EventTime:       e.ProviderEventTime,
+			BillingKind:     e.BillingKind,
+			PaymentType:     e.PaymentType,
+			IsOneOff:        e.IsOneOff,
+			PaymentStatus:   e.PaymentStatus,
+			TransactionID:   e.IntegratorTransactionID,
+			CustomerID:      e.IntegratorCustomerID,
+			UserReference:   e.UserReference,
+			Amount:          e.Amount,
+			Currency:        e.Currency,
+			PlanName:        e.PlanName,
+			PlanID:          e.PlanID,
+			PlanSlug:        e.PlanSlug,
+			CostID:          e.CostID,
+			ProviderPriceID: e.ProviderPriceID,
+			Status:          e.Status,
+			ReceiptURL:      e.ReceiptURL,
+			Description:     formatEventDescription(e.EventType, e.PlanName, e.Status),
 		}
 	}
 
 	logger.Info("billing-events-retrieved-for-user", append(logFields, zap.Int("total-events", eventsResp.Total), zap.Int("returned-events", len(events)))...)
 
 	return &GetUserBillingEventsResponse{
-		Events: events,
-		Total:  eventsResp.Total,
+		Events:     events,
+		Total:      eventsResp.Total,
+		TotalPages: eventsResp.TotalPages,
+		PerPage:    eventsResp.PerPage,
+		Page:       eventsResp.Page,
 	}, nil
 }
 
@@ -439,7 +537,7 @@ func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingD
 	// Get subscriptions for the user
 	subscriptionsResp, err := s.BillingService.GetSubscriptions(ctx, &billing.GetSubscriptionsRequest{
 		ForUserIDs: []string{req.UserID},
-		PerPage:    1,
+		PerPage:    100,
 		Page:       1,
 		Order:      "created_at_desc",
 	})
@@ -449,29 +547,46 @@ func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingD
 	}
 
 	// Check if user has any subscriptions
-	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
+	if subscriptionsResp == nil || subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
 		logger.Info("no-active-subscription-found", logFields...)
 		return &GetUserBillingDetailResponse{
 			BillingDetail: &BillingDetail{
+				HasAccess:       false,
 				HasSubscription: false,
-				Summary:         "No active subscription found",
+				Summary:         "No plan access found",
 			},
 		}, nil
 	}
 
-	subscription := subscriptionsResp.Subscriptions[0]
+	subscription := selectPlanAccessRecord(subscriptionsResp.Subscriptions)
+	if subscription == nil {
+		return &GetUserBillingDetailResponse{BillingDetail: &BillingDetail{Summary: "No plan access found"}}, nil
+	}
 
 	detail := &BillingDetail{
-		HasSubscription: true,
+		HasAccess:       subscription.HasAccess(),
+		HasSubscription: subscription.IsRecurring(),
+		BillingKind:     subscriptionBillingKind(subscription),
+		PaymentType:     subscriptionPaymentType(subscription),
+		IsOneOff:        !subscription.IsRecurring(),
+		PaymentStatus:   subscription.PaymentStatus,
 		Provider:        subscription.Integrator,
 		Plan:            subscription.PlanName,
+		PlanName:        subscription.PlanName,
+		PlanID:          subscription.PlanID,
+		PlanSlug:        subscription.PlanSlug,
+		CostID:          subscription.CostID,
+		ProviderPriceID: subscription.ProviderPriceID,
+		TransactionID:   subscription.IntegratorTransactionID,
+		CustomerID:      subscription.IntegratorCustomerID,
+		UserReference:   subscription.UserReference,
 		Status:          subscription.Status,
 		CancelURL:       subscription.CancelURL,
 		UpdateURL:       subscription.UpdateURL,
 	}
 
 	// Generate human-readable summary
-	detail.Summary = s.generateSubscriptionSummary(&subscription)
+	detail.Summary = s.generateSubscriptionSummary(subscription)
 
 	logger.Info("billing-detail-retrieved", logFields...)
 	return &GetUserBillingDetailResponse{
@@ -527,23 +642,33 @@ func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context
 // resolveUserID attempts to resolve the user ID associated with a payment provider webhook payload.
 // note that this may return an empty user ID if only an email is available in the payload but no user
 // is found with that email
-func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.WebhookPayload) (string, error) {
+func (s *Service) resolveUserID(ctx context.Context, providerName string, payload *paymentprovider.WebhookPayload) (string, error) {
 
-	var (
-		logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
-		err    error
-	)
-
-	subResp, err := s.BillingService.GetSubscriptionByIntegratorID(ctx, &billing.GetSubscriptionByIntegratorIDRequest{
-		IntegratorName:           payload.EventType,
-		IntegratorSubscriptionID: payload.SubscriptionID,
-	})
-	if err == nil {
-		logger.Info("found-existing-subscription-using-event-type-and-subscription-id", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("event-type", payload.EventType))
-		return subResp.Subscription.UserID, nil
+	logger := logger.AcquirePackageFrom(ctx, "external/billingmanager")
+	if payload == nil {
+		return "", ErrBillingManagerNoUserIdentifyingInformationInPayload
 	}
 
-	logger.Info("unable-to-find-existing-subscription-using-event-type-and-subscription-id", zap.String("event-type", payload.EventType))
+	// The stable reference supplied by the application at checkout is the most
+	// reliable identity and does not depend on a mutable email address.
+	if strings.TrimSpace(payload.UserReference) != "" {
+		return strings.TrimSpace(payload.UserReference), nil
+	}
+
+	reference := providerAccessReference(payload)
+	if reference != "" {
+		subResp, lookupErr := s.BillingService.GetSubscriptionByIntegratorID(ctx, &billing.GetSubscriptionByIntegratorIDRequest{
+			IntegratorName:           providerName,
+			IntegratorSubscriptionID: reference,
+		})
+		if lookupErr == nil && subResp != nil && subResp.Subscription != nil {
+			logger.Info("found-existing-plan-access-using-provider-reference", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("provider", providerName))
+			return subResp.Subscription.UserID, nil
+		}
+		if lookupErr != nil && !errors.Is(lookupErr, billing.ErrBillingSubscriptionNotFound) {
+			return "", lookupErr
+		}
+	}
 
 	if s.UserService != nil && payload.CustomerEmail != "" {
 		userResp, userErr := findUserByEmail(ctx, s.UserService, &user.GetUserByEmailRequest{Email: payload.CustomerEmail})
@@ -562,7 +687,7 @@ func (s *Service) resolveUserID(ctx context.Context, payload *paymentprovider.We
 
 	// if email is missing we need to error out as we have no way to identify the user
 	if payload.CustomerEmail == "" {
-		logger.Warn("unable-to-identify-user-no-email-in-payload", zap.String("subscription-id", payload.SubscriptionID), zap.String("customer-id", payload.CustomerID))
+		logger.Warn("unable-to-identify-user-no-email-in-payload", zap.String("provider-reference", reference), zap.String("customer-id", payload.CustomerID))
 		return "", ErrBillingManagerNoUserIdentifyingInformationInPayload
 	}
 
@@ -593,28 +718,44 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 		err    error
 	)
 
-	// Try to find existing subscription by integrator ID
-	subResp, err := s.BillingService.GetSubscriptionByIntegratorID(ctx, &billing.GetSubscriptionByIntegratorIDRequest{
-		IntegratorName:           providerName,
-		IntegratorSubscriptionID: payload.SubscriptionID,
-	})
-	if err == nil {
-		logger.Info("found-existing-subscription-using-integrator-and-subscription-id", zap.String("user-id", subResp.Subscription.UserID), zap.String("subscription-id", subResp.Subscription.ID), zap.String("provider", providerName))
-		return subResp.Subscription, nil
+	reference := providerAccessReference(payload)
+	if reference == "" {
+		return nil, paymentprovider.ErrPaymentProviderMissingRequiredField
+	}
+
+	if existing, lookupErr := s.findPlanAccess(ctx, providerName, payload); lookupErr == nil {
+		logger.Info("found-existing-plan-access-using-integrator-and-reference", zap.String("user-id", existing.UserID), zap.String("subscription-id", existing.ID), zap.String("provider", providerName))
+		return existing, nil
+	} else if !errors.Is(lookupErr, billing.ErrBillingSubscriptionNotFound) {
+		return nil, lookupErr
 	}
 
 	// Create new subscription
 	nextBillingDate := parseTimeOrNil(payload.NextBillingDate)
 	availableUntilDate := parseTimeOrNil(payload.AvailableUntilDate)
+	status := payload.Status
+	if status == "" && payload.PaymentStatus == paymentprovider.PaymentStatusSucceeded {
+		status = billing.StatusActive
+	}
 
 	createReq := &billing.CreateSubscriptionRequest{
 		UserID:                   userID,
 		Email:                    payload.CustomerEmail,
-		Status:                   payload.Status,
+		Status:                   status,
 		Integrator:               providerName,
-		IntegratorSubscriptionID: payload.SubscriptionID,
+		IntegratorSubscriptionID: reference,
 		IntegratorCustomerID:     payload.CustomerID,
+		IntegratorTransactionID:  payload.TransactionID,
+		UserReference:            payload.UserReference,
+		BillingKind:              string(payload.BillingKind),
+		PaymentType:              payload.PaymentType,
+		IsOneOff:                 payload.IsOneOff,
+		PaymentStatus:            payload.PaymentStatus,
 		PlanName:                 payload.PlanName,
+		PlanID:                   payload.PlanID,
+		PlanSlug:                 payload.PlanSlug,
+		CostID:                   payload.CostID,
+		ProviderPriceID:          payload.ProviderPriceID,
 		Amount:                   payload.Amount,
 		Currency:                 payload.Currency,
 		NextBillingDate:          nextBillingDate,
@@ -625,7 +766,7 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 
 	logFields := []zap.Field{
 		zap.String("provider", providerName),
-		zap.String("subscription-id", payload.SubscriptionID),
+		zap.String("provider-reference", reference),
 		zap.Bool("email-present", emailPresentForLog(payload.CustomerEmail)),
 		zap.String("email-domain", emailDomainForLog(payload.CustomerEmail)),
 	}
@@ -657,8 +798,26 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 	return createResp.Subscription, nil
 }
 
+func (s *Service) findPlanAccess(ctx context.Context, providerName string, payload *paymentprovider.WebhookPayload) (*billing.Subscription, error) {
+	reference := providerAccessReference(payload)
+	if reference == "" {
+		return nil, billing.ErrBillingSubscriptionNotFound
+	}
+	response, err := s.BillingService.GetSubscriptionByIntegratorID(ctx, &billing.GetSubscriptionByIntegratorIDRequest{
+		IntegratorName:           providerName,
+		IntegratorSubscriptionID: reference,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if response == nil || response.Subscription == nil {
+		return nil, billing.ErrBillingSubscriptionNotFound
+	}
+	return response.Subscription, nil
+}
+
 // updateSubscriptionFromPayload updates a subscription based on webhook data
-func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscription *billing.Subscription, payload *paymentprovider.WebhookPayload) error {
+func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscription *billing.Subscription, payload *paymentprovider.WebhookPayload, userID string) error {
 
 	var (
 		logger    = logger.AcquirePackageFrom(ctx, "external/billingmanager")
@@ -667,9 +826,36 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 		}
 	)
 
-	updateReq := &billing.UpdateSubscriptionRequest{
-		ID:     subscription.ID,
-		Status: &payload.Status,
+	updateReq := &billing.UpdateSubscriptionRequest{ID: subscription.ID}
+	if userID != "" {
+		updateReq.UserID = &userID
+	}
+	status := payload.Status
+	if payload.EventType == paymentprovider.EventTypePaymentRefunded {
+		status = billing.StatusCancelled
+	}
+	if status != "" {
+		updateReq.Status = &status
+	}
+	billingKind := string(payload.BillingKind)
+	updateReq.BillingKind = &billingKind
+	updateReq.PaymentType = &payload.PaymentType
+	updateReq.IsOneOff = &payload.IsOneOff
+	if payload.PaymentStatus != "" {
+		updateReq.PaymentStatus = &payload.PaymentStatus
+	}
+	if payload.TransactionID != "" {
+		updateReq.IntegratorTransactionID = &payload.TransactionID
+	}
+	if payload.CustomerID != "" {
+		updateReq.IntegratorCustomerID = &payload.CustomerID
+	}
+	if payload.UserReference != "" {
+		updateReq.UserReference = &payload.UserReference
+		updateReq.UserID = &payload.UserReference
+	}
+	if payload.CustomerEmail != "" {
+		updateReq.Email = &payload.CustomerEmail
 	}
 
 	// Update dates if present
@@ -690,6 +876,24 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 		logger.Debug("updating-plan-name", append(logFields, zap.String("plan-name", payload.PlanName))...)
 		updateReq.PlanName = &payload.PlanName
 	}
+	if payload.PlanID != "" {
+		updateReq.PlanID = &payload.PlanID
+	}
+	if payload.PlanSlug != "" {
+		updateReq.PlanSlug = &payload.PlanSlug
+	}
+	if payload.CostID != "" {
+		updateReq.CostID = &payload.CostID
+	}
+	if payload.ProviderPriceID != "" {
+		updateReq.ProviderPriceID = &payload.ProviderPriceID
+	}
+	if payload.Amount != 0 {
+		updateReq.Amount = &payload.Amount
+	}
+	if payload.Currency != "" {
+		updateReq.Currency = &payload.Currency
+	}
 
 	// Update URLs if present
 	if payload.CancelURL != "" {
@@ -702,7 +906,7 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 	}
 
 	// Handle cancellation
-	if payload.EventType == paymentprovider.EventTypeSubscriptionCancelled {
+	if payload.EventType == paymentprovider.EventTypeSubscriptionCancelled || payload.EventType == paymentprovider.EventTypePaymentRefunded {
 		logger.Info("marking-subscription-as-cancelled", append(logFields, zap.String("user-id", payload.CustomerID))...)
 		now := time.Now()
 		updateReq.CancelledAt = &now
@@ -734,10 +938,21 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 		Integrator:               providerName,
 		IntegratorEventID:        payload.EventID,
 		IntegratorSubscriptionID: payload.SubscriptionID,
+		IntegratorTransactionID:  payload.TransactionID,
+		IntegratorCustomerID:     payload.CustomerID,
+		UserReference:            payload.UserReference,
+		BillingKind:              string(payload.BillingKind),
+		PaymentType:              payload.PaymentType,
+		IsOneOff:                 payload.IsOneOff,
+		PaymentStatus:            payload.PaymentStatus,
 		Status:                   payload.Status,
 		Amount:                   payload.Amount,
 		Currency:                 payload.Currency,
 		PlanName:                 payload.PlanName,
+		PlanID:                   payload.PlanID,
+		PlanSlug:                 payload.PlanSlug,
+		CostID:                   payload.CostID,
+		ProviderPriceID:          payload.ProviderPriceID,
 		Email:                    payload.CustomerEmail,
 		ReceiptURL:               payload.ReceiptURL,
 		RawPayload:               payload.RawPayload,
@@ -746,6 +961,10 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 
 	_, err := s.BillingService.CreateBillingEvent(ctx, createReq)
 
+	if errors.Is(err, billing.ErrBillingEventAlreadyProcessed) {
+		logger.Info("billing-event-already-processed", logFields...)
+		return nil
+	}
 	if err != nil {
 		logger.Error("failed-to-create-billing-event", append(logFields, zap.Error(err))...)
 		return err
@@ -755,8 +974,147 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 	return nil
 }
 
+func normaliseLegacyWebhookPayload(payload *paymentprovider.WebhookPayload) {
+	if payload == nil {
+		return
+	}
+	if payload.BillingKind == "" {
+		switch {
+		case payload.IsOneOff:
+			payload.BillingKind = paymentprovider.BillingKindOneTime
+		case payload.PaymentType == paymentprovider.PaymentTypeSubscription || payload.SubscriptionID != "":
+			payload.BillingKind = paymentprovider.BillingKindRecurring
+		}
+	}
+	if payload.BillingKind == paymentprovider.BillingKindOneTime {
+		payload.IsOneOff = true
+		if payload.PaymentType == paymentprovider.PaymentTypeSubscription {
+			payload.PaymentType = paymentprovider.PaymentTypePurchase
+		}
+		if payload.TransactionID == "" {
+			payload.TransactionID = payload.SubscriptionID
+		}
+	}
+	if payload.PaymentType == "" {
+		if payload.BillingKind == paymentprovider.BillingKindRecurring {
+			payload.PaymentType = paymentprovider.PaymentTypeSubscription
+		} else if payload.BillingKind == paymentprovider.BillingKindOneTime &&
+			(payload.PlanID != "" || payload.PlanSlug != "" || payload.CostID != "" || payload.ProviderPriceID != "" || payload.PlanName != "") {
+			payload.PaymentType = paymentprovider.PaymentTypePurchase
+		}
+	}
+	if payload.PaymentStatus == "" {
+		switch payload.EventType {
+		case paymentprovider.EventTypePaymentSucceeded, paymentprovider.EventTypeSubscriptionCreated:
+			payload.PaymentStatus = paymentprovider.PaymentStatusSucceeded
+		case paymentprovider.EventTypePaymentFailed:
+			payload.PaymentStatus = paymentprovider.PaymentStatusFailed
+		case paymentprovider.EventTypePaymentRefunded:
+			payload.PaymentStatus = paymentprovider.PaymentStatusRefunded
+		case paymentprovider.EventTypePaymentActionRequired:
+			payload.PaymentStatus = paymentprovider.PaymentStatusActionRequired
+		}
+	}
+	if payload.Status == "" {
+		switch payload.PaymentStatus {
+		case paymentprovider.PaymentStatusSucceeded:
+			payload.Status = billing.StatusActive
+		case paymentprovider.PaymentStatusRefunded:
+			payload.Status = billing.StatusCancelled
+		case paymentprovider.PaymentStatusFailed, paymentprovider.PaymentStatusActionRequired:
+			payload.Status = billing.StatusIncomplete
+		}
+	}
+}
+
+func providerAccessReference(payload *paymentprovider.WebhookPayload) string {
+	if payload == nil {
+		return ""
+	}
+	if payload.IsRecurring() {
+		return strings.TrimSpace(payload.SubscriptionID)
+	}
+	return strings.TrimSpace(firstNonEmptyString(payload.TransactionID, payload.SubscriptionID, payload.EventID))
+}
+
+func isSuccessfulOneOffAccess(payload *paymentprovider.WebhookPayload) bool {
+	return payload != nil && payload.GrantsPlanAccess() && !payload.IsRecurring() &&
+		(payload.PaymentStatus == paymentprovider.PaymentStatusSucceeded || payload.EventType == paymentprovider.EventTypePaymentSucceeded) &&
+		hasPlanAccessMetadata(payload)
+}
+
+func hasPlanAccessMetadata(payload *paymentprovider.WebhookPayload) bool {
+	return payload != nil && strings.TrimSpace(firstNonEmptyString(
+		payload.PlanID,
+		payload.PlanSlug,
+		payload.CostID,
+		payload.ProviderPriceID,
+		payload.PlanName,
+	)) != ""
+}
+
+func selectPlanAccessRecord(records []billing.Subscription) *billing.Subscription {
+	for i := range records {
+		if records[i].HasAccess() {
+			return &records[i]
+		}
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	return &records[0]
+}
+
+func subscriptionBillingKind(record *billing.Subscription) string {
+	if record == nil {
+		return ""
+	}
+	if record.BillingKind != "" {
+		return record.BillingKind
+	}
+	if record.IsRecurring() {
+		return string(paymentprovider.BillingKindRecurring)
+	}
+	return string(paymentprovider.BillingKindOneTime)
+}
+
+func subscriptionPaymentType(record *billing.Subscription) string {
+	if record == nil {
+		return ""
+	}
+	if record.PaymentType != "" {
+		return record.PaymentType
+	}
+	if record.IsRecurring() {
+		return paymentprovider.PaymentTypeSubscription
+	}
+	return paymentprovider.PaymentTypePurchase
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 // generateSubscriptionSummary creates a human-readable summary of the subscription
 func (s *Service) generateSubscriptionSummary(sub *billing.Subscription) string {
+	if sub != nil && !sub.IsRecurring() {
+		switch sub.Status {
+		case billing.StatusActive, billing.StatusTrialing:
+			return fmt.Sprintf("Your one-time access to %s is active and does not renew", sub.PlanName)
+		case billing.StatusCancelled, billing.StatusExpired:
+			if sub.PaymentStatus == paymentprovider.PaymentStatusRefunded {
+				return fmt.Sprintf("Your %s purchase was refunded and access is inactive", sub.PlanName)
+			}
+			return fmt.Sprintf("Your one-time access to %s is inactive", sub.PlanName)
+		default:
+			return fmt.Sprintf("One-time access status: %s", sub.Status)
+		}
+	}
 	switch sub.Status {
 	case billing.StatusActive:
 		if sub.NextBillingDate != nil {

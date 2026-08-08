@@ -30,6 +30,9 @@ const (
 	// CorrelationIdHttpHeader is the header used to identify the request's id
 	CorrelationIdHttpHeader string = "X-Correlation-Id"
 
+	// IdempotencyKeyHttpHeader scopes retry-safe mutation attempts.
+	IdempotencyKeyHttpHeader string = "Idempotency-Key"
+
 	// WebPartialHttpRequestHeader is the header used to tell server that client only requires
 	// a partial response from the endpoint
 	WebPartialHttpRequestHeader string = "X-Web-Partial"

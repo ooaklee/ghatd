@@ -23,4 +23,5 @@ var PaymentProviderErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrPaymentProviderWebhookTimestampTooOld:         {Title: "Bad Request", Detail: "Webhook is too old", StatusCode: 400, Code: "PP00-015"},
 	ErrPaymentProviderMissingPayloadCustomerEmail:    {Title: "Bad Request", Detail: "Customer email is missing from webhook payload", StatusCode: 400, Code: "PP00-016"},
 	ErrPaymentProviderNotFound:                       {Title: "Internal Server Error", Detail: "Payment provider not found in registry", StatusCode: 500, Code: "PP00-017"},
+	ErrPaymentProviderPriceMismatch:                  {Title: "Conflict", Detail: "Provider pricing does not match the published catalogue", StatusCode: 409, Code: "PP00-018"},
 }

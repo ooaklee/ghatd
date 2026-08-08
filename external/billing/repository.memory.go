@@ -2,8 +2,10 @@ package billing
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
@@ -163,6 +165,7 @@ func (m *InMemoryRepository) GetBillingEvents(ctx context.Context, req *GetBilli
 
 	// Sort events based on order
 	events = m.sortBillingEvents(events, req.Order)
+	events = paginateBillingEvents(events, req.PerPage, req.Page)
 
 	return events, nil
 }
@@ -515,7 +518,15 @@ func (m *InMemoryRepository) matchesBillingEventFilter(event *BillingEvent, req 
 		return false
 	}
 
-	if req.IntegratorUserID != "" && event.IntegratorEventID != req.IntegratorUserID {
+	integratorCustomerID := req.IntegratorCustomerID
+	if integratorCustomerID == "" {
+		integratorCustomerID = req.IntegratorUserID
+	}
+	if integratorCustomerID != "" && event.IntegratorCustomerID != integratorCustomerID {
+		return false
+	}
+
+	if req.IntegratorTransactionID != "" && event.IntegratorTransactionID != req.IntegratorTransactionID {
 		return false
 	}
 
@@ -524,6 +535,10 @@ func (m *InMemoryRepository) matchesBillingEventFilter(event *BillingEvent, req 
 	}
 
 	if len(req.UserIDs) > 0 && !contains(req.UserIDs, event.UserID) {
+		return false
+	}
+
+	if len(req.Emails) > 0 && !containsEmail(req.Emails, event.Email) {
 		return false
 	}
 
@@ -548,6 +563,10 @@ func (m *InMemoryRepository) matchesBillingEventFilter(event *BillingEvent, req 
 	}
 
 	if req.CreatedAtTo != "" && event.CreatedAt > req.CreatedAtTo {
+		return false
+	}
+
+	if !eventTimeMatches(event.ProviderEventTime, req.EventTimeFrom, req.EventTimeTo) {
 		return false
 	}
 
@@ -560,7 +579,15 @@ func (m *InMemoryRepository) matchesBillingEventFilterFromGetRequest(event *Bill
 		return false
 	}
 
-	if req.IntegratorUserID != "" && event.IntegratorEventID != req.IntegratorUserID {
+	integratorCustomerID := req.IntegratorCustomerID
+	if integratorCustomerID == "" {
+		integratorCustomerID = req.IntegratorUserID
+	}
+	if integratorCustomerID != "" && event.IntegratorCustomerID != integratorCustomerID {
+		return false
+	}
+
+	if req.IntegratorTransactionID != "" && event.IntegratorTransactionID != req.IntegratorTransactionID {
 		return false
 	}
 
@@ -569,6 +596,10 @@ func (m *InMemoryRepository) matchesBillingEventFilterFromGetRequest(event *Bill
 	}
 
 	if len(req.ForUserIDs) > 0 && !contains(req.ForUserIDs, event.UserID) {
+		return false
+	}
+
+	if len(req.ForEmails) > 0 && !containsEmail(req.ForEmails, event.Email) {
 		return false
 	}
 
@@ -596,6 +627,10 @@ func (m *InMemoryRepository) matchesBillingEventFilterFromGetRequest(event *Bill
 		return false
 	}
 
+	if !eventTimeMatches(event.ProviderEventTime, req.EventTimeFrom, req.EventTimeTo) {
+		return false
+	}
+
 	return true
 }
 
@@ -605,10 +640,54 @@ func (m *InMemoryRepository) sortSubscriptions(subscriptions []Subscription, ord
 	return subscriptions
 }
 
-// sortBillingEvents placeholder sorting the billing events
-// we'll keep the order as-is since maps are unordered
 func (m *InMemoryRepository) sortBillingEvents(events []BillingEvent, order string) []BillingEvent {
+	sort.SliceStable(events, func(i, j int) bool {
+		switch order {
+		case "created_at_asc":
+			return events[i].CreatedAt < events[j].CreatedAt
+		case "updated_at_asc":
+			return events[i].UpdatedAt < events[j].UpdatedAt
+		case "updated_at_desc":
+			return events[i].UpdatedAt > events[j].UpdatedAt
+		default:
+			return events[i].CreatedAt > events[j].CreatedAt
+		}
+	})
 	return events
+}
+
+func eventTimeMatches(value time.Time, from, to string) bool {
+	if from != "" {
+		fromTime, err := time.Parse(time.RFC3339, from)
+		if err == nil && value.Before(fromTime) {
+			return false
+		}
+	}
+	if to != "" {
+		toTime, err := time.Parse(time.RFC3339, to)
+		if err == nil && value.After(toTime) {
+			return false
+		}
+	}
+	return true
+}
+
+func paginateBillingEvents(events []BillingEvent, perPage, page int) []BillingEvent {
+	if perPage <= 0 {
+		perPage = 25
+	}
+	if page <= 0 {
+		page = 1
+	}
+	start := (page - 1) * perPage
+	if start >= len(events) {
+		return []BillingEvent{}
+	}
+	end := start + perPage
+	if end > len(events) {
+		end = len(events)
+	}
+	return events[start:end]
 }
 
 // Helper functions

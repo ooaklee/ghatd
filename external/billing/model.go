@@ -6,7 +6,8 @@ import (
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
-// Subscription represents a user's subscription
+// Subscription represents a recurring subscription or one-time plan-access record.
+// Existing fields retain their original names for storage and API compatibility.
 type Subscription struct {
 	// ID is the internal unique identifier
 	ID string `json:"id" bson:"_id"`
@@ -29,11 +30,36 @@ type Subscription struct {
 	// IntegratorCustomerID is the provider's customer ID
 	IntegratorCustomerID string `json:"integrator_customer_id" bson:"integrator_customer_id"`
 
+	// IntegratorTransactionID is the provider's stable payment transaction ID.
+	IntegratorTransactionID string `json:"transaction_id,omitempty" bson:"integrator_transaction_id,omitempty"`
+
+	// UserReference is the stable application user reference attached at checkout.
+	UserReference string `json:"user_reference,omitempty" bson:"user_reference,omitempty"`
+
+	// BillingKind distinguishes recurring billing from one-time billing.
+	BillingKind string `json:"billing_kind,omitempty" bson:"billing_kind,omitempty"`
+
+	// PaymentType describes the purchased item independently of billing cadence.
+	PaymentType string `json:"payment_type,omitempty" bson:"payment_type,omitempty"`
+
+	// IsOneOff indicates that this access record does not renew.
+	IsOneOff bool `json:"is_one_off" bson:"is_one_off,omitempty"`
+
+	// PaymentStatus is the state of the individual payment.
+	PaymentStatus string `json:"payment_status,omitempty" bson:"payment_status,omitempty"`
+
 	// PlanName is the name of the subscription plan
 	PlanName string `json:"plan_name" bson:"plan_name"`
 
 	// PlanID is the provider's plan identifier
 	PlanID string `json:"plan_id" bson:"plan_id,omitempty"`
+
+	// PlanSlug is the stable human-readable plan identifier.
+	PlanSlug string `json:"plan_slug,omitempty" bson:"plan_slug,omitempty"`
+
+	// CostID identifies the selected cost and ProviderPriceID its provider price.
+	CostID          string `json:"cost_id,omitempty" bson:"cost_id,omitempty"`
+	ProviderPriceID string `json:"provider_price_id,omitempty" bson:"provider_price_id,omitempty"`
 
 	// Amount is the subscription amount (in cents)
 	Amount int64 `json:"amount" bson:"amount"`
@@ -91,6 +117,21 @@ func (s *Subscription) IsCancelled() bool {
 // IsInGoodStanding returns true if the subscription is active and not past due
 func (s *Subscription) IsInGoodStanding() bool {
 	return s.Status == StatusActive || s.Status == StatusTrialing
+}
+
+// IsRecurring reports whether the record is a recurring subscription. Empty
+// classification fields retain the legacy recurring interpretation.
+func (s *Subscription) IsRecurring() bool {
+	if s == nil || s.IsOneOff || s.BillingKind == "one_time" {
+		return false
+	}
+	return s.BillingKind == "recurring" || s.PaymentType == "subscription" ||
+		(s.BillingKind == "" && s.PaymentType == "")
+}
+
+// HasAccess reports whether this record currently grants plan access.
+func (s *Subscription) HasAccess() bool {
+	return s != nil && s.IsActive()
 }
 
 // DaysUntilNextBilling returns the number of days until the next billing date
@@ -153,6 +194,20 @@ type BillingEvent struct {
 	// IntegratorSubscriptionID is the provider's subscription ID
 	IntegratorSubscriptionID string `json:"integrator_subscription_id" bson:"integrator_subscription_id"`
 
+	// IntegratorTransactionID is the provider's transaction ID.
+	IntegratorTransactionID string `json:"transaction_id,omitempty" bson:"integrator_transaction_id,omitempty"`
+
+	// IntegratorCustomerID is the provider's customer ID.
+	IntegratorCustomerID string `json:"customer_id,omitempty" bson:"integrator_customer_id,omitempty"`
+
+	// UserReference is the stable application user reference attached at checkout.
+	UserReference string `json:"user_reference,omitempty" bson:"user_reference,omitempty"`
+
+	BillingKind   string `json:"billing_kind,omitempty" bson:"billing_kind,omitempty"`
+	PaymentType   string `json:"payment_type,omitempty" bson:"payment_type,omitempty"`
+	IsOneOff      bool   `json:"is_one_off" bson:"is_one_off,omitempty"`
+	PaymentStatus string `json:"payment_status,omitempty" bson:"payment_status,omitempty"`
+
 	// Status is the event status (active, trialing, past_due, etc.)
 	Status string `json:"status" bson:"status"`
 
@@ -164,6 +219,11 @@ type BillingEvent struct {
 
 	// PlanName is the subscription plan name
 	PlanName string `json:"plan_name" bson:"plan_name"`
+
+	PlanID          string `json:"plan_id,omitempty" bson:"plan_id,omitempty"`
+	PlanSlug        string `json:"plan_slug,omitempty" bson:"plan_slug,omitempty"`
+	CostID          string `json:"cost_id,omitempty" bson:"cost_id,omitempty"`
+	ProviderPriceID string `json:"provider_price_id,omitempty" bson:"provider_price_id,omitempty"`
 
 	// ReceiptURL is the provider's receipt URL
 	ReceiptURL string `json:"receipt_url,omitempty" bson:"receipt_url,omitempty"`

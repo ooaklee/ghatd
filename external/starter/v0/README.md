@@ -103,6 +103,55 @@ For a fuller GHATD host application server-command walkthrough, see
 `NewStack` intentionally accepts nil layer fields so teams can adopt starter/v0
 incrementally. Treat nil layers as "not wired yet" and check them before use.
 
+## Payment Checkout Capabilities
+
+`NewServices` registers each `PaymentProviders` entry in one shared provider
+registry. Billing Manager uses that same registry for webhook processing and,
+when a provider implements the optional `paymentprovider.CheckoutProvider`
+capability, authenticated checkout session creation. Hosts do not need a
+second provider list or a provider-specific checkout handler.
+
+The host configures the trusted browser return destination on the same
+provider instance that it supplies to Starter. A non-empty `ReturnURL`
+implicitly opts that provider into checkout; `NewServices` validates any
+provider-owned checkout validation capability before returning:
+
+```go
+stripeProvider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+    ProviderName:   "stripe",
+    WebhookSecret:  "<stripe-webhook-secret>",
+    APIKey:         "<stripe-secret-key>",
+    PublishableKey: "<stripe-publishable-key>",
+    ReturnURL:      "https://app.example.test/app/plan?checkout=pending&session_id={CHECKOUT_SESSION_ID}",
+})
+if err != nil {
+    return err
+}
+
+serviceRequest.PaymentProviders = append(serviceRequest.PaymentProviders, stripeProvider)
+services, err := starter.NewServices(serviceRequest)
+if err != nil {
+    return err
+}
+```
+
+`starter.AttachDefaultRoutes` exposes the resulting authenticated endpoint at
+`POST /api/v1/bms/billings/{providerName}/checkout`. Provider credentials,
+return destinations, catalogue migrations, CORS, and frontend checkout
+rendering remain host-owned. Billing Manager discovers both the optional
+`CheckoutProvider` and `CheckoutReturnURLProvider` capabilities from the same
+registered instance, so no post-construction checkout registration is needed.
+A custom webhook-only registry remains valid; a host using one can supply a
+separate optional checkout registry directly to Billing Manager. The
+deprecated `WithCheckoutProviderConfig` method remains a migration fallback
+for custom checkout providers that do not yet expose provider-owned return
+configuration; new Starter integrations should not call it.
+
+An empty provider-owned `ReturnURL` remains valid for webhook-only and provider
+API-sync deployments. For Stripe checkout, configure the secret API key,
+browser publishable key, and an absolute HTTP(S) return URL together so startup
+fails before routes begin serving.
+
 ## Reminder and Streaker
 
 `NewRepositories` creates `Reminder` and `Streaker` repositories from the core

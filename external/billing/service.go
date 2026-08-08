@@ -81,8 +81,17 @@ func (s *Service) CreateSubscription(ctx context.Context, req *CreateSubscriptio
 			Integrator:               req.Integrator,
 			IntegratorSubscriptionID: req.IntegratorSubscriptionID,
 			IntegratorCustomerID:     req.IntegratorCustomerID,
+			IntegratorTransactionID:  req.IntegratorTransactionID,
+			UserReference:            req.UserReference,
+			BillingKind:              req.BillingKind,
+			PaymentType:              req.PaymentType,
+			IsOneOff:                 req.IsOneOff,
+			PaymentStatus:            req.PaymentStatus,
 			PlanName:                 req.PlanName,
 			PlanID:                   req.PlanID,
+			PlanSlug:                 req.PlanSlug,
+			CostID:                   req.CostID,
+			ProviderPriceID:          req.ProviderPriceID,
 			Amount:                   req.Amount,
 			Currency:                 req.Currency,
 			BillingInterval:          req.BillingInterval,
@@ -129,14 +138,50 @@ func (s *Service) UpdateSubscription(ctx context.Context, req *UpdateSubscriptio
 	}
 
 	// Update fields if provided
+	if req.UserID != nil {
+		subscription.UserID = *req.UserID
+	}
+	if req.Email != nil {
+		subscription.Email = toolbox.StringStandardisedToLower(*req.Email)
+	}
 	if req.Status != nil {
 		subscription.Status = *req.Status
+	}
+	if req.BillingKind != nil {
+		subscription.BillingKind = *req.BillingKind
+	}
+	if req.PaymentType != nil {
+		subscription.PaymentType = *req.PaymentType
+	}
+	if req.IsOneOff != nil {
+		subscription.IsOneOff = *req.IsOneOff
+	}
+	if req.PaymentStatus != nil {
+		subscription.PaymentStatus = *req.PaymentStatus
+	}
+	if req.IntegratorTransactionID != nil {
+		subscription.IntegratorTransactionID = *req.IntegratorTransactionID
+	}
+	if req.IntegratorCustomerID != nil {
+		subscription.IntegratorCustomerID = *req.IntegratorCustomerID
+	}
+	if req.UserReference != nil {
+		subscription.UserReference = *req.UserReference
 	}
 	if req.PlanName != nil {
 		subscription.PlanName = *req.PlanName
 	}
 	if req.PlanID != nil {
 		subscription.PlanID = *req.PlanID
+	}
+	if req.PlanSlug != nil {
+		subscription.PlanSlug = *req.PlanSlug
+	}
+	if req.CostID != nil {
+		subscription.CostID = *req.CostID
+	}
+	if req.ProviderPriceID != nil {
+		subscription.ProviderPriceID = *req.ProviderPriceID
 	}
 	if req.Amount != nil {
 		subscription.Amount = *req.Amount
@@ -364,10 +409,21 @@ func (s *Service) CreateBillingEvent(ctx context.Context, req *CreateBillingEven
 			Integrator:               req.Integrator,
 			IntegratorEventID:        req.IntegratorEventID,
 			IntegratorSubscriptionID: req.IntegratorSubscriptionID,
+			IntegratorTransactionID:  req.IntegratorTransactionID,
+			IntegratorCustomerID:     req.IntegratorCustomerID,
+			UserReference:            req.UserReference,
+			BillingKind:              req.BillingKind,
+			PaymentType:              req.PaymentType,
+			IsOneOff:                 req.IsOneOff,
+			PaymentStatus:            req.PaymentStatus,
 			Status:                   req.Status,
 			Amount:                   req.Amount,
 			Currency:                 req.Currency,
 			PlanName:                 req.PlanName,
+			PlanID:                   req.PlanID,
+			PlanSlug:                 req.PlanSlug,
+			CostID:                   req.CostID,
+			ProviderPriceID:          req.ProviderPriceID,
 			ReceiptURL:               req.ReceiptURL,
 			RawPayload:               req.RawPayload,
 			ProviderEventTime:        req.EventTime,
@@ -415,8 +471,11 @@ func (s *Service) GetBillingEvents(ctx context.Context, req *GetBillingEventsReq
 	getTotalBillingEventsRequest := &GetTotalBillingEventsRequest{
 		IntegratorName:           req.IntegratorName,
 		IntegratorUserID:         req.IntegratorUserID,
+		IntegratorCustomerID:     req.IntegratorCustomerID,
+		IntegratorTransactionID:  req.IntegratorTransactionID,
 		IntegratorSubscriptionID: req.IntegratorSubscriptionID,
 		UserIDs:                  req.ForUserIDs,
+		Emails:                   standardisedEmails(req.ForEmails),
 		EventTypes:               req.EventTypes,
 		PlanNameContains:         req.PlanNameContains,
 		Currency:                 req.Currency,

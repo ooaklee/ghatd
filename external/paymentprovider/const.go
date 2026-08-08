@@ -1,6 +1,10 @@
 package paymentprovider
 
 const (
+	// StripeDefaultAPIVersion is the Stripe API contract used by outbound
+	// requests. It includes the embedded_page Checkout UI mode used by Stripe.js 9.
+	StripeDefaultAPIVersion = "2026-03-25.dahlia"
+
 	// ErrKeyPaymentProviderMissingConfiguration is a configuration error, returned when the provider name is missing in the config
 	ErrKeyPaymentProviderMissingConfiguration = "PaymentProviderMissingConfiguration"
 
@@ -47,6 +51,9 @@ const (
 	// ErrKeyPaymentProviderAPIResponseInvalid is an API error, returned when the payment provider returns an invalid response
 	ErrKeyPaymentProviderAPIResponseInvalid = "PaymentProviderAPIResponseInvalid"
 
+	// ErrKeyPaymentProviderPriceMismatch is returned when provider pricing does not match the trusted application catalogue.
+	ErrKeyPaymentProviderPriceMismatch = "PaymentProviderPriceMismatch"
+
 	// ErrKeyPaymentProviderSubscriptionNotFound is an API error, returned when a subscription is not found
 	ErrKeyPaymentProviderSubscriptionNotFound = "PaymentProviderSubscriptionNotFound"
 
@@ -60,9 +67,37 @@ const (
 // PaymentType constants for categorizing different types of payments
 const (
 	PaymentTypeSubscription = "subscription"
+	PaymentTypePurchase     = "purchase"
 	PaymentTypeDonation     = "donation"
 	PaymentTypeShopOrder    = "shop_order"
 	PaymentTypeCommission   = "commission"
+)
+
+// BillingKind describes whether a payment renews or is made once. It is kept
+// separate from PaymentType so products such as donations can still describe
+// what was purchased without being treated as plan access.
+type BillingKind string
+
+const (
+	BillingKindRecurring BillingKind = "recurring"
+	BillingKindOneTime   BillingKind = "one_time"
+)
+
+// PaymentStatus constants describe the state of an individual payment.
+const (
+	PaymentStatusSucceeded         = "succeeded"
+	PaymentStatusFailed            = "failed"
+	PaymentStatusRefunded          = "refunded"
+	PaymentStatusPartiallyRefunded = "partially_refunded"
+	PaymentStatusRefundFailed      = "refund_failed"
+	PaymentStatusActionRequired    = "action_required"
+	PaymentStatusNoPaymentRequired = "no_payment_required"
+)
+
+// CheckoutMode constants are provider-neutral checkout modes.
+const (
+	CheckoutModePayment      = "payment"
+	CheckoutModeSubscription = "subscription"
 )
 
 // EventType constants for normalised event types across all providers
@@ -82,10 +117,12 @@ const (
 	EventTypeSubscriptionResumedDonation   = "subscription.resumed.donation"
 
 	// Payment events
-	EventTypePaymentSucceeded      = "payment.succeeded"
-	EventTypePaymentFailed         = "payment.failed"
-	EventTypePaymentRefunded       = "payment.refunded"
-	EventTypePaymentActionRequired = "payment.action_required"
+	EventTypePaymentSucceeded         = "payment.succeeded"
+	EventTypePaymentFailed            = "payment.failed"
+	EventTypePaymentRefunded          = "payment.refunded"
+	EventTypePaymentPartiallyRefunded = "payment.partially_refunded"
+	EventTypePaymentRefundFailed      = "payment.refund_failed"
+	EventTypePaymentActionRequired    = "payment.action_required"
 
 	// Customer and trial events
 	EventTypeCustomerUpdated = "customer.updated"
