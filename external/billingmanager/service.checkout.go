@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/logger"
@@ -373,7 +374,7 @@ func parseCheckoutReturnURL(rawURL string) (*url.URL, []checkoutURLPlaceholder, 
 	}
 
 	parsed, err := url.Parse(protectedURL)
-	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" {
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" || !hasValidHTTPPort(parsed) {
 		return nil, nil, ErrBillingManagerCheckoutConfigurationInvalid
 	}
 	scheme := strings.ToLower(parsed.Scheme)
@@ -398,7 +399,7 @@ func checkoutRequestOriginAllowed(origin, secFetchSite, allowedOrigin string) bo
 		return true
 	}
 	parsed, err := url.Parse(origin)
-	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" ||
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" || !hasValidHTTPPort(parsed) ||
 		parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
 		return false
 	}
@@ -413,6 +414,10 @@ func canonicalHTTPOrigin(parsed *url.URL) string {
 	scheme := strings.ToLower(parsed.Scheme)
 	hostname := strings.ToLower(parsed.Hostname())
 	port := parsed.Port()
+	if port != "" {
+		portNumber, _ := strconv.Atoi(port)
+		port = strconv.Itoa(portNumber)
+	}
 	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
 		port = ""
 	}
@@ -423,4 +428,15 @@ func canonicalHTTPOrigin(parsed *url.URL) string {
 		host = "[" + hostname + "]"
 	}
 	return scheme + "://" + host
+}
+
+func hasValidHTTPPort(parsed *url.URL) bool {
+	if parsed == nil {
+		return false
+	}
+	if parsed.Port() == "" {
+		return true
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	return err == nil && port >= 1 && port <= 65535
 }

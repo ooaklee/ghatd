@@ -516,7 +516,7 @@ func TestStripeCheckoutRejectsProviderPriceMismatch(t *testing.T) {
 	}
 }
 
-func TestStripeCheckoutCopiesOneTimeMetadataToInvoice(t *testing.T) {
+func TestStripeCheckoutKeepsOneTimeInvoiceDataCompatibleWithManagedPayments(t *testing.T) {
 	var received url.Values
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -536,20 +536,36 @@ func TestStripeCheckoutCopiesOneTimeMetadataToInvoice(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = provider.CreateCheckoutSession(context.Background(), &CheckoutSessionRequest{
-		PriceID: "price_1", PlanID: "plan_1", CostID: "cost_1", UserID: "user_1",
+		PriceID: "price_1", PlanID: "plan_1", PlanSlug: "lifetime", PlanName: "Lifetime", CostID: "cost_1", UserID: "user_1",
 		CustomerEmail: "buyer@example.test", Mode: CheckoutModePayment,
 	})
 	if err != nil {
 		t.Fatalf("CreateCheckoutSession() error = %v", err)
 	}
 	for key, want := range map[string]string{
-		"invoice_creation[enabled]":                                "true",
-		"payment_intent_data[metadata][billing_kind]":              "one_time",
-		"invoice_creation[invoice_data][metadata][billing_kind]":   "one_time",
-		"invoice_creation[invoice_data][metadata][user_reference]": "user_1",
+		"invoice_creation[enabled]":                        "true",
+		"metadata[plan_id]":                                "plan_1",
+		"metadata[plan_slug]":                              "lifetime",
+		"metadata[plan_name]":                              "Lifetime",
+		"metadata[cost_id]":                                "cost_1",
+		"metadata[provider_price_id]":                      "price_1",
+		"metadata[user_reference]":                         "user_1",
+		"metadata[billing_kind]":                           "one_time",
+		"payment_intent_data[metadata][plan_id]":           "plan_1",
+		"payment_intent_data[metadata][plan_slug]":         "lifetime",
+		"payment_intent_data[metadata][plan_name]":         "Lifetime",
+		"payment_intent_data[metadata][cost_id]":           "cost_1",
+		"payment_intent_data[metadata][billing_kind]":      "one_time",
+		"payment_intent_data[metadata][user_reference]":    "user_1",
+		"payment_intent_data[metadata][provider_price_id]": "price_1",
 	} {
 		if got := received.Get(key); got != want {
 			t.Errorf("form %s = %q, want %q", key, got, want)
+		}
+	}
+	for key := range received {
+		if strings.HasPrefix(key, "invoice_creation[invoice_data]") {
+			t.Errorf("form contains Managed Payments-incompatible field %q", key)
 		}
 	}
 }

@@ -105,7 +105,7 @@ func checkoutPublishedPlan(cadence pricer.PriceBillingCadence) pricer.PricePlan 
 		Slug:        "pro",
 		Name:        "Pro",
 		Status:      pricer.PricePlanStatusPublished,
-		PublishedAt: time.Now().UTC().Add(-time.Hour).Format(time.RFC3339),
+		PublishedAt: time.Now().UTC().Add(-time.Hour).Format(common.RFC3339NanoUTC),
 		Costs: []pricer.PriceCost{{
 			ID:             "cost_123",
 			Amount:         9900,
@@ -116,6 +116,34 @@ func checkoutPublishedPlan(cadence pricer.PriceBillingCadence) pricer.PricePlan 
 				ProviderPriceID: "price_123",
 			}},
 		}},
+	}
+}
+
+func TestIsPricePlanPubliclyVisibleSupportsCanonicalAndRFC3339Timestamps(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	tests := []struct {
+		name        string
+		publishedAt string
+		want        bool
+	}{
+		{name: "canonical GHATD UTC timestamp", publishedAt: now.Add(-time.Hour).Format(common.RFC3339NanoUTC), want: true},
+		{name: "RFC3339 timestamp", publishedAt: now.Add(-time.Hour).Format(time.RFC3339), want: true},
+		{name: "RFC3339 nanosecond timestamp", publishedAt: now.Add(-time.Hour).Format(time.RFC3339Nano), want: true},
+		{name: "future canonical timestamp", publishedAt: now.Add(time.Hour).Format(common.RFC3339NanoUTC), want: false},
+		{name: "missing timestamp", publishedAt: "", want: false},
+		{name: "malformed timestamp", publishedAt: "not-a-timestamp", want: false},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isPricePlanPubliclyVisible(test.publishedAt); got != test.want {
+				t.Fatalf("isPricePlanPubliclyVisible(%q) = %t, want %t", test.publishedAt, got, test.want)
+			}
+		})
 	}
 }
 

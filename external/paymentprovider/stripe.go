@@ -453,8 +453,9 @@ func (s *StripeProvider) CreateCheckoutSession(ctx context.Context, input *Check
 		}
 		form.Set("metadata["+key+"]", value)
 		if input.Mode == CheckoutModePayment {
+			// Managed Payments rejects invoice_creation[invoice_data], so keep
+			// entitlement correlation on the Session and PaymentIntent instead.
 			form.Set("payment_intent_data[metadata]["+key+"]", value)
-			form.Set("invoice_creation[invoice_data][metadata]["+key+"]", value)
 		} else {
 			form.Set("subscription_data[metadata]["+key+"]", value)
 		}

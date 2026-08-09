@@ -10,6 +10,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/ooaklee/ghatd/external/pricer"
@@ -336,8 +337,15 @@ func isPricePlanPubliclyVisible(publishedAt string) bool {
 		return false
 	}
 
-	publishedAtTime, err := time.Parse(time.RFC3339, publishedAt)
-	if err != nil {
+	var publishedAtTime time.Time
+	for _, layout := range []string{common.RFC3339NanoUTC, time.RFC3339Nano, time.RFC3339} {
+		parsed, err := time.Parse(layout, publishedAt)
+		if err == nil {
+			publishedAtTime = parsed
+			break
+		}
+	}
+	if publishedAtTime.IsZero() {
 		return false
 	}
 
