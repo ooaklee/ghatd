@@ -103,6 +103,81 @@ For a fuller GHATD host application server-command walkthrough, see
 `NewStack` intentionally accepts nil layer fields so teams can adopt starter/v0
 incrementally. Treat nil layers as "not wired yet" and check them before use.
 
+## Payment Checkout and Customer Portal Capabilities
+
+`NewServices` registers each `PaymentProviders` entry in one shared provider
+registry. Billing Manager uses that same registry for webhook processing and,
+when providers implement the optional capabilities, authenticated checkout or
+hosted customer-portal session creation. Hosts do not need a second provider
+list or provider-specific session handlers.
+
+The host configures trusted browser return destinations on the same provider
+instance that it supplies to Starter. A non-empty `ReturnURL` implicitly opts
+that provider into checkout; `NewServices` validates any provider-owned
+checkout validation capability before returning:
+
+```go
+stripeProvider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+    ProviderName:                  "stripe",
+    WebhookSecret:                 "<stripe-webhook-secret>",
+    APIKey:                        "<stripe-secret-key>",
+    PublishableKey:                "<stripe-publishable-key>",
+    ReturnURL:                     "https://app.example.test/app/plan?checkout=pending&session_id={CHECKOUT_SESSION_ID}",
+    CustomerPortalReturnURL:       "https://app.example.test/settings/billing",
+    CustomerPortalConfigurationID: "bpc_example", // Optional.
+})
+if err != nil {
+    return err
+}
+
+serviceRequest.PaymentProviders = append(serviceRequest.PaymentProviders, stripeProvider)
+services, err := starter.NewServices(serviceRequest)
+if err != nil {
+    return err
+}
+```
+
+`starter.AttachDefaultRoutes` exposes the resulting authenticated endpoints at
+`POST /api/v1/bms/billings/{providerName}/checkout` and
+`POST /api/v1/bms/billings/{providerName}/portal`. Provider credentials,
+return destinations, catalogue migrations, CORS, and frontend rendering remain
+host-owned. Billing Manager discovers checkout and portal capabilities from
+the same registered instance, so no post-construction provider registration
+is needed. A custom webhook-only registry remains valid; custom composition can
+supply separate optional capability registries directly to Billing Manager.
+
+An empty provider-owned `ReturnURL` remains valid for webhook-only and provider
+API-sync deployments. For Stripe checkout, configure the secret API key,
+browser publishable key, and an absolute HTTP(S) return URL together so startup
+fails before routes begin serving.
+
+`CustomerPortalReturnURL` is an independent opt-in. Starter validates the
+provider's optional portal configuration, including a provider-specific
+configuration identifier when supplied and the provider's hosted-session URL
+allowlist capability. The portal request accepts no customer or return URL;
+Billing Manager derives the authenticated user's provider customer from
+recurring subscription state and returns a fresh, non-cacheable session:
+
+```http
+POST /api/v1/bms/billings/stripe/portal
+Accept: application/json
+```
+
+```json
+{
+  "data": {
+    "id": "bps_example",
+    "url": "https://billing.stripe.com/p/session_example"
+  }
+}
+```
+
+One-time purchases are not eligible for the hosted subscription-management
+portal. Stored subscription update or cancellation links remain separate,
+provider-specific read-model values rather than substitutes for an on-demand
+session. Multiple distinct provider customers in the selected lifecycle tier
+fail closed instead of opening an arbitrary billing account.
+
 ## Reminder and Streaker
 
 `NewRepositories` creates `Reminder` and `Streaker` repositories from the core

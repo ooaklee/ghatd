@@ -301,8 +301,14 @@ func resolvePaymentProviderRegistry(
 
 	concreteRegistry := paymentprovider.NewProviderRegistry()
 	for _, provider := range providers {
-		if provider == nil {
+		if paymentprovider.IsNilProvider(provider) {
 			return nil, ErrNilPaymentProvider
+		}
+		if err := paymentprovider.ValidateCheckoutProviderConfig(provider); err != nil {
+			return nil, err
+		}
+		if err := paymentprovider.ValidateCustomerPortalProviderConfig(provider); err != nil {
+			return nil, err
 		}
 		concreteRegistry.Register(provider)
 	}

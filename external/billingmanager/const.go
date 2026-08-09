@@ -52,4 +52,61 @@ const (
 
 	// ErrKeyBillingManagerPricerServiceNotSet is returned when pricing endpoints are used without pricer service wiring.
 	ErrKeyBillingManagerPricerServiceNotSet = "BillingManagerPricerServiceNotSet"
+
+	// ErrKeyBillingManagerCheckoutProviderUnavailable is returned when the requested checkout capability is not registered.
+	ErrKeyBillingManagerCheckoutProviderUnavailable = "BillingManagerCheckoutProviderUnavailable"
+
+	// ErrKeyBillingManagerCheckoutConfigurationInvalid is returned when trusted checkout configuration is missing or invalid.
+	ErrKeyBillingManagerCheckoutConfigurationInvalid = "BillingManagerCheckoutConfigurationInvalid"
+
+	// ErrKeyBillingManagerCheckoutOriginRejected is returned when browser origin checks reject a checkout request.
+	ErrKeyBillingManagerCheckoutOriginRejected = "BillingManagerCheckoutOriginRejected"
+
+	// ErrKeyBillingManagerCheckoutPriceUnavailable is returned when no purchasable catalogue cost matches the requested provider price.
+	ErrKeyBillingManagerCheckoutPriceUnavailable = "BillingManagerCheckoutPriceUnavailable"
+
+	// ErrKeyBillingManagerCheckoutPriceAmbiguous is returned when a provider price is assigned to more than one published cost.
+	ErrKeyBillingManagerCheckoutPriceAmbiguous = "BillingManagerCheckoutPriceAmbiguous"
+
+	// ErrKeyBillingManagerCheckoutTermsUnsupported is returned when a catalogue cost cannot be represented by the shared checkout contract.
+	ErrKeyBillingManagerCheckoutTermsUnsupported = "BillingManagerCheckoutTermsUnsupported"
+
+	// ErrKeyBillingManagerCheckoutUserUnavailable is returned when the authenticated user's authoritative billing identity cannot be resolved.
+	ErrKeyBillingManagerCheckoutUserUnavailable = "BillingManagerCheckoutUserUnavailable"
+
+	// ErrKeyBillingManagerCheckoutCatalogueUnavailable is returned when the pricing catalogue cannot be safely resolved.
+	ErrKeyBillingManagerCheckoutCatalogueUnavailable = "BillingManagerCheckoutCatalogueUnavailable"
+
+	// ErrKeyBillingManagerCheckoutProviderRequestFailed is returned when the provider cannot create a checkout session.
+	ErrKeyBillingManagerCheckoutProviderRequestFailed = "BillingManagerCheckoutProviderRequestFailed"
+
+	// ErrKeyBillingManagerCheckoutSessionInvalid is returned when a provider returns no usable checkout session.
+	ErrKeyBillingManagerCheckoutSessionInvalid = "BillingManagerCheckoutSessionInvalid"
+
+	// ErrKeyBillingManagerCheckoutIdempotencyFailed is returned when a retry-safe provider key cannot be generated.
+	ErrKeyBillingManagerCheckoutIdempotencyFailed = "BillingManagerCheckoutIdempotencyFailed"
+
+	// ErrKeyBillingManagerPortalProviderUnavailable is returned when the requested portal capability is not registered.
+	ErrKeyBillingManagerPortalProviderUnavailable = "BillingManagerPortalProviderUnavailable"
+
+	// ErrKeyBillingManagerPortalConfigurationInvalid is returned when trusted portal configuration is missing or invalid.
+	ErrKeyBillingManagerPortalConfigurationInvalid = "BillingManagerPortalConfigurationInvalid"
+
+	// ErrKeyBillingManagerPortalOriginRejected is returned when browser origin checks reject a portal request.
+	ErrKeyBillingManagerPortalOriginRejected = "BillingManagerPortalOriginRejected"
+
+	// ErrKeyBillingManagerPortalBillingUnavailable is returned when server-owned subscription state cannot be validated safely.
+	ErrKeyBillingManagerPortalBillingUnavailable = "BillingManagerPortalBillingUnavailable"
+
+	// ErrKeyBillingManagerPortalSubscriptionUnavailable is returned when no eligible recurring provider customer exists.
+	ErrKeyBillingManagerPortalSubscriptionUnavailable = "BillingManagerPortalSubscriptionUnavailable"
+
+	// ErrKeyBillingManagerPortalProviderRequestFailed is returned when the provider cannot create a portal session.
+	ErrKeyBillingManagerPortalProviderRequestFailed = "BillingManagerPortalProviderRequestFailed"
+
+	// ErrKeyBillingManagerPortalSessionInvalid is returned when a provider returns no usable portal session.
+	ErrKeyBillingManagerPortalSessionInvalid = "BillingManagerPortalSessionInvalid"
+
+	// ErrKeyBillingManagerPortalCustomerAmbiguous is returned when server-owned records identify more than one eligible provider customer.
+	ErrKeyBillingManagerPortalCustomerAmbiguous = "BillingManagerPortalCustomerAmbiguous"
 )

@@ -18,6 +18,18 @@ type billingmanagerHandler interface {
 	GetPricingFeatures(w http.ResponseWriter, r *http.Request)
 }
 
+// billingmanagerCheckoutHandler is an optional routing capability so custom
+// legacy route handlers keep satisfying billingmanagerHandler.
+type billingmanagerCheckoutHandler interface {
+	ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.Request)
+}
+
+// billingmanagerPortalHandler is optional so legacy route handlers remain
+// compatible when hosted customer-portal support is not implemented.
+type billingmanagerPortalHandler interface {
+	ProcessBillingProviderPortal(w http.ResponseWriter, r *http.Request)
+}
+
 const (
 	// APIBillingManagerV1Prefix base URI prefix for all billing manager v1 routes
 	APIBillingManagerV1Prefix = "/api/v1/bms"
@@ -54,6 +66,12 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	billingmanagerOpenRoutes.HandleFunc("/billings/{providerName}/webhooks", request.Handler.ProcessBillingProviderWebhooks).Methods(http.MethodPost, http.MethodOptions)
 
 	billingmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
+	if checkoutHandler, ok := request.Handler.(billingmanagerCheckoutHandler); ok {
+		billingmanagerActiveOnlyRoutes.HandleFunc("/billings/{providerName}/checkout", checkoutHandler.ProcessBillingProviderCheckout).Methods(http.MethodPost, http.MethodOptions)
+	}
+	if portalHandler, ok := request.Handler.(billingmanagerPortalHandler); ok {
+		billingmanagerActiveOnlyRoutes.HandleFunc("/billings/{providerName}/portal", portalHandler.ProcessBillingProviderPortal).Methods(http.MethodPost, http.MethodOptions)
+	}
 	billingmanagerActiveOnlyRoutes.HandleFunc("/billings/users/{userId}/events", request.Handler.GetUserBillingEvents).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/subscription", request.Handler.GetUserSubscriptionStatus).Methods(http.MethodGet, http.MethodOptions)
 	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/billing", request.Handler.GetUserBillingDetail).Methods(http.MethodGet, http.MethodOptions)

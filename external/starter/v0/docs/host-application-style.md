@@ -299,6 +299,46 @@ func runServer(embeddedContent fs.FS, embeddedContentFilePathPrefix string) erro
 }
 ```
 
+## Enabling Shared Checkout
+
+When one of `PaymentProviders` implements
+`paymentprovider.CheckoutProvider`, the concrete registry created by Starter
+exposes that capability to Billing Manager automatically. Configure the
+trusted return destination on that provider before passing it to Starter. A
+non-empty `ReturnURL` opts the provider into checkout, and Starter validates
+the provider's checkout configuration during service construction:
+
+```go
+stripeProvider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+    ProviderName:   "stripe",
+    WebhookSecret:  appSettings.StripeWebhookSecret,
+    APIKey:         appSettings.StripeAPIKey,
+    PublishableKey: appSettings.StripePublishableKey,
+    ReturnURL:      appSettings.CheckoutReturnURL,
+})
+if err != nil {
+    return err
+}
+
+starterServices, err := starter.NewServices(&starter.NewServicesRequest{
+    // Other host-owned dependencies omitted.
+    PaymentProviders: []paymentprovider.Provider{stripeProvider},
+})
+if err != nil {
+    return err
+}
+```
+
+`starter.AttachDefaultRoutes` then attaches authenticated checkout at
+`POST /api/v1/bms/billings/{providerName}/checkout`. The host does not attach a
+provider-specific checkout route. It continues to own provider credentials,
+the return URL, catalogue data, CORS policy, and the provider-specific browser
+component. Billing Manager owns user and catalogue resolution; the adapter
+owns provider API calls and exposes its trusted return configuration through
+`paymentprovider.CheckoutReturnURLProvider`; signed webhooks own fulfilment.
+No checkout-specific post-construction registration is required.
+Leave `ReturnURL` empty for a webhook-only or provider API-sync integration.
+
 ## Migration Notes
 
 - Keep third-party settings explicit until the project has a stable opinion

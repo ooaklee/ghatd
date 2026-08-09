@@ -378,6 +378,114 @@ func TestNewServices(t *testing.T) {
 			wantErr: ErrNilPaymentProvider,
 		},
 		{
+			name: "Failure - typed nil payment provider",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				var provider *fakeCheckoutPaymentProvider
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: ErrNilPaymentProvider,
+		},
+		{
+			name: "Failure - opted-in Stripe has incomplete checkout configuration",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret: "whsec_test",
+					ReturnURL:     "https://app.example.test/checkout/return",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - opted-in Stripe has incomplete customer portal configuration",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:           "whsec_test",
+					CustomerPortalReturnURL: "https://app.example.test/settings",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - Stripe portal configuration ID without return URL",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:                 "whsec_test",
+					APIKey:                        "sk_test",
+					CustomerPortalConfigurationID: "bpc_test_123",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - Stripe portal return URL has invalid port",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:           "whsec_test",
+					APIKey:                  "sk_test",
+					CustomerPortalReturnURL: "https://app.example.test:70000/settings",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - Stripe portal return URL contains a placeholder",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:           "whsec_test",
+					APIKey:                  "sk_test",
+					CustomerPortalReturnURL: "https://app.example.test/{PORTAL_SESSION_ID}",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Success - Stripe API sync remains valid without checkout opt-in",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret: "whsec_test",
+					APIKey:        "sk_test",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+		},
+		{
 			name: "Failure - custom registry and providers conflict",
 			request: func(t *testing.T) *NewServicesRequest {
 				req := validServicesRequest(t)
@@ -386,6 +494,24 @@ func TestNewServices(t *testing.T) {
 				return req
 			},
 			wantErr: ErrPaymentProviderRegistryConflict,
+		},
+		{
+			name: "Success - registered checkout provider owns return URL",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				req.PaymentProviders = []paymentprovider.Provider{&fakeCheckoutPaymentProvider{returnURL: "https://app.example.test/checkout/return"}}
+				return req
+			},
+			assert: func(t *testing.T, got *Services) {
+				provider, err := got.BillingManager.CheckoutProviderRegistry.GetCheckoutProvider("checkout")
+				if err != nil {
+					t.Fatalf("GetCheckoutProvider() error = %v", err)
+				}
+				configured, ok := provider.(paymentprovider.CheckoutReturnURLProvider)
+				if !ok || configured.GetCheckoutReturnURL() != "https://app.example.test/checkout/return" {
+					t.Fatalf("provider-owned checkout configuration = %#v", provider)
+				}
+			},
 		},
 		{
 			name:    "Success - valid dependencies create concrete services",
@@ -402,6 +528,9 @@ func TestNewServices(t *testing.T) {
 				}
 				if got.AccessManager.GroupService != got.Group {
 					t.Fatalf("expected access manager to receive group service")
+				}
+				if got.BillingManager.CheckoutProviderRegistry == nil {
+					t.Fatalf("expected billing manager to auto-detect the standard checkout provider registry")
 				}
 				if got.AccessManager.BillingService != got.Billing {
 					t.Fatalf("expected access manager to receive billing service")
@@ -990,6 +1119,7 @@ func TestResolvePolicyStore(t *testing.T) {
 
 func TestResolvePaymentProviderRegistry(t *testing.T) {
 	suppliedRegistry := paymentprovider.NewProviderRegistry()
+	var typedNilProvider *fakeCheckoutPaymentProvider
 
 	tests := []struct {
 		name      string
@@ -1042,6 +1172,11 @@ func TestResolvePaymentProviderRegistry(t *testing.T) {
 				nil,
 			},
 			wantErr: ErrNilPaymentProvider,
+		},
+		{
+			name:      "FAILURE - typed nil provider in list",
+			providers: []paymentprovider.Provider{typedNilProvider},
+			wantErr:   ErrNilPaymentProvider,
 		},
 		{
 			name: "SUCCESS - nil registry with nil providers creates new registry",
@@ -1316,6 +1451,17 @@ func (fakePaymentProvider) ParsePayload(ctx context.Context, req *http.Request) 
 func (fakePaymentProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*paymentprovider.SubscriptionInfo, error) {
 	return nil, nil
 }
+
+type fakeCheckoutPaymentProvider struct {
+	fakePaymentProvider
+	returnURL string
+}
+
+func (*fakeCheckoutPaymentProvider) GetProviderName() string { return "checkout" }
+func (*fakeCheckoutPaymentProvider) CreateCheckoutSession(context.Context, *paymentprovider.CheckoutSessionRequest) (*paymentprovider.CheckoutSession, error) {
+	return &paymentprovider.CheckoutSession{ID: "session", URL: "https://provider.example.test/session"}, nil
+}
+func (p *fakeCheckoutPaymentProvider) GetCheckoutReturnURL() string { return p.returnURL }
 
 type fakePolicyStore struct {
 	policies []policy.WebAppPolicy

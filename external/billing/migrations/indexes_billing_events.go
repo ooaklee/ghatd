@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// InitBillingEventsIndexesUp creates the billing-event lookup and idempotency indexes.
 func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 
 	const mongoCollectionName = billing.BillingEventsCollection
@@ -41,6 +42,19 @@ func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 		Options: options.Index().SetName("idx_billing_events_created_at"),
 	}
 
+	// Each provider event is processed at most once. Empty legacy event IDs are
+	// excluded so existing records without a provider identifier remain valid.
+	providerEventIndexModel := mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "integrator", Value: 1},
+			{Key: "integrator_event_id", Value: 1},
+		},
+		Options: options.Index().
+			SetName("idx_billing_events_provider_event").
+			SetUnique(true).
+			SetPartialFilterExpression(bson.M{"integrator_event_id": bson.M{"$gt": ""}}),
+	}
+
 	// Create all indexes
 	_, err := db.Collection("billing_events").Indexes().CreateMany(
 		context.Background(),
@@ -49,6 +63,7 @@ func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 			emailIndexModel,
 			subscriptionIdIndexModel,
 			createdAtIndexModel,
+			providerEventIndexModel,
 		},
 	)
 	if err != nil {
@@ -61,6 +76,7 @@ func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 
 }
 
+// InitBillingEventsIndexesDown removes the indexes created by InitBillingEventsIndexesUp.
 func InitBillingEventsIndexesDown(db *mongo.Database) error { //Down
 	log.SetFlags(0)
 	const mongoCollectionName = billing.BillingEventsCollection
@@ -73,6 +89,7 @@ func InitBillingEventsIndexesDown(db *mongo.Database) error { //Down
 		"idx_billing_events_email",
 		"idx_billing_events_subscription_id",
 		"idx_billing_events_created_at",
+		"idx_billing_events_provider_event",
 	}
 
 	for _, indexName := range indexNames {

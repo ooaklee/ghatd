@@ -316,6 +316,11 @@ func (p *PricePlan) Validate() error {
 	if err := ValidatePricePaymentTerms(p.PaymentTerms); err != nil {
 		return err
 	}
+	if p.Status == PricePlanStatusPublished {
+		if err := ValidatePricePlanForPublish(p); err != nil {
+			return err
+		}
+	}
 
 	return ValidatePriceProviderRefs(p.ProviderRefs)
 }
@@ -416,10 +421,121 @@ func (p *PricePaymentTerms) Validate() error {
 
 // ValidatePriceCosts checks a set of costs.
 func ValidatePriceCosts(costs []PriceCost) error {
+	if HasDuplicatePriceCostIDs(costs) {
+		return ErrDuplicatePriceCostID
+	}
+
 	for i := range costs {
 		if err := costs[i].Validate(); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// HasDuplicatePriceCostIDs returns true when a non-empty cost ID appears more than once.
+func HasDuplicatePriceCostIDs(costs []PriceCost) bool {
+	seen := make(map[string]struct{}, len(costs))
+	for _, cost := range costs {
+		if cost.ID == "" {
+			continue
+		}
+
+		if _, exists := seen[cost.ID]; exists {
+			return true
+		}
+		seen[cost.ID] = struct{}{}
+	}
+
+	return false
+}
+
+// ValidatePricePlanForPublish validates the shared catalogue requirements and
+// the provider-specific terms that the built-in checkout flow can represent.
+// Draft plans remain permissive so operators can save work in progress.
+func ValidatePricePlanForPublish(pricePlan *PricePlan) error {
+	if pricePlan == nil {
+		return ErrInvalidPricePlanPayload
+	}
+	if len(pricePlan.Costs) == 0 {
+		return ErrPricePlanPublishRequiresCost
+	}
+	if err := ValidatePriceCosts(pricePlan.Costs); err != nil {
+		return err
+	}
+	if !pricePlanHasProviderRef(pricePlan) {
+		return ErrPricePlanPublishRequiresProvider
+	}
+
+	return validateStripePricePlanForPublish(pricePlan)
+}
+
+// pricePlanHasProviderRef returns true when a plan or one of its costs has a
+// valid provider association.
+func pricePlanHasProviderRef(pricePlan *PricePlan) bool {
+	if len(pricePlan.ProviderRefs) > 0 && ValidatePriceProviderRefs(pricePlan.ProviderRefs) == nil {
+		return true
+	}
+
+	for _, cost := range pricePlan.Costs {
+		if len(cost.ProviderRefs) > 0 && ValidatePriceProviderRefs(cost.ProviderRefs) == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func validateStripePricePlanForPublish(pricePlan *PricePlan) error {
+	hasPlanStripeRef := false
+	for _, providerRef := range pricePlan.ProviderRefs {
+		if providerRef.Provider == PriceProviderStripe {
+			hasPlanStripeRef = true
+			break
+		}
+	}
+
+	hasStripeCost := false
+	stripePriceIDs := make(map[string]struct{})
+	for _, cost := range pricePlan.Costs {
+		costHasStripeRef := false
+		for _, providerRef := range cost.ProviderRefs {
+			if providerRef.Provider != PriceProviderStripe {
+				continue
+			}
+
+			costHasStripeRef = true
+			providerPriceID := strings.TrimSpace(providerRef.ProviderPriceID)
+			if providerPriceID == "" {
+				return ErrPricePlanStripeCheckoutUnsupported
+			}
+			if _, exists := stripePriceIDs[providerPriceID]; exists {
+				return ErrPricePlanStripeCheckoutUnsupported
+			}
+			stripePriceIDs[providerPriceID] = struct{}{}
+		}
+		if !costHasStripeRef {
+			continue
+		}
+
+		hasStripeCost = true
+		if strings.TrimSpace(cost.ID) == "" || cost.Amount <= 0 || cost.SetupFeeAmount != 0 {
+			return ErrPricePlanStripeCheckoutUnsupported
+		}
+		if cost.BillingCadence == PriceBillingCadenceOneTime && cost.TrialPeriodDays != 0 {
+			return ErrPricePlanStripeCheckoutUnsupported
+		}
+		if cost.BillingCadence != PriceBillingCadenceOneTime && cost.TrialPeriodDays > 730 {
+			return ErrPricePlanStripeCheckoutUnsupported
+		}
+	}
+
+	if hasPlanStripeRef && !hasStripeCost {
+		return ErrPricePlanStripeCheckoutUnsupported
+	}
+	if hasStripeCost && (len(pricePlan.Discounts) > 0 || pricePlan.PaymentTerms != nil) {
+		return ErrPricePlanStripeCheckoutUnsupported
 	}
 
 	return nil

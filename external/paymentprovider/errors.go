@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrPaymentProviderAPIRequestFailed               = errors.New(ErrKeyPaymentProviderAPIRequestFailed)
 	ErrPaymentProviderAPIResponseInvalid             = errors.New(ErrKeyPaymentProviderAPIResponseInvalid)
+	ErrPaymentProviderPriceMismatch                  = errors.New(ErrKeyPaymentProviderPriceMismatch)
 	ErrPaymentProviderInvalidConfigWebhookSecret     = errors.New(ErrKeyPaymentProviderInvalidConfigWebhookSecret)
 	ErrPaymentProviderInvalidConfiguration           = errors.New(ErrKeyPaymentProviderInvalidConfiguration)
 	ErrPaymentProviderInvalidEventType               = errors.New(ErrKeyPaymentProviderInvalidEventType)

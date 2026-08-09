@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/logger"
 	"go.uber.org/zap"
@@ -115,14 +116,19 @@ func (l *LemonSqueezyProvider) ParsePayload(ctx context.Context, req *http.Reque
 		zap.String("email-domain", emailDomainForLog(webhook.Data.Attributes.UserEmail)),
 	)
 
+	providerEventID := strings.Join([]string{webhook.Meta.EventName, webhook.Data.ID, attrs.UpdatedAt}, ":")
 	return &WebhookPayload{
 		EventType:          eventType,
-		EventID:            webhook.Data.ID,
+		EventID:            providerEventID,
 		EventTime:          attrs.UpdatedAt,
+		PaymentType:        PaymentTypeSubscription,
+		BillingKind:        BillingKindRecurring,
+		IsOneOff:           false,
 		SubscriptionID:     webhook.Data.ID,
 		CustomerID:         fmt.Sprintf("%d", attrs.CustomerID),
 		CustomerEmail:      attrs.UserEmail,
 		Status:             status,
+		PaymentStatus:      paymentStatusForEvent(eventType),
 		PlanName:           planName,
 		Amount:             priceInfo.UnitPrice,
 		Currency:           priceInfo.Currency,

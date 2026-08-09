@@ -56,6 +56,10 @@ func TestServiceGetPricingPlansForNonAdminForcesPublicFilters(t *testing.T) {
 				t.Fatal("expected IsPublished to be forced for non-admin pricing list requests")
 			}
 
+			if req.WithStatus != string(pricer.PricePlanStatusPublished) {
+				t.Fatalf("expected published status to be forced, got %q", req.WithStatus)
+			}
+
 			return &pricer.GetPricePlansResponse{}, nil
 		},
 	})
@@ -104,6 +108,7 @@ func TestServiceGetPricePlanBySlugForNonAdminOnlyReturnsPublicPlans(t *testing.T
 		{
 			name: "rejects deleted price plans",
 			pricePlan: &pricer.PricePlan{
+				Status:      pricer.PricePlanStatusPublished,
 				PublishedAt: time.Now().UTC().Add(-time.Hour).Format(time.RFC3339),
 				DeletedAt:   time.Now().UTC().Format(time.RFC3339),
 			},
@@ -117,13 +122,23 @@ func TestServiceGetPricePlanBySlugForNonAdminOnlyReturnsPublicPlans(t *testing.T
 		{
 			name: "rejects future published price plans",
 			pricePlan: &pricer.PricePlan{
+				Status:      pricer.PricePlanStatusPublished,
 				PublishedAt: time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339),
+			},
+			expectedErr: pricer.ErrKeyPricePlanNotFound,
+		},
+		{
+			name: "rejects archived plans while preserving publication timestamp",
+			pricePlan: &pricer.PricePlan{
+				Status:      pricer.PricePlanStatusArchived,
+				PublishedAt: time.Now().UTC().Add(-time.Hour).Format(time.RFC3339),
 			},
 			expectedErr: pricer.ErrKeyPricePlanNotFound,
 		},
 		{
 			name: "allows active published price plans",
 			pricePlan: &pricer.PricePlan{
+				Status:      pricer.PricePlanStatusPublished,
 				PublishedAt: time.Now().UTC().Add(-time.Hour).Format(time.RFC3339),
 			},
 		},

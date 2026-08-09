@@ -15,7 +15,7 @@ func NewCorsMiddleware(allowedOrigins []string) func(handler http.Handler) http.
 	return func(handler http.Handler) http.Handler {
 		corsHandler := handlers.CORS(
 			handlers.AllowCredentials(),
-			handlers.AllowedHeaders([]string{common.CorrelationIdHttpHeader, "Content-Type", "Authorization", common.WebPlatformHttpRequestHeader, common.TimezoneHttpRequestHeader, common.SystemWideXApiToken, common.WebPartialHttpRequestHeader, common.CacheSkipHttpResponseHeader, common.HtmxHttpCurrentUrlHeader,
+			handlers.AllowedHeaders([]string{common.CorrelationIdHttpHeader, common.IdempotencyKeyHttpHeader, "Content-Type", "Authorization", common.WebPlatformHttpRequestHeader, common.TimezoneHttpRequestHeader, common.SystemWideXApiToken, common.WebPartialHttpRequestHeader, common.CacheSkipHttpResponseHeader, common.HtmxHttpCurrentUrlHeader,
 				common.HtmxHttpRequestHeader,
 				common.HtmxHttpTargetHeader,
 				common.HtmxHttpTriggerHeader}),

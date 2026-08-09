@@ -108,15 +108,25 @@ func Example3_MockProvider() {
 	mock := paymentprovider.NewMockProvider("stripe")
 
 	// Set up test data
+	recurringAmount := int64(2999)
+	recurringCurrency := "USD"
+	billingInterval := "month"
+	intervalCount := int64(1)
+	quantity := int64(1)
 	mock.SetMockPayload(&paymentprovider.WebhookPayload{
-		EventType:      paymentprovider.EventTypePaymentSucceeded,
+		EventType:      paymentprovider.EventTypeSubscriptionCreated,
 		EventID:        "evt_test_123",
+		PaymentType:    paymentprovider.PaymentTypeSubscription,
+		BillingKind:    paymentprovider.BillingKindRecurring,
 		SubscriptionID: "sub_test_123",
 		CustomerEmail:  "test@example.com",
 		Status:         paymentprovider.SubscriptionStatusActive,
 		PlanName:       "Pro Plan",
-		Amount:         2999,
-		Currency:       "USD",
+		SubscriptionTerms: paymentprovider.SubscriptionTerms{
+			Observed: true, Amount: &recurringAmount, Currency: &recurringCurrency,
+			BillingInterval: &billingInterval, BillingIntervalCount: &intervalCount,
+			Quantity: &quantity,
+		},
 	})
 
 	// Use in tests
@@ -127,7 +137,7 @@ func Example3_MockProvider() {
 	fmt.Printf("Verification: %v\n", err)
 
 	payload, _ := mock.ParsePayload(ctx, req)
-	fmt.Printf("Plan: %s, Amount: $%.2f\n", payload.PlanName, float64(payload.Amount)/100)
+	fmt.Printf("Plan: %s, recurring amount known: %t\n", payload.PlanName, payload.SubscriptionTerms.Amount != nil)
 }
 
 // Example4_LemonSqueezyWebhook demonstrates Lemon Squeezy webhook processing

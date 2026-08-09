@@ -1,5 +1,10 @@
 package paymentprovider
 
+import (
+	"net/http"
+	"time"
+)
+
 // Config holds configuration for a payment provider
 type Config struct {
 	// ProviderName is the unique identifier for this provider
@@ -22,6 +27,38 @@ type Config struct {
 
 	// APIBaseURL is the base URL for API requests (optional, uses provider default if empty)
 	APIBaseURL string
+
+	// APIVersion pins the provider API contract used for outbound requests.
+	// Providers that support version headers use a tested default when this is empty.
+	APIVersion string
+
+	// PublishableKey is returned to browser clients by providers that support embedded checkout.
+	PublishableKey string
+
+	// ReturnURL is the trusted default URL used after checkout completes.
+	// Checkout-capable providers may expose it to Billing Manager through
+	// CheckoutReturnURLProvider; it must not come from browser input.
+	ReturnURL string
+
+	// CustomerPortalReturnURL is the trusted destination used when a customer
+	// leaves a provider-hosted billing-management portal. Portal-capable
+	// providers may expose it through CustomerPortalReturnURLProvider; it must
+	// not come from browser input.
+	CustomerPortalReturnURL string
+
+	// CustomerPortalConfigurationID optionally selects a provider-owned hosted
+	// portal configuration. Providers that do not support named configurations
+	// ignore it; it must never come from browser input.
+	CustomerPortalConfigurationID string
+
+	// HTTPClient allows applications to configure transport policy and test provider calls.
+	HTTPClient *http.Client
+
+	// SignatureTolerance controls the accepted webhook timestamp window.
+	SignatureTolerance time.Duration
+
+	// MaxWebhookBodySize bounds direct provider verification and parsing. Zero uses the default.
+	MaxWebhookBodySize int64
 }
 
 // Validate checks if the configuration has the required fields

@@ -27,6 +27,7 @@ func TestNewCorsMiddlewareAllowsClientContextHeaders(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Headers", strings.Join([]string{
 		common.WebPlatformHttpRequestHeader,
 		common.TimezoneHttpRequestHeader,
+		common.IdempotencyKeyHttpHeader,
 	}, ", "))
 	rec := httptest.NewRecorder()
 
@@ -35,4 +36,5 @@ func TestNewCorsMiddlewareAllowsClientContextHeaders(t *testing.T) {
 	allowedHeaders := strings.ToLower(rec.Header().Get("Access-Control-Allow-Headers"))
 	assert.Contains(t, allowedHeaders, strings.ToLower(common.WebPlatformHttpRequestHeader))
 	assert.Contains(t, allowedHeaders, strings.ToLower(common.TimezoneHttpRequestHeader))
+	assert.Contains(t, allowedHeaders, strings.ToLower(common.IdempotencyKeyHttpHeader))
 }

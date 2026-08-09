@@ -1,29 +1,81 @@
 {
-  "version": 1,
-  "description": "Stable card-projection for the Fireflies-style E2E pricing seed. Golden fixture for /api/v1/pricing/plans/{slug} responses. Update via -update flag on TestE2E_PricingCardsGolden.",
+  "version": 2,
+  "description": "Stable card and Stripe-checkout projection for the local/test pricing seed. Golden fixture for /api/v1/pricing/plans/{slug} responses. Update via -update flag on TestE2E_PricingCardsGolden.",
   "plans": [
     {
       "slug": "free",
       "name": "Free",
       "description": "Get started with core meeting transcription for individuals.",
       "status": "published",
+      "provider": "manual",
+      "provider_product_id": "free",
       "ui": {
         "type": "PERSONAL",
         "is_popular": false,
         "cta_label": "Get started"
       },
       "costs": [
-        {"amount": 0, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": false}
+        {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "amount": 0,
+          "currency": "USD",
+          "billing_cadence": "month",
+          "trial_period_days": 0,
+          "provider": "manual",
+          "provider_price_id": "free_monthly",
+          "discount_percentage": 0,
+          "per_seat": false
+        }
       ],
       "features": [
-        {"slug": "transcription-credits", "included": true, "quantity": 800, "label": "800 minutes per month"},
-        {"slug": "storage-limit", "included": true, "quantity": 5, "label": "5 GB storage"},
-        {"slug": "team-seats", "included": true, "quantity": 1, "label": "1 seat"},
-        {"slug": "integrations", "included": false, "quantity": 0, "label": "Integrations"},
-        {"slug": "developer-api-access", "included": false, "quantity": 0, "label": "API access"},
-        {"slug": "priority-support-tier", "included": false, "quantity": 0, "label": "Priority support"},
-        {"slug": "custom-branding", "included": false, "quantity": 0, "label": "Custom branding"},
-        {"slug": "sso", "included": false, "quantity": 0, "label": "SSO & SCIM"}
+        {
+          "slug": "transcription-credits",
+          "included": true,
+          "quantity": 800,
+          "label": "800 minutes per month"
+        },
+        {
+          "slug": "storage-limit",
+          "included": true,
+          "quantity": 5,
+          "label": "5 GB storage"
+        },
+        {
+          "slug": "team-seats",
+          "included": true,
+          "quantity": 1,
+          "label": "1 seat"
+        },
+        {
+          "slug": "integrations",
+          "included": false,
+          "quantity": 0,
+          "label": "Integrations"
+        },
+        {
+          "slug": "developer-api-access",
+          "included": false,
+          "quantity": 0,
+          "label": "API access"
+        },
+        {
+          "slug": "priority-support-tier",
+          "included": false,
+          "quantity": 0,
+          "label": "Priority support"
+        },
+        {
+          "slug": "custom-branding",
+          "included": false,
+          "quantity": 0,
+          "label": "Custom branding"
+        },
+        {
+          "slug": "sso",
+          "included": false,
+          "quantity": 0,
+          "label": "SSO \u0026 SCIM"
+        }
       ]
     },
     {
@@ -31,24 +83,86 @@
       "name": "Pro",
       "description": "For growing teams that need unlimited transcription and integrations.",
       "status": "published",
+      "provider": "stripe",
+      "provider_product_id": "prod_test_pro",
       "ui": {
         "type": "TEAM",
         "is_popular": true,
         "cta_label": "Start free trial"
       },
       "costs": [
-        {"amount": 1800, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": true},
-        {"amount": 12000, "currency": "USD", "billing_cadence": "year", "discount_percentage": 44, "per_seat": true}
+        {
+          "id": "20000000-0000-4000-8000-000000000002",
+          "amount": 1800,
+          "currency": "USD",
+          "billing_cadence": "month",
+          "trial_period_days": 14,
+          "provider": "stripe",
+          "provider_price_id": "price_test_pro_monthly",
+          "discount_percentage": 0,
+          "per_seat": true
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000003",
+          "amount": 12000,
+          "currency": "USD",
+          "billing_cadence": "year",
+          "trial_period_days": 14,
+          "provider": "stripe",
+          "provider_price_id": "price_test_pro_yearly",
+          "discount_percentage": 44,
+          "per_seat": true
+        }
       ],
       "features": [
-        {"slug": "transcription-credits", "included": true, "quantity": 8000, "label": "8,000 minutes per month"},
-        {"slug": "storage-limit", "included": true, "quantity": 50, "label": "50 GB storage"},
-        {"slug": "team-seats", "included": true, "quantity": 10, "label": "Up to 10 seats"},
-        {"slug": "integrations", "included": true, "quantity": 0, "label": "Integrations"},
-        {"slug": "developer-api-access", "included": true, "quantity": 0, "label": "API access"},
-        {"slug": "priority-support-tier", "included": true, "quantity": 0, "label": "Priority support"},
-        {"slug": "custom-branding", "included": false, "quantity": 0, "label": "Custom branding"},
-        {"slug": "sso", "included": false, "quantity": 0, "label": "SSO & SCIM"}
+        {
+          "slug": "transcription-credits",
+          "included": true,
+          "quantity": 8000,
+          "label": "8,000 minutes per month"
+        },
+        {
+          "slug": "storage-limit",
+          "included": true,
+          "quantity": 50,
+          "label": "50 GB storage"
+        },
+        {
+          "slug": "team-seats",
+          "included": true,
+          "quantity": 10,
+          "label": "Up to 10 seats"
+        },
+        {
+          "slug": "integrations",
+          "included": true,
+          "quantity": 0,
+          "label": "Integrations"
+        },
+        {
+          "slug": "developer-api-access",
+          "included": true,
+          "quantity": 0,
+          "label": "API access"
+        },
+        {
+          "slug": "priority-support-tier",
+          "included": true,
+          "quantity": 0,
+          "label": "Priority support"
+        },
+        {
+          "slug": "custom-branding",
+          "included": false,
+          "quantity": 0,
+          "label": "Custom branding"
+        },
+        {
+          "slug": "sso",
+          "included": false,
+          "quantity": 0,
+          "label": "SSO \u0026 SCIM"
+        }
       ]
     },
     {
@@ -56,24 +170,286 @@
       "name": "Enterprise",
       "description": "Advanced security, branding and dedicated support for organisations.",
       "status": "published",
+      "provider": "stripe",
+      "provider_product_id": "prod_test_enterprise",
       "ui": {
         "type": "ENTERPRISE",
         "is_popular": false,
         "cta_label": "Contact sales"
       },
       "costs": [
-        {"amount": 3900, "currency": "USD", "billing_cadence": "month", "discount_percentage": 0, "per_seat": true},
-        {"amount": 39000, "currency": "USD", "billing_cadence": "year", "discount_percentage": 17, "per_seat": true}
+        {
+          "id": "20000000-0000-4000-8000-000000000004",
+          "amount": 3900,
+          "currency": "USD",
+          "billing_cadence": "month",
+          "trial_period_days": 30,
+          "provider": "stripe",
+          "provider_price_id": "price_test_enterprise_monthly",
+          "discount_percentage": 0,
+          "per_seat": true
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000005",
+          "amount": 39000,
+          "currency": "USD",
+          "billing_cadence": "year",
+          "trial_period_days": 30,
+          "provider": "stripe",
+          "provider_price_id": "price_test_enterprise_yearly",
+          "discount_percentage": 17,
+          "per_seat": true
+        }
       ],
       "features": [
-        {"slug": "transcription-credits", "included": true, "quantity": 0, "label": "Unlimited transcription"},
-        {"slug": "storage-limit", "included": true, "quantity": 0, "label": "Unlimited storage"},
-        {"slug": "team-seats", "included": true, "quantity": 0, "label": "Unlimited seats"},
-        {"slug": "integrations", "included": true, "quantity": 0, "label": "Integrations"},
-        {"slug": "developer-api-access", "included": true, "quantity": 0, "label": "API access"},
-        {"slug": "priority-support-tier", "included": true, "quantity": 0, "label": "Priority support"},
-        {"slug": "custom-branding", "included": true, "quantity": 0, "label": "Custom branding"},
-        {"slug": "sso", "included": true, "quantity": 0, "label": "SSO & SCIM"}
+        {
+          "slug": "transcription-credits",
+          "included": true,
+          "quantity": 0,
+          "label": "Unlimited transcription"
+        },
+        {
+          "slug": "storage-limit",
+          "included": true,
+          "quantity": 0,
+          "label": "Unlimited storage"
+        },
+        {
+          "slug": "team-seats",
+          "included": true,
+          "quantity": 0,
+          "label": "Unlimited seats"
+        },
+        {
+          "slug": "integrations",
+          "included": true,
+          "quantity": 0,
+          "label": "Integrations"
+        },
+        {
+          "slug": "developer-api-access",
+          "included": true,
+          "quantity": 0,
+          "label": "API access"
+        },
+        {
+          "slug": "priority-support-tier",
+          "included": true,
+          "quantity": 0,
+          "label": "Priority support"
+        },
+        {
+          "slug": "custom-branding",
+          "included": true,
+          "quantity": 0,
+          "label": "Custom branding"
+        },
+        {
+          "slug": "sso",
+          "included": true,
+          "quantity": 0,
+          "label": "SSO \u0026 SCIM"
+        }
+      ]
+    },
+    {
+      "slug": "stripe-one-time-test",
+      "name": "Stripe One-Time Test",
+      "description": "Test-only catalogue fixture for a one-time Stripe Checkout payment.",
+      "status": "published",
+      "provider": "stripe",
+      "provider_product_id": "prod_test_stripe_one_time",
+      "ui": {
+        "type": "TEST",
+        "is_popular": false,
+        "cta_label": "Test one-time checkout"
+      },
+      "costs": [
+        {
+          "id": "20000000-0000-4000-8000-000000000006",
+          "amount": 4900,
+          "currency": "USD",
+          "billing_cadence": "one_time",
+          "trial_period_days": 0,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_one_time",
+          "discount_percentage": 0,
+          "per_seat": false
+        }
+      ],
+      "features": [
+        {
+          "slug": "transcription-credits",
+          "included": true,
+          "quantity": 10000,
+          "label": "10,000 minutes per month"
+        },
+        {
+          "slug": "storage-limit",
+          "included": true,
+          "quantity": 100,
+          "label": "100 GB storage"
+        },
+        {
+          "slug": "integrations",
+          "included": true,
+          "quantity": 0,
+          "label": "Integrations"
+        },
+        {
+          "slug": "developer-api-access",
+          "included": true,
+          "quantity": 0,
+          "label": "API access"
+        }
+      ]
+    },
+    {
+      "slug": "stripe-recurring-test",
+      "name": "Stripe Recurring Test",
+      "description": "Test-only catalogue fixture for recurring Stripe Checkout without a trial.",
+      "status": "published",
+      "provider": "stripe",
+      "provider_product_id": "prod_test_stripe_recurring",
+      "ui": {
+        "type": "TEST",
+        "is_popular": false,
+        "cta_label": "Test recurring checkout"
+      },
+      "costs": [
+        {
+          "id": "20000000-0000-4000-8000-000000000009",
+          "amount": 500,
+          "currency": "USD",
+          "billing_cadence": "week",
+          "trial_period_days": 0,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_recurring_weekly",
+          "discount_percentage": 0,
+          "per_seat": false
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000007",
+          "amount": 1800,
+          "currency": "USD",
+          "billing_cadence": "month",
+          "trial_period_days": 0,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_recurring_monthly",
+          "discount_percentage": 0,
+          "per_seat": false
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000008",
+          "amount": 18000,
+          "currency": "USD",
+          "billing_cadence": "year",
+          "trial_period_days": 0,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_recurring_yearly",
+          "discount_percentage": 0,
+          "per_seat": false
+        }
+      ],
+      "features": [
+        {
+          "slug": "transcription-credits",
+          "included": true,
+          "quantity": 10000,
+          "label": "10,000 minutes per month"
+        },
+        {
+          "slug": "storage-limit",
+          "included": true,
+          "quantity": 100,
+          "label": "100 GB storage"
+        },
+        {
+          "slug": "integrations",
+          "included": true,
+          "quantity": 0,
+          "label": "Integrations"
+        },
+        {
+          "slug": "developer-api-access",
+          "included": true,
+          "quantity": 0,
+          "label": "API access"
+        }
+      ]
+    },
+    {
+      "slug": "stripe-recurring-trial-test",
+      "name": "Stripe Recurring Trial Test",
+      "description": "Test-only catalogue fixture for recurring Stripe Checkout with a catalogue-owned trial.",
+      "status": "published",
+      "provider": "stripe",
+      "provider_product_id": "prod_test_stripe_recurring_trial",
+      "ui": {
+        "type": "TEST",
+        "is_popular": false,
+        "cta_label": "Test trial checkout"
+      },
+      "costs": [
+        {
+          "id": "20000000-0000-4000-8000-000000000012",
+          "amount": 500,
+          "currency": "USD",
+          "billing_cadence": "week",
+          "trial_period_days": 7,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_trial_weekly",
+          "discount_percentage": 0,
+          "per_seat": false
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000010",
+          "amount": 1800,
+          "currency": "USD",
+          "billing_cadence": "month",
+          "trial_period_days": 14,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_trial_monthly",
+          "discount_percentage": 0,
+          "per_seat": false
+        },
+        {
+          "id": "20000000-0000-4000-8000-000000000011",
+          "amount": 18000,
+          "currency": "USD",
+          "billing_cadence": "year",
+          "trial_period_days": 30,
+          "provider": "stripe",
+          "provider_price_id": "price_test_stripe_trial_yearly",
+          "discount_percentage": 0,
+          "per_seat": false
+        }
+      ],
+      "features": [
+        {
+          "slug": "transcription-credits",
+          "included": true,
+          "quantity": 10000,
+          "label": "10,000 minutes per month"
+        },
+        {
+          "slug": "storage-limit",
+          "included": true,
+          "quantity": 100,
+          "label": "100 GB storage"
+        },
+        {
+          "slug": "integrations",
+          "included": true,
+          "quantity": 0,
+          "label": "Integrations"
+        },
+        {
+          "slug": "developer-api-access",
+          "included": true,
+          "quantity": 0,
+          "label": "API access"
+        }
       ]
     }
   ]

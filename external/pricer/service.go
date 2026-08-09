@@ -77,6 +77,7 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		PaymentTerms:  req.PaymentTerms,
 		ProviderRefs:  req.ProviderRefs,
 		Metadata:      req.Metadata,
+		DisplayOrder:  req.DisplayOrder,
 		CreatedByID:   req.UserID,
 		UpdatedByID:   req.UserID,
 		PublishedAt:   publishedAt,
@@ -95,9 +96,11 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		pricePlan.Status = PricePlanStatusPublished
 		pricePlan.PublishedAt = toolbox.TimeNowUTC()
 	}
-	if pricePlan.PublishedAt != "" || pricePlan.Status == PricePlanStatusPublished {
+	ensurePublishedPricePlanMetadata(pricePlan, req.UserID)
+	if pricePlan.PublishedAt != "" {
 		pricePlan.PublishedByID = req.UserID
 	}
+	assignMissingPriceCostIDs(pricePlan.Costs)
 
 	if pricePlan.Status == PricePlanStatusPublished {
 		if err := validatePricePlanCanPublish(pricePlan); err != nil {
@@ -178,13 +181,18 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 		if req.Metadata != nil {
 			pricePlanToUpdate.Metadata = req.Metadata
 		}
+		if req.DisplayOrder != nil {
+			pricePlanToUpdate.DisplayOrder = req.DisplayOrder
+		}
 	} else if strings.TrimSpace(pricePlanToUpdate.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	} else {
-		if _, err := s.PricerRepository.GetPricePlanByID(ctx, pricePlanToUpdate.ID, &GetPricePlanByIDRequest{}); err != nil {
+		existingPricePlan, err := s.PricerRepository.GetPricePlanByID(ctx, pricePlanToUpdate.ID, &GetPricePlanByIDRequest{})
+		if err != nil {
 			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", pricePlanToUpdate.ID), zap.Error(err))
 			return nil, err
 		}
+		preservePricePlanAuditMetadata(pricePlanToUpdate, existingPricePlan)
 	}
 
 	if pricePlanToUpdate.Slug == "" {
@@ -192,6 +200,8 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 	}
 	pricePlanToUpdate.NormaliseSlug()
 	pricePlanToUpdate.UpdatedByID = req.UserID
+	ensurePublishedPricePlanMetadata(pricePlanToUpdate, req.UserID)
+	assignMissingPriceCostIDs(pricePlanToUpdate.Costs)
 
 	if pricePlanToUpdate.Status == PricePlanStatusPublished {
 		if err := validatePricePlanCanPublish(pricePlanToUpdate); err != nil {
@@ -211,6 +221,59 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 	}
 
 	return &UpdatePricePlanResponse{PricePlan: updatedPricePlan}, nil
+}
+
+// ensurePublishedPricePlanMetadata prevents a published lifecycle state from
+// existing without the publication metadata required by public projections.
+func ensurePublishedPricePlanMetadata(pricePlan *PricePlan, userID string) {
+	if pricePlan == nil || pricePlan.Status != PricePlanStatusPublished {
+		return
+	}
+
+	if strings.TrimSpace(pricePlan.PublishedAt) == "" {
+		pricePlan.PublishedAt = toolbox.TimeNowUTC()
+	}
+	if strings.TrimSpace(pricePlan.PublishedByID) == "" {
+		pricePlan.PublishedByID = userID
+	}
+}
+
+// preservePricePlanAuditMetadata keeps server-owned lifecycle history when a
+// caller submits a full replacement of the mutable plan fields.
+func preservePricePlanAuditMetadata(pricePlan, existingPricePlan *PricePlan) {
+	if pricePlan == nil || existingPricePlan == nil {
+		return
+	}
+
+	if pricePlan.NanoID == "" {
+		pricePlan.NanoID = existingPricePlan.NanoID
+	}
+	if pricePlan.CreatedAt == "" {
+		pricePlan.CreatedAt = existingPricePlan.CreatedAt
+	}
+	if pricePlan.CreatedByID == "" {
+		pricePlan.CreatedByID = existingPricePlan.CreatedByID
+	}
+	if pricePlan.PublishedAt == "" {
+		pricePlan.PublishedAt = existingPricePlan.PublishedAt
+	}
+	if pricePlan.PublishedByID == "" {
+		pricePlan.PublishedByID = existingPricePlan.PublishedByID
+	}
+	if pricePlan.DeletedAt == "" {
+		pricePlan.DeletedAt = existingPricePlan.DeletedAt
+	}
+	if pricePlan.DeletedByID == "" {
+		pricePlan.DeletedByID = existingPricePlan.DeletedByID
+	}
+}
+
+func assignMissingPriceCostIDs(costs []PriceCost) {
+	for i := range costs {
+		if costs[i].ID == "" {
+			costs[i].ID = toolbox.GenerateUuidV4()
+		}
+	}
 }
 
 // GetPricePlanByID returns a price plan by ID.
@@ -714,37 +777,7 @@ func (s *Service) DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) 
 // It checks that the plan is not nil, has at least one cost, all costs are valid,
 // and has at least one valid provider reference at the plan or cost level.
 func validatePricePlanCanPublish(pricePlan *PricePlan) error {
-	if pricePlan == nil {
-		return ErrInvalidPricePlanPayload
-	}
-	if len(pricePlan.Costs) == 0 {
-		return ErrPricePlanPublishRequiresCost
-	}
-	if err := ValidatePriceCosts(pricePlan.Costs); err != nil {
-		return err
-	}
-	if !pricePlanHasProviderRef(pricePlan) {
-		return ErrPricePlanPublishRequiresProvider
-	}
-
-	return nil
-}
-
-// pricePlanHasProviderRef checks if a price plan has at least one valid provider reference.
-// It returns true if the plan itself has valid provider references or if any of its costs
-// have valid provider references.
-func pricePlanHasProviderRef(pricePlan *PricePlan) bool {
-	if len(pricePlan.ProviderRefs) > 0 && ValidatePriceProviderRefs(pricePlan.ProviderRefs) == nil {
-		return true
-	}
-
-	for _, cost := range pricePlan.Costs {
-		if len(cost.ProviderRefs) > 0 && ValidatePriceProviderRefs(cost.ProviderRefs) == nil {
-			return true
-		}
-	}
-
-	return false
+	return ValidatePricePlanForPublish(pricePlan)
 }
 
 // defaultPricePlanListRequest applies default values to a price plan list request.

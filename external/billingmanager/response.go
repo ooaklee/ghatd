@@ -1,9 +1,22 @@
 package billingmanager
 
 import (
+	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
+
+// ProcessBillingProviderCheckoutResponse contains the browser-safe provider
+// session returned by a successful checkout request.
+type ProcessBillingProviderCheckoutResponse struct {
+	Session *paymentprovider.CheckoutSession `json:"session"`
+}
+
+// ProcessBillingProviderPortalResponse contains the browser-safe hosted portal
+// session returned by a successful request.
+type ProcessBillingProviderPortalResponse struct {
+	Session *paymentprovider.CustomerPortalSession `json:"session"`
+}
 
 // GetUserBillingDetailResponse represents the response containing billing information for a user
 type GetUserBillingDetailResponse struct {

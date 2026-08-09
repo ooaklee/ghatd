@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/logger"
 )
@@ -30,6 +31,112 @@ type Provider interface {
 	GetSubscriptionInfo(ctx context.Context, subscriptionID string) (*SubscriptionInfo, error)
 }
 
+// CheckoutProvider is an optional capability. It intentionally remains outside
+// Provider so existing providers and test doubles do not need to implement checkout.
+type CheckoutProvider interface {
+	CreateCheckoutSession(ctx context.Context, request *CheckoutSessionRequest) (*CheckoutSession, error)
+}
+
+// CheckoutReturnURLProvider is an optional checkout configuration capability.
+// It keeps the trusted return destination on the same provider instance that
+// the registry resolves for checkout, without widening Provider or
+// CheckoutProvider for webhook-only and custom implementations.
+type CheckoutReturnURLProvider interface {
+	GetCheckoutReturnURL() string
+}
+
+// CheckoutConfigValidator is an optional validation capability for providers
+// that can distinguish webhook-only configuration from checkout opt-in.
+// Implementations should treat an empty checkout ReturnURL as not opted in.
+type CheckoutConfigValidator interface {
+	ValidateCheckoutConfig() error
+}
+
+// ValidateCheckoutProviderConfig validates provider-owned checkout settings
+// when a non-empty return URL implicitly opts the provider into checkout.
+// Providers without the optional validation capability retain their existing
+// behaviour and are validated by Billing Manager and the provider call.
+func ValidateCheckoutProviderConfig(provider Provider) error {
+	if IsNilProvider(provider) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	configured, ok := provider.(CheckoutReturnURLProvider)
+	if !ok || strings.TrimSpace(configured.GetCheckoutReturnURL()) == "" {
+		return nil
+	}
+	validator, ok := provider.(CheckoutConfigValidator)
+	if !ok {
+		return nil
+	}
+	return validator.ValidateCheckoutConfig()
+}
+
+// CustomerPortalProvider is an optional capability for providers that expose
+// a hosted customer billing-management portal. Implementations must validate
+// a returned session URL against the provider's trusted hosted-origin allowlist
+// before returning it to callers.
+type CustomerPortalProvider interface {
+	CreateCustomerPortalSession(ctx context.Context, request *CustomerPortalSessionRequest) (*CustomerPortalSession, error)
+}
+
+// UpcomingInvoicePreviewProvider is an optional capability for providers that
+// can estimate the next invoice for a server-owned recurring subscription.
+type UpcomingInvoicePreviewProvider interface {
+	CreateUpcomingInvoicePreview(ctx context.Context, request *UpcomingInvoicePreviewRequest) (*UpcomingInvoicePreview, error)
+}
+
+// CustomerPortalSessionURLValidator is an optional safety capability used by
+// generic browser routes. It verifies that a hosted session URL belongs to the
+// provider's trusted origin before the URL is returned to a client.
+type CustomerPortalSessionURLValidator interface {
+	ValidateCustomerPortalSessionURL(sessionURL string) error
+}
+
+// CustomerPortalReturnURLProvider is an optional portal configuration
+// capability. Keeping it separate preserves source compatibility for existing
+// providers and test doubles that only create sessions.
+type CustomerPortalReturnURLProvider interface {
+	GetCustomerPortalReturnURL() string
+}
+
+// CustomerPortalConfigValidator validates provider-specific portal settings.
+// An empty return URL with no other portal settings must remain valid so a
+// provider can be used for webhooks, checkout, or API synchronization without
+// opting into a customer portal.
+type CustomerPortalConfigValidator interface {
+	ValidateCustomerPortalConfig() error
+}
+
+// ValidateCustomerPortalProviderConfig validates provider-owned portal
+// settings when a non-empty return URL implicitly opts the provider in.
+func ValidateCustomerPortalProviderConfig(provider Provider) error {
+	if IsNilProvider(provider) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	validator, ok := provider.(CustomerPortalConfigValidator)
+	if ok {
+		// Provider-specific validation also catches partial disabled-state
+		// configuration, such as a named portal configuration without a return URL.
+		if err := validator.ValidateCustomerPortalConfig(); err != nil {
+			return err
+		}
+	}
+	configured, ok := provider.(CustomerPortalReturnURLProvider)
+	if !ok || strings.TrimSpace(configured.GetCustomerPortalReturnURL()) == "" {
+		return nil
+	}
+	portalProvider, ok := provider.(CustomerPortalProvider)
+	if !ok || isNilProviderCapability(portalProvider) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	sessionValidator, ok := provider.(CustomerPortalSessionURLValidator)
+	if !ok || isNilProviderCapability(sessionValidator) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	return nil
+}
+
+// endpointHostForLog returns only the host portion of an endpoint for logging.
 func endpointHostForLog(endpoint string) string {
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
@@ -38,10 +145,12 @@ func endpointHostForLog(endpoint string) string {
 	return parsed.Host
 }
 
+// emailPresentForLog reports whether an email value is present without exposing it.
 func emailPresentForLog(value string) bool {
 	return logger.EmailPresentForLog(value)
 }
 
+// emailDomainForLog returns a privacy-safe email domain for structured logs.
 func emailDomainForLog(value string) string {
 	return logger.EmailDomainForLog(value)
 }

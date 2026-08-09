@@ -16,6 +16,29 @@ type ProcessBillingProviderWebhooksRequest struct {
 	Request *http.Request
 }
 
+// ProcessBillingProviderCheckoutRequest contains the authenticated account and
+// browser request data needed to create a provider checkout session. UserID is
+// always derived from authentication middleware; Origin and IdempotencyKey are
+// HTTP transport inputs and must never be supplied by a request body.
+type ProcessBillingProviderCheckoutRequest struct {
+	UserID         string
+	ProviderName   string
+	PriceID        string `query:"price" validate:"required"`
+	IdempotencyKey string
+	Origin         string
+	SecFetchSite   string
+}
+
+// ProcessBillingProviderPortalRequest contains only authenticated and transport
+// values needed to create a hosted customer-portal session. The service derives
+// the provider customer and return URL from server-owned state.
+type ProcessBillingProviderPortalRequest struct {
+	UserID       string
+	ProviderName string
+	Origin       string
+	SecFetchSite string
+}
+
 // GetUserSubscriptionStatusRequest represents a request to get a user's subscription status
 type GetUserSubscriptionStatusRequest struct {
 	// UserID is the unique identifier of the user

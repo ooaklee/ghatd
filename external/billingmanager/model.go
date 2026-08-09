@@ -8,42 +8,106 @@ import (
 
 // SubscriptionStatus represents a user's subscription status
 type SubscriptionStatus struct {
-	HasSubscription    bool       `json:"has_subscription"`
-	Status             string     `json:"status"`
-	PlanName           string     `json:"plan_name,omitempty"`
-	Provider           string     `json:"provider,omitempty"`
-	Amount             int64      `json:"amount,omitempty"`
-	Currency           string     `json:"currency,omitempty"`
-	NextBillingDate    *time.Time `json:"next_billing_date,omitempty"`
-	AvailableUntilDate *time.Time `json:"available_until_date,omitempty"`
-	CancelURL          string     `json:"cancel_url,omitempty"`
-	UpdateURL          string     `json:"update_url,omitempty"`
-	IsActive           bool       `json:"is_active"`
-	IsInGoodStanding   bool       `json:"is_in_good_standing"`
+	HasAccess            bool       `json:"has_access"`
+	HasSubscription      bool       `json:"has_subscription"`
+	BillingKind          string     `json:"billing_kind,omitempty"`
+	PaymentType          string     `json:"payment_type,omitempty"`
+	IsOneOff             bool       `json:"is_one_off"`
+	PaymentStatus        string     `json:"payment_status,omitempty"`
+	Status               string     `json:"status"`
+	PlanName             string     `json:"plan_name,omitempty"`
+	PlanID               string     `json:"plan_id,omitempty"`
+	PlanSlug             string     `json:"plan_slug,omitempty"`
+	CostID               string     `json:"cost_id,omitempty"`
+	ProviderPriceID      string     `json:"provider_price_id,omitempty"`
+	Provider             string     `json:"provider,omitempty"`
+	TransactionID        string     `json:"transaction_id,omitempty"`
+	CustomerID           string     `json:"customer_id,omitempty"`
+	UserReference        string     `json:"user_reference,omitempty"`
+	Amount               int64      `json:"amount"`
+	AmountKnown          bool       `json:"amount_known"`
+	Currency             string     `json:"currency,omitempty"`
+	BillingInterval      string     `json:"billing_interval,omitempty"`
+	BillingIntervalCount int64      `json:"billing_interval_count,omitempty"`
+	Quantity             int64      `json:"billing_quantity,omitempty"`
+	NextBillingDate      *time.Time `json:"next_billing_date,omitempty"`
+	TrialEndsAt          *time.Time `json:"provider_trial_ends_at,omitempty"`
+	AvailableUntilDate   *time.Time `json:"available_until_date,omitempty"`
+	CancelURL            string     `json:"cancel_url,omitempty"`
+	UpdateURL            string     `json:"update_url,omitempty"`
+	IsActive             bool       `json:"is_active"`
+	IsInGoodStanding     bool       `json:"is_in_good_standing"`
 }
 
 // BillingDetail represents detailed billing information
 type BillingDetail struct {
-	HasSubscription bool   `json:"has_subscription"`
-	Provider        string `json:"provider,omitempty"`
-	Plan            string `json:"plan,omitempty"`
-	Status          string `json:"status,omitempty"`
-	Summary         string `json:"summary"`
-	CancelURL       string `json:"cancel_url,omitempty"`
-	UpdateURL       string `json:"update_url,omitempty"`
+	HasAccess               bool                     `json:"has_access"`
+	HasSubscription         bool                     `json:"has_subscription"`
+	BillingKind             string                   `json:"billing_kind,omitempty"`
+	PaymentType             string                   `json:"payment_type,omitempty"`
+	IsOneOff                bool                     `json:"is_one_off"`
+	PaymentStatus           string                   `json:"payment_status,omitempty"`
+	Provider                string                   `json:"provider,omitempty"`
+	Plan                    string                   `json:"plan,omitempty"`
+	PlanName                string                   `json:"plan_name,omitempty"`
+	PlanID                  string                   `json:"plan_id,omitempty"`
+	PlanSlug                string                   `json:"plan_slug,omitempty"`
+	CostID                  string                   `json:"cost_id,omitempty"`
+	ProviderPriceID         string                   `json:"provider_price_id,omitempty"`
+	TransactionID           string                   `json:"transaction_id,omitempty"`
+	CustomerID              string                   `json:"customer_id,omitempty"`
+	UserReference           string                   `json:"user_reference,omitempty"`
+	Status                  string                   `json:"status,omitempty"`
+	Summary                 string                   `json:"summary"`
+	Amount                  int64                    `json:"amount"`
+	AmountKnown             bool                     `json:"amount_known"`
+	Currency                string                   `json:"currency,omitempty"`
+	BillingInterval         string                   `json:"billing_interval,omitempty"`
+	BillingIntervalCount    int64                    `json:"billing_interval_count,omitempty"`
+	Quantity                int64                    `json:"billing_quantity,omitempty"`
+	NextBillingDate         *time.Time               `json:"next_billing_date,omitempty"`
+	TrialEndsAt             *time.Time               `json:"provider_trial_ends_at,omitempty"`
+	AvailableUntilDate      *time.Time               `json:"available_until_date,omitempty"`
+	UpcomingInvoiceEstimate *UpcomingInvoiceEstimate `json:"upcoming_invoice_estimate,omitempty"`
+	CancelURL               string                   `json:"cancel_url,omitempty"`
+	UpdateURL               string                   `json:"update_url,omitempty"`
+}
+
+// UpcomingInvoiceEstimate is a provider-generated preview, not a guaranteed
+// final invoice. All amounts use the currency's minor unit.
+type UpcomingInvoiceEstimate struct {
+	Estimated bool       `json:"estimated"`
+	Subtotal  int64      `json:"subtotal"`
+	TaxAmount int64      `json:"tax_amount"`
+	Total     int64      `json:"total"`
+	AmountDue int64      `json:"amount_due"`
+	Currency  string     `json:"currency"`
+	DueDate   *time.Time `json:"due_date,omitempty"`
 }
 
 // EventSummary represents a billing event summary
 type EventSummary struct {
-	EventID     string    `json:"event_id"`
-	EventType   string    `json:"event_type"`
-	EventTime   time.Time `json:"event_time"`
-	Amount      int64     `json:"amount"`
-	Currency    string    `json:"currency"`
-	PlanName    string    `json:"plan_name"`
-	Status      string    `json:"status"`
-	ReceiptURL  string    `json:"receipt_url,omitempty"`
-	Description string    `json:"description"`
+	EventID         string    `json:"event_id"`
+	ProviderEventID string    `json:"provider_event_id,omitempty"`
+	EventType       string    `json:"event_type"`
+	EventTime       time.Time `json:"event_time"`
+	BillingKind     string    `json:"billing_kind,omitempty"`
+	PaymentType     string    `json:"payment_type,omitempty"`
+	IsOneOff        bool      `json:"is_one_off"`
+	PaymentStatus   string    `json:"payment_status,omitempty"`
+	TransactionID   string    `json:"transaction_id,omitempty"`
+	CustomerID      string    `json:"customer_id,omitempty"`
+	UserReference   string    `json:"user_reference,omitempty"`
+	Amount          int64     `json:"amount"`
+	Currency        string    `json:"currency"`
+	PlanName        string    `json:"plan_name"`
+	PlanID          string    `json:"plan_id,omitempty"`
+	PlanSlug        string    `json:"plan_slug,omitempty"`
+	CostID          string    `json:"cost_id,omitempty"`
+	ProviderPriceID string    `json:"provider_price_id,omitempty"`
+	Status          string    `json:"status"`
+	ReceiptURL      string    `json:"receipt_url,omitempty"`
+	Description     string    `json:"description"`
 }
 
 // AuditEvent represents an audit log entry

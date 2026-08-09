@@ -664,9 +664,15 @@ The pricer package includes MongoDB index migrations for the `pricing_plans` and
 - Index on `pricing_features.type` for filtering
 - Index on `pricing_features.created_at` for sorting
 
-Register these migrations during server bootstrap using the `migrate.Register` pattern:
+Register each migration pair from its own dated host migration file. The
+`mongo-migrate` package derives the migration version from the caller's
+filename, so do not register several pairs through one shared helper or source
+file. For example, a host file named
+`migrations/20260101120000_pricing_indexes.go` can contain:
 
 ```go
+package migrations
+
 import (
     "context"
 
@@ -675,48 +681,79 @@ import (
     "go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func registerPricingMigrations() error {
-    register := func(up, down func(*mongo.Database) error) error {
-        return migrate.Register(
-            func(_ context.Context, db *mongo.Database) error { return up(db) },
-            func(_ context.Context, db *mongo.Database) error { return down(db) },
-        )
-    }
-
-    if err := register(pricerMigrations.InitPricingIndexesUp, pricerMigrations.InitPricingIndexesDown); err != nil {
-        return err
-    }
-    if err := register(pricerMigrations.InitPricingSeedUp, pricerMigrations.InitPricingSeedDown); err != nil {
-        return err
-    }
-    return register(pricerMigrations.InitTestPlansSeedUp, pricerMigrations.InitTestPlansSeedDown)
+func init() {
+    migrate.MustRegister(
+        func(_ context.Context, db *mongo.Database) error {
+            return pricerMigrations.InitPricingIndexesUp(db)
+        },
+        func(_ context.Context, db *mongo.Database) error {
+            return pricerMigrations.InitPricingIndexesDown(db)
+        },
+    )
 }
 ```
 
-Call `registerPricingMigrations` from the host's `migrations/mongo` package so
-its registrations run before the shared command. Apply all pending migrations
-with:
+Create later dated files for the provider-neutral seed and, when upgrading an
+already-applied seed, `InitPricingSeedProviderNeutralReconcileUp`/`Down`. Test
+fixtures and their Stripe-fixture reconciliation must each have separate dated
+host files too. Import the host migration package from its migration command so
+the `init` registrations run before the shared command. Apply all pending
+migrations with:
 
 ```sh
 asdf exec go run main.go mongo-migrator up
 ```
 
-`InitTestPlansSeedUp` creates comparison fixtures intended for E2E verification;
-register it in environments where that data is appropriate. The shared `down`
-action reverts every applied registered migration, so review the seed and index
-down functions before rollback. See
+Register `InitTestPlansSeedUp` only behind two independent, fail-closed gates:
+an explicit local/test environment and a dedicated fixture opt-in that defaults
+to disabled. It publishes fake Stripe Product and Price identifiers for
+deterministic E2E verification with a fake checkout provider. They are not
+accepted by the Stripe API and must never be registered in staging, production,
+or a host process configured to use a real Stripe checkout provider.
+
+The reconciliation migration gives hosts that already applied an older version
+of the three-plan fixture a new forward migration. It requires the deterministic
+IDs, slugs, and ownership markers of the base plans, checks the complete
+catalogue for conflicting cost and Price IDs, and will not create fixtures in an
+empty or operator-owned catalogue. Fresh E2E databases receive the same target
+data directly from `InitTestPlansSeedUp`, so reconciliation is an idempotent
+no-op there.
+
+The shared `down` action reverts every applied registered migration, so review
+the seed and index down functions before rollback. See
 [Managing MongoDB Migrations](../../docs/how-to/manage-mongodb-migrations.md).
 
 Seed migrations are also provided:
 
-- `external/pricer/migrations/seed_pricing.go` inserts a starter feature catalogue and starter plan.
-- `external/pricer/migrations/seed_test_plans.go` inserts comparison plans (`free`, `pro`, `enterprise`) for pricing-card E2E verification.
+- `external/pricer/migrations/seed_pricing.go` inserts a provider-neutral starter feature catalogue and starter plan.
+- `external/pricer/migrations/seed_pricing_reconcile.go` safely removes obsolete trial fields from a previously applied owned Starter seed.
+- `external/pricer/migrations/seed_test_plans.go` inserts comparison plans (`free`, `pro`, `enterprise`) plus three provider-behaviour fixtures for local pricing-card and checkout verification.
+- `external/pricer/migrations/seed_test_stripe_plans_reconcile.go` safely brings an already-seeded local/test database to the current provider-behaviour fixture version.
+
+The provider-behaviour fixtures deliberately separate commercial intent by
+plan so clients do not have to distinguish two identical cadence labels:
+
+| Fixture | Costs | Trial |
+| --- | --- | --- |
+| `stripe-one-time-test` | one-time | none |
+| `stripe-recurring-test` | weekly, monthly, yearly | none |
+| `stripe-recurring-trial-test` | weekly, monthly, yearly | 7, 14, and 30 days respectively |
+
+Every cost has a deterministic ID and a globally unique placeholder Stripe
+Price ID. Monthly is stored first on recurring plans so clients that display a
+single primary cost have a stable default. Replace all placeholder Product and
+Price references with environment-specific provider objects before using a
+fixture as the basis of a real checkout catalogue.
 
 ## Local E2E Testing
 
-The pricer migration test suite includes a golden-card regression test and a rollback test under `external/pricer/migrations/e2e_pricing_cards_test.go`.
+The pricer migration test suite includes golden-card, checkout-matrix,
+reconciliation, and rollback coverage under `external/pricer/migrations`.
 
 - `TestE2E_PricingCardsGolden` exercises the public pricing HTTP endpoints and compares the response projection to `external/pricer/migrations/testdata/pricing_cards.golden.json`.
+- `TestE2E_PricingStripeCheckoutMatrix` locks the exact cost IDs, Price IDs, cadences, and trial terms in the seven-case provider fixture matrix.
+- `TestE2E_BillingManagerCheckoutFromStripeSeed` sends every matrix Price through Billing Manager with a fake checkout provider and verifies payment/subscription mode, trusted catalogue metadata, and trial propagation without making provider API calls.
+- `TestE2E_TestStripePlansReconciliationIsIdempotentAndReversible` covers both fresh and already-seeded database paths.
 - `TestE2E_PricingTestPlansSeedDownRollsBackCleanly` verifies that the pricing-card test seed rolls back cleanly without deleting the starter seed.
 
 By default these tests try to start [memongo](https://github.com/benweissmann/memongo). On ARM Macs, or anywhere memongo cannot download a local `mongod`, set `PRICER_E2E_MONGO_URI` to a real MongoDB instance.
@@ -735,7 +772,7 @@ This exposes MongoDB on `mongodb://localhost:47027`.
 
 ```sh
 export PRICER_E2E_MONGO_URI=mongodb://localhost:47027
-asdf exec go test -count=1 -v -run 'TestE2E_Pricing' ./external/pricer/migrations/...
+asdf exec go test -count=1 -v -run 'TestE2E_(Pricing|BillingManagerCheckout|TestStripe)' ./external/pricer/migrations/...
 ```
 
 ### Update the pricing-card golden fixture

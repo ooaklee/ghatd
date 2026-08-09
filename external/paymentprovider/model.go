@@ -15,6 +15,9 @@ type WebhookPayload struct {
 	// PaymentType indicates the type of payment: "subscription", "donation", "shop_order", "commission"
 	PaymentType string
 
+	// BillingKind indicates whether billing recurs or happens once.
+	BillingKind BillingKind
+
 	// IsOneOff indicates if this is a one-time payment (true) vs recurring subscription (false)
 	IsOneOff bool
 
@@ -23,6 +26,12 @@ type WebhookPayload struct {
 
 	// TransactionID is the unique identifier for one-off payments or individual transactions
 	TransactionID string
+
+	// PaymentStatus is the state of the individual payment, independent of plan access status.
+	PaymentStatus string
+
+	// UserReference is a stable application user reference supplied when checkout is created.
+	UserReference string
 
 	// CustomerID is the provider's unique identifier for the customer
 	CustomerID string
@@ -40,17 +49,40 @@ type WebhookPayload struct {
 	// PlanName is the name/identifier of the subscription plan or tier
 	PlanName string
 
+	// PlanID and PlanSlug are stable application plan identifiers.
+	PlanID   string
+	PlanSlug string
+
+	// CostID identifies the selected plan cost and ProviderPriceID identifies the provider price.
+	CostID          string
+	ProviderPriceID string
+
 	// Amount is the payment amount (in the smallest currency unit, e.g., cents)
 	Amount int64
 
 	// Currency is the ISO 4217 currency code (e.g., "USD", "GBP")
 	Currency string
 
+	// SubscriptionTerms describes recurring commercial terms independently of
+	// Amount and Currency, which remain the totals for this individual ledger
+	// event. Nil term fields mean the provider event did not establish that
+	// value; a non-nil zero Amount is a known free recurring price.
+	SubscriptionTerms SubscriptionTerms
+
+	// SubscriptionStateAuthoritative reports that this provider event is a
+	// subscription lifecycle snapshot rather than a checkout or invoice event.
+	// Billing Manager uses it to prevent older lifecycle deliveries from
+	// rolling back newer access state and commercial terms.
+	SubscriptionStateAuthoritative bool
+
 	// IsFirstSubscriptionPayment indicates if this is the first payment of a subscription
 	IsFirstSubscriptionPayment bool
 
 	// NextBillingDate is when the next payment will be attempted (ISO 8601 format)
 	NextBillingDate string
+
+	// TrialEndsAt is when the provider-managed trial ends (ISO 8601 format).
+	TrialEndsAt string
 
 	// AvailableUntilDate is when the subscription access expires (ISO 8601 format)
 	AvailableUntilDate string
@@ -68,9 +100,137 @@ type WebhookPayload struct {
 	RawPayload string
 }
 
+// SubscriptionTerms contains provider-neutral recurring commercial terms.
+// Pointer fields preserve the distinction between an absent value and a
+// known zero value. Amount is the licensed per-unit recurring amount multiplied
+// by Quantity, expressed in the currency's minor unit.
+type SubscriptionTerms struct {
+	// Observed reports that the provider supplied a commercial item snapshot.
+	// Observed with nil Amount means the amount is unsupported or ambiguous;
+	// Observed false means this event carried no commercial snapshot.
+	Observed             bool
+	Amount               *int64
+	Currency             *string
+	BillingInterval      *string
+	BillingIntervalCount *int64
+	Quantity             *int64
+	ProviderPriceID      *string
+}
+
 // IsSubscription returns true if the payment type is a subscription
 func (wp *WebhookPayload) IsSubscription() bool {
-	return wp.PaymentType == PaymentTypeSubscription
+	return wp != nil && wp.PaymentType == PaymentTypeSubscription
+}
+
+// IsRecurring reports whether the payload represents recurring billing. Empty
+// BillingKind values retain the legacy subscription behaviour.
+func (wp *WebhookPayload) IsRecurring() bool {
+	if wp == nil || wp.IsOneOff || wp.BillingKind == BillingKindOneTime {
+		return false
+	}
+	return wp.BillingKind == BillingKindRecurring || wp.PaymentType == PaymentTypeSubscription
+}
+
+// GrantsPlanAccess reports whether a successful event should be projected into
+// the plan-access read model. Other payment types remain ledger-only.
+func (wp *WebhookPayload) GrantsPlanAccess() bool {
+	if wp == nil {
+		return false
+	}
+	return wp.IsRecurring() || wp.PaymentType == PaymentTypePurchase ||
+		(wp.PaymentType == PaymentTypeSubscription && wp.IsOneOff)
+}
+
+// billingKindForPayment infers the canonical billing kind from legacy fields.
+func billingKindForPayment(paymentType string, isOneOff bool) BillingKind {
+	if isOneOff {
+		return BillingKindOneTime
+	}
+	if paymentType == PaymentTypeSubscription {
+		return BillingKindRecurring
+	}
+	return ""
+}
+
+// paymentStatusForEvent maps a normalized event type to its payment status.
+func paymentStatusForEvent(eventType string) string {
+	switch eventType {
+	case EventTypePaymentSucceeded, EventTypeSubscriptionCreated, EventTypeSubscriptionCreatedDonation:
+		return PaymentStatusSucceeded
+	case EventTypePaymentFailed:
+		return PaymentStatusFailed
+	case EventTypePaymentRefunded:
+		return PaymentStatusRefunded
+	case EventTypePaymentActionRequired:
+		return PaymentStatusActionRequired
+	default:
+		return ""
+	}
+}
+
+// CheckoutSessionRequest is the provider-neutral input for a hosted or embedded
+// checkout session. Metadata is copied to the resulting payment when supported.
+type CheckoutSessionRequest struct {
+	PriceID       string
+	PlanID        string
+	PlanSlug      string
+	PlanName      string
+	CostID        string
+	UserID        string
+	UserReference string
+	CustomerEmail string
+	Mode          string
+	ReturnURL     string
+	// ExpectedAmount is the trusted catalogue amount in minor currency units.
+	// When any Expected* field is set, Stripe validates all three before checkout.
+	ExpectedAmount         int64
+	ExpectedCurrency       string
+	ExpectedBillingCadence string
+	// TrialPeriodDays applies to recurring Checkout Sessions only. Zero means
+	// the Stripe Price starts billing immediately.
+	TrialPeriodDays int
+	// IdempotencyKey prevents duplicate provider sessions for a retried checkout
+	// attempt. Host applications should scope untrusted client keys to the user.
+	IdempotencyKey string
+	Metadata       map[string]string
+}
+
+// CheckoutSession contains the browser-safe values returned by a checkout provider.
+type CheckoutSession struct {
+	ID             string `json:"id"`
+	ClientSecret   string `json:"client_secret,omitempty"`
+	PublishableKey string `json:"publishable_key,omitempty"`
+	URL            string `json:"url,omitempty"`
+}
+
+// CustomerPortalSessionRequest contains the provider customer identifier and
+// the trusted application URL to return to after portal activity.
+type CustomerPortalSessionRequest struct {
+	CustomerID string
+	ReturnURL  string
+}
+
+// CustomerPortalSession contains browser-safe hosted portal session values.
+type CustomerPortalSession struct {
+	ID  string `json:"id,omitempty"`
+	URL string `json:"url"`
+}
+
+// UpcomingInvoicePreviewRequest identifies the server-owned recurring
+// subscription whose next invoice should be estimated.
+type UpcomingInvoicePreviewRequest struct {
+	SubscriptionID string
+}
+
+// UpcomingInvoicePreview is a provider-generated estimate. It is not a final
+// invoice: provider state, taxes, discounts, credits, or usage can still change.
+type UpcomingInvoicePreview struct {
+	Subtotal  int64
+	TaxAmount int64
+	Total     int64
+	AmountDue int64
+	Currency  string
+	DueDate   string
 }
 
 // SubscriptionInfo represents detailed subscription information from a provider's API

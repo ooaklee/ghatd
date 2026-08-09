@@ -416,8 +416,16 @@ func (r *Repository) GetTotalBillingEvents(ctx context.Context, req *GetTotalBil
 		queryFilter["integrator"] = req.IntegratorName
 	}
 
-	if req.IntegratorUserID != "" {
-		queryFilter["integrator_customer_id"] = req.IntegratorUserID
+	integratorCustomerID := req.IntegratorCustomerID
+	if integratorCustomerID == "" {
+		integratorCustomerID = req.IntegratorUserID
+	}
+	if integratorCustomerID != "" {
+		queryFilter["integrator_customer_id"] = integratorCustomerID
+	}
+
+	if req.IntegratorTransactionID != "" {
+		queryFilter["integrator_transaction_id"] = req.IntegratorTransactionID
 	}
 
 	if req.IntegratorSubscriptionID != "" {
@@ -426,6 +434,10 @@ func (r *Repository) GetTotalBillingEvents(ctx context.Context, req *GetTotalBil
 
 	if len(req.UserIDs) > 0 {
 		queryFilter["user_id"] = bson.M{"$in": req.UserIDs}
+	}
+
+	if len(req.Emails) > 0 {
+		queryFilter["email"] = bson.M{"$in": standardisedEmails(req.Emails)}
 	}
 
 	if len(req.EventTypes) > 0 {
@@ -492,7 +504,6 @@ func (r *Repository) GetBillingEvents(ctx context.Context, req *GetBillingEvents
 	)
 
 	findOptions := options.Find()
-
 	findOptions.SetLimit(*paginationLimit)
 	findOptions.SetSkip(*repository.GetPaginationSkip(int64(req.Page), paginationLimit))
 
@@ -501,8 +512,16 @@ func (r *Repository) GetBillingEvents(ctx context.Context, req *GetBillingEvents
 		queryFilter = append(queryFilter, bson.E{Key: "integrator", Value: req.IntegratorName})
 	}
 
-	if req.IntegratorUserID != "" {
-		queryFilter = append(queryFilter, bson.E{Key: "integrator_customer_id", Value: req.IntegratorUserID})
+	integratorCustomerID := req.IntegratorCustomerID
+	if integratorCustomerID == "" {
+		integratorCustomerID = req.IntegratorUserID
+	}
+	if integratorCustomerID != "" {
+		queryFilter = append(queryFilter, bson.E{Key: "integrator_customer_id", Value: integratorCustomerID})
+	}
+
+	if req.IntegratorTransactionID != "" {
+		queryFilter = append(queryFilter, bson.E{Key: "integrator_transaction_id", Value: req.IntegratorTransactionID})
 	}
 
 	if req.IntegratorSubscriptionID != "" {
@@ -511,6 +530,10 @@ func (r *Repository) GetBillingEvents(ctx context.Context, req *GetBillingEvents
 
 	if len(req.ForUserIDs) > 0 {
 		queryFilter = append(queryFilter, bson.E{Key: "user_id", Value: bson.M{"$in": req.ForUserIDs}})
+	}
+
+	if len(req.ForEmails) > 0 {
+		queryFilter = append(queryFilter, bson.E{Key: "email", Value: bson.M{"$in": standardisedEmails(req.ForEmails)}})
 	}
 
 	if len(req.EventTypes) > 0 {
@@ -555,6 +578,10 @@ func (r *Repository) GetBillingEvents(ctx context.Context, req *GetBillingEvents
 		requestFilter = append(requestFilter, bson.E{Key: "updated_at", Value: 1})
 	case "updated_at_desc":
 		requestFilter = append(requestFilter, bson.E{Key: "updated_at", Value: -1})
+	case "event_time_asc":
+		requestFilter = append(requestFilter, bson.E{Key: "provider_event_time", Value: 1})
+	case "event_time_desc":
+		requestFilter = append(requestFilter, bson.E{Key: "provider_event_time", Value: -1})
 	default:
 		requestFilter = append(requestFilter, bson.E{Key: "created_at", Value: -1})
 	}
@@ -589,6 +616,9 @@ func (r *Repository) CreateBillingEvent(ctx context.Context, newEvent *BillingEv
 
 	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, newEvent, "billing_event")
 	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, ErrBillingEventAlreadyProcessed
+		}
 		return nil, err
 	}
 
