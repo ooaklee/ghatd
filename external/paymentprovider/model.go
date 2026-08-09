@@ -63,11 +63,26 @@ type WebhookPayload struct {
 	// Currency is the ISO 4217 currency code (e.g., "USD", "GBP")
 	Currency string
 
+	// SubscriptionTerms describes recurring commercial terms independently of
+	// Amount and Currency, which remain the totals for this individual ledger
+	// event. Nil term fields mean the provider event did not establish that
+	// value; a non-nil zero Amount is a known free recurring price.
+	SubscriptionTerms SubscriptionTerms
+
+	// SubscriptionStateAuthoritative reports that this provider event is a
+	// subscription lifecycle snapshot rather than a checkout or invoice event.
+	// Billing Manager uses it to prevent older lifecycle deliveries from
+	// rolling back newer access state and commercial terms.
+	SubscriptionStateAuthoritative bool
+
 	// IsFirstSubscriptionPayment indicates if this is the first payment of a subscription
 	IsFirstSubscriptionPayment bool
 
 	// NextBillingDate is when the next payment will be attempted (ISO 8601 format)
 	NextBillingDate string
+
+	// TrialEndsAt is when the provider-managed trial ends (ISO 8601 format).
+	TrialEndsAt string
 
 	// AvailableUntilDate is when the subscription access expires (ISO 8601 format)
 	AvailableUntilDate string
@@ -83,6 +98,23 @@ type WebhookPayload struct {
 
 	// RawPayload is the original JSON payload from the provider (for auditing)
 	RawPayload string
+}
+
+// SubscriptionTerms contains provider-neutral recurring commercial terms.
+// Pointer fields preserve the distinction between an absent value and a
+// known zero value. Amount is the licensed per-unit recurring amount multiplied
+// by Quantity, expressed in the currency's minor unit.
+type SubscriptionTerms struct {
+	// Observed reports that the provider supplied a commercial item snapshot.
+	// Observed with nil Amount means the amount is unsupported or ambiguous;
+	// Observed false means this event carried no commercial snapshot.
+	Observed             bool
+	Amount               *int64
+	Currency             *string
+	BillingInterval      *string
+	BillingIntervalCount *int64
+	Quantity             *int64
+	ProviderPriceID      *string
 }
 
 // IsSubscription returns true if the payment type is a subscription
@@ -182,6 +214,23 @@ type CustomerPortalSessionRequest struct {
 type CustomerPortalSession struct {
 	ID  string `json:"id,omitempty"`
 	URL string `json:"url"`
+}
+
+// UpcomingInvoicePreviewRequest identifies the server-owned recurring
+// subscription whose next invoice should be estimated.
+type UpcomingInvoicePreviewRequest struct {
+	SubscriptionID string
+}
+
+// UpcomingInvoicePreview is a provider-generated estimate. It is not a final
+// invoice: provider state, taxes, discounts, credits, or usage can still change.
+type UpcomingInvoicePreview struct {
+	Subtotal  int64
+	TaxAmount int64
+	Total     int64
+	AmountDue int64
+	Currency  string
+	DueDate   string
 }
 
 // SubscriptionInfo represents detailed subscription information from a provider's API

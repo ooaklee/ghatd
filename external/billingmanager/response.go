@@ -12,6 +12,12 @@ type ProcessBillingProviderCheckoutResponse struct {
 	Session *paymentprovider.CheckoutSession `json:"session"`
 }
 
+// ProcessBillingProviderPortalResponse contains the browser-safe hosted portal
+// session returned by a successful request.
+type ProcessBillingProviderPortalResponse struct {
+	Session *paymentprovider.CustomerPortalSession `json:"session"`
+}
+
 // GetUserBillingDetailResponse represents the response containing billing information for a user
 type GetUserBillingDetailResponse struct {
 

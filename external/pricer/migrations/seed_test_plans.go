@@ -2,6 +2,8 @@ package migrations
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 
 	"github.com/ooaklee/ghatd/external/pricer"
@@ -15,8 +17,17 @@ import (
 // seed data.
 const TestPlansSeedCreatedByID = "test-plans-seed-migration"
 
-// Deterministic identifiers for the Fireflies-style E2E seed. Kept as exported
-// vars so integration tests and golden fixtures can reference them by name.
+// TestStripePlansSeedCreatedByID identifies the provider-specific checkout
+// fixtures separately from the comparison-card seed. Keeping a distinct owner
+// lets the forward reconciliation and rollback touch only these test plans.
+const TestStripePlansSeedCreatedByID = "test-stripe-plans-seed-migration-v1"
+
+// ErrTestPlansSeedConflict indicates that deterministic test identifiers are
+// already present or that a partial seed could not be applied safely.
+var ErrTestPlansSeedConflict = errors.New("test pricing seed conflict")
+
+// Deterministic identifiers for the tiered E2E seed. Kept as exported vars so
+// integration tests and golden fixtures can reference them by name.
 var (
 	// Feature catalog identifiers.
 	TestSeedFeatureTranscriptionID   = "30000000-0000-4000-8000-000000000001"
@@ -29,17 +40,143 @@ var (
 	TestSeedFeatureSsoID             = "30000000-0000-4000-8000-000000000008"
 
 	// Plan identifiers.
-	TestSeedPlanFreeID       = "10000000-0000-4000-8000-000000000001"
-	TestSeedPlanProID        = "10000000-0000-4000-8000-000000000002"
-	TestSeedPlanEnterpriseID = "10000000-0000-4000-8000-000000000003"
+	TestSeedPlanFreeID            = "10000000-0000-4000-8000-000000000001"
+	TestSeedPlanProID             = "10000000-0000-4000-8000-000000000002"
+	TestSeedPlanEnterpriseID      = "10000000-0000-4000-8000-000000000003"
+	TestSeedPlanStripeOneTimeID   = "10000000-0000-4000-8000-000000000004"
+	TestSeedPlanStripeRecurringID = "10000000-0000-4000-8000-000000000005"
+	TestSeedPlanStripeTrialID     = "10000000-0000-4000-8000-000000000006"
 
 	// Cost identifiers.
-	TestSeedCostFreeMonthID       = "20000000-0000-4000-8000-000000000001"
-	TestSeedCostProMonthID        = "20000000-0000-4000-8000-000000000002"
-	TestSeedCostProYearID         = "20000000-0000-4000-8000-000000000003"
-	TestSeedCostEnterpriseMonthID = "20000000-0000-4000-8000-000000000004"
-	TestSeedCostEnterpriseYearID  = "20000000-0000-4000-8000-000000000005"
+	TestSeedCostFreeMonthID            = "20000000-0000-4000-8000-000000000001"
+	TestSeedCostProMonthID             = "20000000-0000-4000-8000-000000000002"
+	TestSeedCostProYearID              = "20000000-0000-4000-8000-000000000003"
+	TestSeedCostEnterpriseMonthID      = "20000000-0000-4000-8000-000000000004"
+	TestSeedCostEnterpriseYearID       = "20000000-0000-4000-8000-000000000005"
+	TestSeedCostStripeOneTimeID        = "20000000-0000-4000-8000-000000000006"
+	TestSeedCostStripeRecurringMonthID = "20000000-0000-4000-8000-000000000007"
+	TestSeedCostStripeRecurringYearID  = "20000000-0000-4000-8000-000000000008"
+	TestSeedCostStripeRecurringWeekID  = "20000000-0000-4000-8000-000000000009"
+	TestSeedCostStripeTrialMonthID     = "20000000-0000-4000-8000-000000000010"
+	TestSeedCostStripeTrialYearID      = "20000000-0000-4000-8000-000000000011"
+	TestSeedCostStripeTrialWeekID      = "20000000-0000-4000-8000-000000000012"
+
+	TestSeedStripeOneTimeProductID   = "prod_test_stripe_one_time"
+	TestSeedStripeRecurringProductID = "prod_test_stripe_recurring"
+	TestSeedStripeTrialProductID     = "prod_test_stripe_recurring_trial"
+
+	TestSeedStripeOneTimePriceID        = "price_test_stripe_one_time"
+	TestSeedStripeRecurringMonthPriceID = "price_test_stripe_recurring_monthly"
+	TestSeedStripeRecurringYearPriceID  = "price_test_stripe_recurring_yearly"
+	TestSeedStripeRecurringWeekPriceID  = "price_test_stripe_recurring_weekly"
+	TestSeedStripeTrialMonthPriceID     = "price_test_stripe_trial_monthly"
+	TestSeedStripeTrialYearPriceID      = "price_test_stripe_trial_yearly"
+	TestSeedStripeTrialWeekPriceID      = "price_test_stripe_trial_weekly"
 )
+
+type testStripeCostSeed struct {
+	ID              string
+	ProviderPriceID string
+	Amount          int64
+	BillingCadence  pricer.PriceBillingCadence
+	TrialPeriodDays int
+}
+
+type testStripePlanSeed struct {
+	ID                string
+	NanoID            string
+	Slug              string
+	Name              string
+	Description       string
+	ProviderProductID string
+	CTALabel          string
+	DisplayOrder      int
+	Costs             []testStripeCostSeed
+}
+
+var testStripePlanSeeds = []testStripePlanSeed{
+	{
+		ID:                TestSeedPlanStripeOneTimeID,
+		NanoID:            "tP4stripeOneTime004",
+		Slug:              "stripe-one-time-test",
+		Name:              "Stripe One-Time Test",
+		Description:       "Test-only catalogue fixture for a one-time Stripe Checkout payment.",
+		ProviderProductID: TestSeedStripeOneTimeProductID,
+		CTALabel:          "Test one-time checkout",
+		DisplayOrder:      4,
+		Costs: []testStripeCostSeed{
+			{
+				ID:              TestSeedCostStripeOneTimeID,
+				ProviderPriceID: TestSeedStripeOneTimePriceID,
+				Amount:          4900,
+				BillingCadence:  pricer.PriceBillingCadenceOneTime,
+			},
+		},
+	},
+	{
+		ID:                TestSeedPlanStripeRecurringID,
+		NanoID:            "tP5stripeRecurring05",
+		Slug:              "stripe-recurring-test",
+		Name:              "Stripe Recurring Test",
+		Description:       "Test-only catalogue fixture for recurring Stripe Checkout without a trial.",
+		ProviderProductID: TestSeedStripeRecurringProductID,
+		CTALabel:          "Test recurring checkout",
+		DisplayOrder:      5,
+		Costs: []testStripeCostSeed{
+			{
+				ID:              TestSeedCostStripeRecurringMonthID,
+				ProviderPriceID: TestSeedStripeRecurringMonthPriceID,
+				Amount:          1800,
+				BillingCadence:  pricer.PriceBillingCadenceMonthly,
+			},
+			{
+				ID:              TestSeedCostStripeRecurringYearID,
+				ProviderPriceID: TestSeedStripeRecurringYearPriceID,
+				Amount:          18000,
+				BillingCadence:  pricer.PriceBillingCadenceYearly,
+			},
+			{
+				ID:              TestSeedCostStripeRecurringWeekID,
+				ProviderPriceID: TestSeedStripeRecurringWeekPriceID,
+				Amount:          500,
+				BillingCadence:  pricer.PriceBillingCadenceWeekly,
+			},
+		},
+	},
+	{
+		ID:                TestSeedPlanStripeTrialID,
+		NanoID:            "tP6stripeTrial000006",
+		Slug:              "stripe-recurring-trial-test",
+		Name:              "Stripe Recurring Trial Test",
+		Description:       "Test-only catalogue fixture for recurring Stripe Checkout with a catalogue-owned trial.",
+		ProviderProductID: TestSeedStripeTrialProductID,
+		CTALabel:          "Test trial checkout",
+		DisplayOrder:      6,
+		Costs: []testStripeCostSeed{
+			{
+				ID:              TestSeedCostStripeTrialMonthID,
+				ProviderPriceID: TestSeedStripeTrialMonthPriceID,
+				Amount:          1800,
+				BillingCadence:  pricer.PriceBillingCadenceMonthly,
+				TrialPeriodDays: 14,
+			},
+			{
+				ID:              TestSeedCostStripeTrialYearID,
+				ProviderPriceID: TestSeedStripeTrialYearPriceID,
+				Amount:          18000,
+				BillingCadence:  pricer.PriceBillingCadenceYearly,
+				TrialPeriodDays: 30,
+			},
+			{
+				ID:              TestSeedCostStripeTrialWeekID,
+				ProviderPriceID: TestSeedStripeTrialWeekPriceID,
+				Amount:          500,
+				BillingCadence:  pricer.PriceBillingCadenceWeekly,
+				TrialPeriodDays: 7,
+			},
+		},
+	},
+}
 
 // boolFeatureRef builds a PlanFeatureRef document for boolean catalog features
 // that are simply included or excluded from a plan.
@@ -52,18 +189,110 @@ func boolFeatureRef(featureID, slug, label string, included bool) bson.M {
 	}
 }
 
-// InitTestPlansSeedUp inserts a Fireflies-style three-tier pricing catalog
-// (Free / Pro / Enterprise) used to drive E2E pricing card comparisons. Legacy
-// UI fields (type, is_popular, conditional, more, is_new, link, images,
-// priority, per_seat, disabled, discount_percentage) are persisted in the
-// metadata maps so the existing model can serve them without schema expansion.
+func testStripeFixturePlans(now string) []interface{} {
+	plans := make([]interface{}, 0, len(testStripePlanSeeds))
+	for _, seed := range testStripePlanSeeds {
+		plans = append(plans, testStripeFixturePlan(seed, now))
+	}
+	return plans
+}
+
+func testStripeFixturePlan(seed testStripePlanSeed, now string) bson.M {
+	costs := make([]bson.M, 0, len(seed.Costs))
+	for _, costSeed := range seed.Costs {
+		cost := bson.M{
+			"_id":             costSeed.ID,
+			"amount":          costSeed.Amount,
+			"currency":        "USD",
+			"billing_cadence": costSeed.BillingCadence,
+			"provider_refs": []bson.M{
+				{
+					"provider":          pricer.PriceProviderStripe,
+					"provider_price_id": costSeed.ProviderPriceID,
+				},
+			},
+			"metadata": bson.M{
+				"test_fixture": bson.M{
+					"stripe":        true,
+					"trial_variant": costSeed.TrialPeriodDays > 0,
+				},
+			},
+		}
+		if costSeed.TrialPeriodDays > 0 {
+			cost["trial_period_days"] = costSeed.TrialPeriodDays
+		}
+		costs = append(costs, cost)
+	}
+
+	return bson.M{
+		"_id":         seed.ID,
+		"_nano_id":    seed.NanoID,
+		"slug":        seed.Slug,
+		"name":        seed.Name,
+		"description": seed.Description,
+		"status":      pricer.PricePlanStatusPublished,
+		"features": []bson.M{
+			{
+				"feature_id":   TestSeedFeatureTranscriptionID,
+				"feature_slug": "transcription-credits",
+				"label":        "10,000 minutes per month",
+				"included":     true,
+				"quantity":     10000,
+				"unit":         pricer.PriceFeatureUnitRequest,
+			},
+			{
+				"feature_id":   TestSeedFeatureStorageID,
+				"feature_slug": "storage-limit",
+				"label":        "100 GB storage",
+				"included":     true,
+				"quantity":     100,
+				"unit":         pricer.PriceFeatureUnitGB,
+			},
+			boolFeatureRef(TestSeedFeatureIntegrationsID, "integrations", "Integrations", true),
+			boolFeatureRef(TestSeedFeatureApiAccessID, "developer-api-access", "API access", true),
+		},
+		"costs": costs,
+		"provider_refs": []bson.M{
+			{
+				"provider":            pricer.PriceProviderStripe,
+				"provider_product_id": seed.ProviderProductID,
+			},
+		},
+		"metadata": bson.M{
+			"ui": bson.M{
+				"type":       "TEST",
+				"is_popular": false,
+				"cta_label":  seed.CTALabel,
+			},
+			"test_fixture": bson.M{
+				"stripe":                true,
+				"replace_provider_refs": true,
+			},
+		},
+		"display_order":   seed.DisplayOrder,
+		"published_at":    now,
+		"published_by_id": TestStripePlansSeedCreatedByID,
+		"created_at":      now,
+		"created_by_id":   TestStripePlansSeedCreatedByID,
+	}
+}
+
+// InitTestPlansSeedUp inserts the comparison catalogue plus explicit Stripe
+// checkout fixtures. It is intended for isolated E2E tests that register a
+// fake checkout provider; the provider identifiers are non-live placeholders.
 func InitTestPlansSeedUp(db *mongo.Database) error { //Up
+	if db == nil {
+		return fmt.Errorf("%w: database is nil", ErrTestPlansSeedConflict)
+	}
 
 	log.SetFlags(0)
 
 	now := toolbox.TimeNowUTC()
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "starting-task-to-test-plans-seed"))
+	if err := preflightTestPlansSeed(context.Background(), db); err != nil {
+		return err
+	}
 
 	features := []interface{}{
 		bson.M{
@@ -175,7 +404,7 @@ func InitTestPlansSeedUp(db *mongo.Database) error { //Up
 
 	if _, err := db.Collection(pricer.PriceFeaturesCollection).InsertMany(context.Background(), features); err != nil {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-task-to-test-plans-seed-features"))
-		return err
+		return errors.Join(err, cleanupPartialTestPlansSeed(context.Background(), db))
 	}
 
 	freePlan := bson.M{
@@ -438,37 +667,167 @@ func InitTestPlansSeedUp(db *mongo.Database) error { //Up
 		"created_by_id":   TestPlansSeedCreatedByID,
 	}
 
+	plans := []interface{}{freePlan, proPlan, enterprisePlan}
+	plans = append(plans, testStripeFixturePlans(now)...)
 	if _, err := db.Collection(pricer.PricePlansCollection).InsertMany(
 		context.Background(),
-		[]interface{}{freePlan, proPlan, enterprisePlan},
+		plans,
 	); err != nil {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-task-to-test-plans-seed-plans"))
-		return err
+		return errors.Join(err, cleanupPartialTestPlansSeed(context.Background(), db))
 	}
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "completed-task-to-test-plans-seed"))
 	return nil
 }
 
+func preflightTestPlansSeed(ctx context.Context, db *mongo.Database) error {
+	featureIDs := []string{
+		TestSeedFeatureTranscriptionID,
+		TestSeedFeatureStorageID,
+		TestSeedFeatureTeamSeatsID,
+		TestSeedFeatureIntegrationsID,
+		TestSeedFeatureApiAccessID,
+		TestSeedFeaturePrioritySupportID,
+		TestSeedFeatureCustomBrandingID,
+		TestSeedFeatureSsoID,
+	}
+	featureSlugs := []string{
+		"transcription-credits",
+		"storage-limit",
+		"team-seats",
+		"integrations",
+		"developer-api-access",
+		"priority-support-tier",
+		"custom-branding",
+		"sso",
+	}
+	featureCount, err := db.Collection(pricer.PriceFeaturesCollection).CountDocuments(ctx, bson.M{
+		"$or": []bson.M{
+			{"_id": bson.M{"$in": featureIDs}},
+			{"slug": bson.M{"$in": featureSlugs}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if featureCount != 0 {
+		return fmt.Errorf("%w: feature identifier already exists", ErrTestPlansSeedConflict)
+	}
+
+	planIDs := []string{
+		TestSeedPlanFreeID,
+		TestSeedPlanProID,
+		TestSeedPlanEnterpriseID,
+		TestSeedPlanStripeOneTimeID,
+		TestSeedPlanStripeRecurringID,
+		TestSeedPlanStripeTrialID,
+	}
+	planSlugs := []string{
+		"free",
+		"pro",
+		"enterprise",
+		"stripe-one-time-test",
+		"stripe-recurring-test",
+		"stripe-recurring-trial-test",
+	}
+	costIDs := []string{
+		TestSeedCostFreeMonthID,
+		TestSeedCostProMonthID,
+		TestSeedCostProYearID,
+		TestSeedCostEnterpriseMonthID,
+		TestSeedCostEnterpriseYearID,
+		TestSeedCostStripeOneTimeID,
+		TestSeedCostStripeRecurringMonthID,
+		TestSeedCostStripeRecurringYearID,
+		TestSeedCostStripeRecurringWeekID,
+		TestSeedCostStripeTrialMonthID,
+		TestSeedCostStripeTrialYearID,
+		TestSeedCostStripeTrialWeekID,
+	}
+	priceIDs := []string{
+		"free_monthly",
+		"price_test_pro_monthly",
+		"price_test_pro_yearly",
+		"price_test_enterprise_monthly",
+		"price_test_enterprise_yearly",
+		TestSeedStripeOneTimePriceID,
+		TestSeedStripeRecurringMonthPriceID,
+		TestSeedStripeRecurringYearPriceID,
+		TestSeedStripeRecurringWeekPriceID,
+		TestSeedStripeTrialMonthPriceID,
+		TestSeedStripeTrialYearPriceID,
+		TestSeedStripeTrialWeekPriceID,
+	}
+	planCount, err := db.Collection(pricer.PricePlansCollection).CountDocuments(ctx, bson.M{
+		"$or": []bson.M{
+			{"_id": bson.M{"$in": planIDs}},
+			{"slug": bson.M{"$in": planSlugs}},
+			{"costs._id": bson.M{"$in": costIDs}},
+			{"costs.provider_refs.provider_price_id": bson.M{"$in": priceIDs}},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if planCount != 0 {
+		return fmt.Errorf("%w: plan, cost, or provider Price identifier already exists", ErrTestPlansSeedConflict)
+	}
+	return nil
+}
+
+func cleanupPartialTestPlansSeed(ctx context.Context, db *mongo.Database) error {
+	planIDs := []string{
+		TestSeedPlanFreeID,
+		TestSeedPlanProID,
+		TestSeedPlanEnterpriseID,
+		TestSeedPlanStripeOneTimeID,
+		TestSeedPlanStripeRecurringID,
+		TestSeedPlanStripeTrialID,
+	}
+	_, planErr := db.Collection(pricer.PricePlansCollection).DeleteMany(ctx, bson.M{
+		"_id":           bson.M{"$in": planIDs},
+		"created_by_id": bson.M{"$in": []string{TestPlansSeedCreatedByID, TestStripePlansSeedCreatedByID}},
+	})
+	featureIDs := []string{
+		TestSeedFeatureTranscriptionID,
+		TestSeedFeatureStorageID,
+		TestSeedFeatureTeamSeatsID,
+		TestSeedFeatureIntegrationsID,
+		TestSeedFeatureApiAccessID,
+		TestSeedFeaturePrioritySupportID,
+		TestSeedFeatureCustomBrandingID,
+		TestSeedFeatureSsoID,
+	}
+	_, featureErr := db.Collection(pricer.PriceFeaturesCollection).DeleteMany(ctx, bson.M{
+		"_id":           bson.M{"$in": featureIDs},
+		"created_by_id": TestPlansSeedCreatedByID,
+	})
+	return errors.Join(planErr, featureErr)
+}
+
 // InitTestPlansSeedDown removes the documents created by InitTestPlansSeedUp.
 func InitTestPlansSeedDown(db *mongo.Database) error { //Down
+	if err := InitTestStripePlansSeedReconcileDown(db); err != nil {
+		return err
+	}
 	log.SetFlags(0)
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "rolling-back-task-to-test-plans-seed"))
-
-	if _, err := db.Collection(pricer.PriceFeaturesCollection).DeleteMany(
-		context.Background(),
-		bson.M{"created_by_id": TestPlansSeedCreatedByID},
-	); err != nil {
-		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-test-plans-seed-features"))
-		return err
-	}
 
 	if _, err := db.Collection(pricer.PricePlansCollection).DeleteMany(
 		context.Background(),
 		bson.M{"created_by_id": TestPlansSeedCreatedByID},
 	); err != nil {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-test-plans-seed-plans"))
+		return err
+	}
+
+	if _, err := db.Collection(pricer.PriceFeaturesCollection).DeleteMany(
+		context.Background(),
+		bson.M{"created_by_id": TestPlansSeedCreatedByID},
+	); err != nil {
+		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-test-plans-seed-features"))
 		return err
 	}
 

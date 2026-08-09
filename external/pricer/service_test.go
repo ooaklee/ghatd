@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -290,6 +291,150 @@ func TestService_CreatePricePlan(t *testing.T) {
 	}
 }
 
+func TestService_CreatePricePlan_AssignsMissingCostIDsBeforePersistence(t *testing.T) {
+	t.Parallel()
+
+	const existingCostID = "existing-cost-id"
+	var persistedCosts []pricer.PriceCost
+	repo := &mockPricerRepository{
+		createPricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			persistedCosts = append([]pricer.PriceCost(nil), pricePlan.Costs...)
+			return pricePlan, nil
+		},
+	}
+
+	response, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
+		UserID: testUserID,
+		Name:   testPlanName,
+		Costs: []pricer.PriceCost{
+			{
+				ID:             existingCostID,
+				Amount:         1000,
+				Currency:       "USD",
+				BillingCadence: pricer.PriceBillingCadenceMonthly,
+			},
+			{
+				Amount:         12000,
+				Currency:       "USD",
+				BillingCadence: pricer.PriceBillingCadenceYearly,
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, persistedCosts, 2)
+	assert.Equal(t, existingCostID, persistedCosts[0].ID)
+	assert.NotEmpty(t, persistedCosts[1].ID)
+	assert.NoError(t, uuid.Validate(persistedCosts[1].ID))
+	require.NotNil(t, response)
+	require.NotNil(t, response.PricePlan)
+	assert.Equal(t, persistedCosts[1].ID, response.PricePlan.Costs[1].ID)
+}
+
+func TestService_CreatePricePlan_PersistsDisplayOrder(t *testing.T) {
+	t.Parallel()
+
+	displayOrder := 0
+	var persistedDisplayOrder *int
+	repo := &mockPricerRepository{
+		createPricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			persistedDisplayOrder = pricePlan.DisplayOrder
+			return pricePlan, nil
+		},
+	}
+
+	response, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
+		UserID:       testUserID,
+		Name:         testPlanName,
+		DisplayOrder: &displayOrder,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, persistedDisplayOrder)
+	assert.Equal(t, 0, *persistedDisplayOrder)
+	require.NotNil(t, response)
+	require.NotNil(t, response.PricePlan)
+	assert.Same(t, persistedDisplayOrder, response.PricePlan.DisplayOrder)
+}
+
+func TestService_CreatePricePlan_NormalisesDirectPublishedStatus(t *testing.T) {
+	t.Parallel()
+
+	repo := &mockPricerRepository{
+		createPricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			return pricePlan, nil
+		},
+	}
+
+	response, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
+		UserID: testUserID,
+		Name:   testPlanName,
+		Status: pricer.PricePlanStatusPublished,
+		Costs: []pricer.PriceCost{
+			{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
+		},
+		ProviderRefs: []pricer.PriceProviderRef{{Provider: pricer.PriceProviderManual}},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, response.PricePlan)
+	assert.Equal(t, pricer.PricePlanStatusPublished, response.PricePlan.Status)
+	assert.NotEmpty(t, response.PricePlan.PublishedAt)
+	assert.Equal(t, testUserID, response.PricePlan.PublishedByID)
+}
+
+func TestService_CreatePricePlan_RejectsStripePlanThatCheckoutCannotRepresent(t *testing.T) {
+	t.Parallel()
+
+	repositoryCalled := false
+	repo := &mockPricerRepository{
+		createPricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			repositoryCalled = true
+			return pricePlan, nil
+		},
+	}
+
+	_, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
+		UserID: testUserID,
+		Name:   testPlanName,
+		Status: pricer.PricePlanStatusPublished,
+		Costs: []pricer.PriceCost{{
+			Amount:         1000,
+			Currency:       "USD",
+			BillingCadence: pricer.PriceBillingCadenceMonthly,
+			ProviderRefs:   []pricer.PriceProviderRef{{Provider: pricer.PriceProviderStripe}},
+		}},
+	})
+
+	require.ErrorIs(t, err, pricer.ErrPricePlanStripeCheckoutUnsupported)
+	assert.False(t, repositoryCalled)
+}
+
+func TestService_CreatePricePlan_RejectsDuplicateCostIDsBeforePersistence(t *testing.T) {
+	t.Parallel()
+
+	repositoryCalled := false
+	repo := &mockPricerRepository{
+		createPricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			repositoryCalled = true
+			return pricePlan, nil
+		},
+	}
+
+	_, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
+		UserID: testUserID,
+		Name:   testPlanName,
+		Costs: []pricer.PriceCost{
+			{ID: "duplicate-cost-id", Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
+			{ID: "duplicate-cost-id", Amount: 12000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceYearly},
+		},
+	})
+
+	require.ErrorIs(t, err, pricer.ErrDuplicatePriceCostID)
+	assert.False(t, repositoryCalled)
+}
+
 func TestService_UpdatePricePlan(t *testing.T) {
 	t.Parallel()
 
@@ -376,6 +521,138 @@ func TestService_UpdatePricePlan(t *testing.T) {
 			assert.Equal(t, testUserID, response.PricePlan.UpdatedByID)
 		})
 	}
+}
+
+func TestService_UpdatePricePlan_AssignsOnlyNewCostIDsBeforePersistence(t *testing.T) {
+	t.Parallel()
+
+	const existingCostID = "existing-cost-id"
+	existingPlan := makeValidPlan()
+	existingPlan.Costs[0].ID = existingCostID
+
+	var persistedCosts []pricer.PriceCost
+	repo := &mockPricerRepository{
+		getPricePlanByIDFunc: func(_ context.Context, _ string, _ *pricer.GetPricePlanByIDRequest) (*pricer.PricePlan, error) {
+			return existingPlan, nil
+		},
+		updatePricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			persistedCosts = append([]pricer.PriceCost(nil), pricePlan.Costs...)
+			return pricePlan, nil
+		},
+	}
+
+	response, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
+		ID:     testPlanID,
+		UserID: testUserID,
+		Costs: []pricer.PriceCost{
+			{
+				ID:             existingCostID,
+				Amount:         1000,
+				Currency:       "USD",
+				BillingCadence: pricer.PriceBillingCadenceMonthly,
+			},
+			{
+				Amount:         250,
+				Currency:       "USD",
+				BillingCadence: pricer.PriceBillingCadenceWeekly,
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, persistedCosts, 2)
+	assert.Equal(t, existingCostID, persistedCosts[0].ID)
+	assert.NotEmpty(t, persistedCosts[1].ID)
+	assert.NoError(t, uuid.Validate(persistedCosts[1].ID))
+	assert.NotEqual(t, persistedCosts[0].ID, persistedCosts[1].ID)
+	require.NotNil(t, response)
+	require.NotNil(t, response.PricePlan)
+	assert.Equal(t, persistedCosts[1].ID, response.PricePlan.Costs[1].ID)
+}
+
+func TestService_UpdatePricePlan_NormalisesDirectPublishedStatus(t *testing.T) {
+	t.Parallel()
+
+	existingPlan := makeValidPlan()
+	publishedStatus := pricer.PricePlanStatusPublished
+	repo := &mockPricerRepository{
+		getPricePlanByIDFunc: func(_ context.Context, _ string, _ *pricer.GetPricePlanByIDRequest) (*pricer.PricePlan, error) {
+			return existingPlan, nil
+		},
+		updatePricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			return pricePlan, nil
+		},
+	}
+
+	response, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
+		ID:     testPlanID,
+		UserID: testUserID,
+		Status: &publishedStatus,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, response.PricePlan)
+	assert.Equal(t, pricer.PricePlanStatusPublished, response.PricePlan.Status)
+	assert.NotEmpty(t, response.PricePlan.PublishedAt)
+	assert.Equal(t, testUserID, response.PricePlan.PublishedByID)
+}
+
+func TestService_UpdatePricePlan_NormalisesFullPublishedPlan(t *testing.T) {
+	t.Parallel()
+
+	existingPlan := makeValidPlan()
+	fullPlan := makeValidPlan()
+	fullPlan.Status = pricer.PricePlanStatusPublished
+	repo := &mockPricerRepository{
+		getPricePlanByIDFunc: func(_ context.Context, _ string, _ *pricer.GetPricePlanByIDRequest) (*pricer.PricePlan, error) {
+			return existingPlan, nil
+		},
+		updatePricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			return pricePlan, nil
+		},
+	}
+
+	response, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
+		ID:        testPlanID,
+		UserID:    testUserID,
+		PricePlan: fullPlan,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	require.NotNil(t, response.PricePlan)
+	assert.Equal(t, pricer.PricePlanStatusPublished, response.PricePlan.Status)
+	assert.NotEmpty(t, response.PricePlan.PublishedAt)
+	assert.Equal(t, testUserID, response.PricePlan.PublishedByID)
+}
+
+func TestService_UpdatePricePlan_RejectsStripePlanThatCheckoutCannotRepresent(t *testing.T) {
+	t.Parallel()
+
+	existingPlan := makeValidPlan()
+	existingPlan.Costs[0].ProviderRefs = []pricer.PriceProviderRef{{Provider: pricer.PriceProviderStripe}}
+	existingPlan.ProviderRefs = nil
+	publishedStatus := pricer.PricePlanStatusPublished
+	repositoryCalled := false
+	repo := &mockPricerRepository{
+		getPricePlanByIDFunc: func(_ context.Context, _ string, _ *pricer.GetPricePlanByIDRequest) (*pricer.PricePlan, error) {
+			return existingPlan, nil
+		},
+		updatePricePlanFunc: func(_ context.Context, pricePlan *pricer.PricePlan) (*pricer.PricePlan, error) {
+			repositoryCalled = true
+			return pricePlan, nil
+		},
+	}
+
+	_, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
+		ID:     testPlanID,
+		UserID: testUserID,
+		Status: &publishedStatus,
+	})
+
+	require.ErrorIs(t, err, pricer.ErrPricePlanStripeCheckoutUnsupported)
+	assert.False(t, repositoryCalled)
 }
 
 func TestService_GetPricePlanByID(t *testing.T) {
@@ -636,6 +913,36 @@ func TestService_PublishPricePlan_RequiresCostAndProvider(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), pricer.ErrKeyPricePlanPublishRequiresProvider)
 	})
+}
+
+func TestService_PublishPricePlan_RejectsStripePlanThatCheckoutCannotRepresent(t *testing.T) {
+	t.Parallel()
+
+	plan := makeValidPlan()
+	plan.Costs[0].ID = "cost-1"
+	plan.Costs[0].ProviderRefs = []pricer.PriceProviderRef{{
+		Provider:        pricer.PriceProviderStripe,
+		ProviderPriceID: "",
+	}}
+	plan.ProviderRefs = nil
+	publishCalled := false
+	repo := &mockPricerRepository{
+		getPricePlanByIDFunc: func(_ context.Context, _ string, _ *pricer.GetPricePlanByIDRequest) (*pricer.PricePlan, error) {
+			return plan, nil
+		},
+		publishPricePlanFunc: func(_ context.Context, _, _, _ string) error {
+			publishCalled = true
+			return nil
+		},
+	}
+
+	_, err := newTestService(repo).PublishPricePlan(context.Background(), &pricer.PublishPricePlanRequest{
+		ID:     testPlanID,
+		UserID: testUserID,
+	})
+
+	require.ErrorIs(t, err, pricer.ErrPricePlanStripeCheckoutUnsupported)
+	assert.False(t, publishCalled)
 }
 
 func TestService_ArchivePricePlan(t *testing.T) {

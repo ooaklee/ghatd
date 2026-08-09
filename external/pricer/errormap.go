@@ -37,4 +37,11 @@ var PricerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrInvalidPriceDate:         {Title: "Bad Request", Detail: "Invalid price date value", StatusCode: 400, Code: "PRC0-21"},
 	ErrInvalidPriceDiscount:     {Title: "Bad Request", Detail: "Invalid price discount", StatusCode: 400, Code: "PRC0-22"},
 	ErrInvalidPricePaymentTerms: {Title: "Bad Request", Detail: "Invalid price payment terms", StatusCode: 400, Code: "PRC0-23"},
+	ErrDuplicatePriceCostID:     {Title: "Bad Request", Detail: "Duplicate price cost ID", StatusCode: 400, Code: "PRC0-24"},
+	ErrPricePlanStripeCheckoutUnsupported: {
+		Title:      "Bad Request",
+		Detail:     "Published Stripe price plan is not compatible with checkout",
+		StatusCode: 400,
+		Code:       "PRC0-25",
+	},
 }

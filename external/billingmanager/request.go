@@ -29,6 +29,16 @@ type ProcessBillingProviderCheckoutRequest struct {
 	SecFetchSite   string
 }
 
+// ProcessBillingProviderPortalRequest contains only authenticated and transport
+// values needed to create a hosted customer-portal session. The service derives
+// the provider customer and return URL from server-owned state.
+type ProcessBillingProviderPortalRequest struct {
+	UserID       string
+	ProviderName string
+	Origin       string
+	SecFetchSite string
+}
+
 // GetUserSubscriptionStatusRequest represents a request to get a user's subscription status
 type GetUserSubscriptionStatusRequest struct {
 	// UserID is the unique identifier of the user

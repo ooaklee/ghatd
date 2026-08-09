@@ -205,12 +205,62 @@ func (r *Repository) UpdatePricePlan(ctx context.Context, pricePlan *PricePlan) 
 		pricePlan.NormaliseSlug()
 	}
 
-	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": pricePlan.ID}, bson.M{"$set": pricePlan}, "price_plan")
+	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": pricePlan.ID}, buildPricePlanUpdate(pricePlan), "price_plan")
 	if err != nil {
 		return nil, err
 	}
 
 	return pricePlan, nil
+}
+
+// buildPricePlanUpdate creates an explicit update document so clearing a
+// mutable optional field is persisted instead of being hidden by BSON
+// omitempty tags. Lifecycle audit fields are only set when supplied and are
+// never removed by a general plan update.
+func buildPricePlanUpdate(pricePlan *PricePlan) bson.M {
+	setFields := bson.M{
+		"slug":          pricePlan.Slug,
+		"name":          pricePlan.Name,
+		"status":        pricePlan.Status,
+		"updated_at":    pricePlan.UpdatedAt,
+		"updated_by_id": pricePlan.UpdatedByID,
+	}
+	unsetFields := bson.M{}
+
+	setOrUnsetPricePlanField(setFields, unsetFields, "description", pricePlan.Description, pricePlan.Description == "")
+	setOrUnsetPricePlanField(setFields, unsetFields, "features", pricePlan.Features, len(pricePlan.Features) == 0)
+	setOrUnsetPricePlanField(setFields, unsetFields, "costs", pricePlan.Costs, len(pricePlan.Costs) == 0)
+	setOrUnsetPricePlanField(setFields, unsetFields, "discounts", pricePlan.Discounts, len(pricePlan.Discounts) == 0)
+	setOrUnsetPricePlanField(setFields, unsetFields, "payment_terms", pricePlan.PaymentTerms, pricePlan.PaymentTerms == nil)
+	setOrUnsetPricePlanField(setFields, unsetFields, "provider_refs", pricePlan.ProviderRefs, len(pricePlan.ProviderRefs) == 0)
+	setOrUnsetPricePlanField(setFields, unsetFields, "metadata", pricePlan.Metadata, len(pricePlan.Metadata) == 0)
+	setOrUnsetPricePlanField(setFields, unsetFields, "display_order", pricePlan.DisplayOrder, pricePlan.DisplayOrder == nil)
+
+	setPricePlanAuditField(setFields, "published_at", pricePlan.PublishedAt)
+	setPricePlanAuditField(setFields, "published_by_id", pricePlan.PublishedByID)
+	setPricePlanAuditField(setFields, "deleted_at", pricePlan.DeletedAt)
+	setPricePlanAuditField(setFields, "deleted_by_id", pricePlan.DeletedByID)
+
+	update := bson.M{"$set": setFields}
+	if len(unsetFields) > 0 {
+		update["$unset"] = unsetFields
+	}
+
+	return update
+}
+
+func setOrUnsetPricePlanField(setFields, unsetFields bson.M, key string, value interface{}, unset bool) {
+	if unset {
+		unsetFields[key] = ""
+		return
+	}
+	setFields[key] = value
+}
+
+func setPricePlanAuditField(setFields bson.M, key, value string) {
+	if value != "" {
+		setFields[key] = value
+	}
 }
 
 // GetPricePlanByID retrieves a price plan by ID.
@@ -555,9 +605,30 @@ func buildPricePlanQueryFilter(req *GetPricePlansRequest) bson.M {
 	addDateRangeFilter(queryFilter, "published_at", req.PublishedAtFrom, req.PublishedAtTo)
 	addDateRangeFilter(queryFilter, "deleted_at", req.DeletedAtFrom, req.DeletedAtTo)
 	addDeletedFilter(queryFilter, req.IsDeleted, req.IsNotDeleted)
-	addPublishedFilter(queryFilter, req.IsPublished, req.IsNotPublished)
+	addPricePlanPublishedFilter(queryFilter, req.IsPublished, req.IsNotPublished)
 
 	return queryFilter
+}
+
+func addPricePlanPublishedFilter(queryFilter bson.M, isPublished bool, isNotPublished bool) {
+	currentTime := toolbox.TimeNowUTC()
+
+	if isPublished {
+		appendAndFilter(queryFilter, bson.M{"status": PricePlanStatusPublished})
+		appendAndFilter(queryFilter, bson.M{
+			"published_at": bson.M{"$exists": true, "$ne": "", "$lte": currentTime},
+		})
+	}
+	if isNotPublished {
+		appendAndFilter(queryFilter, bson.M{
+			"$or": []bson.M{
+				{"status": bson.M{"$ne": PricePlanStatusPublished}},
+				{"published_at": bson.M{"$exists": false}},
+				{"published_at": ""},
+				{"published_at": bson.M{"$gt": currentTime}},
+			},
+		})
+	}
 }
 
 func buildPriceFeatureQueryFilter(req *GetFeaturesRequest) bson.M {

@@ -61,14 +61,24 @@ type Subscription struct {
 	CostID          string `json:"cost_id,omitempty" bson:"cost_id,omitempty"`
 	ProviderPriceID string `json:"provider_price_id,omitempty" bson:"provider_price_id,omitempty"`
 
-	// Amount is the subscription amount (in cents)
+	// Amount is the subscription amount in the currency's minor unit.
 	Amount int64 `json:"amount" bson:"amount"`
+
+	// AmountKnown distinguishes an explicit free recurring price from a legacy
+	// or ambiguous record whose recurring amount is unknown.
+	AmountKnown bool `json:"amount_known" bson:"amount_known,omitempty"`
 
 	// Currency is the ISO 4217 currency code
 	Currency string `json:"currency" bson:"currency"`
 
 	// BillingInterval is the billing frequency (month, year, etc.)
 	BillingInterval string `json:"billing_interval" bson:"billing_interval,omitempty"`
+
+	// BillingIntervalCount is the number of intervals between renewals.
+	BillingIntervalCount int64 `json:"billing_interval_count,omitempty" bson:"billing_interval_count,omitempty"`
+
+	// Quantity is the licensed quantity already included in Amount.
+	Quantity int64 `json:"quantity,omitempty" bson:"quantity,omitempty"`
 
 	// NextBillingDate is when the next payment will be attempted
 	NextBillingDate *time.Time `json:"next_billing_date,omitempty" bson:"next_billing_date,omitempty"`

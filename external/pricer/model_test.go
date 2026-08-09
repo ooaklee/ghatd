@@ -519,6 +519,194 @@ func TestValidatePriceCosts(t *testing.T) {
 	err := pricer.ValidatePriceCosts([]pricer.PriceCost{invalidCost})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), pricer.ErrKeyInvalidPriceCurrency)
+
+	duplicateCosts := []pricer.PriceCost{
+		{ID: "cost-1", Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
+		{ID: "cost-1", Amount: 12000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceYearly},
+	}
+	err = pricer.ValidatePriceCosts(duplicateCosts)
+	require.ErrorIs(t, err, pricer.ErrDuplicatePriceCostID)
+
+	idLessCosts := []pricer.PriceCost{
+		{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
+		{Amount: 12000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceYearly},
+	}
+	require.NoError(t, pricer.ValidatePriceCosts(idLessCosts))
+}
+
+func TestHasDuplicatePriceCostIDs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		costs    []pricer.PriceCost
+		expected bool
+	}{
+		{name: "no costs", costs: nil, expected: false},
+		{name: "distinct IDs", costs: []pricer.PriceCost{{ID: "cost-1"}, {ID: "cost-2"}}, expected: false},
+		{name: "missing IDs are ignored", costs: []pricer.PriceCost{{}, {}}, expected: false},
+		{name: "duplicate non-empty ID", costs: []pricer.PriceCost{{ID: "cost-1"}, {ID: "cost-1"}}, expected: true},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, pricer.HasDuplicatePriceCostIDs(tt.costs))
+		})
+	}
+}
+
+func TestValidatePricePlanForPublish_StripeCheckoutReadiness(t *testing.T) {
+	t.Parallel()
+
+	validStripePlan := func() *pricer.PricePlan {
+		return &pricer.PricePlan{
+			Name:   "Stripe plan",
+			Status: pricer.PricePlanStatusPublished,
+			Costs: []pricer.PriceCost{{
+				ID:              "cost-monthly",
+				Amount:          1800,
+				Currency:        "USD",
+				BillingCadence:  pricer.PriceBillingCadenceMonthly,
+				TrialPeriodDays: 14,
+				ProviderRefs: []pricer.PriceProviderRef{{
+					Provider:        pricer.PriceProviderStripe,
+					ProviderPriceID: "price_monthly",
+				}},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*pricer.PricePlan)
+		wantErr bool
+	}{
+		{
+			name: "accepts Stripe cost without plan-level Product reference",
+		},
+		{
+			name: "accepts maximum recurring trial",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].TrialPeriodDays = 730
+			},
+		},
+		{
+			name: "rejects plan-level Stripe reference without Stripe cost",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.ProviderRefs = []pricer.PriceProviderRef{{Provider: pricer.PriceProviderStripe, ProviderProductID: "prod_123"}}
+				plan.Costs[0].ProviderRefs = []pricer.PriceProviderRef{{Provider: pricer.PriceProviderManual}}
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects missing stable cost ID",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].ID = ""
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects blank Stripe Price ID",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].ProviderRefs[0].ProviderPriceID = "  "
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects zero amount",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].Amount = 0
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects setup fee",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].SetupFeeAmount = 100
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects one-time trial",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].BillingCadence = pricer.PriceBillingCadenceOneTime
+				plan.Costs[0].TrialPeriodDays = 1
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects recurring trial over 730 days",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Costs[0].TrialPeriodDays = 731
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects catalogue discounts",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.Discounts = []pricer.PriceDiscount{{Type: pricer.PriceDiscountTypePercent, PercentBps: 500}}
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects custom payment terms",
+			mutate: func(plan *pricer.PricePlan) {
+				plan.PaymentTerms = &pricer.PricePaymentTerms{}
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects duplicate Stripe Price IDs",
+			mutate: func(plan *pricer.PricePlan) {
+				duplicate := plan.Costs[0]
+				duplicate.ID = "cost-yearly"
+				duplicate.BillingCadence = pricer.PriceBillingCadenceYearly
+				plan.Costs = append(plan.Costs, duplicate)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			plan := validStripePlan()
+			if tt.mutate != nil {
+				tt.mutate(plan)
+			}
+
+			err := pricer.ValidatePricePlanForPublish(plan)
+			if tt.wantErr {
+				require.ErrorIs(t, err, pricer.ErrPricePlanStripeCheckoutUnsupported)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPricePlanValidate_EnforcesStripeReadinessOnlyWhenPublished(t *testing.T) {
+	t.Parallel()
+
+	plan := &pricer.PricePlan{
+		Slug:   "work-in-progress",
+		Name:   "Work in progress",
+		Status: pricer.PricePlanStatusDraft,
+		Costs: []pricer.PriceCost{{
+			ID:             "cost-1",
+			Amount:         0,
+			Currency:       "USD",
+			BillingCadence: pricer.PriceBillingCadenceMonthly,
+			ProviderRefs:   []pricer.PriceProviderRef{{Provider: pricer.PriceProviderStripe}},
+		}},
+	}
+
+	require.NoError(t, plan.Validate())
+	plan.Status = pricer.PricePlanStatusPublished
+	require.ErrorIs(t, plan.Validate(), pricer.ErrPricePlanStripeCheckoutUnsupported)
 }
 
 func TestValidatePriceProviderRefs(t *testing.T) {

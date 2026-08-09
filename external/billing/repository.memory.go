@@ -653,6 +653,10 @@ func (m *InMemoryRepository) sortBillingEvents(events []BillingEvent, order stri
 			return events[i].UpdatedAt < events[j].UpdatedAt
 		case "updated_at_desc":
 			return events[i].UpdatedAt > events[j].UpdatedAt
+		case "event_time_asc":
+			return events[i].ProviderEventTime.Before(events[j].ProviderEventTime)
+		case "event_time_desc":
+			return events[i].ProviderEventTime.After(events[j].ProviderEventTime)
 		default:
 			return events[i].CreatedAt > events[j].CreatedAt
 		}

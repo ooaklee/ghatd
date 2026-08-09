@@ -102,6 +102,9 @@ func InitPricingSeedUp(db *mongo.Database) error { //Up
 		return err
 	}
 
+	// Keep the starter seed provider-neutral. Provider-backed checkout examples
+	// belong to the explicitly local/test-only seed in seed_test_plans.go so a
+	// host cannot accidentally publish placeholder provider identifiers.
 	starterPlan := bson.M{
 		"_id":         seedPlanStarterID,
 		"_nano_id":    "PQakL1mZfFEOtRxYuA0d",
@@ -135,11 +138,10 @@ func InitPricingSeedUp(db *mongo.Database) error { //Up
 		},
 		"costs": []bson.M{
 			{
-				"_id":               seedPlanStarterCostMonthID,
-				"amount":            0,
-				"currency":          "USD",
-				"billing_cadence":   pricer.PriceBillingCadenceMonthly,
-				"trial_period_days": 14,
+				"_id":             seedPlanStarterCostMonthID,
+				"amount":          0,
+				"currency":        "USD",
+				"billing_cadence": pricer.PriceBillingCadenceMonthly,
 				"provider_refs": []bson.M{
 					{
 						"provider":          pricer.PriceProviderManual,
@@ -148,11 +150,10 @@ func InitPricingSeedUp(db *mongo.Database) error { //Up
 				},
 			},
 			{
-				"_id":               seedPlanStarterCostYearID,
-				"amount":            0,
-				"currency":          "USD",
-				"billing_cadence":   pricer.PriceBillingCadenceYearly,
-				"trial_period_days": 14,
+				"_id":             seedPlanStarterCostYearID,
+				"amount":          0,
+				"currency":        "USD",
+				"billing_cadence": pricer.PriceBillingCadenceYearly,
 				"provider_refs": []bson.M{
 					{
 						"provider":          pricer.PriceProviderManual,

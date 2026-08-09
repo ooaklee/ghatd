@@ -72,9 +72,68 @@ func ValidateCheckoutProviderConfig(provider Provider) error {
 }
 
 // CustomerPortalProvider is an optional capability for providers that expose
-// a hosted customer billing-management portal.
+// a hosted customer billing-management portal. Implementations must validate
+// a returned session URL against the provider's trusted hosted-origin allowlist
+// before returning it to callers.
 type CustomerPortalProvider interface {
 	CreateCustomerPortalSession(ctx context.Context, request *CustomerPortalSessionRequest) (*CustomerPortalSession, error)
+}
+
+// UpcomingInvoicePreviewProvider is an optional capability for providers that
+// can estimate the next invoice for a server-owned recurring subscription.
+type UpcomingInvoicePreviewProvider interface {
+	CreateUpcomingInvoicePreview(ctx context.Context, request *UpcomingInvoicePreviewRequest) (*UpcomingInvoicePreview, error)
+}
+
+// CustomerPortalSessionURLValidator is an optional safety capability used by
+// generic browser routes. It verifies that a hosted session URL belongs to the
+// provider's trusted origin before the URL is returned to a client.
+type CustomerPortalSessionURLValidator interface {
+	ValidateCustomerPortalSessionURL(sessionURL string) error
+}
+
+// CustomerPortalReturnURLProvider is an optional portal configuration
+// capability. Keeping it separate preserves source compatibility for existing
+// providers and test doubles that only create sessions.
+type CustomerPortalReturnURLProvider interface {
+	GetCustomerPortalReturnURL() string
+}
+
+// CustomerPortalConfigValidator validates provider-specific portal settings.
+// An empty return URL with no other portal settings must remain valid so a
+// provider can be used for webhooks, checkout, or API synchronization without
+// opting into a customer portal.
+type CustomerPortalConfigValidator interface {
+	ValidateCustomerPortalConfig() error
+}
+
+// ValidateCustomerPortalProviderConfig validates provider-owned portal
+// settings when a non-empty return URL implicitly opts the provider in.
+func ValidateCustomerPortalProviderConfig(provider Provider) error {
+	if IsNilProvider(provider) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	validator, ok := provider.(CustomerPortalConfigValidator)
+	if ok {
+		// Provider-specific validation also catches partial disabled-state
+		// configuration, such as a named portal configuration without a return URL.
+		if err := validator.ValidateCustomerPortalConfig(); err != nil {
+			return err
+		}
+	}
+	configured, ok := provider.(CustomerPortalReturnURLProvider)
+	if !ok || strings.TrimSpace(configured.GetCustomerPortalReturnURL()) == "" {
+		return nil
+	}
+	portalProvider, ok := provider.(CustomerPortalProvider)
+	if !ok || isNilProviderCapability(portalProvider) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	sessionValidator, ok := provider.(CustomerPortalSessionURLValidator)
+	if !ok || isNilProviderCapability(sessionValidator) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	return nil
 }
 
 // endpointHostForLog returns only the host portion of an endpoint for logging.

@@ -40,6 +40,17 @@ type Config struct {
 	// CheckoutReturnURLProvider; it must not come from browser input.
 	ReturnURL string
 
+	// CustomerPortalReturnURL is the trusted destination used when a customer
+	// leaves a provider-hosted billing-management portal. Portal-capable
+	// providers may expose it through CustomerPortalReturnURLProvider; it must
+	// not come from browser input.
+	CustomerPortalReturnURL string
+
+	// CustomerPortalConfigurationID optionally selects a provider-owned hosted
+	// portal configuration. Providers that do not support named configurations
+	// ignore it; it must never come from browser input.
+	CustomerPortalConfigurationID string
+
 	// HTTPClient allows applications to configure transport policy and test provider calls.
 	HTTPClient *http.Client
 

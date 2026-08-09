@@ -35,6 +35,12 @@ const (
 	// ErrKeyInvalidPricePaymentTerms is returned when payment terms are invalid.
 	ErrKeyInvalidPricePaymentTerms = "InvalidPricePaymentTerms"
 
+	// ErrKeyDuplicatePriceCostID is returned when a plan contains duplicate cost IDs.
+	ErrKeyDuplicatePriceCostID = "DuplicatePriceCostID"
+
+	// ErrKeyPricePlanStripeCheckoutUnsupported is returned when a published Stripe plan cannot be represented by the shared checkout flow.
+	ErrKeyPricePlanStripeCheckoutUnsupported = "PricePlanStripeCheckoutUnsupported"
+
 	// ErrKeyInvalidPriceCurrency is returned when a currency is invalid.
 	ErrKeyInvalidPriceCurrency = "InvalidPriceCurrency"
 

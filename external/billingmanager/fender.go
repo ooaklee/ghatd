@@ -52,6 +52,37 @@ func mapRequestToProcessBillingProviderCheckoutRequest(request *http.Request, va
 	return parsedRequest, nil
 }
 
+// mapRequestToProcessBillingProviderPortalRequest maps only authenticated and
+// trusted transport values. Customer identifiers and return URLs are never
+// accepted from the browser.
+func mapRequestToProcessBillingProviderPortalRequest(request *http.Request, validator BillingManagerValidator) (*ProcessBillingProviderPortalRequest, error) {
+	if request == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	providerName, err := toolbox.GetVariableValueFromUri(request, "providerName")
+	if err != nil {
+		return nil, ErrBillingManagerUnableToGetProviderNameFromURI
+	}
+	userID := strings.TrimSpace(accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context()))
+	if userID == "" {
+		return nil, ErrBillingManagerUnableToIdentifyUser
+	}
+	parsedRequest := &ProcessBillingProviderPortalRequest{
+		UserID:       userID,
+		ProviderName: normaliseCheckoutProviderName(providerName),
+		Origin:       strings.TrimSpace(request.Header.Get("Origin")),
+		SecFetchSite: strings.TrimSpace(request.Header.Get("Sec-Fetch-Site")),
+	}
+	if !checkoutProviderNamePattern.MatchString(parsedRequest.ProviderName) ||
+		len(parsedRequest.Origin) > checkoutMaxOriginLength || len(parsedRequest.SecFetchSite) > checkoutMaxFetchSiteLength {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	if validator != nil && validator.Validate(parsedRequest) != nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	return parsedRequest, nil
+}
+
 // mapRequestToProcessBillingProviderWebhooksRequest maps incoming request to the correct struct
 func mapRequestToProcessBillingProviderWebhooksRequest(request *http.Request, validator BillingManagerValidator) (*ProcessBillingProviderWebhooksRequest, error) {
 

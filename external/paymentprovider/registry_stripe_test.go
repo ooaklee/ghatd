@@ -225,6 +225,17 @@ func TestStripeTrialCheckoutGrantsRecurringAccessWithoutLabellingPaymentSucceede
 	}
 }
 
+func TestBillingKindFromStripeObjectRecognisesCanonicalRecurringCadences(t *testing.T) {
+	for _, cadence := range []string{"week", "weekly", "month", "monthly", "year", "yearly", "annual"} {
+		t.Run(cadence, func(t *testing.T) {
+			kind := billingKindFromStripeObject("", map[string]any{"billing_cadence": cadence}, "", "")
+			if kind != BillingKindRecurring {
+				t.Fatalf("billing kind = %q, want %q", kind, BillingKindRecurring)
+			}
+		})
+	}
+}
+
 func TestStripeRefundUsesPaymentIntentAsTransactionIdentity(t *testing.T) {
 	body := `{"id":"evt_refund","type":"charge.refunded","created":1700000000,"data":{"object":{"id":"ch_1","payment_intent":"pi_1","customer":"cus_1","amount":1200,"amount_refunded":1200,"refunded":true,"currency":"gbp"}}}`
 	provider, err := NewStripeProvider(&Config{WebhookSecret: "whsec_test"})
@@ -238,8 +249,47 @@ func TestStripeRefundUsesPaymentIntentAsTransactionIdentity(t *testing.T) {
 	if payload.EventType != EventTypePaymentRefunded || payload.PaymentStatus != PaymentStatusRefunded || payload.TransactionID != "pi_1" {
 		t.Fatalf("refund payload = %#v", payload)
 	}
-	if payload.CustomerEmail != "" || payload.PaymentType != PaymentTypePurchase || payload.BillingKind != BillingKindOneTime {
+	if payload.CustomerEmail != "" || payload.PaymentType != "" || payload.BillingKind != "" || payload.IsOneOff {
 		t.Fatalf("refund classification = %#v", payload)
+	}
+}
+
+func TestStripeMetadataFreePaymentIntentRemainsLedgerOnly(t *testing.T) {
+	body := `{"id":"evt_payment","type":"payment_intent.succeeded","created":1700000000,"data":{"object":{"id":"pi_1","customer":"cus_1","status":"succeeded","amount_received":1800,"currency":"usd","metadata":{}}}}`
+	provider, err := NewStripeProvider(&Config{WebhookSecret: "whsec_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := provider.ParsePayload(context.Background(), httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body)))
+	if err != nil {
+		t.Fatalf("ParsePayload() error = %v", err)
+	}
+	if payload.EventType != EventTypePaymentSucceeded || payload.TransactionID != "pi_1" || payload.CustomerID != "cus_1" {
+		t.Fatalf("payment identity = %#v", payload)
+	}
+	if payload.BillingKind != "" || payload.PaymentType != "" || payload.IsOneOff || payload.IsRecurring() || payload.GrantsPlanAccess() {
+		t.Fatalf("metadata-free payment classification = %#v", payload)
+	}
+}
+
+func TestStripeRecurringInvoiceMergesSubscriptionSnapshotAndLeavesAccessStateToSubscription(t *testing.T) {
+	body := `{"id":"evt_invoice","type":"invoice.paid","created":1700000000,"data":{"object":{"id":"in_1","customer":"cus_1","customer_email":"buyer@example.test","status":"paid","amount_paid":1800,"currency":"usd","period_end":1700000000,"metadata":{"invoice_note":"renewal"},"parent":{"type":"subscription_details","subscription_details":{"subscription":"sub_1","metadata":{"billing_kind":"recurring","user_reference":"user_1","plan_id":"plan_1","cost_id":"cost_1","provider_price_id":"price_1"}}},"payments":{"data":[{"payment":{"type":"payment_intent","payment_intent":"pi_1"}}]}}}}`
+	provider, err := NewStripeProvider(&Config{WebhookSecret: "whsec_test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := provider.ParsePayload(context.Background(), httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body)))
+	if err != nil {
+		t.Fatalf("ParsePayload() error = %v", err)
+	}
+	if !payload.IsRecurring() || payload.SubscriptionID != "sub_1" || payload.TransactionID != "pi_1" {
+		t.Fatalf("recurring invoice identity = %#v", payload)
+	}
+	if payload.UserReference != "user_1" || payload.PlanID != "plan_1" || payload.CostID != "cost_1" || payload.ProviderPriceID != "price_1" {
+		t.Fatalf("subscription snapshot metadata = %#v", payload)
+	}
+	if payload.EventType != EventTypePaymentSucceeded || payload.PaymentStatus != PaymentStatusSucceeded || payload.Status != "" {
+		t.Fatalf("invoice payment/access state = %#v", payload)
 	}
 }
 
@@ -593,6 +643,7 @@ func TestStripeCustomerPortalCapabilityCreatesHostedSession(t *testing.T) {
 
 	provider, err := NewStripeProvider(&Config{
 		WebhookSecret: "whsec_test", APIKey: "sk_test", APIBaseURL: server.URL, HTTPClient: server.Client(),
+		CustomerPortalReturnURL: "https://example.test/settings#billing", CustomerPortalConfigurationID: "bpc_test_123",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -607,11 +658,49 @@ func TestStripeCustomerPortalCapabilityCreatesHostedSession(t *testing.T) {
 	if session.ID != "bps_1" || session.URL != "https://billing.stripe.com/p/session/test_1" {
 		t.Fatalf("session = %#v", session)
 	}
-	if received.Get("customer") != "cus_1" || received.Get("return_url") != "https://example.test/settings#billing" {
+	if received.Get("customer") != "cus_1" || received.Get("return_url") != "https://example.test/settings#billing" || received.Get("configuration") != "bpc_test_123" {
 		t.Fatalf("form = %v", received)
 	}
 	if authorization != "Bearer sk_test" || apiVersionHeader != StripeDefaultAPIVersion {
 		t.Fatalf("headers: Authorization=%q Stripe-Version=%q", authorization, apiVersionHeader)
+	}
+}
+
+func TestStripeCustomerPortalConfigUsesReturnURLAsOptIn(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *Config
+		want   error
+	}{
+		{name: "webhook only", config: &Config{WebhookSecret: "whsec_test"}},
+		{name: "configuration ID without return URL", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalConfigurationID: "bpc_test_123"}, want: ErrPaymentProviderInvalidConfiguration},
+		{name: "portal default configuration", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "https://app.example.test/settings"}},
+		{name: "portal return URL scheme is case insensitive", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "HTTPS://APP.EXAMPLE.TEST/settings"}},
+		{name: "portal named configuration", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "https://app.example.test/settings", CustomerPortalConfigurationID: "bpc_test_123"}},
+		{name: "missing API key", config: &Config{WebhookSecret: "whsec_test", CustomerPortalReturnURL: "https://app.example.test/settings"}, want: ErrPaymentProviderInvalidConfiguration},
+		{name: "relative return URL", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "/settings"}, want: ErrPaymentProviderInvalidConfiguration},
+		{name: "invalid return URL port", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "https://app.example.test:70000/settings"}, want: ErrPaymentProviderInvalidConfiguration},
+		{name: "placeholder return URL", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "https://app.example.test/{PORTAL_SESSION_ID}"}, want: ErrPaymentProviderInvalidConfiguration},
+		{name: "invalid configuration ID", config: &Config{WebhookSecret: "whsec_test", APIKey: "sk_test", CustomerPortalReturnURL: "https://app.example.test/settings", CustomerPortalConfigurationID: "configuration_attacker"}, want: ErrPaymentProviderInvalidConfiguration},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider, err := NewStripeProvider(test.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := provider.GetCustomerPortalReturnURL(); got != strings.TrimSpace(test.config.CustomerPortalReturnURL) {
+				t.Fatalf("return URL = %q", got)
+			}
+			err = ValidateCustomerPortalProviderConfig(provider)
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error = %v, want %v", err, test.want)
+			}
+		})
+	}
+	var nilProvider *StripeProvider
+	if nilProvider.GetCustomerPortalReturnURL() != "" {
+		t.Fatal("typed nil returned a portal URL")
 	}
 }
 
@@ -623,8 +712,11 @@ func TestStripeCustomerPortalCapabilityRejectsInvalidInput(t *testing.T) {
 	for _, input := range []*CustomerPortalSessionRequest{
 		nil,
 		{ReturnURL: "https://example.test/settings"},
+		{CustomerID: "customer_not_stripe", ReturnURL: "https://example.test/settings"},
 		{CustomerID: "cus_1", ReturnURL: "/settings"},
 		{CustomerID: "cus_1", ReturnURL: "https://user@example.test/settings"},
+		{CustomerID: "cus_1", ReturnURL: "https://example.test:70000/settings"},
+		{CustomerID: "cus_1", ReturnURL: "https://example.test/{PORTAL_SESSION_ID}"},
 		{CustomerID: "cus_1", ReturnURL: "javascript:alert(1)"},
 	} {
 		if _, err := provider.CreateCustomerPortalSession(context.Background(), input); err != ErrPaymentProviderInvalidConfiguration {
@@ -654,6 +746,8 @@ func TestStripeCustomerPortalCapabilityRejectsInvalidResponses(t *testing.T) {
 		{name: "missing ID", status: http.StatusOK, body: `{"url":"https://billing.stripe.com/p/session/test_1"}`, want: ErrPaymentProviderAPIResponseInvalid},
 		{name: "insecure URL", status: http.StatusOK, body: `{"id":"bps_1","url":"http://billing.stripe.com/p/session/test_1"}`, want: ErrPaymentProviderAPIResponseInvalid},
 		{name: "userinfo URL", status: http.StatusOK, body: `{"id":"bps_1","url":"https://user@billing.stripe.com/p/session/test_1"}`, want: ErrPaymentProviderAPIResponseInvalid},
+		{name: "untrusted host", status: http.StatusOK, body: `{"id":"bps_1","url":"https://billing.stripe.com.example.test/p/session/test_1"}`, want: ErrPaymentProviderAPIResponseInvalid},
+		{name: "unexpected port", status: http.StatusOK, body: `{"id":"bps_1","url":"https://billing.stripe.com:444/p/session/test_1"}`, want: ErrPaymentProviderAPIResponseInvalid},
 		{name: "malformed JSON", status: http.StatusOK, body: `{`, want: ErrPaymentProviderAPIResponseInvalid},
 	}
 

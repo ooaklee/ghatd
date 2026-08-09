@@ -10,8 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +30,7 @@ const (
 )
 
 var stripeDefaultSignatureTolerance = 5 * time.Minute
+var stripeCustomerPortalConfigurationIDPattern = regexp.MustCompile(`^bpc_[A-Za-z0-9_]{1,251}$`)
 
 // StripeProvider implements webhook and subscription lookup plus optional
 // browser-session capabilities without expanding the base Provider interface.
@@ -112,6 +116,38 @@ func (s *StripeProvider) ValidateCheckoutConfig() error {
 	return nil
 }
 
+// GetCustomerPortalReturnURL returns the provider-owned trusted portal return
+// destination. It is deliberately independent from the checkout return URL.
+func (s *StripeProvider) GetCustomerPortalReturnURL() string {
+	if s == nil || s.config == nil {
+		return ""
+	}
+	return strings.TrimSpace(s.config.CustomerPortalReturnURL)
+}
+
+// ValidateCustomerPortalConfig validates Stripe portal configuration only
+// when CustomerPortalReturnURL opts this provider into the generic route.
+func (s *StripeProvider) ValidateCustomerPortalConfig() error {
+	if s == nil || s.config == nil {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	returnURL := s.GetCustomerPortalReturnURL()
+	configurationID := strings.TrimSpace(s.config.CustomerPortalConfigurationID)
+	if returnURL == "" {
+		if configurationID != "" {
+			return ErrPaymentProviderInvalidConfiguration
+		}
+		return nil
+	}
+	if strings.TrimSpace(s.config.APIKey) == "" || !isValidStripeCustomerPortalReturnURL(returnURL) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	if configurationID != "" && !stripeCustomerPortalConfigurationIDPattern.MatchString(configurationID) {
+		return ErrPaymentProviderInvalidConfiguration
+	}
+	return nil
+}
+
 // VerifyWebhook validates the signed timestamp and preserves the request body.
 func (s *StripeProvider) VerifyWebhook(_ context.Context, req *http.Request) error {
 	body, err := readAndRestoreWebhookBody(req, s.maxWebhookBodySize)
@@ -176,7 +212,12 @@ func (s *StripeProvider) ParsePayload(_ context.Context, req *http.Request) (*We
 	case "checkout.session.completed":
 		switch stripeString(object, "payment_status") {
 		case "paid":
-			markStripePaymentSucceeded(payload)
+			if stripeCheckoutHasTrial(object) {
+				markStripeRecurring(payload, EventTypeSubscriptionCreated, SubscriptionStatusTrialing)
+				payload.PaymentStatus = PaymentStatusSucceeded
+			} else {
+				markStripePaymentSucceeded(payload)
+			}
 		case PaymentStatusNoPaymentRequired:
 			if stripeString(object, "mode") == CheckoutModeSubscription {
 				status := SubscriptionStatusActive
@@ -192,33 +233,68 @@ func (s *StripeProvider) ParsePayload(_ context.Context, req *http.Request) (*We
 		default:
 			markStripePaymentActionRequired(payload)
 		}
-	case "checkout.session.async_payment_succeeded", "payment_intent.succeeded", "invoice.payment_succeeded", "invoice.paid":
+	case "checkout.session.async_payment_succeeded", "payment_intent.succeeded":
 		markStripePaymentSucceeded(payload)
-	case "checkout.session.async_payment_failed", "payment_intent.payment_failed", "invoice.payment_failed":
+	case "invoice.payment_succeeded", "invoice.paid":
+		payload.EventType = EventTypePaymentSucceeded
+		payload.PaymentStatus = PaymentStatusSucceeded
+		if !payload.IsRecurring() {
+			payload.Status = SubscriptionStatusActive
+		} else {
+			// Subscription lifecycle events own recurring access state. Invoice
+			// events update payment state without reviving a cancelled or paused
+			// subscription when deliveries arrive out of order.
+			payload.Status = ""
+		}
+	case "checkout.session.async_payment_failed", "payment_intent.payment_failed":
 		payload.EventType = EventTypePaymentFailed
 		payload.PaymentStatus = PaymentStatusFailed
 		payload.Status = SubscriptionStatusIncomplete
+	case "invoice.payment_failed":
+		payload.EventType = EventTypePaymentFailed
+		payload.PaymentStatus = PaymentStatusFailed
+		if !payload.IsRecurring() {
+			payload.Status = SubscriptionStatusIncomplete
+		} else {
+			payload.Status = ""
+		}
 	case "payment_intent.requires_action", "invoice.payment_action_required":
 		markStripePaymentActionRequired(payload)
+		if event.Type == "invoice.payment_action_required" && payload.IsRecurring() {
+			payload.Status = ""
+		}
 	case "charge.refunded":
 		markStripeChargeRefund(payload, object)
 	case "refund.created", "refund.updated", "refund.failed":
 		markStripeRefundLifecycle(payload, object)
 	case "customer.subscription.created":
+		payload.SubscriptionStateAuthoritative = true
 		markStripeRecurring(payload, EventTypeSubscriptionCreated, stripeStatusToStandard(stripeString(object, "status")))
 	case "customer.subscription.updated":
+		payload.SubscriptionStateAuthoritative = true
 		markStripeRecurring(payload, EventTypeSubscriptionUpdated, stripeStatusToStandard(stripeString(object, "status")))
 	case "customer.subscription.deleted":
+		payload.SubscriptionStateAuthoritative = true
 		markStripeRecurring(payload, EventTypeSubscriptionCancelled, SubscriptionStatusCancelled)
 	case "customer.subscription.paused":
+		payload.SubscriptionStateAuthoritative = true
 		markStripeRecurring(payload, EventTypeSubscriptionPaused, SubscriptionStatusPaused)
 	case "customer.subscription.resumed":
+		payload.SubscriptionStateAuthoritative = true
 		markStripeRecurring(payload, EventTypeSubscriptionResumed, SubscriptionStatusActive)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrPaymentProviderInvalidEventType, event.Type)
 	}
 
 	return payload, nil
+}
+
+func stripeCheckoutHasTrial(object map[string]any) bool {
+	if stripeString(object, "mode") != CheckoutModeSubscription {
+		return false
+	}
+	trialDays, err := strconv.Atoi(stripeString(stripeObject(object, "metadata"), "trial_period_days"))
+	return err == nil && trialDays > 0
 }
 
 // markStripePaymentSucceeded marks a Stripe payment event as successful access.
@@ -275,15 +351,19 @@ func markStripeRecurring(payload *WebhookPayload, eventType, status string) {
 
 // stripeBasePayload extracts shared identity, catalogue, payment, and period fields.
 func stripeBasePayload(eventID, eventType string, created int64, raw []byte, object map[string]any) *WebhookPayload {
-	metadata := stripeObject(object, "metadata")
+	subscriptionDetails := stripeObject(stripeObject(object, "parent"), "subscription_details")
+	// Subscription invoice metadata is an immutable snapshot under
+	// parent.subscription_details. Merge it with object metadata so an
+	// invoice-specific key does not hide the application-owned subscription
+	// correlation written when Checkout created the subscription.
+	metadata := mergeStripeMetadata(
+		stripeObject(subscriptionDetails, "metadata"),
+		stripeObject(object, "metadata"),
+	)
 	mode := stripeString(object, "mode")
 	subscriptionID := stripeStringOrID(object, "subscription")
-	subscriptionDetails := stripeObject(stripeObject(object, "parent"), "subscription_details")
 	if subscriptionID == "" {
 		subscriptionID = stripeStringOrID(subscriptionDetails, "subscription")
-	}
-	if len(metadata) == 0 {
-		metadata = stripeObject(subscriptionDetails, "metadata")
 	}
 	objectID := stripeString(object, "id")
 	invoicePaymentIntentID, invoiceChargeID := stripeInvoicePaymentReferences(object)
@@ -294,16 +374,23 @@ func stripeBasePayload(eventID, eventType string, created int64, raw []byte, obj
 	}
 
 	billingKind := billingKindFromStripeObject(mode, metadata, subscriptionID, eventType)
-	paymentType := PaymentTypePurchase
+	paymentType := ""
 	isOneOff := billingKind == BillingKindOneTime
-	if billingKind == BillingKindRecurring {
+	if billingKind == BillingKindOneTime {
+		paymentType = PaymentTypePurchase
+	} else if billingKind == BillingKindRecurring {
 		paymentType = PaymentTypeSubscription
 	}
 	if strings.HasPrefix(eventType, "customer.subscription.") && subscriptionID == "" {
 		subscriptionID = objectID
 	}
 
+	subscriptionTerms := SubscriptionTerms{}
+	if strings.HasPrefix(eventType, "customer.subscription.") {
+		subscriptionTerms = stripeSubscriptionTerms(object, metadata)
+	}
 	priceID := firstNonEmpty(
+		stripeOptionalString(subscriptionTerms.ProviderPriceID),
 		stripeString(metadata, "provider_price_id"),
 		stripeString(metadata, "price_id"),
 		stripeNestedPriceID(object),
@@ -363,16 +450,18 @@ func stripeBasePayload(eventID, eventType string, created int64, raw []byte, obj
 			stripeString(stripeObject(object, "customer_details"), "name"),
 			stripeString(stripeObject(object, "billing_details"), "name"),
 		),
-		Status:          stripeStatusToStandard(stripeString(object, "status")),
-		PaymentStatus:   stripePaymentStatusToStandard(stripeString(object, "payment_status")),
-		PlanName:        planName,
-		PlanID:          stripeString(metadata, "plan_id"),
-		PlanSlug:        stripeString(metadata, "plan_slug"),
-		CostID:          stripeString(metadata, "cost_id"),
-		ProviderPriceID: priceID,
-		Amount:          amount,
-		Currency:        strings.ToUpper(stripeString(object, "currency")),
-		NextBillingDate: nextBillingDate,
+		Status:            stripeStatusToStandard(stripeString(object, "status")),
+		PaymentStatus:     stripePaymentStatusToStandard(stripeString(object, "payment_status")),
+		PlanName:          planName,
+		PlanID:            stripeString(metadata, "plan_id"),
+		PlanSlug:          stripeString(metadata, "plan_slug"),
+		CostID:            stripeString(metadata, "cost_id"),
+		ProviderPriceID:   priceID,
+		Amount:            amount,
+		Currency:          strings.ToUpper(stripeString(object, "currency")),
+		SubscriptionTerms: subscriptionTerms,
+		NextBillingDate:   nextBillingDate,
+		TrialEndsAt:       stripeUnixDate(stripeInteger(object, "trial_end")),
 		AvailableUntilDate: firstNonEmpty(
 			stripeUnixDate(stripeInteger(object, "cancel_at")),
 			nextBillingDate,
@@ -385,19 +474,158 @@ func stripeBasePayload(eventID, eventType string, created int64, raw []byte, obj
 	}
 }
 
+// stripeSubscriptionTerms resolves exactly one licensed, per-unit recurring
+// item. Metadata correlation wins; a sole item is the only fallback. Ambiguous,
+// metered, tiered, fractional-decimal, invalid-quantity, or partially expanded
+// items keep the commercial amount unknown instead of fabricating a value.
+func stripeSubscriptionTerms(object, metadata map[string]any) SubscriptionTerms {
+	itemsObject := stripeObject(object, "items")
+	if _, present := itemsObject["data"]; !present {
+		return SubscriptionTerms{}
+	}
+	observed := SubscriptionTerms{Observed: true}
+	item, ok := stripeSelectedSubscriptionItem(object, firstNonEmpty(
+		stripeString(metadata, "provider_price_id"),
+		stripeString(metadata, "price_id"),
+	))
+	if !ok {
+		return observed
+	}
+
+	price := stripeObject(item, "price")
+	if len(price) == 0 {
+		price = stripeObject(item, "plan")
+	}
+	if len(price) == 0 {
+		return observed
+	}
+
+	terms := observed
+	if priceID := stripeString(price, "id"); priceID != "" {
+		terms.ProviderPriceID = &priceID
+	}
+	if currency := strings.ToUpper(stripeString(price, "currency")); currency != "" {
+		terms.Currency = &currency
+	}
+	recurring := stripeObject(price, "recurring")
+	if len(recurring) == 0 {
+		recurring = price
+	}
+	if interval := strings.ToLower(stripeString(recurring, "interval")); interval != "" {
+		terms.BillingInterval = &interval
+		intervalCount, present := stripeIntegerValue(recurring, "interval_count")
+		if !present {
+			intervalCount = 1
+		}
+		if intervalCount > 0 {
+			terms.BillingIntervalCount = &intervalCount
+		}
+	}
+
+	if !strings.EqualFold(stripeString(recurring, "usage_type"), "licensed") ||
+		!strings.EqualFold(stripeString(price, "billing_scheme"), "per_unit") {
+		return terms
+	}
+	unitAmount, amountPresent := stripeIntegerValue(price, "unit_amount")
+	decimalRaw := stripeString(price, "unit_amount_decimal")
+	decimalAmount, decimalPresent := stripeIntegralMinorUnitDecimal(decimalRaw)
+	if decimalRaw != "" && !decimalPresent {
+		return terms
+	}
+	if decimalPresent && amountPresent && decimalAmount != unitAmount {
+		return terms
+	}
+	if !amountPresent && decimalPresent {
+		unitAmount, amountPresent = decimalAmount, true
+	}
+	if !amountPresent || unitAmount < 0 {
+		return terms
+	}
+	quantity, quantityPresent := stripeIntegerValue(item, "quantity")
+	if !quantityPresent || quantity <= 0 {
+		return terms
+	}
+	terms.Quantity = &quantity
+	if unitAmount != 0 && quantity > math.MaxInt64/unitAmount {
+		return terms
+	}
+	amount := unitAmount * quantity
+	terms.Amount = &amount
+	return terms
+}
+
+func stripeSelectedSubscriptionItem(object map[string]any, preferredPriceID string) (map[string]any, bool) {
+	itemsObject := stripeObject(object, "items")
+	rawItems, _ := itemsObject["data"].([]any)
+	items := make([]map[string]any, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		if item, ok := rawItem.(map[string]any); ok {
+			items = append(items, item)
+		}
+	}
+	if preferredPriceID != "" {
+		var match map[string]any
+		matches := 0
+		for _, item := range items {
+			priceID := firstNonEmpty(
+				stripeString(stripeObject(item, "price"), "id"),
+				stripeString(stripeObject(item, "plan"), "id"),
+			)
+			if priceID == preferredPriceID {
+				match = item
+				matches++
+			}
+		}
+		if matches == 1 {
+			return match, true
+		}
+		return nil, false
+	}
+	if len(items) == 1 {
+		return items[0], true
+	}
+	return nil, false
+}
+
+func stripeIntegralMinorUnitDecimal(value string) (int64, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+	rational, ok := new(big.Rat).SetString(value)
+	if !ok || !rational.IsInt() || !rational.Num().IsInt64() {
+		return 0, false
+	}
+	return rational.Num().Int64(), true
+}
+
+func stripeOptionalString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(*value)
+}
+
 // billingKindFromStripeObject infers recurring versus one-time Stripe billing.
 func billingKindFromStripeObject(mode string, metadata map[string]any, subscriptionID, eventType string) BillingKind {
 	kind := strings.ToLower(firstNonEmpty(stripeString(metadata, "billing_kind"), stripeString(metadata, "billing_cadence")))
 	switch kind {
-	case string(BillingKindRecurring), CheckoutModeSubscription, "monthly", "yearly", "annual":
+	case string(BillingKindRecurring), CheckoutModeSubscription, "week", "weekly", "month", "monthly", "year", "yearly", "annual":
 		return BillingKindRecurring
 	case string(BillingKindOneTime), CheckoutModePayment, "one-time", "one_off", "lifetime":
+		return BillingKindOneTime
+	}
+	if mode == CheckoutModePayment {
 		return BillingKindOneTime
 	}
 	if mode == CheckoutModeSubscription || subscriptionID != "" || strings.HasPrefix(eventType, "customer.subscription.") {
 		return BillingKindRecurring
 	}
-	return BillingKindOneTime
+	// PaymentIntent, Charge, Refund, and non-subscription Invoice objects do
+	// not carry enough information on their own to prove billing cadence. An
+	// empty classification keeps them ledger-only until Billing Manager can
+	// correlate them to server-owned access state.
+	return ""
 }
 
 // CreateCheckoutSession creates a provider checkout session. Authentication
@@ -504,7 +732,7 @@ func (s *StripeProvider) CreateCheckoutSession(ctx context.Context, input *Check
 // CreateCustomerPortalSession creates a hosted customer billing-management
 // session. Customer ownership and access policy remain with the caller.
 func (s *StripeProvider) CreateCustomerPortalSession(ctx context.Context, input *CustomerPortalSessionRequest) (*CustomerPortalSession, error) {
-	if s == nil || s.config == nil || input == nil || strings.TrimSpace(input.CustomerID) == "" || !isValidAbsoluteHTTPURL(input.ReturnURL, false) {
+	if s == nil || s.config == nil || input == nil || !isValidStripeCustomerID(input.CustomerID) || !isValidStripeCustomerPortalReturnURL(input.ReturnURL) {
 		return nil, ErrPaymentProviderInvalidConfiguration
 	}
 	if strings.TrimSpace(s.config.APIKey) == "" {
@@ -514,6 +742,12 @@ func (s *StripeProvider) CreateCustomerPortalSession(ctx context.Context, input 
 	form := url.Values{}
 	form.Set("customer", strings.TrimSpace(input.CustomerID))
 	form.Set("return_url", strings.TrimSpace(input.ReturnURL))
+	if configurationID := strings.TrimSpace(s.config.CustomerPortalConfigurationID); configurationID != "" {
+		if !stripeCustomerPortalConfigurationIDPattern.MatchString(configurationID) {
+			return nil, ErrPaymentProviderInvalidConfiguration
+		}
+		form.Set("configuration", configurationID)
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.apiBaseURL+"/v1/billing_portal/sessions", strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPaymentProviderAPIRequestFailed, err)
@@ -536,7 +770,7 @@ func (s *StripeProvider) CreateCustomerPortalSession(ctx context.Context, input 
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&session); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPaymentProviderAPIResponseInvalid, err)
 	}
-	if strings.TrimSpace(session.ID) == "" || !isValidAbsoluteHTTPURL(session.URL, true) {
+	if strings.TrimSpace(session.ID) == "" || s.ValidateCustomerPortalSessionURL(session.URL) != nil {
 		return nil, ErrPaymentProviderAPIResponseInvalid
 	}
 	session.ID = strings.TrimSpace(session.ID)
@@ -544,16 +778,158 @@ func (s *StripeProvider) CreateCustomerPortalSession(ctx context.Context, input 
 	return &session, nil
 }
 
+// CreateUpcomingInvoicePreview asks Stripe for a read-only estimate of the
+// next invoice for a server-owned subscription. The returned invoice is only a
+// preview and is deliberately not persisted as a payment or access event.
+func (s *StripeProvider) CreateUpcomingInvoicePreview(ctx context.Context, input *UpcomingInvoicePreviewRequest) (*UpcomingInvoicePreview, error) {
+	if s == nil || s.config == nil || input == nil || !isValidStripeSubscriptionID(input.SubscriptionID) || strings.TrimSpace(s.config.APIKey) == "" {
+		return nil, ErrPaymentProviderInvalidConfiguration
+	}
+
+	form := url.Values{}
+	form.Set("subscription", strings.TrimSpace(input.SubscriptionID))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.apiBaseURL+"/v1/invoices/create_preview", strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPaymentProviderAPIRequestFailed, err)
+	}
+	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(s.config.APIKey))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Stripe-Version", s.apiVersion)
+
+	response, err := s.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrPaymentProviderAPIRequestFailed, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%w: status %d", ErrPaymentProviderAPIRequestFailed, response.StatusCode)
+	}
+
+	const maxPreviewResponseSize int64 = 256 << 10
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxPreviewResponseSize+1))
+	if err != nil || int64(len(body)) > maxPreviewResponseSize {
+		return nil, ErrPaymentProviderAPIResponseInvalid
+	}
+	var invoice struct {
+		Object     string `json:"object"`
+		Subtotal   *int64 `json:"subtotal"`
+		Total      *int64 `json:"total"`
+		AmountDue  *int64 `json:"amount_due"`
+		Currency   string `json:"currency"`
+		DueDate    int64  `json:"due_date"`
+		TotalTaxes []struct {
+			Amount int64 `json:"amount"`
+		} `json:"total_taxes"`
+		TotalTaxAmounts []struct {
+			Amount int64 `json:"amount"`
+		} `json:"total_tax_amounts"`
+	}
+	if err := json.Unmarshal(body, &invoice); err != nil {
+		return nil, ErrPaymentProviderAPIResponseInvalid
+	}
+	currency := strings.ToUpper(strings.TrimSpace(invoice.Currency))
+	if invoice.Object != "invoice" || invoice.Subtotal == nil || invoice.Total == nil || invoice.AmountDue == nil ||
+		!isValidCurrencyCode(currency) || *invoice.Subtotal < 0 || *invoice.Total < 0 || *invoice.AmountDue < 0 {
+		return nil, ErrPaymentProviderAPIResponseInvalid
+	}
+	taxAmount, ok := sumStripeTaxAmounts(invoice.TotalTaxes, invoice.TotalTaxAmounts)
+	if !ok {
+		return nil, ErrPaymentProviderAPIResponseInvalid
+	}
+	return &UpcomingInvoicePreview{
+		Subtotal:  *invoice.Subtotal,
+		TaxAmount: taxAmount,
+		Total:     *invoice.Total,
+		AmountDue: *invoice.AmountDue,
+		Currency:  currency,
+		DueDate:   stripeUnixDate(invoice.DueDate),
+	}, nil
+}
+
+func sumStripeTaxAmounts(current, legacy []struct {
+	Amount int64 `json:"amount"`
+}) (int64, bool) {
+	amounts := current
+	if len(amounts) == 0 {
+		amounts = legacy
+	}
+	var total int64
+	for _, tax := range amounts {
+		if tax.Amount < 0 || tax.Amount > math.MaxInt64-total {
+			return 0, false
+		}
+		total += tax.Amount
+	}
+	return total, true
+}
+
+func isValidCurrencyCode(value string) bool {
+	if len(value) != 3 {
+		return false
+	}
+	for _, character := range value {
+		if character < 'A' || character > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateCustomerPortalSessionURL enforces Stripe's documented hosted portal
+// origin before Billing Manager can return a provider URL to a browser.
+func (s *StripeProvider) ValidateCustomerPortalSessionURL(value string) error {
+	if s == nil || !isValidStripeCustomerPortalURL(value) {
+		return ErrPaymentProviderAPIResponseInvalid
+	}
+	return nil
+}
+
+// isValidStripeCustomerID checks the documented object prefix without making
+// assumptions about Stripe's opaque suffix beyond a conservative size bound.
+func isValidStripeCustomerID(value string) bool {
+	value = strings.TrimSpace(value)
+	return strings.HasPrefix(value, "cus_") && len(value) > len("cus_") && len(value) <= 255 &&
+		!strings.ContainsAny(value, " \t\r\n")
+}
+
+func isValidStripeSubscriptionID(value string) bool {
+	value = strings.TrimSpace(value)
+	return strings.HasPrefix(value, "sub_") && len(value) > len("sub_") && len(value) <= 255 &&
+		!strings.ContainsAny(value, " \t\r\n")
+}
+
+func isValidStripeCustomerPortalReturnURL(value string) bool {
+	return !strings.ContainsAny(strings.TrimSpace(value), "{}") && isValidAbsoluteHTTPURL(value, false)
+}
+
+// isValidStripeCustomerPortalURL allowlists Stripe's documented hosted portal
+// origin. This prevents an upstream or parsing failure becoming an open redirect.
+func isValidStripeCustomerPortalURL(value string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	return err == nil && parsed.IsAbs() && strings.EqualFold(parsed.Scheme, "https") &&
+		strings.EqualFold(parsed.Host, "billing.stripe.com") && parsed.User == nil && parsed.Opaque == ""
+}
+
 // isValidAbsoluteHTTPURL validates a return URL accepted by Stripe checkout.
 func isValidAbsoluteHTTPURL(value string, requireHTTPS bool) bool {
 	parsed, err := url.Parse(strings.TrimSpace(value))
-	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.User != nil || parsed.Opaque != "" {
+	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" || !isValidHTTPURLPort(parsed) {
 		return false
 	}
 	if requireHTTPS {
-		return parsed.Scheme == "https"
+		return strings.EqualFold(parsed.Scheme, "https")
 	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+	return strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")
+}
+
+func isValidHTTPURLPort(parsed *url.URL) bool {
+	port := parsed.Port()
+	if port == "" {
+		return true
+	}
+	portNumber, err := strconv.Atoi(port)
+	return err == nil && portNumber >= 1 && portNumber <= 65535
 }
 
 // validateCheckoutPrice rechecks the live Stripe price against trusted catalogue terms.
@@ -852,24 +1228,52 @@ func stripeObject(object map[string]any, key string) map[string]any {
 	return value
 }
 
+// mergeStripeMetadata combines application correlation copied to a
+// subscription invoice with any event-object metadata. Object metadata wins
+// on duplicate keys while an empty result remains nil.
+func mergeStripeMetadata(metadataSets ...map[string]any) map[string]any {
+	var merged map[string]any
+	for _, metadata := range metadataSets {
+		for key, value := range metadata {
+			if merged == nil {
+				merged = make(map[string]any)
+			}
+			merged[key] = value
+		}
+	}
+	return merged
+}
+
 // stripeInteger reads an integer-valued Stripe field across JSON number types.
 func stripeInteger(object map[string]any, key string) int64 {
-	value, ok := object[key]
+	value, ok := stripeIntegerValue(object, key)
 	if !ok {
 		return 0
 	}
+	return value
+}
+
+// stripeIntegerValue preserves field presence, including an explicit zero.
+func stripeIntegerValue(object map[string]any, key string) (int64, bool) {
+	value, ok := object[key]
+	if !ok {
+		return 0, false
+	}
 	switch typed := value.(type) {
 	case json.Number:
-		result, _ := typed.Int64()
-		return result
+		result, err := typed.Int64()
+		return result, err == nil
 	case float64:
-		return int64(typed)
+		if math.Trunc(typed) != typed || typed > math.MaxInt64 || typed < math.MinInt64 {
+			return 0, false
+		}
+		return int64(typed), true
 	case int64:
-		return typed
+		return typed, true
 	case int:
-		return int64(typed)
+		return int64(typed), true
 	}
-	return 0
+	return 0, false
 }
 
 // stripeBoolean reads a boolean-valued Stripe field.

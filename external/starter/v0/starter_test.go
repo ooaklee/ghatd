@@ -404,6 +404,73 @@ func TestNewServices(t *testing.T) {
 			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
 		},
 		{
+			name: "Failure - opted-in Stripe has incomplete customer portal configuration",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:           "whsec_test",
+					CustomerPortalReturnURL: "https://app.example.test/settings",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - Stripe portal configuration ID without return URL",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:                 "whsec_test",
+					APIKey:                        "sk_test",
+					CustomerPortalConfigurationID: "bpc_test_123",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - Stripe portal return URL has invalid port",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:           "whsec_test",
+					APIKey:                  "sk_test",
+					CustomerPortalReturnURL: "https://app.example.test:70000/settings",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
+			name: "Failure - Stripe portal return URL contains a placeholder",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{
+					WebhookSecret:           "whsec_test",
+					APIKey:                  "sk_test",
+					CustomerPortalReturnURL: "https://app.example.test/{PORTAL_SESSION_ID}",
+				})
+				if err != nil {
+					t.Fatalf("NewStripeProvider() error = %v", err)
+				}
+				req.PaymentProviders = []paymentprovider.Provider{provider}
+				return req
+			},
+			wantErr: paymentprovider.ErrPaymentProviderInvalidConfiguration,
+		},
+		{
 			name: "Success - Stripe API sync remains valid without checkout opt-in",
 			request: func(t *testing.T) *NewServicesRequest {
 				req := validServicesRequest(t)

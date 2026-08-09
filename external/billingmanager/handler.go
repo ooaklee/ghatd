@@ -27,6 +27,12 @@ type billingManagerCheckoutService interface {
 	ProcessBillingProviderCheckout(ctx context.Context, req *ProcessBillingProviderCheckoutRequest) (*ProcessBillingProviderCheckoutResponse, error)
 }
 
+// billingManagerPortalService is additive so existing BillingManagerService
+// implementations and test doubles remain source compatible.
+type billingManagerPortalService interface {
+	ProcessBillingProviderPortal(ctx context.Context, req *ProcessBillingProviderPortalRequest) (*ProcessBillingProviderPortalResponse, error)
+}
+
 // ProcessBillingProviderCheckout creates a provider checkout session from an
 // authenticated, catalogue-backed request.
 func (h *Handler) ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +65,43 @@ func (h *Handler) ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.
 	if response == nil || response.Session == nil {
 		logger.Warn("handler-returning-error-response", zap.Error(ErrBillingManagerCheckoutSessionInvalid))
 		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerCheckoutSessionInvalid)
+		return
+	}
+
+	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Session)
+}
+
+// ProcessBillingProviderPortal creates a provider-hosted billing-management
+// session for the authenticated account.
+func (h *Handler) ProcessBillingProviderPortal(w http.ResponseWriter, r *http.Request) {
+	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-process-billing-provider-portal")
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodOptions {
+		h.getBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusNoContent)
+		return
+	}
+	request, err := mapRequestToProcessBillingProviderPortalRequest(r, h.Validator)
+	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+
+	portalService, ok := h.Service.(billingManagerPortalService)
+	if !ok || isNilCheckoutCapability(portalService) {
+		logger.Error("customer-portal-service-capability-not-configured")
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerPortalConfigurationInvalid)
+		return
+	}
+	response, err := portalService.ProcessBillingProviderPortal(r.Context(), request)
+	if err != nil {
+		logger.Warn("handler-returning-error-response", zap.Error(err))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	if response == nil || response.Session == nil {
+		logger.Warn("handler-returning-error-response", zap.Error(ErrBillingManagerPortalSessionInvalid))
+		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerPortalSessionInvalid)
 		return
 	}
 

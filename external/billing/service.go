@@ -93,8 +93,11 @@ func (s *Service) CreateSubscription(ctx context.Context, req *CreateSubscriptio
 			CostID:                   req.CostID,
 			ProviderPriceID:          req.ProviderPriceID,
 			Amount:                   req.Amount,
+			AmountKnown:              req.AmountKnown,
 			Currency:                 req.Currency,
 			BillingInterval:          req.BillingInterval,
+			BillingIntervalCount:     req.BillingIntervalCount,
+			Quantity:                 req.Quantity,
 			NextBillingDate:          req.NextBillingDate,
 			AvailableUntilDate:       req.AvailableUntilDate,
 			ProviderTrialEndsAt:      req.TrialEndsAt,
@@ -103,6 +106,10 @@ func (s *Service) CreateSubscription(ctx context.Context, req *CreateSubscriptio
 			Metadata:                 req.Metadata,
 		}
 	)
+	if req.ProviderEventTime != nil {
+		newSubscription.ProviderCreatedAt = req.ProviderEventTime.UTC()
+		newSubscription.ProviderUpdatedAt = req.ProviderEventTime.UTC()
+	}
 
 	logger.Debug("initiating-create-subscription-request", zap.Any("request", safeLogValue(req)))
 
@@ -186,11 +193,20 @@ func (s *Service) UpdateSubscription(ctx context.Context, req *UpdateSubscriptio
 	if req.Amount != nil {
 		subscription.Amount = *req.Amount
 	}
+	if req.AmountKnown != nil {
+		subscription.AmountKnown = *req.AmountKnown
+	}
 	if req.Currency != nil {
 		subscription.Currency = *req.Currency
 	}
 	if req.BillingInterval != nil {
 		subscription.BillingInterval = *req.BillingInterval
+	}
+	if req.BillingIntervalCount != nil {
+		subscription.BillingIntervalCount = *req.BillingIntervalCount
+	}
+	if req.Quantity != nil {
+		subscription.Quantity = *req.Quantity
 	}
 	if req.NextBillingDate != nil {
 		subscription.NextBillingDate = req.NextBillingDate
@@ -212,6 +228,9 @@ func (s *Service) UpdateSubscription(ctx context.Context, req *UpdateSubscriptio
 	}
 	if req.Metadata != nil {
 		subscription.Metadata = req.Metadata
+	}
+	if req.ProviderUpdatedAt != nil {
+		subscription.ProviderUpdatedAt = req.ProviderUpdatedAt.UTC()
 	}
 
 	subscription.SetUpdatedAtTimeToNow()

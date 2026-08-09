@@ -307,6 +307,9 @@ func resolvePaymentProviderRegistry(
 		if err := paymentprovider.ValidateCheckoutProviderConfig(provider); err != nil {
 			return nil, err
 		}
+		if err := paymentprovider.ValidateCustomerPortalProviderConfig(provider); err != nil {
+			return nil, err
+		}
 		concreteRegistry.Register(provider)
 	}
 

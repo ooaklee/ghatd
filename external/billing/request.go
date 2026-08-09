@@ -24,14 +24,18 @@ type CreateSubscriptionRequest struct {
 	CostID                   string
 	ProviderPriceID          string
 	Amount                   int64
+	AmountKnown              bool
 	Currency                 string
 	BillingInterval          string
+	BillingIntervalCount     int64
+	Quantity                 int64
 	NextBillingDate          *time.Time
 	AvailableUntilDate       *time.Time
 	TrialEndsAt              *time.Time
 	CancelURL                string
 	UpdateURL                string
 	Metadata                 map[string]interface{}
+	ProviderEventTime        *time.Time
 }
 
 // UpdateSubscriptionRequest contains data for updating a subscription
@@ -53,8 +57,11 @@ type UpdateSubscriptionRequest struct {
 	CostID                  *string
 	ProviderPriceID         *string
 	Amount                  *int64
+	AmountKnown             *bool
 	Currency                *string
 	BillingInterval         *string
+	BillingIntervalCount    *int64
+	Quantity                *int64
 	NextBillingDate         *time.Time
 	AvailableUntilDate      *time.Time
 	TrialEndsAt             *time.Time
@@ -62,6 +69,7 @@ type UpdateSubscriptionRequest struct {
 	CancelURL               *string
 	UpdateURL               *string
 	Metadata                map[string]interface{}
+	ProviderUpdatedAt       *time.Time
 }
 
 // GetTotalSubscriptionsRequest holds everything needed to make

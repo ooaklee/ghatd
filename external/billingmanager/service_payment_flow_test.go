@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	user "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 type payloadRegistry struct {
@@ -27,6 +29,18 @@ func (r *payloadRegistry) VerifyAndParseWebhookPayload(context.Context, string, 
 type createEventFailingBillingService struct {
 	BillingService
 	err error
+}
+
+type fixedBillingUserService struct {
+	user *user.UniversalUser
+}
+
+func (s *fixedBillingUserService) GetUserByEmail(context.Context, *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error) {
+	return &user.GetUserByEmailResponse{User: s.user}, nil
+}
+
+func (s *fixedBillingUserService) GetUserByID(context.Context, *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error) {
+	return &user.GetUserByIDResponse{User: s.user}, nil
 }
 
 func (s *createEventFailingBillingService) CreateBillingEvent(context.Context, *billing.CreateBillingEventRequest) (*billing.CreateBillingEventResponse, error) {
@@ -77,8 +91,7 @@ func TestOneOffPaymentCreatesAccessIsIdempotentAndRefundRevokesIt(t *testing.T) 
 
 	registry.payload = &paymentprovider.WebhookPayload{
 		EventID: "evt_partial_refund", EventType: paymentprovider.EventTypePaymentPartiallyRefunded,
-		PaymentType: paymentprovider.PaymentTypePurchase, BillingKind: paymentprovider.BillingKindOneTime,
-		IsOneOff: true, PaymentStatus: paymentprovider.PaymentStatusPartiallyRefunded, TransactionID: "txn_1",
+		PaymentStatus: paymentprovider.PaymentStatusPartiallyRefunded, TransactionID: "txn_1",
 	}
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatalf("partial refund ProcessBillingProviderWebhooks() error = %v", err)
@@ -94,8 +107,7 @@ func TestOneOffPaymentCreatesAccessIsIdempotentAndRefundRevokesIt(t *testing.T) 
 
 	registry.payload = &paymentprovider.WebhookPayload{
 		EventID: "evt_refund", EventType: paymentprovider.EventTypePaymentRefunded,
-		PaymentType: paymentprovider.PaymentTypePurchase, BillingKind: paymentprovider.BillingKindOneTime,
-		IsOneOff: true, PaymentStatus: paymentprovider.PaymentStatusRefunded, TransactionID: "txn_1",
+		PaymentStatus: paymentprovider.PaymentStatusRefunded, TransactionID: "txn_1",
 	}
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatalf("refund ProcessBillingProviderWebhooks() error = %v", err)
@@ -123,7 +135,8 @@ func TestRecurringPaymentReportsAccessAndSubscription(t *testing.T) {
 		EventID: "evt_subscription", EventType: paymentprovider.EventTypeSubscriptionCreated,
 		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
 		SubscriptionID: "sub_1", UserReference: "user_1", Status: billing.StatusActive,
-		PlanName: "Monthly", PaymentStatus: paymentprovider.PaymentStatusSucceeded,
+		PlanName: "Monthly", PlanID: "plan_1", CostID: "cost_1", ProviderPriceID: "price_1",
+		PaymentStatus: paymentprovider.PaymentStatusSucceeded,
 	})
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), webhookRequest("stripe")); err != nil {
 		t.Fatal(err)
@@ -142,6 +155,7 @@ func TestRecurringTrialGrantsAccessAndAcceptsLaterSubscriptionStatus(t *testing.
 		EventID: "evt_trial", EventType: paymentprovider.EventTypeSubscriptionCreated,
 		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
 		SubscriptionID: "sub_trial", UserReference: "user_1", Status: billing.StatusTrialing,
+		PlanID: "plan_1", CostID: "cost_1", ProviderPriceID: "price_1",
 		PaymentStatus: paymentprovider.PaymentStatusNoPaymentRequired,
 	})
 	request := webhookRequest("stripe")
@@ -170,6 +184,161 @@ func TestRecurringTrialGrantsAccessAndAcceptsLaterSubscriptionStatus(t *testing.
 	}
 	if response.SubscriptionStatus.Status != billing.StatusActive || !response.SubscriptionStatus.HasAccess {
 		t.Fatalf("active status after subscription update = %#v", response.SubscriptionStatus)
+	}
+}
+
+func TestStripeLiveDeliveryOrderKeepsSubscriptionTrialAuthoritative(t *testing.T) {
+	manager, billingService, registry := newPaymentFlowService(&paymentprovider.WebhookPayload{
+		EventID: "evt_invoice_paid", EventType: paymentprovider.EventTypePaymentSucceeded,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_trial", TransactionID: "in_initial", UserReference: "user_1", CustomerID: "cus_1",
+		PlanID: "plan_1", CostID: "cost_1", ProviderPriceID: "price_1",
+		PaymentStatus: paymentprovider.PaymentStatusSucceeded,
+		// Stripe recurring invoices intentionally carry no access Status.
+	})
+	request := webhookRequest("stripe")
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatalf("invoice ProcessBillingProviderWebhooks() error = %v", err)
+	}
+	assertSubscriptionCount(t, billingService, 0)
+
+	trialEnd := time.Date(2026, time.August, 23, 5, 27, 43, 0, time.UTC)
+	registry.payload = &paymentprovider.WebhookPayload{
+		EventID: "evt_subscription_created", EventType: paymentprovider.EventTypeSubscriptionCreated,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_trial", TransactionID: "in_initial", UserReference: "user_1", CustomerID: "cus_1",
+		Status: billing.StatusTrialing, PaymentStatus: paymentprovider.PaymentStatusNoPaymentRequired,
+		PlanName: "Pro", PlanID: "plan_1", CostID: "cost_1", ProviderPriceID: "price_1",
+		NextBillingDate: trialEnd.Format(time.RFC3339), AvailableUntilDate: trialEnd.Format(time.RFC3339),
+	}
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatalf("subscription ProcessBillingProviderWebhooks() error = %v", err)
+	}
+
+	// Stripe can deliver Checkout completion after subscription.created. It is
+	// a payment ledger event at this point and must not replace trial state or
+	// the provider period with the Checkout/invoice timestamp.
+	checkoutTime := trialEnd.Add(-14 * 24 * time.Hour)
+	registry.payload = &paymentprovider.WebhookPayload{
+		EventID: "evt_checkout_completed", EventType: paymentprovider.EventTypePaymentSucceeded,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_trial", TransactionID: "cs_initial", UserReference: "user_1", CustomerID: "cus_1",
+		Status: billing.StatusActive, PaymentStatus: paymentprovider.PaymentStatusSucceeded,
+		PlanName: "Pro", PlanID: "plan_1", CostID: "cost_1", ProviderPriceID: "price_1",
+		NextBillingDate: checkoutTime.Format(time.RFC3339), AvailableUntilDate: checkoutTime.Format(time.RFC3339),
+	}
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatalf("checkout ProcessBillingProviderWebhooks() error = %v", err)
+	}
+
+	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := response.SubscriptionStatus
+	if got.Status != billing.StatusTrialing || !got.HasAccess || !got.HasSubscription {
+		t.Fatalf("authoritative trial status = %#v", got)
+	}
+	if got.NextBillingDate == nil || !got.NextBillingDate.Equal(trialEnd) || got.AvailableUntilDate == nil || !got.AvailableUntilDate.Equal(trialEnd) {
+		t.Fatalf("authoritative trial period = %#v", got)
+	}
+	assertSubscriptionCount(t, billingService, 1)
+
+	events, err := billingService.GetBillingEvents(context.Background(), &billing.GetBillingEventsRequest{ForUserIDs: []string{"user_1"}, PerPage: 25, Page: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if events.Total != 3 {
+		t.Fatalf("ledger events = %d, want 3", events.Total)
+	}
+}
+
+func TestUnrelatedStripeSubscriptionEmailCannotCreateAccess(t *testing.T) {
+	manager, billingService, _ := newPaymentFlowService(&paymentprovider.WebhookPayload{
+		EventID: "evt_unrelated_subscription", EventType: paymentprovider.EventTypeSubscriptionCreated,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_unrelated", CustomerID: "cus_unrelated", CustomerEmail: "member@example.test",
+		Status: billing.StatusActive, PaymentStatus: paymentprovider.PaymentStatusSucceeded,
+	})
+	manager.WithUserService(&fixedBillingUserService{user: &user.UniversalUser{ID: "user_1", Email: "member@example.test"}})
+
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), webhookRequest("stripe")); err != nil {
+		t.Fatalf("ProcessBillingProviderWebhooks() error = %v", err)
+	}
+	assertSubscriptionCount(t, billingService, 0)
+	events, err := billingService.GetBillingEvents(context.Background(), &billing.GetBillingEventsRequest{ForUserIDs: []string{"user_1"}, PerPage: 25, Page: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if events.Total != 1 || events.BillingEvents[0].SubscriptionID != "" {
+		t.Fatalf("unrelated event ledger projection = %#v", events)
+	}
+}
+
+func TestRecurringRefundIsLedgerOnlyAndMetadataPoorLifecycleStillUpdates(t *testing.T) {
+	manager, billingService, registry := newPaymentFlowService(&paymentprovider.WebhookPayload{
+		EventID: "evt_subscription", EventType: paymentprovider.EventTypeSubscriptionCreated,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_1", UserReference: "user_1", CustomerID: "cus_1",
+		Status: billing.StatusActive, PaymentStatus: paymentprovider.PaymentStatusSucceeded,
+		PlanID: "plan_1", CostID: "cost_1", ProviderPriceID: "price_1",
+	})
+	request := webhookRequest("stripe")
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+
+	registry.payload = &paymentprovider.WebhookPayload{
+		EventID: "evt_invoice", EventType: paymentprovider.EventTypePaymentSucceeded,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_1", TransactionID: "pi_renewal", CustomerID: "cus_1",
+		PaymentStatus: paymentprovider.PaymentStatusSucceeded,
+	}
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+
+	registry.payload = &paymentprovider.WebhookPayload{
+		EventID: "evt_refund", EventType: paymentprovider.EventTypePaymentRefunded,
+		TransactionID: "pi_renewal", CustomerID: "cus_1", PaymentStatus: paymentprovider.PaymentStatusRefunded,
+	}
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.SubscriptionStatus.Status != billing.StatusActive || !status.SubscriptionStatus.HasAccess || status.SubscriptionStatus.PaymentStatus != paymentprovider.PaymentStatusSucceeded {
+		t.Fatalf("recurring access after refund = %#v", status.SubscriptionStatus)
+	}
+
+	registry.payload = &paymentprovider.WebhookPayload{
+		EventID: "evt_subscription_past_due", EventType: paymentprovider.EventTypeSubscriptionUpdated,
+		PaymentType: paymentprovider.PaymentTypeSubscription, BillingKind: paymentprovider.BillingKindRecurring,
+		SubscriptionID: "sub_1", Status: billing.StatusPastDue,
+	}
+	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.SubscriptionStatus.Status != billing.StatusPastDue || status.SubscriptionStatus.HasAccess {
+		t.Fatalf("metadata-poor lifecycle update = %#v", status.SubscriptionStatus)
+	}
+	assertSubscriptionCount(t, billingService, 1)
+}
+
+func assertSubscriptionCount(t *testing.T, billingService *billing.Service, want int) {
+	t.Helper()
+	response, err := billingService.GetSubscriptions(context.Background(), &billing.GetSubscriptionsRequest{PerPage: 25, Page: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Total != want {
+		t.Fatalf("subscriptions total = %d, want %d", response.Total, want)
 	}
 }
 

@@ -25,19 +25,30 @@ func setupPricerIntegration(t *testing.T) (context.Context, *pricer.Repository, 
 	ctx := context.Background()
 
 	mongoServer, err := memongo.StartWithOptions(&memongo.Options{MongoVersion: "7.0.14"})
-	if err != nil {
-		t.Skipf("skipping integration test: unable to start memongo: %v", err)
+	mongoURI := ""
+	if err == nil {
+		mongoURI = mongoServer.URI()
+	} else {
+		mongoURI = strings.TrimSpace(os.Getenv("PRICER_IT_MONGO_URI"))
+		if mongoURI == "" {
+			t.Skipf("skipping integration test: unable to start memongo: %v", err)
+		}
 	}
 
 	dbName := memongo.RandomDatabase()
-	mongoHandler, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(mongoServer.URI(), dbName))
+	mongoHandler, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(mongoURI, dbName))
 	require.NoError(t, err)
 
 	store := repository.NewMongoDbRepositoryWithDefaults(mongoHandler, dbName)
 	repo := pricer.NewRepository(store)
 
 	cleanup := func() {
-		mongoServer.Stop()
+		if database, databaseErr := mongoHandler.GetDatabase(ctx, dbName); databaseErr == nil {
+			_ = database.Drop(ctx)
+		}
+		if mongoServer != nil {
+			mongoServer.Stop()
+		}
 		_ = mongoHandler.Close(ctx)
 	}
 
@@ -67,7 +78,14 @@ func TestIntegration_PricePlanRepository_FullLifecycle(t *testing.T) {
 		Features: []pricer.PlanFeatureRef{
 			{FeatureID: "feat-1", FeatureSlug: "projects", Included: true, Quantity: 5},
 		},
+		Discounts: []pricer.PriceDiscount{
+			{Type: pricer.PriceDiscountTypePercent, PercentBps: 500},
+		},
+		PaymentTerms: &pricer.PricePaymentTerms{},
+		Metadata:     map[string]interface{}{"audience": "integration"},
 	}
+	displayOrder := 2
+	testPlan.DisplayOrder = &displayOrder
 
 	t.Run("Create and retrieve price plan", func(t *testing.T) {
 		created, err := repo.CreatePricePlan(ctx, testPlan)
@@ -94,12 +112,25 @@ func TestIntegration_PricePlanRepository_FullLifecycle(t *testing.T) {
 		assert.Equal(t, int64(1999), retrieved.Costs[0].Amount)
 		assert.Len(t, retrieved.Features, 1)
 		assert.Len(t, retrieved.ProviderRefs, 1)
+		assert.Len(t, retrieved.Discounts, 1)
+		assert.NotNil(t, retrieved.PaymentTerms)
+		assert.Equal(t, "integration", retrieved.Metadata["audience"])
+		require.NotNil(t, retrieved.DisplayOrder)
+		assert.Equal(t, 2, *retrieved.DisplayOrder)
 	})
 
 	t.Run("Update price plan", func(t *testing.T) {
 		updatedName := "Updated Integration Plan"
 		testPlan.Name = updatedName
-		testPlan.Description = "Updated description"
+		testPlan.Description = ""
+		testPlan.Features = []pricer.PlanFeatureRef{}
+		testPlan.Costs = []pricer.PriceCost{}
+		testPlan.Discounts = []pricer.PriceDiscount{}
+		testPlan.PaymentTerms = nil
+		testPlan.ProviderRefs = []pricer.PriceProviderRef{}
+		testPlan.Metadata = map[string]interface{}{}
+		testPlan.DisplayOrder = nil
+		testPlan.UpdatedByID = testUserID
 
 		updated, err := repo.UpdatePricePlan(ctx, testPlan)
 		require.NoError(t, err)
@@ -107,9 +138,23 @@ func TestIntegration_PricePlanRepository_FullLifecycle(t *testing.T) {
 		assert.NotEmpty(t, updated.UpdatedAt)
 		assert.Equal(t, testUserID, updated.UpdatedByID)
 
-		retrieved, err := repo.GetPricePlanByID(ctx, testPlan.ID, &pricer.GetPricePlanByIDRequest{})
+		retrieved, err := repo.GetPricePlanByID(ctx, testPlan.ID, &pricer.GetPricePlanByIDRequest{
+			IncludeFeatures:  true,
+			IncludeCosts:     true,
+			IncludeProviders: true,
+		})
 		require.NoError(t, err)
 		assert.Equal(t, updatedName, retrieved.Name)
+		assert.Empty(t, retrieved.Description)
+		assert.Empty(t, retrieved.Features)
+		assert.Empty(t, retrieved.Costs)
+		assert.Empty(t, retrieved.Discounts)
+		assert.Nil(t, retrieved.PaymentTerms)
+		assert.Empty(t, retrieved.ProviderRefs)
+		assert.Empty(t, retrieved.Metadata)
+		assert.Nil(t, retrieved.DisplayOrder)
+		assert.NotEmpty(t, retrieved.CreatedAt)
+		assert.Equal(t, testUserID, retrieved.CreatedByID)
 	})
 
 	t.Run("Publish price plan", func(t *testing.T) {
@@ -130,6 +175,26 @@ func TestIntegration_PricePlanRepository_FullLifecycle(t *testing.T) {
 		retrieved, err := repo.GetPricePlanByID(ctx, testPlan.ID, &pricer.GetPricePlanByIDRequest{})
 		require.NoError(t, err)
 		assert.Equal(t, pricer.PricePlanStatusArchived, retrieved.Status)
+	})
+
+	t.Run("Full update preserves archived publication audit fields", func(t *testing.T) {
+		publishedPlan, err := repo.GetPricePlanByID(ctx, testPlan.ID, &pricer.GetPricePlanByIDRequest{})
+		require.NoError(t, err)
+		require.NotEmpty(t, publishedPlan.PublishedAt)
+		require.NotEmpty(t, publishedPlan.PublishedByID)
+
+		publishedAt := publishedPlan.PublishedAt
+		publishedByID := publishedPlan.PublishedByID
+		publishedPlan.PublishedAt = ""
+		publishedPlan.PublishedByID = ""
+		_, err = repo.UpdatePricePlan(ctx, publishedPlan)
+		require.NoError(t, err)
+
+		retrieved, err := repo.GetPricePlanByID(ctx, testPlan.ID, &pricer.GetPricePlanByIDRequest{})
+		require.NoError(t, err)
+		assert.Equal(t, pricer.PricePlanStatusArchived, retrieved.Status)
+		assert.Equal(t, publishedAt, retrieved.PublishedAt)
+		assert.Equal(t, publishedByID, retrieved.PublishedByID)
 	})
 
 	t.Run("Soft delete price plan", func(t *testing.T) {
@@ -153,6 +218,7 @@ func TestIntegration_PricePlanRepository_QueryFilters(t *testing.T) {
 	defer cleanup()
 
 	draftPlan := &pricer.PricePlan{
+		Slug:        "filter-draft-plan",
 		Name:        "Filter Draft Plan",
 		Description: "Draft plan for filter tests",
 		Status:      pricer.PricePlanStatusDraft,
@@ -163,9 +229,11 @@ func TestIntegration_PricePlanRepository_QueryFilters(t *testing.T) {
 	}
 
 	publishedPlan := &pricer.PricePlan{
+		Slug:        "filter-published-plan",
 		Name:        "Filter Published Plan",
 		Description: "Published plan for filter tests",
 		Status:      pricer.PricePlanStatusPublished,
+		PublishedAt: "2025-01-01T00:00:00.000000000Z",
 		CreatedByID: testUserID,
 		Costs: []pricer.PriceCost{
 			{Amount: 1500, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
@@ -174,9 +242,11 @@ func TestIntegration_PricePlanRepository_QueryFilters(t *testing.T) {
 	}
 
 	archivedPlan := &pricer.PricePlan{
+		Slug:        "filter-archived-plan",
 		Name:        "Filter Archived Plan",
 		Description: "Archived plan for filter tests",
 		Status:      pricer.PricePlanStatusArchived,
+		PublishedAt: "2025-01-01T00:00:00.000000000Z",
 		CreatedByID: testUserID,
 		Costs: []pricer.PriceCost{
 			{Amount: 1000, Currency: "GBP", BillingCadence: pricer.PriceBillingCadenceYearly},

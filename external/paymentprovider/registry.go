@@ -71,6 +71,42 @@ func (r *ProviderRegistry) GetCheckoutProvider(name string) (CheckoutProvider, e
 	return checkoutProvider, nil
 }
 
+// GetCustomerPortalProvider retrieves the optional hosted customer-portal
+// capability exposed by a registered payment provider.
+func (r *ProviderRegistry) GetCustomerPortalProvider(name string) (CustomerPortalProvider, error) {
+	provider, err := r.Get(name)
+	if err != nil {
+		return nil, err
+	}
+
+	portalProvider, ok := provider.(CustomerPortalProvider)
+	if !ok || isNilProviderCapability(portalProvider) {
+		return nil, ErrPaymentProviderUnsupportedProvider
+	}
+	if validator, ok := portalProvider.(CustomerPortalConfigValidator); ok {
+		if err := validator.ValidateCustomerPortalConfig(); err != nil {
+			return nil, err
+		}
+	}
+
+	return portalProvider, nil
+}
+
+// GetUpcomingInvoicePreviewProvider retrieves the optional upcoming-invoice
+// preview capability exposed by a registered payment provider.
+func (r *ProviderRegistry) GetUpcomingInvoicePreviewProvider(name string) (UpcomingInvoicePreviewProvider, error) {
+	provider, err := r.Get(name)
+	if err != nil {
+		return nil, err
+	}
+
+	previewProvider, ok := provider.(UpcomingInvoicePreviewProvider)
+	if !ok || isNilProviderCapability(previewProvider) {
+		return nil, ErrPaymentProviderUnsupportedProvider
+	}
+	return previewProvider, nil
+}
+
 // IsNilProvider reports whether a Provider is nil, including an interface that
 // contains a typed-nil provider pointer.
 func IsNilProvider(provider Provider) bool {

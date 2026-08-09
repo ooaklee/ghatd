@@ -578,6 +578,10 @@ func (r *Repository) GetBillingEvents(ctx context.Context, req *GetBillingEvents
 		requestFilter = append(requestFilter, bson.E{Key: "updated_at", Value: 1})
 	case "updated_at_desc":
 		requestFilter = append(requestFilter, bson.E{Key: "updated_at", Value: -1})
+	case "event_time_asc":
+		requestFilter = append(requestFilter, bson.E{Key: "provider_event_time", Value: 1})
+	case "event_time_desc":
+		requestFilter = append(requestFilter, bson.E{Key: "provider_event_time", Value: -1})
 	default:
 		requestFilter = append(requestFilter, bson.E{Key: "created_at", Value: -1})
 	}
