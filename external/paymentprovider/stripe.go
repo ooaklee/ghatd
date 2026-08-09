@@ -81,6 +81,7 @@ func NewStripeProvider(config *Config) (*StripeProvider, error) {
 	}, nil
 }
 
+// GetProviderName returns Stripe's stable provider registry key.
 func (s *StripeProvider) GetProviderName() string { return s.name }
 
 // GetCheckoutReturnURL returns the provider-owned trusted checkout return
@@ -220,18 +221,21 @@ func (s *StripeProvider) ParsePayload(_ context.Context, req *http.Request) (*We
 	return payload, nil
 }
 
+// markStripePaymentSucceeded marks a Stripe payment event as successful access.
 func markStripePaymentSucceeded(payload *WebhookPayload) {
 	payload.EventType = EventTypePaymentSucceeded
 	payload.PaymentStatus = PaymentStatusSucceeded
 	payload.Status = SubscriptionStatusActive
 }
 
+// markStripePaymentActionRequired marks a Stripe payment that needs customer action.
 func markStripePaymentActionRequired(payload *WebhookPayload) {
 	payload.EventType = EventTypePaymentActionRequired
 	payload.PaymentStatus = PaymentStatusActionRequired
 	payload.Status = SubscriptionStatusIncomplete
 }
 
+// markStripeChargeRefund maps a charge refund to full or partial refund semantics.
 func markStripeChargeRefund(payload *WebhookPayload, object map[string]any) {
 	amount := stripeInteger(object, "amount")
 	amountRefunded := stripeInteger(object, "amount_refunded")
@@ -246,6 +250,7 @@ func markStripeChargeRefund(payload *WebhookPayload, object map[string]any) {
 	payload.Status = ""
 }
 
+// markStripeRefundLifecycle maps an individual Stripe refund object's lifecycle.
 func markStripeRefundLifecycle(payload *WebhookPayload, object map[string]any) {
 	if status := strings.ToLower(stripeString(object, "status")); status == "failed" || status == "canceled" {
 		payload.EventType = EventTypePaymentRefundFailed
@@ -259,6 +264,7 @@ func markStripeRefundLifecycle(payload *WebhookPayload, object map[string]any) {
 	payload.Status = ""
 }
 
+// markStripeRecurring maps a Stripe subscription event to canonical recurring fields.
 func markStripeRecurring(payload *WebhookPayload, eventType, status string) {
 	payload.EventType = eventType
 	payload.PaymentType = PaymentTypeSubscription
@@ -267,6 +273,7 @@ func markStripeRecurring(payload *WebhookPayload, eventType, status string) {
 	payload.Status = status
 }
 
+// stripeBasePayload extracts shared identity, catalogue, payment, and period fields.
 func stripeBasePayload(eventID, eventType string, created int64, raw []byte, object map[string]any) *WebhookPayload {
 	metadata := stripeObject(object, "metadata")
 	mode := stripeString(object, "mode")
@@ -378,6 +385,7 @@ func stripeBasePayload(eventID, eventType string, created int64, raw []byte, obj
 	}
 }
 
+// billingKindFromStripeObject infers recurring versus one-time Stripe billing.
 func billingKindFromStripeObject(mode string, metadata map[string]any, subscriptionID, eventType string) BillingKind {
 	kind := strings.ToLower(firstNonEmpty(stripeString(metadata, "billing_kind"), stripeString(metadata, "billing_cadence")))
 	switch kind {
@@ -536,6 +544,7 @@ func (s *StripeProvider) CreateCustomerPortalSession(ctx context.Context, input 
 	return &session, nil
 }
 
+// isValidAbsoluteHTTPURL validates a return URL accepted by Stripe checkout.
 func isValidAbsoluteHTTPURL(value string, requireHTTPS bool) bool {
 	parsed, err := url.Parse(strings.TrimSpace(value))
 	if err != nil || !parsed.IsAbs() || parsed.Host == "" || parsed.User != nil || parsed.Opaque != "" {
@@ -547,6 +556,7 @@ func isValidAbsoluteHTTPURL(value string, requireHTTPS bool) bool {
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
+// validateCheckoutPrice rechecks the live Stripe price against trusted catalogue terms.
 func (s *StripeProvider) validateCheckoutPrice(ctx context.Context, input *CheckoutSessionRequest) error {
 	hasExpectation := input.ExpectedAmount != 0 || strings.TrimSpace(input.ExpectedCurrency) != "" || strings.TrimSpace(input.ExpectedBillingCadence) != ""
 	if !hasExpectation {
@@ -687,6 +697,7 @@ func (s *StripeProvider) GetSubscriptionInfo(ctx context.Context, subscriptionID
 	return info, nil
 }
 
+// isValidStripeAPIVersion validates the pinned Stripe API version format.
 func isValidStripeAPIVersion(version string) bool {
 	if version == "" || len(version) > 64 {
 		return false
@@ -701,6 +712,7 @@ func isValidStripeAPIVersion(version string) bool {
 	return true
 }
 
+// readAndRestoreWebhookBody bounds webhook input and restores it for later parsing.
 func readAndRestoreWebhookBody(req *http.Request, maxBodySize int64) ([]byte, error) {
 	if req == nil || req.Body == nil {
 		return nil, errors.New("request body is required")
@@ -716,6 +728,7 @@ func readAndRestoreWebhookBody(req *http.Request, maxBodySize int64) ([]byte, er
 	return body, nil
 }
 
+// parseStripeSignatureHeader extracts the timestamp and candidate v1 signatures.
 func parseStripeSignatureHeader(value string) (int64, []string, error) {
 	if strings.TrimSpace(value) == "" {
 		return 0, nil, ErrPaymentProviderMissingSignature
@@ -744,6 +757,7 @@ func parseStripeSignatureHeader(value string) (int64, []string, error) {
 	return timestamp, signatures, nil
 }
 
+// stripeEventToStandard maps a Stripe event type to the shared event vocabulary.
 func stripeEventToStandard(eventType string) string {
 	switch eventType {
 	case "customer.subscription.created":
@@ -773,6 +787,7 @@ func stripeEventToStandard(eventType string) string {
 	}
 }
 
+// stripeStatusToStandard maps Stripe subscription states to shared statuses.
 func stripeStatusToStandard(status string) string {
 	switch status {
 	case "active", "paid", "complete", "succeeded":
@@ -794,6 +809,7 @@ func stripeStatusToStandard(status string) string {
 	}
 }
 
+// stripePaymentStatusToStandard maps Stripe payment states to shared statuses.
 func stripePaymentStatusToStandard(status string) string {
 	switch status {
 	case "paid", "succeeded":
@@ -811,6 +827,7 @@ func stripePaymentStatusToStandard(status string) string {
 	}
 }
 
+// stripeString reads a string field from a decoded Stripe object.
 func stripeString(object map[string]any, key string) string {
 	if value, ok := object[key].(string); ok {
 		return strings.TrimSpace(value)
@@ -818,6 +835,7 @@ func stripeString(object map[string]any, key string) string {
 	return ""
 }
 
+// stripeStringOrID reads either a Stripe expandable ID string or object ID.
 func stripeStringOrID(object map[string]any, key string) string {
 	if value := stripeString(object, key); value != "" {
 		return value
@@ -825,6 +843,7 @@ func stripeStringOrID(object map[string]any, key string) string {
 	return stripeString(stripeObject(object, key), "id")
 }
 
+// stripeObject reads a nested Stripe object, returning nil for another shape.
 func stripeObject(object map[string]any, key string) map[string]any {
 	if object == nil {
 		return nil
@@ -833,6 +852,7 @@ func stripeObject(object map[string]any, key string) map[string]any {
 	return value
 }
 
+// stripeInteger reads an integer-valued Stripe field across JSON number types.
 func stripeInteger(object map[string]any, key string) int64 {
 	value, ok := object[key]
 	if !ok {
@@ -852,11 +872,13 @@ func stripeInteger(object map[string]any, key string) int64 {
 	return 0
 }
 
+// stripeBoolean reads a boolean-valued Stripe field.
 func stripeBoolean(object map[string]any, key string) bool {
 	value, _ := object[key].(bool)
 	return value
 }
 
+// stripeNestedPriceID extracts a price ID from common Stripe line-item shapes.
 func stripeNestedPriceID(object map[string]any) string {
 	items := stripeObject(object, "items")
 	if len(items) == 0 {
@@ -873,6 +895,7 @@ func stripeNestedPriceID(object map[string]any) string {
 	)
 }
 
+// stripeInvoicePaymentReferences extracts payment IDs from modern invoice payments.
 func stripeInvoicePaymentReferences(object map[string]any) (paymentIntentID, chargeID string) {
 	payments := stripeObject(object, "payments")
 	data, _ := payments["data"].([]any)
@@ -885,6 +908,7 @@ func stripeInvoicePaymentReferences(object map[string]any) (paymentIntentID, cha
 	return paymentIntentID, chargeID
 }
 
+// stripeSubscriptionItemPeriod extracts current period bounds from subscription items.
 func stripeSubscriptionItemPeriod(object map[string]any) (periodStart, periodEnd int64) {
 	items := stripeObject(object, "items")
 	data, _ := items["data"].([]any)
@@ -902,6 +926,7 @@ func stripeSubscriptionItemPeriod(object map[string]any) (periodStart, periodEnd
 	return periodStart, periodEnd
 }
 
+// firstNonZero returns the first positive integer in the supplied values.
 func firstNonZero(values ...int64) int64 {
 	for _, value := range values {
 		if value != 0 {
@@ -911,6 +936,7 @@ func firstNonZero(values ...int64) int64 {
 	return 0
 }
 
+// stripeUnixDate converts a Unix timestamp to an RFC3339 string.
 func stripeUnixDate(value int64) string {
 	if value <= 0 {
 		return ""
@@ -918,6 +944,7 @@ func stripeUnixDate(value int64) string {
 	return time.Unix(value, 0).UTC().Format(time.RFC3339)
 }
 
+// firstNonEmpty returns the first non-blank, trimmed string.
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -932,6 +959,7 @@ func getStringField(object map[string]interface{}, key string) string {
 	return stripeString(object, key)
 }
 
+// getFloatField reads a floating-point field from a decoded provider object.
 func getFloatField(object map[string]interface{}, key string) float64 {
 	if value, ok := object[key].(float64); ok {
 		return value

@@ -109,6 +109,7 @@ func (wp *WebhookPayload) GrantsPlanAccess() bool {
 		(wp.PaymentType == PaymentTypeSubscription && wp.IsOneOff)
 }
 
+// billingKindForPayment infers the canonical billing kind from legacy fields.
 func billingKindForPayment(paymentType string, isOneOff bool) BillingKind {
 	if isOneOff {
 		return BillingKindOneTime
@@ -119,6 +120,7 @@ func billingKindForPayment(paymentType string, isOneOff bool) BillingKind {
 	return ""
 }
 
+// paymentStatusForEvent maps a normalized event type to its payment status.
 func paymentStatusForEvent(eventType string) string {
 	switch eventType {
 	case EventTypePaymentSucceeded, EventTypeSubscriptionCreated, EventTypeSubscriptionCreatedDonation:

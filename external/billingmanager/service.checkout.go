@@ -155,6 +155,7 @@ func (s *Service) ProcessBillingProviderCheckout(ctx context.Context, req *Proce
 	return &ProcessBillingProviderCheckoutResponse{Session: session}, nil
 }
 
+// checkoutProviderReturnURL resolves the provider-owned return URL and detects legacy conflicts.
 func (s *Service) checkoutProviderReturnURL(providerName string, provider paymentprovider.CheckoutProvider) (string, bool) {
 	legacyReturnURL := ""
 	if s != nil {
@@ -172,6 +173,7 @@ func (s *Service) checkoutProviderReturnURL(providerName string, provider paymen
 	return providerReturnURL, legacyReturnURL != "" && legacyReturnURL != providerReturnURL
 }
 
+// isNilCheckoutCapability detects nil values hidden inside optional capability interfaces.
 func isNilCheckoutCapability(capability interface{}) bool {
 	if capability == nil {
 		return true
@@ -185,6 +187,7 @@ func isNilCheckoutCapability(capability interface{}) bool {
 	}
 }
 
+// resolvePublishedCheckoutPrice finds one exact provider price in the complete public catalogue.
 func (s *Service) resolvePublishedCheckoutPrice(ctx context.Context, providerName, priceID string) (*checkoutSelection, error) {
 	var (
 		found              *checkoutSelection
@@ -251,6 +254,7 @@ func (s *Service) resolvePublishedCheckoutPrice(ctx context.Context, providerNam
 	return found, nil
 }
 
+// checkoutCataloguePageMetadataValid rejects inconsistent or truncated catalogue pages.
 func checkoutCataloguePageMetadataValid(response *pricer.GetPricePlansResponse, page int) bool {
 	if response == nil || page < 1 || response.Page != page || response.PerPage != checkoutCataloguePageSize ||
 		response.Total < 0 || response.TotalPages < 0 || response.TotalPages > checkoutCatalogueMaxPages ||
@@ -280,6 +284,7 @@ func checkoutCataloguePageMetadataValid(response *pricer.GetPricePlansResponse, 
 	return expectedPageSize >= 0 && len(response.PricePlans) == expectedPageSize
 }
 
+// validateCheckoutSelection maps supported catalogue terms to a checkout mode.
 func validateCheckoutSelection(selection *checkoutSelection) (string, error) {
 	if selection == nil || strings.TrimSpace(selection.plan.ID) == "" || strings.TrimSpace(selection.plan.Slug) == "" ||
 		strings.TrimSpace(selection.cost.ID) == "" || strings.TrimSpace(selection.cost.Currency) == "" ||
@@ -301,10 +306,12 @@ func validateCheckoutSelection(selection *checkoutSelection) (string, error) {
 	}
 }
 
+// normaliseCheckoutProviderName canonicalizes a provider route variable for lookup.
 func normaliseCheckoutProviderName(providerName string) string {
 	return strings.ToLower(strings.TrimSpace(providerName))
 }
 
+// checkoutIdempotencyKey scopes an optional browser key to the user, provider, and price.
 func checkoutIdempotencyKey(userID, providerName, priceID, clientKey string) (string, error) {
 	clientKey = strings.TrimSpace(clientKey)
 	if clientKey == "" {
@@ -318,6 +325,7 @@ func checkoutIdempotencyKey(userID, providerName, priceID, clientKey string) (st
 	return "bms-checkout-" + hex.EncodeToString(digest[:]), nil
 }
 
+// checkoutReturnURLOrigin returns the canonical origin permitted for checkout requests.
 func checkoutReturnURLOrigin(rawURL string) (string, error) {
 	parsed, _, err := parseCheckoutReturnURL(rawURL)
 	if err != nil {
@@ -326,6 +334,7 @@ func checkoutReturnURLOrigin(rawURL string) (string, error) {
 	return canonicalHTTPOrigin(parsed), nil
 }
 
+// enrichCheckoutReturnURL adds trusted catalogue correlation fields to a return URL.
 func enrichCheckoutReturnURL(rawURL string, selection *checkoutSelection) (string, error) {
 	if selection == nil {
 		return "", ErrBillingManagerCheckoutConfigurationInvalid
@@ -352,6 +361,7 @@ type checkoutURLPlaceholder struct {
 	value string
 }
 
+// parseCheckoutReturnURL validates a provider return URL while preserving Stripe placeholders.
 func parseCheckoutReturnURL(rawURL string) (*url.URL, []checkoutURLPlaceholder, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
@@ -390,6 +400,7 @@ func parseCheckoutReturnURL(rawURL string) (*url.URL, []checkoutURLPlaceholder, 
 	return parsed, placeholders, nil
 }
 
+// checkoutRequestOriginAllowed enforces fetch-metadata and same-origin checkout policy.
 func checkoutRequestOriginAllowed(origin, secFetchSite, allowedOrigin string) bool {
 	if strings.EqualFold(strings.TrimSpace(secFetchSite), "cross-site") {
 		return false
@@ -410,6 +421,7 @@ func checkoutRequestOriginAllowed(origin, secFetchSite, allowedOrigin string) bo
 	return canonicalHTTPOrigin(parsed) == allowedOrigin
 }
 
+// canonicalHTTPOrigin normalizes an HTTP origin, including IPv6 and default ports.
 func canonicalHTTPOrigin(parsed *url.URL) string {
 	scheme := strings.ToLower(parsed.Scheme)
 	hostname := strings.ToLower(parsed.Hostname())
@@ -430,6 +442,7 @@ func canonicalHTTPOrigin(parsed *url.URL) string {
 	return scheme + "://" + host
 }
 
+// hasValidHTTPPort reports whether a URL has no port or a valid TCP port number.
 func hasValidHTTPPort(parsed *url.URL) bool {
 	if parsed == nil {
 		return false

@@ -806,6 +806,7 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 	return createResp.Subscription, nil
 }
 
+// findPlanAccess locates the access record identified by a normalized webhook reference.
 func (s *Service) findPlanAccess(ctx context.Context, providerName string, payload *paymentprovider.WebhookPayload) (*billing.Subscription, error) {
 	reference := providerAccessReference(payload)
 	if reference == "" {
@@ -982,6 +983,7 @@ func (s *Service) createBillingEvent(ctx context.Context, subscriptionID, userID
 	return nil
 }
 
+// normaliseLegacyWebhookPayload fills canonical one-time and payment fields for older payloads.
 func normaliseLegacyWebhookPayload(payload *paymentprovider.WebhookPayload) {
 	if payload == nil {
 		return
@@ -1035,6 +1037,7 @@ func normaliseLegacyWebhookPayload(payload *paymentprovider.WebhookPayload) {
 	}
 }
 
+// providerAccessReference chooses the stable provider identifier for access persistence.
 func providerAccessReference(payload *paymentprovider.WebhookPayload) string {
 	if payload == nil {
 		return ""
@@ -1045,12 +1048,14 @@ func providerAccessReference(payload *paymentprovider.WebhookPayload) string {
 	return strings.TrimSpace(firstNonEmptyString(payload.TransactionID, payload.SubscriptionID, payload.EventID))
 }
 
+// isSuccessfulOneOffAccess reports whether a payment webhook can grant one-time plan access.
 func isSuccessfulOneOffAccess(payload *paymentprovider.WebhookPayload) bool {
 	return payload != nil && payload.GrantsPlanAccess() && !payload.IsRecurring() &&
 		(payload.PaymentStatus == paymentprovider.PaymentStatusSucceeded || payload.EventType == paymentprovider.EventTypePaymentSucceeded) &&
 		hasPlanAccessMetadata(payload)
 }
 
+// hasPlanAccessMetadata reports whether a payment contains trusted plan correlation metadata.
 func hasPlanAccessMetadata(payload *paymentprovider.WebhookPayload) bool {
 	return payload != nil && strings.TrimSpace(firstNonEmptyString(
 		payload.PlanID,
@@ -1061,6 +1066,7 @@ func hasPlanAccessMetadata(payload *paymentprovider.WebhookPayload) bool {
 	)) != ""
 }
 
+// selectPlanAccessRecord prefers an access-bearing record when several records are returned.
 func selectPlanAccessRecord(records []billing.Subscription) *billing.Subscription {
 	for i := range records {
 		if records[i].HasAccess() {
@@ -1073,6 +1079,7 @@ func selectPlanAccessRecord(records []billing.Subscription) *billing.Subscriptio
 	return &records[0]
 }
 
+// subscriptionBillingKind returns the canonical billing kind with legacy inference as fallback.
 func subscriptionBillingKind(record *billing.Subscription) string {
 	if record == nil {
 		return ""
@@ -1086,6 +1093,7 @@ func subscriptionBillingKind(record *billing.Subscription) string {
 	return string(paymentprovider.BillingKindOneTime)
 }
 
+// subscriptionPaymentType returns the canonical payment type with legacy inference as fallback.
 func subscriptionPaymentType(record *billing.Subscription) string {
 	if record == nil {
 		return ""
@@ -1099,6 +1107,7 @@ func subscriptionPaymentType(record *billing.Subscription) string {
 	return paymentprovider.PaymentTypePurchase
 }
 
+// firstNonEmptyString returns the first non-blank, trimmed value.
 func firstNonEmptyString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -1167,6 +1176,7 @@ func initLogFieldsWithUserIdAndRequestingUserId(userId, requestingUserId string)
 	return logFields
 }
 
+// webhookPayloadFieldsForLog builds privacy-safe webhook fields for structured logging.
 func webhookPayloadFieldsForLog(providerName string, userID string, payload *paymentprovider.WebhookPayload) []zap.Field {
 	fields := []zap.Field{
 		zap.String("provider", providerName),

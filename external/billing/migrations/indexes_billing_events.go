@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// InitBillingEventsIndexesUp creates the billing-event lookup and idempotency indexes.
 func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 
 	const mongoCollectionName = billing.BillingEventsCollection
@@ -75,6 +76,7 @@ func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 
 }
 
+// InitBillingEventsIndexesDown removes the indexes created by InitBillingEventsIndexesUp.
 func InitBillingEventsIndexesDown(db *mongo.Database) error { //Down
 	log.SetFlags(0)
 	const mongoCollectionName = billing.BillingEventsCollection

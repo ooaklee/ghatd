@@ -77,6 +77,7 @@ type CustomerPortalProvider interface {
 	CreateCustomerPortalSession(ctx context.Context, request *CustomerPortalSessionRequest) (*CustomerPortalSession, error)
 }
 
+// endpointHostForLog returns only the host portion of an endpoint for logging.
 func endpointHostForLog(endpoint string) string {
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
@@ -85,10 +86,12 @@ func endpointHostForLog(endpoint string) string {
 	return parsed.Host
 }
 
+// emailPresentForLog reports whether an email value is present without exposing it.
 func emailPresentForLog(value string) bool {
 	return logger.EmailPresentForLog(value)
 }
 
+// emailDomainForLog returns a privacy-safe email domain for structured logs.
 func emailDomainForLog(value string) string {
 	return logger.EmailDomainForLog(value)
 }

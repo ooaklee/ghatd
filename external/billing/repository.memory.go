@@ -417,6 +417,7 @@ func (m *InMemoryRepository) GetUnassociatedBillingEvents(ctx context.Context, r
 
 // Helper methods for filtering
 
+// matchesSubscriptionFilter reports whether a subscription satisfies a total-count query.
 func (m *InMemoryRepository) matchesSubscriptionFilter(sub *Subscription, req *GetTotalSubscriptionsRequest) bool {
 	if req.IntegratorName != "" && sub.Integrator != req.IntegratorName {
 		return false
@@ -465,6 +466,7 @@ func (m *InMemoryRepository) matchesSubscriptionFilter(sub *Subscription, req *G
 	return true
 }
 
+// matchesSubscriptionFilterFromGetRequest reports whether a subscription satisfies a list query.
 func (m *InMemoryRepository) matchesSubscriptionFilterFromGetRequest(sub *Subscription, req *GetSubscriptionsRequest) bool {
 	if req.IntegratorName != "" && sub.Integrator != req.IntegratorName {
 		return false
@@ -513,6 +515,7 @@ func (m *InMemoryRepository) matchesSubscriptionFilterFromGetRequest(sub *Subscr
 	return true
 }
 
+// matchesBillingEventFilter reports whether a billing event satisfies a total-count query.
 func (m *InMemoryRepository) matchesBillingEventFilter(event *BillingEvent, req *GetTotalBillingEventsRequest) bool {
 	if req.IntegratorName != "" && event.Integrator != req.IntegratorName {
 		return false
@@ -640,6 +643,7 @@ func (m *InMemoryRepository) sortSubscriptions(subscriptions []Subscription, ord
 	return subscriptions
 }
 
+// sortBillingEvents orders billing events according to the requested sort key.
 func (m *InMemoryRepository) sortBillingEvents(events []BillingEvent, order string) []BillingEvent {
 	sort.SliceStable(events, func(i, j int) bool {
 		switch order {
@@ -656,6 +660,7 @@ func (m *InMemoryRepository) sortBillingEvents(events []BillingEvent, order stri
 	return events
 }
 
+// eventTimeMatches reports whether a timestamp falls within the optional bounds.
 func eventTimeMatches(value time.Time, from, to string) bool {
 	if from != "" {
 		fromTime, err := time.Parse(time.RFC3339, from)
@@ -672,6 +677,7 @@ func eventTimeMatches(value time.Time, from, to string) bool {
 	return true
 }
 
+// paginateBillingEvents returns the requested page using the repository's default page size.
 func paginateBillingEvents(events []BillingEvent, perPage, page int) []BillingEvent {
 	if perPage <= 0 {
 		perPage = 25
@@ -692,6 +698,7 @@ func paginateBillingEvents(events []BillingEvent, perPage, page int) []BillingEv
 
 // Helper functions
 
+// contains reports whether an exact string is present in a slice.
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -701,6 +708,7 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
+// containsEmail reports whether a case-normalized email is present in a slice.
 func containsEmail(slice []string, email string) bool {
 	emailLower := toolbox.StringStandardisedToLower(email)
 	for _, s := range slice {

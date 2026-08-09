@@ -77,6 +77,7 @@ func IsNilProvider(provider Provider) bool {
 	return isNilProviderCapability(provider)
 }
 
+// isNilProviderCapability detects nil values hidden inside capability interfaces.
 func isNilProviderCapability(capability interface{}) bool {
 	if capability == nil {
 		return true
