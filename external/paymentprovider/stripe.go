@@ -23,10 +23,9 @@ import (
 )
 
 const (
-	stripeProviderName            = "stripe"
-	stripeDefaultAPIBaseURL       = "https://api.stripe.com"
-	stripeSignatureHeader         = "Stripe-Signature"
-	stripeDefaultBodySize   int64 = 2 << 20
+	stripeProviderName          = "stripe"
+	stripeSignatureHeader       = "Stripe-Signature"
+	stripeDefaultBodySize int64 = 2 << 20
 )
 
 var stripeDefaultSignatureTolerance = 5 * time.Minute
@@ -56,7 +55,7 @@ func NewStripeProvider(config *Config) (*StripeProvider, error) {
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(config.APIBaseURL), "/")
 	if baseURL == "" {
-		baseURL = stripeDefaultAPIBaseURL
+		baseURL = StripeDefaultAPIBaseURL
 	}
 	apiVersion := strings.TrimSpace(config.APIVersion)
 	if apiVersion == "" {
