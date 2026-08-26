@@ -61,6 +61,7 @@ A complete billing solution split into three composable packages for maximum fle
 - **[Logger](./external/logger/)** - Structured logging with middleware support
 - **[MongoDB Migrator](./external/migrator/mongo/README.md)** - Shared migration command with host-owned registrations and templates
 - **[Notifier](./external/notifier/README.md)** - Push notification registration, preferences, and delivery
+- **[Observability](./external/observability/README.md)** - Provider-neutral OpenTelemetry traces, metrics, and logs
 - **[Post](./external/post/README.md)** - Reusable content models, persistence, and publication rules
 - **[Reminder](./external/reminder/README.md)** - User-owned scheduled reminders with target-based lookups and execution tracking
 - **[Router](./external/router/README.md)** - Shared HTTP routing and route attachment

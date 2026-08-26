@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/observability"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +22,7 @@ import (
 type LemonSqueezyProvider struct {
 	config *Config
 	name   string
+	client *http.Client
 }
 
 // NewLemonSqueezyProvider creates a new Lemon Squeezy payment provider
@@ -28,9 +31,15 @@ func NewLemonSqueezyProvider(config *Config) (*LemonSqueezyProvider, error) {
 		return nil, ErrPaymentProviderMissingConfiguration
 	}
 
+	client := config.HTTPClient
+	if client == nil {
+		client = observability.NewHTTPClient(http.DefaultTransport, 30*time.Second)
+	}
+
 	return &LemonSqueezyProvider{
 		config: config,
 		name:   "lemonsqueezy",
+		client: client,
 	}, nil
 }
 
@@ -153,7 +162,7 @@ func (l *LemonSqueezyProvider) GetSubscriptionInfo(ctx context.Context, subscrip
 	}
 
 	apiURL := baseURL + "/v1/subscriptions/" + subscriptionID
-	body, err := l.callLemonSqueezyEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := l.callLemonSqueezyEndpoint(ctx, logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +221,7 @@ func (l *LemonSqueezyProvider) getPriceByPriceID(ctx context.Context, priceID st
 	}
 
 	apiURL := baseURL + "/v1/prices/" + priceID
-	body, err := l.callLemonSqueezyEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := l.callLemonSqueezyEndpoint(ctx, logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +254,7 @@ func (l *LemonSqueezyProvider) getPriceByOrderItemID(ctx context.Context, orderI
 	}
 
 	apiURL := baseURL + "/v1/order-items/" + fmt.Sprintf("%d", orderItemID)
-	body, err := l.callLemonSqueezyEndpoint(logger, "GET", apiURL, nil, []int{http.StatusOK})
+	body, err := l.callLemonSqueezyEndpoint(ctx, logger, "GET", apiURL, nil, []int{http.StatusOK})
 	if err != nil {
 		return nil, err
 	}
@@ -280,10 +289,10 @@ func (l *LemonSqueezyProvider) getPriceByOrderItemID(ctx context.Context, orderI
 }
 
 // callLemonSqueezyEndpoint is a helper to call Lemon Squeezy API endpoints
-func (l *LemonSqueezyProvider) callLemonSqueezyEndpoint(logger *zap.Logger, method, endpoint string, body io.Reader, validHttpStatusCodes []int) ([]byte, error) {
+func (l *LemonSqueezyProvider) callLemonSqueezyEndpoint(ctx context.Context, logger *zap.Logger, method, endpoint string, body io.Reader, validHttpStatusCodes []int) ([]byte, error) {
 	logger.Info("calling-lemon-squeezy-endpoint", zap.String("http-method", method), zap.String("endpoint-host", endpointHostForLog(endpoint)))
 
-	req, err := http.NewRequest(method, endpoint, body)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		logger.Error("failed-to-create-http-request", zap.Error(err))
 		return nil, ErrPaymentProviderAPIRequestFailed
@@ -293,7 +302,7 @@ func (l *LemonSqueezyProvider) callLemonSqueezyEndpoint(logger *zap.Logger, meth
 	req.Header.Set("Accept", "application/vnd.api+json")
 	req.Header.Set("Content-Type", "application/vnd.api+json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := l.client.Do(req)
 	if err != nil {
 		logger.Error("http-request-failed", zap.Error(err))
 		return nil, ErrPaymentProviderAPIRequestFailed

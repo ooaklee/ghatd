@@ -1,27 +1,34 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/observability"
 	"github.com/ooaklee/ghatd/external/toolbox"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+const unknownRoute = "unknown"
 
 // Middleware of logger
 type Middleware struct {
 	logger *zap.Logger
 
-	// uriIgnoreList the list of Uris that should not be logged on completion
-	// of request
+	// uriIgnoreList is the list of URIs that should not be logged when a
+	// request completes.
 	uriIgnoreList []string
 }
 
-// NewLogger returns middleware
+// NewLogger returns request-logging middleware.
 func NewLogger(logger *zap.Logger, uriIgnoreList []string) *Middleware {
 	return &Middleware{
 		logger:        logger,
@@ -29,53 +36,25 @@ func NewLogger(logger *zap.Logger, uriIgnoreList []string) *Middleware {
 	}
 }
 
-// getOrCreateCorrelationId attempts to pull correlation Id from request header, if exists.
-// If correlation Id is not present, a new Id will be generated
+// getOrCreateCorrelationId preserves canonical UUIDv4 request IDs and replaces
+// every other value. Correlation IDs are exported to logs and traces, so
+// accepting arbitrary caller-controlled values would leak sensitive data and
+// create unbounded telemetry cardinality.
 func getOrCreateCorrelationId(req *http.Request) string {
-	correlationId := req.Header.Get(common.CorrelationIdHttpHeader)
-	if correlationId == "" {
-		return toolbox.GenerateUuidV4()
+	correlationID := strings.TrimSpace(req.Header.Get(common.CorrelationIdHttpHeader))
+	parsed, err := uuid.Parse(correlationID)
+	if err == nil && parsed.Version() == uuid.Version(4) && strings.EqualFold(correlationID, parsed.String()) {
+		return parsed.String()
 	}
-	return correlationId
+
+	return toolbox.GenerateUuidV4()
 }
 
 // HTTPLogger is a middleware that adds correlation ID tracking and logging to HTTP requests.
 // It generates or retrieves a correlation ID, attaches it to the request context and response headers,
 // creates a logger with the correlation ID, and logs request details after the handler completes.
 func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-
-		fetchedCorrelationId := getOrCreateCorrelationId(req)
-		w.Header().Add(common.CorrelationIdHttpHeader, fetchedCorrelationId)
-
-		// attach correlation id to request context
-		req = req.WithContext(toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId))
-
-		// attach correlation id to logger
-		reqLogger := m.logger.With(zap.String("correlation-id", fetchedCorrelationId))
-		//nolint Sync the request logger
-		defer reqLogger.Sync()
-
-		request := req.WithContext(logger.TransitWith(req.Context(), reqLogger))
-
-		responseWriter := middlewareResponseWriter(w)
-		handler.ServeHTTP(responseWriter, request)
-
-		// Log request data
-		reqLogger.Info(
-			fmt.Sprintf("concluded request for %s [correlation-id: %s]", req.URL.RequestURI(), fetchedCorrelationId),
-			zap.String(logger.FieldSource, logger.SourceGHATD),
-			zap.String(logger.FieldPackage, "external/logger/middleware"),
-			zap.String(logger.FieldOperation, "http-request"),
-			zap.Int("status", responseWriter.statusCode),
-			zap.String("method", req.Method),
-			zap.String("clientip", req.RemoteAddr),
-			zap.String("forwarded-for", req.Header.Get("X-Forwarded-For")),
-			zap.String("host", req.Host),
-			zap.String("uri", req.URL.RequestURI()),
-			zap.String("user-agent", req.UserAgent()),
-		)
-	})
+	return m.httpLogger(handler, false)
 }
 
 // HTTPLoggerWithCustomUriIgnoreList is a middleware that adds correlation ID tracking and logging to HTTP requests
@@ -83,44 +62,68 @@ func (m *Middleware) HTTPLogger(handler http.Handler) http.Handler {
 // attaches it to the request context and response headers, creates a logger with the correlation ID,
 // and logs request details after the handler completes, skipping logging for URIs in the ignore list.
 func (m *Middleware) HTTPLoggerWithCustomUriIgnoreList(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	return m.httpLogger(handler, true)
+}
 
+// httpLogger builds the request logger with optional route suppression.
+func (m *Middleware) httpLogger(handler http.Handler, useIgnoreList bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		fetchedCorrelationId := getOrCreateCorrelationId(req)
 		w.Header().Add(common.CorrelationIdHttpHeader, fetchedCorrelationId)
 
-		// attach correlation id to request context
-		req = req.WithContext(toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId))
+		// Attach the correlation ID to the request context.
+		requestContext := toolbox.TransitWithCtxByKey[string](req.Context(), toolbox.CtxKeyCorrelationId, fetchedCorrelationId)
+		trace.SpanFromContext(requestContext).SetAttributes(attribute.String("correlation.id", fetchedCorrelationId))
 
-		// attach correlation id to logger
-		reqLogger := m.logger.With(zap.String("correlation-id", fetchedCorrelationId))
+		// Attach the active OTel context and stable correlation fields to every
+		// logger acquired downstream from this request.
+		reqLogger := observability.WithTraceContext(requestContext, m.logger).With(zap.String("correlation-id", fetchedCorrelationId))
 		//nolint Sync the request logger
 		defer reqLogger.Sync()
 
-		request := req.WithContext(logger.TransitWith(req.Context(), reqLogger))
+		request := req.WithContext(logger.TransitWith(requestContext, reqLogger))
 
 		responseWriter := middlewareResponseWriter(w)
 		handler.ServeHTTP(responseWriter, request)
 
-		// handle uri ignore list
-		if len(m.uriIgnoreList) > 0 && slices.Contains(m.uriIgnoreList, req.URL.RequestURI()) {
+		route := routeTemplate(req)
+		if useIgnoreList && m.shouldIgnore(req, route) {
 			return
 		}
 
-		// Log request data
 		reqLogger.Info(
-			fmt.Sprintf("concluded request for %s [correlation-id: %s]", req.URL.RequestURI(), fetchedCorrelationId),
+			"http request completed",
 			zap.String(logger.FieldSource, logger.SourceGHATD),
 			zap.String(logger.FieldPackage, "external/logger/middleware"),
 			zap.String(logger.FieldOperation, "http-request"),
 			zap.Int("status", responseWriter.statusCode),
 			zap.String("method", req.Method),
-			zap.String("clientip", req.RemoteAddr),
-			zap.String("forwarded-for", req.Header.Get("X-Forwarded-For")),
-			zap.String("host", req.Host),
-			zap.String("uri", req.URL.RequestURI()),
-			zap.String("user-agent", req.UserAgent()),
+			zap.String("route", route),
 		)
 	})
+}
+
+// shouldIgnore reports whether the request path or route is suppressed.
+func (m *Middleware) shouldIgnore(req *http.Request, route string) bool {
+	if len(m.uriIgnoreList) == 0 {
+		return false
+	}
+
+	return slices.Contains(m.uriIgnoreList, route) || slices.Contains(m.uriIgnoreList, req.URL.Path)
+}
+
+// routeTemplate returns the matched route pattern or a stable fallback.
+func routeTemplate(req *http.Request) string {
+	route := mux.CurrentRoute(req)
+	if route == nil {
+		return unknownRoute
+	}
+
+	template, err := route.GetPathTemplate()
+	if err != nil || template == "" {
+		return unknownRoute
+	}
+	return template
 }
 
 type httpResponseWriter struct {
@@ -128,12 +131,13 @@ type httpResponseWriter struct {
 	statusCode int
 }
 
-// middlewareResponseWriter handles events when responses that implicitly returns 200 OK do
-// no call WriteHeader(int).
+// middlewareResponseWriter records an implicit 200 OK when a handler does not
+// call WriteHeader.
 func middlewareResponseWriter(w http.ResponseWriter) *httpResponseWriter {
 	return &httpResponseWriter{w, http.StatusOK}
 }
 
+// WriteHeader records the response status before forwarding it.
 func (lrw *httpResponseWriter) WriteHeader(code int) {
 	lrw.statusCode = code
 	lrw.ResponseWriter.WriteHeader(code)
