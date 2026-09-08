@@ -7,19 +7,29 @@ compatible Collector and backend without embedding a vendor agent.
 
 ## Bootstrap
 
-Start the SDK before constructing instrumented clients, then shut it down with
-a bounded context so buffered signals are flushed:
+Start a runtime before constructing instrumented clients. It owns the SDK and
+telemetry logger, and creates a fresh bounded context when shutdown begins:
 
 ```go
-telemetry, err := observability.Start(ctx, observability.Config{
-    ServiceName: "my-service",
-    Version:     gitCommit,
-    Environment: environment,
+runtime, err := observability.StartRuntime(ctx, observability.RuntimeConfig{
+    Telemetry: observability.Config{
+        ServiceName: "my-service",
+        Version:     gitCommit,
+        Environment: environment,
+    },
+    Logger:          appLogger,
+    ShutdownTimeout: 15 * time.Second,
 })
 if err != nil {
     return err
 }
-defer telemetry.Shutdown(shutdownCtx)
+defer func() {
+    if err := runtime.Shutdown(ctx); err != nil {
+        appLogger.Warn("telemetry shutdown failed")
+    }
+}()
+ctx = runtime.Context()
+telemetry := runtime.SDK()
 ```
 
 `Start` installs W3C Trace Context propagation, OTLP exporters for all three
@@ -42,6 +52,94 @@ Set any signal exporter to `none` to disable it explicitly. This package does
 not interpret `OTEL_PROPAGATORS` or `OTEL_SDK_DISABLED`; propagation is fixed to
 Trace Context, and signals are disabled individually through their exporter
 variables.
+
+## Runtime lifecycle and command adapters
+
+Use one owning runtime in a service process. `Runtime.SDK()` exposes explicit
+providers for dependency construction, `Runtime.Logger()` returns the telemetry
+logger, and `Runtime.Context()` carries both the logger and runtime.
+`RuntimeFromContext(ctx)` retrieves that runtime from derived contexts. A nil
+configured logger uses the existing context logger. `LogOptions` applies the
+same immutable field policy options accepted by `TeeLogger`.
+
+Close application listeners, finish workers, and release dependencies before
+calling `Runtime.Shutdown`. It preserves the supplied context's values but
+detaches its cancellation and deadline, then applies `ShutdownTimeout` starting
+at that moment. Zero selects 15 seconds; negative values fail startup. Exporters
+share this deadline and must honor their contexts. Shutdown is idempotent and
+returns the first SDK shutdown result. It does not close the original application
+logger or reset global providers. Avoid creating competing runtime owners or
+assuming clients created with an old SDK will rebind after SDK replacement.
+
+The lower-level `Start`/`SDK.Shutdown` API remains available when an application
+already owns its lifecycle. That API uses the shutdown context supplied by its
+caller; the runtime adds the fresh timeout and logger/context setup.
+
+For an HTTP service, the child package
+`github.com/ooaklee/ghatd/external/observability/otelhttp` composes the entire
+dispatch in the required order:
+
+```go
+handler := otelhttp.Wrap("my-service", runtime.Logger(), router.GetRouter())
+```
+
+The wrapper applies telemetry, request logging, recovery, and then the complete
+router. Keep only matched-route concerns such as authentication inside the
+router. Install this wrapper once; do not add a second request logger/recovery
+on matched routes. It preserves matched templates and covers generated 404/405
+responses, redirects, and ordinary application panics. Intentional
+`http.ErrAbortHandler` retains its existing abort semantics.
+
+For Cobra, import
+`github.com/ooaklee/ghatd/external/observability/otelcobra` and instrument an
+existing executable command during construction:
+
+```go
+err := otelcobra.Instrument(command, func(command *cobra.Command) (otelcobra.Config, error) {
+    return otelcobra.Config{
+        Name:  "database.up",
+        Scope: "example.com/service/commands",
+        Runtime: observability.RuntimeConfig{
+            Telemetry: observability.Config{ServiceName: "my-service-migrator"},
+            Logger:    appLogger,
+        },
+        Errors: classifier,
+    }, nil
+})
+if err != nil {
+    return err
+}
+```
+
+Call `Instrument` once per leaf command. Its resolver runs on each invocation,
+so it can load current settings and return configuration errors. The existing
+`RunE` retains precedence over `Run`. Arguments, flags, validation, help, and
+pre/post hooks keep their existing behavior. The runtime and command span cover
+the executable action only: pre/post hooks are outside that lifetime, and
+non-executable parent commands cannot be instrumented accidentally.
+
+When configuration and the action need the same parsed settings, load them once
+in the application's `RunE` and call `otelcobra.Run` directly:
+
+```go
+return otelcobra.Run(command, args, commandConfig,
+    func(command *cobra.Command, args []string) error {
+        runtime := observability.RuntimeFromContext(command.Context())
+        return runDomainAction(command.Context(), runtime.SDK(), settings)
+    })
+```
+
+The adapter preserves the argument slice and original action error, supplies
+the traced context and logger, and restores the original command context on
+return or panic. `Config.Errors` selects the same classifier for the command
+span and automatic completion log. Names are explicit trusted constants of
+1–64 ASCII bytes, never derived from arguments, flags, or command help text.
+The adapter does not export arguments, raw errors, or panic payloads; automatic
+local error logs also use a constant message. Completed spans and logs flush
+before the runtime stops. A shutdown failure emits a static stderr diagnostic
+without changing a potentially committed command result. Application panics
+are classified and rethrown unchanged. Actions must return errors instead of
+calling `os.Exit`, `log.Fatal`, or `zap.Fatal`, which bypass deferred cleanup.
 
 ## Service identity
 
@@ -208,9 +306,12 @@ operations, err := observability.NewOperations(observability.OperationConfig{
 if err != nil {
     return err
 }
-appLogger = observability.TeeLogger(appLogger, telemetry.LoggerProvider(),
-    observability.WithLogErrorClassifier(classifier))
 ```
+
+Build the classifier before starting the runtime and pass
+`LogOptions: []observability.LogOption{observability.WithLogErrorClassifier(classifier)}`
+in `RuntimeConfig` to share its codes with logs. Applications using the lower-level
+SDK API can instead pass that option to `TeeLogger` when creating their logger.
 
 Use static operation names and a named error result. Defer `Finish` directly so
 it observes both the returned error and a panic:
