@@ -11,6 +11,45 @@ The `router` package provides a standardised, project-specific wrapper around `g
 
 ## Getting Started
 
+For complete request telemetry, wrap the router at the HTTP server boundary.
+Mux middleware runs only after a successful match, so installing telemetry
+only with `GetRouter().Use(...)` omits generated 404/405 responses and some
+redirects. A typical middleware order is:
+
+```go
+requestLogger := loggermiddleware.NewLogger(appLogger, nil)
+handler := observability.HTTPServerMiddleware("my-service")(
+    requestLogger.HTTPLogger(
+        observability.HTTPRecoveryMiddleware(ghatdRouter.GetRouter()),
+    ),
+)
+```
+
+Here `loggermiddleware` is `external/logger/middleware` and `observability` is
+`external/observability`. Pass `handler` to the HTTP server. Keep route-specific
+middleware, such as authentication and caching, on the router.
+
+`NewRouter` installs lightweight route observation before supplied middleware.
+The `external/router/routecontext` package shares the matched template with
+outer middleware without another matching pass. This covers middleware that
+responds immediately, nested routes, and strict-slash redirects. Unmatched
+requests and redirects performed before matching retain an empty template;
+their raw paths are never used as route labels.
+
+For a plain Gorilla Mux router, install `routecontext.ObserveMiddleware` with
+`Use` before other Mux middleware. Outer middleware can call
+`routecontext.Begin(request)` before dispatch and `routecontext.Template(request)`
+afterward. GHATD's HTTP telemetry and request logger initialize that shared
+state automatically.
+
+Recovery records a constant panic classification and writes a generic 500 only
+if a final response has not already been committed or the connection hijacked.
+It preserves committed response statuses and HTTP streaming interfaces. An
+intentional `http.ErrAbortHandler` is rethrown unchanged; upstream HTTP
+instrumentation ends its span during that unwind but does not complete its
+request-duration metric. Request logging also skips its completion event on
+that intentional abort.
+
 The following example shows how to initialise the `ghatdRouter`, configure it with default handlers and middleware, and attach a verification endpoint.
 
 ### Example Initialisation
@@ -93,8 +132,9 @@ func main() {
 	// 	// ... middleware
 	// })
 
-	// 6. Start the HTTP Server
-	// http.ListenAndServe(":8080", ghatdRouter.GetRouter())
+	// 6. Wrap the router with the boundary middleware shown above, then start
+	// the HTTP server with that wrapped handler.
+	// http.ListenAndServe(":8080", handler)
 }
 ```
 

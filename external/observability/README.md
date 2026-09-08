@@ -87,7 +87,14 @@ resource attributes; resources are attached to all exported signals.
 
 ## Instrumentation
 
-- Wrap Gorilla Mux handlers with `HTTPServerMiddleware`.
+- Wrap the complete router with `HTTPServerMiddleware`, request logging, and
+  `HTTPRecoveryMiddleware`, in that outer-to-inner order. This observes generated
+  404/405 responses and redirects as well as matched routes. GHATD routers track
+  templates automatically; direct Gorilla Mux users must install
+  `routecontext.ObserveMiddleware` before other route middleware. See the
+  [router integration guide](../router/README.md#getting-started).
+  Intentional `http.ErrAbortHandler` panics retain Go's abort semantics and omit
+  normal request completion logging and duration recording.
 - Construct outbound clients with `NewHTTPClient` or wrap a transport with
   `NewRoundTripper`.
 - Attach `NewMongoCommandMonitor` to MongoDB v2 client options.

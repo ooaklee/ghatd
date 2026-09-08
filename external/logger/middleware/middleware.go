@@ -1,15 +1,17 @@
 package middleware
 
 import (
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 
+	"github.com/felixge/httpsnoop"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/observability"
+	"github.com/ooaklee/ghatd/external/router/routecontext"
 	"github.com/ooaklee/ghatd/external/toolbox"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -81,25 +83,30 @@ func (m *Middleware) httpLogger(handler http.Handler, useIgnoreList bool) http.H
 		//nolint Sync the request logger
 		defer reqLogger.Sync()
 
-		request := req.WithContext(logger.TransitWith(requestContext, reqLogger))
+		request := routecontext.Begin(req.WithContext(logger.TransitWith(requestContext, reqLogger)))
 
-		responseWriter := middlewareResponseWriter(w)
+		responseWriter, response := middlewareResponseWriter(w)
 		handler.ServeHTTP(responseWriter, request)
 
-		route := routeTemplate(req)
+		route := routeTemplate(request)
 		if useIgnoreList && m.shouldIgnore(req, route) {
 			return
 		}
 
-		reqLogger.Info(
-			"http request completed",
+		fields := []zap.Field{
 			zap.String(logger.FieldSource, logger.SourceGHATD),
 			zap.String(logger.FieldPackage, "external/logger/middleware"),
 			zap.String(logger.FieldOperation, "http-request"),
-			zap.Int("status", responseWriter.statusCode),
-			zap.String("method", req.Method),
+			zap.Int("status", response.statusCode),
+			zap.String("method", observability.HTTPMethodForTelemetry(req.Method)),
 			zap.String("route", route),
-		)
+		}
+		if observability.HTTPRequestPanicked(request) {
+			// A panic after headers were sent cannot change the HTTP status.
+			// Keep the actual status and expose the failure independently.
+			fields = append(fields, zap.String("outcome", "error"), zap.String("error.type", "panic"))
+		}
+		reqLogger.Info("http request completed", fields...)
 	})
 }
 
@@ -114,31 +121,59 @@ func (m *Middleware) shouldIgnore(req *http.Request, route string) bool {
 
 // routeTemplate returns the matched route pattern or a stable fallback.
 func routeTemplate(req *http.Request) string {
-	route := mux.CurrentRoute(req)
-	if route == nil {
-		return unknownRoute
+	if template := routecontext.Template(req); template != "" {
+		return template
 	}
+	return unknownRoute
+}
 
-	template, err := route.GetPathTemplate()
-	if err != nil || template == "" {
-		return unknownRoute
+type httpResponseStatus struct {
+	statusCode    int
+	headerWritten bool
+}
+
+// writeHeader records the first final response. Informational responses leave
+// the final status open, except 101 which commits an upgraded connection.
+func (status *httpResponseStatus) writeHeader(code int) {
+	if status.headerWritten || code >= 100 && code < 200 && code != http.StatusSwitchingProtocols {
+		return
 	}
-	return template
+	status.statusCode = code
+	status.headerWritten = true
 }
 
-type httpResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-// middlewareResponseWriter records an implicit 200 OK when a handler does not
-// call WriteHeader.
-func middlewareResponseWriter(w http.ResponseWriter) *httpResponseWriter {
-	return &httpResponseWriter{w, http.StatusOK}
-}
-
-// WriteHeader records the response status before forwarding it.
-func (lrw *httpResponseWriter) WriteHeader(code int) {
-	lrw.statusCode = code
-	lrw.ResponseWriter.WriteHeader(code)
+// middlewareResponseWriter tracks response status without removing or adding
+// optional streaming interfaces. httpsnoop also exposes Unwrap, allowing
+// http.ResponseController to reach capabilities such as write deadlines.
+func middlewareResponseWriter(w http.ResponseWriter) (http.ResponseWriter, *httpResponseStatus) {
+	status := &httpResponseStatus{statusCode: http.StatusOK}
+	writer := httpsnoop.Wrap(w, httpsnoop.Hooks{
+		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(code int) {
+				next(code)
+				status.writeHeader(code)
+			}
+		},
+		Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
+			return func(buffer []byte) (int, error) {
+				n, err := next(buffer)
+				status.writeHeader(http.StatusOK)
+				return n, err
+			}
+		},
+		ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+			return func(reader io.Reader) (int64, error) {
+				n, err := next(reader)
+				status.writeHeader(http.StatusOK)
+				return n, err
+			}
+		},
+		Flush: func(next httpsnoop.FlushFunc) httpsnoop.FlushFunc {
+			return func() {
+				next()
+				status.writeHeader(http.StatusOK)
+			}
+		},
+	})
+	return writer, status
 }

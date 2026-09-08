@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/ooaklee/ghatd/external/router/routecontext"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const redactedURLPath = "/"
@@ -39,6 +42,7 @@ type serverRequestState struct {
 	remoteAddr string
 	host       string
 	method     string
+	panicked   bool
 }
 
 var clientIdentityHeaders = []string{
@@ -151,6 +155,9 @@ func NewHTTPClient(base http.RoundTripper, timeout time.Duration) *http.Client {
 // attributes see only a constant path, no query, and no client-identifying
 // transport metadata. The application handler still receives the original URL,
 // RequestURI, route data, headers, RemoteAddr, and traced context.
+// Wrap the complete router to cover generated 404/405 responses and redirects.
+// GHATD routers capture route templates automatically; direct Gorilla Mux
+// routers should install routecontext.ObserveMiddleware before other middleware.
 func HTTPServerMiddleware(serviceName string) func(http.Handler) http.Handler {
 	return httpServerMiddleware(serviceName)
 }
@@ -165,7 +172,7 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 
 	return func(next http.Handler) http.Handler {
 		restoreTarget := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			state, ok := request.Context().Value(serverRequestTargetKey{}).(serverRequestState)
+			state, ok := request.Context().Value(serverRequestTargetKey{}).(*serverRequestState)
 			if !ok {
 				next.ServeHTTP(responseWriter, request)
 				return
@@ -173,9 +180,16 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 
 			restoredRequest := request.Clone(request.Context())
 			applyRequestTarget(restoredRequest, state.target)
-			restoreServerRequestMetadata(restoredRequest, state)
+			restoreServerRequestMetadata(restoredRequest, *state)
 			restoredRequest.Body = transformHTTPBody(restoredRequest.Body, restoreHTTPIOError)
 			next.ServeHTTP(transformHTTPWriter(responseWriter, restoreHTTPIOError), restoredRequest)
+			// Mux passes a different request to matched handlers. Transfer only
+			// its tracked template back to otelhttp's request so final span and
+			// metric attributes use the match without exposing raw request data.
+			request.Pattern = routecontext.Template(restoredRequest)
+			if request.Pattern != "" {
+				trace.SpanFromContext(request.Context()).SetAttributes(attribute.String("http.route", request.Pattern))
+			}
 
 			// Keep parsed multipart state visible to the instrumented request and
 			// ultimately net/http's request cleanup.
@@ -186,8 +200,15 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 		instrumentedHandler := instrument(restoreTarget)
 
 		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			if _, active := request.Context().Value(serverRequestTargetKey{}).(*serverRequestState); active {
+				// An outer boundary already owns this request's server telemetry.
+				// Retain compatibility with existing route-level installations.
+				next.ServeHTTP(responseWriter, request)
+				return
+			}
+			request = routecontext.Begin(request)
 			state := captureServerRequestState(request)
-			ctx := context.WithValue(request.Context(), serverRequestTargetKey{}, state)
+			ctx := context.WithValue(request.Context(), serverRequestTargetKey{}, &state)
 
 			sanitisedRequest := request.Clone(ctx)
 			applySanitisedTarget(sanitisedRequest, matchedRouteTemplate(request))
@@ -329,4 +350,11 @@ func telemetrySafeHTTPMethod(method string) string {
 	default:
 		return "OTHER"
 	}
+}
+
+// HTTPMethodForTelemetry returns a standard uppercase HTTP method or OTHER.
+// Use it in request logs and metrics to keep unknown caller-supplied methods
+// bounded and consistent with the HTTP instrumentation's privacy policy.
+func HTTPMethodForTelemetry(method string) string {
+	return telemetrySafeHTTPMethod(method)
 }
