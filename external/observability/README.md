@@ -104,8 +104,11 @@ resource attributes; resources are attached to all exported signals.
 - Use `TeeLogger` to preserve existing Zap output while exporting sanitised
   records, and `WithTraceContext` when placing a logger into a traced context.
 
-The OTLP logging branch exports only an explicit allowlist of low-cardinality
-operational fields; arbitrary primitive fields and opaque values are dropped.
+The OTLP logging branch exports an explicit allowlist of operational fields;
+unknown keys, opaque values, and namespace controls are dropped. Some fields
+receive additional value validation, as described below. Other operational
+values, such as operation names and route templates, must be static values
+supplied by application code or configuration, never request payloads.
 Log messages must remain static and must not interpolate request or domain data.
 HTTP paths and queries, Mongo statements, Redis keys/arguments, request and
 response objects, credentials, vehicle registrations, user details, and raw
@@ -117,6 +120,59 @@ HTTP stream failures retain their original errors for application code while
 instrumentation sees only a constant message. This includes response-body reads
 and upgraded-connection writes. Exact EOF behavior, partial byte counts, and
 optional HTTP writer interfaces are preserved.
+
+## Safe log fields
+
+`TeeLogger` keeps existing local Zap fields, field names, levels, sampling, and
+hooks. Its OTLP branch canonicalizes the following fields; punctuation and case
+variants of the listed keys are recognized:
+
+| Input key | OTLP key | Accepted value |
+| --- | --- | --- |
+| `source` | `source` | `ghatd` or an explicitly configured static extension; other values are dropped |
+| `provider` | `provider` | `kofi`, `lemonsqueezy`, `stripe`, `SPARKPOST`, `LOCAL`, or a configured extension; other strings become `other` |
+| `method`, `http.request.method` | `method` | Standard uppercase HTTP methods; other strings become `OTHER` |
+| `status-code`, `status_code`, `statusCode`, `http.status_code`, `http.response.status_code` | `status` | Integer HTTP status codes from 100 through 999; floats, strings, and other types are dropped |
+| `status` | `status` | Integer HTTP status codes as above, or existing domain-state strings from static configuration |
+| `error.type` | `error.type` | Explicit `panic` classification; other direct values are dropped |
+
+Other accepted keys keep their existing spellings, including `ghatd-package`
+and `operation`. Aliases that produce the same OTLP key follow the ordinary
+last-value-wins behavior, including fields attached with `With`. Existing
+user/group lifecycle logs use configurable `status` strings; these remain
+supported for compatibility and must not contain request data or identifiers.
+Use an explicit HTTP status alias when string values must be rejected.
+
+`zap.Error` and `zap.NamedError` export only the named concrete error type,
+without evaluating an error method in the OTLP branch. Anonymous error types
+use `error`, and generic type arguments are omitted, so reflected struct tags
+cannot enter telemetry. Local logs retain their existing error behavior.
+Keep log messages static; field filtering does not redact interpolated message
+text or the logger's automatic caller and stack metadata.
+
+Register custom provider or source names from trusted startup constants:
+
+```go
+providerValues, err := observability.WithLogFieldValues("provider", "custom-payment")
+if err != nil {
+    return err
+}
+sourceValues, err := observability.WithLogFieldValues("source", "application")
+if err != nil {
+    return err
+}
+appLogger = observability.TeeLogger(appLogger, telemetry.LoggerProvider(), providerValues, sourceValues)
+```
+
+Only `source` and `provider` support extensions. Each option accepts at most 32
+distinct, case-sensitive names, each 1–64 ASCII bytes starting with a letter and
+containing letters, digits, dots, underscores, or hyphens. Invalid configuration
+returns an error without repeating the supplied value. Options snapshot their
+input, and each logger receives an independent immutable policy. The last option
+for a field replaces its earlier extensions; an empty list clears them. Built-in
+values remain accepted. Request values never register themselves, even when they
+look like valid identifiers. Mock and custom providers require their exact
+configured names; no name prefixes are automatically trusted.
 
 ## Redis module commands
 

@@ -2,9 +2,6 @@ package observability
 
 import (
 	"context"
-	"reflect"
-	"strings"
-	"unicode"
 
 	"go.opentelemetry.io/contrib/bridges/otelzap"
 	otellog "go.opentelemetry.io/otel/log"
@@ -32,14 +29,11 @@ var telemetryLogFieldAllowlist = map[string]struct{}{
 	"durationms":    {},
 	"enabled":       {},
 	"environment":   {},
-	"errortype":     {},
 	"exporter":      {},
 	"ghatdpackage":  {},
-	"method":        {},
 	"operation":     {},
 	"outcome":       {},
 	"package":       {},
-	"provider":      {},
 	"protocol":      {},
 	"region":        {},
 	"route":         {},
@@ -47,7 +41,6 @@ var telemetryLogFieldAllowlist = map[string]struct{}{
 	"servicename":   {},
 	"signal":        {},
 	"spanid":        {},
-	"status":        {},
 	"success":       {},
 	"system":        {},
 	"traceid":       {},
@@ -61,21 +54,23 @@ var telemetryLogFieldAllowlist = map[string]struct{}{
 //
 // The OpenTelemetry branch uses the level enabled by the existing zap core, so
 // attaching telemetry cannot make a disabled log level visible remotely.
-func TeeLogger(base *zap.Logger, provider otellog.LoggerProvider) *zap.Logger {
+func TeeLogger(base *zap.Logger, provider otellog.LoggerProvider, options ...LogOption) *zap.Logger {
 	if base == nil {
 		base = zap.NewNop()
 	}
+	policy := newLogFieldPolicy(options...)
 
 	return base.WithOptions(zap.WrapCore(func(baseCore zapcore.Core) zapcore.Core {
-		options := make([]otelzap.Option, 0, 1)
+		bridgeOptions := make([]otelzap.Option, 0, 1)
 		if provider != nil {
-			options = append(options, otelzap.WithLoggerProvider(provider))
+			bridgeOptions = append(bridgeOptions, otelzap.WithLoggerProvider(provider))
 		}
 
-		otelCore := otelzap.NewCore(logInstrumentationName, options...)
+		otelCore := otelzap.NewCore(logInstrumentationName, bridgeOptions...)
 		return zapcore.NewTee(baseCore, &sanitisingCore{
 			core:      otelCore,
 			levelGate: baseCore,
+			policy:    policy,
 		})
 	}))
 }
@@ -116,12 +111,13 @@ func isTraceContextField(field zapcore.Field) bool {
 }
 
 // sanitisingCore guards the OTLP branch of a tee. It exports only explicitly
-// allowlisted, low-cardinality operational fields and drops opaque or
-// custom-marshalled values. A denylist cannot safely account for arbitrary
-// caller-defined keys that may contain credentials or personal data.
+// allowlisted operational fields and drops opaque or custom-marshalled values.
+// Selected fields receive additional value validation. Other operational values
+// must come from static application configuration, never request payloads.
 type sanitisingCore struct {
 	core      zapcore.Core
 	levelGate zapcore.LevelEnabler
+	policy    *logFieldPolicy
 }
 
 // Enabled reports whether both the original Zap core and OTLP core accept the level.
@@ -132,8 +128,9 @@ func (core *sanitisingCore) Enabled(level zapcore.Level) bool {
 // With attaches sanitised fields to the OTLP core.
 func (core *sanitisingCore) With(fields []zapcore.Field) zapcore.Core {
 	return &sanitisingCore{
-		core:      core.core.With(sanitiseLogFields(fields)),
+		core:      core.core.With(core.policy.sanitise(fields)),
 		levelGate: core.levelGate,
+		policy:    core.policy,
 	}
 }
 
@@ -148,65 +145,10 @@ func (core *sanitisingCore) Check(entry zapcore.Entry, checked *zapcore.CheckedE
 
 // Write exports an entry with sanitised fields.
 func (core *sanitisingCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
-	return core.core.Write(entry, sanitiseLogFields(fields))
+	return core.core.Write(entry, core.policy.sanitise(fields))
 }
 
 // Sync flushes buffered output in the OTLP core.
 func (core *sanitisingCore) Sync() error {
 	return core.core.Sync()
-}
-
-// sanitiseLogFields retains only correlation context and allowlisted operational fields.
-func sanitiseLogFields(fields []zapcore.Field) []zapcore.Field {
-	safe := make([]zapcore.Field, 0, len(fields))
-	for _, field := range fields {
-		if field.Type == zapcore.ErrorType {
-			if err, ok := field.Interface.(error); ok && err != nil {
-				safe = append(safe, zap.String("error.type", reflect.TypeOf(err).String()))
-			}
-			continue
-		}
-
-		if isTraceContextField(field) {
-			safe = append(safe, field)
-			continue
-		}
-
-		if !isAllowedTelemetryLogKey(field.Key) || isOpaqueLogField(field.Type) {
-			continue
-		}
-
-		safe = append(safe, field)
-	}
-	return safe
-}
-
-// isAllowedTelemetryLogKey reports whether a field key is safe for OTLP export.
-func isAllowedTelemetryLogKey(key string) bool {
-	normalised := strings.Map(func(char rune) rune {
-		if unicode.IsLetter(char) || unicode.IsDigit(char) {
-			return unicode.ToLower(char)
-		}
-		return -1
-	}, key)
-
-	_, allowed := telemetryLogFieldAllowlist[normalised]
-	return allowed
-}
-
-// isOpaqueLogField reports whether Zap may serialise nested or custom data for a field.
-func isOpaqueLogField(fieldType zapcore.FieldType) bool {
-	switch fieldType {
-	case zapcore.ArrayMarshalerType,
-		zapcore.ObjectMarshalerType,
-		zapcore.InlineMarshalerType,
-		zapcore.BinaryType,
-		zapcore.ByteStringType,
-		zapcore.ReflectType,
-		zapcore.StringerType,
-		zapcore.UnknownType:
-		return true
-	default:
-		return false
-	}
 }
