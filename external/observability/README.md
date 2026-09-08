@@ -143,7 +143,7 @@ user/group lifecycle logs use configurable `status` strings; these remain
 supported for compatibility and must not contain request data or identifiers.
 Use an explicit HTTP status alias when string values must be rejected.
 
-`zap.Error` and `zap.NamedError` export only the named concrete error type,
+By default, `zap.Error` and `zap.NamedError` export only the named concrete error type,
 without evaluating an error method in the OTLP branch. Anonymous error types
 use `error`, and generic type arguments are omitted, so reflected struct tags
 cannot enter telemetry. Local logs retain their existing error behavior.
@@ -173,6 +173,115 @@ for a field replaces its earlier extensions; an empty list clears them. Built-in
 values remain accepted. Request values never register themselves, even when they
 look like valid identifiers. Mock and custom providers require their exact
 configured names; no name prefixes are automatically trusted.
+
+## Service operations and error classification
+
+Create one `Operations` instance at startup and inject it into your services.
+It starts internal spans, rebinds the context logger to each operation span,
+and records completed count, duration, and active-operation metrics. Return
+constructor errors as startup failures so invalid instrument configuration is
+visible immediately:
+
+```go
+classifier, err := observability.NewErrorClassifier(
+    observability.ErrorRule{
+        Err:     ErrQuotaExceeded, // an application-owned static sentinel
+        Code:    "APP-001",
+        Outcome: observability.OutcomeRejected,
+    },
+    observability.ErrorRule{
+        Err:     ErrDependencyUnavailable,
+        Code:    "APP-002",
+        Outcome: observability.OutcomeError,
+    },
+)
+if err != nil {
+    return err
+}
+operations, err := observability.NewOperations(observability.OperationConfig{
+    Scope:          "example.com/service/internal/services",
+    MetricPrefix:   "example.service.operation",
+    TracerProvider: telemetry.TracerProvider(),
+    MeterProvider:  telemetry.MeterProvider(),
+    Errors:         classifier,
+})
+if err != nil {
+    return err
+}
+appLogger = observability.TeeLogger(appLogger, telemetry.LoggerProvider(),
+    observability.WithLogErrorClassifier(classifier))
+```
+
+Use static operation names and a named error result. Defer `Finish` directly so
+it observes both the returned error and a panic:
+
+```go
+func (service *Service) ProcessOrder(ctx context.Context) (err error) {
+    ctx, operation := service.operations.Start(ctx, "process-order")
+    defer operation.Finish(&err)
+    return service.process(ctx)
+}
+```
+
+Do not put `Finish` inside another deferred closure: Go's `recover` must run
+directly in the deferred method. `Finish` records a constant panic classification
+and rethrows the identical value; it never formats the payload. `End(err)` is
+available for explicit completion, and `Finish(nil)` handles functions without
+an error result. Completion is first-wins and safe against duplicate/concurrent
+calls. A later panic still propagates after an earlier `End`, but cannot change
+an already completed span or metric. A nil `*Operations` returns an inert operation
+for optional instrumentation while preserving panic behavior.
+
+The prefix above emits `example.service.operation.count`, `.duration`, and
+`.active`. Count and active have no unit, preserving their exported metric names;
+duration uses `s`. Count and duration have only `operation` and `outcome` labels,
+and active uses only `operation` so every completion balances its increment.
+Default duration boundaries in seconds are
+`0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30`.
+`DurationBuckets` accepts 1–128 finite, positive, strictly increasing boundaries
+and is copied at construction. An omitted slice selects defaults; an explicitly
+empty slice is invalid. Omitted providers use OTel globals; empty scope/prefix
+select GHATD's defaults. Applications can keep their existing scope and prefix
+when adopting this helper.
+
+| Result | Outcome | Error code | Span status |
+| --- | --- | --- | --- |
+| Nil returned error | `success` | None | Unset |
+| Registered expected rejection | `rejected` | Registered code | Unset |
+| Wrapped cancellation | `cancelled` | `cancelled` | Unset |
+| Wrapped deadline | `timeout` | `timeout` | Error |
+| Registered internal failure | `error` | Registered code | Error |
+| Unregistered error | `error` | `internal` | Error |
+| Recovered panic | `panic` | `panic` | Error |
+
+`errors.Is` recognizes wrapped and joined errors. Deadlines take precedence over
+cancellation, followed by the first matching registered rule. Nil errors remain
+successful even if the context was cancelled. Rules explicitly distinguish
+expected rejection from internal failure; an HTTP response status alone cannot
+make that decision. Error messages, concrete types, custom `ErrorType` values,
+and panic payloads never enter operation telemetry.
+
+Classifiers snapshot up to 128 rules, each with a non-nil comparable sentinel,
+a static code of 1–64 ASCII bytes, and either `OutcomeRejected` or `OutcomeError`.
+Codes start with a letter and contain only letters, digits, dots, underscores,
+or hyphens. Built-in codes and sentinel identities cannot be overridden, and
+duplicate sentinel identities are rejected. Sentinel implementations must stay
+immutable and support safe `errors.Is` matching. Codes may come from an
+application's error manifest without coupling this package to its reply layer.
+A nil classifier uses only built-in and unknown-error classifications.
+
+Spans expose the code as `error.type` and the finite outcome category as
+`error.category`. `WithLogErrorClassifier` applies the same registry to
+`zap.Error`/`zap.NamedError` on the OTLP branch, including native trace/span
+correlation. Passing nil explicitly selects default classification; omitting the
+option retains the existing concrete-type behavior. Arbitrary string error fields
+remain rejected, and local logs keep their existing behavior.
+
+Scope, prefix, operation names, codes, and sentinels are trusted startup/code
+constants. `Start` does not enforce a name registry: never pass request values,
+identifiers, URLs, or arbitrary error text as operation names or configured codes.
+Pass the returned context into downstream calls so their spans and logs retain
+the correct parent.
 
 ## Redis module commands
 

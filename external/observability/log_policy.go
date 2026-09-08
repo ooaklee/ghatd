@@ -13,7 +13,8 @@ import (
 const maxLogFieldValues = 32
 
 // LogOption configures a logger's immutable OpenTelemetry field policy.
-// Obtain an option with WithLogFieldValues; no process-global policy is changed.
+// Obtain options with WithLogFieldValues or WithLogErrorClassifier; no
+// process-global policy is changed.
 type LogOption interface {
 	applyLogPolicy(*logFieldPolicy)
 }
@@ -21,6 +22,26 @@ type LogOption interface {
 type staticLogFieldValues struct {
 	field  string
 	values []string
+}
+
+type logErrorClassifierOption struct{ classifier *ErrorClassifier }
+
+// WithLogErrorClassifier uses the same static error codes as Operations for
+// zap.Error and zap.NamedError fields. The classifier is immutable and may be
+// shared. A nil classifier selects the built-in cancellation, timeout, and
+// internal-error classifications; omitting this option retains named error
+// types for compatibility. The last classifier option wins.
+//
+// Arbitrary string error.type and error.category fields remain rejected. The
+// local Zap output is unchanged, and application log messages must still avoid
+// sensitive data. Matching uses errors.Is without calling Error().
+func WithLogErrorClassifier(classifier *ErrorClassifier) LogOption {
+	return logErrorClassifierOption{classifier: classifier}
+}
+
+func (option logErrorClassifierOption) applyLogPolicy(policy *logFieldPolicy) {
+	policy.classifier = option.classifier
+	policy.classifyErrors = true
 }
 
 // WithLogFieldValues permits additional static source or provider values in
@@ -89,8 +110,10 @@ func (option staticLogFieldValues) applyLogPolicy(policy *logFieldPolicy) {
 }
 
 type logFieldPolicy struct {
-	sources   map[string]struct{}
-	providers map[string]struct{}
+	sources        map[string]struct{}
+	providers      map[string]struct{}
+	classifier     *ErrorClassifier
+	classifyErrors bool
 }
 
 // newLogFieldPolicy builds a private immutable policy for one logger.
@@ -105,13 +128,20 @@ func newLogFieldPolicy(options ...LogOption) *logFieldPolicy {
 }
 
 // sanitise retains correlation context and accepted operational fields without
-// evaluating custom encoders or error methods in the OpenTelemetry branch.
+// evaluating custom encoders or Error methods in the OpenTelemetry branch.
 func (policy *logFieldPolicy) sanitise(fields []zapcore.Field) []zapcore.Field {
 	safe := make([]zapcore.Field, 0, len(fields))
 	for _, field := range fields {
 		if field.Type == zapcore.ErrorType {
 			if err, ok := field.Interface.(error); ok && err != nil {
-				safe = append(safe, zap.String("error.type", logErrorType(err)))
+				if policy.classifyErrors {
+					classification := policy.classifier.Classify(err)
+					safe = append(safe,
+						zap.String("error.type", classification.Code),
+						zap.String("error.category", classification.Category))
+				} else {
+					safe = append(safe, zap.String("error.type", logErrorType(err)))
+				}
 			}
 			continue
 		}
