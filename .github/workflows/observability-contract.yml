@@ -36,9 +36,17 @@ jobs:
           cache-dependency-path: go.sum
       - name: Pull the pinned contract Collector
         run: docker pull otel/opentelemetry-collector-contrib:0.160.0
+      - name: Pull pinned queue initializer and rule checker
+        run: |
+          docker pull busybox:1.37.0
+          docker pull prom/prometheus:v3.5.0
       - name: Check telemetry, CLI, and reference contracts with the race detector
         env:
           GHATD_TEST_COLLECTOR: '1'
         run: go test -race -count=1 ./external/observability/... ./cli/cmd/... ./examples/observability/...
       - name: Check reference smoke assertions
         run: python3 -m unittest discover -s examples/observability -p 'test_*.py'
+      - name: Validate Collector configuration and alert behavior
+        run: |
+          python3 examples/observability/collector/test_config.py
+          python3 examples/observability/collector/test_alerts.py

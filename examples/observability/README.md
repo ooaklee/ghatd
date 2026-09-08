@@ -6,6 +6,9 @@ The optional local stack contains an OpenTelemetry Collector, Grafana, Tempo,
 Prometheus and Loki. No vendor account, application database or API key is
 required.
 
+For persistent exporter queues, deployment enrichment, independent export-health
+alerts and optional tail sampling, use the [Collector overlay](collector/README.md).
+
 The successful request follows this chain:
 
 ```text

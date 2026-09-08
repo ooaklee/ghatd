@@ -387,6 +387,11 @@ an already unsampled incoming parent. Tail sampling also requires coherent
 trace routing and a decision window that covers the work. It cannot recover
 spans discarded by application head sampling.
 
+The [optional production Collector example](../../examples/observability/collector/README.md)
+provides persistent exporter queues, bounded retries, independent selfmetrics
+monitoring and an explicit single-Collector tail-sampling overlay. Direct OTLP
+export remains supported for simpler deployments.
+
 GHATD installs W3C Trace Context propagation (`traceparent` and `tracestate`).
 Baggage is omitted to avoid forwarding arbitrary inbound values to other
 services. `OTEL_PROPAGATORS` and `OTEL_SDK_DISABLED` are not interpreted by this

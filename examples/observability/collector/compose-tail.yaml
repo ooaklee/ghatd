@@ -1,0 +1,6 @@
+# Optional overlay. Keep one Collector and provide complete head-sampled input.
+services:
+  otel-collector:
+    command:
+      - --config=/etc/otelcol/collector.yaml
+      - --config=/etc/otelcol/collector-tail.yaml
