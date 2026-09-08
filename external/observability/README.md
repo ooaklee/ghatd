@@ -10,6 +10,9 @@ for a complete working pipeline. The [configuration reference](CONFIGURATION.md)
 covers endpoint and header precedence, protocols, TLS, cadence and sampling.
 Use the [telemetry doctor and contract tests](DOCTOR.md) to inspect effective
 settings safely and verify that all three signals reach a receiver.
+For manually instrumented web clients, the opt-in [browser trace intake](BROWSER.md)
+validates a small fixed span vocabulary and forwards rebuilt batches through the
+server's configured OTLP destination.
 
 ## Bootstrap
 

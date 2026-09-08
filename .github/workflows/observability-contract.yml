@@ -34,6 +34,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install the pinned browser serializer contract
+        run: npm ci --prefix external/observability/testdata/browser --ignore-scripts
       - name: Pull the pinned contract Collector
         run: docker pull otel/opentelemetry-collector-contrib:0.160.0
       - name: Pull pinned queue initializer and rule checker
