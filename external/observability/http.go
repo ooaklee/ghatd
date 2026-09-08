@@ -162,9 +162,26 @@ func HTTPServerMiddleware(serviceName string) func(http.Handler) http.Handler {
 	return httpServerMiddleware(serviceName)
 }
 
+// HTTPServerMiddlewareWithOptions adds explicit policy to the complete HTTP
+// boundary while preserving HTTPServerMiddleware's exact function signature.
+// The zero configuration retains all existing tracing and measurements.
+func HTTPServerMiddlewareWithOptions(serviceName string, options ...HTTPServerOption) func(http.Handler) http.Handler {
+	var config httpServerConfiguration
+	for _, option := range options {
+		if option != nil {
+			option.applyHTTPServer(&config)
+		}
+	}
+	return httpServerMiddlewareWithPolicy(serviceName, config.tracePolicy)
+}
+
 // httpServerMiddleware builds privacy-safe server instrumentation with optional
 // otelhttp settings for tests and advanced callers.
 func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(http.Handler) http.Handler {
+	return httpServerMiddlewareWithPolicy(serviceName, HTTPTracePolicy{}, options...)
+}
+
+func httpServerMiddlewareWithPolicy(serviceName string, policy HTTPTracePolicy, options ...otelhttp.Option) func(http.Handler) http.Handler {
 	instrument := otelhttp.NewMiddleware(
 		serviceName,
 		append(options, otelhttp.WithSpanNameFormatter(serverSpanName))...,
@@ -209,6 +226,7 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 			request = routecontext.Begin(request)
 			state := captureServerRequestState(request)
 			ctx := context.WithValue(request.Context(), serverRequestTargetKey{}, &state)
+			ctx = contextWithHTTPTracePolicy(ctx, policy, request)
 
 			sanitisedRequest := request.Clone(ctx)
 			applySanitisedTarget(sanitisedRequest, matchedRouteTemplate(request))

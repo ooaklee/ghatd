@@ -351,6 +351,42 @@ Trace sampling does not disable metrics or logs. A log can contain valid trace
 IDs even when its trace was not sampled and is absent from the backend.
 `OTEL_TRACES_EXPORTER=none` overrides the selected sampler with never-sample.
 
+For distributed services, prefer parent-based samplers consistently. An
+explicit head ratio can be configured with:
+
+```sh
+export OTEL_TRACES_SAMPLER=parentbased_traceidratio
+export OTEL_TRACES_SAMPLER_ARG=0.1
+```
+
+This chooses a ratio for new roots and retains sampled parent traces. It also
+discards most error traces before their outcome is known; a head ratio is not
+an error-retention policy. The default remains `parentbased_always_on`.
+
+An application can separately opt into exact health/static GET/HEAD suppression
+through `NewHTTPTracePolicy` and the outer HTTP wrapper's
+`WithHTTPTracePolicy` option. No suppression paths or new environment variables
+are implicit. The [HTTP policy guide](README.md#optional-http-trace-suppression)
+documents bounded canonical matching, parent handling, and the sampler
+decorator installed by `Start`. Middleware options belong to the application
+executable; the standalone doctor cannot infer them from the environment.
+
+HTTP suppression retains request metrics and ordinary logs, including valid
+correlation IDs for unsampled spans. With the default parent-based sampler,
+sampled incoming parents retain their traces. Selected requests can still fail
+after the head decision: their 404/500/panic traces may be absent, and the
+default trace-based exemplar filter yields fewer trace links. An unrelated
+provider configured with `always_on` can resume recording downstream work from
+an unsampled propagated parent.
+
+Collector tail sampling can retain errors and slow traces only from spans it
+receives. For complete error visibility, send full head input using the
+parent-based default and avoid path suppression where errors must be retained.
+Every contributing service must cooperate: parent-based sampling still honors
+an already unsampled incoming parent. Tail sampling also requires coherent
+trace routing and a decision window that covers the work. It cannot recover
+spans discarded by application head sampling.
+
 GHATD installs W3C Trace Context propagation (`traceparent` and `tracestate`).
 Baggage is omitted to avoid forwarding arbitrary inbound values to other
 services. `OTEL_PROPAGATORS` and `OTEL_SDK_DISABLED` are not interpreted by this

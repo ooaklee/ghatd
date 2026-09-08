@@ -25,7 +25,15 @@ import (
 // Recovery preserves responses already committed or hijacked. ErrAbortHandler
 // continues to abort the request and omits normal completion logs/duration.
 func Wrap(name string, logger *zap.Logger, handler http.Handler) http.Handler {
-	return observability.HTTPServerMiddleware(name)(
+	return WrapWithOptions(name, logger, handler)
+}
+
+// WrapWithOptions composes the same outer boundary as Wrap with explicit HTTP
+// telemetry options. A trace policy suppresses selected unsampled roots only
+// when the provider uses observability.HTTPTraceSampler, as Start does. Request
+// metrics and logs remain enabled, including for suppressed requests.
+func WrapWithOptions(name string, logger *zap.Logger, handler http.Handler, options ...observability.HTTPServerOption) http.Handler {
+	return observability.HTTPServerMiddlewareWithOptions(name, options...)(
 		loggermiddleware.NewLogger(logger, nil).HTTPLogger(
 			observability.HTTPRecoveryMiddleware(handler),
 		),

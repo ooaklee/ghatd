@@ -118,6 +118,61 @@ func TestHTTPReferenceConnectsRequestOperationDependencyAndLogs(t *testing.T) {
 	assert.True(t, active)
 }
 
+func TestReferenceHealthPolicyRetainsMetricsLogsAndSampledParents(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			spans, logs, reader := referenceExporters(t)
+			runtime, _ := referenceRuntime(t)
+			var options []observability.HTTPServerOption
+			if enabled {
+				policy, err := observability.NewHTTPTracePolicy([]string{"/healthz"}, nil)
+				require.NoError(t, err)
+				options = append(options, observability.WithHTTPTracePolicy(policy))
+			}
+			handler := newHandler(runtime, nil, options...)
+			for _, parent := range []string{"", "00-0102030405060708090a0b0c0d0e0f10-0102030405060708-01"} {
+				request := httptest.NewRequest(http.MethodGet, "/healthz?secret=private-health-canary", nil)
+				request.Header.Set("traceparent", parent)
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				assert.Equal(t, http.StatusOK, response.Code)
+			}
+			require.NoError(t, runtime.SDK().ForceFlush(context.Background()))
+			expected := 2
+			if enabled {
+				expected = 1
+			}
+			assert.Len(t, spans.GetSpans(), expected)
+			parented := referenceTrace(spans.GetSpans(), "0102030405060708090a0b0c0d0e0f10")
+			require.Len(t, parented, 1)
+			assert.Equal(t, "0102030405060708", parented[0].Parent.SpanID().String())
+			completed := 0
+			for _, record := range logs.Records() {
+				if record.Body().AsString() == "http request completed" {
+					completed++
+					assert.True(t, record.TraceID().IsValid())
+					assert.True(t, record.SpanID().IsValid())
+					assert.NotContains(t, fmt.Sprint(record), "private-health-canary")
+				}
+			}
+			assert.Equal(t, 2, completed)
+			var metrics metricdata.ResourceMetrics
+			require.NoError(t, reader.Collect(context.Background(), &metrics))
+			var requests uint64
+			for _, scope := range metrics.ScopeMetrics {
+				for _, instrument := range scope.Metrics {
+					if instrument.Name == "http.server.request.duration" {
+						for _, point := range instrument.Data.(metricdata.Histogram[float64]).DataPoints {
+							requests += point.Count
+						}
+					}
+				}
+			}
+			assert.EqualValues(t, 2, requests)
+		})
+	}
+}
+
 func TestStandaloneWorkerFlushesWithoutExistingServer(t *testing.T) {
 	spans, logs, _ := referenceExporters(t)
 	command := newCommand()

@@ -225,6 +225,67 @@ instrumentation sees only a constant message. This includes response-body reads
 and upgraded-connection writes. Exact EOF behavior, partial byte counts, and
 optional HTTP writer interfaces are preserved.
 
+## Optional HTTP trace suppression
+
+The default records new roots and respects parent sampling decisions. No health
+or static path is excluded automatically. To select a small set of GET/HEAD
+paths explicitly, construct an immutable policy and pass it to the outer HTTP
+wrapper:
+
+```go
+policy, err := observability.NewHTTPTracePolicy(
+    []string{"/v0/health/check", "/favicon.ico"},
+    []string{"/assets/"},
+)
+if err != nil {
+    return err
+}
+handler := otelhttp.WrapWithOptions(
+    "my-service", runtime.Logger(), router.GetRouter(),
+    observability.WithHTTPTracePolicy(policy),
+)
+```
+
+For custom middleware composition use
+`HTTPServerMiddlewareWithOptions(serviceName, options...)`; the original
+`HTTPServerMiddleware` signature and behavior remain unchanged. Install the
+policy at the outer boundary. A duplicate inner installation cannot change a
+server span that has already started.
+
+Paths are literal, bounded ASCII paths. Prefixes require a trailing slash, so
+`/assets/` matches `/assets/app.js` but not `/assets-private/app.js` or `/assets`.
+The constructor accepts at most 64 total entries, each at most 256 bytes, and
+rejects root, patterns, dot segments, repeated slashes, escapes, query/fragment
+characters, whitespace and controls. It copies its input slices. Runtime paths
+with those ambiguities, an explicit `RawPath`, or more than 256 bytes retain
+tracing. Query strings do not affect selection and remain redacted.
+
+Selected requests with no sampled parent drop their server span and local
+descendants using the same marked context and decorated provider. A sampled
+parent delegates to the configured sampler; the default parent-based sampler
+keeps that trace intact. Metrics, ordinary logs, request handling and propagation
+continue. This does not use `otelhttp.WithFilter`, which would also bypass HTTP
+metrics. Unsampled requests have valid correlation IDs and propagate sampled=0;
+those IDs may have no stored trace. Trace-based exemplars become less frequent.
+
+`Start` installs `HTTPTraceSampler` around the chosen environment sampler.
+Applications constructing their own tracer provider must decorate its sampler
+with `HTTPTraceSampler(base)`; nil selects the normal parent-based default.
+Use the decorated provider consistently for local instrumentation. An existing
+request span can cause otelhttp to use that span's own provider, so changing a
+global provider does not control a different provider already in the context.
+Use parent-based sampling across services: a downstream `always_on` provider
+can resume an unsampled trace. The private suppression marker is never sent as
+baggage, a header or a span attribute, and an independent background task should
+use its own deliberate context.
+
+This decision precedes routing and response status. A selected directory's
+404, 500 or recovered panic can lose its trace while retaining its ordinary
+logs and HTTP metrics. Intentional `http.ErrAbortHandler` retains its existing
+abort semantics. Select only paths where that tradeoff is acceptable. A head
+ratio also cannot retain errors selectively; see the
+[sampling guidance](CONFIGURATION.md#sampling-and-propagation).
+
 ## Safe log fields
 
 `TeeLogger` keeps existing local Zap fields, field names, levels, sampling, and

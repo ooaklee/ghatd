@@ -38,11 +38,15 @@ func main() {
 func newCommand() *cobra.Command {
 	command := &cobra.Command{Use: "observability", SilenceErrors: true, SilenceUsage: true}
 	var listen string
+	var suppressHTTPNoise bool
 	serve := &cobra.Command{
 		Use: "serve", Short: "Run the local HTTP reference service", Args: cobra.NoArgs,
-		RunE: func(command *cobra.Command, _ []string) error { return runServer(command.Context(), listen) },
+		RunE: func(command *cobra.Command, _ []string) error {
+			return runServer(command.Context(), listen, suppressHTTPNoise)
+		},
 	}
 	serve.Flags().StringVar(&listen, "listen", "127.0.0.1:8080", "HTTP listen address")
+	serve.Flags().BoolVar(&suppressHTTPNoise, "suppress-http-noise", false, "Suppress new health-check traces while retaining HTTP metrics and logs")
 	work := &cobra.Command{
 		Use: "work", Short: "Run one standalone instrumented work item", Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, args []string) error {
@@ -135,7 +139,15 @@ func exampleOperations(runtime *observability.Runtime, classifier *observability
 	})
 }
 
-func runServer(ctx context.Context, listen string) error {
+func runServer(ctx context.Context, listen string, suppressHTTPNoise bool) error {
+	var httpOptions []observability.HTTPServerOption
+	if suppressHTTPNoise {
+		policy, err := observability.NewHTTPTracePolicy([]string{"/healthz"}, nil)
+		if err != nil {
+			return err
+		}
+		httpOptions = append(httpOptions, observability.WithHTTPTracePolicy(policy))
+	}
 	config, classifier, err := exampleRuntimeConfig("example-api")
 	if err != nil {
 		return err
@@ -162,7 +174,7 @@ func runServer(ctx context.Context, listen string) error {
 	service := newService(operations, classifier, dependencyURL)
 	defer service.client.CloseIdleConnections()
 	server := &http.Server{
-		Handler: newHandler(runtime, service), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second,
+		Handler: newHandler(runtime, service, httpOptions...), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return context.WithoutCancel(runtime.Context()) },
 	}
 	// Also close accepted connections if Serve exits unexpectedly, before

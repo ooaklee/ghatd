@@ -76,13 +76,13 @@ func (service *exampleService) perform(ctx context.Context, reject bool) error {
 	return nil
 }
 
-func newHandler(runtime *observability.Runtime, service *exampleService) http.Handler {
+func newHandler(runtime *observability.Runtime, service *exampleService, options ...observability.HTTPServerOption) http.Handler {
 	routes := router.NewRouter(nil, nil).GetRouter()
 	routes.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }).Methods(http.MethodGet)
 	routes.HandleFunc("/dependency", dependencyHandler).Methods(http.MethodGet)
 	routes.HandleFunc("/api/v1/work", workHandler(service, false)).Methods(http.MethodGet)
 	routes.HandleFunc("/api/v1/rejected", workHandler(service, true)).Methods(http.MethodGet)
-	return otelhttp.Wrap("example-api", runtime.Logger(), routes)
+	return otelhttp.WrapWithOptions("example-api", runtime.Logger(), routes, options...)
 }
 
 func workHandler(service *exampleService, reject bool) http.HandlerFunc {

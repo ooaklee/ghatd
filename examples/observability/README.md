@@ -98,6 +98,33 @@ Use the same variables with `serve` for an HTTP-only run. The resource and
 sampler configuration are still validated; disabling exporters does not bypass
 invalid startup settings. The existing application logger remains available.
 
+## Try explicit sampling
+
+Health-check tracing stays enabled by default. To try explicit noise suppression:
+
+```sh
+go run ./examples/observability serve --suppress-http-noise
+```
+
+The flag selects only `GET`/`HEAD /healthz`. It keeps HTTP metrics and request
+logs, but suppresses the server span and local descendants when no sampled
+parent exists. A sampled incoming parent retains the existing trace under the
+default parent-based sampler. A later health-check failure still has metrics
+and logs; its trace cannot be recovered after this head decision. Correlated
+logs can therefore contain IDs without a stored trace, and suppressed requests
+do not contribute trace exemplars. The work routes and smoke check are unchanged.
+
+For a service-wide root ratio, use the standard sampler variables rather than
+changing request instrumentation:
+
+```sh
+OTEL_TRACES_SAMPLER=parentbased_traceidratio OTEL_TRACES_SAMPLER_ARG=0.1 \
+  go run ./examples/observability serve
+```
+
+This also discards most error traces. Tail sampling requires full incoming
+traces to retain errors; see the [sampling guide](../../external/observability/CONFIGURATION.md#sampling-and-propagation).
+
 ## Customize ports or identity
 
 Edit `GRAFANA_PORT`, `OTLP_GRPC_PORT`, `OTLP_HTTP_PORT` and `PROMETHEUS_PORT` in

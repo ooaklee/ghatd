@@ -85,7 +85,7 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 		return nil, errors.New("create OpenTelemetry span exporter failed")
 	}
 
-	tracerOptions := []trace.TracerProviderOption{trace.WithResource(res), trace.WithSampler(sampler)}
+	tracerOptions := []trace.TracerProviderOption{trace.WithResource(res), trace.WithSampler(HTTPTraceSampler(sampler))}
 	if autoexport.IsNoneSpanExporter(spanExporter) {
 		tracerOptions = append(tracerOptions, trace.WithSampler(trace.NeverSample()))
 	} else {
