@@ -10,6 +10,73 @@ The behavior below is checked against the dependencies pinned in
 log exporters v0.20.0. Exporter implementations differ in some details, so
 examples set the transport explicitly and avoid ambiguous configuration.
 
+## Inspect configuration before exporting
+
+`InspectConfiguration(Config)` returns a sanitized `ConfigurationReport` and
+an error when a supported setting is invalid. It uses the same validation as
+`Start` and `StartRuntime`. Inspection creates no providers, changes no
+OpenTelemetry globals, contacts no endpoint, and opens no listener. It reads
+configured TLS files to check PEM certificates and matching client keys.
+
+The report includes exporter and protocol choices, precedence sources,
+timeouts, identity presence, credential presence, and fixed issue codes. Its
+endpoint description contains only scheme, loopback/remote classification,
+port, and standard/root/custom/origin path classification. It never returns
+service names, instance IDs, endpoint hosts or paths, header names or values,
+certificate paths, or invalid input. Startup errors identify the affected
+variable and issue code without copying its value.
+
+```go
+report, err := observability.InspectConfiguration(observability.Config{})
+// report contains only sanitized fields and can be encoded as JSON.
+if err != nil {
+    return err
+}
+```
+
+The standalone doctor and its opt-in receiver probe are described in the
+[package guide](README.md). A configuration-only check is safe to run before
+starting a service with a Prometheus exporter: it does not bind that exporter's
+port. Custom exporter and metric-producer names are reported as `custom` or a
+fixed warning, and remain available to applications that register them through
+autoexport. Their private configuration and registration cannot be verified by
+this inspector. Inspecting an unknown name does not prove startup will succeed.
+
+Validation applies to the settings consumed by the selected exporters and
+GHATD's providers. Disabling an exporter skips its OTLP settings; providers
+still validate resource identity, sampling and applicable SDK limits. The
+selected protocol alone is validated, because autoexport does not parse an
+overridden generic protocol. Generic endpoint, header, timeout, compression,
+insecure and TLS-file settings are checked even when a signal overrides them:
+the pinned trace and metric exporters parse those generic settings first.
+
+GHATD uses a stricter portable policy where the pinned exporters differ:
+
+- Endpoints must be absolute HTTP or HTTPS URLs with valid hosts and ports,
+  without userinfo, query strings, fragments, or raw/decoded control characters.
+  Custom HTTP paths remain supported. gRPC endpoints must be origins.
+- Header keys must be HTTP tokens and unique without regard to case. Values
+  must use valid percent encoding and contain no control characters. Effective
+  gRPC metadata additionally requires letter/digit/hyphen/underscore/dot keys
+  and printable ASCII values, except for `-bin` metadata values.
+- Endpoint and insecure settings must agree. TLS certificates require TLS;
+  client certificates and keys must form a pair at the same configuration
+  level. TLS files must be readable regular PEM files of at most 4 MiB each.
+- Protocol and compression values cannot have surrounding whitespace.
+  Insecure flags accept case-insensitive `true` or `false` only. Positive
+  millisecond durations and queue/batch counts are limited to 2147483647.
+  Attribute and cardinality limits retain supported zero/negative semantics
+  within the signed 32-bit integer range.
+- Sampler ratios must be finite numbers in [0, 1]. Metric temporality,
+  histogram aggregation, and exemplar filter values must be supported enums.
+
+The inspector warns about a shared HTTP base ending in a slash, a
+signal-specific HTTP root path, and exponential histograms used with classic
+bucket dashboards. These configurations remain valid when the receiver and
+queries support them. It does not test receiver authentication, connectivity,
+indexing or query compatibility; use an explicit probe and backend smoke test
+for those checks.
+
 ## Start with an explicit destination
 
 For an application running on the same machine as a plaintext OTLP/HTTP
@@ -211,8 +278,9 @@ Configure `CERTIFICATE` when a receiver needs a custom CA. Configure both
 level for mTLS; these settings name files readable by the application process.
 Keep file contents and local paths out of diagnostics.
 
-Avoid contradictory endpoint schemes, `INSECURE` flags, and TLS certificate
-settings. In the pinned log exporters, a nonempty endpoint scheme takes
+GHATD rejects contradictory endpoint schemes, `INSECURE` flags, and TLS
+certificate settings before constructing an exporter. In the pinned log
+exporters, a nonempty endpoint scheme takes
 precedence over the insecure flag. Trace/metric exporters apply insecure flags
 after the scheme; gRPC TLS credentials introduce another precedence rule.
 An insecure HTTP trace endpoint combined with TLS client configuration is
@@ -222,9 +290,9 @@ portable configuration for these exporters.
 ## Export cadence and shutdown budgets
 
 Environment durations below are integer **milliseconds**, not Go duration
-strings such as `5s`. Use positive values within the supported integer-duration
-range. Avoid whitespace and do not rely on malformed values falling back to a
-default.
+strings such as `5s`. GHATD accepts positive values through 2147483647
+milliseconds. Whitespace, zero, negative, malformed and larger values fail
+validation before an upstream parser can fall back or report their contents.
 
 | Variable | Default | Controls |
 | --- | --- | --- |
@@ -255,6 +323,10 @@ when shutdown begins, detaches prior cancellation, and shares the budget
 across its providers. Close application dependencies before flushing
 telemetry. The lower-level `SDK.Shutdown` uses the context you provide. See
 [runtime lifecycle](README.md#runtime-lifecycle-and-command-adapters).
+
+`SDK.ForceFlush(ctx)` attempts all three providers without stopping them and
+joins their errors. It can be repeated, accepts a nil SDK, and uses the caller's
+context budget. End spans and complete operations before flushing them.
 
 ## Sampling and propagation
 
@@ -329,12 +401,13 @@ endpoint paths, headers, certificate paths, or backend response bodies.
 
 Some pinned upstream parsers report malformed URLs, headers, numbers, metric
 preferences, or TLS file errors through OpenTelemetry's global error handler
-or logger. Those diagnostics can include the original value even when a
-constructor falls back or returns no error. The sanitized application log
-bridge does not intercept every upstream diagnostic. Keep shared settings
-valid even when a signal overrides them, and validate deployment input before
-starting exporters. Trace/metric parsers may retain a partial malformed header
-map, while log parsers can reject it and fall back to shared headers.
+or logger. GHATD validates its supported settings before calling those parsers,
+including configured generic settings that a signal overrides. Malformed
+settings fail startup with fixed variable names and issue codes. This prevents
+partial malformed header maps or parser fallbacks from making startup appear
+successful. Custom exporter code and asynchronous runtime/export errors still
+need their own safe diagnostics; the application log bridge does not intercept
+every upstream diagnostic.
 
 For application-owned automatic diagnostics, use a static message such as
 `telemetry export failed` with a trusted signal name; avoid formatting an

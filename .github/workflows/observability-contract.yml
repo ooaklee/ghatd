@@ -1,0 +1,44 @@
+name: Observability contract
+
+on:
+  push:
+    paths:
+      - '.github/workflows/observability-contract.yml'
+      - 'external/**'
+      - 'examples/observability/**'
+      - 'cli/**'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    paths:
+      - '.github/workflows/observability-contract.yml'
+      - 'external/**'
+      - 'examples/observability/**'
+      - 'cli/**'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Pull the pinned contract Collector
+        run: docker pull otel/opentelemetry-collector-contrib:0.160.0
+      - name: Check telemetry, CLI, and reference contracts with the race detector
+        env:
+          GHATD_TEST_COLLECTOR: '1'
+        run: go test -race -count=1 ./external/observability/... ./cli/cmd/... ./examples/observability/...
+      - name: Check reference smoke assertions
+        run: python3 -m unittest discover -s examples/observability -p 'test_*.py'

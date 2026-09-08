@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -53,6 +54,7 @@ type SDK struct {
 	shutdownOnce sync.Once
 	shutdownErr  error
 	shutdown     []func(context.Context) error
+	forceFlush   []func(context.Context) error
 }
 
 // Start configures OTLP (or another autoexport-supported exporter) for traces,
@@ -64,6 +66,9 @@ type SDK struct {
 func Start(ctx context.Context, config Config) (*SDK, error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if _, err := InspectConfiguration(config); err != nil {
+		return nil, err
 	}
 
 	res, err := newResource(config)
@@ -77,7 +82,7 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 
 	spanExporter, err := autoexport.NewSpanExporter(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create OpenTelemetry span exporter: %w", err)
+		return nil, errors.New("create OpenTelemetry span exporter failed")
 	}
 
 	tracerOptions := []trace.TracerProviderOption{trace.WithResource(res), trace.WithSampler(sampler)}
@@ -91,8 +96,8 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 	metricReader, err := autoexport.NewMetricReader(ctx)
 	if err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("create OpenTelemetry metric reader: %w", err),
-			tracerProvider.Shutdown(ctx),
+			errors.New("create OpenTelemetry metric reader failed"),
+			shutdownAfterStartupFailure(ctx, tracerProvider.Shutdown),
 		)
 	}
 
@@ -106,9 +111,8 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 	logExporter, err := autoexport.NewLogExporter(ctx)
 	if err != nil {
 		return nil, errors.Join(
-			fmt.Errorf("create OpenTelemetry log exporter: %w", err),
-			meterProvider.Shutdown(ctx),
-			tracerProvider.Shutdown(ctx),
+			errors.New("create OpenTelemetry log exporter failed"),
+			shutdownAfterStartupFailure(ctx, meterProvider.Shutdown, tracerProvider.Shutdown),
 		)
 	}
 
@@ -121,18 +125,14 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 	if metricsEnabled {
 		if err := runtime.Start(runtime.WithMeterProvider(meterProvider)); err != nil {
 			return nil, errors.Join(
-				fmt.Errorf("start OpenTelemetry runtime metrics: %w", err),
-				loggerProvider.Shutdown(ctx),
-				meterProvider.Shutdown(ctx),
-				tracerProvider.Shutdown(ctx),
+				errors.New("start OpenTelemetry runtime metrics failed"),
+				shutdownAfterStartupFailure(ctx, loggerProvider.Shutdown, meterProvider.Shutdown, tracerProvider.Shutdown),
 			)
 		}
 		if err := host.Start(host.WithMeterProvider(meterProvider)); err != nil {
 			return nil, errors.Join(
-				fmt.Errorf("start OpenTelemetry host metrics: %w", err),
-				loggerProvider.Shutdown(ctx),
-				meterProvider.Shutdown(ctx),
-				tracerProvider.Shutdown(ctx),
+				errors.New("start OpenTelemetry host metrics failed"),
+				shutdownAfterStartupFailure(ctx, loggerProvider.Shutdown, meterProvider.Shutdown, tracerProvider.Shutdown),
 			)
 		}
 	}
@@ -146,6 +146,11 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 			meterProvider.Shutdown,
 			tracerProvider.Shutdown,
 		},
+		forceFlush: []func(context.Context) error{
+			loggerProvider.ForceFlush,
+			meterProvider.ForceFlush,
+			tracerProvider.ForceFlush,
+		},
 	}
 
 	otel.SetTracerProvider(tracerProvider)
@@ -156,6 +161,22 @@ func Start(ctx context.Context, config Config) (*SDK, error) {
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	return sdk, nil
+}
+
+// Startup errors may be returned directly by command-line tools. Preserve a
+// safe phase diagnostic even when a custom exporter's cleanup returns private
+// text. Normal Shutdown and ForceFlush retain original errors for their caller.
+func shutdownAfterStartupFailure(ctx context.Context, callbacks ...func(context.Context) error) error {
+	failed := false
+	for _, shutdown := range callbacks {
+		if shutdown != nil && shutdown(ctx) != nil {
+			failed = true
+		}
+	}
+	if failed {
+		return errors.New("clean up OpenTelemetry providers after startup failure failed")
+	}
+	return nil
 }
 
 // samplerFromEnvironment constructs a sampler from standard OTEL environment variables.
@@ -171,7 +192,7 @@ func samplerFromEnvironment() (trace.Sampler, error) {
 			return nil, fmt.Errorf("OTEL_TRACES_SAMPLER_ARG is required for %s", name)
 		}
 		ratio, err := strconv.ParseFloat(value, 64)
-		if err != nil || ratio < 0 || ratio > 1 {
+		if err != nil || math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 || ratio > 1 {
 			return nil, fmt.Errorf("OTEL_TRACES_SAMPLER_ARG must be a number between 0 and 1 for %s", name)
 		}
 		return trace.TraceIDRatioBased(ratio), nil
@@ -195,7 +216,7 @@ func samplerFromEnvironment() (trace.Sampler, error) {
 		}
 		return trace.ParentBased(ratio), nil
 	default:
-		return nil, fmt.Errorf("unsupported OTEL_TRACES_SAMPLER value %q", name)
+		return nil, errors.New("unsupported OTEL_TRACES_SAMPLER value")
 	}
 }
 
@@ -221,6 +242,25 @@ func (sdk *SDK) LoggerProvider() *log.LoggerProvider {
 		return nil
 	}
 	return sdk.loggerProvider
+}
+
+// ForceFlush exports pending records from all three providers without stopping
+// them. Every provider is attempted and errors are joined. A nil SDK is safe;
+// the caller owns the context deadline and may call ForceFlush again.
+func (sdk *SDK) ForceFlush(ctx context.Context) error {
+	if sdk == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var errs []error
+	for _, flush := range sdk.forceFlush {
+		if flush != nil {
+			errs = append(errs, flush(ctx))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Shutdown flushes and stops all providers. Calls are safe to repeat and from

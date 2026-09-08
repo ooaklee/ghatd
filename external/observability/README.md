@@ -8,6 +8,8 @@ compatible Collector and backend without embedding a vendor agent.
 Start with the [runnable HTTP/CLI reference and local LGTM kit](../../examples/observability/README.md)
 for a complete working pipeline. The [configuration reference](CONFIGURATION.md)
 covers endpoint and header precedence, protocols, TLS, cadence and sampling.
+Use the [telemetry doctor and contract tests](DOCTOR.md) to inspect effective
+settings safely and verify that all three signals reach a receiver.
 
 ## Bootstrap
 
