@@ -41,6 +41,7 @@ func (option redisHookOptionFunc) applyRedisHook(config *redisHookConfig) {
 type redisHookConfig struct {
 	tracerProvider trace.TracerProvider
 	meterProvider  metric.MeterProvider
+	moduleCommands map[string]struct{}
 }
 
 // WithRedisTracerProvider configures the tracer provider used by a Redis hook.
@@ -69,6 +70,7 @@ type redisHook struct {
 	operationErrors   metric.Int64Counter
 	serverAttributes  []attribute.KeyValue
 	stateKey          *redisHookStateKey
+	moduleCommands    map[string]struct{}
 }
 
 // The byte gives independently constructed hooks distinct, non-zero-sized
@@ -86,9 +88,10 @@ type redisOperationState struct {
 
 // NewRedisHook creates an OpenTelemetry hook compatible with go-redis v7.
 //
-// Telemetry contains the Redis command name, but never command arguments,
-// query text, keys, or values. A pipeline is represented as one BATCH client
-// operation so its cardinality is independent of its commands and size.
+// Telemetry contains only recognized core command names or explicitly
+// registered module command names, never arguments, query text, keys, or
+// values. Unknown commands use a constant fallback. A pipeline is represented
+// as one BATCH client operation, independent of its commands and size.
 func NewRedisHook(options *redis.Options, hookOptions ...RedisHookOption) redis.Hook {
 	config := redisHookConfig{
 		tracerProvider: otel.GetTracerProvider(),
@@ -127,12 +130,13 @@ func NewRedisHook(options *redis.Options, hookOptions ...RedisHookOption) redis.
 		operationErrors:   operationErrors,
 		serverAttributes:  redisServerAttributes(options),
 		stateKey:          &redisHookStateKey{},
+		moduleCommands:    config.moduleCommands,
 	}
 }
 
 // BeforeProcess starts telemetry for one Redis command.
 func (hook *redisHook) BeforeProcess(ctx context.Context, command redis.Cmder) (context.Context, error) {
-	return hook.start(ctx, redisOperationName(command)), nil
+	return hook.start(ctx, hook.operationName(command)), nil
 }
 
 // AfterProcess completes telemetry for one Redis command.
@@ -215,19 +219,6 @@ func (hook *redisHook) finish(ctx context.Context, operationErr error) {
 		}
 		state.span.End()
 	})
-}
-
-// redisOperationName returns a stable command name without arguments.
-func redisOperationName(command redis.Cmder) string {
-	if command == nil {
-		return unknownRedisOperation
-	}
-	operation := strings.TrimSpace(command.Name())
-	if operation == "" {
-		return unknownRedisOperation
-	}
-
-	return strings.ToLower(operation)
 }
 
 // redisCommandError returns a command error when a command is present.

@@ -99,7 +99,8 @@ resource attributes; resources are attached to all exported signals.
   `NewRoundTripper`.
 - Attach `NewMongoCommandMonitor` to MongoDB v2 client options.
 - Attach `NewRedisHook` to Redis v7 clients and always execute commands with
-  the caller's context.
+  the caller's context. Core command names use a fixed vocabulary; additional
+  module commands require explicit registration as described below.
 - Use `TeeLogger` to preserve existing Zap output while exporting sanitised
   records, and `WithTraceContext` when placing a logger into a traced context.
 
@@ -116,3 +117,33 @@ HTTP stream failures retain their original errors for application code while
 instrumentation sees only a constant message. This includes response-body reads
 and upgraded-connection writes. Exact EOF behavior, partial byte counts, and
 optional HTTP writer interfaces are preserved.
+
+## Redis module commands
+
+Redis spans and metrics recognize a fixed set of core command names, including
+the commands issued by go-redis v7. Unrecognized commands use `redis.unknown`
+and `db.operation.name=unknown`, even when their names look syntactically valid.
+This prevents arbitrary custom command names from becoming telemetry labels.
+Pipelines remain one `redis.batch` span with `db.operation.name=BATCH`.
+
+Register additional module commands using trusted constants during startup:
+
+```go
+moduleCommands, err := observability.WithRedisModuleCommands("FT.SEARCH", "JSON.GET")
+if err != nil {
+    return err
+}
+client.AddHook(observability.NewRedisHook(redisOptions, moduleCommands))
+```
+
+Registration accepts at most 64 names, each 1–64 ASCII bytes starting with a
+letter and containing only letters, digits, dots, underscores, or hyphens.
+Names match case-insensitively and appear lowercase in telemetry. `unknown`
+and `batch` are reserved. Each option snapshots its input and each hook receives
+an independent immutable set. If multiple module-command options are supplied,
+the last replaces the preceding list; an empty list clears it. There is no
+runtime registration or automatic Redis command discovery.
+
+Use only static operational names in the registration list. Request values,
+keys, identifiers, and query text do not belong there. Command arguments stay
+excluded for both recognized and unrecognized operations.
