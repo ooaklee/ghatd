@@ -10,25 +10,21 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unicode"
 
 	"go.opentelemetry.io/contrib/exporters/autoexport"
 	"go.opentelemetry.io/contrib/instrumentation/host"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	otellogglobal "go.opentelemetry.io/otel/log/global"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 )
 
 const (
 	// DefaultServiceName is used when neither Config.ServiceName nor
-	// OTEL_SERVICE_NAME provides a service name.
+	// OTEL_SERVICE_NAME nor OTEL_RESOURCE_ATTRIBUTES provides a service name.
 	DefaultServiceName = "ghatd"
 )
 
@@ -39,6 +35,13 @@ type Config struct {
 	ServiceName string
 	Version     string
 	Environment string
+	// Namespace groups related services. An empty value uses service.namespace
+	// from OTEL_RESOURCE_ATTRIBUTES, or leaves the namespace unset.
+	Namespace string
+	// InstanceID identifies this service process. An empty value uses
+	// service.instance.id from OTEL_RESOURCE_ATTRIBUTES, then a random UUID
+	// shared by resource construction within this process.
+	InstanceID string
 }
 
 // SDK owns the providers installed by Start.
@@ -241,31 +244,4 @@ func (sdk *SDK) Shutdown(ctx context.Context) error {
 	})
 
 	return sdk.shutdownErr
-}
-
-// newResource merges host resource data with application-owned attributes.
-func newResource(config Config) (*resource.Resource, error) {
-	serviceName := strings.TrimSpace(config.ServiceName)
-	if serviceName == "" {
-		serviceName = strings.TrimSpace(os.Getenv("OTEL_SERVICE_NAME"))
-	}
-	if serviceName == "" {
-		serviceName = DefaultServiceName
-	}
-	if strings.IndexFunc(serviceName, unicode.IsControl) >= 0 {
-		return nil, fmt.Errorf("OpenTelemetry service name contains control characters")
-	}
-
-	attributes := []attribute.KeyValue{semconv.ServiceName(serviceName)}
-	if version := strings.TrimSpace(config.Version); version != "" {
-		attributes = append(attributes, semconv.ServiceVersion(version))
-	}
-	if environment := strings.TrimSpace(config.Environment); environment != "" {
-		attributes = append(attributes, semconv.DeploymentEnvironmentNameKey.String(environment))
-	}
-
-	return resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(semconv.SchemaURL, attributes...),
-	)
 }

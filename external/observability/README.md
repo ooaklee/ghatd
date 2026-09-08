@@ -43,6 +43,48 @@ not interpret `OTEL_PROPAGATORS` or `OTEL_SDK_DISABLED`; propagation is fixed to
 Trace Context, and signals are disabled individually through their exporter
 variables.
 
+## Service identity
+
+Every signal carries the same service resource. `service.instance.id` defaults
+to a random UUID generated once per process: repeated SDK construction in that
+process retains the ID, while a new process receives a new ID. This separates
+replica metric streams without collecting executable paths, command arguments,
+usernames, or host identifiers.
+
+Applications can set `Config.Namespace` to group related services and
+`Config.InstanceID` when the deployment already assigns a unique instance ID.
+The standard environment variables also work:
+
+```sh
+OTEL_SERVICE_NAME=my-service
+OTEL_RESOURCE_ATTRIBUTES=service.namespace=example-platform,deployment.environment.name=staging
+```
+
+Configuration precedence, from highest to lowest, is:
+
+| Resource attribute | Precedence |
+| --- | --- |
+| `service.name` | Nonblank `Config.ServiceName`, `OTEL_SERVICE_NAME`, `service.name` in `OTEL_RESOURCE_ATTRIBUTES`, then `ghatd` |
+| `service.namespace` | Nonblank `Config.Namespace`, then `service.namespace` in `OTEL_RESOURCE_ATTRIBUTES` |
+| `service.instance.id` | Nonblank `Config.InstanceID`, `service.instance.id` in `OTEL_RESOURCE_ATTRIBUTES`, then the process UUID |
+| `service.version` | Nonblank `Config.Version`, then `service.version` in `OTEL_RESOURCE_ATTRIBUTES` |
+| `deployment.environment.name` | Nonblank `Config.Environment`, then `deployment.environment.name` in `OTEL_RESOURCE_ATTRIBUTES` |
+
+Namespace, version, and environment have no automatic default. Configuration
+values are trimmed, and blank application fields allow environment settings to
+apply. Environment attributes are read at each startup, independently of the
+SDK's cached default resource. Other explicitly supplied resource attributes
+are retained. Malformed attributes, invalid percent encoding, and control
+characters fail startup with a diagnostic that excludes the supplied value.
+
+Use a stable namespace for a group of related services, stable service names
+for each executable role, and a separate deployment environment such as
+`development`, `staging`, or `production`. Let the process UUID identify each
+replica unless an explicit instance ID is unique among concurrently running
+instances. A deployment-wide constant would merge distinct metric streams.
+Keep identifiers, credentials, request values, and personal data out of
+resource attributes; resources are attached to all exported signals.
+
 ## Instrumentation
 
 - Wrap Gorilla Mux handlers with `HTTPServerMiddleware`.
