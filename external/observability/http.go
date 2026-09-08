@@ -61,6 +61,8 @@ var telemetrySafeTransportError = errors.New("outbound HTTP transport failed")
 // NewRoundTripper instruments outbound HTTP requests with OpenTelemetry while
 // keeping raw URL paths and query strings out of telemetry. The wrapped
 // transport still receives the complete original request target.
+// Response stream errors are sanitised for telemetry and restored for callers,
+// including reads and writes on upgraded connections.
 //
 // A nil base uses http.DefaultTransport. The caller's request is never mutated.
 func NewRoundTripper(base http.RoundTripper) http.RoundTripper {
@@ -92,6 +94,9 @@ func (transport *privacySafeRoundTripper) RoundTrip(request *http.Request) (*htt
 	applySanitisedTarget(sanitisedRequest, "")
 
 	response, err := transport.instrumented.RoundTrip(sanitisedRequest)
+	if response != nil {
+		response.Body = transformHTTPBody(response.Body, restoreHTTPIOError)
+	}
 	if state.transportErr != nil {
 		return response, state.transportErr
 	}
@@ -126,6 +131,9 @@ func (transport *requestTargetRestoringRoundTripper) RoundTrip(request *http.Req
 		return response, telemetrySafeTransportError
 	}
 
+	if response != nil {
+		response.Body = transformHTTPBody(response.Body, sanitiseHTTPIOError)
+	}
 	return response, nil
 }
 
@@ -166,7 +174,8 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 			restoredRequest := request.Clone(request.Context())
 			applyRequestTarget(restoredRequest, state.target)
 			restoreServerRequestMetadata(restoredRequest, state)
-			next.ServeHTTP(responseWriter, restoredRequest)
+			restoredRequest.Body = transformHTTPBody(restoredRequest.Body, restoreHTTPIOError)
+			next.ServeHTTP(transformHTTPWriter(responseWriter, restoreHTTPIOError), restoredRequest)
 
 			// Keep parsed multipart state visible to the instrumented request and
 			// ultimately net/http's request cleanup.
@@ -183,7 +192,8 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 			sanitisedRequest := request.Clone(ctx)
 			applySanitisedTarget(sanitisedRequest, matchedRouteTemplate(request))
 			sanitiseServerRequestMetadata(sanitisedRequest)
-			instrumentedHandler.ServeHTTP(responseWriter, sanitisedRequest)
+			sanitisedRequest.Body = transformHTTPBody(sanitisedRequest.Body, sanitiseHTTPIOError)
+			instrumentedHandler.ServeHTTP(transformHTTPWriter(responseWriter, sanitiseHTTPIOError), sanitisedRequest)
 
 			if sanitisedRequest.MultipartForm != nil {
 				request.MultipartForm = sanitisedRequest.MultipartForm

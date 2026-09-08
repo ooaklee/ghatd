@@ -62,3 +62,8 @@ response objects, credentials, vehicle registrations, user details, and raw
 error messages are deliberately excluded from exported telemetry fields. Route
 templates, HTTP methods/statuses, database system/operation names, Redis command
 names, error types, trace IDs, and span IDs remain available for diagnosis.
+
+HTTP stream failures retain their original errors for application code while
+instrumentation sees only a constant message. This includes response-body reads
+and upgraded-connection writes. Exact EOF behavior, partial byte counts, and
+optional HTTP writer interfaces are preserved.
