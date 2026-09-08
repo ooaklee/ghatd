@@ -5,6 +5,10 @@ traces, metrics, and logs. It uses the OpenTelemetry SDK and standard exporter,
 resource, and sampler `OTEL_*` configuration, so applications can export to any
 compatible Collector and backend without embedding a vendor agent.
 
+Start with the [runnable HTTP/CLI reference and local LGTM kit](../../examples/observability/README.md)
+for a complete working pipeline. The [configuration reference](CONFIGURATION.md)
+covers endpoint and header precedence, protocols, TLS, cadence and sampling.
+
 ## Bootstrap
 
 Start a runtime before constructing instrumented clients. It owns the SDK and
