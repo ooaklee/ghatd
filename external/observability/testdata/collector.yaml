@@ -1,0 +1,50 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 100ms
+    send_batch_size: 64
+
+exporters:
+  file/traces:
+    path: /output/traces.jsonl
+    format: json
+    flush_interval: 100ms
+  file/metrics:
+    path: /output/metrics.jsonl
+    format: json
+    flush_interval: 100ms
+  file/logs:
+    path: /output/logs.jsonl
+    format: json
+    flush_interval: 100ms
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /healthz
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file/traces]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file/metrics]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file/logs]

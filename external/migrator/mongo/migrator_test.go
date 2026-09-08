@@ -11,11 +11,13 @@ import (
 	"time"
 
 	migrate "github.com/xakep666/mongo-migrate"
+	"go.mongodb.org/mongo-driver/v2/event"
 	mongodb "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
+// TestNewCommandExposesDedicatedActions verifies the migrator exposes its new, up, and down commands.
 func TestNewCommandExposesDedicatedActions(t *testing.T) {
 	command := NewCommand()
 	want := map[string]bool{"new": true, "up": true, "down": true}
@@ -28,6 +30,7 @@ func TestNewCommandExposesDedicatedActions(t *testing.T) {
 	}
 }
 
+// TestWithMigrationDirectoryPreservesLoadedDatabaseSettings verifies the option changes only the migration directory.
 func TestWithMigrationDirectoryPreservesLoadedDatabaseSettings(t *testing.T) {
 	loaded := Settings{
 		MongoDatabaseHost:       "mongo.example.test:27017",
@@ -54,6 +57,44 @@ func TestWithMigrationDirectoryPreservesLoadedDatabaseSettings(t *testing.T) {
 	}
 }
 
+// TestWithMongoCommandMonitorConfiguresDatabaseActions verifies database commands receive the supplied monitor.
+func TestWithMongoCommandMonitorConfiguresDatabaseActions(t *testing.T) {
+	monitor := &event.CommandMonitor{}
+	configuredOptions := commandOptionsWithDefaults()
+	WithMongoCommandMonitor(monitor)(&configuredOptions)
+	if configuredOptions.commandMonitor != monitor {
+		t.Fatal("WithMongoCommandMonitor() did not preserve the supplied monitor")
+	}
+
+	client := &fakeMongoClient{}
+	migration := &fakeMigrationRunner{}
+	settings := validTestSettings(t.TempDir())
+	monitorSeen := false
+	runner := commandRunner{
+		commandMonitor: configuredOptions.commandMonitor,
+		dependencies: commandDependencies{
+			connect: func(clientOptions *options.ClientOptions) (mongoClient, error) {
+				monitorSeen = clientOptions.Monitor == monitor
+				return client, nil
+			},
+			registeredMigrations: func() []migrate.Migration {
+				return []migrate.Migration{{Version: 1, Description: "test"}}
+			},
+			newMigrationRunner: func(*mongodb.Database, []migrate.Migration, string) migrationRunner {
+				return migration
+			},
+		},
+	}
+
+	if err := runner.runDatabaseAction(context.Background(), settings, "up"); err != nil {
+		t.Fatalf("runDatabaseAction() error = %v", err)
+	}
+	if !monitorSeen {
+		t.Fatal("runDatabaseAction() did not attach the configured command monitor")
+	}
+}
+
+// TestNewActionCopiesTemplateWithoutConnectingToMongo verifies local migration creation needs no database connection.
 func TestNewActionCopiesTemplateWithoutConnectingToMongo(t *testing.T) {
 	migrationDirectory := t.TempDir()
 	template := []byte("package migrations\n")
@@ -95,6 +136,7 @@ func TestNewActionCopiesTemplateWithoutConnectingToMongo(t *testing.T) {
 	}
 }
 
+// TestCreateMigrationRejectsUnsafeNames verifies migration names cannot escape the configured directory.
 func TestCreateMigrationRejectsUnsafeNames(t *testing.T) {
 	runner := commandRunner{dependencies: commandDependencies{now: time.Now}}
 	settings := validTestSettings(t.TempDir())
@@ -109,6 +151,7 @@ func TestCreateMigrationRejectsUnsafeNames(t *testing.T) {
 	}
 }
 
+// TestCreateMigrationDoesNotOverwriteAnExistingFile verifies existing migrations remain unchanged.
 func TestCreateMigrationDoesNotOverwriteAnExistingFile(t *testing.T) {
 	migrationDirectory := t.TempDir()
 	if err := os.WriteFile(filepath.Join(migrationDirectory, "template.go"), []byte("new template"), 0o644); err != nil {
@@ -136,6 +179,7 @@ func TestCreateMigrationDoesNotOverwriteAnExistingFile(t *testing.T) {
 	}
 }
 
+// TestRunDatabaseActionUsesLocalRunnerForUpAndDown verifies both actions use the configured local runner.
 func TestRunDatabaseActionUsesLocalRunnerForUpAndDown(t *testing.T) {
 	for _, action := range []string{"up", "down"} {
 		t.Run(action, func(t *testing.T) {
@@ -174,6 +218,7 @@ func TestRunDatabaseActionUsesLocalRunnerForUpAndDown(t *testing.T) {
 	}
 }
 
+// TestDatabaseActionsSucceedWithoutRegisteredMigrationsOrConnecting verifies empty migration sets need no database connection.
 func TestDatabaseActionsSucceedWithoutRegisteredMigrationsOrConnecting(t *testing.T) {
 	for _, action := range []string{"up", "down"} {
 		t.Run(action, func(t *testing.T) {
@@ -204,6 +249,7 @@ func TestDatabaseActionsSucceedWithoutRegisteredMigrationsOrConnecting(t *testin
 	}
 }
 
+// TestRunDatabaseActionDisconnectsAfterPingFailure verifies failed health checks still release the client.
 func TestRunDatabaseActionDisconnectsAfterPingFailure(t *testing.T) {
 	pingErr := errors.New("ping failed")
 	client := &fakeMongoClient{pingErr: pingErr}
@@ -222,6 +268,7 @@ func TestRunDatabaseActionDisconnectsAfterPingFailure(t *testing.T) {
 	}
 }
 
+// validTestSettings returns complete local settings for migrator tests.
 func validTestSettings(migrationDirectory string) Settings {
 	return Settings{
 		MongoDatabaseUsername:    "mongoadmin",
@@ -244,16 +291,19 @@ type fakeMongoClient struct {
 	databaseName    string
 }
 
+// Database records the selected database name for assertions.
 func (client *fakeMongoClient) Database(name string, _ ...options.Lister[options.DatabaseOptions]) *mongodb.Database {
 	client.databaseName = name
 	return nil
 }
 
+// Disconnect records the call and returns the configured test error.
 func (client *fakeMongoClient) Disconnect(context.Context) error {
 	client.disconnectCalls++
 	return client.disconnectErr
 }
 
+// Ping records the call and returns the configured test error.
 func (client *fakeMongoClient) Ping(context.Context, *readpref.ReadPref) error {
 	client.pingCalls++
 	return client.pingErr
@@ -268,12 +318,14 @@ type fakeMigrationRunner struct {
 	downErr   error
 }
 
+// Up records an upward migration request and returns the configured test error.
 func (runner *fakeMigrationRunner) Up(_ context.Context, count int) error {
 	runner.upCalls++
 	runner.upCount = count
 	return runner.upErr
 }
 
+// Down records a downward migration request and returns the configured test error.
 func (runner *fakeMigrationRunner) Down(_ context.Context, count int) error {
 	runner.downCalls++
 	runner.downCount = count

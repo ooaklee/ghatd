@@ -17,6 +17,7 @@ import (
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/spf13/cobra"
 	migrate "github.com/xakep666/mongo-migrate"
+	"go.mongodb.org/mongo-driver/v2/event"
 	mongodb "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
@@ -35,7 +36,8 @@ const maximumMigrationNameLength = 128
 type settingsLoader func() (*Settings, error)
 
 type commandOptions struct {
-	loadSettings settingsLoader
+	loadSettings   settingsLoader
+	commandMonitor *event.CommandMonitor
 }
 
 // CommandOption customises the shared MongoDB migrator command.
@@ -72,6 +74,15 @@ func WithMigrationDirectory(directory string) CommandOption {
 	}
 }
 
+// WithMongoCommandMonitor attaches a MongoDB v2 command monitor to clients
+// created for migration up and down actions. A nil monitor preserves the
+// driver's default behaviour.
+func WithMongoCommandMonitor(monitor *event.CommandMonitor) CommandOption {
+	return func(options *commandOptions) {
+		options.commandMonitor = monitor
+	}
+}
+
 type mongoClient interface {
 	// Database returns a handle for the named MongoDB database.
 	Database(string, ...options.Lister[options.DatabaseOptions]) *mongodb.Database
@@ -96,8 +107,9 @@ type commandDependencies struct {
 }
 
 type commandRunner struct {
-	loadSettings settingsLoader
-	dependencies commandDependencies
+	loadSettings   settingsLoader
+	commandMonitor *event.CommandMonitor
+	dependencies   commandDependencies
 }
 
 // NewCommand returns the shared Cobra command for creating, applying, and
@@ -115,8 +127,9 @@ func NewCommand(commandOptions ...CommandOption) *cobra.Command {
 	}
 
 	return newCommand(commandRunner{
-		loadSettings: options.loadSettings,
-		dependencies: commandDependenciesWithDefaults(),
+		loadSettings:   options.loadSettings,
+		commandMonitor: options.commandMonitor,
+		dependencies:   commandDependenciesWithDefaults(),
 	})
 }
 
@@ -279,6 +292,9 @@ func (runner commandRunner) runDatabaseAction(parentContext context.Context, set
 		ApplyURI(mongoURI).
 		SetConnectTimeout(settings.MongoMigrationTimeout).
 		SetMaxPoolSize(uint64(settings.MongoConnectionPool))
+	if runner.commandMonitor != nil {
+		clientOptions.SetMonitor(runner.commandMonitor)
+	}
 
 	client, err := runner.dependencies.connect(clientOptions)
 	if err != nil {

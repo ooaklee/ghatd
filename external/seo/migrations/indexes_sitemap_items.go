@@ -16,7 +16,15 @@ const sitemapItemsURIIndexName = "sitemap_items_uri_unique"
 
 // InitSitemapItemIndexesUp creates indexes needed by sitemap item persistence.
 func InitSitemapItemIndexesUp(db *mongo.Database) error {
-	ctx := context.Background()
+	return InitSitemapItemIndexesUpWithContext(context.Background(), db)
+}
+
+// InitSitemapItemIndexesUpWithContext creates indexes needed by sitemap item
+// persistence using ctx for MongoDB operations.
+func InitSitemapItemIndexesUpWithContext(ctx context.Context, db *mongo.Database) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	collection := db.Collection(seo.SitemapItemsCollection)
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "starting-task-to-create-sitemap-item-indexes"))
@@ -39,7 +47,15 @@ func InitSitemapItemIndexesUp(db *mongo.Database) error {
 
 // InitSitemapItemIndexesDown removes indexes created for sitemap item persistence.
 func InitSitemapItemIndexesDown(db *mongo.Database) error {
-	ctx := context.Background()
+	return InitSitemapItemIndexesDownWithContext(context.Background(), db)
+}
+
+// InitSitemapItemIndexesDownWithContext removes indexes created for sitemap
+// item persistence using ctx for MongoDB operations.
+func InitSitemapItemIndexesDownWithContext(ctx context.Context, db *mongo.Database) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	collection := db.Collection(seo.SitemapItemsCollection)
 
 	log.Default().Println(toolbox.OutputBasicLogString("info", "rolling-back-task-to-create-sitemap-item-indexes"))

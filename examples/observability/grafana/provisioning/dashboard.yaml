@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: GHATD reference service
+    orgId: 1
+    folder: Local observability
+    folderUid: ghatd-local-observability
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 5
+    allowUiUpdates: false
+    options:
+      path: /otel-lgtm/reference-dashboards
+      foldersFromFilesStructure: false

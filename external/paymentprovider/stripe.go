@@ -20,13 +20,13 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/observability"
 )
 
 const (
-	stripeProviderName            = "stripe"
-	stripeDefaultAPIBaseURL       = "https://api.stripe.com"
-	stripeSignatureHeader         = "Stripe-Signature"
-	stripeDefaultBodySize   int64 = 2 << 20
+	stripeProviderName          = "stripe"
+	stripeSignatureHeader       = "Stripe-Signature"
+	stripeDefaultBodySize int64 = 2 << 20
 )
 
 var stripeDefaultSignatureTolerance = 5 * time.Minute
@@ -52,11 +52,11 @@ func NewStripeProvider(config *Config) (*StripeProvider, error) {
 
 	client := config.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
+		client = observability.NewHTTPClient(http.DefaultTransport, 10*time.Second)
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(config.APIBaseURL), "/")
 	if baseURL == "" {
-		baseURL = stripeDefaultAPIBaseURL
+		baseURL = StripeDefaultAPIBaseURL
 	}
 	apiVersion := strings.TrimSpace(config.APIVersion)
 	if apiVersion == "" {
@@ -289,6 +289,7 @@ func (s *StripeProvider) ParsePayload(_ context.Context, req *http.Request) (*We
 	return payload, nil
 }
 
+// stripeCheckoutHasTrial reports whether subscription metadata requests a trial.
 func stripeCheckoutHasTrial(object map[string]any) bool {
 	if stripeString(object, "mode") != CheckoutModeSubscription {
 		return false
@@ -554,6 +555,7 @@ func stripeSubscriptionTerms(object, metadata map[string]any) SubscriptionTerms 
 	return terms
 }
 
+// stripeSelectedSubscriptionItem selects one unambiguous subscription item.
 func stripeSelectedSubscriptionItem(object map[string]any, preferredPriceID string) (map[string]any, bool) {
 	itemsObject := stripeObject(object, "items")
 	rawItems, _ := itemsObject["data"].([]any)
@@ -587,6 +589,7 @@ func stripeSelectedSubscriptionItem(object map[string]any, preferredPriceID stri
 	return nil, false
 }
 
+// stripeIntegralMinorUnitDecimal parses an exact integral minor-unit amount.
 func stripeIntegralMinorUnitDecimal(value string) (int64, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -599,6 +602,7 @@ func stripeIntegralMinorUnitDecimal(value string) (int64, bool) {
 	return rational.Num().Int64(), true
 }
 
+// stripeOptionalString trims a nullable Stripe string.
 func stripeOptionalString(value *string) string {
 	if value == nil {
 		return ""
@@ -847,6 +851,7 @@ func (s *StripeProvider) CreateUpcomingInvoicePreview(ctx context.Context, input
 	}, nil
 }
 
+// sumStripeTaxAmounts safely totals current or legacy Stripe tax amounts.
 func sumStripeTaxAmounts(current, legacy []struct {
 	Amount int64 `json:"amount"`
 }) (int64, bool) {
@@ -864,6 +869,7 @@ func sumStripeTaxAmounts(current, legacy []struct {
 	return total, true
 }
 
+// isValidCurrencyCode accepts three-letter upper-case currency codes.
 func isValidCurrencyCode(value string) bool {
 	if len(value) != 3 {
 		return false
@@ -893,12 +899,14 @@ func isValidStripeCustomerID(value string) bool {
 		!strings.ContainsAny(value, " \t\r\n")
 }
 
+// isValidStripeSubscriptionID validates the documented subscription prefix and size.
 func isValidStripeSubscriptionID(value string) bool {
 	value = strings.TrimSpace(value)
 	return strings.HasPrefix(value, "sub_") && len(value) > len("sub_") && len(value) <= 255 &&
 		!strings.ContainsAny(value, " \t\r\n")
 }
 
+// isValidStripeCustomerPortalReturnURL rejects templates and malformed return URLs.
 func isValidStripeCustomerPortalReturnURL(value string) bool {
 	return !strings.ContainsAny(strings.TrimSpace(value), "{}") && isValidAbsoluteHTTPURL(value, false)
 }
@@ -923,6 +931,7 @@ func isValidAbsoluteHTTPURL(value string, requireHTTPS bool) bool {
 	return strings.EqualFold(parsed.Scheme, "http") || strings.EqualFold(parsed.Scheme, "https")
 }
 
+// isValidHTTPURLPort checks that an explicit URL port is within the TCP range.
 func isValidHTTPURLPort(parsed *url.URL) bool {
 	port := parsed.Port()
 	if port == "" {
@@ -1358,7 +1367,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-// These helpers remain for package compatibility with provider-specific parsers.
+// getStringField remains for package compatibility with provider-specific parsers.
 func getStringField(object map[string]interface{}, key string) string {
 	return stripeString(object, key)
 }

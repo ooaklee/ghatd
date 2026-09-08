@@ -1,0 +1,109 @@
+# Validated with otel/opentelemetry-collector-contrib:0.160.0.
+# Private receivers: publish only through an explicitly chosen network boundary.
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /healthz
+  file_storage/queue:
+    directory: /var/lib/otelcol/queue
+    create_directory: true
+    fsync: true
+    max_size: 1073741824
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        max_recv_msg_size_mib: 4
+      http:
+        endpoint: 0.0.0.0:4318
+  prometheus/self:
+    config:
+      scrape_configs:
+        - job_name: otel-collector
+          scrape_interval: 15s
+          static_configs:
+            - targets: [127.0.0.1:8888]
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 384
+    spike_limit_mib: 128
+  resource/deployment:
+    attributes:
+      - key: service.namespace
+        value: "${env:COLLECTOR_SERVICE_NAMESPACE:-example}"
+        action: insert
+      - key: deployment.environment.name
+        value: "${env:COLLECTOR_ENVIRONMENT:-local}"
+        action: insert
+  resource/self:
+    attributes:
+      - key: service.name
+        value: "${env:COLLECTOR_SERVICE_NAME:-example-collector}"
+        action: upsert
+      - key: service.instance.id
+        value: "${env:COLLECTOR_INSTANCE_ID:-${env:HOSTNAME}}"
+        action: upsert
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+exporters:
+  otlp_http/backend:
+    endpoint: "${env:COLLECTOR_BACKEND_ENDPOINT:-http://lgtm:4318}"
+    headers:
+      # One HTTP header value, not an OTEL_EXPORTER_OTLP_HEADERS header list.
+      Authorization: "${env:COLLECTOR_AUTHORIZATION:-}"
+    compression: gzip
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      storage: file_storage/queue
+      sizer: bytes
+      # Per signal. This is a byte budget, despite the generic metric HELP text.
+      queue_size: 268435456
+      num_consumers: 4
+      wait_for_result: false
+      block_on_overflow: false
+
+service:
+  extensions: [health_check, file_storage/queue]
+  telemetry:
+    logs:
+      level: warn
+    metrics:
+      level: normal
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+                without_type_suffix: true
+                without_units: true
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/deployment, batch]
+      exporters: [otlp_http/backend]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/deployment, batch]
+      exporters: [otlp_http/backend]
+    metrics/self:
+      receivers: [prometheus/self]
+      processors: [memory_limiter, resource/deployment, resource/self, batch]
+      exporters: [otlp_http/backend]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/deployment, batch]
+      exporters: [otlp_http/backend]

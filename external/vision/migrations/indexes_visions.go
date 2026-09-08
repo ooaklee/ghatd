@@ -13,6 +13,15 @@ import (
 
 // InitVisionIndexesUp initialises indexes for the visions collection.
 func InitVisionIndexesUp(db *mongo.Database) error { //Up
+	return InitVisionIndexesUpWithContext(context.Background(), db)
+}
+
+// InitVisionIndexesUpWithContext initialises indexes for the visions collection
+// using ctx for MongoDB operations.
+func InitVisionIndexesUpWithContext(ctx context.Context, db *mongo.Database) error { //Up
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	log.SetFlags(0)
 	const collectionName = vision.VisionCollection
 
@@ -47,7 +56,7 @@ func InitVisionIndexesUp(db *mongo.Database) error { //Up
 		},
 	}
 
-	if _, err := db.Collection(collectionName).Indexes().CreateMany(context.Background(), indexes); err != nil {
+	if _, err := db.Collection(collectionName).Indexes().CreateMany(ctx, indexes); err != nil {
 		log.Default().Println(toolbox.OutputBasicLogString("error", "failed-task-to-add-vision-indexes"))
 		return err
 	}
@@ -58,6 +67,15 @@ func InitVisionIndexesUp(db *mongo.Database) error { //Up
 
 // InitVisionIndexesDown rolls back the visions indexes.
 func InitVisionIndexesDown(db *mongo.Database) error { //Down
+	return InitVisionIndexesDownWithContext(context.Background(), db)
+}
+
+// InitVisionIndexesDownWithContext rolls back the visions indexes using ctx
+// for MongoDB operations.
+func InitVisionIndexesDownWithContext(ctx context.Context, db *mongo.Database) error { //Down
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	log.SetFlags(0)
 	const collectionName = vision.VisionCollection
 
@@ -67,7 +85,7 @@ func InitVisionIndexesDown(db *mongo.Database) error { //Down
 		"idx_visions_status_created_at",
 		"idx_visions_created_at",
 	} {
-		if err := db.Collection(collectionName).Indexes().DropOne(context.TODO(), indexName); err != nil {
+		if err := db.Collection(collectionName).Indexes().DropOne(ctx, indexName); err != nil {
 			return err
 		}
 	}

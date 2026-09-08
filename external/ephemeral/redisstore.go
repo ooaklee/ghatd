@@ -25,6 +25,10 @@ type PersistentClient interface {
 	Scan(cursor uint64, match string, count int64) *redis.ScanCmd
 }
 
+type contextAwarePersistentClient interface {
+	WithContext(context.Context) PersistentClient
+}
+
 const (
 	// prefixTemplate is how the cache key prefix should be shaped, <appComponent>-<appEnvironment>_
 	prefixTemplate string = "%s-%s_"
@@ -72,6 +76,32 @@ func NewRedisStore(client PersistentClient, maxUnauthedRequestAllowance int64, a
 	}
 }
 
+// clientForContext returns a shallow go-redis client clone carrying ctx. The
+// fallback preserves compatibility with lightweight PersistentClient test
+// doubles and adapters that do not support context propagation.
+func (c *Client) clientForContext(ctx context.Context) PersistentClient {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if redisClient, ok := c.client.(*redis.Client); ok {
+		return redisClient.WithContext(ctx)
+	}
+	if redisClient, ok := c.client.(*redis.ClusterClient); ok {
+		return redisClient.WithContext(ctx)
+	}
+	if redisClient, ok := c.client.(*redis.Ring); ok {
+		return redisClient.WithContext(ctx)
+	}
+	if redisClient, ok := c.client.(*redis.Tx); ok {
+		return redisClient.WithContext(ctx)
+	}
+	if contextualClient, ok := c.client.(contextAwarePersistentClient); ok {
+		return contextualClient.WithContext(ctx)
+	}
+
+	return c.client
+}
+
 // StoreToken saves token and user uuid to persistent storage
 // Creates entry in Store using the combinedUUID as a key.
 // TODO: Create tests
@@ -82,7 +112,7 @@ func (c *Client) StoreToken(ctx context.Context, tokenUUID string, userID string
 
 	completeKey := c.keyPrefix + combinedID
 
-	if err := c.client.Set(completeKey, userID, ttl).Err(); err != nil {
+	if err := c.clientForContext(ctx).Set(completeKey, userID, ttl).Err(); err != nil {
 		logger.Error("ephemeral-token-store-failed", zap.String("user-id", userID), zap.Duration("ttl", ttl), zap.Error(err))
 		return err
 	}
@@ -118,7 +148,7 @@ func (c *Client) AcquireRefreshTokenRotationLock(ctx context.Context, userID, re
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "acquire-refresh-token-rotation-lock")
 	completeKey := c.keyPrefix + refreshTokenRotationLockKey(userID, refreshTokenUUID)
 
-	acquired, err := c.client.SetNX(completeKey, "1", ttl).Result()
+	acquired, err := c.clientForContext(ctx).SetNX(completeKey, "1", ttl).Result()
 	if err != nil {
 		logger.Error("ephemeral-refresh-rotation-lock-acquire-failed", zap.String("user-id", userID), zap.Duration("ttl", ttl), zap.Error(err))
 		return false, err
@@ -133,7 +163,7 @@ func (c *Client) ReleaseRefreshTokenRotationLock(ctx context.Context, userID, re
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "release-refresh-token-rotation-lock")
 	completeKey := c.keyPrefix + refreshTokenRotationLockKey(userID, refreshTokenUUID)
 
-	deleted, err := c.client.Del(completeKey).Result()
+	deleted, err := c.clientForContext(ctx).Del(completeKey).Result()
 	if err != nil {
 		logger.Error("ephemeral-refresh-rotation-lock-release-failed", zap.String("user-id", userID), zap.Error(err))
 		return 0, err
@@ -158,7 +188,7 @@ func (c *Client) StoreRefreshTokenRotationResult(ctx context.Context, userID, re
 	}
 
 	completeKey := c.keyPrefix + refreshTokenRotationKey(userID, refreshTokenUUID)
-	if err := c.client.Set(completeKey, string(payload), ttl).Err(); err != nil {
+	if err := c.clientForContext(ctx).Set(completeKey, string(payload), ttl).Err(); err != nil {
 		logger.Error("ephemeral-refresh-rotation-result-store-failed", zap.String("user-id", userID), zap.Duration("ttl", ttl), zap.Error(err))
 		return err
 	}
@@ -172,7 +202,7 @@ func (c *Client) GetRefreshTokenRotationResult(ctx context.Context, userID, refr
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "get-refresh-token-rotation-result")
 	completeKey := c.keyPrefix + refreshTokenRotationKey(userID, refreshTokenUUID)
 
-	raw, err := c.client.Get(completeKey).Result()
+	raw, err := c.clientForContext(ctx).Get(completeKey).Result()
 	if err == redis.Nil {
 		logger.Debug("ephemeral-refresh-rotation-result-not-found", zap.String("user-id", userID))
 		return nil, nil
@@ -197,7 +227,7 @@ func (c *Client) AcquireLoginEmailCooldown(ctx context.Context, userID string, i
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "acquire-login-email-cooldown")
 	completeKey := c.keyPrefix + loginEmailCooldownKey(userID, isDashboardRequest, requestURL)
 
-	acquired, err := c.client.SetNX(completeKey, "1", ttl).Result()
+	acquired, err := c.clientForContext(ctx).SetNX(completeKey, "1", ttl).Result()
 	if err != nil {
 		logger.Error("ephemeral-login-email-cooldown-acquire-failed", zap.String("user-id", userID), zap.Bool("dashboard-request", isDashboardRequest), zap.Duration("ttl", ttl), zap.Error(err))
 		return false, err
@@ -212,7 +242,7 @@ func (c *Client) ReleaseLoginEmailCooldown(ctx context.Context, userID string, i
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "release-login-email-cooldown")
 	completeKey := c.keyPrefix + loginEmailCooldownKey(userID, isDashboardRequest, requestURL)
 
-	deleted, err := c.client.Del(completeKey).Result()
+	deleted, err := c.clientForContext(ctx).Del(completeKey).Result()
 	if err != nil {
 		logger.Error("ephemeral-login-email-cooldown-release-failed", zap.String("user-id", userID), zap.Bool("dashboard-request", isDashboardRequest), zap.Error(err))
 		return 0, err
@@ -240,7 +270,7 @@ func (c *Client) DeleteAllTokenExceptedSpecified(ctx context.Context, userId str
 	for {
 		var keys []string
 		var err error
-		keys, cursor, err = c.client.Scan(cursor, authTokenPrefix, 0).Result()
+		keys, cursor, err = c.clientForContext(ctx).Scan(cursor, authTokenPrefix, 0).Result()
 		if err != nil {
 			logger.Error("unable-to-find-tokens-matching-prefix", zap.String("search-prefix", authTokenPrefix), zap.Error(err))
 			return err
@@ -266,7 +296,7 @@ func (c *Client) DeleteAllTokenExceptedSpecified(ctx context.Context, userId str
 
 	// Delete remaining keys
 	if len(foundTokenIds) > 0 {
-		_, err := c.client.Del(foundTokenIds...).Result()
+		_, err := c.clientForContext(ctx).Del(foundTokenIds...).Result()
 		if err != nil {
 			logger.Error("error-while-wiping-other-user-tokens", zap.Strings("exemption-token-ids", completeExemptionTokenIds), zap.Strings("found-token-ids", foundTokenIds), zap.String("user-id", userId), zap.Error(err))
 			return err
@@ -290,7 +320,7 @@ func (c *Client) FetchAuth(ctx context.Context, accessDetails TokenDetailsAccess
 	completeKey := c.keyPrefix + combinedID
 
 	userID := accessDetails.GetUserId()
-	userIDFromToken, err := c.client.Get(completeKey).Result()
+	userIDFromToken, err := c.clientForContext(ctx).Get(completeKey).Result()
 	if err != nil {
 		logger.Error("ephemeral-auth-fetch-failed", zap.String("user-id", userID), zap.Error(err))
 		return "", err
@@ -308,7 +338,7 @@ func (c *Client) DeleteAuth(ctx context.Context, combinedUUID string) (int64, er
 
 	completeKey := c.keyPrefix + combinedUUID
 
-	deleted, err := c.client.Del(completeKey).Result()
+	deleted, err := c.clientForContext(ctx).Del(completeKey).Result()
 	if err != nil {
 		logger.Error("ephemeral-auth-delete-failed", zap.Error(err))
 		return 0, err
@@ -356,7 +386,7 @@ func (c *Client) AddRequestCountEntry(ctx context.Context, clientIp string) erro
 // countRequestCountEntry checks to see how many requests have been made and returns error if limit exceeded
 func (c *Client) countRequestCountEntry(ctx context.Context, requestorID string, requestLimit int64) error {
 	// Get current request count
-	count := c.client.Get(requestorID).Val()
+	count := c.clientForContext(ctx).Get(requestorID).Val()
 	i, _ := strconv.ParseInt(count, 10, 64)
 
 	if i >= requestLimit {
@@ -370,7 +400,7 @@ func (c *Client) countRequestCountEntry(ctx context.Context, requestorID string,
 // incrementAndUpdateRequestCountEntry updates an entry with incremented value in empheral store
 func (c *Client) incrementAndUpdateRequestCountEntry(ctx context.Context, requestorID string) error {
 
-	_, err := c.client.Incr(requestorID).Result()
+	_, err := c.clientForContext(ctx).Incr(requestorID).Result()
 	return err
 }
 
@@ -381,14 +411,14 @@ func (c *Client) initiateRequestCountEntry(ctx context.Context, requestorID stri
 	expiryUTC := time.Unix(time.Now().Add(defaultTTL).Unix(), 0)
 	now := time.Now()
 
-	return c.client.Set(requestorID, 1, expiryUTC.Sub(now)).Err()
+	return c.clientForContext(ctx).Set(requestorID, 1, expiryUTC.Sub(now)).Err()
 }
 
 // fetchRequestCountEntry retrieves unauth request entry from persistent storage using requestor ID
 // TODO: Create tests
 func (c *Client) fetchRequestCountEntry(ctx context.Context, requestorID string) (string, error) {
 
-	return c.client.Get(requestorID).Result()
+	return c.clientForContext(ctx).Get(requestorID).Result()
 }
 
 // createRateLimitRequestorID returns a string containing a combination of r_<clientIP>
@@ -403,7 +433,7 @@ func (c *Client) CodeExists(ctx context.Context, code string) (bool, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "code-exists")
 	completeKey := c.keyPrefix + "code:" + code
 
-	_, err := c.client.Get(completeKey).Result()
+	_, err := c.clientForContext(ctx).Get(completeKey).Result()
 	if err == redis.Nil {
 		logger.Debug("ephemeral-code-not-found")
 		return false, nil
@@ -422,7 +452,7 @@ func (c *Client) StoreCode(ctx context.Context, code string, ttl time.Duration) 
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "store-code")
 	completeKey := c.keyPrefix + "code:" + code
 
-	if err := c.client.Set(completeKey, 1, ttl).Err(); err != nil {
+	if err := c.clientForContext(ctx).Set(completeKey, 1, ttl).Err(); err != nil {
 		logger.Error("ephemeral-code-store-failed", zap.Duration("ttl", ttl), zap.Error(err))
 		return err
 	}
@@ -436,7 +466,7 @@ func (c *Client) StoreCodeMapping(ctx context.Context, code, token string, ttl t
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "store-code-mapping")
 	completeKey := c.keyPrefix + "codetoken:" + code
 
-	if err := c.client.Set(completeKey, token, ttl).Err(); err != nil {
+	if err := c.clientForContext(ctx).Set(completeKey, token, ttl).Err(); err != nil {
 		logger.Error("ephemeral-code-mapping-store-failed", zap.Duration("ttl", ttl), zap.Error(err))
 		return err
 	}
@@ -451,7 +481,7 @@ func (c *Client) GetCodeMapping(ctx context.Context, code string) (string, error
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "get-code-mapping")
 	completeKey := c.keyPrefix + "codetoken:" + code
 
-	token, err := c.client.Get(completeKey).Result()
+	token, err := c.clientForContext(ctx).Get(completeKey).Result()
 	if err != nil {
 		logger.Error("ephemeral-code-mapping-fetch-failed", zap.Error(err))
 		return "", err
@@ -489,7 +519,7 @@ func (c *Client) BlockIP(ctx context.Context, ip string, duration time.Duration)
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "block-ip")
 	blockKey := c.keyPrefix + "hrl_block:" + ip
 
-	if err := c.client.Set(blockKey, "1", duration).Err(); err != nil {
+	if err := c.clientForContext(ctx).Set(blockKey, "1", duration).Err(); err != nil {
 		logger.Error("ephemeral-ip-block-store-failed", zap.String("clientip", ip), zap.Duration("duration", duration), zap.Error(err))
 		return err
 	}
@@ -503,7 +533,7 @@ func (c *Client) IsIPBlocked(ctx context.Context, ip string) (bool, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "is-ip-blocked")
 	blockKey := c.keyPrefix + "hrl_block:" + ip
 
-	_, err := c.client.Get(blockKey).Result()
+	_, err := c.clientForContext(ctx).Get(blockKey).Result()
 	if err == redis.Nil {
 		logger.Debug("ephemeral-ip-not-blocked", zap.String("clientip", ip))
 		return false, nil
@@ -521,14 +551,14 @@ func (c *Client) IsIPBlocked(ctx context.Context, ip string) (bool, error) {
 // increment, and returns an error if the counter exceeds maxAttempts.
 func (c *Client) incrementAndCheckHardened(ctx context.Context, key string, maxAttempts int, window time.Duration) error {
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "increment-and-check-hardened")
-	val, err := c.client.Incr(key).Result()
+	val, err := c.clientForContext(ctx).Incr(key).Result()
 	if err != nil {
 		logger.Error("ephemeral-hardened-counter-increment-failed", zap.Error(err))
 		return err
 	}
 
 	if val == 1 {
-		_ = c.client.Set(key, val, window)
+		_ = c.clientForContext(ctx).Set(key, val, window)
 	}
 
 	if int(val) > maxAttempts {
