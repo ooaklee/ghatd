@@ -64,8 +64,39 @@ the process working directory.
 GHATD packages expose migration helpers, but the host decides which migrations
 belong to the application and in which registration order.
 
-For helpers that accept `*mongo.Database`, adapt them to the context-aware
-`mongo-migrate` signature:
+Prefer native context-aware helpers where available. Billing events and
+subscriptions, sitemap items, and vision indexes expose paired
+`...UpWithContext` / `...DownWithContext` functions:
+
+```go
+package migrations
+
+import (
+    billingmigrations "github.com/ooaklee/ghatd/external/billing/migrations"
+    migrate "github.com/xakep666/mongo-migrate"
+)
+
+func init() {
+    if err := migrate.Register(
+        billingmigrations.InitBillingEventsIndexesUpWithContext,
+        billingmigrations.InitBillingEventsIndexesDownWithContext,
+    ); err != nil {
+        panic(err)
+    }
+}
+```
+
+These helpers pass the migration context into database operations, preserving
+cancellation, deadlines and trace parentage. When updating an existing
+registration, keep its file and ordering; do not add a duplicate migration just
+to switch helper signatures. The corresponding subscription, sitemap and vision
+prefixes are `InitBillingSubscriptionIndexes`, `InitSitemapItemIndexes` and
+`InitVisionIndexes` in `external/billing/migrations`, `external/seo/migrations`
+and `external/vision/migrations`.
+
+For legacy helpers that accept only `*mongo.Database`, adapt them to the
+`mongo-migrate` signature as below. This preserves compatibility but cannot
+pass the action context into a helper that uses `context.Background()`:
 
 ```go
 package migrations
@@ -132,6 +163,11 @@ export MONGO_DISCONNECT_TIMEOUT="10s"
 
 Keep real credentials in the deployment's secret manager rather than source
 control or shell-history examples.
+
+To trace database work, attach `WithMongoCommandMonitor` as described in
+[Tracing Migrations](../../external/migrator/mongo/README.md#tracing-migrations)
+and execute the command with the host's runtime/action context. Tracing does not
+discover migration packages, change registration order, or make rollback safer.
 
 ## 5. Apply Pending Migrations
 

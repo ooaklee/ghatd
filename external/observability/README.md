@@ -5,6 +5,9 @@ traces, metrics, and logs. It uses the OpenTelemetry SDK and standard exporter,
 resource, and sampler `OTEL_*` configuration, so applications can export to any
 compatible Collector and backend without embedding a vendor agent.
 
+For an existing or new host service, follow the
+[service adoption guide](../../docs/how-to/add-service-observability.md) for
+signal selection, lifecycle ownership, client wiring and an upgrade checklist.
 Start with the [runnable HTTP/CLI reference and local LGTM kit](../../examples/observability/README.md)
 for a complete working pipeline. The [configuration reference](CONFIGURATION.md)
 covers endpoint and header precedence, protocols, TLS, cadence and sampling.
@@ -459,6 +462,28 @@ constants. `Start` does not enforce a name registry: never pass request values,
 identifiers, URLs, or arbitrary error text as operation names or configured codes.
 Pass the returned context into downstream calls so their spans and logs retain
 the correct parent.
+
+## MongoDB monitor and metric cardinality
+
+Attach `NewMongoCommandMonitor` to each MongoDB v2 client before connecting.
+It disables command-document capture, uses operation-only span names and
+replaces driver error text only on the telemetry path. Application calls still
+receive their original errors. See the
+[database wiring example](../../examples/observability/database_wiring.go) and
+the [migration monitor option](../migrator/mongo/README.md#tracing-migrations).
+
+The `otelmongo` revision pinned in [go.mod](../../go.mod) normalizes the driver's
+connection ID before deriving `network.peer.address`: the pool sequence suffix
+does not create a new metric label value for every connection. Started/finished
+command correlation still uses the original connection identity. Keep this fix
+when changing instrumentation versions; this behavior is supplied by the
+pinned dependency, not a GHATD metric view.
+
+Stable peer labels remove that source of series churn, but do not cap total
+backend usage. Databases, operations, histogram buckets and service replicas
+can still contribute separate series. Check enabled instruments and the
+backend's actual series counts before broad rollout. Trace sampling does not
+reduce metric cardinality.
 
 ## Redis module commands
 

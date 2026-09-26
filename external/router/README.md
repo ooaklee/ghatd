@@ -14,20 +14,25 @@ The `router` package provides a standardised, project-specific wrapper around `g
 For complete request telemetry, wrap the router at the HTTP server boundary.
 Mux middleware runs only after a successful match, so installing telemetry
 only with `GetRouter().Use(...)` omits generated 404/405 responses and some
-redirects. A typical middleware order is:
+redirects. Use GHATD's composed boundary:
 
 ```go
-requestLogger := loggermiddleware.NewLogger(appLogger, nil)
-handler := observability.HTTPServerMiddleware("my-service")(
-    requestLogger.HTTPLogger(
-        observability.HTTPRecoveryMiddleware(ghatdRouter.GetRouter()),
-    ),
-)
+handler := otelhttp.Wrap("my-service", runtime.Logger(), ghatdRouter.GetRouter())
 ```
 
-Here `loggermiddleware` is `external/logger/middleware` and `observability` is
-`external/observability`. Pass `handler` to the HTTP server. Keep route-specific
-middleware, such as authentication and caching, on the router.
+Import `otelhttp` from `external/observability/otelhttp` and start the
+[observability runtime](../observability/README.md#bootstrap) before constructing
+dependencies. Pass `handler` to the HTTP server. It applies telemetry, request
+logging, recovery, then the complete router. Install it once, removing duplicate
+request loggers/recovery inside the router. Keep route-specific middleware,
+such as authentication and caching, on the router.
+
+Use `WrapWithOptions` for explicit
+[request-log details](../observability/CONFIGURATION.md#http-request-log-details)
+or trace-suppression policies. A catch-all SPA route can have template `/` even
+when its original `url.path` is a different page; the template remains suitable
+for grouping. See [service adoption](../../docs/how-to/add-service-observability.md)
+for signal and lifecycle choices.
 
 `NewRouter` installs lightweight route observation before supplied middleware.
 The `external/router/routecontext` package shares the matched template with

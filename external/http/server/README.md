@@ -26,6 +26,21 @@ success), and Shutdown.
 
 ## API
 
+### Observability lifecycle
+
+Start one [observability runtime](../../observability/README.md#bootstrap) before
+application dependencies and pass `otelhttp.Wrap(...)` as `Handler`. `Context`
+controls this helper's lifecycle and logging; it does **not** populate
+`http.Server.BaseContext` for requests. If handlers need runtime values from
+their request contexts, configure a server directly as shown by the
+[reference service](../../../examples/observability/main.go).
+
+Drain requests and close dependencies before shutting telemetry down. If
+`Shutdown` returns an error, this helper returns it without automatically
+forcing `Server.Close`; a host requiring that fallback must supply a custom
+shutdown function or own the server lifecycle. The reference demonstrates both
+bounded draining and forced close before telemetry cleanup.
+
 ### `StartServerWith(req *StartServerWithRequest) error`
 
 Creates an `*http.Server`, starts it in a background goroutine, blocks until a

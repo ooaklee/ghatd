@@ -6,8 +6,9 @@ settings come from the supported `OTEL_*` variables. For application wiring and
 shutdown ownership, see the [package guide](README.md#bootstrap).
 
 The behavior below is checked against the dependencies pinned in
-[go.mod](../../go.mod): autoexport v0.69.0, trace/metric exporters v1.44.0, and
-log exporters v0.20.0. Exporter implementations differ in some details, so
+[go.mod](../../go.mod): core trace/metric SDK v1.45.0, autoexport v0.69.0,
+trace/metric exporters v1.44.0, and log SDK/exporters v0.20.0.
+Exporter implementations differ in some details, so
 examples set the transport explicitly and avoid ambiguous configuration.
 
 ## Inspect configuration before exporting
@@ -357,6 +358,7 @@ dimensions and Loki stream labels; query them as log fields instead.
 | Field | Meaning |
 | --- | --- |
 | `route` | Matched template, unchanged |
+| `duration_ms` | Downstream handler execution in fractional milliseconds; always present on completion logs, even without this opt-in policy |
 | `url.path` | Escaped original path captured before dispatch; never includes the query |
 | `user_agent.original` | Incoming user-agent, bounded and normalized |
 | `network.peer.address` | Socket-peer IP, with its port removed |
@@ -367,6 +369,12 @@ dimensions and Loki stream labels; query them as log fields instead.
 | `http.request.header.x_real_ip` | Supplied X-Real-IP value; an unverified claim |
 | `http.request.header.cf_connecting_ip` | Supplied CF-Connecting-IP value; an unverified claim |
 | `http.request.header.true_client_ip` | Supplied True-Client-IP value; an unverified claim |
+
+`route` and `duration_ms` are baseline request fields; the other fields above
+require the corresponding policy options. Both baseline fields are allowed on
+GHATD's OTLP log branch when log export is enabled. See the
+[logger guide](../logger/README.md#request-completion-fields) for timing and
+panic/abort semantics.
 
 No proxy configuration is required to inspect the supplied headers. User-agent
 and forwarding headers are caller-controlled evidence, not verified identity.
@@ -475,7 +483,9 @@ export remains supported for simpler deployments.
 
 GHATD installs W3C Trace Context propagation (`traceparent` and `tracestate`).
 Baggage is omitted to avoid forwarding arbitrary inbound values to other
-services. `OTEL_PROPAGATORS` and `OTEL_SDK_DISABLED` are not interpreted by this
+services. `OTEL_CONFIG_FILE` is not loaded; configure this runtime through Go
+and the supported environment variables instead of an SDK YAML file.
+`OTEL_PROPAGATORS` and `OTEL_SDK_DISABLED` are not interpreted by this
 package. Use the individual exporter variables to disable signals; setting
 either unsupported variable does not change this lifecycle's behavior.
 

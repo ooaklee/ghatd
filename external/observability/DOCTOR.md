@@ -8,6 +8,11 @@ providers, opens no listener and sends no telemetry:
 go run ./cli telemetry doctor
 ```
 
+If you have built or installed the CLI from a revision containing this command,
+the equivalent invocation is `ghatdcli telemetry doctor`, or
+`ghatdcli telemetry doctor --probe --timeout 10s` for the explicit probe. Older
+CLI binaries need updating even when a service's GHATD dependency has changed.
+
 The JSON report describes each signal's exporter, protocol, configuration
 source, endpoint class, TLS, header presence and timeout. It reports identity
 presence and precedence without printing identity values. It never prints
