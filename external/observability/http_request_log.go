@@ -19,6 +19,9 @@ import (
 type HTTPRequestLogConfig struct {
 	IncludePath      bool
 	IncludeUserAgent bool
+	// PreservePathParameters keeps actual parameter values in url.path instead
+	// of substituting the matched template. Prefix redaction still takes priority.
+	PreservePathParameters bool
 	// IncludeClientAddress records the socket peer and bounded, unverified
 	// forwarding-header claims. Trusted proxy resolution is optional.
 	IncludeClientAddress bool
@@ -37,6 +40,7 @@ type HTTPRequestLogConfig struct {
 // zero value adds no request details. Construct it with NewHTTPRequestLogPolicy.
 type HTTPRequestLogPolicy struct {
 	includePath, includeUserAgent, includeClientAddress bool
+	preservePathParameters                              bool
 	prefixes                                            []string
 	proxies                                             []netip.Prefix
 	maxPath, maxUserAgent                               int
@@ -60,7 +64,9 @@ func NewHTTPRequestLogPolicy(config HTTPRequestLogConfig) (HTTPRequestLogPolicy,
 	}
 	policy := HTTPRequestLogPolicy{
 		includePath: config.IncludePath, includeUserAgent: config.IncludeUserAgent, includeClientAddress: config.IncludeClientAddress,
-		maxPath: config.MaxPathBytes, maxUserAgent: config.MaxUserAgentBytes,
+		preservePathParameters: config.PreservePathParameters,
+		maxPath:                config.MaxPathBytes,
+		maxUserAgent:           config.MaxUserAgentBytes,
 	}
 	for _, prefix := range config.RedactPathPrefixes {
 		if !canonicalHTTPTracePath(prefix) || !strings.HasSuffix(prefix, "/") {
@@ -152,12 +158,13 @@ func CaptureHTTPRequestLog(request *http.Request) HTTPRequestLogSnapshot {
 
 // Fields returns log fields, preserving the route template separately from the
 // original path. Parameterized routes use their template as url.path, keeping
-// route parameter values private. Catch-all prefixes such as / retain the
-// original path. Configured prefix redaction takes precedence.
+// route parameter values private unless PreservePathParameters is enabled.
+// Catch-all prefixes such as / retain the original path. Configured prefix
+// redaction takes precedence even when PreservePathParameters is enabled.
 func (snapshot HTTPRequestLogSnapshot) Fields(route string) []zap.Field {
 	fields := append([]zap.Field(nil), snapshot.fields...)
 	if snapshot.policy.includePath && snapshot.path != "" {
-		if !snapshot.pathRedacted && strings.Contains(route, "{") {
+		if !snapshot.pathRedacted && !snapshot.policy.preservePathParameters && strings.Contains(route, "{") {
 			snapshot.path, snapshot.pathTruncated = boundedRequestLogValue(route, snapshot.policy.maxPath)
 			snapshot.pathRedacted = true
 		}

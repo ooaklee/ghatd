@@ -43,11 +43,12 @@ func TestRequestLogPolicyPreservesSPAAndKeepsDetailsOutOfOTLP(t *testing.T) {
 	})
 	core, local := observer.New(zap.InfoLevel)
 	logger := observability.TeeLogger(zap.New(core), logProvider)
-	policy, err := observability.NewHTTPRequestLogPolicy(observability.HTTPRequestLogConfig{
+	config := observability.HTTPRequestLogConfig{
 		IncludePath: true, IncludeUserAgent: true, IncludeClientAddress: true,
 		RedactPathPrefixes: []string{"/private/"}, TrustedProxyCIDRs: []string{"10.0.0.0/24"},
 		MaxPathBytes: 64, MaxUserAgentBytes: 32,
-	})
+	}
+	policy, err := observability.NewHTTPRequestLogPolicy(config)
 	require.NoError(t, err)
 	r := router.NewRouter(nil, nil)
 	r.GetRouter().HandleFunc("/items/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -60,22 +61,33 @@ func TestRequestLogPolicyPreservesSPAAndKeepsDetailsOutOfOTLP(t *testing.T) {
 		"dist/assets/app.js": {Data: []byte("asset")},
 	}}))
 	handler := WrapWithOptions("example-api", logger, r.GetRouter(), observability.WithHTTPRequestLogPolicy(policy))
+	config.PreservePathParameters = true
+	preservePolicy, err := observability.NewHTTPRequestLogPolicy(config)
+	require.NoError(t, err)
+	preserveHandler := WrapWithOptions("example-api", logger, r.GetRouter(), observability.WithHTTPRequestLogPolicy(preservePolicy))
 	for _, test := range []struct {
 		target, route, loggedPath string
+		preserveParameters        bool
 		status                    int
 	}{
-		{"/dashboard?token=secret-canary", "/", "/dashboard", 200},
-		{"/assets/app.js?token=secret-canary", "/", "/assets/app.js", 200},
-		{"/items/private-canary?token=secret-canary", "/items/{id}", "/items/{id}", 204},
-		{"/private/private-canary", "/", "/private/[redacted]", 200},
-		{"/" + strings.Repeat("p", 80), "/", "/" + strings.Repeat("p", 63), 200},
+		{"/dashboard?token=secret-canary", "/", "/dashboard", false, 200},
+		{"/assets/app.js?token=secret-canary", "/", "/assets/app.js", false, 200},
+		{"/items/private-canary?token=secret-canary", "/items/{id}", "/items/{id}", false, 204},
+		{"/private/private-canary", "/", "/private/[redacted]", false, 200},
+		{"/" + strings.Repeat("p", 80), "/", "/" + strings.Repeat("p", 63), false, 200},
+		{"/items/usage-canary?token=secret-canary", "/items/{id}", "/items/usage-canary", true, 204},
+		{"/private/private-canary", "/", "/private/[redacted]", true, 200},
 	} {
 		request := httptest.NewRequest("GET", test.target, nil)
 		request.Header.Set("User-Agent", "original-agent-"+strings.Repeat("a", 50))
 		request.Header.Set("X-Forwarded-For", "198.51.100.99, 192.0.2.7, 10.0.0.2")
 		request.RemoteAddr = "10.0.0.1:1234"
 		response := httptest.NewRecorder()
-		handler.ServeHTTP(response, request)
+		if test.preserveParameters {
+			preserveHandler.ServeHTTP(response, request)
+		} else {
+			handler.ServeHTTP(response, request)
+		}
 		require.Equal(t, test.status, response.Code)
 		if test.status == 200 && !strings.HasPrefix(test.target, "/assets/") {
 			require.Contains(t, response.Body.String(), "SPA entry point")
@@ -98,7 +110,7 @@ func TestRequestLogPolicyPreservesSPAAndKeepsDetailsOutOfOTLP(t *testing.T) {
 	var metrics metricdata.ResourceMetrics
 	require.NoError(t, reader.Collect(context.Background(), &metrics))
 	records := logs.Records()
-	require.Len(t, records, 5)
+	require.Len(t, records, 7)
 	for _, record := range records {
 		// SDK log records have private fields; inspect exported attributes rather
 		// than relying on json.Marshal(record), which cannot expose their data.
@@ -112,7 +124,7 @@ func TestRequestLogPolicyPreservesSPAAndKeepsDetailsOutOfOTLP(t *testing.T) {
 	for _, telemetry := range []any{traces.GetSpans(), metrics} {
 		encoded, err := json.Marshal(telemetry)
 		require.NoError(t, err)
-		for _, forbidden := range []string{"secret-canary", "private-canary", "original-agent", "192.0.2.7", "10.0.0.1", "/dashboard", "/assets/app.js"} {
+		for _, forbidden := range []string{"secret-canary", "private-canary", "usage-canary", "original-agent", "192.0.2.7", "10.0.0.1", "/dashboard", "/assets/app.js"} {
 			require.NotContains(t, string(encoded), forbidden)
 		}
 	}

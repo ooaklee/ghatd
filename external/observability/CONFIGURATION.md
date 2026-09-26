@@ -387,6 +387,12 @@ decoded path and its cleaned form, preventing encoded separators or dot
 segments from bypassing configured redaction. Matching suffixes become
 `[redacted]`. Parameterized router matches (templates containing `{`) use the
 whole template as `url.path`; configured prefix redaction takes precedence.
+Set `PreservePathParameters: true` to retain actual path parameter values in
+container logs when needed for usage analysis. The `route` field still contains
+the matched template, query strings remain excluded, and configured prefix
+redaction still applies. This is an explicit per-service choice because paths
+can contain user or resource identifiers. It does not add these values to
+GHATD's OTLP logs, spans or metrics.
 Redacted paths have `url.path.redacted=true`. Unknown paths outside configured
 prefixes remain visible for troubleshooting; choose prefixes for your service.
 The path snapshot does not alter dispatch, cache behavior or SPA rewrites.
