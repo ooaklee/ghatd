@@ -13,10 +13,82 @@ import (
 	"go.mongodb.org/mongo-driver/v2/event"
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/v2/mongo/otelmongo"
 	"go.opentelemetry.io/otel/attribute"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// Real driver connection IDs contain a pool sequence suffix. That sequence
+// must remain available for command correlation, but never become a metric label.
+func TestMongoConnectionChurnKeepsMetricsBoundedAndSpansDistinct(t *testing.T) {
+	for _, address := range []struct{ connection, host string }{
+		{"mongo.example:27018", "mongo.example"},
+		{"127.0.0.1:27018", "127.0.0.1"},
+		{"[2001:db8::1]:27018", "2001:db8::1"},
+	} {
+		for _, failure := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/failure=%t", address.connection, failure), func(t *testing.T) {
+				ctx := context.Background()
+				reader := sdkmetric.NewManualReader()
+				meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+				recorder := tracetest.NewSpanRecorder()
+				tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+				t.Cleanup(func() {
+					require.NoError(t, meterProvider.Shutdown(ctx))
+					require.NoError(t, tracerProvider.Shutdown(ctx))
+				})
+				monitor := NewMongoCommandMonitor(otelmongo.WithMeterProvider(meterProvider), otelmongo.WithTracerProvider(tracerProvider))
+				const connections = 64
+				parents := make([]trace.SpanContext, connections)
+				for i := range connections {
+					parents[i] = trace.NewSpanContext(trace.SpanContextConfig{
+						TraceID: trace.TraceID{1, byte(i + 1)}, SpanID: trace.SpanID{1, byte(i + 1)}, TraceFlags: trace.FlagsSampled,
+					})
+					monitor.Started(trace.ContextWithSpanContext(ctx, parents[i]), &event.CommandStartedEvent{
+						DatabaseName: "example", CommandName: "find", RequestID: 42,
+						ConnectionID: fmt.Sprintf("%s[-%d]", address.connection, i+1),
+					})
+				}
+				// Overlapping request IDs on different connections must finish their
+				// own spans, even when responses arrive in the opposite order.
+				for i := connections - 1; i >= 0; i-- {
+					finished := event.CommandFinishedEvent{
+						DatabaseName: "example", CommandName: "find", RequestID: 42, Duration: time.Millisecond,
+						ConnectionID: fmt.Sprintf("%s[-%d]", address.connection, i+1),
+					}
+					if failure {
+						monitor.Failed(ctx, &event.CommandFailedEvent{CommandFinishedEvent: finished, Failure: fmt.Errorf("private query details")})
+					} else {
+						monitor.Succeeded(ctx, &event.CommandSucceededEvent{CommandFinishedEvent: finished})
+					}
+				}
+				spans := recorder.Ended()
+				require.Len(t, spans, connections)
+				for i, span := range spans {
+					assert.Equal(t, parents[connections-1-i], span.Parent())
+					assert.Equal(t, address.host, mongoSpanAttribute(t, span.Attributes(), "network.peer.address").AsString())
+					assert.Equal(t, int64(27018), mongoSpanAttribute(t, span.Attributes(), "network.peer.port").AsInt64())
+				}
+				var exported metricdata.ResourceMetrics
+				require.NoError(t, reader.Collect(ctx, &exported))
+				var points []metricdata.HistogramDataPoint[float64]
+				for _, scope := range exported.ScopeMetrics {
+					for _, instrument := range scope.Metrics {
+						if instrument.Name == "db.client.operation.duration" {
+							points = append(points, instrument.Data.(metricdata.Histogram[float64]).DataPoints...)
+						}
+					}
+				}
+				require.Len(t, points, 1, "connection churn must not create new metric streams")
+				assert.Equal(t, uint64(connections), points[0].Count)
+				assert.Equal(t, address.host, mongoSpanAttribute(t, points[0].Attributes.ToSlice(), "network.peer.address").AsString())
+				assert.Equal(t, int64(27018), mongoSpanAttribute(t, points[0].Attributes.ToSlice(), "network.peer.port").AsInt64())
+			})
+		}
+	}
+}
 
 // TestNewMongoCommandMonitorAlwaysDisablesCommandText verifies that callers cannot enable sensitive command text.
 func TestNewMongoCommandMonitorAlwaysDisablesCommandText(t *testing.T) {
