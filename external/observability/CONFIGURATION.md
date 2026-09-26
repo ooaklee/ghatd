@@ -328,6 +328,81 @@ telemetry. The lower-level `SDK.Shutdown` uses the context you provide. See
 joins their errors. It can be repeated, accepts a nil SDK, and uses the caller's
 context budget. End spans and complete operations before flushing them.
 
+## HTTP request-log details
+
+The default completion log records a matched `route` template. A SPA mounted
+at `PathPrefix("/")` correctly has `/` as its template, even for deep links.
+To also capture the requested path, opt into a per-handler policy:
+
+```go
+policy, err := observability.NewHTTPRequestLogPolicy(observability.HTTPRequestLogConfig{
+    IncludePath:          true,
+    IncludeUserAgent:     true,
+    IncludeClientAddress: true,
+    RedactPathPrefixes:   []string{"/accounts/", "/invitations/"},
+})
+if err != nil {
+    return err
+}
+handler := otelhttp.WrapWithOptions("my-service", runtime.Logger(), router.GetRouter(),
+    observability.WithHTTPRequestLogPolicy(policy))
+```
+
+The existing Zap sink receives these additional JSON fields. GHATD's OTLP
+log branch drops them, and HTTP spans and metrics retain their existing
+attributes. A container log shipper will send the extra fields wherever it
+already sends container output. Keep request-derived values out of metric
+dimensions and Loki stream labels; query them as log fields instead.
+
+| Field | Meaning |
+| --- | --- |
+| `route` | Matched template, unchanged |
+| `url.path` | Escaped original path captured before dispatch; never includes the query |
+| `user_agent.original` | Incoming user-agent, bounded and normalized |
+| `network.peer.address` | Socket-peer IP, with its port removed |
+| `client.address` | Socket peer by default, or optionally a trusted-proxy-resolved address |
+| `client.address.source` | `peer` or `forwarded`; a peer can itself be a proxy |
+| `http.request.header.x_forwarded_for` | Supplied X-Forwarded-For values, joined in order; an unverified claim |
+| `http.request.header.forwarded` | Supplied Forwarded value; an unverified claim |
+| `http.request.header.x_real_ip` | Supplied X-Real-IP value; an unverified claim |
+| `http.request.header.cf_connecting_ip` | Supplied CF-Connecting-IP value; an unverified claim |
+| `http.request.header.true_client_ip` | Supplied True-Client-IP value; an unverified claim |
+
+No proxy configuration is required to inspect the supplied headers. User-agent
+and forwarding headers are caller-controlled evidence, not verified identity.
+Unrelated headers, including Authorization and Cookie, are never captured by
+this policy. There is no implicit environment-variable configuration. Install
+one outer wrapper: nested HTTP telemetry boundaries preserve the outer policy;
+repeated options in that outer wrapper use the last supplied policy.
+
+Path/user-agent defaults are 2048/512 bytes, configurable through
+`MaxPathBytes` (32–4096) and `MaxUserAgentBytes` (32–2048). X-Forwarded-For and
+Forwarded are capped at 1024 bytes each; the other address headers at 128.
+Fields cut short have a matching `<field>.truncated=true` flag. Control
+characters become spaces and invalid UTF-8 becomes `?`.
+
+Paths can contain secrets even without queries. Configure directory prefixes
+for sensitive SPA routes and unmatched requests. Prefix matching checks the
+decoded path and its cleaned form, preventing encoded separators or dot
+segments from bypassing configured redaction. Matching suffixes become
+`[redacted]`. Parameterized router matches (templates containing `{`) use the
+whole template as `url.path`; configured prefix redaction takes precedence.
+Redacted paths have `url.path.redacted=true`. Unknown paths outside configured
+prefixes remain visible for troubleshooting; choose prefixes for your service.
+The path snapshot does not alter dispatch, cache behavior or SPA rewrites.
+
+For deployments with a known proxy boundary, optionally supply
+`TrustedProxyCIDRs`. An untrusted socket peer's forwarding headers cannot
+change `client.address`. For a trusted peer, resolution checks every
+X-Forwarded-For header line, then walks from right to left past trusted proxies
+and selects the first untrusted IP. Missing, invalid, all-trusted or oversized
+chains omit the derived client address; the socket peer and bounded header
+claims remain available. Resolution accepts at most 32 IPs and 4096 header
+bytes, rejects ports/zones in forwarded IPs, and supports IPv4 and IPv6.
+Other address headers are recorded only, never used for automatic resolution.
+Trust no range unless its proxies reliably append or overwrite forwarding
+headers. Empty trusts none; catch-all and IPv4-mapped CIDRs are rejected.
+
 ## Sampling and propagation
 
 `OTEL_TRACES_SAMPLER` defaults to `parentbased_always_on`. GHATD recognizes:

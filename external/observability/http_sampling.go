@@ -92,7 +92,10 @@ type HTTPServerOption interface {
 	applyHTTPServer(*httpServerConfiguration)
 }
 
-type httpServerConfiguration struct{ tracePolicy HTTPTracePolicy }
+type httpServerConfiguration struct {
+	tracePolicy      HTTPTracePolicy
+	requestLogPolicy HTTPRequestLogPolicy
+}
 type httpServerOptionFunc func(*httpServerConfiguration)
 
 func (option httpServerOptionFunc) applyHTTPServer(config *httpServerConfiguration) { option(config) }

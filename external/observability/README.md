@@ -99,6 +99,12 @@ on matched routes. It preserves matched templates and covers generated 404/405
 responses, redirects, and ordinary application panics. Intentional
 `http.ErrAbortHandler` retains its existing abort semantics.
 
+To retain the original request path and user-agent in existing container logs,
+opt into [request-log details](CONFIGURATION.md#http-request-log-details) with
+`WithHTTPRequestLogPolicy`. The policy snapshots values before SPA rewrites,
+preserves route templates, bounds request-derived fields, and keeps those
+additional fields out of OTLP logs, spans and metrics.
+
 For Cobra, import
 `github.com/ooaklee/ghatd/external/observability/otelcobra` and instrument an
 existing executable command during construction:

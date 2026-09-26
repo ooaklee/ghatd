@@ -84,6 +84,7 @@ func (m *Middleware) httpLogger(handler http.Handler, useIgnoreList bool) http.H
 		defer reqLogger.Sync()
 
 		request := routecontext.Begin(req.WithContext(logger.TransitWith(requestContext, reqLogger)))
+		requestLog := observability.CaptureHTTPRequestLog(request)
 
 		responseWriter, response := middlewareResponseWriter(w)
 		handler.ServeHTTP(responseWriter, request)
@@ -101,6 +102,7 @@ func (m *Middleware) httpLogger(handler http.Handler, useIgnoreList bool) http.H
 			zap.String("method", observability.HTTPMethodForTelemetry(req.Method)),
 			zap.String("route", route),
 		}
+		fields = append(fields, requestLog.Fields(route)...)
 		if observability.HTTPRequestPanicked(request) {
 			// A panic after headers were sent cannot change the HTTP status.
 			// Keep the actual status and expose the failure independently.

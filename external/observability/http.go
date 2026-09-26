@@ -172,7 +172,16 @@ func HTTPServerMiddlewareWithOptions(serviceName string, options ...HTTPServerOp
 			option.applyHTTPServer(&config)
 		}
 	}
-	return httpServerMiddlewareWithPolicy(serviceName, config.tracePolicy)
+	instrument := httpServerMiddlewareWithPolicy(serviceName, config.tracePolicy)
+	return func(next http.Handler) http.Handler {
+		wrapped := instrument(next)
+		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if _, active := request.Context().Value(serverRequestTargetKey{}).(*serverRequestState); !active {
+				request = request.WithContext(context.WithValue(request.Context(), httpRequestLogPolicyKey{}, config.requestLogPolicy))
+			}
+			wrapped.ServeHTTP(writer, request)
+		})
+	}
 }
 
 // httpServerMiddleware builds privacy-safe server instrumentation with optional
