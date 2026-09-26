@@ -1,0 +1,10 @@
+# Optional local diagnosis overlay. The private Collector overlay has no ports.
+services:
+  otel-collector:
+    ports:
+      - "127.0.0.1:${COLLECTOR_OTLP_HTTP_PORT:-14318}:4318"
+      - "127.0.0.1:${COLLECTOR_OTLP_GRPC_PORT:-14317}:4317"
+      - "127.0.0.1:${COLLECTOR_HEALTH_PORT:-13134}:13133"
+  collector-monitor:
+    ports:
+      - "127.0.0.1:${COLLECTOR_MONITOR_PORT:-9091}:9090"

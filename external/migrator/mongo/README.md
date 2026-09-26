@@ -187,6 +187,50 @@ defaults. Command options are applied in order. To override the directory on a
 complete settings value, pass `WithSettings` first and
 `WithMigrationDirectory` second.
 
+## Tracing Migrations
+
+Use `WithMongoCommandMonitor` to observe MongoDB commands from `up` and `down`.
+Construct the monitor after starting the host-owned observability runtime:
+
+```go
+package migrator
+
+import (
+    mongomigrator "github.com/ooaklee/ghatd/external/migrator/mongo"
+    "github.com/ooaklee/ghatd/external/observability"
+    "github.com/spf13/cobra"
+    "go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/v2/mongo/otelmongo"
+)
+
+func NewTracedCommand(runtime *observability.Runtime) *cobra.Command {
+    return mongomigrator.NewCommand(mongomigrator.WithMongoCommandMonitor(
+        observability.NewMongoCommandMonitor(
+            otelmongo.WithTracerProvider(runtime.SDK().TracerProvider()),
+        ),
+    ))
+}
+```
+
+The host still blank-imports its migration registrations and attaches this
+command to its root. Execute the root with `ExecuteContext(runtime.Context())`,
+or a child action context containing the command span. The shared migrator
+passes that context and its migration timeout to database operations. The
+monitor creates database spans; it does not create an enclosing command span
+or own the SDK. Shut the runtime down after command execution and database
+cleanup return. Use a distinct service name for the migration process.
+
+For a runtime owned only by a Cobra action, use the
+[command adapters](../../observability/README.md#runtime-lifecycle-and-command-adapters)
+at the executable action boundary and construct instrumented dependencies
+inside that action. Do not instrument only the `mongo-migrator` parent or nest
+two runtime owners.
+
+Prefer the billing, sitemap and vision index helpers ending in `WithContext`;
+the [registration guide](../../../docs/how-to/manage-mongodb-migrations.md#3-register-up-and-down-functions)
+shows how to keep cancellation and parent spans. Legacy helpers remain available
+but use background contexts. No migration-history schema change is required.
+The monitor option leaves `new` offline and does not change rollback behavior.
+
 ## Execution and Failure Semantics
 
 Each database action:

@@ -1,0 +1,58 @@
+# Overlay after examples/observability/compose.yaml. Bind paths are relative
+# to that first Compose file, not this overlay's directory.
+services:
+  otel-collector-volume-init:
+    image: busybox:1.37.0@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
+    user: "0:0"
+    command: ["sh", "-c", "chown 10001:10001 /queue && chmod 0700 /queue"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    restart: "no"
+    volumes:
+      - collector-queue:/queue
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.160.0
+    user: "10001:10001"
+    command: ["--config=/etc/otelcol/collector.yaml"]
+    environment:
+      COLLECTOR_BACKEND_ENDPOINT: ${COLLECTOR_BACKEND_ENDPOINT:-http://lgtm:4318}
+      COLLECTOR_AUTHORIZATION: ${COLLECTOR_AUTHORIZATION:-}
+      COLLECTOR_SERVICE_NAMESPACE: ${COLLECTOR_SERVICE_NAMESPACE:-example}
+      COLLECTOR_ENVIRONMENT: ${COLLECTOR_ENVIRONMENT:-local}
+      COLLECTOR_SERVICE_NAME: ${COLLECTOR_SERVICE_NAME:-example-collector}
+    depends_on:
+      otel-collector-volume-init:
+        condition: service_completed_successfully
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    stop_grace_period: 30s
+    restart: unless-stopped
+    volumes:
+      - ./collector/collector.yaml:/etc/otelcol/collector.yaml:ro
+      - ./collector/collector-tail.yaml:/etc/otelcol/collector-tail.yaml:ro
+      - collector-queue:/var/lib/otelcol/queue
+    tmpfs:
+      - /tmp:uid=10001,gid=10001,mode=0700
+  collector-monitor:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    volumes:
+      - ./collector/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./collector/alerts.yaml:/etc/prometheus/alerts.yaml:ro
+      - collector-monitor-data:/prometheus
+
+volumes:
+  collector-queue:
+  collector-monitor-data:

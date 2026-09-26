@@ -85,6 +85,14 @@ store.
 
 ## Constructor Flow
 
+For telemetry, start one host-owned `observability.Runtime` before this flow,
+construct instrumented clients and pass their dependencies into Starter. Wrap
+the finished router once with `otelhttp.Wrap`; Starter does not install an SDK,
+exporter settings, Mongo monitors, Redis hooks, or an HTTP telemetry boundary
+automatically. Drain the service and run its dependency cleanup before runtime
+shutdown. Follow [Add Service Observability](../../../docs/how-to/add-service-observability.md)
+for the complete sequence and existing-service checklist.
+
 The common lazy path is:
 
 1. Build third-party and app-specific dependencies in `main`.
@@ -104,6 +112,12 @@ For a fuller GHATD host application server-command walkthrough, see
 incrementally. Treat nil layers as "not wired yet" and check them before use.
 
 ## Payment Checkout and Customer Portal Capabilities
+
+After loading settings, hosts can use the
+[shared Stripe settings helper](../../paymentprovider/helpers/README.md) to
+apply frontend/environment validation with `Configure` and append the enabled
+provider. Low-level construction below remains available when the host owns
+those checks directly.
 
 `NewServices` registers each `PaymentProviders` entry in one shared provider
 registry. Billing Manager uses that same registry for webhook processing and,

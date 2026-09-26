@@ -1,0 +1,718 @@
+{
+  "uid": "ghatd-reference-observability",
+  "title": "GHATD reference service observability",
+  "description": "Portable local HTTP, business, runtime, trace and log view. Service/environment labels follow the pinned LGTM OTLP mapping. Business panels use the reference metric prefix.",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "tags": [
+    "ghatd",
+    "opentelemetry",
+    "reference"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_METRICS",
+        "label": "metrics",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "prometheus",
+          "value": "prometheus"
+        }
+      },
+      {
+        "name": "DS_TRACES",
+        "label": "traces",
+        "type": "datasource",
+        "query": "tempo",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "tempo",
+          "value": "tempo"
+        }
+      },
+      {
+        "name": "DS_LOGS",
+        "label": "logs",
+        "type": "datasource",
+        "query": "loki",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "loki",
+          "value": "loki"
+        }
+      },
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_METRICS}"
+        },
+        "definition": "label_values(go_goroutine_count, service_name)",
+        "query": {
+          "query": "label_values(go_goroutine_count, service_name)",
+          "refId": "variable-service"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "allowCustomValue": false,
+        "skipUrlSync": true,
+        "regex": "/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/",
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "example-api",
+          "value": "example-api"
+        }
+      },
+      {
+        "name": "environment",
+        "label": "Environment",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_METRICS}"
+        },
+        "definition": "label_values(go_goroutine_count{service_name=${service:doublequote}}, deployment_environment_name)",
+        "query": {
+          "query": "label_values(go_goroutine_count{service_name=${service:doublequote}}, deployment_environment_name)",
+          "refId": "variable-environment"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": false,
+        "includeAll": false,
+        "allowCustomValue": false,
+        "skipUrlSync": true,
+        "regex": "/^[a-zA-Z0-9][a-zA-Z0-9._:/-]*$/",
+        "options": [],
+        "current": {
+          "selected": true,
+          "text": "local",
+          "value": "local"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HTTP requests per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[$__rate_interval]))",
+          "legendFormat": "",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "HTTP 5xx ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "(sum(rate(http_server_request_duration_seconds_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote},http_response_status_code=~\"5..\"}[$__rate_interval])) or (0 * sum(rate(http_server_request_duration_seconds_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[$__rate_interval])))) / (sum(rate(http_server_request_duration_seconds_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[$__rate_interval])) > 0)",
+          "legendFormat": "",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ],
+      "description": "Recent 5xx fraction. Idle and missing traffic remain undefined; zero is shown only when request samples exist."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "HTTP p95 latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[$__rate_interval])))",
+          "legendFormat": "",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Business operations per second",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (operation, outcome) (rate(example_service_operation_count_total{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[$__rate_interval]))",
+          "legendFormat": "{{operation}} [{{outcome}}]",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Business p95 latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (operation, le) (rate(example_service_operation_duration_seconds_bucket{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[$__rate_interval])))",
+          "legendFormat": "{{operation}}",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Active business operations",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (operation) (example_service_operation_active{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}})",
+          "legendFormat": "{{operation}}",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Go goroutines",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 13,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(go_goroutine_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}})",
+          "legendFormat": "",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ],
+      "description": "Sum across selected instances. Runtime pressure, not a direct request count."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Runtime metrics received in 5m",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "max(present_over_time(go_goroutine_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}[5m])) or vector(0)",
+          "legendFormat": "",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ],
+      "description": "1 means runtime metrics arrived for at least one selected instance in five minutes; 0 means absent. This does not prove every replica or signal is healthy."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Latest runtime metric age",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_METRICS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "noValue": "No data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_METRICS}"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(timestamp(go_goroutine_count{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}))",
+          "legendFormat": "",
+          "range": true,
+          "instant": false,
+          "interval": "5s",
+          "exemplar": true
+        }
+      ],
+      "description": "Age of the newest runtime metric sample for any selected instance. Missing telemetry remains empty."
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Recent traces",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${DS_TRACES}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "${DS_TRACES}"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = ${service:doublequote} && resource.deployment.environment.name = ${environment:doublequote} }",
+          "limit": 50,
+          "spss": 3,
+          "tableType": "traces"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "logs",
+      "title": "Correlated application logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "${DS_LOGS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 10
+      },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "enableLogDetails": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOGS}"
+          },
+          "expr": "{service_name=${service:doublequote},deployment_environment_name=${environment:doublequote}}",
+          "queryType": "range",
+          "editorMode": "code",
+          "direction": "backward"
+        }
+      ]
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

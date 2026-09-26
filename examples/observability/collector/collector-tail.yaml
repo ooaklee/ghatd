@@ -1,0 +1,27 @@
+# Optional merge overlay, loaded AFTER collector.yaml with a second --config.
+# One deciding Collector only; every span of a trace must reach that instance.
+processors:
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 5000
+    expected_new_traces_per_sec: 100
+    decision_cache:
+      sampled_cache_size: 10000
+      non_sampled_cache_size: 10000
+    policies:
+      - name: errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: slow
+        type: latency
+        latency:
+          threshold_ms: 2000
+      - name: baseline
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+service:
+  pipelines:
+    traces:
+      processors: [memory_limiter, resource/deployment, tail_sampling, batch]

@@ -11,6 +11,7 @@ import (
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	paymentproviderhelpers "github.com/ooaklee/ghatd/external/paymentprovider/helpers"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/reminder"
@@ -31,6 +32,7 @@ func AccessManager() []reply.ErrorManifest {
 		group.GroupErrorMap,
 		billingmanager.BillingManagerErrorMap,
 		paymentprovider.PaymentProviderErrorMap,
+		paymentproviderhelpers.PaymentProviderHelperErrorMap,
 		billing.BillingErrorMap,
 	})
 }
@@ -65,6 +67,7 @@ func BillingManager() []reply.ErrorManifest {
 	return cloneBundle([]reply.ErrorManifest{
 		pricer.PricerErrorMap,
 		paymentprovider.PaymentProviderErrorMap,
+		paymentproviderhelpers.PaymentProviderHelperErrorMap,
 		billing.BillingErrorMap,
 		toolbox.ToolboxErrorMap,
 		user.UserErrorMap,
@@ -86,6 +89,7 @@ func AuthMiddleware() []reply.ErrorManifest {
 		post.PostErrorMap,
 		billingmanager.BillingManagerErrorMap,
 		paymentprovider.PaymentProviderErrorMap,
+		paymentproviderhelpers.PaymentProviderHelperErrorMap,
 		billing.BillingErrorMap,
 	})
 }

@@ -1,0 +1,20 @@
+name: ghatd-observability
+
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.30.0
+    environment:
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /otel-lgtm/reference-dashboards/service.json
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+      - "127.0.0.1:${OTLP_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${OTLP_HTTP_PORT:-4318}:4318"
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./grafana/provisioning/dashboard.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/reference.yaml:ro
+      - ./grafana/dashboards:/otel-lgtm/reference-dashboards:ro
+    healthcheck:
+      test: ["CMD", "cat", "/tmp/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 30

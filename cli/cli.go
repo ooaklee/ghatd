@@ -39,6 +39,7 @@ https://demo.ghatd.com to see the framework in action.`,
 	rootCmd.AddCommand(cmd.NewCommandCreateDetail())
 	rootCmd.AddCommand(cmd.NewCommandTemplate())
 	rootCmd.AddCommand(cmd.NewCommandVersion())
+	rootCmd.AddCommand(cmd.NewCommandTelemetry())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

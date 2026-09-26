@@ -1,12 +1,15 @@
 package reader
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ghodss/yaml"
+	"github.com/ooaklee/ghatd/external/observability"
 )
 
 // UnmarshalReader is used to read manifests from stdin
@@ -20,11 +23,11 @@ func UnmarshalReader(reader io.Reader, obj interface{}) error {
 
 // unmarshalObject tries to convert a YAML or JSON byte array into the provided type.
 func unmarshalObject(data []byte, obj interface{}) error {
-	// first, try unmarshaling as JSON
+	// First, try unmarshalling as JSON.
 	// Based on technique from Kubectl, which supports both YAML and JSON:
 	//   https://mlafeldt.github.io/blog/teaching-go-programs-to-love-json-and-yaml/
 	//   http://ghodss.com/2014/the-right-way-to-handle-yaml-in-golang/
-	// Short version: JSON unmarshaling won't zero out null fields; YAML unmarshaling will.
+	// Short version: JSON unmarshalling will not zero out null fields; YAML unmarshalling will.
 	// This may have unintended effects or hard-to-catch issues when populating our application object.
 	jsonData, err := yaml.YAMLToJSON(data)
 	if err != nil {
@@ -59,6 +62,7 @@ func UnmarshalLocalFile(path string, obj interface{}) error {
 	return err
 }
 
+// Unmarshal converts YAML or JSON bytes into the provided value.
 func Unmarshal(data []byte, obj interface{}) error {
 	return unmarshalObject(data, obj)
 }
@@ -66,7 +70,12 @@ func Unmarshal(data []byte, obj interface{}) error {
 // UnmarshalRemoteFile retrieves JSON or YAML through a GET request.
 // The caller is responsible for checking error return values.
 func UnmarshalRemoteFile(url string, obj interface{}) error {
-	data, err := ReadRemoteFile(url)
+	return UnmarshalRemoteFileContext(context.Background(), nil, url, obj)
+}
+
+// UnmarshalRemoteFileContext is the context-aware form of UnmarshalRemoteFile.
+func UnmarshalRemoteFileContext(ctx context.Context, client *http.Client, url string, obj interface{}) error {
+	data, err := ReadRemoteFileContext(ctx, client, url)
 	if err == nil {
 		err = unmarshalObject(data, obj)
 	}
@@ -76,8 +85,21 @@ func UnmarshalRemoteFile(url string, obj interface{}) error {
 // ReadRemoteFile issues a GET request to retrieve the contents of the specified URL as a byte array.
 // The caller is responsible for checking error return values.
 func ReadRemoteFile(url string) ([]byte, error) {
+	return ReadRemoteFileContext(context.Background(), nil, url)
+}
+
+// ReadRemoteFileContext issues a traced, context-aware GET request. Passing a
+// nil client uses GHATD's privacy-safe OpenTelemetry transport.
+func ReadRemoteFileContext(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	var data []byte
-	resp, err := http.Get(url)
+	if client == nil {
+		client = observability.NewHTTPClient(http.DefaultTransport, 30*time.Second)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(request)
 	if err == nil {
 		defer func() {
 			_ = resp.Body.Close()

@@ -11,8 +11,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// InitSubscriptionIndexes initializes indexes for the billing subscriptions collection
+// InitBillingSubscriptionIndexesUp initialises indexes for the billing subscriptions collection.
 func InitBillingSubscriptionIndexesUp(db *mongo.Database) error { //Up
+	return InitBillingSubscriptionIndexesUpWithContext(context.Background(), db)
+}
+
+// InitBillingSubscriptionIndexesUpWithContext initialises billing subscription
+// indexes using ctx for MongoDB operations.
+func InitBillingSubscriptionIndexesUpWithContext(ctx context.Context, db *mongo.Database) error { //Up
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	log.SetFlags(0)
 	const mongoCollectionName = billing.BillingSubscriptionsCollection
 
@@ -50,7 +59,7 @@ func InitBillingSubscriptionIndexesUp(db *mongo.Database) error { //Up
 
 	// Create all indexes
 	_, err := db.Collection(mongoCollectionName).Indexes().CreateMany(
-		context.Background(),
+		ctx,
 		[]mongo.IndexModel{
 			userIdIndexModel,
 			emailIndexModel,
@@ -70,6 +79,15 @@ func InitBillingSubscriptionIndexesUp(db *mongo.Database) error { //Up
 
 // InitBillingSubscriptionIndexesDown rolls back the billing subscriptions indexes
 func InitBillingSubscriptionIndexesDown(db *mongo.Database) error { //Down
+	return InitBillingSubscriptionIndexesDownWithContext(context.Background(), db)
+}
+
+// InitBillingSubscriptionIndexesDownWithContext rolls back billing subscription
+// indexes using ctx for MongoDB operations.
+func InitBillingSubscriptionIndexesDownWithContext(ctx context.Context, db *mongo.Database) error { //Down
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	log.SetFlags(0)
 	const mongoCollectionName = billing.BillingSubscriptionsCollection
 
@@ -84,7 +102,7 @@ func InitBillingSubscriptionIndexesDown(db *mongo.Database) error { //Down
 	}
 
 	for _, indexName := range indexNames {
-		err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(mongoCollectionName).Indexes().DropOne(ctx, indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err

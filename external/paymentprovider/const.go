@@ -1,6 +1,9 @@
 package paymentprovider
 
 const (
+	// StripeDefaultAPIBaseURL is the trusted Stripe API origin used by outbound requests.
+	StripeDefaultAPIBaseURL = "https://api.stripe.com"
+
 	// StripeDefaultAPIVersion is the Stripe API contract used by outbound
 	// requests. It includes the embedded_page Checkout UI mode used by Stripe.js 9.
 	StripeDefaultAPIVersion = "2026-03-25.dahlia"

@@ -32,6 +32,9 @@ type NewRedisRuntimeRequest struct {
 // NewRedisRuntime creates a Redis client, attaches hooks, optionally pings it,
 // and builds the GHATD ephemeral store.
 func NewRedisRuntime(ctx context.Context, request *NewRedisRuntimeRequest) (*RedisRuntime, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "new-redis-runtime")
 	if request == nil {
 		logger.Warn("redis-runtime-nil-request")
@@ -51,7 +54,7 @@ func NewRedisRuntime(ctx context.Context, request *NewRedisRuntimeRequest) (*Red
 	}
 
 	if !request.SkipPing {
-		if _, err := redisClient.Ping().Result(); err != nil {
+		if _, err := redisClient.WithContext(ctx).Ping().Result(); err != nil {
 			_ = redisClient.Close()
 			logger.Error("redis-runtime-ping-failed", zap.String("addr", request.Options.Addr), zap.Error(err))
 			return nil, fmt.Errorf("ephemeral/redis-runtime-ping: %w", err)

@@ -13,6 +13,15 @@ import (
 
 // InitBillingEventsIndexesUp creates the billing-event lookup and idempotency indexes.
 func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
+	return InitBillingEventsIndexesUpWithContext(context.Background(), db)
+}
+
+// InitBillingEventsIndexesUpWithContext creates the billing-event lookup and
+// idempotency indexes using ctx for MongoDB operations.
+func InitBillingEventsIndexesUpWithContext(ctx context.Context, db *mongo.Database) error { //Up
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	const mongoCollectionName = billing.BillingEventsCollection
 
@@ -56,8 +65,8 @@ func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 	}
 
 	// Create all indexes
-	_, err := db.Collection("billing_events").Indexes().CreateMany(
-		context.Background(),
+	_, err := db.Collection(mongoCollectionName).Indexes().CreateMany(
+		ctx,
 		[]mongo.IndexModel{
 			userIdIndexModel,
 			emailIndexModel,
@@ -78,6 +87,15 @@ func InitBillingEventsIndexesUp(db *mongo.Database) error { //Up
 
 // InitBillingEventsIndexesDown removes the indexes created by InitBillingEventsIndexesUp.
 func InitBillingEventsIndexesDown(db *mongo.Database) error { //Down
+	return InitBillingEventsIndexesDownWithContext(context.Background(), db)
+}
+
+// InitBillingEventsIndexesDownWithContext removes the billing-event indexes
+// using ctx for MongoDB operations.
+func InitBillingEventsIndexesDownWithContext(ctx context.Context, db *mongo.Database) error { //Down
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	log.SetFlags(0)
 	const mongoCollectionName = billing.BillingEventsCollection
 
@@ -93,7 +111,7 @@ func InitBillingEventsIndexesDown(db *mongo.Database) error { //Down
 	}
 
 	for _, indexName := range indexNames {
-		err := db.Collection(mongoCollectionName).Indexes().DropOne(context.TODO(), indexName)
+		err := db.Collection(mongoCollectionName).Indexes().DropOne(ctx, indexName)
 		if err != nil {
 			log.Default().Println(toolbox.OutputBasicLogString("error", "failed-rolling-back-index: "+indexName))
 			return err

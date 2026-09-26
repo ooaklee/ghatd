@@ -14,6 +14,7 @@ import (
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/notifier"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	paymentproviderhelpers "github.com/ooaklee/ghatd/external/paymentprovider/helpers"
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/reminder"
@@ -23,6 +24,7 @@ import (
 	"github.com/ooaklee/reply/v2"
 )
 
+// TestBundles verifies each bundle matches its application wiring.
 func TestBundles(t *testing.T) {
 	tests := []struct {
 		name string
@@ -40,6 +42,7 @@ func TestBundles(t *testing.T) {
 				group.GroupErrorMap,
 				billingmanager.BillingManagerErrorMap,
 				paymentprovider.PaymentProviderErrorMap,
+				paymentproviderhelpers.PaymentProviderHelperErrorMap,
 				billing.BillingErrorMap,
 			},
 		},
@@ -71,6 +74,7 @@ func TestBundles(t *testing.T) {
 			want: []reply.ErrorManifest{
 				pricer.PricerErrorMap,
 				paymentprovider.PaymentProviderErrorMap,
+				paymentproviderhelpers.PaymentProviderHelperErrorMap,
 				billing.BillingErrorMap,
 				toolbox.ToolboxErrorMap,
 				user.UserErrorMap,
@@ -91,6 +95,7 @@ func TestBundles(t *testing.T) {
 				post.PostErrorMap,
 				billingmanager.BillingManagerErrorMap,
 				paymentprovider.PaymentProviderErrorMap,
+				paymentproviderhelpers.PaymentProviderHelperErrorMap,
 				billing.BillingErrorMap,
 			},
 		},
@@ -106,6 +111,7 @@ func TestBundles(t *testing.T) {
 	}
 }
 
+// TestBundlesReturnCopies verifies callers cannot mutate future bundle results.
 func TestBundlesReturnCopies(t *testing.T) {
 	tests := []struct {
 		name string

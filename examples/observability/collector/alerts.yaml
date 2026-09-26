@@ -1,0 +1,127 @@
+# Raw Collector 0.160.0 selfmetrics: without_type_suffix/without_units=true.
+# Scrape each replica independently with job="otel-collector" and an instance.
+groups:
+  - name: ghatd-collector
+    rules:
+      - alert: CollectorQueuePressure
+        expr: |
+          (otelcol_exporter_queue_size{job="otel-collector"}
+            / otelcol_exporter_queue_capacity{job="otel-collector"}) > 0.8
+          and on(job, instance, exporter, data_type)
+            otelcol_exporter_queue_capacity{job="otel-collector"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector queue exceeds 80% of its byte capacity
+      - alert: CollectorQueueTelemetryMissing
+        expr: |
+          up{job="otel-collector"} == 1
+          unless on(job, instance)
+            (count by(job, instance) (
+              otelcol_exporter_queue_capacity{job="otel-collector", exporter="otlp_http/backend", data_type=~"traces|metrics|logs"} > 0
+            ) == 3)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector is reachable but a configured signal queue is missing
+      - alert: CollectorExporterEnqueueFailures
+        expr: |
+          sum by(job, instance, exporter) (
+            increase(otelcol_exporter_enqueue_failed_spans{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, exporter) (
+            increase(otelcol_exporter_enqueue_failed_metric_points{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, exporter) (
+            increase(otelcol_exporter_enqueue_failed_log_records{job="otel-collector"}[5m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector could not add telemetry to its exporter queue
+      - alert: CollectorExporterSendFailures
+        expr: |
+          sum by(job, instance, exporter) (
+            increase(otelcol_exporter_send_failed_spans{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, exporter) (
+            increase(otelcol_exporter_send_failed_metric_points{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, exporter) (
+            increase(otelcol_exporter_send_failed_log_records{job="otel-collector"}[5m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector export attempts failed; inspect retry and backend state
+      - alert: CollectorReceiverRefused
+        expr: |
+          sum by(job, instance, receiver) (
+            increase(otelcol_receiver_refused_spans{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, receiver) (
+            increase(otelcol_receiver_refused_metric_points{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, receiver) (
+            increase(otelcol_receiver_refused_log_records{job="otel-collector"}[5m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector refused incoming telemetry
+      - alert: CollectorReceiverInternalFailures
+        expr: |
+          sum by(job, instance, receiver) (
+            increase(otelcol_receiver_failed_spans{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, receiver) (
+            increase(otelcol_receiver_failed_metric_points{job="otel-collector"}[5m])
+          ) > 0
+          or sum by(job, instance, receiver) (
+            increase(otelcol_receiver_failed_log_records{job="otel-collector"}[5m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector receiver reported internal processing failures
+      - alert: CollectorMemoryHigh
+        expr: otelcol_process_memory_rss{job="otel-collector"} > 469762048
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector resident memory exceeds 448 MiB of the 512 MiB example budget
+      - alert: CollectorTailSamplingPressure
+        expr: |
+          sum by(job, instance) (
+            increase(otelcol_processor_tail_sampling_sampling_trace_dropped_too_early{job="otel-collector"}[5m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector discarded traces before the tail decision window ended
+      - alert: CollectorScrapeUnavailable
+        expr: up{job="otel-collector"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Independent Collector scrape is failing
+      - alert: CollectorTargetsMissing
+        expr: absent(up{job="otel-collector"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Independent monitor has no Collector scrape target
+      - alert: CollectorRuntimeTelemetryMissing
+        expr: |
+          up{job="otel-collector"} == 1
+          unless on(job, instance) otelcol_process_uptime{job="otel-collector"}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Collector is reachable but its runtime selfmetrics are missing
