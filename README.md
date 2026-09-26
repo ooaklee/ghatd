@@ -58,7 +58,7 @@ A complete billing solution split into three composable packages for maximum fle
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging
 - **[Content Manager](./external/contentmanager/README.md)** - HTTP orchestration for CMS-style content
 - **[Group](./external/group/README.md)** - User groups, memberships, and hierarchical organisations
-- **[Logger](./external/logger/)** - Structured logging with middleware support
+- **[Logger](./external/logger/)** - Structured logging with middleware support; request-completion logs include a `duration_ms` field measuring handler execution in fractional milliseconds
 - **[MongoDB Migrator](./external/migrator/mongo/README.md)** - Shared migration command with host-owned registrations and templates
 - **[Notifier](./external/notifier/README.md)** - Push notification registration, preferences, and delivery
 - **[Observability](./external/observability/README.md)** - Provider-neutral OpenTelemetry traces, metrics, and logs

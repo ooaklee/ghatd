@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/felixge/httpsnoop"
 	"github.com/google/uuid"
@@ -87,7 +88,9 @@ func (m *Middleware) httpLogger(handler http.Handler, useIgnoreList bool) http.H
 		requestLog := observability.CaptureHTTPRequestLog(request)
 
 		responseWriter, response := middlewareResponseWriter(w)
+		start := time.Now()
 		handler.ServeHTTP(responseWriter, request)
+		elapsed := time.Since(start)
 
 		route := routeTemplate(request)
 		if useIgnoreList && m.shouldIgnore(req, route) {
@@ -101,6 +104,7 @@ func (m *Middleware) httpLogger(handler http.Handler, useIgnoreList bool) http.H
 			zap.Int("status", response.statusCode),
 			zap.String("method", observability.HTTPMethodForTelemetry(req.Method)),
 			zap.String("route", route),
+			zap.Float64("duration_ms", float64(elapsed)/float64(time.Millisecond)),
 		}
 		fields = append(fields, requestLog.Fields(route)...)
 		if observability.HTTPRequestPanicked(request) {

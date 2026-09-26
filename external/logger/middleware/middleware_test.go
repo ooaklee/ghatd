@@ -313,6 +313,50 @@ func TestHTTPLoggerDelegatesStreamingCapabilities(t *testing.T) {
 	assert.EqualValues(t, http.StatusOK, recorded.All()[0].ContextMap()["status"])
 }
 
+// TestHTTPLoggerEmitsHandlerDurationMs verifies the completion log reports
+// monotonic handler execution time as fractional milliseconds, measured around
+// the handler rather than log formatting.
+func TestHTTPLoggerEmitsHandlerDurationMs(t *testing.T) {
+	const handlerDelay = 40 * time.Millisecond
+
+	core, recorded := observer.New(zapcore.InfoLevel)
+	handler := middleware.NewLogger(zap.New(core), nil).HTTPLogger(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(handlerDelay)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	start := time.Now()
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/work", nil))
+	totalDurationMS := float64(time.Since(start)) / float64(time.Millisecond)
+
+	entries := recorded.All()
+	require.Len(t, entries, 1)
+	fields := entries[0].ContextMap()
+	duration, ok := fields["duration_ms"].(float64)
+	require.True(t, ok, "duration_ms must be a numeric float64 field, got %T", fields["duration_ms"])
+	assert.GreaterOrEqual(t, duration, float64(handlerDelay)/float64(time.Millisecond), "duration must cover handler work")
+	assert.LessOrEqual(t, duration, totalDurationMS, "handler milliseconds must fit within total middleware milliseconds")
+}
+
+// TestHTTPLoggerEmitsDurationWhenRequestDetailsDisabled confirms duration_ms is
+// present on completion logs even without request-details fields, and that the
+// fast-path duration stays positive.
+func TestHTTPLoggerEmitsDurationWhenRequestDetailsDisabled(t *testing.T) {
+	core, recorded := observer.New(zapcore.InfoLevel)
+	handler := middleware.NewLogger(zap.New(core), nil).HTTPLogger(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/fast", nil))
+
+	require.Len(t, recorded.All(), 1)
+	fields := recorded.All()[0].ContextMap()
+	duration, ok := fields["duration_ms"].(float64)
+	require.True(t, ok, "duration_ms must be a numeric float64 field, got %T", fields["duration_ms"])
+	assert.Greater(t, duration, 0.0, "duration must be positive even for fast handlers")
+	assert.NotContains(t, fields, "url.path")
+	assert.NotContains(t, fields, "user_agent.original")
+}
+
 func TestHTTPLoggerReadsRouteAfterOuterRouterDispatch(t *testing.T) {
 	core, recorded := observer.New(zap.InfoLevel)
 	router := ghatdrouter.NewRouter(nil, nil).GetRouter()
