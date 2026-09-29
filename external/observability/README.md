@@ -87,6 +87,19 @@ The lower-level `Start`/`SDK.Shutdown` API remains available when an application
 already owns its lifecycle. That API uses the shutdown context supplied by its
 caller; the runtime adds the fresh timeout and logger/context setup.
 
+`ShutdownResources(ctx, ShutdownConfig{...})` centralizes optional admission
+stop/drain, work cancellation, dependency cleanup, and runtime shutdown. Drain
+and cleanup get independent time budgets. Pass `Runtime.Shutdown` as the final
+callback so telemetry also gets its own fresh budget. Failure logs contain fixed
+messages only. Hosts retain dependency ownership, cancellation-aware callbacks,
+and the original logger's final flush. See the [adoption guide](../../docs/how-to/add-service-observability.md#2-start-one-runtime-and-keep-ownership-explicit).
+
+For finite infrastructure measurements, use [otelcache](otelcache/README.md)
+and [otelqueue](otelqueue/README.md). Both bind instruments when constructed,
+accept existing metric names, and keep dynamic keys, payloads and error text out
+of dimensions. The queue runtime supplies detached job contexts and the shared
+shutdown ordering while the host retains broker and settlement decisions.
+
 For an HTTP service, the child package
 `github.com/ooaklee/ghatd/external/observability/otelhttp` composes the entire
 dispatch in the required order:
@@ -514,3 +527,23 @@ runtime registration or automatic Redis command discovery.
 Use only static operational names in the registration list. Request values,
 keys, identifiers, and query text do not belong there. Command arguments stay
 excluded for both recognized and unrecognized operations.
+
+## Host HTTP policy and browser intake composition
+
+`NewHTTPServerOptions` accepts `HTTPServerOptionsConfig` with explicit flags and
+host-owned paths. Detailed access logging enables bounded path, user-agent and
+address evidence only in the original logger sink; query strings stay omitted.
+Proxy CSV values are trimmed, blank trusts nobody, and malformed nonblank lists
+fail without echoing input. Disabled policies ignore unused configuration.
+Suppression keeps metrics/logs and requires `HTTPTraceSampler` as configured by
+`Start`. For custom field selections or byte limits, use the lower-level
+`NewHTTPRequestLogPolicy` and `NewHTTPTracePolicy` constructors directly.
+
+`MountBrowserTraceIntake(next, intake, path)` returns a handler and error. It
+mounts a host-supplied canonical literal path without cleaning or redirecting
+encoded aliases, observes its route, and passes other paths unchanged to `next`.
+Nil intake, including a nil `*BrowserTraceIntake`, returns `next` unchanged;
+callers must supply a nonnil application handler.
+It neither starts an SDK nor owns shutdown. Place it before application
+middleware and inside `otelhttp.WrapWithOptions`; keep intake configuration and
+shutdown with the host. See the [service guide](../../docs/how-to/add-service-observability.md).

@@ -189,47 +189,108 @@ complete settings value, pass `WithSettings` first and
 
 ## Tracing Migrations
 
-Use `WithMongoCommandMonitor` to observe MongoDB commands from `up` and `down`.
-Construct the monitor after starting the host-owned observability runtime:
+Opt in at command construction; GHATD owns the telemetry lifetime of `up` and
+`down`, using the existing `otelcobra` adapter internally:
 
 ```go
-package migrator
-
-import (
-    mongomigrator "github.com/ooaklee/ghatd/external/migrator/mongo"
-    "github.com/ooaklee/ghatd/external/observability"
-    "github.com/spf13/cobra"
-    "go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/v2/mongo/otelmongo"
-)
-
-func NewTracedCommand(runtime *observability.Runtime) *cobra.Command {
-    return mongomigrator.NewCommand(mongomigrator.WithMongoCommandMonitor(
-        observability.NewMongoCommandMonitor(
-            otelmongo.WithTracerProvider(runtime.SDK().TracerProvider()),
+func NewCommand() *cobra.Command {
+    return mongomigrator.NewCommand(
+        mongomigrator.WithMigrationDirectory("./migrations"),
+        mongomigrator.WithTelemetryFromEnvironment(
+            "example", "github.com/example/host/cmd/migrator",
         ),
-    ))
+    )
 }
 ```
 
-The host still blank-imports its migration registrations and attaches this
-command to its root. Execute the root with `ExecuteContext(runtime.Context())`,
-or a child action context containing the command span. The shared migrator
-passes that context and its migration timeout to database operations. The
-monitor creates database spans; it does not create an enclosing command span
-or own the SDK. Shut the runtime down after command execution and database
-cleanup return. Use a distinct service name for the migration process.
+Keep the host migration blank import shown in Quick Start. The helper loads
+these settings only when a database action runs:
 
-For a runtime owned only by a Cobra action, use the
-[command adapters](../../observability/README.md#runtime-lifecycle-and-command-adapters)
-at the executable action boundary and construct instrumented dependencies
-inside that action. Do not instrument only the `mongo-migrator` parent or nest
-two runtime owners.
+| Variable | Default | Use |
+|---|---|---|
+| `COMPONENT` | First argument to the option | Service name is `<component>-mongo-migrator`; also labels local logs. |
+| `ENVIRONMENT` | `local` | Resource environment and logger mode. |
+| `GIT_COMMIT` | `local` | Service version. |
+| `LOG_LEVEL` | `info` | Local logger level. |
+| `GRACEFUL_SERVER_TIMEOUT` | `15` | Telemetry shutdown timeout in seconds; zero selects the runtime's 15-second default. Negative or overflowing values fail before database work. |
 
-Prefer the billing, sitemap and vision index helpers ending in `WithContext`;
-the [registration guide](../../../docs/how-to/manage-mongodb-migrations.md#3-register-up-and-down-functions)
-shows how to keep cancellation and parent spans. Legacy helpers remain available
-but use background contexts. No migration-history schema change is required.
-The monitor option leaves `new` offline and does not change rollback behavior.
+The supplied scope stays host-owned. An empty scope uses `otelcobra`'s default.
+The component must be nonblank. The explicit service name takes precedence
+over `OTEL_SERVICE_NAME`. Standard exporter, sampling and resource settings
+remain available through the [observability configuration](../../observability/CONFIGURATION.md).
+Choose all three exporters explicitly; for trace-only operation set
+`OTEL_TRACES_EXPORTER=otlp`, `OTEL_METRICS_EXPORTER=none` and
+`OTEL_LOGS_EXPORTER=none` with a reachable trace endpoint. Local logs remain.
+
+Each invocation starts a fresh runtime, creates a command span named
+`mongo-migrator.up` or `mongo-migrator.down`, and constructs a MongoDB monitor
+bound to that invocation's trace and meter providers. The monitor suppresses
+command documents and raw database error descriptions. Passing the command
+context through migration functions keeps their database spans under the
+command span.
+
+Cleanup runs in this order: database disconnect, command completion and span
+end, telemetry shutdown, then logger sync. Disconnect gets its own fresh
+`MONGO_DISCONNECT_TIMEOUT` while preserving context values even after
+cancellation. Telemetry shutdown also gets a fresh deadline. A telemetry flush
+failure produces a fixed diagnostic without changing the migration result,
+since the migration may already have committed. Database action and disconnect
+errors retain their existing joined-error behavior; the host must handle their
+returned text appropriately. Shared telemetry sanitization does not sanitize
+arbitrary host logging of returned errors.
+
+Help, Cobra argument validation, pre/post hooks and `new` remain outside the
+telemetry lifetime. Empty migration registries still get a command span but
+never connect to MongoDB. Plain `NewCommand()` remains uninstrumented. Do not
+wrap this option in another owning runtime or run multiple owning runtimes
+concurrently in one process; providers are process-global.
+
+Execute the host root with a signal-aware context so interruptions reach the
+migration and deferred cleanup:
+
+```go
+ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+defer stop()
+err := rootCmd.ExecuteContext(ctx)
+// Choose the process exit code after ExecuteContext returns and cleanup finishes.
+```
+
+### Custom host configuration
+
+For another configuration system, use `WithTelemetry` and return an
+`otelcobra.Config` lazily. GHATD sets the stable command name; the host supplies
+scope, runtime identity, logger and optional error classification. The host
+owns the supplied logger's lifetime. The last telemetry option wins; a nil
+resolver fails when `up` or `down` executes.
+
+```go
+mongomigrator.WithTelemetry(func(command *cobra.Command) (otelcobra.Config, error) {
+    return otelcobra.Config{
+        Scope: "github.com/example/host/cmd/migrator",
+        Runtime: observability.RuntimeConfig{
+            Telemetry: observability.Config{ServiceName: "example-mongo-migrator"},
+            Logger: appLogger,
+            ShutdownTimeout: 15 * time.Second,
+        },
+    }, nil
+})
+```
+
+If the host already owns a runtime, omit these telemetry options and supply
+`WithMongoCommandMonitor(observability.NewMongoCommandMonitor(...))` after
+starting it, with its explicit trace and meter providers. Execute with that
+runtime's context and shut it down after command execution returns. The monitor
+alone creates database spans and does not own an enclosing command span or SDK.
+
+An explicit `WithMongoCommandMonitor` always overrides the automatic monitor,
+regardless of option order. Explicit nil disables the monitor while retaining
+command telemetry. Custom monitors and their provider lifetimes are caller-owned.
+
+Prefer index helpers ending in `WithContext`; the
+[registration guide](../../../docs/how-to/manage-mongodb-migrations.md#3-register-up-and-down-functions)
+shows how to keep cancellation and parent spans. Legacy helpers may use
+background contexts. No migration-history schema change or migration rerun is
+required. Telemetry options do not change rollback behavior.
 
 ## Execution and Failure Semantics
 

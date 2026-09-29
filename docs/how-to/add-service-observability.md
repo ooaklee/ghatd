@@ -10,7 +10,9 @@ Start with the [runnable reference service](../../examples/observability/README.
 if you want to see a complete pipeline first. Use the
 [package guide](../../external/observability/README.md) for API details and the
 [configuration reference](../../external/observability/CONFIGURATION.md) for
-supported environment settings.
+supported environment settings. The [deployment environment guide](configure-observability-environment.md)
+shows how operators supply those settings through a shell, service manager,
+Compose or Kubernetes; deployment remains operator-owned.
 
 ## 1. Choose the signals and destinations
 
@@ -100,13 +102,44 @@ close database connections. Its shutdown budget starts when shutdown is called,
 even if the service context is already cancelled. The lower-level
 `SDK.Shutdown(ctx)` instead uses the caller's context directly.
 
-The [reference server lifecycle](../../examples/observability/main.go) shows
-bounded draining and forced close when draining fails. If request handlers need
-`RuntimeFromContext`, set `http.Server.BaseContext` to a context derived from
-`runtime.Context()`. The reference uses `context.WithoutCancel` there so a
-shutdown signal does not immediately cancel active requests. Setting the
-[HTTP server helper's](../../external/http/server/README.md) `Context` alone
-does not set request `BaseContext`.
+The [HTTP server helper](../../external/http/server/README.md) handles bounded
+draining, request-context values and forced close on failure directly. Pass
+`runtime.Context()` as `StartServerWithRequest.Context`; no copied lifecycle
+adapter is needed. A manually configured server can follow the
+[reference lifecycle](../../examples/observability/main.go) instead.
+
+For dependency cleanup after the server returns, defer the shared coordinator:
+
+```go
+defer observability.ShutdownResources(runtime.Context(), observability.ShutdownConfig{
+    Timeout:  15 * time.Second,
+    Cleanup:  cleanupGroup.Run,
+    Shutdown: runtime.Shutdown,
+    Logger:   runtime.Logger(),
+})
+```
+
+Register dependency callbacks on the host's cleanup group. The coordinator
+gives cleanup a fresh deadline and always attempts the final telemetry flush,
+even if cleanup panics. It emits fixed failure messages without arbitrary
+dependency error bodies. Callbacks must honor their contexts; the helper cannot
+forcibly interrupt them. The logger's own final `Sync` remains host-owned.
+
+Hosts that expose flags for access-log details and HTTP trace suppression can
+use `observability.NewHTTPServerOptions(HTTPServerOptionsConfig{...})` to validate
+and assemble them before `otelhttp.WrapWithOptions`. Pass redaction prefixes,
+suppressed paths/prefixes, proxy ranges and enable flags explicitly. The zero
+configuration enables neither policy and supplies no application path defaults.
+The underlying policy constructors remain available for finer field selection.
+
+Mount an optional browser intake with
+`observability.MountBrowserTraceIntake(applicationHandler, intakeHandler, intakePath)`
+before wrapping the complete handler. Handle its construction error. A nil
+intake handler preserves the application handler; enabled paths must be
+canonical literals. Keep the returned handler inside telemetry/recovery and
+outside application auth, caching and response transforms. The host still owns
+`BrowserTraceIntakeConfig`, route/API vocabularies and intake shutdown. A nil
+`*BrowserTraceIntake` also leaves the application handler unchanged.
 
 ## 3. Wrap the complete HTTP handler once
 
@@ -145,7 +178,10 @@ Install instrumentation when constructing clients, before their first use:
 | Outbound HTTP | Use `observability.NewHTTPClient(baseTransport, timeout)` and create requests with the caller's context. Keep the host's transport and timeout policy. |
 | Business operations | Create an `Operations` instance and pass the context returned by `Start` into downstream work; call `End` with the action's result. Use fixed operation names. |
 | Cobra commands | Use `otelcobra.Instrument` on executable leaf actions, or `otelcobra.Run` inside an action after loading settings. The adapter owns that action's runtime; do not nest it inside another owning runtime. |
-| MongoDB migrations | Attach the monitor with `WithMongoCommandMonitor` and register context-aware migration helpers; see [migration tracing](../../external/migrator/mongo/README.md#tracing-migrations). |
+| MongoDB migrations | Opt into `WithTelemetryFromEnvironment(component, scope)` for action-scoped runtime and monitor ownership, or `WithTelemetry` for custom settings. Keep registrations and context-aware migration helpers in the host; see [migration tracing](../../external/migrator/mongo/README.md#tracing-migrations). |
+| SparkPost | Pass a private HTTP client to `emailprovider.NewSparkPostClient` using its `HTTPClient` field or request's `WithHTTPClient` method. `NewSparkPostEmailProvider` prefers the SDK's context-aware send method. See [client policy and compatibility](../../external/emailprovider/README.md). |
+| Cache decisions | Use [`otelcache`](../../external/observability/otelcache/README.md) with the runtime's meter provider and your existing metric name, then attach its HTTP cache observer. |
+| Consumer jobs | Use [`otelqueue`](../../external/observability/otelqueue/README.md) with a finite operation vocabulary and host-owned acknowledgement/retry logic. |
 
 The [database wiring example](../../examples/observability/database_wiring.go)
 shows the Mongo and Redis provider options. It compiles without opening database
@@ -188,7 +224,12 @@ separate, explicit option: it needs all contributing spans and cannot recover
 spans already dropped by head sampling or HTTP suppression. Browser traces also
 require separate client instrumentation and the opt-in
 [browser intake](../../external/observability/BROWSER.md); the server wrapper
-does not instrument an embedded SPA's browser activity.
+does not instrument an embedded SPA's browser activity. For browser collection,
+consume the [shared browser package](../../browser/observability/README.md) at
+the same exact GHATD revision as the Go module. Supply consent callbacks and
+finite groups, load the controller lazily, and keep the server intake vocabulary
+aligned. Delete migrated infrastructure copies; retain application policy and
+integration tests.
 
 ## 6. Validate and adopt in an existing service
 
@@ -235,3 +276,13 @@ Keep log messages static. GHATD filters fields on its OTLP log branch but does
 not redact interpolated messages, automatic caller/stack metadata, or the
 existing local sink. Review host-owned instrumentation and logging as part of
 adoption; the package's field policy is not a general-purpose data scrubber.
+
+## Share verification without copying the test runner
+
+Keep dashboards, chart values and process topology in the host. Configure the
+[shared verification command](../../external/observability/verify/README.md)
+with the host’s asset paths, metric names and roles, then invoke it from CI using
+the same GHATD module pin. It embeds the synthetic fixtures and assertions.
+Retain product-specific integration checks, such as the browser/server group
+contract, in the host. Copied deployment assets keep their own provenance hashes;
+a library upgrade alone does not require pretending those assets changed.

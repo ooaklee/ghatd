@@ -9,6 +9,11 @@ on:
       - 'cli/**'
       - 'go.mod'
       - 'go.sum'
+      - 'browser/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.browser.json'
+      - 'vitest.browser.config.ts'
   pull_request:
     paths:
       - '.github/workflows/observability-contract.yml'
@@ -17,6 +22,11 @@ on:
       - 'cli/**'
       - 'go.mod'
       - 'go.sum'
+      - 'browser/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.browser.json'
+      - 'vitest.browser.config.ts'
   workflow_dispatch:
 
 permissions:
@@ -49,10 +59,31 @@ jobs:
       - name: Check telemetry, CLI, and reference contracts with the race detector
         env:
           GHATD_TEST_COLLECTOR: '1'
-        run: go test -race -count=1 ./external/observability/... ./cli/cmd/... ./examples/observability/...
-      - name: Check reference smoke assertions
-        run: python3 -m unittest discover -s examples/observability -p 'test_*.py'
+        run: go test -race -count=1 ./external/observability/... ./external/http/server/... ./external/emailprovider/... ./cli/cmd/... ./examples/observability/...
+      - name: Check shared verification and reference smoke assertions
+        run: |
+          python3 -m venv "$RUNNER_TEMP/observability-verify"
+          "$RUNNER_TEMP/observability-verify/bin/python" -m pip install PyYAML==6.0.3
+          "$RUNNER_TEMP/observability-verify/bin/python" -m unittest discover -s external/observability/verify/python -p 'test_*.py'
+          python3 -m unittest discover -s examples/observability -p 'test_*.py'
       - name: Validate Collector configuration and alert behavior
         run: |
           python3 examples/observability/collector/test_config.py
           python3 examples/observability/collector/test_alerts.py
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run typecheck
+      - name: Check distributable contents
+        run: npm pack --dry-run --ignore-scripts

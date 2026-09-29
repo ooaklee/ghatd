@@ -29,17 +29,20 @@ success), and Shutdown.
 ### Observability lifecycle
 
 Start one [observability runtime](../../observability/README.md#bootstrap) before
-application dependencies and pass `otelhttp.Wrap(...)` as `Handler`. `Context`
-controls this helper's lifecycle and logging; it does **not** populate
-`http.Server.BaseContext` for requests. If handlers need runtime values from
-their request contexts, configure a server directly as shown by the
-[reference service](../../../examples/observability/main.go).
+application dependencies and pass `otelhttp.Wrap(...)` as `Handler`. Pass
+`runtime.Context()` as `Context`. Request contexts inherit its values, including
+the runtime and logger. Its cancellation starts shutdown, while active requests
+remain live during the graceful drain. The helper cancels their detached base
+context on return. A custom `ListenAndServe` hook may override `BaseContext`;
+in that case the host owns those replacement context semantics.
 
 Drain requests and close dependencies before shutting telemetry down. If
-`Shutdown` returns an error, this helper returns it without automatically
-forcing `Server.Close`; a host requiring that fallback must supply a custom
-shutdown function or own the server lifecycle. The reference demonstrates both
-bounded draining and forced close before telemetry cleanup.
+`Shutdown` returns an error, the helper calls `Server.Close` before returning
+`ErrShutdownFailure`. The shutdown context retains runtime values and has a
+fresh timeout. Hosts no longer need duplicate hooks for these defaults.
+Hijacked connections are outside `http.Server.Shutdown`/`Close`; their owner
+must drain them explicitly. The timeout also cannot stop handlers that ignore
+their context after the connection is closed.
 
 ### `StartServerWith(req *StartServerWithRequest) error`
 
