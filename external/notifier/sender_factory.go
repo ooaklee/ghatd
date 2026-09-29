@@ -1,5 +1,7 @@
 package notifier
 
+import "net/http"
+
 // StandardSendersRequest holds the configuration for creating standard
 // notification channel senders (Web Push and FCM).
 //
@@ -20,6 +22,20 @@ type StandardSendersRequest struct {
 	// temporary file whose lifecycle is managed by the cleanup function
 	// returned from NewStandardSenders.
 	FCMCredentialsBase64 string
+
+	// HTTPClient is used for Web Push and FCM requests when supplied.
+	HTTPClient *http.Client
+}
+
+// WithHTTPClient returns a copy of the request configured with the supplied
+// client. The original request is left unchanged.
+func (r *StandardSendersRequest) WithHTTPClient(client *http.Client) *StandardSendersRequest {
+	if r == nil {
+		return nil
+	}
+	updated := *r
+	updated.HTTPClient = client
+	return &updated
 }
 
 // StandardSendersResult contains the senders created by NewStandardSenders
@@ -49,8 +65,12 @@ type StandardSendersResult struct {
 //     Cleanup function is a no-op.
 func NewStandardSenders(req *StandardSendersRequest) (*StandardSendersResult, error) {
 	webPushConfig := resolveWebPushConfig(req)
+	webPushSender := NewWebPushSender(*webPushConfig)
+	if req != nil {
+		webPushSender.httpClient = copyNotifierHTTPClient(req.HTTPClient)
+	}
 	senders := []ChannelSender{
-		NewWebPushSender(*webPushConfig),
+		webPushSender,
 	}
 
 	if req == nil || req.FCM == nil || !req.FCM.Enabled {
@@ -67,12 +87,28 @@ func NewStandardSenders(req *StandardSendersRequest) (*StandardSendersResult, er
 
 	fcmConfig := *req.FCM
 	fcmConfig.CredentialsFile = credsPath
-	senders = append(senders, NewFCMSender(fcmConfig))
+	fcmSender := NewFCMSender(fcmConfig)
+	fcmSender.httpClient = copyNotifierHTTPClient(req.HTTPClient)
+	senders = append(senders, fcmSender)
 
 	return &StandardSendersResult{
 		Senders: senders,
 		Cleanup: cleanup,
 	}, nil
+}
+
+// copyNotifierHTTPClient preserves the caller's client policy without giving
+// either sender ownership of the caller's *http.Client value.
+func copyNotifierHTTPClient(source *http.Client) *http.Client {
+	if source == nil {
+		return nil
+	}
+	return &http.Client{
+		Transport:     source.Transport,
+		Timeout:       source.Timeout,
+		CheckRedirect: source.CheckRedirect,
+		Jar:           source.Jar,
+	}
 }
 
 // resolveWebPushConfig returns the effective WebPushSenderConfig.
