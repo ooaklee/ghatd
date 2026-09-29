@@ -1,0 +1,63 @@
+{
+  "name": "@ghatd/browser-observability",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable, consent-scoped browser telemetry for GHATD host applications.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./browser/observability/src/index.ts",
+    "./controller": "./browser/observability/src/controller.ts",
+    "./exporter": "./browser/observability/src/exporter.ts",
+    "./facade": "./browser/observability/src/facade.ts",
+    "./groups": "./browser/observability/src/groups.ts",
+    "./types": "./browser/observability/src/types.ts",
+    "./axios": "./browser/observability/src/axios.ts",
+    "./router": "./browser/observability/src/router.ts",
+    "./vue": "./browser/observability/src/vue.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "browser/observability/src/**/*.ts",
+    "browser/observability/README.md",
+    "tsconfig.browser.json",
+    "vitest.browser.config.ts"
+  ],
+  "scripts": {
+    "test": "vitest run --config vitest.browser.config.ts",
+    "test:watch": "vitest --config vitest.browser.config.ts",
+    "typecheck": "tsc --build tsconfig.browser.json"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/core": "2.11.0",
+    "@opentelemetry/otlp-transformer": "0.222.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-trace": "2.11.0"
+  },
+  "peerDependencies": {
+    "axios": "1.15.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "peerDependenciesMeta": {
+    "axios": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "vue-router": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "22.5.5",
+    "axios": "1.15.0",
+    "jsdom": "^24.1.3",
+    "typescript": "^5.8.3",
+    "vitest": "^1.6.1",
+    "vue": "3.5.13",
+    "vue-router": "4.5.0"
+  }
+}

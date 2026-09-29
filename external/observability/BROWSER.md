@@ -3,8 +3,12 @@
 `NewBrowserTraceIntake` accepts a deliberately small browser span contract,
 rebuilds trusted OTLP protobuf, and waits for a configured receiver to accept
 each batch. It owns no SDK or global provider. Applications explicitly mount
-the handler and implement consent-aware browser instrumentation; the package
-does not enable browser collection automatically.
+the handler and opt in to consent-aware browser instrumentation; the package
+does not enable browser collection automatically. GHATD’s
+[shared browser package](../../browser/observability/README.md) provides the
+controller, exporter and optional framework/HTTP adapters. Hosts retain consent
+policy and finite route/API groups. See [ADR022](../../docs/adr/adr022-shared-browser-and-verification-distribution.md)
+for distribution and ownership.
 
 ## Server setup
 
