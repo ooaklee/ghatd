@@ -1,5 +1,6 @@
 """Contract tests for hosts with different identities, panel IDs and topology."""
 import contextlib
+from copy import deepcopy
 import importlib.util
 import io
 import json
@@ -22,6 +23,7 @@ def load_suite(name):
 
 
 collector = load_suite("collector-render")
+production = load_suite("production-render")
 
 
 def host_profile():
@@ -47,6 +49,35 @@ def host_profile():
 
 
 class HostContractTests(unittest.TestCase):
+    def test_production_trace_wiring_rejects_misrouting_and_unexpanded_credentials(self):
+        trace = {"endpoint": "https://traces.example.com/v1/traces", "header_name": "x-example-team",
+                 "credential_env": "TRACE_API_KEY", "secret_name": "example-telemetry",
+                 "secret_key": "api-key", "remote_key": "/example/live/TRACE_API_KEY"}
+        entries = [
+            {"name": "TRACE_API_KEY", "valueFrom": {"secretKeyRef": {"name": "example-telemetry", "key": "api-key"}}},
+            {"name": "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "value": trace["endpoint"]},
+            {"name": "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "value": "http/protobuf"},
+            {"name": "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "value": "x-example-team=$(TRACE_API_KEY)"},
+        ]
+        documents = [{"kind": "ExternalSecret", "spec": {"target": {"name": "example-telemetry"},
+                      "data": [{"secretKey": "api-key", "remoteRef": {"key": trace["remote_key"]}}]}}]
+        production.validate_trace_route(documents, entries, trace)
+        cases = []
+        for index, replacement in [(0, {"name": "TRACE_API_KEY", "value": "synthetic-canary"}),
+                                   (1, {"name": entries[1]["name"], "value": "https://wrong.example/v1/traces"}),
+                                   (2, {"name": entries[2]["name"], "value": "grpc"}),
+                                   (3, {"name": entries[3]["name"], "value": "x-example-team=${TRACE_API_KEY}"})]:
+            changed = deepcopy(entries)
+            changed[index] = replacement
+            cases.append((documents, changed))
+        cases.extend([(documents, entries[1:] + entries[:1]), (documents, entries + entries[:1]), ([], entries)])
+        changed_documents = deepcopy(documents)
+        changed_documents[0]["spec"]["data"][0]["remoteRef"]["key"] = "/another/live/TRACE_API_KEY"
+        cases.append((changed_documents, entries))
+        for docs, env in cases:
+            with self.subTest(case=cases.index((docs, env))), self.assertRaises(AssertionError):
+                production.validate_trace_route(docs, env, trace)
+
     def test_paths_reject_parent_and_symlink_escape(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "host"

@@ -85,6 +85,36 @@ func TestInvalidProfileDoesNotEchoValues(t *testing.T) {
 		}
 	}
 }
+func TestProductionTraceProfileValidation(t *testing.T) {
+	p := example(t)
+	p.Helm.ProductionTrace = &productionTraceProfile{
+		Endpoint: "https://traces.example.com/v1/traces", HeaderName: "x-example-team",
+		CredentialEnv: "TRACE_API_KEY", SecretName: "example-telemetry",
+		SecretKey: "api-key", RemoteKey: "/example/live/TRACE_API_KEY",
+	}
+	if _, err := parseProfile(encode(t, p)); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*productionTraceProfile){
+		func(p *productionTraceProfile) { p.Endpoint = "https://private-canary@example.com/v1/traces" },
+		func(p *productionTraceProfile) { p.Endpoint = "https://example.com?key=private-canary" },
+		func(p *productionTraceProfile) { p.Endpoint = "http://example.com/v1/traces" },
+		func(p *productionTraceProfile) { p.CredentialEnv = "private-canary" },
+		func(p *productionTraceProfile) { p.HeaderName = "header\nprivate-canary" },
+		func(p *productionTraceProfile) { p.SecretName = "" },
+		func(p *productionTraceProfile) { p.SecretKey = "" },
+		func(p *productionTraceProfile) { p.RemoteKey = "private-canary\n" },
+	} {
+		copy := *p.Helm.ProductionTrace
+		mutate(&copy)
+		bad := p
+		bad.Helm.ProductionTrace = &copy
+		if _, err := parseProfile(encode(t, bad)); err == nil || strings.Contains(err.Error(), "private-canary") {
+			t.Fatal("expected fixed validation error for invalid production trace profile")
+		}
+	}
+}
+
 func TestAssetPathConfinement(t *testing.T) {
 	p := example(t)
 	root := assets(t, p)

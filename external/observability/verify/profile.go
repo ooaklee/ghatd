@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -40,16 +41,25 @@ type composeProfile struct {
 	AssetsDir        string            `json:"assets_dir"`
 }
 type helmProfile struct {
-	ChartDir        string          `json:"chart_dir"`
-	BaseValues      string          `json:"base_values"`
-	ServiceValues   string          `json:"service_values"`
-	CollectorValues string          `json:"collector_values"`
-	RenderScript    string          `json:"render_script"`
-	RenderOutput    string          `json:"render_output"`
-	Port            int             `json:"port"`
-	Migrator        bool            `json:"migrator"`
-	Sidekick        bool            `json:"sidekick"`
-	Workers         []workerProfile `json:"workers"`
+	ChartDir        string                  `json:"chart_dir"`
+	BaseValues      string                  `json:"base_values"`
+	ServiceValues   string                  `json:"service_values"`
+	CollectorValues string                  `json:"collector_values"`
+	RenderScript    string                  `json:"render_script"`
+	RenderOutput    string                  `json:"render_output"`
+	Port            int                     `json:"port"`
+	Migrator        bool                    `json:"migrator"`
+	Sidekick        bool                    `json:"sidekick"`
+	Workers         []workerProfile         `json:"workers"`
+	ProductionTrace *productionTraceProfile `json:"production_trace,omitempty"`
+}
+type productionTraceProfile struct {
+	Endpoint      string `json:"endpoint"`
+	HeaderName    string `json:"header_name"`
+	CredentialEnv string `json:"credential_env"`
+	SecretName    string `json:"secret_name"`
+	SecretKey     string `json:"secret_key"`
+	RemoteKey     string `json:"remote_key"`
 }
 type workerProfile struct {
 	ValuesKey string `json:"values_key"`
@@ -57,11 +67,13 @@ type workerProfile struct {
 }
 
 var (
-	identity  = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
-	metric    = regexp.MustCompile(`^[a-zA-Z_:][a-zA-Z0-9_:]{0,127}$`)
-	operation = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
-	chartKey  = regexp.MustCompile(`^[a-z][a-zA-Z0-9]{0,63}$`)
-	envKey    = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,127}$`)
+	identity   = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+	metric     = regexp.MustCompile(`^[a-zA-Z_:][a-zA-Z0-9_:]{0,127}$`)
+	operation  = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
+	chartKey   = regexp.MustCompile(`^[a-z][a-zA-Z0-9]{0,63}$`)
+	envKey     = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,127}$`)
+	headerName = regexp.MustCompile(`^[A-Za-z0-9-]{1,128}$`)
+	secretKey  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$`)
 )
 
 func parseProfile(data []byte) (profile, error) {
@@ -118,6 +130,14 @@ func parseProfile(data []byte) (profile, error) {
 	}
 	if p.Helm.Port < 1 || p.Helm.Port > 65535 || len(p.Helm.Workers) > 16 {
 		return p, invalid
+	}
+	if trace := p.Helm.ProductionTrace; trace != nil {
+		endpoint, err := url.Parse(trace.Endpoint)
+		if err != nil || len(trace.Endpoint) > 2048 || endpoint.Scheme != "https" || endpoint.Hostname() == "" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" ||
+			!headerName.MatchString(trace.HeaderName) || !envKey.MatchString(trace.CredentialEnv) || !identity.MatchString(trace.SecretName) || !secretKey.MatchString(trace.SecretKey) ||
+			trace.RemoteKey == "" || len(trace.RemoteKey) > 1024 || strings.ContainsAny(trace.RemoteKey, "\x00\r\n") {
+			return p, invalid
+		}
 	}
 	keys, suffixes := map[string]bool{}, map[string]bool{}
 	for _, worker := range p.Helm.Workers {

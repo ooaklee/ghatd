@@ -38,7 +38,7 @@ the common contract belong in the shared suites and their tests.
 | --- | --- |
 | `collector-compose` | Disabled/direct/queued routing for all roles, readiness, private ports, queue storage, monitoring and provenance hashes |
 | `collector-render` | Private persistent Collector, worker overrides, tail/monitoring variants, fixed invalid-value diagnostics, schema validation and atomic rendering |
-| `production-render` | Disabled signal defaults and explicit trace-only Secret routing across every configured process |
+| `production-render` | Declared disabled or trace-only defaults, Secret references and ordering, alternate direct routing and exporter-off rollback across every configured process |
 | `dashboards` | Shipped PromQL with replica resets, idle/missing data, freshness, histograms, cache and consumer outcomes |
 | `production-logs` | Real Loki queries with plain/wrapped logs, duplicates, stream isolation, summaries and Loki-backed variables |
 
@@ -64,6 +64,30 @@ Start with [examples/example.json](examples/example.json). Version 1 uses:
 - `helm`: chart and render-script/output paths; value filenames relative to
   the chart; service port; enabled migrator/sidekick; and optional extra workers
   with their chart value key and generated name suffix.
+
+By default `production-render` expects all production exporters disabled. A
+host with direct trace-only OTLP/HTTP export declares `helm.production_trace`:
+
+```json
+{
+  "endpoint": "https://traces.example.com/v1/traces",
+  "header_name": "x-example-team",
+  "credential_env": "TRACE_API_KEY",
+  "secret_name": "example-telemetry",
+  "secret_key": "api-key",
+  "remote_key": "/example/live/TRACE_API_KEY"
+}
+```
+
+These are routing identifiers, never credential values. The suite verifies the
+exact HTTPS endpoint, `http/protobuf` signal protocol, header expansion from a
+preceding Secret-backed environment entry, and its ExternalSecret remote key.
+The ordering assertion follows Kubernetes' [dependent environment variable
+rules](https://kubernetes.io/docs/tasks/inject-data-application/define-interdependent-environment-variables/).
+Every declared process must have the same route with `always_on`, no HTTP
+suppression, and metrics/log exporters disabled. It also tests an alternate
+synthetic trace-header Secret and disabling all exporters. No backend requests,
+secret retrieval or cluster changes are performed.
 
 All asset paths are relative to the host root. Existing files and symlinks must
 resolve inside that root. The output may not exist yet. Unknown fields, invalid
