@@ -13,6 +13,14 @@ type SparkPostClient interface {
 	Send(t *sp.Transmission) (id string, res *sp.Response, err error)
 }
 
+// sparkPostContextClient is the optional context-aware interface used when the
+// underlying client supports it. *gosparkpost.Client implements it, so the
+// provider can propagate cancellation, deadlines and tracing parents into the
+// outbound HTTP request.
+type sparkPostContextClient interface {
+	SendContext(ctx context.Context, t *sp.Transmission) (id string, res *sp.Response, err error)
+}
+
 // SparkPostEmailProvider implements an email provider for SparkPost
 type SparkPostEmailProvider struct {
 	client SparkPostClient
@@ -43,6 +51,12 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 	}
 
 	// Create SparkPost transmission
+	//
+	// NOTE (known behaviour, preserved for compatibility): validation accepts a
+	// text-only email (TextBody without HTMLBody), but the transmission
+	// currently sets only the HTML part, so a text-only email may be sent
+	// without any body content. Fixing this would change behaviour for existing
+	// callers and is therefore left to a separate, deliberate change.
 	transmission := &sp.Transmission{
 		Recipients: []string{email.To},
 		Content: sp.Content{
@@ -53,10 +67,21 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 		},
 	}
 
-	// Send via SparkPost
-	messageID, _, err := p.client.Send(transmission)
+	// Send via SparkPost. Prefer the context-aware API when the client
+	// supports it so cancellation, deadlines and tracing parents propagate;
+	// otherwise fall back to the legacy Send for existing mocks and custom
+	// implementations. The per-call ctx is never stored on the provider.
+	var messageID string
+	var err error
+	if contextClient, ok := p.client.(sparkPostContextClient); ok {
+		messageID, _, err = contextClient.SendContext(ctx, transmission)
+	} else {
+		messageID, _, err = p.client.Send(transmission)
+	}
 	if err != nil {
-		logger.Error("sparkpost-email-send-failed", append(emailLogFields(p.Name(), email), zap.Error(err))...)
+		// SDK error bodies may echo message content or credentials. Keep the
+		// stable public failure classification in both logs and the return value.
+		logger.Error("sparkpost-email-send-failed", append(emailLogFields(p.Name(), email), zap.Error(ErrEmailProviderSendFailed))...)
 		return &SendResult{
 			Provider: p.Name(),
 			Success:  false,
