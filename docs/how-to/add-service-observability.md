@@ -206,7 +206,12 @@ separate, explicit option: it needs all contributing spans and cannot recover
 spans already dropped by head sampling or HTTP suppression. Browser traces also
 require separate client instrumentation and the opt-in
 [browser intake](../../external/observability/BROWSER.md); the server wrapper
-does not instrument an embedded SPA's browser activity.
+does not instrument an embedded SPA's browser activity. For browser collection,
+consume the [shared browser package](../../browser/observability/README.md) at
+the same exact GHATD revision as the Go module. Supply consent callbacks and
+finite groups, load the controller lazily, and keep the server intake vocabulary
+aligned. Delete migrated infrastructure copies; retain application policy and
+integration tests.
 
 ## 6. Validate and adopt in an existing service
 
@@ -253,3 +258,13 @@ Keep log messages static. GHATD filters fields on its OTLP log branch but does
 not redact interpolated messages, automatic caller/stack metadata, or the
 existing local sink. Review host-owned instrumentation and logging as part of
 adoption; the package's field policy is not a general-purpose data scrubber.
+
+## Share verification without copying the test runner
+
+Keep dashboards, chart values and process topology in the host. Configure the
+[shared verification command](../../external/observability/verify/README.md)
+with the host’s asset paths, metric names and roles, then invoke it from CI using
+the same GHATD module pin. It embeds the synthetic fixtures and assertions.
+Retain product-specific integration checks, such as the browser/server group
+contract, in the host. Copied deployment assets keep their own provenance hashes;
+a library upgrade alone does not require pretending those assets changed.

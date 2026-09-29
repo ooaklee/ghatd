@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "service": {"name": "example-api", "namespace": "production"},
+  "dashboards": {
+    "paths": ["monitoring/local.json", "monitoring/production.json"],
+    "cache_metric": "example_cache_event_count_total",
+    "queue_count_metric": "example_worker_queue_count_total",
+    "queue_bucket_metric": "example_worker_queue_duration_seconds_bucket",
+    "queue_operation": "queue.process.consume"
+  },
+  "compose": {
+    "base": ["compose/base.yaml", "compose/local.yaml"],
+    "monitor": "compose/monitor.yaml",
+    "collector": "compose/collector.yaml",
+    "roles": ["api", "migrator", "worker", "tools"],
+    "application_roles": ["api", "migrator", "worker"],
+    "fixture_env": {"GIT_COMMIT": "fixture", "REGISTRY": "example.invalid"},
+    "assets_dir": "monitoring/collector"
+  },
+  "helm": {
+    "chart_dir": "deployment/chart",
+    "base_values": "production.yaml",
+    "service_values": "service.yaml",
+    "collector_values": "collector.yaml",
+    "render_script": "scripts/render.sh",
+    "render_output": "deployment/rendered.yaml",
+    "port": 8080,
+    "migrator": true,
+    "sidekick": false,
+    "workers": [{"values_key": "backgroundWorker", "suffix": "background-worker"}]
+  }
+}

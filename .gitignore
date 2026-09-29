@@ -1,2 +1,4 @@
 node_modules/
 tsconfig.browser.tsbuildinfo
+__pycache__/
+*.pyc
