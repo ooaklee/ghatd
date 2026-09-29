@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -91,6 +92,7 @@ type WebPushSenderConfig struct {
 // Transient errors are returned as-is and do not trigger cleanup.
 type WebPushSender struct {
 	config                WebPushSenderConfig
+	httpClient            *http.Client
 	invalidAddressHandler func(ctx context.Context, hash string) error
 }
 
@@ -267,6 +269,9 @@ func (s *WebPushSender) sendOne(ctx context.Context, subject, message string, ad
 
 	webPushService := notifywebpush.New(s.config.VAPIDPublicKey, s.config.VAPIDPrivateKey)
 	webPushService.AddReceivers(subscription)
+	if s.httpClient != nil {
+		ctx = notifywebpush.WithOptions(ctx, notifywebpush.Options{HTTPClient: s.httpClient})
+	}
 	if len(data) > 0 {
 		ctx = notifywebpush.WithData(ctx, data)
 	}
@@ -343,6 +348,7 @@ type FCMSenderConfig struct {
 // wired in v1.
 type FCMSender struct {
 	config                FCMSenderConfig
+	httpClient            *http.Client
 	invalidAddressHandler func(ctx context.Context, hash string) error
 }
 
@@ -437,6 +443,9 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 	}
 	if s.config.ProjectID != "" {
 		opts = append(opts, fcm.WithProjectID(s.config.ProjectID))
+	}
+	if s.httpClient != nil {
+		opts = append(opts, fcm.WithHTTPClient(s.httpClient))
 	}
 
 	fcmClient, err := fcm.NewClient(ctx, opts...)

@@ -155,6 +155,12 @@ The Web Push sender is always included. Its `Enabled` field is set to `true`
 when explicitly enabled **or** when both VAPID keys are non-empty. The FCM
 sender is only included when `req.FCM.Enabled` is `true`.
 
+To trace outbound delivery, pass an instrumented `*http.Client` with
+`(&notifier.StandardSendersRequest{...}).WithHTTPClient(client)`. The factory
+copies the client policy for each sender. Web Push endpoint requests and FCM
+requests use the supplied transport; FCM credential token requests use it too.
+If no client is supplied, both senders retain their existing HTTP defaults.
+
 **Cleanup ownership**: When `FCMCredentialsBase64` is set, `NewStandardSenders`
 decodes the value into a temporary file. The returned `Cleanup` function
 removes that file. The caller **must** call `Cleanup` (typically at server
