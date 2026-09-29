@@ -164,10 +164,15 @@ export MONGO_DISCONNECT_TIMEOUT="10s"
 Keep real credentials in the deployment's secret manager rather than source
 control or shell-history examples.
 
-To trace database work, attach `WithMongoCommandMonitor` as described in
-[Tracing Migrations](../../external/migrator/mongo/README.md#tracing-migrations)
-and execute the command with the host's runtime/action context. Tracing does not
-discover migration packages, change registration order, or make rollback safer.
+To trace migration actions, opt into `WithTelemetryFromEnvironment(component,
+scope)` as described in
+[Tracing Migrations](../../external/migrator/mongo/README.md#tracing-migrations).
+GHATD starts telemetry only for `up` and `down`, creates their MongoDB monitor
+after startup, and flushes after database cleanup. The host executes its root
+with a signal-aware context. `WithTelemetry` supports custom settings; hosts
+that already own a runtime can supply only `WithMongoCommandMonitor` instead.
+Tracing does not discover migration packages, change registration order, or
+make rollback safer.
 
 ## 5. Apply Pending Migrations
 

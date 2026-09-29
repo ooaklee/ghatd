@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ooaklee/ghatd/external/observability"
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/spf13/cobra"
@@ -21,6 +22,7 @@ import (
 	mongodb "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
+	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/v2/mongo/otelmongo"
 )
 
 var (
@@ -38,6 +40,8 @@ type settingsLoader func() (*Settings, error)
 type commandOptions struct {
 	loadSettings   settingsLoader
 	commandMonitor *event.CommandMonitor
+	monitorSet     bool
+	telemetry      telemetryResolver
 }
 
 // CommandOption customises the shared MongoDB migrator command.
@@ -76,10 +80,13 @@ func WithMigrationDirectory(directory string) CommandOption {
 
 // WithMongoCommandMonitor attaches a MongoDB v2 command monitor to clients
 // created for migration up and down actions. A nil monitor preserves the
-// driver's default behaviour.
+// driver's default behaviour, including when WithTelemetry is enabled. An
+// explicit monitor takes precedence over the automatic telemetry monitor,
+// regardless of option order. Its provider lifecycle remains caller-owned.
 func WithMongoCommandMonitor(monitor *event.CommandMonitor) CommandOption {
 	return func(options *commandOptions) {
 		options.commandMonitor = monitor
+		options.monitorSet = true
 	}
 }
 
@@ -109,6 +116,8 @@ type commandDependencies struct {
 type commandRunner struct {
 	loadSettings   settingsLoader
 	commandMonitor *event.CommandMonitor
+	monitorSet     bool
+	telemetry      telemetryResolver
 	dependencies   commandDependencies
 }
 
@@ -129,6 +138,8 @@ func NewCommand(commandOptions ...CommandOption) *cobra.Command {
 	return newCommand(commandRunner{
 		loadSettings:   options.loadSettings,
 		commandMonitor: options.commandMonitor,
+		monitorSet:     options.monitorSet,
+		telemetry:      options.telemetry,
 		dependencies:   commandDependenciesWithDefaults(),
 	})
 }
@@ -189,7 +200,7 @@ Use:
 					if err != nil {
 						return err
 					}
-					fmt.Fprintf(command.OutOrStdout(), "New migration created: %s\n", migrationPath)
+					_, _ = fmt.Fprintf(command.OutOrStdout(), "New migration created: %s\n", migrationPath)
 					return nil
 				})
 			},
@@ -198,20 +209,16 @@ Use:
 			Use:   "up",
 			Short: "Apply all available migrations",
 			Args:  cobra.NoArgs,
-			RunE: func(command *cobra.Command, _ []string) error {
-				return runner.run(command, "up", func(settings Settings) error {
-					return runner.runDatabaseAction(command.Context(), settings, "up")
-				})
+			RunE: func(command *cobra.Command, args []string) error {
+				return runner.runDatabaseCommand(command, args, "up")
 			},
 		},
 		&cobra.Command{
 			Use:   "down",
 			Short: "Revert all applied migrations",
 			Args:  cobra.NoArgs,
-			RunE: func(command *cobra.Command, _ []string) error {
-				return runner.run(command, "down", func(settings Settings) error {
-					return runner.runDatabaseAction(command.Context(), settings, "down")
-				})
+			RunE: func(command *cobra.Command, args []string) error {
+				return runner.runDatabaseCommand(command, args, "down")
 			},
 		},
 	)
@@ -233,11 +240,13 @@ func (runner commandRunner) run(command *cobra.Command, action string, execute f
 		return err
 	}
 
-	fmt.Fprintln(command.OutOrStdout(), toolbox.OutputBasicLogString("info", "starting-service-migrations"))
+	// Output is best effort: a write failure must not turn committed work into
+	// an action failure that an operator or job runner might retry.
+	_, _ = fmt.Fprintln(command.OutOrStdout(), toolbox.OutputBasicLogString("info", "starting-service-migrations"))
 	if err := execute(*settings); err != nil {
 		return err
 	}
-	fmt.Fprintln(command.OutOrStdout(), toolbox.OutputBasicLogString("info", "completed-service-migrations"))
+	_, _ = fmt.Fprintln(command.OutOrStdout(), toolbox.OutputBasicLogString("info", "completed-service-migrations"))
 	return nil
 }
 
@@ -294,6 +303,17 @@ func (runner commandRunner) runDatabaseAction(parentContext context.Context, set
 		SetMaxPoolSize(uint64(settings.MongoConnectionPool))
 	if runner.commandMonitor != nil {
 		clientOptions.SetMonitor(runner.commandMonitor)
+	} else if !runner.monitorSet && runner.telemetry != nil {
+		// Bind to this invocation's provider after its runtime has started.
+		// A monitor built with the command tree can retain a closed provider
+		// when an embedded command is executed again in the same process.
+		runtime := observability.RuntimeFromContext(parentContext)
+		if runtime != nil {
+			clientOptions.SetMonitor(observability.NewMongoCommandMonitor(
+				otelmongo.WithTracerProvider(runtime.SDK().TracerProvider()),
+				otelmongo.WithMeterProvider(runtime.SDK().MeterProvider()),
+			))
+		}
 	}
 
 	client, err := runner.dependencies.connect(clientOptions)
@@ -302,7 +322,9 @@ func (runner commandRunner) runDatabaseAction(parentContext context.Context, set
 	}
 
 	defer func() {
-		disconnectContext, cancel := context.WithTimeout(context.Background(), settings.MongoDisconnectTimeout)
+		// Preserve command trace/logger values while giving cleanup its own
+		// deadline, even when the migration or process context was cancelled.
+		disconnectContext, cancel := context.WithTimeout(context.WithoutCancel(parentContext), settings.MongoDisconnectTimeout)
 		defer cancel()
 		disconnectErr := client.Disconnect(disconnectContext)
 		if disconnectErr != nil {
@@ -346,7 +368,7 @@ func (runner commandRunner) createMigration(settings Settings, migrationName str
 	if err != nil {
 		return "", fmt.Errorf("migrator/unable-to-open-template: %w", err)
 	}
-	defer template.Close()
+	defer func() { _ = template.Close() }()
 
 	migrationPath := filepath.Join(
 		settings.MongoMigrationDirectory,
