@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -40,7 +41,8 @@ type StartServerWithRequest struct {
 	ListenAndServe func(*http.Server) error
 	// Shutdown gracefully stops the server and may be overridden for tests or custom shutdown logic.
 	Shutdown func(*http.Server, context.Context) error
-	// Context cancels server execution when done.
+	// Context cancels server execution when done. Its values are inherited by
+	// requests, but cancellation starts graceful drain rather than aborting them.
 	Context context.Context
 }
 
@@ -78,10 +80,13 @@ func StartServerWith(req *StartServerWithRequest) error {
 	logger := logger.AcquireOperationFrom(ctx, "external/http/server", "start-server")
 	logger.Debug("server-start-requested", zap.String("addr", resolvedAddr))
 
+	requestCtx, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelRequests()
 	srv := &http.Server{
 		Addr:              resolvedAddr,
 		Handler:           req.Handler,
 		ReadHeaderTimeout: req.ReadHeaderTimeout,
+		BaseContext:       func(net.Listener) context.Context { return requestCtx },
 	}
 
 	signals := req.Signals
@@ -145,10 +150,13 @@ func StartServerWith(req *StartServerWithRequest) error {
 		logger.Info("server-context-done", zap.Error(ctx.Err()))
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), req.GracefulShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), req.GracefulShutdownTimeout)
 	defer cancel()
 
 	if err := shutdown(srv, shutdownCtx); err != nil {
+		// Dependencies may be closed immediately after this function returns.
+		// Stop connections still using them when the graceful drain expires.
+		err = errors.Join(err, srv.Close())
 		logger.Error("server-shutdown-failed", zap.Error(err))
 		return fmt.Errorf("%w: %v", ErrShutdownFailure, err)
 	}

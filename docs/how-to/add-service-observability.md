@@ -100,13 +100,28 @@ close database connections. Its shutdown budget starts when shutdown is called,
 even if the service context is already cancelled. The lower-level
 `SDK.Shutdown(ctx)` instead uses the caller's context directly.
 
-The [reference server lifecycle](../../examples/observability/main.go) shows
-bounded draining and forced close when draining fails. If request handlers need
-`RuntimeFromContext`, set `http.Server.BaseContext` to a context derived from
-`runtime.Context()`. The reference uses `context.WithoutCancel` there so a
-shutdown signal does not immediately cancel active requests. Setting the
-[HTTP server helper's](../../external/http/server/README.md) `Context` alone
-does not set request `BaseContext`.
+The [HTTP server helper](../../external/http/server/README.md) handles bounded
+draining, request-context values and forced close on failure directly. Pass
+`runtime.Context()` as `StartServerWithRequest.Context`; no copied lifecycle
+adapter is needed. A manually configured server can follow the
+[reference lifecycle](../../examples/observability/main.go) instead.
+
+For dependency cleanup after the server returns, defer the shared coordinator:
+
+```go
+defer observability.ShutdownResources(runtime.Context(), observability.ShutdownConfig{
+    Timeout:  15 * time.Second,
+    Cleanup:  cleanupGroup.Run,
+    Shutdown: runtime.Shutdown,
+    Logger:   runtime.Logger(),
+})
+```
+
+Register dependency callbacks on the host's cleanup group. The coordinator
+gives cleanup a fresh deadline and always attempts the final telemetry flush,
+even if cleanup panics. It emits fixed failure messages without arbitrary
+dependency error bodies. Callbacks must honor their contexts; the helper cannot
+forcibly interrupt them. The logger's own final `Sync` remains host-owned.
 
 ## 3. Wrap the complete HTTP handler once
 
@@ -146,6 +161,9 @@ Install instrumentation when constructing clients, before their first use:
 | Business operations | Create an `Operations` instance and pass the context returned by `Start` into downstream work; call `End` with the action's result. Use fixed operation names. |
 | Cobra commands | Use `otelcobra.Instrument` on executable leaf actions, or `otelcobra.Run` inside an action after loading settings. The adapter owns that action's runtime; do not nest it inside another owning runtime. |
 | MongoDB migrations | Attach the monitor with `WithMongoCommandMonitor` and register context-aware migration helpers; see [migration tracing](../../external/migrator/mongo/README.md#tracing-migrations). |
+| SparkPost | Pass a private HTTP client to `emailprovider.NewSparkPostClient` using its `HTTPClient` field or request's `WithHTTPClient` method. `NewSparkPostEmailProvider` prefers the SDK's context-aware send method. See [client policy and compatibility](../../external/emailprovider/README.md). |
+| Cache decisions | Use [`otelcache`](../../external/observability/otelcache/README.md) with the runtime's meter provider and your existing metric name, then attach its HTTP cache observer. |
+| Consumer jobs | Use [`otelqueue`](../../external/observability/otelqueue/README.md) with a finite operation vocabulary and host-owned acknowledgement/retry logic. |
 
 The [database wiring example](../../examples/observability/database_wiring.go)
 shows the Mongo and Redis provider options. It compiles without opening database

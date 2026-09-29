@@ -87,6 +87,19 @@ The lower-level `Start`/`SDK.Shutdown` API remains available when an application
 already owns its lifecycle. That API uses the shutdown context supplied by its
 caller; the runtime adds the fresh timeout and logger/context setup.
 
+`ShutdownResources(ctx, ShutdownConfig{...})` centralizes optional admission
+stop/drain, work cancellation, dependency cleanup, and runtime shutdown. Drain
+and cleanup get independent time budgets. Pass `Runtime.Shutdown` as the final
+callback so telemetry also gets its own fresh budget. Failure logs contain fixed
+messages only. Hosts retain dependency ownership, cancellation-aware callbacks,
+and the original logger's final flush. See the [adoption guide](../../docs/how-to/add-service-observability.md#2-start-one-runtime-and-keep-ownership-explicit).
+
+For finite infrastructure measurements, use [otelcache](otelcache/README.md)
+and [otelqueue](otelqueue/README.md). Both bind instruments when constructed,
+accept existing metric names, and keep dynamic keys, payloads and error text out
+of dimensions. The queue runtime supplies detached job contexts and the shared
+shutdown ordering while the host retains broker and settlement decisions.
+
 For an HTTP service, the child package
 `github.com/ooaklee/ghatd/external/observability/otelhttp` composes the entire
 dispatch in the required order:
