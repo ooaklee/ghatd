@@ -10,7 +10,9 @@ Start with the [runnable reference service](../../examples/observability/README.
 if you want to see a complete pipeline first. Use the
 [package guide](../../external/observability/README.md) for API details and the
 [configuration reference](../../external/observability/CONFIGURATION.md) for
-supported environment settings.
+supported environment settings. The [deployment environment guide](configure-observability-environment.md)
+shows how operators supply those settings through a shell, service manager,
+Compose or Kubernetes; deployment remains operator-owned.
 
 ## 1. Choose the signals and destinations
 
@@ -122,6 +124,22 @@ gives cleanup a fresh deadline and always attempts the final telemetry flush,
 even if cleanup panics. It emits fixed failure messages without arbitrary
 dependency error bodies. Callbacks must honor their contexts; the helper cannot
 forcibly interrupt them. The logger's own final `Sync` remains host-owned.
+
+Hosts that expose flags for access-log details and HTTP trace suppression can
+use `observability.NewHTTPServerOptions(HTTPServerOptionsConfig{...})` to validate
+and assemble them before `otelhttp.WrapWithOptions`. Pass redaction prefixes,
+suppressed paths/prefixes, proxy ranges and enable flags explicitly. The zero
+configuration enables neither policy and supplies no application path defaults.
+The underlying policy constructors remain available for finer field selection.
+
+Mount an optional browser intake with
+`observability.MountBrowserTraceIntake(applicationHandler, intakeHandler, intakePath)`
+before wrapping the complete handler. Handle its construction error. A nil
+intake handler preserves the application handler; enabled paths must be
+canonical literals. Keep the returned handler inside telemetry/recovery and
+outside application auth, caching and response transforms. The host still owns
+`BrowserTraceIntakeConfig`, route/API vocabularies and intake shutdown. A nil
+`*BrowserTraceIntake` also leaves the application handler unchanged.
 
 ## 3. Wrap the complete HTTP handler once
 

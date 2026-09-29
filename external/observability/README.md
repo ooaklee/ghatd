@@ -527,3 +527,23 @@ runtime registration or automatic Redis command discovery.
 Use only static operational names in the registration list. Request values,
 keys, identifiers, and query text do not belong there. Command arguments stay
 excluded for both recognized and unrecognized operations.
+
+## Host HTTP policy and browser intake composition
+
+`NewHTTPServerOptions` accepts `HTTPServerOptionsConfig` with explicit flags and
+host-owned paths. Detailed access logging enables bounded path, user-agent and
+address evidence only in the original logger sink; query strings stay omitted.
+Proxy CSV values are trimmed, blank trusts nobody, and malformed nonblank lists
+fail without echoing input. Disabled policies ignore unused configuration.
+Suppression keeps metrics/logs and requires `HTTPTraceSampler` as configured by
+`Start`. For custom field selections or byte limits, use the lower-level
+`NewHTTPRequestLogPolicy` and `NewHTTPTracePolicy` constructors directly.
+
+`MountBrowserTraceIntake(next, intake, path)` returns a handler and error. It
+mounts a host-supplied canonical literal path without cleaning or redirecting
+encoded aliases, observes its route, and passes other paths unchanged to `next`.
+Nil intake, including a nil `*BrowserTraceIntake`, returns `next` unchanged;
+callers must supply a nonnil application handler.
+It neither starts an SDK nor owns shutdown. Place it before application
+middleware and inside `otelhttp.WrapWithOptions`; keep intake configuration and
+shutdown with the host. See the [service guide](../../docs/how-to/add-service-observability.md).
