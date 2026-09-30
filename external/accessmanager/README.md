@@ -278,3 +278,51 @@ The fixed browser errors are `cancelled`, `unavailable`, `invalid`,
 Provider accounts are found by signed issuer/subject, never automatically by
 matching email. Apple repeat sign-in can omit first-only profile data. Every
 restricted user status is denied before session issuance.
+
+## Native app handoff
+
+Native clients reuse the provider callbacks, identity resolution and normal
+session issuance above. Configure `Handler.ConfigureMobileOAuth` once at
+startup with `MobileOAuthConfig{Origin, RedirectURIs, Store}` and
+`NewRedisMobileOAuthStore(redisClient, namespace)`. An empty redirect allowlist
+disables native discovery and handoff. `Origin` must be the public HTTPS origin
+hosting the provider callbacks; register exact private app URIs such as
+`boasi.io.bedrock:/oauth/callback`. Each app should use its own reverse-domain
+scheme. These app URIs are separate from Google/Apple's HTTPS redirect URIs.
+
+| Method | Route under `/api/v1/ams` | Behaviour |
+| --- | --- | --- |
+| GET | `/oauth/mobile/providers` | Available providers and exact allowed app callback URIs |
+| POST | `/oauth/{google\|apple}/mobile/login` | Creates an app-bound, two-minute browser start ticket |
+| POST | `/oauth/{google\|apple}/mobile/link` | Creates a start ticket bound to a fresh signed app session |
+| GET | `/oauth/mobile/start?ticket=…` | Consumes the ticket and starts the existing browser-cookie-bound provider flow |
+| POST | `/oauth/mobile/exchange` | Consumes a proven one-minute handoff code and sets normal session cookies in the app response |
+
+Initiation uses JSON `redirect_uri`, `state`, `code_challenge`, and
+`code_challenge_method: "S256"`. Generate independent random 32-byte state and
+verifier values in the app; the challenge is base64url(SHA256(verifier)). Native
+POSTs reject browser Origin headers and require JSON. Link initiation also
+requires the existing fresh access cookie. The response's
+`data.authorization_url` is opened in the platform system authentication
+browser. The browser retains the existing provider state cookie requirement.
+
+A successful provider callback returns only `code` and the original app `state`
+to the allowlisted app URI. It does not create an account, link an identity or
+set browser session cookies. The app validates the exact callback and state,
+then posts `code`, `code_verifier`, `redirect_uri` and `state` to exchange.
+Matching proof consumes the code atomically; incorrect proof leaves it usable
+by the initiating app. Account status is checked at exchange. Linking requires
+the same still-fresh signed app session before the identity is attached.
+
+Exchange returns `data.provider` and `data.linked`. Login sets the existing
+access/refresh cookies; linking preserves the current session cookies. Reuse
+the native client's cookie manager and secure cookie storage, then confirm the
+user via `/api/v1/ums/me`. Existing refresh/logout behaviour remains shared.
+Native errors use the same fixed vocabulary in `data.error`; browser cancellation
+returns `error=cancelled` with app state. Do not log callback URLs, bodies,
+codes, verifiers or cookies, or automatically retry one-use exchanges.
+
+Validation includes the signed-provider HTTP lifecycle test with real isolated
+MongoDB/Redis. Set `GHATD_TEST_MONGO_URI` and `GHATD_TEST_REDIS_ADDR` to test-only
+stores to exercise both browser and native identity/session lifecycles; normal
+unit tests run without those services.

@@ -53,6 +53,7 @@ type Handler struct {
 	CookieDomain             string
 	// OAuthOrigin is the configured browser origin used for linking CSRF checks.
 	OAuthOrigin string
+	mobileOAuth *MobileOAuthConfig
 }
 
 // NewHandlerRequest holds things needed for creating a handler

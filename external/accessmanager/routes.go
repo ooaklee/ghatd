@@ -146,6 +146,19 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserRefreshToken, request.Handler.RefreshToken).Methods(http.MethodPost, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/callback", request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/login", request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+	if mobile, ok := request.Handler.(interface {
+		MobileOAuthProviders(http.ResponseWriter, *http.Request)
+		MobileOAuthLogin(http.ResponseWriter, *http.Request)
+		MobileOAuthLink(http.ResponseWriter, *http.Request)
+		MobileOAuthStart(http.ResponseWriter, *http.Request)
+		MobileOAuthExchange(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/providers", mobile.MobileOAuthProviders).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/mobile/login", mobile.MobileOAuthLogin).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/mobile/link", mobile.MobileOAuthLink).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/start", mobile.MobileOAuthStart).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/exchange", mobile.MobileOAuthExchange).Methods(http.MethodPost)
+	}
 	if optional, ok := request.Handler.(interface {
 		OAuthProviders(http.ResponseWriter, *http.Request)
 		OAuthLink(http.ResponseWriter, *http.Request)

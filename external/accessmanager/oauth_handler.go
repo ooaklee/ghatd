@@ -140,6 +140,10 @@ func (h *Handler) OauthCallback(w http.ResponseWriter, r *http.Request) {
 	if response != nil && response.ProviderStateCookieKey != "" {
 		h.clearOAuthCookie(w, response.ProviderStateCookieKey, request.Provider)
 	}
+	if response != nil && response.Mobile != nil {
+		h.finishMobileCallback(w, r, response, err)
+		return
+	}
 	if err != nil {
 		if response != nil && response.Browser {
 			h.oauthErrorRedirect(w, r, err, response.RequestUrl)

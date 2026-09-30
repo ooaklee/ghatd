@@ -81,8 +81,17 @@ type SecureCallbackResult struct {
 
 // SecureFlowOptions contains server-authenticated initiation context.
 type SecureFlowOptions struct {
-	Browser bool       `json:"browser"`
-	Link    *LinkProof `json:"link,omitempty"`
+	Browser bool               `json:"browser"`
+	Link    *LinkProof         `json:"link,omitempty"`
+	Mobile  *MobileFlowContext `json:"mobile,omitempty"`
+}
+
+// MobileFlowContext is trusted initiation context, stored server-side only.
+// The native verifier is independent from the provider's own PKCE verifier.
+type MobileFlowContext struct {
+	RedirectURI string `json:"redirect_uri"`
+	State       string `json:"state"`
+	Challenge   string `json:"challenge"`
 }
 
 // LinkProof binds linking to fresh, signed session evidence checked by the host.

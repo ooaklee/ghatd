@@ -86,7 +86,7 @@ func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthL
 			return nil, err
 		}
 	}
-	txn, err := provider.BeginSecureTransactionWithOptions(ctx, r.RequestUrl, oauth.SecureFlowOptions{Browser: r.Browser, Link: r.Link})
+	txn, err := provider.BeginSecureTransactionWithOptions(ctx, r.RequestUrl, oauth.SecureFlowOptions{Browser: r.Browser, Link: r.Link, Mobile: r.Mobile})
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +154,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 	if result != nil && result.Transaction != nil {
 		response.Browser = result.Transaction.Options.Browser
 		response.RequestUrl = result.ReturnPath
+		response.Mobile = result.Transaction.Options.Mobile
 	}
 	if err != nil {
 		return response, err
@@ -165,7 +166,25 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 	if !ok {
 		return response, oauth.ErrSecureIDTokenInvalid
 	}
-	identity, err := user.CanonicalOAuthIdentity(&user.OAuthIdentity{Provider: r.Provider, Issuer: info.GetProviderIssuer(), Subject: info.GetProviderSubject()})
+	if response.Mobile != nil {
+		// Browser possession alone cannot create an app session or attach an
+		// identity. The initiating app must redeem with its independent verifier.
+		response.MobileGrant = &mobileOAuthGrant{
+			Provider: r.Provider,
+			Profile: mobileOAuthProfile{Issuer: info.GetProviderIssuer(), Subject: info.GetProviderSubject(),
+				Email: info.GetUserEmail(), EmailVerified: info.IsUserEmailVerifiedByProvider(),
+				FirstName: info.GetUserFirstName(), LastName: info.GetUserLastName()},
+			Flow: *response.Mobile, Link: result.Transaction.Options.Link,
+			ExpiresAt: time.Now().Add(mobileOAuthGrantTTL),
+		}
+		return response, nil
+	}
+	return s.finalizeOAuthIdentity(ctx, r.Provider, info, result.Transaction.Options.Link, response)
+}
+
+// finalizeOAuthIdentity is shared by web completion and a proven native exchange.
+func (s *Service) finalizeOAuthIdentity(ctx context.Context, provider string, info oauth.IdentityUserInfo, proof *oauth.LinkProof, response *OauthCallbackResponse) (*OauthCallbackResponse, error) {
+	identity, err := user.CanonicalOAuthIdentity(&user.OAuthIdentity{Provider: provider, Issuer: info.GetProviderIssuer(), Subject: info.GetProviderSubject()})
 	if err != nil {
 		return response, oauth.ErrSecureIDTokenInvalid
 	}
@@ -174,10 +193,10 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		return response, user.ErrOAuthUnsupported
 	}
 	// A supplied email must be verified; repeat Apple sign-in may omit it entirely.
-	if (r.Provider == "google" || info.GetUserEmail() != "") && !info.IsUserEmailVerifiedByProvider() {
+	if (provider == "google" || info.GetUserEmail() != "") && !info.IsUserEmailVerifiedByProvider() {
 		return response, oauth.ErrSecureIDTokenUnverified
 	}
-	if proof := result.Transaction.Options.Link; proof != nil {
+	if proof != nil {
 		if err = s.validateOAuthLinkProof(ctx, proof); err != nil {
 			return response, err
 		}
@@ -187,10 +206,10 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		response.Linked = true
 		path, _ := url.Parse(response.RequestUrl)
 		query := path.Query()
-		query.Set("oauth_linked", r.Provider)
+		query.Set("oauth_linked", provider)
 		path.RawQuery = query.Encode()
 		response.RequestUrl = path.String()
-		s.auditOAuth(ctx, proof.UserID, r.Provider, "user.oauth_linked")
+		s.auditOAuth(ctx, proof.UserID, provider, "user.oauth_linked")
 		return response, nil
 	}
 	account, err := repository.GetUserByOAuthIdentity(ctx, identity)
@@ -205,7 +224,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		account = created.User
 		if created.Created {
 			s.associateNewUser(ctx, account)
-			s.auditOAuth(ctx, account.ID, r.Provider, string(audit.UserAccountNewSso))
+			s.auditOAuth(ctx, account.ID, provider, string(audit.UserAccountNewSso))
 		}
 	} else if err != nil {
 		return response, err
@@ -231,7 +250,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 	response.RefreshToken = tokens.RefreshToken
 	response.AccessTokenExpiresAt = tokens.AtExpires
 	response.RefreshTokenExpiresAt = tokens.RtExpires
-	s.auditOAuth(ctx, account.ID, r.Provider, string(audit.UserLoginSso))
+	s.auditOAuth(ctx, account.ID, provider, string(audit.UserLoginSso))
 	return response, nil
 }
 

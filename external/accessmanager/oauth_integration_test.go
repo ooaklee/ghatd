@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -317,6 +318,225 @@ func TestOAuthBrowserLifecycleIntegration(t *testing.T) {
 	crossReply := httptest.NewRecorder()
 	httpRouter.GetRouter().ServeHTTP(crossReply, crossOrigin)
 	require.Equal(t, http.StatusForbidden, crossReply.Code)
+
+	t.Run("native handoff reuses provider identities and normal sessions", func(t *testing.T) {
+		const callbackURI = "boasi.io.bedrock:/oauth/callback"
+		const otherCallbackURI = "other.example.app:/oauth/callback"
+		post := func(path string, body map[string]string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+			raw, marshalErr := json.Marshal(body)
+			require.NoError(t, marshalErr)
+			req := httptest.NewRequest(http.MethodPost, "https://app.example"+path, strings.NewReader(string(raw)))
+			req.Header.Set("Content-Type", "application/json")
+			for _, c := range cookies {
+				req.AddCookie(c)
+			}
+			out := httptest.NewRecorder()
+			httpRouter.GetRouter().ServeHTTP(out, req)
+			return out
+		}
+		data := func(out *httptest.ResponseRecorder) map[string]interface{} {
+			var envelope struct {
+				Data map[string]interface{} `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(out.Body.Bytes(), &envelope))
+			return envelope.Data
+		}
+		discovery := serve(http.MethodGet, "/api/v1/ams/oauth/mobile/providers", "")
+		require.Empty(t, data(discovery)["providers"])
+		require.NoError(t, handler.ConfigureMobileOAuth(accessmanager.MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{callbackURI, otherCallbackURI}, Store: accessmanager.NewRedisMobileOAuthStore(redisRuntime.Client, dbName)}))
+		discovery = serve(http.MethodGet, "/api/v1/ams/oauth/mobile/providers", "")
+		require.Len(t, data(discovery)["providers"], 2)
+		type attempt struct {
+			verifier, state, authURL string
+			cookie                   *http.Cookie
+		}
+		begin := func(provider string, linking bool, session *http.Cookie) attempt {
+			verifier := base64.RawURLEncoding.EncodeToString([]byte(toolbox.GenerateUuidV4()[:32]))
+			state := base64.RawURLEncoding.EncodeToString([]byte(toolbox.GenerateUuidV4()[:32]))
+			digest := sha256.Sum256([]byte(verifier))
+			body := map[string]string{"redirect_uri": callbackURI, "state": state, "code_challenge": base64.RawURLEncoding.EncodeToString(digest[:]), "code_challenge_method": "S256"}
+			path := "/api/v1/ams/oauth/" + provider + "/mobile/login"
+			cookies := []*http.Cookie{}
+			if linking {
+				path = "/api/v1/ams/oauth/" + provider + "/mobile/link"
+				if session != nil {
+					cookies = append(cookies, session)
+				}
+			}
+			out := post(path, body, cookies...)
+			require.Equal(t, 200, out.Code, out.Body.String())
+			require.Empty(t, out.Result().Cookies())
+			authorization, parseErr := url.Parse(data(out)["authorization_url"].(string))
+			require.NoError(t, parseErr)
+			require.Equal(t, "app.example", authorization.Host)
+			browserStart := serve(http.MethodGet, authorization.RequestURI(), "")
+			require.Equal(t, 302, browserStart.Code, browserStart.Body.String())
+			require.Len(t, browserStart.Result().Cookies(), 1)
+			repeated := serve(http.MethodGet, authorization.RequestURI(), "")
+			require.Equal(t, 400, repeated.Code)
+			return attempt{verifier: verifier, state: state, authURL: browserStart.Header().Get("Location"), cookie: browserStart.Result().Cookies()[0]}
+		}
+		finish := func(provider string, flow attempt, subject, email string) string {
+			params := transport.prepare(t, flow.authURL, subject, email, email != "")
+			if provider == "apple" && email != "" {
+				params.Set("user", `{"name":{"firstName":"Relay","lastName":"Person"}}`)
+			}
+			out := complete(provider, params, flow.cookie)
+			require.Equal(t, 303, out.Code, out.Body.String())
+			for _, c := range out.Result().Cookies() {
+				require.NotEqual(t, "access", c.Name)
+				require.NotEqual(t, "refresh", c.Name)
+			}
+			uri, parseErr := url.Parse(out.Header().Get("Location"))
+			require.NoError(t, parseErr)
+			require.Equal(t, callbackURI, uri.Scheme+":"+uri.Path)
+			require.Equal(t, flow.state, uri.Query().Get("state"))
+			require.Empty(t, uri.Query().Get("error"))
+			require.Len(t, uri.Query().Get("code"), 43)
+			require.NotContains(t, out.Body.String(), "access_token")
+			return uri.Query().Get("code")
+		}
+		redeem := func(code string, flow attempt, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+			return post("/api/v1/ams/oauth/mobile/exchange", map[string]string{"code": code, "code_verifier": flow.verifier, "redirect_uri": callbackURI, "state": flow.state}, cookies...)
+		}
+		flow := begin("google", false, nil)
+		code := finish("google", flow, "native-google", "native@example.test")
+		_, err := users.GetUserByOAuthIdentity(ctx, &user.OAuthIdentity{Provider: "google", Issuer: oauth.GoogleSecureIssuer, Subject: "native-google"})
+		require.ErrorIs(t, err, user.ErrUserNotFound, "no account mutation before verifier proof")
+		invalid := flow
+		invalid.verifier = strings.Repeat("x", 43)
+		require.Equal(t, 400, redeem(code, invalid).Code)
+		invalid = flow
+		invalid.state = strings.Repeat("y", 43)
+		require.Equal(t, 400, redeem(code, invalid).Code)
+		wrongApp := post("/api/v1/ams/oauth/mobile/exchange", map[string]string{"code": code, "code_verifier": flow.verifier, "redirect_uri": otherCallbackURI, "state": flow.state})
+		require.Equal(t, 400, wrongApp.Code)
+		out := redeem(code, flow)
+		require.Equal(t, 200, out.Code, out.Body.String())
+		nativeAccess, nativeRefresh := authCookies(out)
+		require.Equal(t, false, data(out)["linked"])
+		require.Equal(t, "google", data(out)["provider"])
+		require.Equal(t, 400, redeem(code, flow).Code)
+		nativeDetails, err := authService.ExtractAccessTokenMetadataByString(ctx, nativeAccess.Value)
+		require.NoError(t, err)
+		nativeAccount, err := users.GetUserByID(ctx, &user.GetUserByIDRequest{ID: nativeDetails.UserID})
+		require.NoError(t, err)
+		require.True(t, nativeAccount.User.Verification.EmailVerified)
+		require.Equal(t, "ACTIVE", nativeAccount.User.Status)
+		owner, err := redisRuntime.Store.FetchAuth(ctx, nativeDetails)
+		require.NoError(t, err)
+		require.Equal(t, nativeDetails.UserID, owner)
+
+		// The same web subject and native subject identify the same account.
+		webCookie, webAuthorization := start("google", "/app", true)
+		webReply := complete("google", transport.prepare(t, webAuthorization, "native-google", "native@example.test", true), webCookie)
+		webAccess, _ := authCookies(webReply)
+		webDetails, err := authService.ExtractAccessTokenMetadataByString(ctx, webAccess.Value)
+		require.NoError(t, err)
+		require.Equal(t, nativeDetails.UserID, webDetails.UserID)
+
+		// Browser callback cookie stays mandatory, even with mobile state.
+		missingCookieFlow := begin("google", false, nil)
+		params := transport.prepare(t, missingCookieFlow.authURL, "no-cookie", "no-cookie@example.test", true)
+		missingCookie := serve(http.MethodGet, "/api/v1/ams/oauth/google/callback?"+params.Encode(), "")
+		require.Equal(t, 400, missingCookie.Code)
+		require.Empty(t, missingCookie.Header().Get("Location"))
+
+		// Mobile provider cancellation returns only fixed error and matching app state.
+		cancelled := begin("apple", false, nil)
+		appleAuthorization, err := url.Parse(cancelled.authURL)
+		require.NoError(t, err)
+		cancelledReply := complete("apple", url.Values{"state": {appleAuthorization.Query().Get("state")}, "error": {"access_denied"}}, cancelled.cookie)
+		cancelURI, err := url.Parse(cancelledReply.Header().Get("Location"))
+		require.NoError(t, err)
+		require.Equal(t, callbackURI, cancelURI.Scheme+":"+cancelURI.Path)
+		require.Equal(t, "cancelled", cancelURI.Query().Get("error"))
+		require.Equal(t, cancelled.state, cancelURI.Query().Get("state"))
+
+		// Apple relay/profile survives repeated native authorization with no email/name.
+		appleFlow := begin("apple", false, nil)
+		appleCode := finish("apple", appleFlow, "native-apple", "mobile@privaterelay.appleid.com")
+		appleReply := redeem(appleCode, appleFlow)
+		require.Equal(t, 200, appleReply.Code, appleReply.Body.String())
+		appleAccess, _ := authCookies(appleReply)
+		appleDetails, err := authService.ExtractAccessTokenMetadataByString(ctx, appleAccess.Value)
+		require.NoError(t, err)
+		repeat := begin("apple", false, nil)
+		repeatedReply := redeem(finish("apple", repeat, "native-apple", ""), repeat)
+		repeatedAccess, _ := authCookies(repeatedReply)
+		repeatedDetails, err := authService.ExtractAccessTokenMetadataByString(ctx, repeatedAccess.Value)
+		require.NoError(t, err)
+		require.Equal(t, appleDetails.UserID, repeatedDetails.UserID)
+		relayAccount, err := users.GetUserByID(ctx, &user.GetUserByIDRequest{ID: appleDetails.UserID})
+		require.NoError(t, err)
+		require.Equal(t, "mobile@privaterelay.appleid.com", relayAccount.User.Email)
+
+		// A callback cannot link without the initiating app's fresh session and verifier.
+		linking := begin("apple", true, nativeAccess)
+		linkCode := finish("apple", linking, "native-linked-apple", "linked@privaterelay.appleid.com")
+		_, err = users.GetUserByOAuthIdentity(ctx, &user.OAuthIdentity{Provider: "apple", Issuer: oauth.AppleIssuer, Subject: "native-linked-apple"})
+		require.ErrorIs(t, err, user.ErrUserNotFound)
+		wrongSession := redeem(linkCode, linking, webAccess)
+		require.Equal(t, 403, wrongSession.Code)
+		require.Equal(t, "reauth_required", data(wrongSession)["error"])
+		_, err = users.GetUserByOAuthIdentity(ctx, &user.OAuthIdentity{Provider: "apple", Issuer: oauth.AppleIssuer, Subject: "native-linked-apple"})
+		require.ErrorIs(t, err, user.ErrUserNotFound)
+		linking = begin("apple", true, nativeAccess)
+		linkedReply := redeem(finish("apple", linking, "native-linked-apple", "linked@privaterelay.appleid.com"), linking, nativeAccess)
+		require.Equal(t, 200, linkedReply.Code, linkedReply.Body.String())
+		require.Equal(t, true, data(linkedReply)["linked"])
+		require.Empty(t, linkedReply.Result().Cookies())
+		linkedUser, err := users.GetUserByOAuthIdentity(ctx, &user.OAuthIdentity{Provider: "apple", Issuer: oauth.AppleIssuer, Subject: "native-linked-apple"})
+		require.NoError(t, err)
+		require.Equal(t, nativeDetails.UserID, linkedUser.ID)
+		require.Equal(t, "native@example.test", linkedUser.Email)
+
+		// Account restrictions are checked at redemption, not just at callback time.
+		restricted := begin("google", false, nil)
+		restrictedCode := finish("google", restricted, "native-google", "native@example.test")
+		_, err = db.Collection("users").UpdateOne(ctx, bson.M{"_id": nativeDetails.UserID}, bson.M{"$set": bson.M{"status": "SUSPENDED"}})
+		require.NoError(t, err)
+		restrictedReply := redeem(restrictedCode, restricted)
+		require.Equal(t, 403, restrictedReply.Code)
+		require.Equal(t, "restricted", data(restrictedReply)["error"])
+		require.Empty(t, restrictedReply.Result().Cookies())
+		_, err = db.Collection("users").UpdateOne(ctx, bson.M{"_id": nativeDetails.UserID}, bson.M{"$set": bson.M{"status": "ACTIVE"}})
+		require.NoError(t, err)
+
+		// Only one of simultaneous native redemptions wins, with one account.
+		concurrent := begin("google", false, nil)
+		concurrentCode := finish("google", concurrent, "native-concurrent", "concurrent-native@example.test")
+		outcomes := make(chan int, 8)
+		for i := 0; i < 8; i++ {
+			go func() { outcomes <- redeem(concurrentCode, concurrent).Code }()
+		}
+		winners := 0
+		for i := 0; i < 8; i++ {
+			status := <-outcomes
+			if status == 200 {
+				winners++
+			} else {
+				require.Equal(t, 400, status)
+			}
+		}
+		require.Equal(t, 1, winners)
+		count, err := db.Collection("users").CountDocuments(ctx, bson.M{"email": "concurrent-native@example.test"})
+		require.NoError(t, err)
+		require.Equal(t, int64(1), count)
+
+		// The exchanged session uses the unchanged refresh and logout implementation.
+		nativeRotated, err := service.RefreshToken(ctx, &accessmanager.RefreshTokenRequest{RefreshToken: nativeRefresh.Value, AccessToken: nativeAccess.Value})
+		require.NoError(t, err)
+		nativeRotatedDetails, err := authService.ExtractAccessTokenMetadataByString(ctx, nativeRotated.AccessToken)
+		require.NoError(t, err)
+		require.True(t, nativeRotatedDetails.AuthenticationTime.Equal(nativeDetails.AuthenticationTime))
+		nativeLogout := httptest.NewRequest(http.MethodGet, "https://app.example/api/v1/ams/logout", nil)
+		nativeLogout.Header.Set("Authorization", "Bearer "+nativeRotated.AccessToken)
+		require.NoError(t, service.LogoutUser(ctx, nativeLogout))
+		_, err = redisRuntime.Store.FetchAuth(ctx, nativeRotatedDetails)
+		require.Error(t, err)
+	})
+
 }
 
 type oauthAuditStub struct{}

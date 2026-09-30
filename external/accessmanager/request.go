@@ -167,6 +167,8 @@ type GetUserAPITokenThresholdRequest struct {
 // OauthLoginRequest hold the data required for inititing a
 // oauth provider login
 type OauthLoginRequest struct {
+	// Mobile is accepted only from a consumed server-side native start ticket.
+	Mobile *oauth.MobileFlowContext
 	// Browser opts into completion by redirect rather than an API token response.
 	Browser bool
 	// Link is accepted only from server-authenticated initiation.
