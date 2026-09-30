@@ -96,21 +96,29 @@ Use verification type `1` when the client is tracking a pending login email.
 
 The code is a manual-entry alias for the underlying token. This keeps the email link and manual code paths equivalent after code resolution.
 
-### SSO With Google Or Another OAuth Provider
+### Sign in with Google and Apple
 
-OAuth support is provider-based. A host application creates one or more providers, such as `oauth.NewGoogleProvider`, and passes them to Access Manager as `OauthServices`.
+Create providers with `oauth.NewGoogleSecureProvider` and `oauth.NewAppleProvider`
+and supply them as `OauthServices`. Apply the identity indexes before enabling
+providers. The legacy `NewGoogleProvider` is not accepted for secure sign-in.
 
-1. The app starts SSO with `GET /api/v1/ams/oauth/google/login`, optionally including `request_url=<path>`.
-2. Access Manager finds the `google` provider, creates a random CSRF protection state, stores that state in an `HttpOnly` provider cookie, appends the requested return path into the state value, and redirects to the provider authorization URL.
-3. The provider redirects back to `GET /api/v1/ams/oauth/google/callback` with `code` and `state`.
-4. Access Manager compares the returned `state` with the provider cookie.
-5. Access Manager exchanges the provider code for provider tokens and fetches provider user information.
-6. If a GHATD user already exists for the provider email, Access Manager creates a GHATD session for that user and records provider-verified email status when present. If no user exists, Access Manager creates a user without sending a verification email, runs the GHATD email-verification revisions, and creates a GHATD session.
-7. Access Manager removes the provider state cookie, sets the GHATD auth cookies, returns a token response, and exposes `X-Web-Location` when a return URL was supplied.
+1. Discover configured providers, then start login with `browser=true` and a
+   rooted local `request_url` for browser clients.
+2. GHATD stores state, nonce, return path and PKCE/linking context server-side;
+   the provider cookie holds only an opaque handle.
+3. The provider returns to the Google GET or Apple form-POST callback. GHATD
+   checks the transaction cookie/state, consumes the transaction, exchanges the
+   code and validates the signed ID token.
+4. Resolve the account by issuer/subject. A matching email on another account
+   requires explicit fresh-session linking; it never silently selects that user.
+5. Set the ordinary session cookies and clear the transaction cookie. Browser
+   mode returns a 303 to the stored safe path; API mode retains the metadata
+   response. No browser callback wrapper is required.
 
-Host applications that want a browser-only final redirect can wrap or customise the callback behavior. Applications that call the callback through an HTTP client can read `X-Web-Location` and route the user after the cookies have been stored.
-
-For an app-facing checklist that applies these flows from a client perspective, see [Authenticating the App](../../docs/how-to/authenticating-the-app.md).
+Native clients use the one-use [handoff](#native-app-handoff) to obtain these same
+cookies in their own HTTP client. For registrations, composition and local
+HTTPS testing, follow [Add Google and Apple sign-in](../../docs/how-to/add-google-apple-sign-in.md).
+The precise route and linking contract is [below](#secure-google-and-apple-sign-in).
 
 ## Security Measures
 
@@ -137,8 +145,8 @@ All endpoints are prefixed with `/api/v1/ams`.
 - `GET /api/v1/ams/logout` — Log out the current user
 - `GET /api/v1/ams/verify/email` — Verify an email verification token or code
 - `POST /api/v1/ams/tokens/refresh` — Refresh access and refresh tokens
-- `GET /api/v1/ams/oauth/google/login` — Initiate Google OAuth login
-- `GET /api/v1/ams/oauth/google/callback` — Google OAuth callback
+- Google/Apple provider discovery, sign-in, callbacks and linking — see [secure provider endpoints](#secure-google-and-apple-sign-in)
+- Optional native discovery, start and exchange — see [native app handoff](#native-app-handoff)
 
 ### Authenticated (JWT or API token required)
 - `POST /api/v1/ams/users/{userID}/tokens` — Create an API token
@@ -183,6 +191,7 @@ func main() {
         CookiePrefixAuthToken:    "__aauth",
         CookiePrefixRefreshToken: "__rauth",
         CookieDomain:             "example.com",
+        OAuthOrigin:              "https://app.example.com",
     })
 
     accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{
@@ -287,7 +296,7 @@ startup with `MobileOAuthConfig{Origin, RedirectURIs, Store}` and
 `NewRedisMobileOAuthStore(redisClient, namespace)`. An empty redirect allowlist
 disables native discovery and handoff. `Origin` must be the public HTTPS origin
 hosting the provider callbacks; register exact private app URIs such as
-`boasi.io.bedrock:/oauth/callback`. Each app should use its own reverse-domain
+`com.example.yourapp:/oauth/callback`. Each app should use its own reverse-domain
 scheme. These app URIs are separate from Google/Apple's HTTPS redirect URIs.
 
 | Method | Route under `/api/v1/ams` | Behaviour |

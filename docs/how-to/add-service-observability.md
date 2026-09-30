@@ -261,8 +261,10 @@ Before rolling an existing service forward:
   [new schema](../../external/logger/README.md#request-completion-fields).
   Arbitrary incoming correlation IDs are now replaced with canonical UUIDv4s.
 - Prefer keyed struct literals when configuring requests such as
-  `oauth.NewGoogleProviderRequest` and `ephemeral.NewRedisRuntimeRequest`; new
-  `HTTPClient` and `Hooks` fields require changes to positional literals.
+  `oauth.NewGoogleSecureProviderRequest` and `ephemeral.NewRedisRuntimeRequest`.
+  For older integrations, the legacy `NewGoogleProviderRequest` also gained
+  `HTTPClient`; prefer keyed literals as fields are added. New sign-in hosts
+  should use the [secure provider setup](add-google-apple-sign-in.md).
 - Move existing billing, sitemap and vision index registrations to their
   [`WithContext` variants](manage-mongodb-migrations.md#3-register-up-and-down-functions)
   so deadlines and trace parentage reach database operations. Existing

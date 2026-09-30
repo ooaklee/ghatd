@@ -401,8 +401,16 @@ always safe.
 - [ADR017: Colocate package documentation](../../../docs/adr/adr017-colocate-package-documentation.md)
 
 
-For Google/Apple sign-in, pass secure OAuth providers to `NewServicesRequest`,
-apply `user/v2/migrations.InitUsersOAuthIndexesUp` in the host migrator and set
-`NewHandlersRequest.OAuthOrigin` to the trusted browser origin. See
-[provider setup](../../oauth/README.md) and
+## Google and Apple sign-in
+
+Pass secure providers through `NewServicesRequest.OAuthServices`, apply
+`user/v2/migrations.InitUsersOAuthIndexesUp` through the host migrator, and set
+`NewHandlersRequest.OAuthOrigin` to the trusted frontend origin. Before serving,
+opt native apps in with `handlers.AccessManager.ConfigureMobileOAuth` and check
+its returned error; an empty redirect allowlist disables native handoff.
+Starter does not load provider secrets, register callbacks or apply migrations.
+
+See the cross-package [adoption guide](../../../docs/how-to/add-google-apple-sign-in.md),
+[compile-checked composition example](../../../examples/oauth/README.md),
+[provider reference](../../oauth/README.md) and
 [access-manager routes](../../accessmanager/README.md).

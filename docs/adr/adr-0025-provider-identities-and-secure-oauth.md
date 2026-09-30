@@ -1,4 +1,4 @@
-# ADR0025: Use signed provider identities for browser sign-in
+# ADR0025: Share signed provider identities across web and native sign-in
 
 - Status: accepted
 - Date: 2026-09-30
@@ -61,3 +61,23 @@ The new HTTP lifecycle checks run against actual MongoDB and Redis with signed
 provider fixtures and cover creation, repeat Apple login, linking, collision,
 restricted statuses, refresh/logout and cancellation. Separate live-provider
 checks are required when credentials and consent are available.
+
+## Native handoff and host adoption
+
+The native flow reuses provider verification, identity resolution/linking and
+normal session issuance. A system authentication browser has a separate cookie
+store from the app. GHATD therefore binds a short-lived start ticket and one-use
+return grant to app-generated state and an independent S256 verifier. No access
+or refresh token crosses a deep link. Account writes and linking happen only
+at exchange, with the same signed-session and account-status checks.
+
+The framework owns this protocol; hosts own environment parsing, secret loading,
+provider registrations, migrations, public origins and platform callback setup.
+Vue/Flutter views and native secure-cookie adapters remain in their clients.
+A [shared adoption guide](../how-to/add-google-apple-sign-in.md) and
+[compiled composition example](../../examples/oauth/README.md) carry the reusable
+setup knowledge. No Bedrock-specific environment or UI API is added to core.
+
+Live Google/Apple web and Android companion login have been confirmed against
+the shared backend. iOS, broader native acceptance and actual relay email
+receipt remain separate validation work, recorded in the adoption guide.
