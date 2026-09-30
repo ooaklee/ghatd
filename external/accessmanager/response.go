@@ -129,6 +129,8 @@ type OauthLoginResponse struct {
 // OauthCallbackResponse hold the data returned when handling a
 // oauth provider callback
 type OauthCallbackResponse struct {
+	Browser bool
+	Linked  bool
 
 	// AccessToken represents the access token for the logged in user
 	AccessToken string

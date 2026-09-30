@@ -241,3 +241,40 @@ Safari is strict about cookie attribute matching for deletion. If the cookie jar
 **Prevention**:
 - Maintain a consistent `CookieDomain` setting in the server configuration across restarts (e.g., always use `"localhost"` for local development, never mix empty and explicit domain values)
 - Avoid switching between secure/non-secure configurations that produce cookies with different `Secure` attribute scopes
+
+
+## Secure Google and Apple sign-in
+
+Supply secure providers in `OauthServices`, identity-capable `user/v2` service,
+the standard auth service and Redis ephemeral storage. Configure `OAuthOrigin`
+on the handler (or starter `NewHandlersRequest`) to the exact trusted browser
+origin for explicit account-link POSTs. Apply the user OAuth indexes first.
+
+| Method | Route under `/api/v1/ams` | Behaviour |
+| --- | --- | --- |
+| GET | `/oauth/providers` | Available secure provider names, without credentials |
+| GET | `/oauth/{google\|apple}/login` | Starts a server-held transaction and redirects |
+| GET | `/oauth/google/callback` | Completes Google sign-in |
+| POST | `/oauth/apple/callback` | Completes Apple's bounded form-post callback |
+| POST | `/oauth/{google\|apple}/link` | Starts explicit, fresh-session linking |
+
+Login accepts `request_url` as a rooted same-origin path and optional
+`browser=true`. Completion mode and return path are stored at initiation.
+Browser success sets normal session cookies and returns a 303; API success
+retains the token-metadata response. Browser failures redirect to
+`/auth/login?oauth_error=<fixed-code>&request_url=<safe-path>`.
+
+Linking requires a JSON body containing only `request_url` and `browser`, an
+exact matching Origin header and the configured access cookie. The service
+uses the signed user ID, access UUID and recent `auth_time`, never a user ID
+supplied by the caller. A successful POST returns `data.redirect_url` and a
+transient cookie. Callback rechecks the original session and current verified
+ACTIVE account before atomic linking. Success preserves session cookies and
+adds `oauth_linked=google|apple` to the trusted continuation URL. Old or revoked
+sessions must reauthenticate. Refresh preserves the original signed login time.
+
+The fixed browser errors are `cancelled`, `unavailable`, `invalid`,
+`unverified_email`, `restricted`, `link_required`, `reauth_required` and `failed`.
+Provider accounts are found by signed issuer/subject, never automatically by
+matching email. Apple repeat sign-in can omit first-only profile data. Every
+restricted user status is denied before session issuance.

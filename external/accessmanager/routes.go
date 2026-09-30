@@ -144,8 +144,15 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.CreateInitalLoginOrVerificationTokenEmail).Methods(http.MethodPost, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogout, request.Handler.LogoutUser).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserRefreshToken, request.Handler.RefreshToken).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleCallback, request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleLogin, request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/callback", request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
+	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/login", request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+	if optional, ok := request.Handler.(interface {
+		OAuthProviders(http.ResponseWriter, *http.Request)
+		OAuthLink(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/providers", optional.OAuthProviders).Methods(http.MethodGet, http.MethodOptions)
+		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/link", optional.OAuthLink).Methods(http.MethodPost, http.MethodOptions)
+	}
 
 	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)

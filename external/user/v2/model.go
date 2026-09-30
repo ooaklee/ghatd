@@ -150,6 +150,10 @@ func (c *UserConfig) GetType(fallback *UserConfig) string {
 
 // UniversalUser represents a flexible user model
 type UniversalUser struct {
+	// OAuthIdentities and OAuthIdentityKeys are written only by trusted provider operations.
+	OAuthIdentities   []OAuthIdentity `json:"-" bson:"oauth_identities,omitempty"`
+	OAuthIdentityKeys []string        `json:"-" bson:"oauth_identity_keys,omitempty"`
+
 	// Core required fields
 	ID     string `json:"id" bson:"_id" db:"id"`
 	Email  string `json:"email" bson:"email" db:"email"`
@@ -581,11 +585,17 @@ func (u *UniversalUser) Validate() error {
 				return ErrUserRequiredFieldMissingEmail
 			}
 		case "first_name":
+			if len(u.OAuthIdentities) > 0 {
+				continue
+			}
 			if u.PersonalInfo == nil || u.PersonalInfo.FirstName == "" {
 				fmt.Printf("required-field-missing: %s\n", field)
 				return ErrUserRequiredFieldMissingFirstName
 			}
 		case "last_name":
+			if len(u.OAuthIdentities) > 0 {
+				continue
+			}
 			if u.PersonalInfo == nil || u.PersonalInfo.LastName == "" {
 				fmt.Printf("required-field-missing: %s\n", field)
 				return ErrUserRequiredFieldMissingLastName

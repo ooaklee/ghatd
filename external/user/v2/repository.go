@@ -183,9 +183,19 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 		"_id": user.ID,
 	}
 
-	update := bson.M{
-		"$set": user,
+	// Protect identities from stale full-user snapshots and client updates.
+	encoded, err := bson.Marshal(user)
+	if err != nil {
+		return nil, err
 	}
+	fields := bson.M{}
+	if err = bson.Unmarshal(encoded, &fields); err != nil {
+		return nil, err
+	}
+	delete(fields, "oauth_identities")
+	delete(fields, "oauth_identity_keys")
+	delete(fields, "_id")
+	update := bson.M{"$set": fields}
 
 	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "user")
 	if err != nil {

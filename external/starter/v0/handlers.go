@@ -56,6 +56,8 @@ type NewHandlersRequest struct {
 	CookiePrefixAuthToken    string
 	CookiePrefixRefreshToken string
 	CookieDomain             string
+	// OAuthOrigin is the trusted frontend origin for explicit provider linking.
+	OAuthOrigin string
 
 	ErrorMaps *HandlerErrorMaps
 }
@@ -86,6 +88,7 @@ func NewHandlers(r *NewHandlersRequest) (*Handlers, error) {
 			CookiePrefixAuthToken:    r.CookiePrefixAuthToken,
 			CookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
 			CookieDomain:             r.CookieDomain,
+			OAuthOrigin:              r.OAuthOrigin,
 		}),
 		BillingManager: billingmanager.NewHandler(
 			r.Services.BillingManager,

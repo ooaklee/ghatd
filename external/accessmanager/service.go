@@ -2,7 +2,6 @@ package accessmanager
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -420,284 +419,6 @@ func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersReque
 	// use user id to call ephemerals store's delete method to remove all tokens except current ones
 	return s.EphemeralStore.DeleteAllTokenExceptedSpecified(ctx, requestingUser.User.ID, []string{
 		toolbox.CombinedUuidFormat(requestingUser.User.ID, accessTokenId), toolbox.CombinedUuidFormat(requestingUser.User.ID, refreshTokenId)})
-}
-
-// OauthCallback handles logic of managing the callback of a provider
-func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error) {
-
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
-	if len(s.OauthServices) == 0 {
-		logger.Error("no-oauth-provider-passed-to-access-manager-but-oauth-callback-requested", zap.String("requested-provider", r.Provider))
-		return nil, ErrNoOauthProvidersDetected
-	}
-
-	for _, provider := range s.OauthServices {
-
-		if r.Provider != provider.ProviderGetName() {
-			logger.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
-			continue
-		}
-
-		// get protection token (state) from cookie
-		var fetchedProtectionStateTokenCookie *http.Cookie
-
-		// create variable to hold unencoded redirect url
-		var detectedUnencodedRedirectUrl string
-
-		for _, requestCookie := range r.RequestCookies {
-			if requestCookie.Name != provider.ProviderGetCookieKey() {
-				continue
-			}
-
-			fetchedProtectionStateTokenCookie = requestCookie
-			break
-		}
-
-		if fetchedProtectionStateTokenCookie == nil {
-			return nil, ErrProviderCookieNotFound
-		}
-
-		// Compare the protection token (state) from cookie with the one passed in
-		// the request
-		providerCookieKey, providerRequestAuthenticated := provider.ProviderVerifyRequestIsAuthentic(r.UrlUri, fetchedProtectionStateTokenCookie)
-
-		if !providerRequestAuthenticated {
-			return &OauthCallbackResponse{
-				ProviderStateCookieKey: providerCookieKey,
-			}, ErrProviderInvalidProtectionStateToken
-		}
-
-		// check if redirect url passed
-		splitProtectionStateTokenCookieValue := strings.Split(fetchedProtectionStateTokenCookie.Value, ".")
-		if len(splitProtectionStateTokenCookieValue) > 1 {
-
-			decoded64RequestUrl, err := base64.StdEncoding.DecodeString(splitProtectionStateTokenCookieValue[1])
-			if err != nil {
-				logger.Warn("failed-to-decode-detected-request-url-uri-for-sso-callback", requestURLLogFields(splitProtectionStateTokenCookieValue[1])...)
-			}
-
-			if err == nil && string(decoded64RequestUrl) != "" {
-				detectedUnencodedRedirectUrl = string(decoded64RequestUrl)
-			}
-		}
-
-		// get user data
-		providerUserInfo, err := provider.ProviderGetUserData(ctx, r.UrlUri)
-		if err != nil {
-			return &OauthCallbackResponse{
-				ProviderStateCookieKey: providerCookieKey,
-			}, err
-		}
-
-		// Manage flow with user information
-		persistentUserResponse, err := findUserByEmail(ctx, s.UserService, &userv2.GetUserByEmailRequest{Email: providerUserInfo.GetUserEmail()})
-		// Check if there is an error outside of user not being found
-		if persistentUserResponse == nil && !errors.Is(err, userv2.ErrUserNotFound) {
-			return &OauthCallbackResponse{
-				ProviderStateCookieKey: providerCookieKey,
-			}, err
-		}
-
-		// Handle if user exists, generate auth tokens
-		if err == nil {
-			persistentUser := persistentUserResponse.User
-
-			tokenDetails, err := s.AuthService.CreateToken(ctx, persistentUser)
-			if err != nil {
-				return &OauthCallbackResponse{
-					ProviderStateCookieKey: providerCookieKey,
-				}, err
-			}
-
-			// update users logged in time
-			persistentUser.SetLastLoginAtNow()
-			persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
-
-			// If user is verified by provider but not our platform, we should trust provider
-			if !persistentUser.Verification.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
-
-				logger.Info("provider-login-user-email-verified-based-on-provider-records", zap.String("user-id", persistentUser.ID))
-				persistentUser.VerifyEmail()
-			}
-
-			UpdateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-				User: persistentUser,
-			})
-			if err != nil {
-				logger.Error("provider-login-user-update-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
-				return &OauthCallbackResponse{
-					ProviderStateCookieKey: providerCookieKey,
-				}, err
-			}
-
-			err = s.EphemeralStore.CreateAuth(ctx, UpdateUserResponse.User.ID, tokenDetails)
-			if err != nil {
-				logger.Error("provider-login-ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
-				return &OauthCallbackResponse{
-					ProviderStateCookieKey: providerCookieKey,
-				}, err
-			}
-
-			// audit log sso login
-			auditEvent := audit.UserLoginSso
-			auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-				ActorId:    audit.AuditActorIdSystem,
-				Action:     auditEvent,
-				TargetId:   persistentUser.ID,
-				TargetType: audit.User,
-				Domain:     "accessmanager",
-				Details: audit.UserSsoEventDetails{
-					SsoProvider: r.Provider,
-				},
-			})
-
-			if auditErr != nil {
-				logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", persistentUser.ID), zap.String("event-type", string(auditEvent)))
-			}
-
-			return &OauthCallbackResponse{
-				RequestUrl:             detectedUnencodedRedirectUrl,
-				ProviderStateCookieKey: providerCookieKey,
-				AccessToken:            tokenDetails.AccessToken,
-				RefreshToken:           tokenDetails.RefreshToken,
-				AccessTokenExpiresAt:   tokenDetails.AtExpires,
-				RefreshTokenExpiresAt:  tokenDetails.RtExpires,
-			}, nil
-		} else { // if not, create user, generate token
-
-			newUserResp, err := s.CreateUser(ctx, &CreateUserRequest{
-				DisableVerificationEmail: true,
-				FirstName:                providerUserInfo.GetUserFirstName(),
-				LastName:                 providerUserInfo.GetUserLastName(),
-				Email:                    providerUserInfo.GetUserEmail(),
-			})
-			if err != nil {
-				logger.Error("provider-signup-user-creation-failed-after-successful-login-initiation", append(emailLogFields("user-email", providerUserInfo.GetUserEmail()), zap.Error(err))...)
-				return &OauthCallbackResponse{
-					ProviderStateCookieKey: providerCookieKey,
-				}, err
-			}
-
-			// If user is verified by provider but not our platform, we should trust provider
-			if !newUserResp.User.Verification.EmailVerified && providerUserInfo.IsUserEmailVerifiedByProvider() {
-
-				logger.Info("provider-signup-user-email-verified-based-on-provider-records", zap.String("user-id", newUserResp.User.ID))
-				newUserResp.User.VerifyEmail()
-
-				// Update user with verification information
-				updatedUser, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-					User: newUserResp.User,
-				})
-				if err != nil {
-					logger.Error("failed-to-save-new-user-verification-by-provider", zap.String("user-id", newUserResp.User.ID), zap.Error(err))
-				} else {
-					logger.Info("successfully-saved-new-user-verification-by-provider", zap.String("user-id", updatedUser.User.ID))
-				}
-
-			}
-
-			// audit log new sso user
-			auditEvent := audit.UserAccountNewSso
-			auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-				ActorId:    audit.AuditActorIdSystem,
-				Action:     auditEvent,
-				TargetId:   newUserResp.User.ID,
-				TargetType: audit.User,
-				Domain:     "accessmanager",
-				Details: audit.UserSsoEventDetails{
-					SsoProvider: r.Provider,
-				},
-			})
-
-			if auditErr != nil {
-				logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
-			}
-
-			logger.Info("initiate-new-user-tokens", zap.String("user-id", newUserResp.User.ID))
-
-			accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, err := s.UserEmailVerificationRevisions(ctx, &UserEmailVerificationRevisionsRequest{
-				UserID: newUserResp.User.ID})
-			if err != nil {
-				return nil, err
-			}
-
-			// audit log sso login
-			auditEvent = audit.UserLoginSso
-			auditErr = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-				ActorId:    audit.AuditActorIdSystem,
-				Action:     auditEvent,
-				TargetId:   newUserResp.User.ID,
-				TargetType: audit.User,
-				Domain:     "accessmanager",
-				Details: audit.UserSsoEventDetails{
-					SsoProvider: r.Provider,
-				},
-			})
-
-			if auditErr != nil {
-				logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", newUserResp.User.ID), zap.String("event-type", string(auditEvent)))
-			}
-
-			return &OauthCallbackResponse{
-				RequestUrl:             detectedUnencodedRedirectUrl,
-				ProviderStateCookieKey: providerCookieKey,
-				AccessToken:            accessToken,
-				RefreshToken:           refreshToken,
-				AccessTokenExpiresAt:   accessTokenExpiresAt,
-				RefreshTokenExpiresAt:  refreshTokenExpiresAt,
-			}, nil
-
-		}
-	}
-
-	return nil, ErrProvidersPassedNotFound
-}
-
-// OauthLogin handles logic of managing the initialisation of provider url
-func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error) {
-
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
-	if len(s.OauthServices) == 0 {
-		logger.Error("no-oauth-provider-passed-to-access-manager-but-oauth-login-requested", zap.String("requested-provider", r.Provider))
-		return nil, ErrNoOauthProvidersDetected
-	}
-
-	for _, provider := range s.OauthServices {
-
-		if r.Provider != provider.ProviderGetName() {
-			logger.Info("skipping-oauth-provider-does-not-match-requested", zap.String("requested-provider", r.Provider), zap.String("sourced-provider", provider.ProviderGetName()))
-			continue
-		}
-
-		// generate protection token (state) query
-		protectionStateToken := provider.ProviderGenerateProtectionToken()
-
-		// append base64 redirect url
-		if r.RequestUrl != "" {
-
-			encoded64RequestUrl := base64.StdEncoding.EncodeToString([]byte(r.RequestUrl))
-
-			protectionStateToken += fmt.Sprintf(`.%s`, encoded64RequestUrl)
-		}
-
-		// Create cookie for holding oauth state
-		oauthCookie := http.Cookie{
-			// 20 minutes expiry
-			Expires: time.Now().Add(20 * time.Minute),
-			Name:    provider.ProviderGetCookieKey(),
-			Value:   protectionStateToken,
-		}
-
-		return &OauthLoginResponse{
-			CookieCore:          &oauthCookie,
-			ProviderAuthCodeUrl: provider.ProviderGenerateAuthCodeUrl(protectionStateToken),
-		}, nil
-
-	}
-
-	return nil, ErrProvidersPassedNotFound
 }
 
 // GetSpecificUserAPITokens retrieves API token for a specific user
@@ -1246,7 +967,7 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	}
 
 	// Create new pair of refresh and access tokens
-	newTokensDetails, err := s.AuthService.CreateToken(ctx, tokenUser)
+	newTokensDetails, err := s.createSessionToken(ctx, tokenUser, refreshTokenDetails.AuthenticationTime)
 	if err != nil {
 		return nil, err
 	}
@@ -1455,7 +1176,7 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 			return nil, err
 		}
 	case userv2.AccountStatusKeyActive:
-		tokenDetails, err = s.AuthService.CreateToken(ctx, persistentUser)
+		tokenDetails, err = s.createSessionToken(ctx, persistentUser, time.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -1639,7 +1360,7 @@ func (s *Service) verifyEmailAndCreateSession(ctx context.Context, persistentUse
 		return nil, err
 	}
 
-	newTokenDetails, err := s.AuthService.CreateToken(ctx, updateUserResponse.User)
+	newTokenDetails, err := s.createSessionToken(ctx, updateUserResponse.User, time.Now())
 	if err != nil {
 		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
 		return nil, err
@@ -1719,142 +1440,7 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", response.User.ID), zap.String("event-type", string(auditEvent)))
 	}
 
-	// handle associating pre-registered subscriptions and billing events if any
-	if s.BillingService != nil {
-		logger.Info("checking-for-pre-registered-subscriptions", append([]zap.Field{zap.String("user-id", newUser.User.ID)}, emailLogFields("user-email", newUser.User.Email)...)...)
-		unassociatedSubResp, err := s.BillingService.GetUnassociatedSubscriptions(ctx, &billing.GetUnassociatedSubscriptionsRequest{
-			Email: newUser.User.Email,
-			Limit: 50,
-		})
-		if err != nil {
-			logger.Error("failed-to-check-for-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(err))
-		} else {
-			if len(unassociatedSubResp.Subscriptions) > 0 {
-				logger.Info("found-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
-				_, subscriptionAssociationErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
-					UserID: newUser.User.ID,
-					Email:  newUser.User.Email,
-				})
-				if subscriptionAssociationErr != nil {
-					logger.Error("failed-to-associate-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Error(subscriptionAssociationErr))
-				} else {
-					logger.Info("successfully-associated-pre-registered-subscriptions", zap.String("user-id", newUser.User.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
-				}
-			} else {
-				logger.Info("no-pre-registered-subscriptions-found", zap.String("user-id", newUser.User.ID))
-			}
-		}
-
-		logger.Info("checking-for-pre-registered-billing-events", append([]zap.Field{zap.String("user-id", newUser.User.ID)}, emailLogFields("user-email", newUser.User.Email)...)...)
-		unassociatedBillingEventsResp, err := s.BillingService.GetUnassociatedBillingEvents(ctx, &billing.GetUnassociatedBillingEventsRequest{
-			Email: newUser.User.Email,
-			Limit: 100,
-		})
-		if err != nil {
-			logger.Error("failed-to-check-for-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(err))
-		} else {
-			if len(unassociatedBillingEventsResp.BillingEvents) > 0 {
-				logger.Info("found-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
-				_, billingEventAssociationErr := s.BillingService.AssociateBillingEventsWithUser(ctx, &billing.AssociateBillingEventsWithUserRequest{
-					UserID: newUser.User.ID,
-					Email:  newUser.User.Email,
-				})
-				if billingEventAssociationErr != nil {
-					logger.Error("failed-to-associate-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Error(billingEventAssociationErr))
-				} else {
-					logger.Info("successfully-associated-pre-registered-billing-events", zap.String("user-id", newUser.User.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
-				}
-			} else {
-				logger.Info("no-pre-registered-billing-events-found", zap.String("user-id", newUser.User.ID))
-			}
-		}
-	}
-
-	// handle auto-join/auto-invite group membership if group service is available
-	if s.GroupService != nil {
-		logger.Info("checking-for-auto-join-groups", append([]zap.Field{zap.String("user-id", newUser.User.ID)}, emailLogFields("user-email", newUser.User.Email)...)...)
-		autoJoinGroupsResp, err := s.GroupService.GetParentGroupsWithAutoJoinForEmail(ctx, newUser.User.Email)
-		if err != nil {
-			logger.Error("failed-to-check-for-auto-join-groups", zap.String("user-id", newUser.User.ID), zap.Error(err))
-		} else {
-			if autoJoinGroupsResp != nil && len(autoJoinGroupsResp.Groups) > 0 {
-				logger.Info("found-groups-with-auto-join", zap.String("user-id", newUser.User.ID), zap.Int("group-count", len(autoJoinGroupsResp.Groups)))
-
-				for _, autoJoinGroup := range autoJoinGroupsResp.Groups {
-					if autoJoinGroup == nil || autoJoinGroup.Settings == nil {
-						continue
-					}
-
-					// Determine which action to take based on group settings
-					if autoJoinGroup.Settings.AutoJoinByEmailDomainEnabled {
-						// Auto-join: add user directly as member
-						memberRole := autoJoinGroup.Settings.AutoActionDefaultMemberRole
-						if memberRole == "" {
-							memberRole = group.MemberRoleMember
-						}
-
-						_, memberErr := s.GroupService.AddMember(ctx, &group.AddMemberRequest{
-							GroupID:  autoJoinGroup.ID,
-							MemberID: newUser.User.ID,
-							Type:     group.MemberTypeUser,
-							Role:     memberRole,
-						})
-						if memberErr != nil {
-							logger.Error("failed-to-auto-join-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(memberErr))
-						} else {
-							logger.Info("successfully-auto-joined-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
-							// Audit log the auto-join
-							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-								ActorId:    audit.AuditActorIdSystem,
-								Action:     "group.member.auto_joined",
-								TargetId:   autoJoinGroup.ID,
-								TargetType: "group",
-								Domain:     "accessmanager",
-								Details: map[string]interface{}{
-									"user_id":            newUser.User.ID,
-									"user_email":         newUser.User.Email,
-									"auto_action_source": "signup",
-								},
-							})
-						}
-					} else if autoJoinGroup.Settings.AutoInviteByEmailDomainEnabled {
-						// Auto-invite: create pending invitation for user's email
-						memberRole := autoJoinGroup.Settings.AutoActionDefaultMemberRole
-						if memberRole == "" {
-							memberRole = group.MemberRoleMember
-						}
-
-						_, inviteErr := s.GroupService.InviteUser(ctx, &group.InviteUserRequest{
-							GroupID:     autoJoinGroup.ID,
-							InviteEmail: newUser.User.Email,
-							Role:        memberRole,
-							InvitedByID: audit.AuditActorIdSystem,
-						})
-						if inviteErr != nil {
-							logger.Error("failed-to-auto-invite-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(inviteErr))
-						} else {
-							logger.Info("successfully-auto-invited-user-to-group", zap.String("user-id", newUser.User.ID), zap.String("group-id", autoJoinGroup.ID))
-							// Audit log the auto-invite
-							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-								ActorId:    audit.AuditActorIdSystem,
-								Action:     "group.member.auto_invited",
-								TargetId:   autoJoinGroup.ID,
-								TargetType: "group",
-								Domain:     "accessmanager",
-								Details: map[string]interface{}{
-									"user_id":            newUser.User.ID,
-									"user_email":         newUser.User.Email,
-									"auto_action_source": "signup",
-								},
-							})
-						}
-					}
-				}
-			} else {
-				logger.Info("no-groups-with-auto-join-found", zap.String("user-id", newUser.User.ID))
-			}
-		}
-	}
+	s.associateNewUser(ctx, newUser.User)
 
 	// handle verification email if not disabled
 	if !r.DisableVerificationEmail {
@@ -2063,4 +1649,146 @@ func (s *Service) resolveTokenFromCode(ctx context.Context, code string) (string
 	logger.Info("successfully-resolved-code-to-token", verificationCodeLogFields(code)...)
 
 	return token, nil
+}
+
+// associateNewUser preserves pre-registration billing and group actions for every signup path.
+func (s *Service) associateNewUser(ctx context.Context, newUser *userv2.UniversalUser) {
+	logger := logger.AcquirePackageFrom(ctx, "external/accessmanager")
+	// handle associating pre-registered subscriptions and billing events if any
+	if s.BillingService != nil {
+		logger.Info("checking-for-pre-registered-subscriptions", append([]zap.Field{zap.String("user-id", newUser.ID)}, emailLogFields("user-email", newUser.Email)...)...)
+		unassociatedSubResp, err := s.BillingService.GetUnassociatedSubscriptions(ctx, &billing.GetUnassociatedSubscriptionsRequest{
+			Email: newUser.Email,
+			Limit: 50,
+		})
+		if err != nil {
+			logger.Error("failed-to-check-for-pre-registered-subscriptions", zap.String("user-id", newUser.ID), zap.Error(err))
+		} else {
+			if len(unassociatedSubResp.Subscriptions) > 0 {
+				logger.Info("found-pre-registered-subscriptions", zap.String("user-id", newUser.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
+				_, subscriptionAssociationErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
+					UserID: newUser.ID,
+					Email:  newUser.Email,
+				})
+				if subscriptionAssociationErr != nil {
+					logger.Error("failed-to-associate-pre-registered-subscriptions", zap.String("user-id", newUser.ID), zap.Error(subscriptionAssociationErr))
+				} else {
+					logger.Info("successfully-associated-pre-registered-subscriptions", zap.String("user-id", newUser.ID), zap.Int("subscription-count", len(unassociatedSubResp.Subscriptions)))
+				}
+			} else {
+				logger.Info("no-pre-registered-subscriptions-found", zap.String("user-id", newUser.ID))
+			}
+		}
+
+		logger.Info("checking-for-pre-registered-billing-events", append([]zap.Field{zap.String("user-id", newUser.ID)}, emailLogFields("user-email", newUser.Email)...)...)
+		unassociatedBillingEventsResp, err := s.BillingService.GetUnassociatedBillingEvents(ctx, &billing.GetUnassociatedBillingEventsRequest{
+			Email: newUser.Email,
+			Limit: 100,
+		})
+		if err != nil {
+			logger.Error("failed-to-check-for-pre-registered-billing-events", zap.String("user-id", newUser.ID), zap.Error(err))
+		} else {
+			if len(unassociatedBillingEventsResp.BillingEvents) > 0 {
+				logger.Info("found-pre-registered-billing-events", zap.String("user-id", newUser.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
+				_, billingEventAssociationErr := s.BillingService.AssociateBillingEventsWithUser(ctx, &billing.AssociateBillingEventsWithUserRequest{
+					UserID: newUser.ID,
+					Email:  newUser.Email,
+				})
+				if billingEventAssociationErr != nil {
+					logger.Error("failed-to-associate-pre-registered-billing-events", zap.String("user-id", newUser.ID), zap.Error(billingEventAssociationErr))
+				} else {
+					logger.Info("successfully-associated-pre-registered-billing-events", zap.String("user-id", newUser.ID), zap.Int("billing-event-count", len(unassociatedBillingEventsResp.BillingEvents)))
+				}
+			} else {
+				logger.Info("no-pre-registered-billing-events-found", zap.String("user-id", newUser.ID))
+			}
+		}
+	}
+
+	// handle auto-join/auto-invite group membership if group service is available
+	if s.GroupService != nil {
+		logger.Info("checking-for-auto-join-groups", append([]zap.Field{zap.String("user-id", newUser.ID)}, emailLogFields("user-email", newUser.Email)...)...)
+		autoJoinGroupsResp, err := s.GroupService.GetParentGroupsWithAutoJoinForEmail(ctx, newUser.Email)
+		if err != nil {
+			logger.Error("failed-to-check-for-auto-join-groups", zap.String("user-id", newUser.ID), zap.Error(err))
+		} else {
+			if autoJoinGroupsResp != nil && len(autoJoinGroupsResp.Groups) > 0 {
+				logger.Info("found-groups-with-auto-join", zap.String("user-id", newUser.ID), zap.Int("group-count", len(autoJoinGroupsResp.Groups)))
+
+				for _, autoJoinGroup := range autoJoinGroupsResp.Groups {
+					if autoJoinGroup == nil || autoJoinGroup.Settings == nil {
+						continue
+					}
+
+					// Determine which action to take based on group settings
+					if autoJoinGroup.Settings.AutoJoinByEmailDomainEnabled {
+						// Auto-join: add user directly as member
+						memberRole := autoJoinGroup.Settings.AutoActionDefaultMemberRole
+						if memberRole == "" {
+							memberRole = group.MemberRoleMember
+						}
+
+						_, memberErr := s.GroupService.AddMember(ctx, &group.AddMemberRequest{
+							GroupID:  autoJoinGroup.ID,
+							MemberID: newUser.ID,
+							Type:     group.MemberTypeUser,
+							Role:     memberRole,
+						})
+						if memberErr != nil {
+							logger.Error("failed-to-auto-join-user-to-group", zap.String("user-id", newUser.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(memberErr))
+						} else {
+							logger.Info("successfully-auto-joined-user-to-group", zap.String("user-id", newUser.ID), zap.String("group-id", autoJoinGroup.ID))
+							// Audit log the auto-join
+							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+								ActorId:    audit.AuditActorIdSystem,
+								Action:     "group.member.auto_joined",
+								TargetId:   autoJoinGroup.ID,
+								TargetType: "group",
+								Domain:     "accessmanager",
+								Details: map[string]interface{}{
+									"user_id":            newUser.ID,
+									"user_email":         newUser.Email,
+									"auto_action_source": "signup",
+								},
+							})
+						}
+					} else if autoJoinGroup.Settings.AutoInviteByEmailDomainEnabled {
+						// Auto-invite: create pending invitation for user's email
+						memberRole := autoJoinGroup.Settings.AutoActionDefaultMemberRole
+						if memberRole == "" {
+							memberRole = group.MemberRoleMember
+						}
+
+						_, inviteErr := s.GroupService.InviteUser(ctx, &group.InviteUserRequest{
+							GroupID:     autoJoinGroup.ID,
+							InviteEmail: newUser.Email,
+							Role:        memberRole,
+							InvitedByID: audit.AuditActorIdSystem,
+						})
+						if inviteErr != nil {
+							logger.Error("failed-to-auto-invite-user-to-group", zap.String("user-id", newUser.ID), zap.String("group-id", autoJoinGroup.ID), zap.Error(inviteErr))
+						} else {
+							logger.Info("successfully-auto-invited-user-to-group", zap.String("user-id", newUser.ID), zap.String("group-id", autoJoinGroup.ID))
+							// Audit log the auto-invite
+							s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
+								ActorId:    audit.AuditActorIdSystem,
+								Action:     "group.member.auto_invited",
+								TargetId:   autoJoinGroup.ID,
+								TargetType: "group",
+								Domain:     "accessmanager",
+								Details: map[string]interface{}{
+									"user_id":            newUser.ID,
+									"user_email":         newUser.Email,
+									"auto_action_source": "signup",
+								},
+							})
+						}
+					}
+				}
+			} else {
+				logger.Info("no-groups-with-auto-join-found", zap.String("user-id", newUser.ID))
+			}
+		}
+	}
+
 }

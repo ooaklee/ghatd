@@ -1,6 +1,7 @@
 package accessmanager
 
 import (
+	"github.com/ooaklee/ghatd/external/oauth"
 	"net/http"
 	"net/url"
 
@@ -166,6 +167,10 @@ type GetUserAPITokenThresholdRequest struct {
 // OauthLoginRequest hold the data required for inititing a
 // oauth provider login
 type OauthLoginRequest struct {
+	// Browser opts into completion by redirect rather than an API token response.
+	Browser bool
+	// Link is accepted only from server-authenticated initiation.
+	Link *oauth.LinkProof
 	// The name of the provider the route belongs to
 	Provider string
 
@@ -177,6 +182,7 @@ type OauthLoginRequest struct {
 // OauthCallbackRequest hold the data required for handling a
 // oauth provider callback
 type OauthCallbackRequest struct {
+	Method string
 	// The name of the provider the route belongs to
 	Provider string
 

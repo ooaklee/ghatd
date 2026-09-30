@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -123,6 +124,15 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 // Access tokens are valid for 15 minutes and contain user session information.
 // Refresh tokens are valid for 7 days and can be used to obtain new access tokens.
 func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
+	return s.CreateTokenWithAuthenticationTime(ctx, user, time.Time{})
+}
+
+// CreateTokenWithAuthenticationTime carries the original signed login time through rotation.
+func (s *Service) CreateTokenWithAuthenticationTime(ctx context.Context, user UserModel, authenticatedAt time.Time) (*TokenDetails, error) {
+	if !authenticatedAt.IsZero() && (authenticatedAt.Unix() <= 0 || authenticatedAt.Unix() > time.Now().Unix()) {
+		return nil, ErrUnauthorized
+	}
+
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "create-token")
 	userID := user.GetUserId()
 	logger.Debug("auth-token-create-started", zap.String("user-id", userID), zap.Bool("admin", user.IsAdmin()), zap.String("user-status", user.GetUserStatus()))
@@ -135,13 +145,17 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 	td.GenerateRefreshUUID().GenerateAccessUUID()
 
 	// Create Access Token
-	at := generateHS256Tokens(mapAccessTokenClaims(&mapAccessTokenClaimsRequest{
+	accessClaims := mapAccessTokenClaims(&mapAccessTokenClaimsRequest{
 		UserStatus:            user.GetUserStatus(),
 		AccessTokenUUID:       td.AccessUUID,
 		UserID:                user.GetUserId(),
 		IsAdmin:               user.IsAdmin(),
 		AccessTokenTTLSeconds: td.AtExpires,
-	}))
+	})
+	if !authenticatedAt.IsZero() {
+		accessClaims["auth_time"] = authenticatedAt.Unix()
+	}
+	at := generateHS256Tokens(accessClaims)
 
 	var err error
 	td.AccessToken, err = at.SignedString([]byte(s.accessTokenSecret))
@@ -151,11 +165,15 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 	}
 
 	// Create Refresh Token
-	rt := generateHS256Tokens(map[string]interface{}{
+	refreshClaims := map[string]interface{}{
 		tokenClaimKeyRefreshUUID: td.RefreshUUID,
 		tokenClaimKeySub:         user.GetUserId(),
 		tokenClaimKeyExp:         td.RtExpires,
-	})
+	}
+	if !authenticatedAt.IsZero() {
+		refreshClaims["auth_time"] = authenticatedAt.Unix()
+	}
+	rt := generateHS256Tokens(refreshClaims)
 
 	td.RefreshToken, err = rt.SignedString([]byte(s.refreshTokenSecret))
 	if err != nil {
@@ -392,11 +410,16 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 		}
 
 		logger.Debug("auth-access-token-details-valid", zap.String("user-id", userID), zap.Bool("admin", isAdmin), zap.Bool("authorized", isActive))
+		authenticatedAt, err := tokenAuthenticationTime(claims)
+		if err != nil {
+			return nil, err
+		}
 		return &TokenAccessDetails{
-			AccessUUID:   accessUUID,
-			UserID:       userID,
-			IsAdmin:      isAdmin,
-			IsAuthorized: isActive,
+			AuthenticationTime: authenticatedAt,
+			AccessUUID:         accessUUID,
+			UserID:             userID,
+			IsAdmin:            isAdmin,
+			IsAuthorized:       isActive,
 		}, nil
 	}
 	logger.Warn("auth-access-token-invalid")
@@ -444,6 +467,11 @@ func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*T
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
+		var err error
+		refreshDetails.AuthenticationTime, err = tokenAuthenticationTime(claims)
+		if err != nil {
+			return nil, err
+		}
 		refreshDetails.RefreshUUID, ok = claims[tokenClaimKeyRefreshUUID].(string)
 		if !ok {
 			logger.Warn("refresh-token-missing-refresh-uuid")
@@ -495,4 +523,17 @@ func getTokenFromHeaderBearerToken(bearerToken string) string {
 func generateTokenWithSigningMethodHS256(claims jwt.Claims) *jwt.Token {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
+}
+
+// tokenAuthenticationTime validates optional freshness without upgrading legacy sessions.
+func tokenAuthenticationTime(claims jwt.MapClaims) (time.Time, error) {
+	value, exists := claims["auth_time"]
+	if !exists {
+		return time.Time{}, nil
+	}
+	seconds, ok := value.(float64)
+	if !ok || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 || seconds > float64(time.Now().Unix()) || math.Trunc(seconds) != seconds {
+		return time.Time{}, ErrUnauthorized
+	}
+	return time.Unix(int64(seconds), 0).UTC(), nil
 }

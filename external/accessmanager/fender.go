@@ -1,16 +1,14 @@
 package accessmanager
 
 import (
-	"fmt"
+	"github.com/ooaklee/ghatd/external/oauth"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/gorilla/mux"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ritwickdey/querydecoder"
@@ -112,62 +110,46 @@ func MapRequestToLogoutUserOthersRequest(request *http.Request, validator Access
 
 // MapRequestToOauthCallbackRequest maps incoming OauthCallback request to correct struct
 func MapRequestToOauthCallbackRequest(request *http.Request, validator AccessmanagerValidator) (*OauthCallbackRequest, error) {
-	parsedRequest := &OauthCallbackRequest{}
-
-	providerName, err := getProviderNameFromURI(request)
+	provider, err := getProviderNameFromURI(request)
 	if err != nil {
 		return nil, err
 	}
-
-	parsedRequest.UrlUri = request.URL.Query()
-	parsedRequest.RequestCookies = request.Cookies()
-
-	if providerName == "" || len(parsedRequest.UrlUri) == 0 || len(parsedRequest.RequestCookies) == 0 {
+	values := request.URL.Query()
+	if request.Method == http.MethodPost {
+		if request.URL.RawQuery != "" {
+			return nil, ErrBadRequest
+		}
+		request.Body = http.MaxBytesReader(nil, request.Body, 16384)
+		if err = request.ParseForm(); err != nil {
+			return nil, ErrBadRequest
+		}
+		values = request.PostForm
+	}
+	if len(values) == 0 {
 		return nil, ErrBadRequest
 	}
-
-	parsedRequest.Provider = providerName
-
-	return parsedRequest, nil
+	return &OauthCallbackRequest{Provider: provider, UrlUri: values, RequestCookies: request.Cookies(), Method: request.Method}, nil
 }
 
-// MapRequestToOauthLoginRequest maps incoming OauthLogin request to correct struct
+// MapRequestToOauthLoginRequest decodes parameters exactly once and validates a same-origin return path.
 func MapRequestToOauthLoginRequest(request *http.Request, validator AccessmanagerValidator) (*OauthLoginRequest, error) {
-	var (
-		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
-
-		parsedRequest OauthLoginRequest = OauthLoginRequest{}
-	)
-
-	providerName, err := getProviderNameFromURI(request)
+	provider, err := getProviderNameFromURI(request)
 	if err != nil {
 		return nil, err
 	}
-
-	// get query params from request
 	query := request.URL.Query()
-	_ = querydecoder.New(query).Decode(&parsedRequest)
-
-	if parsedRequest.RequestUrl != "" {
-
-		decodedUriValue, err := url.PathUnescape(parsedRequest.RequestUrl)
-		if err != nil {
-			logger.Warn("failed-to-decode-request-url-uri-for-sso-login", requestURLLogFields(parsedRequest.RequestUrl)...)
-		}
-
-		if err == nil {
-			logger.Info("request-url-uri-decoded-for-sso-login", requestURLLogFields(parsedRequest.RequestUrl)...)
-			parsedRequest.RequestUrl = decodedUriValue
-		}
-	}
-
-	if providerName == "" {
+	if len(query["request_url"]) > 1 || len(query["browser"]) > 1 {
 		return nil, ErrBadRequest
 	}
-
-	parsedRequest.Provider = providerName
-
-	return &parsedRequest, nil
+	path, err := oauth.ValidateSecureReturnPath(query.Get("request_url"))
+	if err != nil {
+		return nil, err
+	}
+	browser := query.Get("browser")
+	if browser != "" && browser != "true" && browser != "false" {
+		return nil, ErrBadRequest
+	}
+	return &OauthLoginRequest{Provider: provider, RequestUrl: path, Browser: browser == "true"}, nil
 }
 
 // MapRequestToGetUserAPITokenThresholdRequest maps incoming GetUserAPITokenThreshold request to correct
@@ -556,11 +538,17 @@ func getTokenIDFromURI(request *http.Request) (string, error) {
 
 // getProviderNameFromURI pulls the provider name from Uri. If fails, returns error
 func getProviderNameFromURI(request *http.Request) (string, error) {
-
-	providerName := strings.Split(
-		strings.ReplaceAll(request.RequestURI, fmt.Sprintf("%s/ams/oauth/", common.ApiV1UriPrefix), ""),
-		"/",
-	)[0]
-
-	return providerName, nil
+	if provider := mux.Vars(request)["provider"]; provider == "google" || provider == "apple" {
+		return provider, nil
+	}
+	parts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+	for i, part := range parts {
+		if part == "oauth" && i+1 < len(parts) {
+			provider := parts[i+1]
+			if provider == "google" || provider == "apple" {
+				return provider, nil
+			}
+		}
+	}
+	return "", ErrBadRequest
 }
