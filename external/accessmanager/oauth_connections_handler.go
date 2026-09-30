@@ -36,21 +36,21 @@ func (h *Handler) OAuthConnections(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	service, ok := h.Service.(oauthConnectionsService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := service.OAuthConnections(r.Context(), token)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 	response.DisconnectAvailable = response.DisconnectAvailable && h.OAuthOrigin != "" && h.OAuthOrigin == service.OAuthConnectionsOrigin()
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 func (h *Handler) decodeConnectionMutation(w http.ResponseWriter, r *http.Request, body interface{}) (oauthConnectionsService, string, string, error) {
 	service, ok := h.Service.(oauthConnectionsService)
@@ -86,27 +86,27 @@ func (h *Handler) StartOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	}
 	service, provider, token, err := h.decodeConnectionMutation(w, r, &body)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := service.StartOAuthDisconnect(r.Context(), provider, body.Email, token)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusAccepted, response)
+	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusAccepted, response)
 }
 func (h *Handler) ConfirmOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	var body OAuthDisconnectConfirmRequest
 	service, provider, token, err := h.decodeConnectionMutation(w, r, &body)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := service.ConfirmOAuthDisconnect(r.Context(), provider, &body, token)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
 	if response.Session != nil {
@@ -114,5 +114,5 @@ func (h *Handler) ConfirmOAuthDisconnect(w http.ResponseWriter, r *http.Request)
 		h.AddAuthCookies(w, tokens.AccessToken, tokens.AtExpires, tokens.RefreshToken, tokens.RtExpires)
 		toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, tokens.AtExpires, tokens.RtExpires)
 	}
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }

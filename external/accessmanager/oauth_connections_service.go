@@ -29,7 +29,8 @@ func (s *Service) ConfigureOAuthConnections(config OAuthConnectionsConfig) error
 	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery || u.Opaque != "" || u.String() != config.Origin || config.Store == nil {
 		return ErrBadRequest
 	}
-	if u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")) {
+	localhost := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
+	if u.Scheme != "https" && (u.Scheme != "http" || !localhost) {
 		return ErrBadRequest
 	}
 	s.oauthConnections = &config
