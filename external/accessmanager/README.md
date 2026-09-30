@@ -335,3 +335,14 @@ Validation includes the signed-provider HTTP lifecycle test with real isolated
 MongoDB/Redis. Set `GHATD_TEST_MONGO_URI` and `GHATD_TEST_REDIS_ADDR` to test-only
 stores to exercise both browser and native identity/session lifecycles; normal
 unit tests run without those services.
+
+
+### Connected providers and verified removal
+
+`GET /api/v1/ams/oauth/connections` reports the current account's linked providers,
+separately from deployment discovery. Hosts can opt into the two same-origin
+JSON disconnect endpoints with `Service.ConfigureOAuthConnections`; they verify
+an email by link/code before atomically replacing the sign-in email and removing
+a provider. See [the complete host flow](../../docs/how-to/add-google-apple-sign-in.md#show-connections-and-safely-disconnect-a-provider),
+including early URL-proof removal, session rotation, optional-adapter contracts,
+and the framework integration tests.

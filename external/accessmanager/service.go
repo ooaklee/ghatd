@@ -134,6 +134,7 @@ type GroupService interface {
 
 // Service holds and manages accessmanager service business logic
 type Service struct {
+	oauthConnections      *OAuthConnectionsConfig
 	EphemeralStore        EphemeralStore
 	AuditService          AuditService
 	EmailManager          EmailManager
@@ -755,6 +756,9 @@ func (s *Service) MiddlewareJWTRequired(r *http.Request) (*MiddlewareAuthedUserR
 		return nil, err
 	}
 
+	if persistentUserResponse.User.EmailRevision != tokenAuth.EmailRevision {
+		return nil, ErrOAuthReauthenticationRequired
+	}
 	return &MiddlewareAuthedUserResponse{
 		Authenticated: true,
 		UserID:        persistentUserResponse.User.GetUserId(),
@@ -800,6 +804,9 @@ func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthed
 		return nil, err
 	}
 
+	if persistentUserResponse.User.EmailRevision != tokenAuth.EmailRevision {
+		return nil, ErrOAuthReauthenticationRequired
+	}
 	return &MiddlewareAuthedUserResponse{
 		Authenticated: true,
 		UserID:        persistentUserResponse.User.GetUserId(),
@@ -840,7 +847,7 @@ func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.Tok
 	logger.Debug("handling-check-activeness-of-user-request")
 
 	user, isActiveUser := s.isUserLiveStatusActive(ctx, tokenAuth.UserID)
-	if !isActiveUser {
+	if !isActiveUser || user.EmailRevision != tokenAuth.EmailRevision {
 		return nil, ErrUnauthorizedNonActiveStatus
 	}
 
@@ -1098,6 +1105,9 @@ func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTo
 		return nil, refreshTokenDetails, err
 	}
 
+	if persistentUserResponse.User.EmailRevision != refreshTokenDetails.EmailRevision {
+		return nil, refreshTokenDetails, ErrOAuthReauthenticationRequired
+	}
 	return persistentUserResponse.User, refreshTokenDetails, nil
 }
 
@@ -1166,6 +1176,9 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	}
 
 	persistentUser := gIDResponse.User
+	if persistentUser.EmailRevision != initiateLoginTokenDetails.EmailRevision {
+		return nil, ErrOAuthReauthenticationRequired
+	}
 
 	var tokenDetails *auth.TokenDetails
 
@@ -1296,7 +1309,7 @@ func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *Validate
 	}
 
 	accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, err := s.UserEmailVerificationRevisions(ctx, &UserEmailVerificationRevisionsRequest{
-		UserID: verifiedTokenDetails.UserID})
+		UserID: verifiedTokenDetails.UserID, EmailRevision: verifiedTokenDetails.EmailRevision})
 	if err != nil {
 		return nil, err
 	}
@@ -1321,6 +1334,9 @@ func (s *Service) UserEmailVerificationRevisions(ctx context.Context, r *UserEma
 		return "", 0, "", 0, err
 	}
 
+	if persistentUserResponse.User.EmailRevision != r.EmailRevision {
+		return "", 0, "", 0, ErrOAuthReauthenticationRequired
+	}
 	tokenDetails, err := s.verifyEmailAndCreateSession(ctx, persistentUserResponse.User)
 	if err != nil {
 		return "", 0, "", 0, err
@@ -1399,8 +1415,9 @@ func (s *Service) TokenAsStringValidator(ctx context.Context, r *TokenAsStringVa
 	}
 
 	return &TokenAsStringValidatorResponse{
-		UserID:  td.UserID,
-		TokenID: td.AccessUUID,
+		EmailRevision: td.EmailRevision,
+		UserID:        td.UserID,
+		TokenID:       td.AccessUUID,
 	}, nil
 
 }

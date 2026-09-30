@@ -87,6 +87,7 @@ type TokenAsStringValidatorRequest struct {
 // UserEmailVerificationRevisionsRequest holds information needed to make revision on
 // system to show email verification was successful
 type UserEmailVerificationRevisionsRequest struct {
+	EmailRevision int64
 	// UserID the user ID the token was successfully validated for
 	UserID string
 }

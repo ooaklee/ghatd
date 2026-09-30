@@ -72,6 +72,7 @@ func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*Token
 	et := generateHS256Tokens(map[string]interface{}{
 		tokenClaimKeyAuthorized: true,
 		tokenClaimKeySub:        user.GetUserId(),
+		"email_revision":        userEmailRevision(user),
 		tokenClaimKeyAccessUUID: td.EphemeralUUID,
 		tokenClaimKeyAdmin:      user.IsAdmin(),
 		tokenClaimKeyExp:        td.EtExpires,
@@ -103,6 +104,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 	evt := generateHS256Tokens(map[string]interface{}{
 		tokenClaimKeyAuthorized: false,
 		tokenClaimKeySub:        user.GetUserId(),
+		"email_revision":        userEmailRevision(user),
 		tokenClaimKeyAccessUUID: td.EmailVerificationUUID,
 		tokenClaimKeyAdmin:      user.IsAdmin(),
 		tokenClaimKeyExp:        td.EvExpires,
@@ -152,6 +154,7 @@ func (s *Service) CreateTokenWithAuthenticationTime(ctx context.Context, user Us
 		IsAdmin:               user.IsAdmin(),
 		AccessTokenTTLSeconds: td.AtExpires,
 	})
+	accessClaims["email_revision"] = userEmailRevision(user)
 	if !authenticatedAt.IsZero() {
 		accessClaims["auth_time"] = authenticatedAt.Unix()
 	}
@@ -168,6 +171,7 @@ func (s *Service) CreateTokenWithAuthenticationTime(ctx context.Context, user Us
 	refreshClaims := map[string]interface{}{
 		tokenClaimKeyRefreshUUID: td.RefreshUUID,
 		tokenClaimKeySub:         user.GetUserId(),
+		"email_revision":         userEmailRevision(user),
 		tokenClaimKeyExp:         td.RtExpires,
 	}
 	if !authenticatedAt.IsZero() {
@@ -414,7 +418,12 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 		if err != nil {
 			return nil, err
 		}
+		revision, err := tokenEmailRevision(claims)
+		if err != nil {
+			return nil, err
+		}
 		return &TokenAccessDetails{
+			EmailRevision:      revision,
 			AuthenticationTime: authenticatedAt,
 			AccessUUID:         accessUUID,
 			UserID:             userID,
@@ -469,6 +478,10 @@ func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*T
 	if ok && token.Valid {
 		var err error
 		refreshDetails.AuthenticationTime, err = tokenAuthenticationTime(claims)
+		if err != nil {
+			return nil, err
+		}
+		refreshDetails.EmailRevision, err = tokenEmailRevision(claims)
 		if err != nil {
 			return nil, err
 		}
@@ -536,4 +549,35 @@ func tokenAuthenticationTime(claims jwt.MapClaims) (time.Time, error) {
 		return time.Time{}, ErrUnauthorized
 	}
 	return time.Unix(int64(seconds), 0).UTC(), nil
+}
+
+// SupportsEmailRevision allows hosts to opt into disconnects without silently
+// accepting a custom signer that cannot invalidate pre-change credentials.
+func (s *Service) SupportsEmailRevision() bool { return true }
+func userEmailRevision(user UserModel) int64 {
+	if model, ok := user.(interface{ GetEmailRevision() int64 }); ok {
+		return model.GetEmailRevision()
+	}
+	return 0
+}
+func tokenEmailRevision(claims jwt.MapClaims) (int64, error) {
+	value, exists := claims["email_revision"]
+	if !exists {
+		return 0, nil
+	}
+	switch n := value.(type) {
+	case float64:
+		if n >= 0 && n <= 9007199254740991 && n == math.Trunc(n) {
+			return int64(n), nil
+		}
+	case int64:
+		if n >= 0 && n <= 9007199254740991 {
+			return n, nil
+		}
+	case int:
+		if n >= 0 && int64(n) <= 9007199254740991 {
+			return int64(n), nil
+		}
+	}
+	return 0, ErrUnauthorized
 }

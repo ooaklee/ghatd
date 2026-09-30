@@ -70,6 +70,11 @@ func Compose(
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := services.AccessManager.ConfigureOAuthConnections(accessmanager.OAuthConnectionsConfig{
+		Origin: origin, Store: oauth.NewRedisDisconnectChallengeStore(redisClient, namespace),
+	}); err != nil {
+		return nil, nil, err
+	}
 	handlersRequest.Services = services
 	// Origin is host policy even when both provider choices are disabled.
 	handlersRequest.OAuthOrigin = origin

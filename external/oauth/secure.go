@@ -96,6 +96,7 @@ type MobileFlowContext struct {
 
 // LinkProof binds linking to fresh, signed session evidence checked by the host.
 type LinkProof struct {
+	EmailRevision      int64     `json:"email_revision,omitempty"`
 	UserID             string    `json:"user_id"`
 	AccessUUID         string    `json:"access_uuid"`
 	AuthenticationTime time.Time `json:"authentication_time"`

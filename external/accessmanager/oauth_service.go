@@ -106,7 +106,7 @@ func (s *Service) validateOAuthLinkProof(ctx context.Context, proof *oauth.LinkP
 	if err != nil {
 		return ErrOAuthReauthenticationRequired
 	}
-	if !oauthAccountActive(response.User) {
+	if !oauthAccountActive(response.User) || response.User.EmailRevision != proof.EmailRevision {
 		return user.ErrOAuthRestricted
 	}
 	return nil
@@ -119,7 +119,7 @@ func (s *Service) OAuthLink(ctx context.Context, r *OauthLoginRequest, accessTok
 		return nil, ErrOAuthReauthenticationRequired
 	}
 	request := *r
-	request.Link = &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime}
+	request.Link = &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime, EmailRevision: details.EmailRevision}
 	return s.OauthLogin(ctx, &request)
 }
 
@@ -200,7 +200,14 @@ func (s *Service) finalizeOAuthIdentity(ctx context.Context, provider string, in
 		if err = s.validateOAuthLinkProof(ctx, proof); err != nil {
 			return response, err
 		}
-		if _, err = repository.LinkOAuthIdentity(ctx, proof.UserID, identity); err != nil {
+		if connections, supported := s.UserService.(oauthConnectionsUsers); supported && connections.SupportsOAuthConnections() {
+			_, err = connections.LinkOAuthIdentityAtRevision(ctx, proof.UserID, identity, proof.EmailRevision)
+		} else if s.oauthConnections != nil || proof.EmailRevision != 0 {
+			err = user.ErrOAuthUnsupported
+		} else {
+			_, err = repository.LinkOAuthIdentity(ctx, proof.UserID, identity)
+		}
+		if err != nil {
 			return response, err
 		}
 		response.Linked = true
@@ -238,6 +245,16 @@ func (s *Service) finalizeOAuthIdentity(ctx context.Context, provider string, in
 	}
 	if !oauthAccountActive(account) {
 		return response, user.ErrOAuthRestricted
+	}
+	stillLinked := false
+	for _, current := range account.OAuthIdentities {
+		if current.Key == identity.Key {
+			stillLinked = true
+			break
+		}
+	}
+	if !stillLinked {
+		return response, user.ErrOAuthConnectionConflict
 	}
 	tokens, err := s.createSessionToken(ctx, account, time.Now())
 	if err != nil {

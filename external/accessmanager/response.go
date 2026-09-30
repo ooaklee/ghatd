@@ -22,6 +22,7 @@ type CreateUserResponse struct {
 
 // TokenAsStringValidatorResponse holds the response for TokenAsStringValidator request
 type TokenAsStringValidatorResponse struct {
+	EmailRevision int64
 	// UserID represents the user ID pulled from the token
 	UserID string
 

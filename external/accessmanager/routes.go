@@ -167,6 +167,16 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/link", optional.OAuthLink).Methods(http.MethodPost, http.MethodOptions)
 	}
 
+	if optional, ok := request.Handler.(interface {
+		OAuthConnections(http.ResponseWriter, *http.Request)
+		StartOAuthDisconnect(http.ResponseWriter, *http.Request)
+		ConfirmOAuthDisconnect(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/connections", optional.OAuthConnections).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect", optional.StartOAuthDisconnect).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/confirm", optional.ConfirmOAuthDisconnect).Methods(http.MethodPost)
+	}
+
 	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserEmail, request.Handler.ValidateEmailVerificationCode).Methods(http.MethodGet, http.MethodOptions)

@@ -183,6 +183,14 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 		"_id": user.ID,
 	}
 
+	// Missing revisions are legacy revision zero. Security changes increment this
+	// value atomically, so stale profile/login snapshots cannot restore old email.
+	if user.EmailRevision == 0 {
+		queryFilter["email_revision"] = bson.M{"$in": bson.A{nil, int64(0)}}
+	} else {
+		queryFilter["email_revision"] = user.EmailRevision
+	}
+
 	// Protect identities from stale full-user snapshots and client updates.
 	encoded, err := bson.Marshal(user)
 	if err != nil {
@@ -194,14 +202,18 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 	}
 	delete(fields, "oauth_identities")
 	delete(fields, "oauth_identity_keys")
+	delete(fields, "had_oauth_identity")
+	delete(fields, "email_revision")
 	delete(fields, "_id")
 	update := bson.M{"$set": fields}
 
-	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, queryFilter, update, "user")
+	result, err := collection.UpdateOne(ctx, queryFilter, update)
 	if err != nil {
 		return nil, err
 	}
-
+	if result.MatchedCount != 1 {
+		return nil, ErrOAuthConnectionConflict
+	}
 	return user, nil
 }
 

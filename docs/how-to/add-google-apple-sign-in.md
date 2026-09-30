@@ -238,3 +238,94 @@ Merge the GHATD feature before downstream hosts and repin their Go dependency to
 the merged revision. Ship the host-owned identity migration before enabling the
 provider credentials. Use staging registrations/secrets first, then verify the
 production origins, mobile allowlist and email sender configuration.
+
+
+## Show connections and safely disconnect a provider
+
+Public `GET /api/v1/ams/oauth/providers` describes deployment configuration.
+Settings screens must use **authenticated** `GET /api/v1/ams/oauth/connections`
+to show which Google/Apple identities are actually linked to the current user.
+Its `data` contains `connected`, `available`, `email`, and `disconnect_available`.
+A provider can remain connected while its deployment configuration is disabled.
+Do not infer connection state from discovery or an OAuth callback query string.
+
+Enable verified disconnects during composition, before serving requests:
+
+```go
+err := services.AccessManager.ConfigureOAuthConnections(accessmanager.OAuthConnectionsConfig{
+    Origin: origin, // exact frontend origin, matching handlersRequest.OAuthOrigin
+    Store: oauth.NewRedisDisconnectChallengeStore(redisClient, namespace),
+})
+```
+
+The compiled [composition example](../../examples/oauth/setup.go) includes this
+setup. Use the ordinary GHATD auth signer, user/v2 repository, Redis runtime and
+email manager. Custom adapters must support the separate optional connection
+repository capability (including atomic `LinkOAuthIdentityAtRevision`) and
+signed email revisions; unsupported adapters retain
+provider login but do not advertise disconnect availability. No extra env vars
+or migration are required: legacy account/token revisions are zero.
+
+The web flow uses session cookies and same-origin JSON POSTs:
+
+1. `POST /api/v1/ams/oauth/connections/{google|apple}/disconnect` with
+   `{"email":"me@example.com"}`. Omit the email to keep the current address.
+   Requires sign-in within the last five minutes. Returns `data.challenge_id`,
+   `expires_in` (600), and `resend_cooldown_seconds` (60).
+2. Deliver a magic link **and** an eight-character alphanumeric code using the
+   host's existing email manager. Every disconnect requires inbox proof, even
+   with another provider connected; provider-asserted email verification alone
+   does not establish current delivery/access, especially for Apple relay.
+3. `POST /api/v1/ams/oauth/connections/{provider}/disconnect/confirm` with
+   `{"challenge_id":"...","code":"A1B2C3D4"}` or `token` instead of `code`.
+   Require exactly one proof and the initiating browser session. The response
+   sets a replacement access/refresh cookie pair and returns
+   `data: {disconnected: true, connected: [...], email: "..."}`.
+
+Email links open
+`{origin}/settings#oauth_disconnect=google&challenge_id=<id>&token=<token>`.
+The host must remove this fragment **before analytics/router startup**, retain
+it only in memory, and show explicit confirmation before posting it. Never
+mutate the account on GET, auto-confirm on page load, or put the proof in a
+server URL query. If the link opens in another browser/session, use the code
+in the initiating browser instead. These mutation endpoints are web-only;
+native clients must not impersonate a browser origin.
+
+Until confirmation succeeds, the old email and provider remain intact. The
+repository atomically verifies the full provider snapshot and account revision,
+saves the verified replacement email, and removes that provider's identities.
+A taken email returns 409 without merging accounts or changing either field.
+A concurrent email/provider change also returns 409. All methods share the same
+user ID, memberships, profile, and existing passwordless login mechanism.
+Provider-created accounts with optional names remain valid after unlinking.
+
+Challenges are purpose-isolated from login codes, single-use, expire after ten
+minutes, allow five failed guesses, and have a per-account send cooldown.
+Successful removal increments a server-owned email revision, invalidating old
+JWTs/email proofs and pending provider links even if they race with session
+cleanup. Linking checks the initiating revision in both its atomic write and
+idempotent lookup. Stale full-user updates fail instead of restoring the old
+email; ordinary no-op updates still succeed. The initiating
+browser receives a new session; other sessions must sign in again. Infrastructure
+failure after the atomic write returns `OAuthDisconnectSessionRequired` (503):
+the provider is already disconnected, so ask the user to sign in using the
+verified email. Never report an unconfirmed network request as an unchanged
+account. A failed email delivery still consumes the one-minute send cooldown.
+
+`OAuthConnections` is a safe read without disconnect configuration. A missing
+configuration, foreign/missing Origin, non-JSON body, unknown fields, missing or
+revoked session, or unavailable signing/persistence capability fails closed.
+Include `AccessmanagerErrorMap` in custom handler error manifests.
+
+Run the HTTP lifecycle/regression tests with disposable MongoDB and Redis:
+
+```sh
+GHATD_TEST_MONGO_URI=mongodb://127.0.0.1:27039 \
+GHATD_TEST_REDIS_ADDR=127.0.0.1:6399 \
+go test -race ./external/accessmanager ./external/oauth ./external/auth ./external/user/v2
+```
+
+Tests cover inbox fallback to the same account, two last-provider removals under
+the sparse unique index, replay/expiry/attempt limits, duplicate email, changed
+account/provider snapshots, concurrent confirmations, failed delivery, stale
+profile writes, and credentials restored by overlapping login/refresh work.

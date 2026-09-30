@@ -12,7 +12,14 @@ import (
 // TODO: remove nolint
 // nolint will be used later
 var AccessmanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
-	ErrOAuthReauthenticationRequired:                       {Title: "Sign in again before connecting a provider", StatusCode: 401, Code: "OAuthReauthenticationRequired"},
+	ErrOAuthDisconnectSessionRequired:                      {Title: "Provider disconnected. Sign in with your verified email.", StatusCode: 503, Code: "OAuthDisconnectSessionRequired"},
+	oauth.ErrDisconnectProofInvalid:                        {Title: "Invalid or expired verification", StatusCode: 400, Code: "DisconnectProofInvalid"},
+	oauth.ErrDisconnectChallengeLocked:                     {Title: "Request a new verification email", StatusCode: 423, Code: "DisconnectChallengeLocked"},
+	oauth.ErrDisconnectCooldown:                            {Title: "Wait before requesting another email", StatusCode: 429, Code: "DisconnectCooldown"},
+	user.ErrOAuthConnectionConflict:                        {Title: "Your sign-in methods changed; please try again", StatusCode: 409, Code: "OAuthConnectionConflict"},
+	user.ErrEmailAlreadyExists:                             {Title: "This email is already used by another account", StatusCode: 409, Code: "OAuthEmailConflict"},
+	ErrOAuthDisconnectDelivery:                             {Title: "Verification email could not be sent", StatusCode: 503, Code: "OAuthDisconnectDeliveryFailed"},
+	ErrOAuthReauthenticationRequired:                       {Title: "Sign in again before managing providers", StatusCode: 401, Code: "OAuthReauthenticationRequired"},
 	user.ErrOAuthLinkRequired:                              {Title: "Sign in to your existing account before connecting this provider", StatusCode: 409, Code: "OAuthLinkRequired"},
 	user.ErrOAuthIdentityConflict:                          {Title: "This provider account is already connected", StatusCode: 409, Code: "OAuthIdentityConflict"},
 	user.ErrOAuthRestricted:                                {Title: "This account cannot sign in", StatusCode: 403, Code: "OAuthRestricted"},

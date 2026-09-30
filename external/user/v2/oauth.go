@@ -142,6 +142,7 @@ func (r *Repository) CreateOAuthUser(ctx context.Context, user *UniversalUser) (
 	}
 	user.OAuthIdentities = []OAuthIdentity{*identity}
 	user.OAuthIdentityKeys = []string{identity.Key}
+	user.HadOAuthIdentity = true
 	collection, err := r.GetUserCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -168,6 +169,17 @@ func (r *Repository) CreateOAuthUser(ctx context.Context, user *UniversalUser) (
 
 // LinkOAuthIdentity atomically links only a verified active account, preserving its profile.
 func (r *Repository) LinkOAuthIdentity(ctx context.Context, id string, identity *OAuthIdentity) (*UniversalUser, error) {
+	return r.linkOAuthIdentity(ctx, id, identity, nil)
+}
+
+func (r *Repository) LinkOAuthIdentityAtRevision(ctx context.Context, id string, identity *OAuthIdentity, revision int64) (*UniversalUser, error) {
+	if revision < 0 {
+		return nil, ErrValidationFailed
+	}
+	return r.linkOAuthIdentity(ctx, id, identity, &revision)
+}
+
+func (r *Repository) linkOAuthIdentity(ctx context.Context, id string, identity *OAuthIdentity, revision *int64) (*UniversalUser, error) {
 	identity, err := CanonicalOAuthIdentity(identity)
 	if err != nil {
 		return nil, err
@@ -180,15 +192,23 @@ func (r *Repository) LinkOAuthIdentity(ctx context.Context, id string, identity 
 		return nil, err
 	}
 	filter := oauthActiveFilter(id)
+	if revision != nil {
+		if *revision == 0 {
+			filter["email_revision"] = bson.M{"$in": bson.A{nil, int64(0)}}
+		} else {
+			filter["email_revision"] = *revision
+		}
+	}
 	filter["oauth_identity_keys"] = bson.M{"$ne": identity.Key}
-	update := bson.M{"$addToSet": bson.M{"oauth_identity_keys": identity.Key, "oauth_identities": identity}}
+	update := bson.M{"$addToSet": bson.M{"oauth_identity_keys": identity.Key, "oauth_identities": identity}, "$set": bson.M{"had_oauth_identity": true}}
 	var user UniversalUser
 	err = collection.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After)).Decode(&user)
 	if mongo.IsDuplicateKeyError(err) {
 		return nil, ErrOAuthIdentityConflict
 	}
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		err = collection.FindOne(ctx, oauthActiveFilter(id)).Decode(&user)
+		delete(filter, "oauth_identity_keys")
+		err = collection.FindOne(ctx, filter).Decode(&user)
 		if err == nil {
 			for _, key := range user.OAuthIdentityKeys {
 				if key == identity.Key {
@@ -275,6 +295,7 @@ func (s *Service) CreateOAuthUser(ctx context.Context, req *CreateOAuthUserReque
 	user.PersonalInfo = &PersonalInfo{FirstName: req.FirstName, LastName: req.LastName, FullName: req.FullName}
 	user.OAuthIdentities = []OAuthIdentity{*identity}
 	user.OAuthIdentityKeys = []string{identity.Key}
+	user.HadOAuthIdentity = true
 	user.GenerateNewUUID()
 	if config.MultipleIdentifiers {
 		user.GenerateNewNanoID()

@@ -122,7 +122,7 @@ func (s *Service) mobileOAuthLinkProof(ctx context.Context, token string) (*oaut
 	if err != nil || details == nil || !details.IsAuthorized {
 		return nil, ErrOAuthReauthenticationRequired
 	}
-	proof := &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime}
+	proof := &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime, EmailRevision: details.EmailRevision}
 	if err := s.validateOAuthLinkProof(ctx, proof); err != nil {
 		return nil, err
 	}
