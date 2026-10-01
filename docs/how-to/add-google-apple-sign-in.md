@@ -306,8 +306,9 @@ implement it to support this review UI. Unknown/foreign/expired challenges retur
 Never
 mutate the account on GET, auto-confirm on page load, or put the proof in a
 server URL query. If the link opens in another browser/session, use the code
-in the initiating browser instead. These mutation endpoints are web-only;
-native clients must not impersonate a browser origin.
+in the initiating browser instead. These endpoints retain their web-only
+mutation guards; native clients use the separate transport below and must not
+impersonate a browser origin.
 
 Until confirmation succeeds, the old email and provider remain intact. The
 repository atomically verifies the full provider snapshot and account revision,
@@ -363,3 +364,38 @@ delivery, stale profile writes, and credentials restored by overlapping
 login/refresh work. Staged cases also verify older and legacy sessions, immediate
 stage progression, review privacy/no-consumption, cross-stage/session rejection,
 unchanged account after current-email approval, and authentication timestamps.
+
+### Native Settings verification
+
+Native clients reuse the same disconnect service and existing secure session
+cookie store. Opt in with `OAuthConnectionsConfig.MobileRedirectURIs`, for
+example `[]string{"com.example.app.settings:/oauth/disconnect"}`. Addresses must
+use an exact private reverse-domain scheme, no authority/query/fragment, and
+path `/oauth/disconnect`. Keep this scheme separate from an OAuth browser
+callback; configure the corresponding Android/iOS app handler. Empty disables
+native disconnection. Native support requires `DisconnectChallengeReader`.
+
+- `GET /api/v1/ams/oauth/mobile/connections?redirect_uri=<address>` returns the
+  authoritative connected providers and native `disconnect_available`. Connected
+  identities remain visible when provider discovery is disabled.
+- `POST /api/v1/ams/oauth/mobile/connections/{provider}/disconnect` accepts
+  `email` and `redirect_uri`. Stage metadata and verification rules match web.
+- `GET /api/v1/ams/oauth/mobile/connections/{provider}/disconnect/challenges/{id}?redirect_uri=<address>`
+  reviews without accepting or spending emailed proof.
+- `POST /api/v1/ams/oauth/mobile/connections/{provider}/disconnect/confirm`
+  accepts `redirect_uri`, `challenge_id` and exactly one of `code` or `token`.
+  First-stage success remains 202; only final 200 sets the renewed cookies.
+
+Native requests reject any `Origin` header. Mutations are JSON-only and require
+one unique live session cookie. Retain the web endpoints' exact Origin checks.
+Disable automatic retries and session-refresh replay for proof requests. If the
+session rotates while a challenge is pending, restart in Settings.
+
+Emails carry both a code and an app-return link such as
+`com.example.app.settings:/oauth/disconnect#oauth_disconnect=google&challenge_id=...&token=...`.
+The link is bound to the initiating account/session and exact return address.
+Web and other native apps cannot spend it, even with the same cookie. Keep proof
+only in memory, exclude it from platform/router/network logs, and review metadata
+before displaying explicit confirmation. Never redeem on app-open. Cancellation
+keeps the provider connected. A new login/account switch must discard pending
+proof; no token or cookie is transferred from the browser into the app.

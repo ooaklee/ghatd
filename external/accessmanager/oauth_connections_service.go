@@ -22,6 +22,9 @@ import (
 type OAuthConnectionsConfig struct {
 	Origin string
 	Store  oauth.DisconnectChallengeStore
+	// Empty disables native disconnects. Each address must be registered by
+	// its app independently of the OAuth browser callback scheme.
+	MobileRedirectURIs []string
 }
 
 func (s *Service) ConfigureOAuthConnections(config OAuthConnectionsConfig) error {
@@ -33,6 +36,14 @@ func (s *Service) ConfigureOAuthConnections(config OAuthConnectionsConfig) error
 	if u.Scheme != "https" && (u.Scheme != "http" || !localhost) {
 		return ErrBadRequest
 	}
+	seen := make(map[string]bool)
+	for _, redirect := range config.MobileRedirectURIs {
+		if !oauth.ValidDisconnectRedirectURI(redirect) || seen[redirect] {
+			return ErrBadRequest
+		}
+		seen[redirect] = true
+	}
+	config.MobileRedirectURIs = append([]string(nil), config.MobileRedirectURIs...)
 	s.oauthConnections = &config
 	return nil
 }
@@ -185,7 +196,35 @@ func validateDisconnectSnapshot(account *user.UniversalUser, provider string, pa
 	return &change, nil
 }
 
+// MobileOAuthDisconnectRedirectAllowed reports the optional native Settings
+// capability. Read support is required to check transport before consuming proof.
+func (s *Service) MobileOAuthDisconnectRedirectAllowed(redirect string) bool {
+	if s.oauthConnections == nil || redirect == "" {
+		return false
+	}
+	if _, ok := s.oauthConnections.Store.(oauth.DisconnectChallengeReader); !ok {
+		return false
+	}
+	for _, allowed := range s.oauthConnections.MobileRedirectURIs {
+		if redirect == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) StartMobileOAuthDisconnect(ctx context.Context, provider, email, redirect, token string) (*OAuthDisconnectStartResponse, error) {
+	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) {
+		return nil, user.ErrOAuthUnsupported
+	}
+	return s.startOAuthDisconnect(ctx, provider, email, token, redirect)
+}
+
 func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, token string) (*OAuthDisconnectStartResponse, error) {
+	return s.startOAuthDisconnect(ctx, provider, email, token, "")
+}
+
+func (s *Service) startOAuthDisconnect(ctx context.Context, provider, email, token, redirect string) (*OAuthDisconnectStartResponse, error) {
 	repo, ok := s.UserService.(oauthConnectionsUsers)
 	if !ok || !repo.SupportsOAuthConnections() || !s.supportsConnectionRevisions() || s.oauthConnections == nil || s.EmailManager == nil {
 		return nil, user.ErrOAuthUnsupported
@@ -212,20 +251,20 @@ func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, tok
 	if email != account.Email && !fresh {
 		// Stale session plus a new inbox must never proceed directly: ask the
 		// user to first prove the CURRENT email. No account change happens here.
-		return s.startDisconnectChallenge(ctx, account, details, provider, account.Email, email, "current_email")
+		return s.startDisconnectChallenge(ctx, account, details, provider, account.Email, email, "current_email", redirect)
 	}
-	return s.startDisconnectChallenge(ctx, account, details, provider, email, email, "sign_in_email", details.AuthenticationTime)
+	return s.startDisconnectChallenge(ctx, account, details, provider, email, email, "sign_in_email", redirect, details.AuthenticationTime)
 }
 
-func (s *Service) startDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage string, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
-	return s.dispatchDisconnectChallenge(ctx, account, details, provider, recipient, signInEmail, stage, true, authTime...)
+func (s *Service) startDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage, redirect string, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
+	return s.dispatchDisconnectChallenge(ctx, account, details, provider, recipient, signInEmail, stage, redirect, true, authTime...)
 }
 
 // dispatchDisconnectChallenge creates, emails and publishes one challenge. The
 // user-facing resend cooldown is only applied to explicit start requests: the
 // automatic follow-up after a consumed current-email approval replaces, not
 // retries, the previous stage's email.
-func (s *Service) dispatchDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage string, cooldown bool, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
+func (s *Service) dispatchDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage, redirect string, cooldown bool, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
 	snapshot, err := disconnectSnapshot(account, provider)
 	if err != nil {
 		return nil, err
@@ -253,16 +292,25 @@ func (s *Service) dispatchDisconnectChallenge(ctx context.Context, account *user
 		return nil, err
 	}
 	challenge.Stage = stage
+	challenge.RedirectURI = redirect
 	if !at.IsZero() {
 		challenge.AuthTimeMillis = at.UnixMilli()
 	}
 	// Keep the provider marker first for the host's early URL scrubber.
-	link := s.oauthConnections.Origin + "/settings#oauth_disconnect=" + provider + "&challenge_id=" + url.QueryEscape(challenge.ID) + "&token=" + url.QueryEscape(proof)
+	linkBase := s.oauthConnections.Origin + "/settings"
+	if redirect != "" {
+		linkBase = redirect
+	}
+	link := linkBase + "#oauth_disconnect=" + provider + "&challenge_id=" + url.QueryEscape(challenge.ID) + "&token=" + url.QueryEscape(proof)
 	label := "Google"
 	if provider == "apple" {
 		label = "Apple"
 	}
 	subject, body := disconnectEmailText(label, recipient, signInEmail, stage, link, code)
+	if redirect != "" {
+		body = strings.ReplaceAll(body, "browser where you started", "app where you started")
+		body = strings.ReplaceAll(body, "same browser session", "same app session")
+	}
 	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{EmailSubject: subject, EmailPreview: "Keep access to your account with email sign-in", EmailBody: body, EmailTo: recipient, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
 	if err != nil {
 		return nil, ErrOAuthDisconnectDelivery
@@ -298,7 +346,18 @@ var ErrOAuthDisconnectSessionRequired = errors.New("OAuthDisconnectSessionRequir
 // else; owner and session checks are still enforced before any lookup reply.
 var ErrOAuthDisconnectChallengeNotFound = errors.New("OAuthDisconnectChallengeNotFound")
 
+func (s *Service) ConfirmMobileOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, redirect, token string) (*OAuthDisconnectResponse, error) {
+	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) {
+		return nil, user.ErrOAuthUnsupported
+	}
+	return s.confirmOAuthDisconnect(ctx, provider, request, token, redirect)
+}
+
 func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, token string) (*OAuthDisconnectResponse, error) {
+	return s.confirmOAuthDisconnect(ctx, provider, request, token, "")
+}
+
+func (s *Service) confirmOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, token, redirect string) (*OAuthDisconnectResponse, error) {
 	repo, ok := s.UserService.(oauthConnectionsUsers)
 	if !ok || !repo.SupportsOAuthConnections() || !s.supportsConnectionRevisions() || s.oauthConnections == nil {
 		return nil, user.ErrOAuthUnsupported
@@ -310,9 +369,23 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 	if err != nil {
 		return nil, err
 	}
+	// Native challenges must not be spent on a web endpoint or by another app.
+	// Read is optional for legacy web-only stores; native opt-in requires it.
+	if reader, ok := s.oauthConnections.Store.(oauth.DisconnectChallengeReader); ok {
+		pending, readErr := reader.Read(ctx, request.ChallengeID, account.ID, details.AccessUUID, provider)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if pending.RedirectURI != redirect {
+			return nil, oauth.ErrDisconnectProofInvalid
+		}
+	}
 	challenge, err := s.oauthConnections.Store.Consume(ctx, request.ChallengeID, account.ID, details.AccessUUID, provider, strings.ToUpper(strings.TrimSpace(request.Code)), request.Token)
 	if err != nil {
 		return nil, err
+	}
+	if challenge.RedirectURI != redirect {
+		return nil, oauth.ErrDisconnectProofInvalid
 	}
 	change, err := validateDisconnectSnapshot(account, provider, challenge.Payload)
 	if err != nil {
@@ -324,7 +397,7 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 		}
 		// The proof just consumed confirms the existing account. Carry that
 		// timestamp, not the time the email was requested, into the next stage.
-		next, nextErr := s.dispatchDisconnectChallenge(ctx, account, details, provider, change.VerifiedEmail, change.VerifiedEmail, "sign_in_email", false, time.Now())
+		next, nextErr := s.dispatchDisconnectChallenge(ctx, account, details, provider, change.VerifiedEmail, change.VerifiedEmail, "sign_in_email", redirect, false, time.Now())
 		if nextErr != nil {
 			// The old proof is spent. A failure to prepare the next challenge
 			// must offer restart, never retry a proof that cannot work again.
@@ -380,7 +453,18 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 // magic-link review screen. It takes no emailed proof, cannot consume or
 // mutate anything, and exposes only the public start-response shape after
 // revalidating session, owner, provider and the account snapshot.
+func (s *Service) ReviewMobileOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, redirect, token string) (*OAuthDisconnectStartResponse, error) {
+	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) {
+		return nil, user.ErrOAuthUnsupported
+	}
+	return s.reviewOAuthDisconnectChallenge(ctx, provider, challengeID, token, redirect)
+}
+
 func (s *Service) ReviewOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, token string) (*OAuthDisconnectStartResponse, error) {
+	return s.reviewOAuthDisconnectChallenge(ctx, provider, challengeID, token, "")
+}
+
+func (s *Service) reviewOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, token, redirect string) (*OAuthDisconnectStartResponse, error) {
 	if !s.supportsConnectionRevisions() || s.oauthConnections == nil || (provider != "google" && provider != "apple") || !oauth.DisconnectIDPattern().MatchString(challengeID) {
 		return nil, ErrBadRequest
 	}
@@ -398,6 +482,9 @@ func (s *Service) ReviewOAuthDisconnectChallenge(ctx context.Context, provider, 
 	}
 	if err != nil {
 		return nil, err
+	}
+	if challenge.RedirectURI != redirect {
+		return nil, ErrOAuthDisconnectChallengeNotFound
 	}
 	snapshot, err := validateDisconnectSnapshot(account, provider, challenge.Payload)
 	if err != nil {

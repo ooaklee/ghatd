@@ -110,6 +110,10 @@ func (h *Handler) ConfirmOAuthDisconnect(w http.ResponseWriter, r *http.Request)
 		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
 		return
 	}
+	h.writeOAuthDisconnectResponse(w, response)
+}
+
+func (h *Handler) writeOAuthDisconnectResponse(w http.ResponseWriter, response *OAuthDisconnectResponse) {
 	if response.Session != nil {
 		tokens := response.Session
 		h.AddAuthCookies(w, tokens.AccessToken, tokens.AtExpires, tokens.RefreshToken, tokens.RtExpires)

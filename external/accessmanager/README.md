@@ -361,3 +361,9 @@ same live session and current account/provider snapshot. Optional read-capable
 stores implement `oauth.DisconnectChallengeReader`; existing store/client and
 challenge-constructor interfaces remain compatible. The host can keep the entire
 flow in protected Settings without relaxing public login route guards.
+
+Native Settings can opt in with `OAuthConnectionsConfig.MobileRedirectURIs`.
+The `/oauth/mobile/connections` routes use the same account, stage and session
+logic, reject browser Origin headers, and bind email proof to the exact native
+return address. They renew cookies through the existing secure mobile cookie
+jar. See the adoption guide for code/link review and platform registration.

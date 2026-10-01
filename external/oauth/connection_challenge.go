@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"net/url"
 	"regexp"
 	"time"
 
@@ -23,6 +24,14 @@ var ErrDisconnectProofInvalid = errors.New("DisconnectProofInvalid")
 var ErrDisconnectChallengeLocked = errors.New("DisconnectChallengeLocked")
 var ErrDisconnectCooldown = errors.New("DisconnectCooldown")
 var disconnectIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+var disconnectSchemePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$`)
+
+// ValidDisconnectRedirectURI validates an exact private-scheme Settings return
+// address. Register its scheme separately from the OAuth browser callback.
+func ValidDisconnectRedirectURI(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && len(raw) <= 512 && disconnectSchemePattern.MatchString(u.Scheme) && u.Host == "" && u.User == nil && u.Opaque == "" && u.Path == "/oauth/disconnect" && u.RawPath == "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && raw == u.Scheme+":/oauth/disconnect"
+}
 
 // DisconnectIDPattern matches the high-entropy challenge identifiers hosts may
 // validate before touching the store.
@@ -35,6 +44,9 @@ type DisconnectChallenge struct {
 	UserID     string `json:"user_id"`
 	AccessUUID string `json:"access_uuid"`
 	Provider   string `json:"provider"`
+	// Empty identifies web proof. Native proof retains its exact allowlisted
+	// Settings return address through all stages and cannot cross transports.
+	RedirectURI string `json:"redirect_uri,omitempty"`
 	// Stage distinguishes a current-email approval challenge ("current_email"),
 	// which grants only the right to issue a candidate challenge, from a final
 	// sign-in-email challenge ("sign_in_email"). Empty means a legacy
@@ -121,6 +133,9 @@ func (s *RedisDisconnectChallengeStore) contextual(ctx context.Context) RedisTra
 	}
 }
 func (s *RedisDisconnectChallengeStore) Save(ctx context.Context, c *DisconnectChallenge) error {
+	if c != nil && c.RedirectURI != "" && !ValidDisconnectRedirectURI(c.RedirectURI) {
+		return ErrDisconnectProofInvalid
+	}
 	if s == nil || s.client == nil || c == nil || !disconnectIDPattern.MatchString(c.ID) || c.UserID == "" || c.AccessUUID == "" || (c.Provider != "google" && c.Provider != "apple") || !validDisconnectStages[c.Stage] || len(c.CodeHash) != 64 || len(c.TokenHash) != 64 || len(c.Payload) == 0 {
 		return ErrDisconnectProofInvalid
 	}
