@@ -11,20 +11,33 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// ErrOAuthConnectionConflict reports that the account no longer matches the
+// email, revision or provider-identity snapshot captured before verification.
 var ErrOAuthConnectionConflict = errors.New("OAuthConnectionConflict")
 
 // OAuthConnectionsRepository is separate from OAuthRepository: adopting account
 // management is optional and cannot disable a host's existing provider login.
 type OAuthConnectionsRepository interface {
+	// DisconnectOAuthProvider atomically verifies the full account snapshot,
+	// removes only the selected provider, applies the verified email and advances
+	// the email revision. A conflict must leave all fields unchanged.
 	DisconnectOAuthProvider(context.Context, *DisconnectOAuthProviderRequest) (*UniversalUser, error)
+	// LinkOAuthIdentityAtRevision attaches the identity only at the expected
+	// account revision, preserving cross-account identity uniqueness.
 	LinkOAuthIdentityAtRevision(context.Context, string, *OAuthIdentity, int64) (*UniversalUser, error)
 }
 
+// OAuthIdentitySnapshot records a provider identity key and link time, allowing
+// verification to detect unlink-and-relink changes that retain the email revision.
 type OAuthIdentitySnapshot struct {
 	Key      string    `json:"key"`
 	LinkedAt time.Time `json:"linked_at"`
 }
 
+// DisconnectOAuthProviderRequest describes a conditional provider removal.
+// ExpectedEmail, EmailRevision and all selected-provider Identities must match the
+// persisted account. The caller must independently verify ownership of VerifiedEmail
+// before invoking the repository; the repository does not verify mailbox access.
 type DisconnectOAuthProviderRequest struct {
 	UserID, Provider, ExpectedEmail, VerifiedEmail string
 	EmailRevision                                  int64
@@ -98,6 +111,8 @@ func (r *Repository) DisconnectOAuthProvider(ctx context.Context, req *Disconnec
 	return &account, nil
 }
 
+// SupportsOAuthConnections reports whether the repository supports conditional
+// provider management. A false result does not disable existing provider login.
 func (s *Service) SupportsOAuthConnections() bool {
 	_, ok := s.UserRepository.(OAuthConnectionsRepository)
 	return ok
@@ -116,6 +131,10 @@ func (s *Service) LinkOAuthIdentityAtRevision(ctx context.Context, id string, id
 	}
 	return account, err
 }
+
+// DisconnectOAuthProvider applies the verified account change through the
+// optional repository capability and restores user dependencies on success.
+// It returns ErrOAuthUnsupported when that capability is absent.
 func (s *Service) DisconnectOAuthProvider(ctx context.Context, req *DisconnectOAuthProviderRequest) (*UniversalUser, error) {
 	repo, ok := s.UserRepository.(OAuthConnectionsRepository)
 	if !ok {
@@ -128,5 +147,6 @@ func (s *Service) DisconnectOAuthProvider(ctx context.Context, req *DisconnectOA
 	return account, err
 }
 
-// GetEmailRevision binds newly issued tokens to the current sign-in methods.
+// GetEmailRevision exposes the persisted sign-in-method revision so newly
+// issued tokens can be bound to the current account state.
 func (u *UniversalUser) GetEmailRevision() int64 { return u.EmailRevision }

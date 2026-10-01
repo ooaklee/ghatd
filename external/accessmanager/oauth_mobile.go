@@ -20,12 +20,24 @@ import (
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
 
+// mobileOAuthStartTTL limits how long an app-issued browser start ticket lives.
 const mobileOAuthStartTTL = 2 * time.Minute
+
+// mobileOAuthGrantTTL limits redemption of a verified provider result by the
+// initiating app after the browser callback completes.
 const mobileOAuthGrantTTL = time.Minute
+
+// mobileOAuthStartPath is the backend route that consumes the app's start ticket
+// and creates the provider's browser transaction.
 const mobileOAuthStartPath = common.ApiV1UriPrefix + "/ams/oauth/mobile/start"
 
+// mobileOpaquePattern accepts the unpadded base64url encoding of a 256-bit secret.
 var mobileOpaquePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
+
+// mobileVerifierPattern restricts native PKCE verifiers to 43–128 unreserved characters.
 var mobileVerifierPattern = regexp.MustCompile(`^[A-Za-z0-9._~-]{43,128}$`)
+
+// mobileSchemePattern restricts private callback schemes to reverse-domain syntax.
 var mobileSchemePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$`)
 
 // MobileOAuthConfig enables only explicitly registered native applications.
@@ -60,11 +72,15 @@ func (h *Handler) ConfigureMobileOAuth(config MobileOAuthConfig) error {
 	return nil
 }
 
+// validMobileRedirect accepts a canonical private-scheme /oauth/callback address
+// without an authority, query or fragment. Allowlist membership is checked separately.
 func validMobileRedirect(raw string) bool {
 	uri, err := url.Parse(raw)
 	return err == nil && len(raw) <= 512 && mobileSchemePattern.MatchString(uri.Scheme) && uri.Host == "" && uri.User == nil && uri.Opaque == "" && uri.Path == "/oauth/callback" && uri.RawPath == "" && uri.RawQuery == "" && !uri.ForceQuery && uri.Fragment == "" && uri.String() == raw && raw == uri.Scheme+":/oauth/callback"
 }
 
+// mobileRedirectAllowed requires exact membership in the configured native
+// OAuth callback allowlist; it performs no prefix or wildcard matching.
 func (h *Handler) mobileRedirectAllowed(raw string) bool {
 	if h.mobileOAuth == nil {
 		return false
@@ -77,6 +93,8 @@ func (h *Handler) mobileRedirectAllowed(raw string) bool {
 	return false
 }
 
+// mobileOAuthStart carries the app's PKCE flow and optional signed-in linking
+// proof into the browser through a short-lived, single-use server-side ticket.
 type mobileOAuthStart struct {
 	Provider  string                  `json:"provider"`
 	Flow      oauth.MobileFlowContext `json:"flow"`
@@ -84,6 +102,8 @@ type mobileOAuthStart struct {
 	ExpiresAt time.Time               `json:"expires_at"`
 }
 
+// mobileOAuthProfile preserves only the verified provider identity and profile
+// fields needed when the initiating app redeems its grant. It holds no session tokens.
 type mobileOAuthProfile struct {
 	Issuer        string `json:"issuer"`
 	Subject       string `json:"subject"`
@@ -93,13 +113,26 @@ type mobileOAuthProfile struct {
 	LastName      string `json:"last_name"`
 }
 
-func (p mobileOAuthProfile) GetProviderIssuer() string           { return p.Issuer }
-func (p mobileOAuthProfile) GetProviderSubject() string          { return p.Subject }
-func (p mobileOAuthProfile) GetUserEmail() string                { return p.Email }
-func (p mobileOAuthProfile) IsUserEmailVerifiedByProvider() bool { return p.EmailVerified }
-func (p mobileOAuthProfile) GetUserFirstName() string            { return p.FirstName }
-func (p mobileOAuthProfile) GetUserLastName() string             { return p.LastName }
+// GetProviderIssuer returns the issuer verified during the provider callback.
+func (p mobileOAuthProfile) GetProviderIssuer() string { return p.Issuer }
 
+// GetProviderSubject returns the stable subject verified during the provider callback.
+func (p mobileOAuthProfile) GetProviderSubject() string { return p.Subject }
+
+// GetUserEmail returns the provider email, which may be absent on repeat Apple sign-in.
+func (p mobileOAuthProfile) GetUserEmail() string { return p.Email }
+
+// IsUserEmailVerifiedByProvider returns the verified token's email-verification claim.
+func (p mobileOAuthProfile) IsUserEmailVerifiedByProvider() bool { return p.EmailVerified }
+
+// GetUserFirstName returns optional profile data retained from the provider callback.
+func (p mobileOAuthProfile) GetUserFirstName() string { return p.FirstName }
+
+// GetUserLastName returns optional profile data retained from the provider callback.
+func (p mobileOAuthProfile) GetUserLastName() string { return p.LastName }
+
+// mobileOAuthGrant binds a verified provider profile to the initiating app's
+// state, PKCE challenge and return address until its single-use exchange.
 type mobileOAuthGrant struct {
 	Provider  string                  `json:"provider"`
 	Profile   mobileOAuthProfile      `json:"profile"`
@@ -108,12 +141,16 @@ type mobileOAuthGrant struct {
 	ExpiresAt time.Time               `json:"expires_at"`
 }
 
+// mobileOAuthService is the internal capability required to initiate and finish
+// native OAuth without transferring browser session cookies to the app.
 type mobileOAuthService interface {
 	OAuthProviders() []string
 	mobileOAuthLinkProof(context.Context, string) (*oauth.LinkProof, error)
 	completeMobileOAuth(context.Context, *mobileOAuthGrant, string) (*OauthCallbackResponse, error)
 }
 
+// mobileOAuthLinkProof derives linking authority from a signed session token
+// and rechecks stored ownership, recent authentication and the account revision.
 func (s *Service) mobileOAuthLinkProof(ctx context.Context, token string) (*oauth.LinkProof, error) {
 	if token == "" {
 		return nil, ErrOAuthReauthenticationRequired
@@ -129,6 +166,9 @@ func (s *Service) mobileOAuthLinkProof(ctx context.Context, token string) (*oaut
 	return proof, nil
 }
 
+// completeMobileOAuth finalises a redeemed native grant. Linking rechecks the
+// initiating account, session and authentication time before attaching the
+// identity; login follows the shared identity-based account-resolution path.
 func (s *Service) completeMobileOAuth(ctx context.Context, grant *mobileOAuthGrant, token string) (*OauthCallbackResponse, error) {
 	if grant == nil || !time.Now().Before(grant.ExpiresAt) {
 		return nil, oauth.ErrSecureTransactionExpired
@@ -159,6 +199,8 @@ func (h *Handler) MobileOAuthProviders(w http.ResponseWriter, r *http.Request) {
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, map[string]interface{}{"providers": providers, "redirect_uris": redirects})
 }
 
+// mobileCookie returns one non-empty named cookie, or an empty string when the
+// request has no usable cookie or contains ambiguous duplicates.
 func mobileCookie(r *http.Request, name string) string {
 	token := ""
 	for _, cookie := range r.Cookies() {
@@ -172,6 +214,8 @@ func mobileCookie(r *http.Request, name string) string {
 	return token
 }
 
+// mobileError exposes a fixed error code and status without disclosing raw
+// provider responses, proof material or database errors.
 func (h *Handler) mobileError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	code := oauthErrorCode(err)
@@ -184,6 +228,8 @@ func (h *Handler) mobileError(w http.ResponseWriter, err error) {
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, status, map[string]string{"error": code})
 }
 
+// decodeMobileJSON requires a native POST with no Origin header and one JSON
+// object within 8 KiB, rejecting unknown fields and trailing JSON values.
 func decodeMobileJSON(w http.ResponseWriter, r *http.Request, target interface{}) bool {
 	if r.Method != http.MethodPost || len(r.Header.Values("Origin")) != 0 {
 		return false
@@ -198,6 +244,7 @@ func decodeMobileJSON(w http.ResponseWriter, r *http.Request, target interface{}
 	return decoder.Decode(target) == nil && decoder.Decode(&struct{}{}) == io.EOF
 }
 
+// randomMobileCode generates a 256-bit opaque secret encoded as unpadded base64url.
 func randomMobileCode() (string, error) {
 	bytes := make([]byte, 32)
 	if _, err := rand.Read(bytes); err != nil {
@@ -216,6 +263,9 @@ func (h *Handler) MobileOAuthLink(w http.ResponseWriter, r *http.Request) {
 	h.mobileInitiate(w, r, true)
 }
 
+// mobileInitiate validates the app callback, state and S256 challenge, and
+// requires recent session proof for linking. It returns a short-lived browser
+// start URL without issuing login cookies.
 func (h *Handler) mobileInitiate(w http.ResponseWriter, r *http.Request, linking bool) {
 	oauthHeaders(w)
 	service, ok := h.Service.(mobileOAuthService)
@@ -305,6 +355,8 @@ func (h *Handler) MobileOAuthStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, response.ProviderAuthCodeUrl, http.StatusFound)
 }
 
+// mobileRedirect returns state and either a grant code or a fixed error to an
+// exactly allowlisted app callback, without forwarding session credentials.
 func (h *Handler) mobileRedirect(w http.ResponseWriter, r *http.Request, flow *oauth.MobileFlowContext, code string, err error) {
 	if flow == nil || !h.mobileRedirectAllowed(flow.RedirectURI) {
 		h.mobileError(w, ErrBadRequest)

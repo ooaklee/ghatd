@@ -554,12 +554,18 @@ func tokenAuthenticationTime(claims jwt.MapClaims) (time.Time, error) {
 // SupportsEmailRevision allows hosts to opt into disconnects without silently
 // accepting a custom signer that cannot invalidate pre-change credentials.
 func (s *Service) SupportsEmailRevision() bool { return true }
+
+// userEmailRevision reads the optional account revision, retaining revision zero
+// for legacy user models that do not expose it.
 func userEmailRevision(user UserModel) int64 {
 	if model, ok := user.(interface{ GetEmailRevision() int64 }); ok {
 		return model.GetEmailRevision()
 	}
 	return 0
 }
+
+// tokenEmailRevision accepts only non-negative integer claims within JSON's
+// exact integer range. A missing claim represents legacy revision zero.
 func tokenEmailRevision(claims jwt.MapClaims) (int64, error) {
 	value, exists := claims["email_revision"]
 	if !exists {

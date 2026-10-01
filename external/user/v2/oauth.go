@@ -172,6 +172,9 @@ func (r *Repository) LinkOAuthIdentity(ctx context.Context, id string, identity 
 	return r.linkOAuthIdentity(ctx, id, identity, nil)
 }
 
+// LinkOAuthIdentityAtRevision atomically attaches a provider identity only when
+// the active, verified account still has the expected email revision. It prevents
+// an earlier callback from restoring a provider after sign-in methods change.
 func (r *Repository) LinkOAuthIdentityAtRevision(ctx context.Context, id string, identity *OAuthIdentity, revision int64) (*UniversalUser, error) {
 	if revision < 0 {
 		return nil, ErrValidationFailed
@@ -179,6 +182,9 @@ func (r *Repository) LinkOAuthIdentityAtRevision(ctx context.Context, id string,
 	return r.linkOAuthIdentity(ctx, id, identity, &revision)
 }
 
+// linkOAuthIdentity preserves the account profile while attaching a unique
+// provider identity. An optional revision adds a concurrency guard; an identity
+// already attached to the same qualifying account is an idempotent success.
 func (r *Repository) linkOAuthIdentity(ctx context.Context, id string, identity *OAuthIdentity, revision *int64) (*UniversalUser, error) {
 	identity, err := CanonicalOAuthIdentity(identity)
 	if err != nil {

@@ -17,16 +17,25 @@ type AppleProvider struct{ *secureProvider }
 
 // NewAppleProviderRequest supplies a Services ID and dedicated signing key.
 type NewAppleProviderRequest struct {
-	ClientID      string
-	TeamID        string
-	KeyID         string
+	// ClientID is the Services ID registered for web sign-in.
+	ClientID string
+	// TeamID identifies the Apple developer team issuing client assertions.
+	TeamID string
+	// KeyID identifies the dedicated Sign in with Apple signing key.
+	KeyID string
+	// PrivateKeyPEM contains the P-256 private key used for client assertions.
+	// Keep this server-side; never embed it in browser or mobile applications.
 	PrivateKeyPEM []byte
-	RedirectURL   string
-	HTTPClient    *http.Client
-	Store         SecureTransactionStore
+	// RedirectURL is the exact HTTPS return URL registered for the Services ID.
+	RedirectURL string
+	// HTTPClient performs provider requests; nil selects a traced 30-second client.
+	HTTPClient *http.Client
+	// Store is required and must consume transactions atomically and once only.
+	Store SecureTransactionStore
 }
 
-// NewAppleProvider validates the P-256 key and public HTTPS callback eagerly.
+// NewAppleProvider validates the P-256 key and HTTPS callback configuration.
+// The host must register the exact callback with Apple before using the provider.
 func NewAppleProvider(r *NewAppleProviderRequest) (*AppleProvider, error) {
 	if r == nil || r.Store == nil || strings.TrimSpace(r.ClientID) == "" || strings.TrimSpace(r.TeamID) == "" || strings.TrimSpace(r.KeyID) == "" || !validRedirectURL(r.RedirectURL, true) {
 		return nil, ErrSecureProviderIncompleteConfig

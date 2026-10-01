@@ -12,6 +12,8 @@ import (
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
 
+// oauthConnectionsService is the optional web Settings contract for listing
+// providers and verifying email before disconnection.
 type oauthConnectionsService interface {
 	OAuthConnections(context.Context, string) (*OAuthConnectionsResponse, error)
 	OAuthConnectionsOrigin() string
@@ -19,6 +21,8 @@ type oauthConnectionsService interface {
 	ConfirmOAuthDisconnect(context.Context, string, *OAuthDisconnectConfirmRequest, string) (*OAuthDisconnectResponse, error)
 }
 
+// uniqueConnectionCookie requires exactly one non-empty session cookie, avoiding
+// ambiguous authentication when several cookies share the configured name.
 func uniqueConnectionCookie(r *http.Request, name string) (string, error) {
 	var value string
 	count := 0
@@ -33,6 +37,9 @@ func uniqueConnectionCookie(r *http.Request, name string) (string, error) {
 	}
 	return value, nil
 }
+
+// OAuthConnections returns the signed-in account's linked providers and the
+// configured provider-management capabilities.
 func (h *Handler) OAuthConnections(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	service, ok := h.Service.(oauthConnectionsService)
@@ -53,6 +60,9 @@ func (h *Handler) OAuthConnections(w http.ResponseWriter, r *http.Request) {
 	response.DisconnectAvailable = response.DisconnectAvailable && h.OAuthOrigin != "" && h.OAuthOrigin == service.OAuthConnectionsOrigin()
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
+
+// decodeConnectionMutation requires the configured web origin, a bounded JSON
+// object with no unknown fields, and one unambiguous session cookie.
 func (h *Handler) decodeConnectionMutation(w http.ResponseWriter, r *http.Request, body interface{}) (oauthConnectionsService, string, string, error) {
 	service, ok := h.Service.(oauthConnectionsService)
 	if !ok {
@@ -80,6 +90,9 @@ func (h *Handler) decodeConnectionMutation(w http.ResponseWriter, r *http.Reques
 	}
 	return service, provider, token, nil
 }
+
+// StartOAuthDisconnect starts email verification from web Settings after
+// validating the request origin, JSON body and current session cookie.
 func (h *Handler) StartOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	var body struct {
@@ -97,6 +110,9 @@ func (h *Handler) StartOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusAccepted, response)
 }
+
+// ConfirmOAuthDisconnect confirms web Settings proof and writes replacement
+// session cookies only when the service returns a completed session.
 func (h *Handler) ConfirmOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	var body OAuthDisconnectConfirmRequest
@@ -113,6 +129,9 @@ func (h *Handler) ConfirmOAuthDisconnect(w http.ResponseWriter, r *http.Request)
 	h.writeOAuthDisconnectResponse(w, response)
 }
 
+// writeOAuthDisconnectResponse installs returned session cookies and exposes
+// public verification metadata. A pending follow-up challenge receives 202;
+// a completed disconnect or connection verification receives 200.
 func (h *Handler) writeOAuthDisconnectResponse(w http.ResponseWriter, response *OAuthDisconnectResponse) {
 	if response.Session != nil {
 		tokens := response.Session

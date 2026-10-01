@@ -11,10 +11,10 @@ import (
 	"github.com/ooaklee/ghatd/external/oauth"
 )
 
-// mobileStartTTLCap and mobileGrantTTLCap bound how long mobile oauth
-// artifacts may live in Redis, regardless of requested TTL.
 const (
+	// mobileStartTTLCap bounds browser-start ticket lifetime in Redis.
 	mobileStartTTLCap = 120 * time.Second
+	// mobileGrantTTLCap bounds native exchange-grant lifetime in Redis.
 	mobileGrantTTLCap = 60 * time.Second
 )
 
@@ -79,7 +79,10 @@ func (s *RedisMobileOAuthStore) contextualClient(ctx context.Context) oauth.Redi
 	}
 }
 
+// startKey hashes the opaque ticket into the store's browser-start namespace.
 func (s *RedisMobileOAuthStore) startKey(id string) string { return s.prefix + "start:" + id }
+
+// grantKey hashes the opaque code into the store's native-exchange namespace.
 func (s *RedisMobileOAuthStore) grantKey(id string) string { return s.prefix + "grant:" + id }
 
 // validMobileID reports whether an opaque handle is a 43-char base64url

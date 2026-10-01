@@ -16,14 +16,15 @@ import (
 )
 
 // TransactionTTL is the server-side lifetime of a sign-in transaction.
-// The cookie only carries an opaque handle; all security material lives here.
+// The cookie carries an opaque handle; transaction security material stays
+// in the server-side store.
 const TransactionTTL = 10 * time.Minute
 
 // SecureFlowProvider is an optional capability interface that providers may
 // implement to opt into the hardened sign-in flow. Implementing it is
 // source-compatible with the legacy OauthService contract: callers must probe
 // for the capability and fail closed when it is absent, rather than falling
-// back to email-only login that bypasses nonce and PKCE guarantees.
+// back to email-only login that bypasses transaction and identity checks.
 type SecureFlowProvider interface {
 	// ProviderGetName returns the canonical provider identifier.
 	ProviderGetName() string
@@ -31,7 +32,7 @@ type SecureFlowProvider interface {
 	// transaction handle.
 	ProviderGetCookieKey() string
 	// BeginSecureTransaction mints a server-side transaction (state, nonce,
-	// PKCE verifier) and returns the authorisation URL plus the opaque
+	// provider-specific PKCE verifier) and returns the authorisation URL plus the opaque
 	// transaction identifier to place in the cookie.
 	BeginSecureTransaction(ctx context.Context, returnPath string) (*SecureTransaction, error)
 	// CompleteSecureTransaction validates the browser callback against the
@@ -46,7 +47,7 @@ type SecureTransaction struct {
 	TransactionID string
 
 	// AuthorisationURL is the fully formed provider authorisation URL
-	// carrying state, nonce and PKCE challenge.
+	// carrying state and nonce, plus an S256 PKCE challenge for Google.
 	AuthorisationURL string
 }
 
@@ -87,7 +88,7 @@ type SecureFlowOptions struct {
 }
 
 // MobileFlowContext is trusted initiation context, stored server-side only.
-// The native verifier is independent from the provider's own PKCE verifier.
+// The native verifier is independent from any provider-side PKCE verifier.
 type MobileFlowContext struct {
 	RedirectURI string `json:"redirect_uri"`
 	State       string `json:"state"`
@@ -105,13 +106,17 @@ type LinkProof struct {
 // ContextualFlowProvider accepts browser completion and authenticated linking.
 type ContextualFlowProvider interface {
 	SecureFlowProvider
+	// BeginSecureTransactionWithOptions captures host-validated browser, linking
+	// and native completion context in the stored transaction.
 	BeginSecureTransactionWithOptions(context.Context, string, SecureFlowOptions) (*SecureTransaction, error)
 }
 
 // IdentityUserInfo exposes signed stable identity independently of profile email.
 type IdentityUserInfo interface {
 	OauthUserInfo
+	// GetProviderSubject returns the stable subject verified in the ID token.
 	GetProviderSubject() string
+	// GetProviderIssuer returns the verified issuer that scopes the subject.
 	GetProviderIssuer() string
 }
 
@@ -121,7 +126,7 @@ type SecureTransactionStore interface {
 	// Save persists a transaction under its opaque handle.
 	Save(ctx context.Context, txn *StoredTransaction) error
 	// Consume atomically deletes and returns the stored transaction. A
-	// missing entry returns ErrTransactionNotFound, making replays fail.
+	// missing entry returns ErrSecureTransactionNotFound, making replays fail.
 	Consume(ctx context.Context, transactionID string) (*StoredTransaction, error)
 }
 
@@ -150,12 +155,19 @@ type StoredTransaction struct {
 
 // Secure flow error keys surfaced to callers without leaking upstream detail.
 const (
-	ErrKeySecureTransactionNotFound       = "SecureTransactionNotFound"
-	ErrKeySecureTransactionInvalidState   = "SecureTransactionInvalidState"
-	ErrKeySecureTransactionExpired        = "SecureTransactionExpired"
-	ErrKeySecureIDTokenInvalid            = "SecureIDTokenInvalid"
-	ErrKeySecureIDTokenUnverified         = "SecureIDTokenUnverified"
-	ErrKeySecureProviderIncompleteConfig  = "SecureProviderIncompleteConfig"
+	// ErrKeySecureTransactionNotFound identifies a missing or already-consumed transaction.
+	ErrKeySecureTransactionNotFound = "SecureTransactionNotFound"
+	// ErrKeySecureTransactionInvalidState identifies a callback state mismatch.
+	ErrKeySecureTransactionInvalidState = "SecureTransactionInvalidState"
+	// ErrKeySecureTransactionExpired identifies an expired transaction.
+	ErrKeySecureTransactionExpired = "SecureTransactionExpired"
+	// ErrKeySecureIDTokenInvalid identifies invalid signed identity claims.
+	ErrKeySecureIDTokenInvalid = "SecureIDTokenInvalid"
+	// ErrKeySecureIDTokenUnverified identifies an unverified provider email.
+	ErrKeySecureIDTokenUnverified = "SecureIDTokenUnverified"
+	// ErrKeySecureProviderIncompleteConfig identifies unavailable provider configuration.
+	ErrKeySecureProviderIncompleteConfig = "SecureProviderIncompleteConfig"
+	// ErrKeySecureProviderInvalidPKCEConfig identifies malformed PKCE material.
 	ErrKeySecureProviderInvalidPKCEConfig = "SecureProviderInvalidPKCEConfig"
 )
 
@@ -209,7 +221,8 @@ func MintPKCEPair() (verifier string, challenge string, err error) {
 	return verifier, challenge, nil
 }
 
-// ConstantTimeEquals compares two strings in constant time.
+// ConstantTimeEquals compares equal-length string contents in constant time.
+// Different lengths return false immediately.
 func ConstantTimeEquals(a string, b string) bool {
 	return hmac.Equal([]byte(a), []byte(b))
 }

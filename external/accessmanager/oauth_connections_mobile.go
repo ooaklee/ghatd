@@ -9,8 +9,9 @@ import (
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
 
-// Native transport is opt-in through exact Settings return addresses. It uses
-// the same account/session/challenge service, never a fabricated browser Origin.
+// mobileOAuthConnectionsService is the optional native Settings capability.
+// It reuses session-bound account verification with exact return addresses;
+// native requests do not fabricate a browser Origin.
 type mobileOAuthConnectionsService interface {
 	OAuthConnections(context.Context, string) (*OAuthConnectionsResponse, error)
 	MobileOAuthDisconnectRedirectAllowed(string) bool
@@ -19,6 +20,9 @@ type mobileOAuthConnectionsService interface {
 	ReviewMobileOAuthDisconnectChallenge(context.Context, string, string, string, string) (*OAuthDisconnectStartResponse, error)
 }
 
+// nativeConnectionRedirect accepts only a single redirect_uri query parameter
+// and rejects any Origin header, including an empty one. The service separately
+// checks the exact return address against the native Settings allowlist.
 func nativeConnectionRedirect(r *http.Request) (string, error) {
 	if r.Method != http.MethodGet || len(r.Header.Values("Origin")) != 0 {
 		return "", ErrForbiddenUnableToAction
@@ -61,6 +65,8 @@ func (h *Handler) MobileOAuthConnections(w http.ResponseWriter, r *http.Request)
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
+// StartMobileOAuthDisconnect accepts native JSON without an Origin header and
+// starts session-bound email verification for an allowlisted Settings return URI.
 func (h *Handler) StartMobileOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	var body struct {
@@ -91,6 +97,8 @@ func (h *Handler) StartMobileOAuthDisconnect(w http.ResponseWriter, r *http.Requ
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusAccepted, response)
 }
 
+// ConfirmMobileOAuthDisconnect confirms native Settings proof using the current
+// session cookie and exact return URI, then installs any replacement session.
 func (h *Handler) ConfirmMobileOAuthDisconnect(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	var body struct {

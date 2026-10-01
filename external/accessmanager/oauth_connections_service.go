@@ -17,16 +17,23 @@ import (
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
 
-// ConfigureOAuthConnections is an opt-in for verified disconnects. Status reads
-// need no new configuration. Call during host composition, before serving.
+// OAuthConnectionsConfig opts a host into verified provider management.
+// Configure it during composition, before serving; status reads need no opt-in.
 type OAuthConnectionsConfig struct {
+	// Origin is the exact web origin used for Settings links and request validation.
+	// HTTPS is required except for HTTP loopback development origins.
 	Origin string
-	Store  oauth.DisconnectChallengeStore
-	// Empty disables native disconnects. Each address must be registered by
-	// its app independently of the OAuth browser callback scheme.
+	// Store holds email proofs separately from sign-in codes and tokens.
+	Store oauth.DisconnectChallengeStore
+	// MobileRedirectURIs contains exact native Settings return addresses. An empty
+	// list disables native verification. Apps must register these schemes separately
+	// from the OAuth browser callback scheme.
 	MobileRedirectURIs []string
 }
 
+// ConfigureOAuthConnections enables verified provider management during host
+// composition, before requests are served. It validates the web origin and store,
+// rejects duplicate or invalid native return addresses, and copies the allowlist.
 func (s *Service) ConfigureOAuthConnections(config OAuthConnectionsConfig) error {
 	u, err := url.Parse(config.Origin)
 	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.ForceQuery || u.Opaque != "" || u.String() != config.Origin || config.Store == nil {
@@ -47,6 +54,9 @@ func (s *Service) ConfigureOAuthConnections(config OAuthConnectionsConfig) error
 	s.oauthConnections = &config
 	return nil
 }
+
+// OAuthConnectionsOrigin returns the configured web origin, or an empty string
+// when verified provider management has not been configured.
 func (s *Service) OAuthConnectionsOrigin() string {
 	if s.oauthConnections == nil {
 		return ""
@@ -54,37 +64,64 @@ func (s *Service) OAuthConnectionsOrigin() string {
 	return s.oauthConnections.Origin
 }
 
+// oauthConnectionsUsers is the optional user-service capability for atomic,
+// snapshot-checked disconnection and revision-checked linking.
 type oauthConnectionsUsers interface {
 	SupportsOAuthConnections() bool
 	DisconnectOAuthProvider(context.Context, *user.DisconnectOAuthProviderRequest) (*user.UniversalUser, error)
 	LinkOAuthIdentityAtRevision(context.Context, string, *user.OAuthIdentity, int64) (*user.UniversalUser, error)
 }
+
+// OAuthConnectionsResponse separates identities linked to the account from
+// providers currently configured by the host, and advertises optional Settings
+// capabilities. A linked provider remains visible even when it is unavailable.
 type OAuthConnectionsResponse struct {
-	Connected                    []string `json:"connected"`
-	Available                    []string `json:"available"`
-	Email                        string   `json:"email"`
-	DisconnectAvailable          bool     `json:"disconnect_available"`
-	ConnectVerificationAvailable bool     `json:"connect_verification_available"`
+	// Connected lists persisted identity links, including disabled providers.
+	Connected []string `json:"connected"`
+	// Available lists providers that the host can currently use for OAuth.
+	Available []string `json:"available"`
+	// Email is the account's current sign-in email.
+	Email string `json:"email"`
+	// DisconnectAvailable reports the required persistence, signer, email and
+	// configuration capabilities; native handlers additionally check their URI.
+	DisconnectAvailable bool `json:"disconnect_available"`
+	// ConnectVerificationAvailable reports native current-email verification
+	// capability for the requested return URI, including an isolated proof store.
+	ConnectVerificationAvailable bool `json:"connect_verification_available"`
 }
+
+// OAuthDisconnectStartResponse describes a pending Settings email challenge.
+// It exposes review metadata only; emailed codes, tokens and account snapshots
+// are excluded. Connection verification reuses this shape with connect_email.
 type OAuthDisconnectStartResponse struct {
 	ChallengeID           string `json:"challenge_id"`
 	ExpiresIn             int    `json:"expires_in"`
 	ResendCooldownSeconds int    `json:"resend_cooldown_seconds"`
 	// VerificationStage reports which mailbox this challenge verifies:
 	// "current_email" approves changing the sign-in email, "sign_in_email"
-	// confirms the final (possibly new) sign-in email. Legacy challenges
-	// are reported as "sign_in_email" final confirmations.
+	// confirms the final (possibly new) sign-in email, and "connect_email"
+	// refreshes account proof before linking. Legacy challenges are reported
+	// as "sign_in_email" final confirmations.
 	VerificationStage string `json:"verification_stage"`
 	// Email is the mailbox receiving this challenge.
 	Email string `json:"email"`
-	// SignInEmail is the final sign-in email the disconnect will apply.
+	// SignInEmail is the final sign-in email a disconnect will apply. For
+	// connection verification it equals Email, the current account address.
 	SignInEmail string `json:"sign_in_email"`
 }
+
+// OAuthDisconnectConfirmRequest identifies a pending challenge and supplies
+// exactly one proof: the emailed code or the token from the review link.
 type OAuthDisconnectConfirmRequest struct {
 	ChallengeID string `json:"challenge_id"`
 	Code        string `json:"code,omitempty"`
 	Token       string `json:"token,omitempty"`
 }
+
+// OAuthDisconnectResponse describes a Settings verification outcome. A pending
+// NextChallenge leaves the account unchanged; Disconnected reports a completed
+// provider removal, while Reauthenticated reports connection verification.
+// Session is private transport data and must be delivered through auth cookies.
 type OAuthDisconnectResponse struct {
 	Session         *auth.TokenDetails `json:"-"`
 	Reauthenticated bool               `json:"reauthenticated,omitempty"`
@@ -96,6 +133,8 @@ type OAuthDisconnectResponse struct {
 	NextChallenge *OAuthDisconnectStartResponse `json:"next_challenge,omitempty"`
 }
 
+// connectedProviderNames returns each linked supported provider once, in a
+// stable Google-then-Apple order, independently of host provider configuration.
 func connectedProviderNames(account *user.UniversalUser) []string {
 	names := []string{}
 	for _, name := range []string{"google", "apple"} {
@@ -108,6 +147,9 @@ func connectedProviderNames(account *user.UniversalUser) []string {
 	}
 	return names
 }
+
+// connectionAccount validates the signed session, stored ownership and account
+// revision. When fresh is true it also requires authentication within five minutes.
 func (s *Service) connectionAccount(ctx context.Context, token string, fresh bool) (*user.UniversalUser, *auth.TokenAccessDetails, error) {
 	account, details, freshNow, err := s.connectionAccountWithFreshness(ctx, token)
 	if err != nil {
@@ -144,10 +186,16 @@ func (s *Service) connectionAccountWithFreshness(ctx context.Context, token stri
 	}
 	return result.User, details, fresh, nil
 }
+
+// supportsConnectionRevisions checks the optional signer capability required
+// to invalidate credentials after a change to the account's sign-in methods.
 func (s *Service) supportsConnectionRevisions() bool {
 	signer, ok := s.AuthService.(interface{ SupportsEmailRevision() bool })
 	return ok && signer.SupportsEmailRevision()
 }
+
+// OAuthConnections returns authoritative provider links and Settings capability
+// flags for a valid session. Status reads do not require recent authentication.
 func (s *Service) OAuthConnections(ctx context.Context, token string) (*OAuthConnectionsResponse, error) {
 	account, _, err := s.connectionAccount(ctx, token, false)
 	if err != nil {
@@ -215,6 +263,9 @@ func (s *Service) MobileOAuthDisconnectRedirectAllowed(redirect string) bool {
 	return false
 }
 
+// StartMobileOAuthDisconnect starts email verification bound to an exact,
+// allowlisted native Settings return URI. The provider remains connected until
+// final confirmation; changing email may require current-email approval first.
 func (s *Service) StartMobileOAuthDisconnect(ctx context.Context, provider, email, redirect, token string) (*OAuthDisconnectStartResponse, error) {
 	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) {
 		return nil, user.ErrOAuthUnsupported
@@ -222,10 +273,16 @@ func (s *Service) StartMobileOAuthDisconnect(ctx context.Context, provider, emai
 	return s.startOAuthDisconnect(ctx, provider, email, token, redirect)
 }
 
+// StartOAuthDisconnect starts email verification for web Settings without
+// changing the account. An older session requesting a different sign-in email
+// must first approve the change through the account's current email.
 func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, token string) (*OAuthDisconnectStartResponse, error) {
 	return s.startOAuthDisconnect(ctx, provider, email, token, "")
 }
 
+// startOAuthDisconnect validates account and host capabilities, normalises the
+// requested sign-in email and chooses current-email approval or final-email
+// verification according to the initiating session's authentication time.
 func (s *Service) startOAuthDisconnect(ctx context.Context, provider, email, token, redirect string) (*OAuthDisconnectStartResponse, error) {
 	repo, ok := s.UserService.(oauthConnectionsUsers)
 	if !ok || !repo.SupportsOAuthConnections() || !s.supportsConnectionRevisions() || s.oauthConnections == nil || s.EmailManager == nil {
@@ -258,6 +315,8 @@ func (s *Service) startOAuthDisconnect(ctx context.Context, provider, email, tok
 	return s.startDisconnectChallenge(ctx, account, details, provider, email, email, "sign_in_email", redirect, details.AuthenticationTime)
 }
 
+// startDisconnectChallenge applies the per-account resend cooldown before
+// creating and emailing a session-bound challenge for the requested stage.
 func (s *Service) startDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage, redirect string, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
 	return s.dispatchDisconnectChallenge(ctx, account, details, provider, recipient, signInEmail, stage, redirect, true, authTime...)
 }
@@ -339,7 +398,13 @@ func disconnectEmailText(label, recipient, signInEmail, stage, link, code string
 	return subject, body
 }
 
+// ErrOAuthDisconnectDelivery reports failure to send or prepare the next email
+// challenge. The account is unchanged; a consumed earlier proof cannot be retried.
 var ErrOAuthDisconnectDelivery = errors.New("OAuthDisconnectDeliveryFailed")
+
+// ErrOAuthDisconnectSessionRequired means the account change succeeded but
+// session cleanup or replacement failed. The client must require sign-in again
+// rather than present the provider removal as an unchanged, retryable operation.
 var ErrOAuthDisconnectSessionRequired = errors.New("OAuthDisconnectSessionRequired")
 
 // ErrOAuthDisconnectChallengeNotFound reports an absent, expired or unowned
@@ -348,6 +413,9 @@ var ErrOAuthDisconnectSessionRequired = errors.New("OAuthDisconnectSessionRequir
 // else; owner and session checks are still enforced before any lookup reply.
 var ErrOAuthDisconnectChallengeNotFound = errors.New("OAuthDisconnectChallengeNotFound")
 
+// ConfirmMobileOAuthDisconnect consumes proof only for the exact allowlisted
+// native Settings return URI. Final confirmation changes sign-in methods and
+// returns a replacement session; an intermediate stage returns NextChallenge.
 func (s *Service) ConfirmMobileOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, redirect, token string) (*OAuthDisconnectResponse, error) {
 	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) {
 		return nil, user.ErrOAuthUnsupported
@@ -355,10 +423,18 @@ func (s *Service) ConfirmMobileOAuthDisconnect(ctx context.Context, provider str
 	return s.confirmOAuthDisconnect(ctx, provider, request, token, redirect)
 }
 
+// ConfirmOAuthDisconnect consumes web Settings proof and either issues the
+// next email challenge or atomically removes the provider and returns a new
+// session. Native proof cannot be confirmed through this web transport.
 func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, token string) (*OAuthDisconnectResponse, error) {
 	return s.confirmOAuthDisconnect(ctx, provider, request, token, "")
 }
 
+// confirmOAuthDisconnect consumes session-bound proof, revalidates the account
+// snapshot and advances the email-verification stage. Final confirmation updates
+// the email and provider identities atomically, invalidates old sessions through
+// the account revision, and issues a replacement with the proven authentication
+// time. Post-update session failures return ErrOAuthDisconnectSessionRequired.
 func (s *Service) confirmOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, token, redirect string) (*OAuthDisconnectResponse, error) {
 	repo, ok := s.UserService.(oauthConnectionsUsers)
 	if !ok || !repo.SupportsOAuthConnections() || !s.supportsConnectionRevisions() || s.oauthConnections == nil {
@@ -451,10 +527,9 @@ func (s *Service) confirmOAuthDisconnect(ctx context.Context, provider string, r
 	return &OAuthDisconnectResponse{Disconnected: true, Connected: connectedProviderNames(updated), Email: updated.Email, Session: tokens}, nil
 }
 
-// ReviewOAuthDisconnectChallenge renders the pending challenge state for the
-// magic-link review screen. It takes no emailed proof, cannot consume or
-// mutate anything, and exposes only the public start-response shape after
-// revalidating session, owner, provider and the account snapshot.
+// ReviewMobileOAuthDisconnectChallenge returns pending native review metadata
+// after validating the initiating session, exact return URI and account snapshot.
+// It takes no emailed proof and does not consume or mutate the challenge.
 func (s *Service) ReviewMobileOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, redirect, token string) (*OAuthDisconnectStartResponse, error) {
 	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) {
 		return nil, user.ErrOAuthUnsupported
@@ -462,10 +537,16 @@ func (s *Service) ReviewMobileOAuthDisconnectChallenge(ctx context.Context, prov
 	return s.reviewOAuthDisconnectChallenge(ctx, provider, challengeID, token, redirect)
 }
 
+// ReviewOAuthDisconnectChallenge returns web review metadata after validating
+// the initiating session and account snapshot. It consumes no emailed proof
+// and does not change the challenge's attempt count.
 func (s *Service) ReviewOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, token string) (*OAuthDisconnectStartResponse, error) {
 	return s.reviewOAuthDisconnectChallenge(ctx, provider, challengeID, token, "")
 }
 
+// reviewOAuthDisconnectChallenge checks ownership, transport, stage and the
+// account snapshot without consuming proof. Missing, expired or foreign-transport
+// challenges have the same not-found response; legacy stages are normalised.
 func (s *Service) reviewOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, token, redirect string) (*OAuthDisconnectStartResponse, error) {
 	if !s.supportsConnectionRevisions() || s.oauthConnections == nil || (provider != "google" && provider != "apple") || !oauth.DisconnectIDPattern().MatchString(challengeID) {
 		return nil, ErrBadRequest

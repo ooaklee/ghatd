@@ -16,17 +16,20 @@ import (
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
 
-// Connection verification reuses the Settings proof store, but has a separate
-// purpose. It proves the current account email without changing sign-in methods.
+// connectionVerificationStage identifies current-email proof used before linking.
+// Its isolated store prevents this proof from being consumed as a disconnect.
 const connectionVerificationStage = "connect_email"
 
+// connectionVerificationSnapshot binds emailed proof to the current account
+// email and revision, so a later account change invalidates the pending proof.
 type connectionVerificationSnapshot struct {
 	Email    string `json:"email"`
 	Revision int64  `json:"revision"`
 }
 
-// Native verification is opt-in and requires a purpose-isolated store. Custom
-// stores that only support disconnect remain compatible and advertise false.
+// connectionVerificationStore returns the optional, purpose-isolated proof store.
+// Custom stores may implement this capability; disconnect-only stores remain
+// compatible and return nil here, disabling native connection verification.
 func (s *Service) connectionVerificationStore() oauth.DisconnectChallengeStore {
 	if s.oauthConnections == nil {
 		return nil
@@ -40,6 +43,9 @@ func (s *Service) connectionVerificationStore() oauth.DisconnectChallengeStore {
 	return provider.ConnectionVerificationStore()
 }
 
+// MobileOAuthConnectionVerificationAvailable reports whether the exact native
+// return address can use current-email verification. It requires email delivery,
+// revision-aware sessions and a readable store isolated from disconnect proofs.
 func (s *Service) MobileOAuthConnectionVerificationAvailable(redirect string) bool {
 	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) || s.EmailManager == nil || !s.supportsConnectionRevisions() {
 		return false
@@ -48,6 +54,10 @@ func (s *Service) MobileOAuthConnectionVerificationAvailable(redirect string) bo
 	return ok
 }
 
+// StartMobileOAuthConnectionVerification sends a code and review link to the
+// signed-in account's current email. The challenge is bound to the initiating
+// session, provider and exact native return address. Sending it does not connect
+// a provider or refresh authentication; confirmation is a separate action.
 func (s *Service) StartMobileOAuthConnectionVerification(ctx context.Context, provider, redirect, token string) (*OAuthDisconnectStartResponse, error) {
 	if !s.MobileOAuthConnectionVerificationAvailable(redirect) {
 		return nil, user.ErrOAuthUnsupported
@@ -90,10 +100,14 @@ func (s *Service) StartMobileOAuthConnectionVerification(ctx context.Context, pr
 	return connectionVerificationResponse(challenge, account.Email), nil
 }
 
+// connectionVerificationResponse exposes review metadata without proof hashes
+// or the private snapshot. Both email fields refer to the current account email.
 func connectionVerificationResponse(c *oauth.DisconnectChallenge, email string) *OAuthDisconnectStartResponse {
 	return &OAuthDisconnectStartResponse{ChallengeID: c.ID, ExpiresIn: int((time.Until(time.UnixMilli(c.ExpiresAt)) + time.Second - 1) / time.Second), ResendCooldownSeconds: 60, VerificationStage: connectionVerificationStage, Email: email, SignInEmail: email}
 }
 
+// readConnectionVerification reads without consuming proof and revalidates its
+// purpose, account, session, provider, return address and email revision.
 func (s *Service) readConnectionVerification(ctx context.Context, provider, id, redirect, token string) (*oauth.DisconnectChallenge, *user.UniversalUser, error) {
 	if !s.MobileOAuthConnectionVerificationAvailable(redirect) {
 		return nil, nil, user.ErrOAuthUnsupported
@@ -117,6 +131,9 @@ func (s *Service) readConnectionVerification(ctx context.Context, provider, id, 
 	return c, account, nil
 }
 
+// ReviewMobileOAuthConnectionVerification returns pending challenge metadata
+// for the initiating app session. It accepts no emailed proof and neither
+// consumes the challenge nor refreshes authentication.
 func (s *Service) ReviewMobileOAuthConnectionVerification(ctx context.Context, provider, id, redirect, token string) (*OAuthDisconnectStartResponse, error) {
 	c, account, err := s.readConnectionVerification(ctx, provider, id, redirect, token)
 	if err != nil {
@@ -125,6 +142,11 @@ func (s *Service) ReviewMobileOAuthConnectionVerification(ctx context.Context, p
 	return connectionVerificationResponse(c, account.Email), nil
 }
 
+// ConfirmMobileOAuthConnectionVerification consumes exactly one emailed code
+// or link token and rechecks the initiating session before issuing a fresh
+// session for the same account. It leaves the email and providers unchanged;
+// existing sessions retain their original authentication time and validity.
+// The transport must install the returned session cookies before linking.
 func (s *Service) ConfirmMobileOAuthConnectionVerification(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, redirect, token string) (*OAuthDisconnectResponse, error) {
 	if request == nil || len(request.Code) > 8 || len(request.Token) > 43 || (request.Code == "") == (request.Token == "") {
 		return nil, ErrBadRequest
@@ -159,14 +181,19 @@ func (s *Service) ConfirmMobileOAuthConnectionVerification(ctx context.Context, 
 	return &OAuthDisconnectResponse{Reauthenticated: true, Connected: connectedProviderNames(account), Email: account.Email, Session: tokens}, nil
 }
 
+// mobileConnectionVerificationService is the optional handler capability for
+// native current-email verification. Hosts without it retain existing sign-in
+// behaviour and receive an unsupported response from these endpoints.
 type mobileConnectionVerificationService interface {
 	StartMobileOAuthConnectionVerification(context.Context, string, string, string) (*OAuthDisconnectStartResponse, error)
 	ReviewMobileOAuthConnectionVerification(context.Context, string, string, string, string) (*OAuthDisconnectStartResponse, error)
 	ConfirmMobileOAuthConnectionVerification(context.Context, string, *OAuthDisconnectConfirmRequest, string, string) (*OAuthDisconnectResponse, error)
 }
 
-// Native-only, JSON POST/no Origin, with the same strict Settings return URI
-// allowlist and single session cookie as the disconnection transport.
+// MobileOAuthConnectionVerification serves native Settings verification: GET
+// reviews a challenge, POST starts one, and POST to /confirm consumes proof.
+// Requests must have no Origin header, an exact allowlisted Settings return URI
+// and one session cookie; POST bodies must be JSON.
 func (h *Handler) MobileOAuthConnectionVerification(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	service, ok := h.Service.(mobileConnectionVerificationService)

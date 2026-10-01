@@ -12,8 +12,10 @@ import (
 
 const (
 	// GoogleSecureIssuer is Google's canonical ID token issuer.
-	GoogleSecureIssuer        = "https://accounts.google.com"
-	googleSecureJWKSURL       = "https://www.googleapis.com/oauth2/v3/certs"
+	GoogleSecureIssuer = "https://accounts.google.com"
+	// googleSecureJWKSURL is the trusted source of Google's ID-token verification keys.
+	googleSecureJWKSURL = "https://www.googleapis.com/oauth2/v3/certs"
+	// googleSecureTokenEndpoint exchanges Google's authorisation code server-side.
 	googleSecureTokenEndpoint = "https://oauth2.googleapis.com/token"
 )
 
@@ -31,13 +33,19 @@ type GoogleSecureProvider struct{ *secureProvider }
 
 // NewGoogleSecureProviderRequest supplies a complete, explicitly enabled provider.
 type NewGoogleSecureProviderRequest struct {
-	ClientID     string
+	// ClientID is the registered web OAuth client identifier.
+	ClientID string
+	// ClientSecret is the server-side OAuth secret; never expose it to clients.
 	ClientSecret string
-	RedirectURL  string
+	// RedirectURL must match the registered callback. HTTP is allowed only for
+	// loopback development addresses; other callbacks require HTTPS.
+	RedirectURL string
 	// Scopes is retained for compatibility; required identity scopes are always used.
-	Scopes     []string
+	Scopes []string
+	// HTTPClient performs provider requests; nil selects a traced 30-second client.
 	HTTPClient *http.Client
-	Store      SecureTransactionStore
+	// Store is required and must consume transactions atomically and once only.
+	Store SecureTransactionStore
 }
 
 // NewGoogleSecureProvider rejects incomplete or unsafe callback configuration.
