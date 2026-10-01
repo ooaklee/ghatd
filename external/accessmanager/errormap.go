@@ -16,6 +16,7 @@ var AccessmanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	oauth.ErrDisconnectProofInvalid:                        {Title: "Invalid or expired verification", StatusCode: 400, Code: "DisconnectProofInvalid"},
 	oauth.ErrDisconnectChallengeLocked:                     {Title: "Request a new verification email", StatusCode: 423, Code: "DisconnectChallengeLocked"},
 	oauth.ErrDisconnectCooldown:                            {Title: "Wait before requesting another email", StatusCode: 429, Code: "DisconnectCooldown"},
+	user.ErrOAuthReplacementEmailRequired:                  {Title: "Verify an independent sign-in email before disconnecting this provider", StatusCode: 409, Code: "OAuthReplacementEmailRequired"},
 	user.ErrOAuthConnectionConflict:                        {Title: "Your sign-in methods changed; please try again", StatusCode: 409, Code: "OAuthConnectionConflict"},
 	user.ErrEmailAlreadyExists:                             {Title: "This email is already used by another account", StatusCode: 409, Code: "OAuthEmailConflict"},
 	ErrOAuthDisconnectDelivery:                             {Title: "Verification email could not be sent", StatusCode: 503, Code: "OAuthDisconnectDeliveryFailed"},

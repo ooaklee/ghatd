@@ -245,7 +245,8 @@ production origins, mobile allowlist and email sender configuration.
 Public `GET /api/v1/ams/oauth/providers` describes deployment configuration.
 Settings screens must use **authenticated** `GET /api/v1/ams/oauth/connections`
 to show which Google/Apple identities are actually linked to the current user.
-Its `data` contains `connected`, `available`, `email`, and `disconnect_available`.
+Its `data` contains `connected`, `available`, `email`, `disconnect_available`,
+and `replacement_email_required_for` (provider names requiring a new email).
 A provider can remain connected while its deployment configuration is disabled.
 Do not infer connection state from discovery or an OAuth callback query string.
 
@@ -266,10 +267,37 @@ signed email revisions; unsupported adapters retain
 provider login but do not advertise disconnect availability. No extra env vars
 or migration are required: legacy account/token revisions are zero.
 
+An Apple Sign in with Apple relay address cannot become the sole sign-in method
+when disconnecting a provider. GHATD recognises the exact domains
+`privaterelay.appleid.com` and `private.icloud.com`; ordinary `icloud.com`
+addresses and independent privacy aliases remain acceptable. See Apple's
+[relay-domain announcement](https://developer.apple.com/news/?id=1ptvdtcm).
+A relay can be retained only if another provider is both linked and enabled by
+the host. Otherwise request and verify an independent email, using the existing
+current-email approval stage when necessary. This rule also applies to removing
+Google later and to selecting a different Apple relay as the replacement.
+
+GHATD checks this policy at start, review and confirmation. MongoDB checks that
+an enabled alternative remains linked in the same atomic write as disconnection.
+`user.DisconnectOAuthProviderRequest.AllowedRelayFallbackProviders` is a fresh,
+server-derived allowlist, excluded from proof JSON. Custom repositories may
+implement `user.OAuthRelayFallbackRepository` only if they enforce that atomic
+guard. Without it GHATD requires an independent email for relay accounts, while
+ordinary provider management remains available. No new migration is required.
+
+Handle `OAuthReplacementEmailRequired` (409) by offering a new independent email
+and restarting verification; a consumed proof cannot be reused. A database
+snapshot race returns `OAuthConnectionConflict` (409), requiring refreshed
+Settings. `OAuthEmailConflict` (409), checked after proof and by the unique index,
+means another account owns the proposed address. Explain that both accounts are
+unchanged; offer a different email or manual support. Never automatically merge
+accounts or infer the destination mailbox behind a relay. A separate explicit
+merge flow is [tracked for exploration](https://commit.boasi.io/boasiHQ/app-bedrock/issues/52).
+
 The web flow uses session cookies and same-origin JSON POSTs:
 
 1. `POST /api/v1/ams/oauth/connections/{google|apple}/disconnect` with
-   `{"email":"me@example.com"}`. Omit the email to keep the current address.
+   `{"email":"me@example.com"}`. Omit the email to keep the current address when the fallback policy permits it.
    Requires a valid session. Keeping the current verified email needs no
    separate recent login: that inbox's proof supplies account authentication.
    For a replacement email, sign-in within five minutes permits direct
@@ -329,7 +357,7 @@ browser receives a new session; other sessions must sign in again. Same-email
 proof uses its successful verification time as `auth_time`. Two-stage changes
 carry the current-email approval time; direct replacement verification preserves
 the original recent sign-in time. A new inbox alone never supplies proof of the
-old account. Valid legacy queued final challenges remain redeemable.
+old account. Legacy queued final challenges remain redeemable only when the current fallback policy also permits them.
 
 The entire UI can stay under authenticated Settings; public login guards need no
 exception. Cancellation and expiry leave the account untouched. An access-token

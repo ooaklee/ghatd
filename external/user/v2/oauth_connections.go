@@ -42,6 +42,12 @@ type DisconnectOAuthProviderRequest struct {
 	UserID, Provider, ExpectedEmail, VerifiedEmail string
 	EmailRevision                                  int64
 	Identities                                     []OAuthIdentitySnapshot
+	// AllowedRelayFallbackProviders is a server-derived allowlist of enabled
+	// providers, excluding the one being removed. It must be recomputed at
+	// confirmation, never accepted from clients or persisted in emailed proofs.
+	// A relay email requires at least one of these providers to remain linked
+	// in the same atomic write. An empty allowlist fails closed for relay emails.
+	AllowedRelayFallbackProviders []string `json:"-"`
 }
 
 // DisconnectOAuthProvider verifies the entire selected-provider snapshot and
@@ -55,6 +61,17 @@ func (r *Repository) DisconnectOAuthProvider(ctx context.Context, req *Disconnec
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address != email || len(email) > 254 {
 		return nil, ErrInvalidEmail
+	}
+	allowed := bson.A{}
+	if IsApplePrivateRelayEmail(email) {
+		for _, provider := range req.AllowedRelayFallbackProviders {
+			if provider != req.Provider && (provider == "google" || provider == "apple") {
+				allowed = append(allowed, provider)
+			}
+		}
+		if len(allowed) == 0 {
+			return nil, ErrOAuthReplacementEmailRequired
+		}
 	}
 	collection, err := r.GetUserCollection(ctx)
 	if err != nil {
@@ -80,6 +97,10 @@ func (r *Repository) DisconnectOAuthProvider(ctx context.Context, req *Disconnec
 	filter["oauth_identities"] = bson.M{"$all": snapshots}
 	selected := bson.M{"$filter": bson.M{"input": "$oauth_identities", "as": "identity", "cond": bson.M{"$eq": bson.A{"$$identity.provider", req.Provider}}}}
 	filter["$expr"] = bson.M{"$eq": bson.A{bson.M{"$size": selected}, len(req.Identities)}}
+	if len(allowed) > 0 {
+		usable := bson.M{"$filter": bson.M{"input": "$oauth_identities", "as": "identity", "cond": bson.M{"$in": bson.A{"$$identity.provider", allowed}}}}
+		filter["$expr"] = bson.M{"$and": bson.A{filter["$expr"], bson.M{"$gt": bson.A{bson.M{"$size": usable}, 0}}}}
+	}
 	remaining := bson.M{"$filter": bson.M{"input": "$oauth_identities", "as": "identity", "cond": bson.M{"$ne": bson.A{"$$identity.provider", req.Provider}}}}
 	stamp := time.Now().UTC().Format(DefaultTimeFormatRFC3339NanoUTC)
 	// Pipeline values originating from an email must be literal, even if the

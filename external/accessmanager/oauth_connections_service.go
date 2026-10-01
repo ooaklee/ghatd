@@ -85,6 +85,9 @@ type OAuthConnectionsResponse struct {
 	// DisconnectAvailable reports the required persistence, signer, email and
 	// configuration capabilities; native handlers additionally check their URI.
 	DisconnectAvailable bool `json:"disconnect_available"`
+	// ReplacementEmailRequiredFor lists connected providers whose removal
+	// requires a verified email independent of Sign in with Apple forwarding.
+	ReplacementEmailRequiredFor []string `json:"replacement_email_required_for"`
 	// ConnectVerificationAvailable reports native current-email verification
 	// capability for the requested return URI, including an isolated proof store.
 	ConnectVerificationAvailable bool `json:"connect_verification_available"`
@@ -202,7 +205,7 @@ func (s *Service) OAuthConnections(ctx context.Context, token string) (*OAuthCon
 		return nil, err
 	}
 	repo, ok := s.UserService.(oauthConnectionsUsers)
-	return &OAuthConnectionsResponse{Connected: connectedProviderNames(account), Available: s.OAuthProviders(), Email: account.Email, DisconnectAvailable: ok && repo.SupportsOAuthConnections() && s.supportsConnectionRevisions() && s.oauthConnections != nil && s.EmailManager != nil}, nil
+	return &OAuthConnectionsResponse{Connected: connectedProviderNames(account), Available: s.OAuthProviders(), Email: account.Email, ReplacementEmailRequiredFor: s.replacementEmailRequiredFor(account), DisconnectAvailable: ok && repo.SupportsOAuthConnections() && s.supportsConnectionRevisions() && s.oauthConnections != nil && s.EmailManager != nil}, nil
 }
 
 // disconnectSnapshot captures the immutable account state a challenge must be
@@ -306,6 +309,9 @@ func (s *Service) startOAuthDisconnect(ctx context.Context, provider, email, tok
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address != email || len(email) > 254 {
 		return nil, ErrBadRequest
+	}
+	if err = s.requireIndependentFallback(account, provider, email); err != nil {
+		return nil, err
 	}
 	if email != account.Email && !fresh {
 		// Stale session plus a new inbox must never proceed directly: ask the
@@ -469,6 +475,9 @@ func (s *Service) confirmOAuthDisconnect(ctx context.Context, provider string, r
 	if err != nil {
 		return nil, err
 	}
+	if err = s.requireIndependentFallback(account, provider, change.VerifiedEmail); err != nil {
+		return nil, err
+	}
 	if challenge.Stage == "current_email" {
 		if change.VerifiedEmail == change.ExpectedEmail {
 			return nil, oauth.ErrDisconnectProofInvalid
@@ -507,6 +516,9 @@ func (s *Service) confirmOAuthDisconnect(ctx context.Context, provider string, r
 			return nil, user.ErrEmailAlreadyExists
 		}
 	}
+	// Recompute from server configuration, never from the serialised proof.
+	// Persistence checks that an allowed fallback is still linked atomically.
+	change.AllowedRelayFallbackProviders = s.relayFallbackProviders(account, provider)
 	updated, err := repo.DisconnectOAuthProvider(ctx, change)
 	if err != nil {
 		return nil, err
@@ -579,6 +591,9 @@ func (s *Service) reviewOAuthDisconnectChallenge(ctx context.Context, provider, 
 	}
 	if stage != "sign_in_email" && stage != "current_email" {
 		return nil, oauth.ErrDisconnectProofInvalid
+	}
+	if err = s.requireIndependentFallback(account, provider, snapshot.VerifiedEmail); err != nil {
+		return nil, err
 	}
 	recipient := snapshot.VerifiedEmail
 	if stage == "current_email" {
