@@ -466,3 +466,32 @@ again without an automatic retry loop. Existing retry, logging and link-review
 precautions apply. Ordinary login codes are deliberately not accepted here:
 they can authenticate a different account and are not bound to this Settings
 operation.
+
+### Web Settings verification for older sessions
+
+Web Settings offers the same reauthentication flow when connecting Google or
+Apple returns `OAuthReauthenticationRequired`. It is available whenever web
+connection verification is configured (origin, email delivery, revision-aware
+sessions and a store exposing `ConnectionVerificationStore()` with read
+support); `GET /api/v1/ams/oauth/connections` advertises
+`connect_verification_available` for it. The return address is derived solely
+from `OAuthConnectionsConfig.Origin` plus `/settings` and can never be
+supplied by a caller; emailed links use
+`https://<origin>/settings#oauth_connect=<provider>&challenge_id=...&token=...`.
+
+- `POST /api/v1/ams/oauth/connections/{provider}/reauthenticate` accepts an
+  empty JSON object `{}` only; the server selects the current account email.
+- `GET .../{provider}/reauthenticate/challenges/{id}` reviews the pending
+  challenge without accepting or spending proof.
+- `POST .../{provider}/reauthenticate/confirm` accepts `challenge_id` and
+  exactly one `code` or `token`.
+
+Start/review reuse the `connect_email` metadata shape. Final confirmation
+returns HTTP 200 with `reauthenticated: true`, unchanged `connected`/`email`,
+and fresh session cookies for the same account; all other sessions stay valid
+and unrefreshed, and no provider identity is mutated. Mutations require the
+exact configured Origin and JSON-only bodies. Every request requires one unique
+session cookie and matching handler/service origin configuration; review GETs
+accept no query parameters or emailed proof.
+Web, native and disconnect proofs remain bound to their own transports and
+cannot spend each other.

@@ -52,6 +52,18 @@ func ValidDisconnectRedirectURI(raw string) bool {
 	return err == nil && len(raw) <= 512 && disconnectSchemePattern.MatchString(u.Scheme) && u.Host == "" && u.User == nil && u.Opaque == "" && u.Path == "/oauth/disconnect" && u.RawPath == "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && raw == u.Scheme+":/oauth/disconnect"
 }
 
+// validWebConnectionReturnURI permits canonical Settings addresses only in the
+// isolated connection-verification store. The service must additionally bind
+// this address to its configured origin; native redirect validation stays strict.
+func validWebConnectionReturnURI(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || len(raw) > 512 || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "/settings" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.String() != raw {
+		return false
+	}
+	loopback := u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"
+	return u.Scheme == "https" || (u.Scheme == "http" && loopback)
+}
+
 // DisconnectIDPattern matches the high-entropy challenge identifiers hosts may
 // validate before touching the store.
 func DisconnectIDPattern() *regexp.Regexp { return disconnectIDPattern }
@@ -63,8 +75,9 @@ type DisconnectChallenge struct {
 	UserID     string `json:"user_id"`
 	AccessUUID string `json:"access_uuid"`
 	Provider   string `json:"provider"`
-	// Empty identifies web proof. Native proof retains its exact allowlisted
-	// Settings return address through all stages and cannot cross transports.
+	// Empty identifies web disconnect proof. Web connection verification stores
+	// its configured HTTPS (or loopback HTTP) Settings address. Native proof retains
+	// its exact allowlisted private-scheme return address and cannot cross transports.
 	RedirectURI string `json:"redirect_uri,omitempty"`
 	// Stage distinguishes a current-email approval challenge ("current_email"),
 	// which grants only the right to issue a candidate challenge, from a final
@@ -205,7 +218,7 @@ func (s *RedisDisconnectChallengeStore) contextual(ctx context.Context) RedisTra
 // Save validates the challenge's purpose, binding and remaining lifetime before
 // inserting it with expiry. An existing ID is never overwritten or extended.
 func (s *RedisDisconnectChallengeStore) Save(ctx context.Context, c *DisconnectChallenge) error {
-	if c != nil && c.RedirectURI != "" && !ValidDisconnectRedirectURI(c.RedirectURI) {
+	if c != nil && c.RedirectURI != "" && !ValidDisconnectRedirectURI(c.RedirectURI) && !(s != nil && s.connectionVerification && validWebConnectionReturnURI(c.RedirectURI)) {
 		return ErrDisconnectProofInvalid
 	}
 	if s == nil || s.client == nil || c == nil || !disconnectIDPattern.MatchString(c.ID) || c.UserID == "" || c.AccessUUID == "" || (c.Provider != "google" && c.Provider != "apple") || !s.validStage(c.Stage) || len(c.CodeHash) != 64 || len(c.TokenHash) != 64 || len(c.Payload) == 0 {

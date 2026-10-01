@@ -88,8 +88,9 @@ type OAuthConnectionsResponse struct {
 	// ReplacementEmailRequiredFor lists connected providers whose removal
 	// requires a verified email independent of Sign in with Apple forwarding.
 	ReplacementEmailRequiredFor []string `json:"replacement_email_required_for"`
-	// ConnectVerificationAvailable reports native current-email verification
-	// capability for the requested return URI, including an isolated proof store.
+	// ConnectVerificationAvailable reports current-email verification for the
+	// requesting transport. Web handlers require matching origin configuration;
+	// native handlers require the requested URI to be exactly allowlisted.
 	ConnectVerificationAvailable bool `json:"connect_verification_available"`
 }
 

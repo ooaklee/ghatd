@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -58,6 +59,12 @@ func (h *Handler) OAuthConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.DisconnectAvailable = response.DisconnectAvailable && h.OAuthOrigin != "" && h.OAuthOrigin == service.OAuthConnectionsOrigin()
+	// Web Settings verification additionally needs an isolated, readable proof
+	// store, so it is advertised separately from the disconnect capability and
+	// only when the handler origin matches the configured connection origin.
+	if verifier, ok := h.Service.(interface{ OAuthConnectionVerificationAvailable() bool }); ok {
+		response.ConnectVerificationAvailable = verifier.OAuthConnectionVerificationAvailable() && h.OAuthOrigin != "" && h.OAuthOrigin == service.OAuthConnectionsOrigin()
+	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 
@@ -175,4 +182,101 @@ func (h *Handler) ReviewOAuthDisconnectChallenge(w http.ResponseWriter, r *http.
 		return
 	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+}
+
+// webConnectionVerificationService is the optional handler capability for web
+// Settings reauthentication before connecting Google or Apple. Hosts without it
+// retain existing behaviour and receive an unsupported response here.
+type webConnectionVerificationService interface {
+	OAuthConnectionsOrigin() string
+	StartOAuthConnectionVerification(context.Context, string, string) (*OAuthDisconnectStartResponse, error)
+	ReviewOAuthConnectionVerification(context.Context, string, string, string) (*OAuthDisconnectStartResponse, error)
+	ConfirmOAuthConnectionVerification(context.Context, string, *OAuthDisconnectConfirmRequest, string) (*OAuthDisconnectResponse, error)
+}
+
+// OAuthConnectionVerification serves web Settings reauthentication: GET
+// reviews a challenge without accepting proof, POST starts one with an empty
+// JSON body, and POST to /confirm consumes exactly one emailed proof. Every
+// mutation requires the configured web Origin and strict JSON. Every request
+// requires one unambiguous session cookie and matching origin configuration;
+// the return address is derived from configuration.
+func (h *Handler) OAuthConnectionVerification(w http.ResponseWriter, r *http.Request) {
+	oauthHeaders(w)
+	service, ok := h.Service.(webConnectionVerificationService)
+	if !ok {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		return
+	}
+	if r.Method == http.MethodGet {
+		if r.URL.RawQuery != "" {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+			return
+		}
+		provider := mux.Vars(r)["provider"]
+		if provider != "google" && provider != "apple" {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+			return
+		}
+		// A read-only review still requires the handler and service to agree on
+		// the configured web origin; callers cannot supply a return address.
+		if h.OAuthOrigin == "" || service.OAuthConnectionsOrigin() != h.OAuthOrigin || (r.Header.Get("Origin") != "" && r.Header.Get("Origin") != h.OAuthOrigin) {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrForbiddenUnableToAction)
+			return
+		}
+		token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
+		if err != nil {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
+		response, err := service.ReviewOAuthConnectionVerification(r.Context(), provider, mux.Vars(r)["challengeID"], token)
+		if err != nil {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
+		_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/confirm") {
+		var body OAuthDisconnectConfirmRequest
+		mutateService, provider, token, err := h.decodeConnectionMutation(w, r, &body)
+		if err != nil {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
+		verifier, ok := mutateService.(webConnectionVerificationService)
+		if !ok {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+			return
+		}
+		response, err := verifier.ConfirmOAuthConnectionVerification(r.Context(), provider, &body, token)
+		if err != nil {
+			_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			return
+		}
+		h.writeOAuthDisconnectResponse(w, response)
+		return
+	}
+	// Starting verification takes no client input; only the empty object is
+	// accepted so callers cannot smuggle a return address or email.
+	var body map[string]json.RawMessage
+	mutateService, provider, token, err := h.decodeConnectionMutation(w, r, &body)
+	if err != nil {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	if body == nil || len(body) != 0 {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+		return
+	}
+	verifier, ok := mutateService.(webConnectionVerificationService)
+	if !ok {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		return
+	}
+	response, err := verifier.StartOAuthConnectionVerification(r.Context(), provider, token)
+	if err != nil {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusAccepted, response)
 }

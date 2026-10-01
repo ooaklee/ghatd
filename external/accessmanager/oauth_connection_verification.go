@@ -43,15 +43,35 @@ func (s *Service) connectionVerificationStore() oauth.DisconnectChallengeStore {
 	return provider.ConnectionVerificationStore()
 }
 
-// MobileOAuthConnectionVerificationAvailable reports whether the exact native
-// return address can use current-email verification. It requires email delivery,
-// revision-aware sessions and a readable store isolated from disconnect proofs.
-func (s *Service) MobileOAuthConnectionVerificationAvailable(redirect string) bool {
-	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) || s.EmailManager == nil || !s.supportsConnectionRevisions() {
+// webConnectionReturnURI derives the sole permitted web Settings return
+// address from the configured origin. Callers never supply a return address.
+func (s *Service) webConnectionReturnURI() string {
+	return s.OAuthConnectionsOrigin() + "/settings"
+}
+
+// OAuthConnectionVerificationAvailable reports whether web Settings can use
+// current-email verification for reauthentication. It requires a configured
+// origin, email delivery, revision-aware sessions and a readable store
+// isolated from disconnect proofs.
+func (s *Service) OAuthConnectionVerificationAvailable() bool {
+	if s.OAuthConnectionsOrigin() == "" || s.EmailManager == nil || !s.supportsConnectionRevisions() {
+		return false
+	}
+	if _, ok := s.AuthService.(authenticationTimeCreator); !ok {
 		return false
 	}
 	_, ok := s.connectionVerificationStore().(oauth.DisconnectChallengeReader)
 	return ok
+}
+
+// MobileOAuthConnectionVerificationAvailable reports whether the exact native
+// return address can use current-email verification. It requires email delivery,
+// revision-aware sessions and a readable store isolated from disconnect proofs.
+func (s *Service) MobileOAuthConnectionVerificationAvailable(redirect string) bool {
+	if !s.MobileOAuthDisconnectRedirectAllowed(redirect) || !s.OAuthConnectionVerificationAvailable() {
+		return false
+	}
+	return true
 }
 
 // StartMobileOAuthConnectionVerification sends a code and review link to the
@@ -62,6 +82,27 @@ func (s *Service) StartMobileOAuthConnectionVerification(ctx context.Context, pr
 	if !s.MobileOAuthConnectionVerificationAvailable(redirect) {
 		return nil, user.ErrOAuthUnsupported
 	}
+	return s.startOAuthConnectionVerification(ctx, provider, redirect, token)
+}
+
+// StartOAuthConnectionVerification starts web Settings reauthentication by
+// sending a code and review link to the signed-in account's current email. The
+// challenge is bound to the initiating session, provider and the configured web
+// Settings return address, which is derived solely from configuration. Sending
+// it does not connect a provider or refresh authentication; confirmation is a
+// separate action.
+func (s *Service) StartOAuthConnectionVerification(ctx context.Context, provider, token string) (*OAuthDisconnectStartResponse, error) {
+	if !s.OAuthConnectionVerificationAvailable() {
+		return nil, user.ErrOAuthUnsupported
+	}
+	return s.startOAuthConnectionVerification(ctx, provider, s.webConnectionReturnURI(), token)
+}
+
+// startOAuthConnectionVerification is the shared, purpose-isolated challenge
+// issuer used by both the native and web Settings verifications. It binds the
+// emailed proof to the initiating session, provider, exact return address and
+// the account's current email revision.
+func (s *Service) startOAuthConnectionVerification(ctx context.Context, provider, redirect, token string) (*OAuthDisconnectStartResponse, error) {
 	if provider != "apple" && provider != "google" {
 		return nil, ErrBadRequest
 	}
@@ -80,7 +121,8 @@ func (s *Service) StartMobileOAuthConnectionVerification(ctx context.Context, pr
 	if err != nil {
 		return nil, err
 	}
-	challenge, code, proof, err := oauth.NewDisconnectChallenge(account.ID, details.AccessUUID, provider, payload)
+	challenge, code, proof, err :=
+		oauth.NewDisconnectChallenge(account.ID, details.AccessUUID, provider, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -107,16 +149,18 @@ func connectionVerificationResponse(c *oauth.DisconnectChallenge, email string) 
 }
 
 // readConnectionVerification reads without consuming proof and revalidates its
-// purpose, account, session, provider, return address and email revision.
+// purpose, account, session, provider, return address and email revision. The
+// redirect must be the exact return address the challenge was issued for: an
+// allowlisted native Settings URI or the configured web Settings address.
 func (s *Service) readConnectionVerification(ctx context.Context, provider, id, redirect, token string) (*oauth.DisconnectChallenge, *user.UniversalUser, error) {
-	if !s.MobileOAuthConnectionVerificationAvailable(redirect) {
+	if !s.OAuthConnectionVerificationAvailable() || (redirect != s.webConnectionReturnURI() && !s.MobileOAuthDisconnectRedirectAllowed(redirect)) {
 		return nil, nil, user.ErrOAuthUnsupported
 	}
 	account, details, err := s.connectionAccount(ctx, token, false)
 	if err != nil {
 		return nil, nil, err
 	}
-	reader := s.connectionVerificationStore().(oauth.DisconnectChallengeReader) // required by native opt-in
+	reader := s.connectionVerificationStore().(oauth.DisconnectChallengeReader) // required by verification opt-in
 	c, err := reader.Read(ctx, id, account.ID, details.AccessUUID, provider)
 	if err != nil {
 		return nil, nil, err
@@ -135,7 +179,22 @@ func (s *Service) readConnectionVerification(ctx context.Context, provider, id, 
 // for the initiating app session. It accepts no emailed proof and neither
 // consumes the challenge nor refreshes authentication.
 func (s *Service) ReviewMobileOAuthConnectionVerification(ctx context.Context, provider, id, redirect, token string) (*OAuthDisconnectStartResponse, error) {
+	if !s.MobileOAuthConnectionVerificationAvailable(redirect) {
+		return nil, user.ErrOAuthUnsupported
+	}
 	c, account, err := s.readConnectionVerification(ctx, provider, id, redirect, token)
+	if err != nil {
+		return nil, err
+	}
+	return connectionVerificationResponse(c, account.Email), nil
+}
+
+// ReviewOAuthConnectionVerification returns pending challenge metadata for
+// the initiating browser session. It accepts no emailed proof and neither
+// consumes the challenge nor refreshes authentication. Only challenges issued
+// for the configured web Settings return address can be reviewed here.
+func (s *Service) ReviewOAuthConnectionVerification(ctx context.Context, provider, id, token string) (*OAuthDisconnectStartResponse, error) {
+	c, account, err := s.readConnectionVerification(ctx, provider, id, s.webConnectionReturnURI(), token)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +207,27 @@ func (s *Service) ReviewMobileOAuthConnectionVerification(ctx context.Context, p
 // existing sessions retain their original authentication time and validity.
 // The transport must install the returned session cookies before linking.
 func (s *Service) ConfirmMobileOAuthConnectionVerification(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, redirect, token string) (*OAuthDisconnectResponse, error) {
+	if !s.MobileOAuthConnectionVerificationAvailable(redirect) {
+		return nil, user.ErrOAuthUnsupported
+	}
+	return s.confirmOAuthConnectionVerification(ctx, provider, request, redirect, token)
+}
+
+// ConfirmOAuthConnectionVerification consumes exactly one emailed code or link
+// token through the web Settings flow and rechecks the initiating session
+// before issuing a fresh session for the same account. It leaves the email and
+// providers unchanged; existing sessions retain their original authentication
+// time and validity. Only challenges issued for the configured web Settings
+// return address can be confirmed here. The transport must install the
+// returned session cookies before linking.
+func (s *Service) ConfirmOAuthConnectionVerification(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, token string) (*OAuthDisconnectResponse, error) {
+	return s.confirmOAuthConnectionVerification(ctx, provider, request, s.webConnectionReturnURI(), token)
+}
+
+// confirmOAuthConnectionVerification shares the purpose-isolated proof
+// consumption between the native and web Settings verifications. The redirect
+// must match the address the challenge was issued for.
+func (s *Service) confirmOAuthConnectionVerification(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, redirect, token string) (*OAuthDisconnectResponse, error) {
 	if request == nil || len(request.Code) > 8 || len(request.Token) > 43 || (request.Code == "") == (request.Token == "") {
 		return nil, ErrBadRequest
 	}
