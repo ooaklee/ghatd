@@ -122,7 +122,7 @@ func (h *Handler) writeOAuthDisconnectResponse(w http.ResponseWriter, response *
 	// First-stage approvals stay 202 with the follow-up challenge; final
 	// confirmations are 200 and disconnected.
 	status := http.StatusOK
-	if !response.Disconnected {
+	if !response.Disconnected && !response.Reauthenticated {
 		status = http.StatusAccepted
 	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, status, response)

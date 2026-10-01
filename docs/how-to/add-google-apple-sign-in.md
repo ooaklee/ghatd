@@ -399,3 +399,42 @@ only in memory, exclude it from platform/router/network logs, and review metadat
 before displaying explicit confirmation. Never redeem on app-open. Cancellation
 keeps the provider connected. A new login/account switch must discard pending
 proof; no token or cookie is transferred from the browser into the app.
+
+### Native connection verification for older sessions
+
+Connecting a provider requires authentication within the last five minutes.
+An otherwise valid session must not be forced through the public login screen
+just to satisfy that check. Native Settings clients can offer current-inbox
+verification when linking returns `reauth_required`.
+
+Native connection status advertises `connect_verification_available`. This is
+opt-in through the existing exact Settings callback allowlist and requires a
+store implementing `ConnectionVerificationStore() DisconnectChallengeStore`
+with read support. The Redis implementation uses a separate purpose namespace;
+custom stores without that capability remain compatible and advertise false.
+
+- `POST /api/v1/ams/oauth/mobile/connections/{provider}/reauthenticate` accepts
+  only `redirect_uri`; the server selects the current account email.
+- `GET .../{provider}/reauthenticate/challenges/{id}?redirect_uri=<address>`
+  reviews the pending challenge without spending proof.
+- `POST .../{provider}/reauthenticate/confirm` accepts `redirect_uri`,
+  `challenge_id` and exactly one `code` or `token`.
+
+Start/review use the existing challenge shape with `verification_stage:
+"connect_email"`. Emails contain an 8-character code and a link whose fragment
+starts with `oauth_connect=<provider>` at the same registered Settings callback.
+Keep that marker separate from `oauth_disconnect`; proof is bound to account,
+initiating session, provider, exact callback and current email revision.
+Disconnection and connection-verification proofs cannot spend each other.
+
+Final confirmation returns HTTP 200 with `reauthenticated: true`,
+`disconnected: false`, unchanged `connected`/`email`, and fresh ordinary session
+cookies for the same account. Other sessions remain valid with their original
+authentication time. No provider is connected or disconnected by this step.
+Show an explicit Continue with Google/Apple action to launch the existing
+native linking flow, which still rechecks session freshness and account revision.
+Cancel keeps the account unchanged. If verification expires, offer verification
+again without an automatic retry loop. Existing retry, logging and link-review
+precautions apply. Ordinary login codes are deliberately not accepted here:
+they can authenticate a different account and are not bound to this Settings
+operation.

@@ -60,10 +60,11 @@ type oauthConnectionsUsers interface {
 	LinkOAuthIdentityAtRevision(context.Context, string, *user.OAuthIdentity, int64) (*user.UniversalUser, error)
 }
 type OAuthConnectionsResponse struct {
-	Connected           []string `json:"connected"`
-	Available           []string `json:"available"`
-	Email               string   `json:"email"`
-	DisconnectAvailable bool     `json:"disconnect_available"`
+	Connected                    []string `json:"connected"`
+	Available                    []string `json:"available"`
+	Email                        string   `json:"email"`
+	DisconnectAvailable          bool     `json:"disconnect_available"`
+	ConnectVerificationAvailable bool     `json:"connect_verification_available"`
 }
 type OAuthDisconnectStartResponse struct {
 	ChallengeID           string `json:"challenge_id"`
@@ -85,10 +86,11 @@ type OAuthDisconnectConfirmRequest struct {
 	Token       string `json:"token,omitempty"`
 }
 type OAuthDisconnectResponse struct {
-	Session      *auth.TokenDetails `json:"-"`
-	Disconnected bool               `json:"disconnected"`
-	Connected    []string           `json:"connected"`
-	Email        string             `json:"email"`
+	Session         *auth.TokenDetails `json:"-"`
+	Reauthenticated bool               `json:"reauthenticated,omitempty"`
+	Disconnected    bool               `json:"disconnected"`
+	Connected       []string           `json:"connected"`
+	Email           string             `json:"email"`
 	// NextChallenge is set when a current-email approval stage succeeded and a
 	// distinct sign-in-email challenge is now pending. Disconnected stays false.
 	NextChallenge *OAuthDisconnectStartResponse `json:"next_challenge,omitempty"`
@@ -376,7 +378,7 @@ func (s *Service) confirmOAuthDisconnect(ctx context.Context, provider string, r
 		if readErr != nil {
 			return nil, readErr
 		}
-		if pending.RedirectURI != redirect {
+		if pending.RedirectURI != redirect || pending.Stage == connectionVerificationStage {
 			return nil, oauth.ErrDisconnectProofInvalid
 		}
 	}

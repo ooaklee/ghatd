@@ -113,8 +113,23 @@ func NewDisconnectChallenge(userID, accessUUID, provider string, payload []byte)
 }
 
 type RedisDisconnectChallengeStore struct {
-	client RedisTransactionClient
-	prefix string
+	client                 RedisTransactionClient
+	prefix                 string
+	connectionVerification bool
+}
+
+// ConnectionVerificationStore provides a distinct proof namespace. Even a
+// direct Consume against the wrong purpose cannot spend another flow's proof.
+// Hosts with custom stores may implement this optional capability themselves.
+func (s *RedisDisconnectChallengeStore) ConnectionVerificationStore() DisconnectChallengeStore {
+	return &RedisDisconnectChallengeStore{client: s.client, prefix: s.prefix + "verify-connect:", connectionVerification: true}
+}
+
+func (s *RedisDisconnectChallengeStore) validStage(stage string) bool {
+	if s.connectionVerification {
+		return stage == "connect_email"
+	}
+	return validDisconnectStages[stage]
 }
 
 func NewRedisDisconnectChallengeStore(client RedisTransactionClient, namespace string) *RedisDisconnectChallengeStore {
@@ -136,7 +151,7 @@ func (s *RedisDisconnectChallengeStore) Save(ctx context.Context, c *DisconnectC
 	if c != nil && c.RedirectURI != "" && !ValidDisconnectRedirectURI(c.RedirectURI) {
 		return ErrDisconnectProofInvalid
 	}
-	if s == nil || s.client == nil || c == nil || !disconnectIDPattern.MatchString(c.ID) || c.UserID == "" || c.AccessUUID == "" || (c.Provider != "google" && c.Provider != "apple") || !validDisconnectStages[c.Stage] || len(c.CodeHash) != 64 || len(c.TokenHash) != 64 || len(c.Payload) == 0 {
+	if s == nil || s.client == nil || c == nil || !disconnectIDPattern.MatchString(c.ID) || c.UserID == "" || c.AccessUUID == "" || (c.Provider != "google" && c.Provider != "apple") || !s.validStage(c.Stage) || len(c.CodeHash) != 64 || len(c.TokenHash) != 64 || len(c.Payload) == 0 {
 		return ErrDisconnectProofInvalid
 	}
 	ttl := time.Until(time.UnixMilli(c.ExpiresAt))
@@ -213,7 +228,7 @@ func (s *RedisDisconnectChallengeStore) Read(ctx context.Context, id, userID, ac
 		return nil, ErrDisconnectProofInvalid
 	}
 	var c DisconnectChallenge
-	if json.Unmarshal([]byte(raw), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || !validDisconnectStages[c.Stage] || c.ExpiresAt <= time.Now().UnixMilli() {
+	if json.Unmarshal([]byte(raw), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || !s.validStage(c.Stage) || c.ExpiresAt <= time.Now().UnixMilli() {
 		return nil, ErrDisconnectProofInvalid
 	}
 	if c.Attempts >= 5 {
@@ -248,7 +263,7 @@ func (s *RedisDisconnectChallengeStore) Consume(ctx context.Context, id, userID,
 		return nil, ErrDisconnectProofInvalid
 	}
 	var c DisconnectChallenge
-	if json.Unmarshal([]byte(value), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || !validDisconnectStages[c.Stage] || c.ExpiresAt <= time.Now().UnixMilli() {
+	if json.Unmarshal([]byte(value), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || !s.validStage(c.Stage) || c.ExpiresAt <= time.Now().UnixMilli() {
 		return nil, ErrDisconnectProofInvalid
 	}
 	return &c, nil

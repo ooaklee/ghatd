@@ -55,6 +55,9 @@ func (h *Handler) MobileOAuthConnections(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	response.DisconnectAvailable = response.DisconnectAvailable && service.MobileOAuthDisconnectRedirectAllowed(redirect)
+	if verifier, ok := h.Service.(interface{ MobileOAuthConnectionVerificationAvailable(string) bool }); ok {
+		response.ConnectVerificationAvailable = verifier.MobileOAuthConnectionVerificationAvailable(redirect)
+	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }
 

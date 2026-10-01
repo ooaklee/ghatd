@@ -194,6 +194,14 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", native.ReviewMobileOAuthDisconnectChallenge).Methods(http.MethodGet)
 	}
 
+	if native, ok := request.Handler.(interface {
+		MobileOAuthConnectionVerification(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate", native.MobileOAuthConnectionVerification).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate/confirm", native.MobileOAuthConnectionVerification).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", native.MobileOAuthConnectionVerification).Methods(http.MethodGet)
+	}
+
 	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserEmail, request.Handler.ValidateEmailVerificationCode).Methods(http.MethodGet, http.MethodOptions)
