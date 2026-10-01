@@ -283,7 +283,16 @@ adds `oauth_linked=google|apple` to the trusted continuation URL. Old or revoked
 sessions must reauthenticate. Refresh preserves the original signed login time.
 
 The fixed browser errors are `cancelled`, `unavailable`, `invalid`,
-`unverified_email`, `restricted`, `link_required`, `reauth_required` and `failed`.
+`unverified_email`, `restricted`, `link_required`, `identity_conflict`,
+`reauth_required` and `failed`.
+
+`identity_conflict` means the verified provider identity is already linked to
+another account. Keep the current session and explain that the user can sign in
+to that account, disconnect the provider there after email verification, then
+connect it to the intended account; alternatively, use another provider account.
+Do not disclose the owning account's email or ID, merge accounts or transfer the
+link automatically. `link_required` remains the separate login case where a
+matching email needs an explicit connection in Settings.
 Provider accounts are found by signed issuer/subject, never automatically by
 matching email. Apple repeat sign-in can omit first-only profile data. Every
 restricted user status is denied before session issuance.

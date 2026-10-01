@@ -182,8 +182,10 @@ func oauthErrorCode(err error) string {
 		return "cancelled"
 	case errors.Is(err, ErrOAuthReauthenticationRequired):
 		return "reauth_required"
-	case errors.Is(err, user.ErrOAuthLinkRequired), errors.Is(err, user.ErrOAuthIdentityConflict):
+	case errors.Is(err, user.ErrOAuthLinkRequired):
 		return "link_required"
+	case errors.Is(err, user.ErrOAuthIdentityConflict):
+		return "identity_conflict"
 	case errors.Is(err, user.ErrOAuthRestricted):
 		return "restricted"
 	case errors.Is(err, oauth.ErrSecureIDTokenUnverified):
