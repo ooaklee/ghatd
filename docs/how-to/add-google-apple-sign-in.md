@@ -270,22 +270,40 @@ The web flow uses session cookies and same-origin JSON POSTs:
 
 1. `POST /api/v1/ams/oauth/connections/{google|apple}/disconnect` with
    `{"email":"me@example.com"}`. Omit the email to keep the current address.
-   Requires sign-in within the last five minutes. Returns `data.challenge_id`,
-   `expires_in` (600), and `resend_cooldown_seconds` (60).
+   Requires a valid session. Keeping the current verified email needs no
+   separate recent login: that inbox's proof supplies account authentication.
+   For a replacement email, sign-in within five minutes permits direct
+   verification; otherwise GHATD first sends approval to the current email.
+   Returns `data.challenge_id`, `expires_in` (600), `resend_cooldown_seconds`
+   (60), `verification_stage` (`current_email` or `sign_in_email`), `email`
+   (the recipient for this stage) and `sign_in_email` (the intended final email).
 2. Deliver a magic link **and** an eight-character alphanumeric code using the
    host's existing email manager. Every disconnect requires inbox proof, even
    with another provider connected; provider-asserted email verification alone
    does not establish current delivery/access, especially for Apple relay.
 3. `POST /api/v1/ams/oauth/connections/{provider}/disconnect/confirm` with
    `{"challenge_id":"...","code":"A1B2C3D4"}` or `token` instead of `code`.
-   Require exactly one proof and the initiating browser session. The response
-   sets a replacement access/refresh cookie pair and returns
-   `data: {disconnected: true, connected: [...], email: "..."}`.
+   Require exactly one proof and the initiating browser session. Confirming
+   `current_email` returns HTTP 202 with `disconnected: false` and
+   `next_challenge` in the start-response shape. No account fields or session
+   cookies change: clear the old proof and prompt for the new address's separate
+   code/link. The automatic transition bypasses the resend cooldown only after
+   consuming the first one-use proof; explicit starts remain rate limited.
+   Final confirmation returns HTTP 200, sets replacement access/refresh cookies,
+   and returns `data: {disconnected: true, connected: [...], email: "..."}`.
 
 Email links open
 `{origin}/settings#oauth_disconnect=google&challenge_id=<id>&token=<token>`.
 The host must remove this fragment **before analytics/router startup**, retain
-it only in memory, and show explicit confirmation before posting it. Never
+it only in memory, and show explicit confirmation before posting it. Load the
+stage and recipient with authenticated
+`GET /api/v1/ams/oauth/connections/{provider}/disconnect/challenges/{challenge_id}`;
+this sends no emailed proof and cannot consume it. The Redis store implements
+the optional `oauth.DisconnectChallengeReader` interface; custom stores may
+implement it to support this review UI. Unknown/foreign/expired challenges return
+404, changed account/provider snapshots return 409, and a revoked session returns
+401. Render server-owned metadata rather than guessing the stage from the link.
+Never
 mutate the account on GET, auto-confirm on page load, or put the proof in a
 server URL query. If the link opens in another browser/session, use the code
 in the initiating browser instead. These mutation endpoints are web-only;
@@ -306,7 +324,20 @@ JWTs/email proofs and pending provider links even if they race with session
 cleanup. Linking checks the initiating revision in both its atomic write and
 idempotent lookup. Stale full-user updates fail instead of restoring the old
 email; ordinary no-op updates still succeed. The initiating
-browser receives a new session; other sessions must sign in again. Infrastructure
+browser receives a new session; other sessions must sign in again. Same-email
+proof uses its successful verification time as `auth_time`. Two-stage changes
+carry the current-email approval time; direct replacement verification preserves
+the original recent sign-in time. A new inbox alone never supplies proof of the
+old account. Valid legacy queued final challenges remain redeemable.
+
+The entire UI can stay under authenticated Settings; public login guards need no
+exception. Cancellation and expiry leave the account untouched. An access-token
+rotation or new login changes the session binding: ask the user to restart the
+request, and never silently carry proof across sessions. If current-email access
+is unavailable, a normal sign-in with an existing connected provider permits
+starting direct replacement verification. A failed second-stage delivery or
+challenge publication consumes the approval proof but leaves the account intact;
+show Start again for `OAuthDisconnectDeliveryFailed`. Infrastructure
 failure after the atomic write returns `OAuthDisconnectSessionRequired` (503):
 the provider is already disconnected, so ask the user to sign in using the
 verified email. Never report an unconfirmed network request as an unchanged
@@ -327,5 +358,8 @@ go test -race ./external/accessmanager ./external/oauth ./external/auth ./extern
 
 Tests cover inbox fallback to the same account, two last-provider removals under
 the sparse unique index, replay/expiry/attempt limits, duplicate email, changed
-account/provider snapshots, concurrent confirmations, failed delivery, stale
-profile writes, and credentials restored by overlapping login/refresh work.
+account/provider snapshots at each stage, concurrent confirmations, failed
+delivery, stale profile writes, and credentials restored by overlapping
+login/refresh work. Staged cases also verify older and legacy sessions, immediate
+stage progression, review privacy/no-consumption, cross-stage/session rejection,
+unchanged account after current-email approval, and authentication timestamps.

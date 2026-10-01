@@ -140,6 +140,11 @@ func (f *connectionFixture) current(t *testing.T) *user.UniversalUser {
 }
 func (f *connectionFixture) start(t *testing.T, email string) (string, string, string) {
 	t.Helper()
+	id, code, token, _ := f.startStage(t, email)
+	return id, code, token
+}
+func (f *connectionFixture) startStage(t *testing.T, email string) (string, string, string, accessmanager.OAuthDisconnectStartResponse) {
+	t.Helper()
 	raw, _ := json.Marshal(map[string]string{"email": email})
 	r := f.request("POST", "/google/disconnect", string(raw))
 	require.Equal(t, 202, r.Code, r.Body.String())
@@ -158,7 +163,17 @@ func (f *connectionFixture) start(t *testing.T, email string) (string, string, s
 	require.Equal(t, "google", fragment.Get("oauth_disconnect"))
 	require.Equal(t, response.Data.ChallengeID, fragment.Get("challenge_id"))
 	require.Empty(t, link.RawQuery)
-	return response.Data.ChallengeID, matches[1], fragment.Get("token")
+	return response.Data.ChallengeID, matches[1], fragment.Get("token"), response.Data
+}
+func (f *connectionFixture) confirmStage(t *testing.T, id, code, token string) *accessmanager.OAuthDisconnectResponse {
+	t.Helper()
+	result := f.request("POST", "/google/disconnect/confirm", confirmBody(id, code, token))
+	require.Equal(t, 202, result.Code, result.Body.String())
+	var response struct {
+		Data accessmanager.OAuthDisconnectResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(result.Body.Bytes(), &response))
+	return &response.Data
 }
 func confirmBody(id, code, token string) string {
 	value, _ := json.Marshal(accessmanager.OAuthDisconnectConfirmRequest{ChallengeID: id, Code: code, Token: token})
@@ -268,7 +283,12 @@ func TestOAuthConnectionsSecurityBoundaries(t *testing.T) {
 		stale, err := f.auth.CreateTokenWithAuthenticationTime(f.ctx, f.account, time.Now().Add(-6*time.Minute))
 		require.NoError(t, err)
 		require.NoError(t, f.ephemeral.CreateAuth(f.ctx, f.account.ID, stale))
-		require.Equal(t, 401, f.serve("POST", "/google/disconnect", `{}`, "https://app.example", "application/json", stale).Code)
+		// Stale sessions may still request same-email verification (the email
+		// proof is itself account proof), but a different sign-in email is
+		// downgraded to the current-email approval stage, never sent directly.
+		require.Equal(t, 202, f.serve("POST", "/google/disconnect", `{"email":"new@example.test"}`, "https://app.example", "application/json", stale).Code)
+		require.Equal(t, f.account.Email, f.mail.custom.EmailTo)
+		require.Equal(t, 403, f.serve("POST", "/google/disconnect", `{"email":"new@example.test"}`, "https://attacker.example", "application/json", stale).Code)
 		_, err = f.ephemeral.DeleteAuth(f.ctx, toolbox.CombinedUuidFormat(f.account.ID, f.tokens.AccessUUID))
 		require.NoError(t, err)
 		require.Equal(t, 401, f.request("GET", "", "").Code)
@@ -377,4 +397,183 @@ func TestOAuthConnectionsSecurityBoundaries(t *testing.T) {
 			})
 		}
 	})
+}
+
+// staleSessionFor issues a second session for the fixture account with an
+// authentication time far outside the five-minute freshness window.
+func (f *connectionFixture) staleSessionFor(t *testing.T, age time.Duration) *auth.TokenDetails {
+	t.Helper()
+	stale, err := f.auth.CreateTokenWithAuthenticationTime(f.ctx, f.account, time.Now().Add(-age))
+	require.NoError(t, err)
+	require.NoError(t, f.ephemeral.CreateAuth(f.ctx, f.account.ID, stale))
+	return stale
+}
+
+func TestOAuthDisconnectStagedVerification(t *testing.T) {
+	t.Run("stale session same-email starts directly and completion is fresh", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		f.tokens = f.staleSessionFor(t, time.Hour)
+		id, code, _, start := f.startStage(t, f.account.Email)
+		require.Equal(t, "sign_in_email", start.VerificationStage)
+		require.Equal(t, f.account.Email, start.Email)
+		require.Equal(t, f.account.Email, start.SignInEmail)
+		result := f.request("POST", "/google/disconnect/confirm", confirmBody(id, code, ""))
+		require.Equal(t, 200, result.Code, result.Body.String())
+		// Completion session carries the same-email proof timestamp, not the
+		// stale session's authentication time.
+		var response struct {
+			Data accessmanager.OAuthDisconnectResponse `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(result.Body.Bytes(), &response))
+		var accessToken string
+		for _, cookie := range result.Result().Cookies() {
+			if cookie.Name == "access" {
+				accessToken = cookie.Value
+			}
+		}
+		require.NotEmpty(t, accessToken)
+		details, err := f.auth.ExtractAccessTokenMetadataByString(f.ctx, accessToken)
+		require.NoError(t, err)
+		require.WithinDuration(t, time.Now(), details.AuthenticationTime, time.Minute)
+	})
+	t.Run("stale session new email requires current-email stage first", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		f.tokens = f.staleSessionFor(t, time.Hour)
+		id, code, _, start := f.startStage(t, "replacement@example.test")
+		require.Equal(t, "current_email", start.VerificationStage)
+		require.Equal(t, f.account.Email, start.Email)
+		require.Equal(t, "replacement@example.test", start.SignInEmail)
+		require.Contains(t, f.mail.custom.EmailSubject, "Confirm your current email")
+		require.Equal(t, f.account.Email, f.mail.custom.EmailTo)
+		// First stage must never unlink or change the account.
+		stage1 := f.confirmStage(t, id, code, "")
+		require.False(t, stage1.Disconnected)
+		require.Equal(t, "sign_in_email", stage1.NextChallenge.VerificationStage)
+		require.Equal(t, "replacement@example.test", stage1.NextChallenge.Email)
+		require.Equal(t, "replacement@example.test", stage1.NextChallenge.SignInEmail)
+		after := f.current(t)
+		require.Len(t, after.OAuthIdentities, 1)
+		require.Equal(t, f.account.Email, after.Email)
+		require.Contains(t, f.mail.custom.EmailSubject, "Verify email before disconnecting")
+		require.Equal(t, "replacement@example.test", f.mail.custom.EmailTo)
+		// The first-stage proof is consumed and cannot be replayed.
+		require.Equal(t, 400, f.request("POST", "/google/disconnect/confirm", confirmBody(id, code, "")).Code)
+		// Final confirmation applies the change atomically.
+		result := f.request("POST", "/google/disconnect/confirm", confirmBody(stage1.NextChallenge.ChallengeID, "", extractLinkToken(t, f.mail.custom.EmailBody)))
+		require.Equal(t, 200, result.Code, result.Body.String())
+		final := f.current(t)
+		require.Equal(t, "replacement@example.test", final.Email)
+		require.Empty(t, final.OAuthIdentities)
+	})
+	t.Run("recent auth new email goes direct with fresh completion timestamp", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		id, code, _, start := f.startStage(t, "direct@example.test")
+		require.Equal(t, "sign_in_email", start.VerificationStage)
+		require.Equal(t, "direct@example.test", start.Email)
+		result := f.request("POST", "/google/disconnect/confirm", confirmBody(id, code, ""))
+		require.Equal(t, 200, result.Code, result.Body.String())
+		var accessToken string
+		for _, cookie := range result.Result().Cookies() {
+			if cookie.Name == "access" {
+				accessToken = cookie.Value
+			}
+		}
+		details, err := f.auth.ExtractAccessTokenMetadataByString(f.ctx, accessToken)
+		require.NoError(t, err)
+		require.WithinDuration(t, time.Now(), details.AuthenticationTime, time.Minute)
+	})
+	t.Run("candidate stage cannot be skipped or cross-used", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		f.tokens = f.staleSessionFor(t, time.Hour)
+		_, _, _, start := f.startStage(t, "replacement@example.test")
+		require.Equal(t, "current_email", start.VerificationStage)
+		// The current-email challenge cannot be consumed through a different
+		// session of the same account.
+		other := f.staleSessionFor(t, time.Hour)
+		require.Equal(t, 400, f.serve("POST", "/google/disconnect/confirm", confirmBody(start.ChallengeID, "00000000", ""), "https://app.example", "application/json", other).Code)
+	})
+	t.Run("failed candidate dispatch after approval fails closed with restart", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		f.tokens = f.staleSessionFor(t, time.Hour)
+		id, code, _, _ := f.startStage(t, "replacement@example.test")
+		f.mail.fail = true
+		// The candidate dispatch consumes the current-email proof, fails, and
+		// leaves no second stage: the account stays untouched and restart is
+		// the only path forward.
+		result := f.request("POST", "/google/disconnect/confirm", confirmBody(id, code, ""))
+		require.Equal(t, 503, result.Code, result.Body.String())
+		require.Contains(t, result.Body.String(), "OAuthDisconnectDeliveryFailed")
+		after := f.current(t)
+		require.Len(t, after.OAuthIdentities, 1)
+		require.Equal(t, f.account.Email, after.Email)
+		// The consumed approval cannot be replayed.
+		require.Equal(t, 400, f.request("POST", "/google/disconnect/confirm", confirmBody(id, code, "")).Code)
+	})
+	t.Run("account change between stages invalidates the pending challenge", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		f.tokens = f.staleSessionFor(t, time.Hour)
+		id, code, _, _ := f.startStage(t, "replacement@example.test")
+		stage1 := f.confirmStage(t, id, code, "")
+		require.False(t, stage1.Disconnected)
+		_, err := f.db.Collection("users").UpdateOne(f.ctx, bson.M{"_id": f.account.ID}, bson.M{"$set": bson.M{"email": "moved@example.test", "email_revision": f.account.EmailRevision + 1}})
+		require.NoError(t, err)
+		result := f.request("POST", "/google/disconnect/confirm", confirmBody(stage1.NextChallenge.ChallengeID, "00000000", ""))
+		// The revision bump makes the session itself stale, so the confirm is
+		// rejected before any proof handling — the challenge is stranded.
+		require.Equal(t, 401, result.Code, result.Body.String())
+		require.Equal(t, 401, f.request("GET", "", "").Code)
+	})
+}
+
+func TestOAuthDisconnectChallengeReview(t *testing.T) {
+	t.Run("review returns public shape without consuming", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		// Stale session + different email forces the two-stage flow, giving a
+		// reviewable current_email challenge for the new sign-in email.
+		f.tokens = f.staleSessionFor(t, time.Hour)
+		id, _, _ := f.start(t, "replacement@example.test")
+		w := f.request("GET", "/google/disconnect/challenges/"+id, "")
+		require.Equal(t, 200, w.Code, w.Body.String())
+		require.Contains(t, w.Body.String(), `"verification_stage":"current_email"`)
+		require.Contains(t, w.Body.String(), `"sign_in_email":"replacement@example.test"`)
+		require.NotContains(t, w.Body.String(), "code_hash")
+		require.NotContains(t, w.Body.String(), "token_hash")
+		require.NotContains(t, w.Body.String(), "payload")
+		require.NotContains(t, w.Body.String(), "access_uuid")
+		// Reading never consumes: a confirm attempt still runs the proof check.
+		require.Equal(t, 400, f.request("POST", "/google/disconnect/confirm", confirmBody(id, "WRONG123", "")).Code)
+	})
+	t.Run("review enforces session, owner and provider binding", func(t *testing.T) {
+		f := newConnectionFixture(t)
+		id, _, _ := f.start(t, f.account.Email)
+		require.Equal(t, 401, f.serve("GET", "/google/disconnect/challenges/"+id, "", "", "", nil).Code)
+		other, _ := f.newAccount(t, "other@example.test", "other-subject")
+		// A well-formed but unowned identifier reads as absent: no existence
+		// oracle for other accounts' pending challenges.
+		require.Equal(t, 404, f.serve("GET", "/google/disconnect/challenges/"+id, "", "https://app.example", "application/json", otherTokens(f, t, other)).Code)
+		// Route-level rejection for malformed identifiers and foreign providers.
+		require.Equal(t, 404, f.request("GET", "/google/disconnect/challenges/"+strings.Repeat("x", 43), "").Code)
+		require.Equal(t, 404, f.request("GET", "/apple/disconnect/challenges/"+id, "").Code)
+		// Own challenge but a different session of the same account: absent.
+		require.Equal(t, 404, f.serve("GET", "/google/disconnect/challenges/"+id, "", "https://app.example", "application/json", f.staleSessionFor(t, time.Hour)).Code)
+	})
+}
+
+func otherTokens(f *connectionFixture, t *testing.T, u *user.UniversalUser) *auth.TokenDetails {
+	t.Helper()
+	tokens, err := f.auth.CreateTokenWithAuthenticationTime(f.ctx, u, time.Now())
+	require.NoError(t, err)
+	require.NoError(t, f.ephemeral.CreateAuth(f.ctx, u.ID, tokens))
+	return tokens
+}
+
+func extractLinkToken(t *testing.T, body string) string {
+	t.Helper()
+	linkMatches := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(body)
+	require.Len(t, linkMatches, 2)
+	link, err := url.Parse(html.UnescapeString(linkMatches[1]))
+	require.NoError(t, err)
+	fragment, err := url.ParseQuery(link.Fragment)
+	require.NoError(t, err)
+	return fragment.Get("token")
 }

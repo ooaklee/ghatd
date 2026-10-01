@@ -346,3 +346,18 @@ an email by link/code before atomically replacing the sign-in email and removing
 a provider. See [the complete host flow](../../docs/how-to/add-google-apple-sign-in.md#show-connections-and-safely-disconnect-a-provider),
 including early URL-proof removal, session rotation, optional-adapter contracts,
 and the framework integration tests.
+
+A valid session can verify the account's current email without another recent
+login. For a new email, recent authentication allows direct verification;
+otherwise the current inbox is verified first. First-stage confirmation returns
+202 with `disconnected: false` and `next_challenge`, leaving the account untouched.
+Only the final 200 response has `disconnected: true` and replacement session
+cookies. Both stages support a purpose-specific magic link or eight-character
+code; ordinary login tokens cannot authorize disconnection.
+
+`GET /oauth/connections/{provider}/disconnect/challenges/{challenge_id}` reviews
+stage/recipient metadata without accepting or consuming a proof. It requires the
+same live session and current account/provider snapshot. Optional read-capable
+stores implement `oauth.DisconnectChallengeReader`; existing store/client and
+challenge-constructor interfaces remain compatible. The host can keep the entire
+flow in protected Settings without relaxing public login route guards.

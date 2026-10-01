@@ -176,6 +176,11 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect", optional.StartOAuthDisconnect).Methods(http.MethodPost)
 		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/confirm", optional.ConfirmOAuthDisconnect).Methods(http.MethodPost)
 	}
+	if optional, ok := request.Handler.(interface {
+		ReviewOAuthDisconnectChallenge(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", optional.ReviewOAuthDisconnectChallenge).Methods(http.MethodGet)
+	}
 
 	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)

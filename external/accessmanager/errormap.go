@@ -19,6 +19,7 @@ var AccessmanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	user.ErrOAuthConnectionConflict:                        {Title: "Your sign-in methods changed; please try again", StatusCode: 409, Code: "OAuthConnectionConflict"},
 	user.ErrEmailAlreadyExists:                             {Title: "This email is already used by another account", StatusCode: 409, Code: "OAuthEmailConflict"},
 	ErrOAuthDisconnectDelivery:                             {Title: "Verification email could not be sent", StatusCode: 503, Code: "OAuthDisconnectDeliveryFailed"},
+	ErrOAuthDisconnectChallengeNotFound:                    {Title: "This verification request does not exist or has expired", StatusCode: 404, Code: "OAuthDisconnectChallengeNotFound"},
 	ErrOAuthReauthenticationRequired:                       {Title: "Sign in again before managing providers", StatusCode: 401, Code: "OAuthReauthenticationRequired"},
 	user.ErrOAuthLinkRequired:                              {Title: "Sign in to your existing account before connecting this provider", StatusCode: 409, Code: "OAuthLinkRequired"},
 	user.ErrOAuthIdentityConflict:                          {Title: "This provider account is already connected", StatusCode: 409, Code: "OAuthIdentityConflict"},

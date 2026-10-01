@@ -7,6 +7,7 @@ import (
 	"mime"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
@@ -113,6 +114,42 @@ func (h *Handler) ConfirmOAuthDisconnect(w http.ResponseWriter, r *http.Request)
 		tokens := response.Session
 		h.AddAuthCookies(w, tokens.AccessToken, tokens.AtExpires, tokens.RefreshToken, tokens.RtExpires)
 		toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, tokens.AtExpires, tokens.RtExpires)
+	}
+	// First-stage approvals stay 202 with the follow-up challenge; final
+	// confirmations are 200 and disconnected.
+	status := http.StatusOK
+	if !response.Disconnected {
+		status = http.StatusAccepted
+	}
+	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, status, response)
+}
+
+// ReviewOAuthDisconnectChallenge backs the magic-link review screen. It is an
+// authenticated, read-only GET: no emailed proof is accepted, nothing is
+// consumed or mutated, and only the public start-response shape is returned.
+func (h *Handler) ReviewOAuthDisconnectChallenge(w http.ResponseWriter, r *http.Request) {
+	oauthHeaders(w)
+	service, ok := h.Service.(interface {
+		ReviewOAuthDisconnectChallenge(context.Context, string, string, string) (*OAuthDisconnectStartResponse, error)
+	})
+	if !ok {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		return
+	}
+	provider := mux.Vars(r)["provider"]
+	if provider != "google" && provider != "apple" {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+		return
+	}
+	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
+	if err != nil {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
+	}
+	response, err := service.ReviewOAuthDisconnectChallenge(r.Context(), provider, mux.Vars(r)["challengeID"], token)
+	if err != nil {
+		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		return
 	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
 }

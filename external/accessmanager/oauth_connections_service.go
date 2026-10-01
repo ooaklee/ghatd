@@ -58,6 +58,15 @@ type OAuthDisconnectStartResponse struct {
 	ChallengeID           string `json:"challenge_id"`
 	ExpiresIn             int    `json:"expires_in"`
 	ResendCooldownSeconds int    `json:"resend_cooldown_seconds"`
+	// VerificationStage reports which mailbox this challenge verifies:
+	// "current_email" approves changing the sign-in email, "sign_in_email"
+	// confirms the final (possibly new) sign-in email. Legacy challenges
+	// are reported as "sign_in_email" final confirmations.
+	VerificationStage string `json:"verification_stage"`
+	// Email is the mailbox receiving this challenge.
+	Email string `json:"email"`
+	// SignInEmail is the final sign-in email the disconnect will apply.
+	SignInEmail string `json:"sign_in_email"`
 }
 type OAuthDisconnectConfirmRequest struct {
 	ChallengeID string `json:"challenge_id"`
@@ -69,6 +78,9 @@ type OAuthDisconnectResponse struct {
 	Disconnected bool               `json:"disconnected"`
 	Connected    []string           `json:"connected"`
 	Email        string             `json:"email"`
+	// NextChallenge is set when a current-email approval stage succeeded and a
+	// distinct sign-in-email challenge is now pending. Disconnected stays false.
+	NextChallenge *OAuthDisconnectStartResponse `json:"next_challenge,omitempty"`
 }
 
 func connectedProviderNames(account *user.UniversalUser) []string {
@@ -84,28 +96,40 @@ func connectedProviderNames(account *user.UniversalUser) []string {
 	return names
 }
 func (s *Service) connectionAccount(ctx context.Context, token string, fresh bool) (*user.UniversalUser, *auth.TokenAccessDetails, error) {
-	details, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, token)
-	if err != nil || details == nil || !details.IsAuthorized {
-		return nil, nil, ErrOAuthReauthenticationRequired
-	}
-	owner, err := s.EphemeralStore.FetchAuth(ctx, details)
-	if err != nil || owner != details.UserID {
-		return nil, nil, ErrOAuthReauthenticationRequired
-	}
-	if fresh && (details.AuthenticationTime.IsZero() || details.AuthenticationTime.After(time.Now()) || time.Since(details.AuthenticationTime) > 5*time.Minute) {
-		return nil, nil, ErrOAuthReauthenticationRequired
-	}
-	result, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: details.UserID})
+	account, details, freshNow, err := s.connectionAccountWithFreshness(ctx, token)
 	if err != nil {
 		return nil, nil, err
 	}
-	if result == nil || !oauthAccountActive(result.User) {
-		return nil, nil, user.ErrOAuthRestricted
-	}
-	if result.User.EmailRevision != details.EmailRevision {
+	if fresh && !freshNow {
 		return nil, nil, ErrOAuthReauthenticationRequired
 	}
-	return result.User, details, nil
+	return account, details, nil
+}
+
+// connectionAccountWithFreshness validates the session once and reports
+// whether the signed authentication time is recent (<=5 minutes). Legacy
+// zero-time sessions are never fresh.
+func (s *Service) connectionAccountWithFreshness(ctx context.Context, token string) (*user.UniversalUser, *auth.TokenAccessDetails, bool, error) {
+	details, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, token)
+	if err != nil || details == nil || !details.IsAuthorized {
+		return nil, nil, false, ErrOAuthReauthenticationRequired
+	}
+	owner, err := s.EphemeralStore.FetchAuth(ctx, details)
+	if err != nil || owner != details.UserID {
+		return nil, nil, false, ErrOAuthReauthenticationRequired
+	}
+	fresh := !details.AuthenticationTime.IsZero() && !details.AuthenticationTime.After(time.Now()) && time.Since(details.AuthenticationTime) <= 5*time.Minute
+	result, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: details.UserID})
+	if err != nil {
+		return nil, nil, false, err
+	}
+	if result == nil || !oauthAccountActive(result.User) {
+		return nil, nil, false, user.ErrOAuthRestricted
+	}
+	if result.User.EmailRevision != details.EmailRevision {
+		return nil, nil, false, ErrOAuthReauthenticationRequired
+	}
+	return result.User, details, fresh, nil
 }
 func (s *Service) supportsConnectionRevisions() bool {
 	signer, ok := s.AuthService.(interface{ SupportsEmailRevision() bool })
@@ -119,6 +143,48 @@ func (s *Service) OAuthConnections(ctx context.Context, token string) (*OAuthCon
 	repo, ok := s.UserService.(oauthConnectionsUsers)
 	return &OAuthConnectionsResponse{Connected: connectedProviderNames(account), Available: s.OAuthProviders(), Email: account.Email, DisconnectAvailable: ok && repo.SupportsOAuthConnections() && s.supportsConnectionRevisions() && s.oauthConnections != nil && s.EmailManager != nil}, nil
 }
+
+// disconnectSnapshot captures the immutable account state a challenge must be
+// revalidated against on every transition until final confirmation.
+func disconnectSnapshot(account *user.UniversalUser, provider string) (*user.DisconnectOAuthProviderRequest, error) {
+	request := &user.DisconnectOAuthProviderRequest{UserID: account.ID, Provider: provider, ExpectedEmail: account.Email, EmailRevision: account.EmailRevision}
+	for _, identity := range account.OAuthIdentities {
+		if identity.Provider == provider {
+			request.Identities = append(request.Identities, user.OAuthIdentitySnapshot{Key: identity.Key, LinkedAt: identity.LinkedAt})
+		}
+	}
+	if len(request.Identities) == 0 {
+		return nil, user.ErrOAuthConnectionConflict
+	}
+	return request, nil
+}
+
+// validateDisconnectSnapshot rejects any account or selected-provider change
+// since initiation, including relinks that do not increment the email revision.
+func validateDisconnectSnapshot(account *user.UniversalUser, provider string, payload []byte) (*user.DisconnectOAuthProviderRequest, error) {
+	var change user.DisconnectOAuthProviderRequest
+	if json.Unmarshal(payload, &change) != nil || change.UserID != account.ID || change.Provider != provider || change.ExpectedEmail != account.Email || change.EmailRevision != account.EmailRevision {
+		return nil, user.ErrOAuthConnectionConflict
+	}
+	current, err := disconnectSnapshot(account, provider)
+	if err != nil || len(current.Identities) != len(change.Identities) {
+		return nil, user.ErrOAuthConnectionConflict
+	}
+	for _, expected := range change.Identities {
+		matched := false
+		for _, actual := range current.Identities {
+			if expected.Key == actual.Key && expected.LinkedAt.Equal(actual.LinkedAt) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, user.ErrOAuthConnectionConflict
+		}
+	}
+	return &change, nil
+}
+
 func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, token string) (*OAuthDisconnectStartResponse, error) {
 	repo, ok := s.UserService.(oauthConnectionsUsers)
 	if !ok || !repo.SupportsOAuthConnections() || !s.supportsConnectionRevisions() || s.oauthConnections == nil || s.EmailManager == nil {
@@ -127,7 +193,11 @@ func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, tok
 	if provider != "google" && provider != "apple" {
 		return nil, ErrBadRequest
 	}
-	account, details, err := s.connectionAccount(ctx, token, true)
+	// Same-email disconnects may start from any valid session: verifying the
+	// current account email is itself account proof in this passwordless model.
+	// A different sign-in email needs either recent authentication now or the
+	// current-email approval stage below.
+	account, details, fresh, err := s.connectionAccountWithFreshness(ctx, token)
 	if err != nil {
 		return nil, err
 	}
@@ -139,29 +209,52 @@ func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, tok
 	if err != nil || parsed.Address != email || len(email) > 254 {
 		return nil, ErrBadRequest
 	}
-	request := &user.DisconnectOAuthProviderRequest{UserID: account.ID, Provider: provider, ExpectedEmail: account.Email, VerifiedEmail: email, EmailRevision: account.EmailRevision}
-	for _, identity := range account.OAuthIdentities {
-		if identity.Provider == provider {
-			request.Identities = append(request.Identities, user.OAuthIdentitySnapshot{Key: identity.Key, LinkedAt: identity.LinkedAt})
+	if email != account.Email && !fresh {
+		// Stale session plus a new inbox must never proceed directly: ask the
+		// user to first prove the CURRENT email. No account change happens here.
+		return s.startDisconnectChallenge(ctx, account, details, provider, account.Email, email, "current_email")
+	}
+	return s.startDisconnectChallenge(ctx, account, details, provider, email, email, "sign_in_email", details.AuthenticationTime)
+}
+
+func (s *Service) startDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage string, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
+	return s.dispatchDisconnectChallenge(ctx, account, details, provider, recipient, signInEmail, stage, true, authTime...)
+}
+
+// dispatchDisconnectChallenge creates, emails and publishes one challenge. The
+// user-facing resend cooldown is only applied to explicit start requests: the
+// automatic follow-up after a consumed current-email approval replaces, not
+// retries, the previous stage's email.
+func (s *Service) dispatchDisconnectChallenge(ctx context.Context, account *user.UniversalUser, details *auth.TokenAccessDetails, provider, recipient, signInEmail, stage string, cooldown bool, authTime ...time.Time) (*OAuthDisconnectStartResponse, error) {
+	snapshot, err := disconnectSnapshot(account, provider)
+	if err != nil {
+		return nil, err
+	}
+	snapshot.VerifiedEmail = signInEmail
+	if cooldown {
+		allowed, err := s.oauthConnections.Store.AcquireCooldown(ctx, account.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, oauth.ErrDisconnectCooldown
 		}
 	}
-	if len(request.Identities) == 0 {
-		return nil, user.ErrOAuthConnectionConflict
-	}
-	allowed, err := s.oauthConnections.Store.AcquireCooldown(ctx, account.ID)
+	payload, err := json.Marshal(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	if !allowed {
-		return nil, oauth.ErrDisconnectCooldown
-	}
-	payload, err := json.Marshal(request)
-	if err != nil {
-		return nil, err
+	var at time.Time
+	if len(authTime) > 0 {
+		at = authTime[0]
 	}
 	challenge, code, proof, err := oauth.NewDisconnectChallenge(account.ID, details.AccessUUID, provider, payload)
 	if err != nil {
 		return nil, err
+	}
+	challenge.Stage = stage
+	if !at.IsZero() {
+		challenge.AuthTimeMillis = at.UnixMilli()
 	}
 	// Keep the provider marker first for the host's early URL scrubber.
 	link := s.oauthConnections.Origin + "/settings#oauth_disconnect=" + provider + "&challenge_id=" + url.QueryEscape(challenge.ID) + "&token=" + url.QueryEscape(proof)
@@ -169,8 +262,8 @@ func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, tok
 	if provider == "apple" {
 		label = "Apple"
 	}
-	body := fmt.Sprintf(`<p>Verify this email to disconnect %s from your account. Once confirmed, %s will be your sign-in email. Your account and its data stay the same.</p><p><a href="%s">Verify email and review disconnect</a></p><p>Or enter this 8-character code in the browser where you started:</p><p><strong>%s</strong></p><p>This request expires in 10 minutes. Opening the link does not change your account; confirm in the same browser session. If you did not request this, ignore this email.</p>`, label, html.EscapeString(email), html.EscapeString(link), code)
-	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{EmailSubject: "Verify email before disconnecting " + label, EmailPreview: "Keep access to your account with email sign-in", EmailBody: body, EmailTo: email, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
+	subject, body := disconnectEmailText(label, recipient, signInEmail, stage, link, code)
+	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{EmailSubject: subject, EmailPreview: "Keep access to your account with email sign-in", EmailBody: body, EmailTo: recipient, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
 	if err != nil {
 		return nil, ErrOAuthDisconnectDelivery
 	}
@@ -178,11 +271,32 @@ func (s *Service) StartOAuthDisconnect(ctx context.Context, provider, email, tok
 	if err = s.oauthConnections.Store.Save(ctx, challenge); err != nil {
 		return nil, err
 	}
-	return &OAuthDisconnectStartResponse{ChallengeID: challenge.ID, ExpiresIn: int(oauth.DisconnectChallengeTTL.Seconds()), ResendCooldownSeconds: 60}, nil
+	return &OAuthDisconnectStartResponse{ChallengeID: challenge.ID, ExpiresIn: int(oauth.DisconnectChallengeTTL.Seconds()), ResendCooldownSeconds: 60, VerificationStage: stage, Email: recipient, SignInEmail: signInEmail}, nil
+}
+
+// disconnectEmailText keeps stage-specific copy: current-email approval asks
+// the user to authorise changing the sign-in email; the final stage confirms
+// the exact mailbox that will become the sign-in email. Both carry a link and
+// an 8-character code; opening the link alone never changes the account.
+func disconnectEmailText(label, recipient, signInEmail, stage, link, code string) (string, string) {
+	if stage == "current_email" {
+		subject := "Confirm your current email before changing your sign-in email"
+		body := fmt.Sprintf(`<p>You requested a change from %s to %s and removal of %s sign-in. Confirm your current address first; the new address will be verified separately before your account changes.</p><p><a href="%s">Confirm your current email and review the request</a></p><p>Or enter this 8-character code in the browser where you started:</p><p><strong>%s</strong></p><p>This request expires in 10 minutes. Opening the link does not change your account. If you did not request this, ignore this email. Your email and connected provider will stay unchanged.</p>`, html.EscapeString(recipient), html.EscapeString(signInEmail), label, html.EscapeString(link), code)
+		return subject, body
+	}
+	subject := "Verify email before disconnecting " + label
+	body := fmt.Sprintf(`<p>Verify this email to disconnect %s from your account. Once confirmed, %s will be your sign-in email. Your account and its data stay the same.</p><p><a href="%s">Verify email and review disconnect</a></p><p>Or enter this 8-character code in the browser where you started:</p><p><strong>%s</strong></p><p>This request expires in 10 minutes. Opening the link does not change your account; confirm in the same browser session. If you did not request this, ignore this email.</p>`, label, html.EscapeString(signInEmail), html.EscapeString(link), code)
+	return subject, body
 }
 
 var ErrOAuthDisconnectDelivery = errors.New("OAuthDisconnectDeliveryFailed")
 var ErrOAuthDisconnectSessionRequired = errors.New("OAuthDisconnectSessionRequired")
+
+// ErrOAuthDisconnectChallengeNotFound reports an absent, expired or unowned
+// review challenge. It deliberately matches "does not exist" semantics so a
+// well-formed identifier reveals nothing about whether it is live for anyone
+// else; owner and session checks are still enforced before any lookup reply.
+var ErrOAuthDisconnectChallengeNotFound = errors.New("OAuthDisconnectChallengeNotFound")
 
 func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, request *OAuthDisconnectConfirmRequest, token string) (*OAuthDisconnectResponse, error) {
 	repo, ok := s.UserService.(oauthConnectionsUsers)
@@ -200,9 +314,38 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 	if err != nil {
 		return nil, err
 	}
-	var change user.DisconnectOAuthProviderRequest
-	if json.Unmarshal(challenge.Payload, &change) != nil || change.UserID != account.ID || change.Provider != provider || change.ExpectedEmail != account.Email || change.EmailRevision != account.EmailRevision {
-		return nil, user.ErrOAuthConnectionConflict
+	change, err := validateDisconnectSnapshot(account, provider, challenge.Payload)
+	if err != nil {
+		return nil, err
+	}
+	if challenge.Stage == "current_email" {
+		if change.VerifiedEmail == change.ExpectedEmail {
+			return nil, oauth.ErrDisconnectProofInvalid
+		}
+		// The proof just consumed confirms the existing account. Carry that
+		// timestamp, not the time the email was requested, into the next stage.
+		next, nextErr := s.dispatchDisconnectChallenge(ctx, account, details, provider, change.VerifiedEmail, change.VerifiedEmail, "sign_in_email", false, time.Now())
+		if nextErr != nil {
+			// The old proof is spent. A failure to prepare the next challenge
+			// must offer restart, never retry a proof that cannot work again.
+			return nil, ErrOAuthDisconnectDelivery
+		}
+		return &OAuthDisconnectResponse{Disconnected: false, Connected: connectedProviderNames(account), Email: account.Email, NextChallenge: next}, nil
+	}
+	if challenge.Stage != "" && challenge.Stage != "sign_in_email" {
+		return nil, oauth.ErrDisconnectProofInvalid
+	}
+	authTime := details.AuthenticationTime // pre-upgrade queued challenges
+	if change.VerifiedEmail == change.ExpectedEmail {
+		authTime = time.Now()
+	} else if challenge.Stage != "" {
+		if challenge.AuthTimeMillis <= 0 {
+			return nil, oauth.ErrDisconnectProofInvalid
+		}
+		authTime = time.UnixMilli(challenge.AuthTimeMillis)
+		if authTime.After(time.Now()) {
+			return nil, oauth.ErrDisconnectProofInvalid
+		}
 	}
 	if change.VerifiedEmail != account.Email {
 		owner, lookupErr := findUserByEmail(ctx, s.UserService, &user.GetUserByEmailRequest{Email: change.VerifiedEmail})
@@ -213,7 +356,7 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 			return nil, user.ErrEmailAlreadyExists
 		}
 	}
-	updated, err := repo.DisconnectOAuthProvider(ctx, &change)
+	updated, err := repo.DisconnectOAuthProvider(ctx, change)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +366,7 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 	if err = s.EphemeralStore.DeleteAllTokenExceptedSpecified(ctx, account.ID, nil); err != nil {
 		return nil, ErrOAuthDisconnectSessionRequired
 	}
-	tokens, err := s.createSessionToken(ctx, updated, details.AuthenticationTime)
+	tokens, err := s.createSessionToken(ctx, updated, authTime)
 	if err != nil {
 		return nil, ErrOAuthDisconnectSessionRequired
 	}
@@ -231,4 +374,49 @@ func (s *Service) ConfirmOAuthDisconnect(ctx context.Context, provider string, r
 		return nil, ErrOAuthDisconnectSessionRequired
 	}
 	return &OAuthDisconnectResponse{Disconnected: true, Connected: connectedProviderNames(updated), Email: updated.Email, Session: tokens}, nil
+}
+
+// ReviewOAuthDisconnectChallenge renders the pending challenge state for the
+// magic-link review screen. It takes no emailed proof, cannot consume or
+// mutate anything, and exposes only the public start-response shape after
+// revalidating session, owner, provider and the account snapshot.
+func (s *Service) ReviewOAuthDisconnectChallenge(ctx context.Context, provider, challengeID, token string) (*OAuthDisconnectStartResponse, error) {
+	if !s.supportsConnectionRevisions() || s.oauthConnections == nil || (provider != "google" && provider != "apple") || !oauth.DisconnectIDPattern().MatchString(challengeID) {
+		return nil, ErrBadRequest
+	}
+	reader, ok := s.oauthConnections.Store.(oauth.DisconnectChallengeReader)
+	if !ok {
+		return nil, user.ErrOAuthUnsupported
+	}
+	account, details, err := s.connectionAccount(ctx, token, false)
+	if err != nil {
+		return nil, err
+	}
+	challenge, err := reader.Read(ctx, challengeID, account.ID, details.AccessUUID, provider)
+	if errors.Is(err, oauth.ErrDisconnectProofInvalid) {
+		return nil, ErrOAuthDisconnectChallengeNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := validateDisconnectSnapshot(account, provider, challenge.Payload)
+	if err != nil {
+		return nil, err
+	}
+	stage := challenge.Stage
+	if stage == "" {
+		stage = "sign_in_email"
+	}
+	if stage != "sign_in_email" && stage != "current_email" {
+		return nil, oauth.ErrDisconnectProofInvalid
+	}
+	recipient := snapshot.VerifiedEmail
+	if stage == "current_email" {
+		recipient = snapshot.ExpectedEmail
+	}
+	remaining := time.Until(time.UnixMilli(challenge.ExpiresAt))
+	if remaining <= 0 {
+		return nil, ErrOAuthDisconnectChallengeNotFound
+	}
+	return &OAuthDisconnectStartResponse{ChallengeID: challenge.ID, ExpiresIn: int((remaining + time.Second - 1) / time.Second), ResendCooldownSeconds: 60, VerificationStage: stage, Email: recipient, SignInEmail: snapshot.VerifiedEmail}, nil
 }

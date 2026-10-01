@@ -24,6 +24,10 @@ var ErrDisconnectChallengeLocked = errors.New("DisconnectChallengeLocked")
 var ErrDisconnectCooldown = errors.New("DisconnectCooldown")
 var disconnectIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 
+// DisconnectIDPattern matches the high-entropy challenge identifiers hosts may
+// validate before touching the store.
+func DisconnectIDPattern() *regexp.Regexp { return disconnectIDPattern }
+
 // DisconnectChallenge stores only hashed proof and a private account snapshot.
 // Its namespace and purpose are independent of login codes and tokens.
 type DisconnectChallenge struct {
@@ -31,17 +35,33 @@ type DisconnectChallenge struct {
 	UserID     string `json:"user_id"`
 	AccessUUID string `json:"access_uuid"`
 	Provider   string `json:"provider"`
-	Payload    []byte `json:"payload"`
-	CodeHash   string `json:"code_hash"`
-	TokenHash  string `json:"token_hash"`
-	ExpiresAt  int64  `json:"expires_at"`
-	Attempts   int    `json:"attempts"`
+	// Stage distinguishes a current-email approval challenge ("current_email"),
+	// which grants only the right to issue a candidate challenge, from a final
+	// sign-in-email challenge ("sign_in_email"). Empty means a legacy
+	// single-stage final challenge.
+	Stage string `json:"stage,omitempty"`
+	// AuthTimeMillis is the account-freshness timestamp the completion session
+	// will carry once this stage's proof is consumed (or, for first stages, once
+	// the follow-up final proof is consumed).
+	AuthTimeMillis int64  `json:"auth_time_ms,omitempty"`
+	Payload        []byte `json:"payload"`
+	CodeHash       string `json:"code_hash"`
+	TokenHash      string `json:"token_hash"`
+	ExpiresAt      int64  `json:"expires_at"`
+	Attempts       int    `json:"attempts"`
 }
 
 type DisconnectChallengeStore interface {
 	Save(context.Context, *DisconnectChallenge) error
 	Consume(context.Context, string, string, string, string, string, string) (*DisconnectChallenge, error)
 	AcquireCooldown(context.Context, string) (bool, error)
+}
+
+// DisconnectChallengeReader is an optional read-only store capability so hosts
+// can render review screens without consuming or mutating a challenge. Public
+// extension compatibility is preserved: stores without it keep working.
+type DisconnectChallengeReader interface {
+	Read(context.Context, string, string, string, string) (*DisconnectChallenge, error)
 }
 
 func disconnectHash(secret string) string {
@@ -55,6 +75,8 @@ func newDisconnectSecret() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
+
+var validDisconnectStages = map[string]bool{"": true, "current_email": true, "sign_in_email": true}
 
 func NewDisconnectChallenge(userID, accessUUID, provider string, payload []byte) (*DisconnectChallenge, string, string, error) {
 	id, err := newDisconnectSecret()
@@ -99,7 +121,7 @@ func (s *RedisDisconnectChallengeStore) contextual(ctx context.Context) RedisTra
 	}
 }
 func (s *RedisDisconnectChallengeStore) Save(ctx context.Context, c *DisconnectChallenge) error {
-	if s == nil || s.client == nil || c == nil || !disconnectIDPattern.MatchString(c.ID) || c.UserID == "" || c.AccessUUID == "" || (c.Provider != "google" && c.Provider != "apple") || len(c.CodeHash) != 64 || len(c.TokenHash) != 64 || len(c.Payload) == 0 {
+	if s == nil || s.client == nil || c == nil || !disconnectIDPattern.MatchString(c.ID) || c.UserID == "" || c.AccessUUID == "" || (c.Provider != "google" && c.Provider != "apple") || !validDisconnectStages[c.Stage] || len(c.CodeHash) != 64 || len(c.TokenHash) != 64 || len(c.Payload) == 0 {
 		return ErrDisconnectProofInvalid
 	}
 	ttl := time.Until(time.UnixMilli(c.ExpiresAt))
@@ -154,6 +176,37 @@ if c.attempts>=5 then return 2 end
 return 0
 `
 
+// Read returns the challenge when it exists and matches owner, session and
+// provider. It never mutates state: expired challenges are reported as absent
+// and no attempt counters are touched.
+func (s *RedisDisconnectChallengeStore) Read(ctx context.Context, id, userID, accessUUID, provider string) (*DisconnectChallenge, error) {
+	if s == nil || s.client == nil || !disconnectIDPattern.MatchString(id) || userID == "" || accessUUID == "" || (provider != "google" && provider != "apple") {
+		return nil, ErrDisconnectProofInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	value, err := s.contextual(ctx).Eval(`return redis.call('GET', KEYS[1])`, []string{s.prefix + id}).Result()
+	if errors.Is(err, redis.Nil) {
+		return nil, ErrDisconnectProofInvalid
+	}
+	if err != nil {
+		return nil, err
+	}
+	raw, ok := value.(string)
+	if !ok {
+		return nil, ErrDisconnectProofInvalid
+	}
+	var c DisconnectChallenge
+	if json.Unmarshal([]byte(raw), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || !validDisconnectStages[c.Stage] || c.ExpiresAt <= time.Now().UnixMilli() {
+		return nil, ErrDisconnectProofInvalid
+	}
+	if c.Attempts >= 5 {
+		return nil, ErrDisconnectChallengeLocked
+	}
+	return &c, nil
+}
+
 func (s *RedisDisconnectChallengeStore) Consume(ctx context.Context, id, userID, accessUUID, provider, code, token string) (*DisconnectChallenge, error) {
 	if s == nil || s.client == nil || !disconnectIDPattern.MatchString(id) || (code == "") == (token == "") {
 		return nil, ErrDisconnectProofInvalid
@@ -180,7 +233,7 @@ func (s *RedisDisconnectChallengeStore) Consume(ctx context.Context, id, userID,
 		return nil, ErrDisconnectProofInvalid
 	}
 	var c DisconnectChallenge
-	if json.Unmarshal([]byte(value), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || c.ExpiresAt <= time.Now().UnixMilli() {
+	if json.Unmarshal([]byte(value), &c) != nil || c.ID != id || c.UserID != userID || c.AccessUUID != accessUUID || c.Provider != provider || !validDisconnectStages[c.Stage] || c.ExpiresAt <= time.Now().UnixMilli() {
 		return nil, ErrDisconnectProofInvalid
 	}
 	return &c, nil
