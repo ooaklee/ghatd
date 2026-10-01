@@ -101,31 +101,31 @@ Client guidance:
 
 Access Manager resolves the code to its underlying ephemeral token and then runs the same validation path as the magic-link flow. Hardened rate limiting protects the code endpoints.
 
-## Google SSO
+## Google and Apple sign-in
 
-Configure a Google provider on the server and pass it to Access Manager as an OAuth service. The provider name becomes the route segment:
+Follow [Add Google and Apple sign-in](add-google-apple-sign-in.md) to register
+providers, apply identity indexes and wire the secure constructors. Both
+providers use the normal GHATD accounts and cookie sessions.
+
+Browser clients discover configured providers with
+`GET /api/v1/ams/oauth/providers`, then navigate to:
 
 ```http
-GET /api/v1/ams/oauth/google/login?request_url=/app
+GET /api/v1/ams/oauth/google/login?browser=true&request_url=%2Fapp
 ```
 
-The login endpoint creates an `HttpOnly` state cookie and redirects to Google. Google then calls:
+Use `apple` for Apple. Google returns by GET; Apple uses a form-POST callback.
+GHATD validates the transaction cookie/state and signed identity, resolves the
+account by issuer/subject, and sets normal session cookies. `browser=true`
+selects an HTTP 303 to the stored safe path; no custom callback wrapper is
+needed. Confirm `/api/v1/ums/me` after return. Matching email on another account
+requires explicit linking from that account's fresh session.
 
-```http
-GET /api/v1/ams/oauth/google/callback?code=<provider-code>&state=<state>
-```
-
-On callback, Access Manager:
-
-- verifies the state value against the provider cookie;
-- exchanges the provider code and fetches provider user information;
-- finds or creates the GHATD user by provider email;
-- records provider-verified email status when present;
-- creates the GHATD session cookies;
-- clears the provider state cookie;
-- includes `X-Web-Location` when a `request_url` was supplied.
-
-If the app needs a pure browser redirect after the provider callback, wrap or customise the callback route so it follows `X-Web-Location` after the cookies are set. If the app handles the callback with an HTTP client, read `X-Web-Location` and route the user in the app.
+Native clients use the [one-use handoff](../../external/accessmanager/README.md#native-app-handoff)
+instead of trying to share the system browser's cookie store. Exchange the code
+using the initiating app's verifier, persist the normal response cookies through
+the existing secure cookie manager, then confirm `/api/v1/ums/me`. Refresh and
+logout remain the same. Keep the magic-link/code option alongside provider buttons.
 
 ## Refresh And Logout
 

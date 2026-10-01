@@ -27,7 +27,10 @@ This will be an exciting experience, and I look forward to building out this pro
 GHAT(D) offers modular packages that can be used both together and independently. Our goal is for each package to adhere to clean architecture principles, featuring comprehensive documentation and examples. We are committed to implementing these practices in both new and legacy packages, especially those that are less extensible for other projects.
 
 ### Authentication & Verification
-A dual-channel verification system providing both magic link and human-readable code entry.
+Email verification provides both magic links and human-readable codes. Secure
+Google and Apple sign-in also share the same accounts and sessions across web
+and native clients. Start with [provider sign-in setup](./docs/how-to/add-google-apple-sign-in.md)
+and the [OAuth package guide](./external/oauth/README.md).
 
 - **[Access Manager](./external/accessmanager/README.md)** - Complete authentication and authorisation with email-based verification, login, OAuth, and API token management
   - `accessmanager` - User creation, login, registration, email verification, OAuth, API token management

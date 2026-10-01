@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/oauth"
+	user "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -11,6 +12,29 @@ import (
 // TODO: remove nolint
 // nolint will be used later
 var AccessmanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrOAuthDisconnectSessionRequired:                      {Title: "Provider disconnected. Sign in with your verified email.", StatusCode: 503, Code: "OAuthDisconnectSessionRequired"},
+	oauth.ErrDisconnectProofInvalid:                        {Title: "Invalid or expired verification", StatusCode: 400, Code: "DisconnectProofInvalid"},
+	oauth.ErrDisconnectChallengeLocked:                     {Title: "Request a new verification email", StatusCode: 423, Code: "DisconnectChallengeLocked"},
+	oauth.ErrDisconnectCooldown:                            {Title: "Wait before requesting another email", StatusCode: 429, Code: "DisconnectCooldown"},
+	user.ErrOAuthReplacementEmailRequired:                  {Title: "Verify an independent sign-in email before disconnecting this provider", StatusCode: 409, Code: "OAuthReplacementEmailRequired"},
+	user.ErrOAuthConnectionConflict:                        {Title: "Your sign-in methods changed; please try again", StatusCode: 409, Code: "OAuthConnectionConflict"},
+	user.ErrEmailAlreadyExists:                             {Title: "This email is already used by another account", StatusCode: 409, Code: "OAuthEmailConflict"},
+	ErrOAuthDisconnectDelivery:                             {Title: "Verification email could not be sent", StatusCode: 503, Code: "OAuthDisconnectDeliveryFailed"},
+	ErrOAuthDisconnectChallengeNotFound:                    {Title: "This verification request does not exist or has expired", StatusCode: 404, Code: "OAuthDisconnectChallengeNotFound"},
+	ErrOAuthReauthenticationRequired:                       {Title: "Sign in again before managing providers", StatusCode: 401, Code: "OAuthReauthenticationRequired"},
+	user.ErrOAuthLinkRequired:                              {Title: "Sign in to your existing account before connecting this provider", StatusCode: 409, Code: "OAuthLinkRequired"},
+	user.ErrOAuthIdentityConflict:                          {Title: "This provider account is already connected", StatusCode: 409, Code: "OAuthIdentityConflict"},
+	user.ErrOAuthRestricted:                                {Title: "This account cannot sign in", StatusCode: 403, Code: "OAuthRestricted"},
+	user.ErrOAuthUnsupported:                               {Title: "Provider sign-in is unavailable", StatusCode: 503, Code: "OAuthUnavailable"},
+	user.ErrOAuthIndexesRequired:                           {Title: "Provider sign-in is unavailable", StatusCode: 503, Code: "OAuthUnavailable"},
+	oauth.ErrSecureProviderIncompleteConfig:                {Title: "Provider sign-in is unavailable", StatusCode: 503, Code: "OAuthUnavailable"},
+	oauth.ErrSecureTransactionNotFound:                     {Title: "Sign-in expired; please try again", StatusCode: 400, Code: "OAuthInvalid"},
+	oauth.ErrSecureTransactionExpired:                      {Title: "Sign-in expired; please try again", StatusCode: 400, Code: "OAuthInvalid"},
+	oauth.ErrSecureTransactionInvalidState:                 {Title: "Invalid sign-in response", StatusCode: 400, Code: "OAuthInvalid"},
+	oauth.ErrSecureReturnPathInvalid:                       {Title: "Invalid return path", StatusCode: 400, Code: "OAuthInvalid"},
+	oauth.ErrSecureIDTokenInvalid:                          {Title: "Invalid sign-in response", StatusCode: 400, Code: "OAuthInvalid"},
+	oauth.ErrSecureIDTokenUnverified:                       {Title: "The provider must verify your email", StatusCode: 403, Code: "OAuthUnverifiedEmail"},
+	oauth.ErrProviderCancelled:                             {Title: "Sign-in cancelled", StatusCode: 400, Code: "OAuthCancelled"},
 	ErrBadRequest:                                          {Title: "Bad Request", StatusCode: 400, Code: "AM00-001"},
 	ErrInvalidUserBody:                                     {Title: "Bad Request", Detail: "Check submitted user information", StatusCode: 400, Code: "AM00-002"},
 	ErrInvalidVerificationToken:                            {Title: "Bad Request", Detail: "User token missing or malformatted", StatusCode: 400, Code: "AM00-003"},

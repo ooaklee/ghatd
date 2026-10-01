@@ -99,9 +99,12 @@ func (t *TokenDetails) GetTokenRefreshTimeToLive() time.Duration {
 // TokenAccessDetails holds information relating to
 // token and its owner
 type TokenAccessDetails struct {
-	AccessUUID string
-	UserID     string
-	IsAdmin    bool
+	EmailRevision int64
+	// AuthenticationTime is signed session freshness; zero for legacy sessions.
+	AuthenticationTime time.Time
+	AccessUUID         string
+	UserID             string
+	IsAdmin            bool
 
 	// IsAuthorized is true if user account is active
 	// during time of token generation
@@ -131,8 +134,11 @@ func (t *TokenAccessDetails) IsUserAuthorized() bool {
 // TokenRefreshDetails holds information relating to
 // refresh token and its owner
 type TokenRefreshDetails struct {
-	RefreshUUID string
-	UserID      string
+	EmailRevision int64
+	// AuthenticationTime preserves the initial login time through refresh.
+	AuthenticationTime time.Time
+	RefreshUUID        string
+	UserID             string
 }
 
 // TokenEmailVerificationDetails holds information relating to

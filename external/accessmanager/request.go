@@ -1,6 +1,7 @@
 package accessmanager
 
 import (
+	"github.com/ooaklee/ghatd/external/oauth"
 	"net/http"
 	"net/url"
 
@@ -86,6 +87,7 @@ type TokenAsStringValidatorRequest struct {
 // UserEmailVerificationRevisionsRequest holds information needed to make revision on
 // system to show email verification was successful
 type UserEmailVerificationRevisionsRequest struct {
+	EmailRevision int64
 	// UserID the user ID the token was successfully validated for
 	UserID string
 }
@@ -166,6 +168,12 @@ type GetUserAPITokenThresholdRequest struct {
 // OauthLoginRequest hold the data required for inititing a
 // oauth provider login
 type OauthLoginRequest struct {
+	// Mobile is accepted only from a consumed server-side native start ticket.
+	Mobile *oauth.MobileFlowContext
+	// Browser opts into completion by redirect rather than an API token response.
+	Browser bool
+	// Link is accepted only from server-authenticated initiation.
+	Link *oauth.LinkProof
 	// The name of the provider the route belongs to
 	Provider string
 
@@ -177,6 +185,7 @@ type OauthLoginRequest struct {
 // OauthCallbackRequest hold the data required for handling a
 // oauth provider callback
 type OauthCallbackRequest struct {
+	Method string
 	// The name of the provider the route belongs to
 	Provider string
 

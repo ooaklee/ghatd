@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
+	"github.com/ooaklee/ghatd/external/oauth"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
@@ -21,6 +22,7 @@ type CreateUserResponse struct {
 
 // TokenAsStringValidatorResponse holds the response for TokenAsStringValidator request
 type TokenAsStringValidatorResponse struct {
+	EmailRevision int64
 	// UserID represents the user ID pulled from the token
 	UserID string
 
@@ -129,6 +131,11 @@ type OauthLoginResponse struct {
 // OauthCallbackResponse hold the data returned when handling a
 // oauth provider callback
 type OauthCallbackResponse struct {
+	// Mobile completion never exposes these server-side values in API responses.
+	Mobile      *oauth.MobileFlowContext
+	MobileGrant *mobileOAuthGrant
+	Browser     bool
+	Linked      bool
 
 	// AccessToken represents the access token for the logged in user
 	AccessToken string

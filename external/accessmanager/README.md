@@ -96,21 +96,29 @@ Use verification type `1` when the client is tracking a pending login email.
 
 The code is a manual-entry alias for the underlying token. This keeps the email link and manual code paths equivalent after code resolution.
 
-### SSO With Google Or Another OAuth Provider
+### Sign in with Google and Apple
 
-OAuth support is provider-based. A host application creates one or more providers, such as `oauth.NewGoogleProvider`, and passes them to Access Manager as `OauthServices`.
+Create providers with `oauth.NewGoogleSecureProvider` and `oauth.NewAppleProvider`
+and supply them as `OauthServices`. Apply the identity indexes before enabling
+providers. The legacy `NewGoogleProvider` is not accepted for secure sign-in.
 
-1. The app starts SSO with `GET /api/v1/ams/oauth/google/login`, optionally including `request_url=<path>`.
-2. Access Manager finds the `google` provider, creates a random CSRF protection state, stores that state in an `HttpOnly` provider cookie, appends the requested return path into the state value, and redirects to the provider authorization URL.
-3. The provider redirects back to `GET /api/v1/ams/oauth/google/callback` with `code` and `state`.
-4. Access Manager compares the returned `state` with the provider cookie.
-5. Access Manager exchanges the provider code for provider tokens and fetches provider user information.
-6. If a GHATD user already exists for the provider email, Access Manager creates a GHATD session for that user and records provider-verified email status when present. If no user exists, Access Manager creates a user without sending a verification email, runs the GHATD email-verification revisions, and creates a GHATD session.
-7. Access Manager removes the provider state cookie, sets the GHATD auth cookies, returns a token response, and exposes `X-Web-Location` when a return URL was supplied.
+1. Discover configured providers, then start login with `browser=true` and a
+   rooted local `request_url` for browser clients.
+2. GHATD stores state, nonce, return path and PKCE/linking context server-side;
+   the provider cookie holds only an opaque handle.
+3. The provider returns to the Google GET or Apple form-POST callback. GHATD
+   checks the transaction cookie/state, consumes the transaction, exchanges the
+   code and validates the signed ID token.
+4. Resolve the account by issuer/subject. A matching email on another account
+   requires explicit fresh-session linking; it never silently selects that user.
+5. Set the ordinary session cookies and clear the transaction cookie. Browser
+   mode returns a 303 to the stored safe path; API mode retains the metadata
+   response. No browser callback wrapper is required.
 
-Host applications that want a browser-only final redirect can wrap or customise the callback behavior. Applications that call the callback through an HTTP client can read `X-Web-Location` and route the user after the cookies have been stored.
-
-For an app-facing checklist that applies these flows from a client perspective, see [Authenticating the App](../../docs/how-to/authenticating-the-app.md).
+Native clients use the one-use [handoff](#native-app-handoff) to obtain these same
+cookies in their own HTTP client. For registrations, composition and local
+HTTPS testing, follow [Add Google and Apple sign-in](../../docs/how-to/add-google-apple-sign-in.md).
+The precise route and linking contract is [below](#secure-google-and-apple-sign-in).
 
 ## Security Measures
 
@@ -137,8 +145,8 @@ All endpoints are prefixed with `/api/v1/ams`.
 - `GET /api/v1/ams/logout` — Log out the current user
 - `GET /api/v1/ams/verify/email` — Verify an email verification token or code
 - `POST /api/v1/ams/tokens/refresh` — Refresh access and refresh tokens
-- `GET /api/v1/ams/oauth/google/login` — Initiate Google OAuth login
-- `GET /api/v1/ams/oauth/google/callback` — Google OAuth callback
+- Google/Apple provider discovery, sign-in, callbacks and linking — see [secure provider endpoints](#secure-google-and-apple-sign-in)
+- Optional native discovery, start and exchange — see [native app handoff](#native-app-handoff)
 
 ### Authenticated (JWT or API token required)
 - `POST /api/v1/ams/users/{userID}/tokens` — Create an API token
@@ -183,6 +191,7 @@ func main() {
         CookiePrefixAuthToken:    "__aauth",
         CookiePrefixRefreshToken: "__rauth",
         CookieDomain:             "example.com",
+        OAuthOrigin:              "https://app.example.com",
     })
 
     accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{
@@ -241,3 +250,129 @@ Safari is strict about cookie attribute matching for deletion. If the cookie jar
 **Prevention**:
 - Maintain a consistent `CookieDomain` setting in the server configuration across restarts (e.g., always use `"localhost"` for local development, never mix empty and explicit domain values)
 - Avoid switching between secure/non-secure configurations that produce cookies with different `Secure` attribute scopes
+
+
+## Secure Google and Apple sign-in
+
+Supply secure providers in `OauthServices`, identity-capable `user/v2` service,
+the standard auth service and Redis ephemeral storage. Configure `OAuthOrigin`
+on the handler (or starter `NewHandlersRequest`) to the exact trusted browser
+origin for explicit account-link POSTs. Apply the user OAuth indexes first.
+
+| Method | Route under `/api/v1/ams` | Behaviour |
+| --- | --- | --- |
+| GET | `/oauth/providers` | Available secure provider names, without credentials |
+| GET | `/oauth/{google\|apple}/login` | Starts a server-held transaction and redirects |
+| GET | `/oauth/google/callback` | Completes Google sign-in |
+| POST | `/oauth/apple/callback` | Completes Apple's bounded form-post callback |
+| POST | `/oauth/{google\|apple}/link` | Starts explicit, fresh-session linking |
+
+Login accepts `request_url` as a rooted same-origin path and optional
+`browser=true`. Completion mode and return path are stored at initiation.
+Browser success sets normal session cookies and returns a 303; API success
+retains the token-metadata response. Browser failures redirect to
+`/auth/login?oauth_error=<fixed-code>&request_url=<safe-path>`.
+
+Linking requires a JSON body containing only `request_url` and `browser`, an
+exact matching Origin header and the configured access cookie. The service
+uses the signed user ID, access UUID and recent `auth_time`, never a user ID
+supplied by the caller. A successful POST returns `data.redirect_url` and a
+transient cookie. Callback rechecks the original session and current verified
+ACTIVE account before atomic linking. Success preserves session cookies and
+adds `oauth_linked=google|apple` to the trusted continuation URL. Old or revoked
+sessions must reauthenticate. Refresh preserves the original signed login time.
+
+The fixed browser errors are `cancelled`, `unavailable`, `invalid`,
+`unverified_email`, `restricted`, `link_required`, `identity_conflict`,
+`reauth_required` and `failed`.
+
+`identity_conflict` means the verified provider identity is already linked to
+another account. Keep the current session and explain that the user can sign in
+to that account, disconnect the provider there after email verification, then
+connect it to the intended account; alternatively, use another provider account.
+Do not disclose the owning account's email or ID, merge accounts or transfer the
+link automatically. `link_required` remains the separate login case where a
+matching email needs an explicit connection in Settings.
+Provider accounts are found by signed issuer/subject, never automatically by
+matching email. Apple repeat sign-in can omit first-only profile data. Every
+restricted user status is denied before session issuance.
+
+## Native app handoff
+
+Native clients reuse the provider callbacks, identity resolution and normal
+session issuance above. Configure `Handler.ConfigureMobileOAuth` once at
+startup with `MobileOAuthConfig{Origin, RedirectURIs, Store}` and
+`NewRedisMobileOAuthStore(redisClient, namespace)`. An empty redirect allowlist
+disables native discovery and handoff. `Origin` must be the public HTTPS origin
+hosting the provider callbacks; register exact private app URIs such as
+`com.example.yourapp:/oauth/callback`. Each app should use its own reverse-domain
+scheme. These app URIs are separate from Google/Apple's HTTPS redirect URIs.
+
+| Method | Route under `/api/v1/ams` | Behaviour |
+| --- | --- | --- |
+| GET | `/oauth/mobile/providers` | Available providers and exact allowed app callback URIs |
+| POST | `/oauth/{google\|apple}/mobile/login` | Creates an app-bound, two-minute browser start ticket |
+| POST | `/oauth/{google\|apple}/mobile/link` | Creates a start ticket bound to a fresh signed app session |
+| GET | `/oauth/mobile/start?ticket=…` | Consumes the ticket and starts the existing browser-cookie-bound provider flow |
+| POST | `/oauth/mobile/exchange` | Consumes a proven one-minute handoff code and sets normal session cookies in the app response |
+
+Initiation uses JSON `redirect_uri`, `state`, `code_challenge`, and
+`code_challenge_method: "S256"`. Generate independent random 32-byte state and
+verifier values in the app; the challenge is base64url(SHA256(verifier)). Native
+POSTs reject browser Origin headers and require JSON. Link initiation also
+requires the existing fresh access cookie. The response's
+`data.authorization_url` is opened in the platform system authentication
+browser. The browser retains the existing provider state cookie requirement.
+
+A successful provider callback returns only `code` and the original app `state`
+to the allowlisted app URI. It does not create an account, link an identity or
+set browser session cookies. The app validates the exact callback and state,
+then posts `code`, `code_verifier`, `redirect_uri` and `state` to exchange.
+Matching proof consumes the code atomically; incorrect proof leaves it usable
+by the initiating app. Account status is checked at exchange. Linking requires
+the same still-fresh signed app session before the identity is attached.
+
+Exchange returns `data.provider` and `data.linked`. Login sets the existing
+access/refresh cookies; linking preserves the current session cookies. Reuse
+the native client's cookie manager and secure cookie storage, then confirm the
+user via `/api/v1/ums/me`. Existing refresh/logout behaviour remains shared.
+Native errors use the same fixed vocabulary in `data.error`; browser cancellation
+returns `error=cancelled` with app state. Do not log callback URLs, bodies,
+codes, verifiers or cookies, or automatically retry one-use exchanges.
+
+Validation includes the signed-provider HTTP lifecycle test with real isolated
+MongoDB/Redis. Set `GHATD_TEST_MONGO_URI` and `GHATD_TEST_REDIS_ADDR` to test-only
+stores to exercise both browser and native identity/session lifecycles; normal
+unit tests run without those services.
+
+
+### Connected providers and verified removal
+
+`GET /api/v1/ams/oauth/connections` reports the current account's linked providers,
+separately from deployment discovery. Hosts can opt into the two same-origin
+JSON disconnect endpoints with `Service.ConfigureOAuthConnections`; they verify
+an email by link/code before atomically replacing the sign-in email and removing
+a provider. See [the complete host flow](../../docs/how-to/add-google-apple-sign-in.md#show-connections-and-safely-disconnect-a-provider),
+including early URL-proof removal, session rotation, optional-adapter contracts,
+and the framework integration tests.
+
+A valid session can verify the account's current email without another recent
+login. For a new email, recent authentication allows direct verification;
+otherwise the current inbox is verified first. First-stage confirmation returns
+202 with `disconnected: false` and `next_challenge`, leaving the account untouched.
+Only the final 200 response has `disconnected: true` and replacement session
+cookies. Both stages support a purpose-specific magic link or eight-character
+code; ordinary login tokens cannot authorize disconnection.
+
+`GET /oauth/connections/{provider}/disconnect/challenges/{challenge_id}` reviews
+stage/recipient metadata without accepting or consuming a proof. It requires the
+same live session and current account/provider snapshot. Optional read-capable
+stores implement `oauth.DisconnectChallengeReader`; existing store/client and
+challenge-constructor interfaces remain compatible. The host can keep the entire
+flow in protected Settings without relaxing public login route guards.
+
+Native Settings can opt in with `OAuthConnectionsConfig.MobileRedirectURIs`.
+The `/oauth/mobile/connections` routes use the same account, stage and session
+logic, reject browser Origin headers, and bind email proof to the exact native
+return address. They renew cookies through the existing secure mobile cookie
+jar. See the adoption guide for code/link review and platform registration.

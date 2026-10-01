@@ -51,6 +51,9 @@ type Handler struct {
 	CookiePrefixRefreshToken string
 	Environment              string
 	CookieDomain             string
+	// OAuthOrigin is the configured browser origin used for linking CSRF checks.
+	OAuthOrigin string
+	mobileOAuth *MobileOAuthConfig
 }
 
 // NewHandlerRequest holds things needed for creating a handler
@@ -62,6 +65,8 @@ type NewHandlerRequest struct {
 	CookiePrefixAuthToken    string
 	CookiePrefixRefreshToken string
 	CookieDomain             string
+	// OAuthOrigin is the configured browser origin used for linking CSRF checks.
+	OAuthOrigin string
 }
 
 // NewHandler returns accessmanager handler
@@ -75,6 +80,7 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 		CookiePrefixRefreshToken: r.CookiePrefixRefreshToken,
 		Environment:              r.Environment,
 		CookieDomain:             r.CookieDomain,
+		OAuthOrigin:              r.OAuthOrigin,
 	}
 }
 
@@ -142,92 +148,6 @@ func (h *Handler) LogoutUserOthers(w http.ResponseWriter, r *http.Request) {
 
 	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
-}
-
-// OauthCallback returns a redirect to the respective providers login page
-// TODO: Create tests
-func (h *Handler) OauthLogin(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-oauth-login")
-
-	request, err := MapRequestToOauthLoginRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.OauthLogin(r.Context(), request)
-	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	// Shape the cookie
-	oauthInitCookie := response.CookieCore
-	oauthInitCookie.Domain = h.CookieDomain
-	oauthInitCookie.Path = "/"
-	oauthInitCookie.Secure = func(env string) bool {
-		return env != "local"
-	}(h.Environment)
-	oauthInitCookie.HttpOnly = true
-	oauthInitCookie.SameSite = func(env string) http.SameSite {
-		if env != "local" {
-			return http.SameSiteStrictMode
-		}
-		return http.SameSiteLaxMode
-	}(h.Environment)
-
-	// Get the provider login Url
-	logInUrl := response.ProviderAuthCodeUrl
-
-	// set cookie
-	http.SetCookie(w, oauthInitCookie)
-
-	// send back redirect
-	http.Redirect(w, r, logInUrl, http.StatusTemporaryRedirect)
-}
-
-// OauthCallback returns user access & refresh tokens if the user making the
-// request is valid
-// TODO: Create tests
-func (h *Handler) OauthCallback(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-oauth-callback")
-
-	request, err := MapRequestToOauthCallbackRequest(r, h.Validator)
-	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	response, err := h.Service.OauthCallback(r.Context(), request)
-	if err != nil {
-
-		if response != nil && response.ProviderStateCookieKey != "" {
-			h.RemoveCookiesWithName(w, response.ProviderStateCookieKey)
-		}
-
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	h.RemoveCookiesWithName(w, response.ProviderStateCookieKey)
-	h.AddAuthCookies(w, response.AccessToken, response.AccessTokenExpiresAt, response.RefreshToken, response.RefreshTokenExpiresAt)
-	toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, response.AccessTokenExpiresAt, response.RefreshTokenExpiresAt)
-
-	if response.RequestUrl != "" {
-		// allow API to pass back accessible header
-		w.Header().Add("Access-Control-Expose-Headers", common.WebLocationHttpRequestHeader)
-		w.Header().Add(common.WebLocationHttpRequestHeader, response.RequestUrl)
-	}
-	//nolint will set up default fallback later
-	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
 }
 
 // GetUserAPITokenThreshold returns user's API tokens

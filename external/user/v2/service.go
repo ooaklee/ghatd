@@ -1063,20 +1063,24 @@ func (s *Service) GetUserConfigs(_ context.Context, _ *GetUserConfigsRequest) (*
 
 // Helper methods
 
+// defaultConfig reads configuration without mutating shared service state during requests.
 func (s *Service) defaultConfig() *UserConfig {
 	if s.Config == nil {
-		s.Config = DefaultUserConfig()
+		return DefaultUserConfig()
 	}
-
-	s.Config = ensureUserConfigType(s.Config)
+	if s.Config.Type == "" {
+		config := *s.Config
+		config.Type = UserConfigTypeCustom
+		return &config
+	}
 	return s.Config
 }
 
+// availableConfigs returns the configured registry without a concurrent lazy write.
 func (s *Service) availableConfigs() []*UserConfig {
 	if len(s.Configs) == 0 {
-		s.Configs = registerUserConfigs(s.defaultConfig())
+		return []*UserConfig{s.defaultConfig()}
 	}
-
 	return s.Configs
 }
 

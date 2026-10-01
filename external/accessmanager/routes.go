@@ -144,8 +144,71 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.CreateInitalLoginOrVerificationTokenEmail).Methods(http.MethodPost, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogout, request.Handler.LogoutUser).Methods(http.MethodGet, http.MethodOptions)
 	accessmanagerRoutes.HandleFunc(APIAccessManagerUserRefreshToken, request.Handler.RefreshToken).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleCallback, request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerOauthGoogleLogin, request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/callback", request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
+	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/login", request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+	if mobile, ok := request.Handler.(interface {
+		MobileOAuthProviders(http.ResponseWriter, *http.Request)
+		MobileOAuthLogin(http.ResponseWriter, *http.Request)
+		MobileOAuthLink(http.ResponseWriter, *http.Request)
+		MobileOAuthStart(http.ResponseWriter, *http.Request)
+		MobileOAuthExchange(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/providers", mobile.MobileOAuthProviders).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/mobile/login", mobile.MobileOAuthLogin).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/mobile/link", mobile.MobileOAuthLink).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/start", mobile.MobileOAuthStart).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/exchange", mobile.MobileOAuthExchange).Methods(http.MethodPost)
+	}
+	if optional, ok := request.Handler.(interface {
+		OAuthProviders(http.ResponseWriter, *http.Request)
+		OAuthLink(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/providers", optional.OAuthProviders).Methods(http.MethodGet, http.MethodOptions)
+		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/link", optional.OAuthLink).Methods(http.MethodPost, http.MethodOptions)
+	}
+
+	if optional, ok := request.Handler.(interface {
+		OAuthConnections(http.ResponseWriter, *http.Request)
+		StartOAuthDisconnect(http.ResponseWriter, *http.Request)
+		ConfirmOAuthDisconnect(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/connections", optional.OAuthConnections).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect", optional.StartOAuthDisconnect).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/confirm", optional.ConfirmOAuthDisconnect).Methods(http.MethodPost)
+	}
+	if optional, ok := request.Handler.(interface {
+		ReviewOAuthDisconnectChallenge(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", optional.ReviewOAuthDisconnectChallenge).Methods(http.MethodGet)
+	}
+
+	if optional, ok := request.Handler.(interface {
+		OAuthConnectionVerification(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/reauthenticate", optional.OAuthConnectionVerification).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/reauthenticate/confirm", optional.OAuthConnectionVerification).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", optional.OAuthConnectionVerification).Methods(http.MethodGet)
+	}
+
+	if native, ok := request.Handler.(interface {
+		MobileOAuthConnections(http.ResponseWriter, *http.Request)
+		StartMobileOAuthDisconnect(http.ResponseWriter, *http.Request)
+		ConfirmMobileOAuthDisconnect(http.ResponseWriter, *http.Request)
+		ReviewMobileOAuthDisconnectChallenge(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections", native.MobileOAuthConnections).Methods(http.MethodGet)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect", native.StartMobileOAuthDisconnect).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect/confirm", native.ConfirmMobileOAuthDisconnect).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", native.ReviewMobileOAuthDisconnectChallenge).Methods(http.MethodGet)
+	}
+
+	if native, ok := request.Handler.(interface {
+		MobileOAuthConnectionVerification(http.ResponseWriter, *http.Request)
+	}); ok {
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate", native.MobileOAuthConnectionVerification).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate/confirm", native.MobileOAuthConnectionVerification).Methods(http.MethodPost)
+		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", native.MobileOAuthConnectionVerification).Methods(http.MethodGet)
+	}
 
 	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)

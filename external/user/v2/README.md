@@ -726,3 +726,33 @@ For issues or questions:
 - See [handler.go](handler.go) for HTTP endpoints
 - Refer to [routes.go](routes.go) for route configuration
 - See the default implementations in [utils.go](utils.go).
+
+
+## Provider identity persistence
+
+`*Service` exposes optional `GetUserByOAuthIdentity`, `CreateOAuthUser`,
+`LinkOAuthIdentity` and `RecordOAuthLogin` capabilities. The underlying
+`OAuthRepository` creates a complete trusted `UniversalUser`; the service
+accepts the narrower `CreateOAuthUserRequest`. Existing `UserRepository`
+implementations remain compatible and fail closed if these capabilities are
+absent.
+
+Before enabling providers, run
+`migrations.InitUsersOAuthIndexesUp(ctx, db)`. It enforces unique email and the
+unique sparse multikey `oauth_identity_keys` index. Resolve existing duplicate
+emails before rollout; the migration refuses them with static operator guidance.
+Provider inserts and links also check that both complete uniqueness constraints
+exist. Rollback removes only the provider index and preserves email uniqueness.
+
+Provider identities are private fields excluded from client JSON. Creation
+atomically stores a verified ACTIVE user and canonical issuer/subject identity.
+Matching email alone returns `ErrOAuthLinkRequired`; same identity retries return
+the winning account without changing its email. Linking uses a narrow atomic
+write for a verified ACTIVE target and preserves existing profile and membership
+state. General user updates exclude identity fields to protect concurrent links.
+`RecordOAuthLogin` conditionally writes only login timestamps.
+
+Names are optional only when trusted private provider identity metadata is
+present. Email signup keeps its configured required fields. Configuration
+registries should be established during service construction, before requests;
+request-time lookups no longer lazily mutate shared service state.

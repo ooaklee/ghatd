@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -71,6 +72,7 @@ func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*Token
 	et := generateHS256Tokens(map[string]interface{}{
 		tokenClaimKeyAuthorized: true,
 		tokenClaimKeySub:        user.GetUserId(),
+		"email_revision":        userEmailRevision(user),
 		tokenClaimKeyAccessUUID: td.EphemeralUUID,
 		tokenClaimKeyAdmin:      user.IsAdmin(),
 		tokenClaimKeyExp:        td.EtExpires,
@@ -102,6 +104,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 	evt := generateHS256Tokens(map[string]interface{}{
 		tokenClaimKeyAuthorized: false,
 		tokenClaimKeySub:        user.GetUserId(),
+		"email_revision":        userEmailRevision(user),
 		tokenClaimKeyAccessUUID: td.EmailVerificationUUID,
 		tokenClaimKeyAdmin:      user.IsAdmin(),
 		tokenClaimKeyExp:        td.EvExpires,
@@ -123,6 +126,15 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 // Access tokens are valid for 15 minutes and contain user session information.
 // Refresh tokens are valid for 7 days and can be used to obtain new access tokens.
 func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetails, error) {
+	return s.CreateTokenWithAuthenticationTime(ctx, user, time.Time{})
+}
+
+// CreateTokenWithAuthenticationTime carries the original signed login time through rotation.
+func (s *Service) CreateTokenWithAuthenticationTime(ctx context.Context, user UserModel, authenticatedAt time.Time) (*TokenDetails, error) {
+	if !authenticatedAt.IsZero() && (authenticatedAt.Unix() <= 0 || authenticatedAt.Unix() > time.Now().Unix()) {
+		return nil, ErrUnauthorized
+	}
+
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "create-token")
 	userID := user.GetUserId()
 	logger.Debug("auth-token-create-started", zap.String("user-id", userID), zap.Bool("admin", user.IsAdmin()), zap.String("user-status", user.GetUserStatus()))
@@ -135,13 +147,18 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 	td.GenerateRefreshUUID().GenerateAccessUUID()
 
 	// Create Access Token
-	at := generateHS256Tokens(mapAccessTokenClaims(&mapAccessTokenClaimsRequest{
+	accessClaims := mapAccessTokenClaims(&mapAccessTokenClaimsRequest{
 		UserStatus:            user.GetUserStatus(),
 		AccessTokenUUID:       td.AccessUUID,
 		UserID:                user.GetUserId(),
 		IsAdmin:               user.IsAdmin(),
 		AccessTokenTTLSeconds: td.AtExpires,
-	}))
+	})
+	accessClaims["email_revision"] = userEmailRevision(user)
+	if !authenticatedAt.IsZero() {
+		accessClaims["auth_time"] = authenticatedAt.Unix()
+	}
+	at := generateHS256Tokens(accessClaims)
 
 	var err error
 	td.AccessToken, err = at.SignedString([]byte(s.accessTokenSecret))
@@ -151,11 +168,16 @@ func (s *Service) CreateToken(ctx context.Context, user UserModel) (*TokenDetail
 	}
 
 	// Create Refresh Token
-	rt := generateHS256Tokens(map[string]interface{}{
+	refreshClaims := map[string]interface{}{
 		tokenClaimKeyRefreshUUID: td.RefreshUUID,
 		tokenClaimKeySub:         user.GetUserId(),
+		"email_revision":         userEmailRevision(user),
 		tokenClaimKeyExp:         td.RtExpires,
-	})
+	}
+	if !authenticatedAt.IsZero() {
+		refreshClaims["auth_time"] = authenticatedAt.Unix()
+	}
+	rt := generateHS256Tokens(refreshClaims)
 
 	td.RefreshToken, err = rt.SignedString([]byte(s.refreshTokenSecret))
 	if err != nil {
@@ -392,11 +414,21 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 		}
 
 		logger.Debug("auth-access-token-details-valid", zap.String("user-id", userID), zap.Bool("admin", isAdmin), zap.Bool("authorized", isActive))
+		authenticatedAt, err := tokenAuthenticationTime(claims)
+		if err != nil {
+			return nil, err
+		}
+		revision, err := tokenEmailRevision(claims)
+		if err != nil {
+			return nil, err
+		}
 		return &TokenAccessDetails{
-			AccessUUID:   accessUUID,
-			UserID:       userID,
-			IsAdmin:      isAdmin,
-			IsAuthorized: isActive,
+			EmailRevision:      revision,
+			AuthenticationTime: authenticatedAt,
+			AccessUUID:         accessUUID,
+			UserID:             userID,
+			IsAdmin:            isAdmin,
+			IsAuthorized:       isActive,
 		}, nil
 	}
 	logger.Warn("auth-access-token-invalid")
@@ -444,6 +476,15 @@ func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*T
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
+		var err error
+		refreshDetails.AuthenticationTime, err = tokenAuthenticationTime(claims)
+		if err != nil {
+			return nil, err
+		}
+		refreshDetails.EmailRevision, err = tokenEmailRevision(claims)
+		if err != nil {
+			return nil, err
+		}
 		refreshDetails.RefreshUUID, ok = claims[tokenClaimKeyRefreshUUID].(string)
 		if !ok {
 			logger.Warn("refresh-token-missing-refresh-uuid")
@@ -495,4 +536,54 @@ func getTokenFromHeaderBearerToken(bearerToken string) string {
 func generateTokenWithSigningMethodHS256(claims jwt.Claims) *jwt.Token {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
+}
+
+// tokenAuthenticationTime validates optional freshness without upgrading legacy sessions.
+func tokenAuthenticationTime(claims jwt.MapClaims) (time.Time, error) {
+	value, exists := claims["auth_time"]
+	if !exists {
+		return time.Time{}, nil
+	}
+	seconds, ok := value.(float64)
+	if !ok || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 || seconds > float64(time.Now().Unix()) || math.Trunc(seconds) != seconds {
+		return time.Time{}, ErrUnauthorized
+	}
+	return time.Unix(int64(seconds), 0).UTC(), nil
+}
+
+// SupportsEmailRevision allows hosts to opt into disconnects without silently
+// accepting a custom signer that cannot invalidate pre-change credentials.
+func (s *Service) SupportsEmailRevision() bool { return true }
+
+// userEmailRevision reads the optional account revision, retaining revision zero
+// for legacy user models that do not expose it.
+func userEmailRevision(user UserModel) int64 {
+	if model, ok := user.(interface{ GetEmailRevision() int64 }); ok {
+		return model.GetEmailRevision()
+	}
+	return 0
+}
+
+// tokenEmailRevision accepts only non-negative integer claims within JSON's
+// exact integer range. A missing claim represents legacy revision zero.
+func tokenEmailRevision(claims jwt.MapClaims) (int64, error) {
+	value, exists := claims["email_revision"]
+	if !exists {
+		return 0, nil
+	}
+	switch n := value.(type) {
+	case float64:
+		if n >= 0 && n <= 9007199254740991 && n == math.Trunc(n) {
+			return int64(n), nil
+		}
+	case int64:
+		if n >= 0 && n <= 9007199254740991 {
+			return n, nil
+		}
+	case int:
+		if n >= 0 && int64(n) <= 9007199254740991 {
+			return int64(n), nil
+		}
+	}
+	return 0, ErrUnauthorized
 }

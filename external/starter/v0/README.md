@@ -399,3 +399,18 @@ always safe.
 - [MongoDB migrator](../../migrator/mongo/README.md)
 - [ADR007: Add starter/v0 as an ejectable Lazy composition layer](../../../docs/adr/adr007-starter-v0-lazy-composition-layer.md)
 - [ADR017: Colocate package documentation](../../../docs/adr/adr017-colocate-package-documentation.md)
+
+
+## Google and Apple sign-in
+
+Pass secure providers through `NewServicesRequest.OAuthServices`, apply
+`user/v2/migrations.InitUsersOAuthIndexesUp` through the host migrator, and set
+`NewHandlersRequest.OAuthOrigin` to the trusted frontend origin. Before serving,
+opt native apps in with `handlers.AccessManager.ConfigureMobileOAuth` and check
+its returned error; an empty redirect allowlist disables native handoff.
+Starter does not load provider secrets, register callbacks or apply migrations.
+
+See the cross-package [adoption guide](../../../docs/how-to/add-google-apple-sign-in.md),
+[compile-checked composition example](../../../examples/oauth/README.md),
+[provider reference](../../oauth/README.md) and
+[access-manager routes](../../accessmanager/README.md).
