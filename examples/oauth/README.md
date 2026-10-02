@@ -27,6 +27,13 @@ The host owns Redis lifecycle, environment parsing and key loading:
   Apple input supplies `ClientID` (Services ID), `TeamID`, `KeyID`,
   `PrivateKeyPEM` and optionally `HTTPClient`. Read the PEM bytes through your
   secret store or a narrowly mounted file outside Git.
+  [LoadAppleSigningKey](apple_key.go) demonstrates a file/base64 adapter: the host
+  supplies `APPLE_OAUTH_PRIVATE_KEY_B64` and `APPLE_OAUTH_PRIVATE_KEY_PATH`,
+  receives decoded bytes, then passes them to `PrivateKeyPEM`. A non-empty
+  encoded value wins, even if the file is unreadable. Invalid encoding fails
+  without fallback; `NewAppleProvider` rejects invalid PEM and non-P-256 keys.
+  No temporary file is required. Keep all-empty providers disabled and reject
+  partial credentials in your host adapter before calling this helper.
 - The example copies each provider request and supplies its `Store` and
   `RedirectURL`. It derives callbacks from one exact public origin, keeping
   Google's and Apple's callbacks on the native handoff's origin. Register
@@ -37,8 +44,9 @@ The host owns Redis lifecycle, environment parsing and key loading:
   HTTPS origin and native callback format before the listener starts.
 
 Apply the OAuth identity migration before enabling providers. This example does
-not provision databases, register providers, run migrations, load `.env`, read
-secrets, or start listeners. Existing email authentication remains host-configured.
+not provision databases, register providers, run migrations, load `.env`, contact a
+secret store, or start listeners. The optional key adapter reads only the file
+path passed by its caller when no encoded value is supplied. Existing email authentication remains host-configured.
 
 Check the example against the framework's current API without provider calls,
 using the Go version pinned in the repository's `.tool-versions`:

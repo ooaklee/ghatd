@@ -23,7 +23,8 @@ type NewAppleProviderRequest struct {
 	TeamID string
 	// KeyID identifies the dedicated Sign in with Apple signing key.
 	KeyID string
-	// PrivateKeyPEM contains the P-256 private key used for client assertions.
+	// PrivateKeyPEM contains decoded PEM for the P-256 client-assertion key.
+	// The host loads files or decodes base64 secrets before constructing a provider.
 	// Keep this server-side; never embed it in browser or mobile applications.
 	PrivateKeyPEM []byte
 	// RedirectURL is the exact HTTPS return URL registered for the Services ID.

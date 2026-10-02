@@ -12,6 +12,11 @@ traced, 30-second default), a `SecureTransactionStore`, and complete provider
 configuration. Keep client secrets and Apple's PKCS#8 P-256 `.p8` key in the
 host's secret store, outside source control. Apple uses the web Services ID as
 its client ID, with the associated team ID and Sign in with Apple key ID.
+`PrivateKeyPEM` accepts decoded PEM bytes. A host may decode an optional base64
+secret in memory rather than mounting a file; the
+[compile-checked adapter](../../examples/oauth/apple_key.go) demonstrates strict
+precedence and redacted errors. The framework does not load environment
+variables, create key files or configure Kubernetes volumes.
 
 Google requests `openid email profile`, nonce and S256 PKCE. Apple requests
 `name email` with `response_mode=form_post`; its client secret is signed with
