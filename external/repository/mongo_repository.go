@@ -64,7 +64,7 @@ func (r *MongoDbRepository) GetHelper() RepositoryHelper {
 func (r *MongoDbRepository) InitialiseClient(ctx context.Context) (*mongo.Client, error) {
 	client, err := r.helper.GetClient(ctx)
 	if err != nil {
-		return nil, NewRepositoryError(ErrUnableToInitialiseDBClient, "failed-to-initialise-client")
+		return nil, NewRepositoryErrorWithCause(ErrUnableToInitialiseDBClient, "failed-to-initialise-client", err)
 	}
 	return client, nil
 }

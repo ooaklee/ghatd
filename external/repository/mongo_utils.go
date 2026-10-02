@@ -3,8 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -87,26 +85,25 @@ func NewMongoRepositoryHelper(
 
 // GetClient returns MongoDB client
 func (r *MongoRepositoryHelper) GetClient(ctx context.Context) (*mongo.Client, error) {
-	client, err := r.mongoClient.GetClient(ctx)
-	if err != nil {
-		r.LogError(ctx, "error-initialising-db-client", err, Field{Key: "operation", Value: "get_client"})
+	if r == nil || r.mongoClient == nil || ctx == nil {
+		return nil, ErrInvalidMongoOperation
 	}
+	client, err := r.mongoClient.GetClient(ctx)
+	observeMongo(ctx, r, "get_client", err)
 	return client, err
 }
 
 // GetDatabase returns MongoDB database
 func (r *MongoRepositoryHelper) GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error) {
+	if r == nil || r.mongoClient == nil || ctx == nil {
+		return nil, ErrInvalidMongoOperation
+	}
 	if dbName == "" {
 		dbName = r.defaultDB
 	}
 
 	db, err := r.mongoClient.GetDatabase(ctx, dbName)
-	if err != nil {
-		r.LogError(ctx, "error-getting-database", err,
-			Field{Key: "operation", Value: "get_database"},
-			Field{Key: "database", Value: dbName},
-		)
-	}
+	observeMongo(ctx, r, "get_database", err)
 	return db, err
 }
 
@@ -170,280 +167,142 @@ func (r *MongoRepositoryHelper) Debug(ctx context.Context, message string, err e
 	r.LogDebug(ctx, message, err, fields...)
 }
 
-// MapAllToResult maps all documents in cursor to result
+// MapAllToResult decodes and closes the cursor. Failures retain their native
+// cause so errors.Is/As and the driver's transaction retry labels still work.
 func (r *MongoRepositoryHelper) MapAllToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, objectName string) error {
-	if cursor == nil {
-		err := fmt.Errorf("cursor-is-nil")
-		r.LogError(ctx, "cannot-decode-documents-from-nil-cursor", err,
-			Field{Key: "operation", Value: "map_all_to_result"},
-			Field{Key: "object_name", Value: objectName},
-		)
-		return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, "cursor is nil")
+	if r == nil || cursor == nil || ctx == nil {
+		return ErrInvalidMongoOperation
 	}
-
-	if err := cursor.All(ctx, result); err != nil {
-		r.LogError(ctx, fmt.Sprintf("unable-to-decode-%s", objectName), err,
-			Field{Key: "operation", Value: "map_all_to_result"},
-			Field{Key: "object_name", Value: objectName},
-		)
-		return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, err.Error())
+	err := cursor.All(ctx, result)
+	observeMongo(ctx, r, "decode_all", err)
+	if err != nil {
+		return NewRepositoryErrorWithCause(ErrUnableToDecodeQueriedDocuments, "unable-to-decode-documents", err)
 	}
-
-	r.LogDebug(ctx, fmt.Sprintf("successfully-decoded-%s", objectName), nil,
-		Field{Key: "operation", Value: "map_all_to_result"},
-		Field{Key: "object_name", Value: objectName},
-	)
-
 	return nil
 }
 
-// MapOneToResult maps one document from cursor to result
+// MapOneToResult owns and closes the supplied cursor. It distinguishes cursor
+// iteration failures from absence and never logs decoded payloads or driver text.
 func (r *MongoRepositoryHelper) MapOneToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, objectName string) error {
-	if cursor == nil {
-		err := fmt.Errorf("cursor-is-nil")
-		r.LogError(ctx, "cannot-decode-document-from-nil-cursor", err,
-			Field{Key: "operation", Value: "map_one_to_result"},
-			Field{Key: "object_name", Value: objectName},
-		)
-		return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, "cursor is nil")
+	if r == nil || cursor == nil || ctx == nil {
+		return ErrInvalidMongoOperation
 	}
-
+	defer closeMongoCursor(ctx, cursor)
+	var err error
 	if cursor.Next(ctx) {
-		if err := cursor.Decode(result); err != nil {
-			r.LogError(ctx, fmt.Sprintf("unable-to-decode-%s", objectName), err,
-				Field{Key: "operation", Value: "map_one_to_result"},
-				Field{Key: "object_name", Value: objectName},
-			)
-			return NewRepositoryError(ErrUnableToDecodeQueriedDocuments, err.Error())
+		err = cursor.Decode(result)
+	} else {
+		err = cursor.Err()
+		if err == nil {
+			err = mongo.ErrNoDocuments
 		}
-
-		r.LogDebug(ctx, fmt.Sprintf("successfully-decoded-%s", objectName), nil,
-			Field{Key: "operation", Value: "map_one_to_result"},
-			Field{Key: "object_name", Value: objectName},
-		)
-		return nil
 	}
-
-	// No documents found
-	err := fmt.Errorf("no-documents-found")
-	r.LogWarn(ctx, fmt.Sprintf("no-%s-found-in-cursor", objectName), err,
-		Field{Key: "operation", Value: "map_one_to_result"},
-		Field{Key: "object_name", Value: objectName},
-	)
-	return NewRepositoryError(ErrResourceNotFound, "no-documents-found")
+	observeMongo(ctx, r, "decode_one", err)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return NewRepositoryErrorWithCause(ErrResourceNotFound, "no-documents-found", err)
+	}
+	if err != nil {
+		return NewRepositoryErrorWithCause(ErrUnableToDecodeQueriedDocuments, "unable-to-decode-document", err)
+	}
+	return nil
 }
 
-// ExecuteCountDocuments returns a int64 count if successful, otherwise an error is returned
+// ExecuteCountDocuments counts the complete filter result unless explicit
+// driver options bound it. Error wrapping preserves the underlying cause.
 func (r *MongoRepositoryHelper) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
-
-	count, err := collection.CountDocuments(ctx, filter, opts...)
+	count, err := mongoCommand(ctx, r, "count_documents", collection, func() (int64, error) { return collection.CountDocuments(ctx, filter, opts...) })
 	if err != nil {
-		r.LogError(ctx, "unable-to-count-records", err,
-			Field{Key: "operation", Value: "count_documents"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-		)
-		return 0, NewRepositoryError(ErrUnableToCountDocuments, err.Error())
+		return 0, NewRepositoryErrorWithCause(ErrUnableToCountDocuments, "unable-to-count-documents", err)
 	}
-
 	return count, nil
 }
 
-// ExecuteDeleteManyCommand attempts to remove all resources matching specified filter(s), if successful error is nil
+// ExecuteDeleteManyCommand removes all matches. The legacy signature discards
+// counts; revision-sensitive single deletes should use the result-bearing API.
 func (r *MongoRepositoryHelper) ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
-
-	targetObjectName = strings.ToLower(targetObjectName)
-
-	_, err := collection.DeleteMany(ctx, filter)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("unable-to-delete-%s", targetObjectName), err,
-			Field{Key: "operation", Value: "delete_many"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-		)
-		return err
-	}
-
-	return nil
+	_, err := mongoCommand(ctx, r, "delete_many", collection, func() (*mongo.DeleteResult, error) { return collection.DeleteMany(ctx, filter) })
+	return err
 }
 
-// ExecuteUpdateManyCommand attempts to match and update document in collection, error on failure
+// ExecuteUpdateManyCommand updates all matches without logging filters or data.
 func (r *MongoRepositoryHelper) ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error {
-
-	resultObjectName = strings.ToLower(resultObjectName)
-
-	_, err := collection.UpdateMany(ctx, filter, updateFilter)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("match-and-update-many-failure-%s", resultObjectName), err,
-			Field{Key: "operation", Value: "update_many"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-			Field{Key: "update_filter", Value: updateFilter},
-		)
-		return err
-	}
-
-	return nil
+	_, err := mongoCommand(ctx, r, "update_many", collection, func() (*mongo.UpdateResult, error) { return collection.UpdateMany(ctx, filter, updateFilter) })
+	return err
 }
 
-// ExecuteUpdateOneCommand attempts to match and update document in collection, error on failure
+// ExecuteUpdateOneCommand preserves the legacy error-only signature. Use
+// ExecuteUpdateOneCommandResult when matched/modified counts affect correctness.
 func (r *MongoRepositoryHelper) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error {
-
-	resultObjectName = strings.ToLower(resultObjectName)
-
-	_, err := collection.UpdateOne(ctx, filter, updateFilter)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("match-and-update-failure-%s", resultObjectName), err,
-			Field{Key: "operation", Value: "update_one"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-			Field{Key: "update_filter", Value: updateFilter},
-		)
-		return err
-	}
-
-	return nil
+	_, err := mongoCommand(ctx, r, "update_one", collection, func() (*mongo.UpdateResult, error) { return collection.UpdateOne(ctx, filter, updateFilter) })
+	return err
 }
 
-// ExecuteDeleteOneCommand attempts to remove resource matching filter from repository, if successful error is nil
+// ExecuteDeleteOneCommand preserves the legacy error-only signature. Use the
+// result-bearing helper for revision-qualified deletes.
 func (r *MongoRepositoryHelper) ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
-
-	targetObjectName = strings.ToLower(targetObjectName)
-	_, err := collection.DeleteOne(ctx, filter)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("unable-to-delete-%s", targetObjectName), err,
-			Field{Key: "operation", Value: "delete_one"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-		)
-		return err
-	}
-
-	return nil
+	_, err := mongoCommand(ctx, r, "delete_one", collection, func() (*mongo.DeleteResult, error) { return collection.DeleteOne(ctx, filter) })
+	return err
 }
 
-// ExecuteFindOneCommandDecodeResult if successful decodes document to passed result object, otherwise an error is returned
+// ExecuteFindOneCommandDecodeResult maps only absence to onFailureErr. All
+// other errors retain their identity; logError controls metadata-only logging.
 func (r *MongoRepositoryHelper) ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error {
-	resultObjectName = strings.ToLower(resultObjectName)
-
+	if r == nil || ctx == nil || collection == nil {
+		return ErrInvalidMongoOperation
+	}
 	err := collection.FindOne(ctx, filter).Decode(result)
-	return r.handleFindOneDecodeError(ctx, err, collection.Name(), filter, resultObjectName, logError, onFailureErr)
+	return r.handleFindOneDecodeError(ctx, err, "", nil, "", logError, onFailureErr)
 }
 
-// handleFindOneDecodeError classifies FindOne decode errors into missing-document
-// and database-failure cases. When logging is enabled, missing documents emit a
-// warning while unexpected failures emit an error. Missing documents may be
-// mapped to onFailureErr; every other failure is returned unchanged.
+// handleFindOneDecodeError keeps the compatibility mapping without exposing
+// object names, query contents or error messages to even custom loggers.
 func (r *MongoRepositoryHelper) handleFindOneDecodeError(ctx context.Context, err error, collectionName string, filter interface{}, resultObjectName string, logError bool, onFailureErr error) error {
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		if logError {
-			r.LogWarn(ctx, fmt.Sprintf("unable-to-find-and-decode-%s-matching-provided-filter", resultObjectName), err,
-				Field{Key: "operation", Value: "find_one_decode"},
-				Field{Key: "collection", Value: collectionName},
-				Field{Key: "query_filter", Value: filter},
-			)
-		}
-		if onFailureErr != nil {
-			return onFailureErr
-		}
-		return err
+	if logError {
+		observeMongo(ctx, r, "find_one_decode", err)
 	}
-	if err != nil {
-		if logError {
-			r.LogError(ctx, fmt.Sprintf("failed-to-find-and-decode-%s-matching-provided-filter", resultObjectName), err,
-				Field{Key: "operation", Value: "find_one_decode"},
-				Field{Key: "collection", Value: collectionName},
-				Field{Key: "query_filter", Value: filter},
-			)
-		}
-		return err
+	if errors.Is(err, mongo.ErrNoDocuments) && onFailureErr != nil {
+		return onFailureErr
 	}
-
-	return nil
+	return err
 }
 
-// ExecuteReplaceOneCommand handles replacing a document in a collection, error on failure
+// ExecuteReplaceOneCommand retains the legacy error-only contract. Use
+// ExecuteReplaceOneCommandResult for compare-and-swap or explicit upsert options.
 func (r *MongoRepositoryHelper) ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error {
-
-	resultObjectName = strings.ToLower(resultObjectName)
-	_, err := collection.ReplaceOne(ctx, filter, replacementObject)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("error-updating-%s", resultObjectName), err,
-			Field{Key: "operation", Value: "replace_one"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-		)
-
-		return err
-	}
-
-	return nil
+	_, err := mongoCommand(ctx, r, "replace_one", collection, func() (*mongo.UpdateResult, error) { return collection.ReplaceOne(ctx, filter, replacementObject) })
+	return err
 }
 
-// ExecuteFindCommand returns a cursor if successful, otherwise an error is returned
+// ExecuteFindCommand preserves native errors underneath the repository code.
+// The caller owns cursor closure or delegates to MapAllInCursorToResult.
 func (r *MongoRepositoryHelper) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
-
-	c, err := collection.Find(ctx, filter, opts...)
+	cursor, err := mongoCommand(ctx, r, "find", collection, func() (*mongo.Cursor, error) { return collection.Find(ctx, filter, opts...) })
 	if err != nil {
-		r.LogError(ctx, "error-generating-cursor", err,
-			Field{Key: "operation", Value: "find"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "query_filter", Value: filter},
-		)
-		return nil, NewRepositoryError(ErrUnableToGenerateCollectionCursor, err.Error())
+		return nil, NewRepositoryErrorWithCause(ErrUnableToGenerateCollectionCursor, "unable-to-create-cursor", err)
 	}
-
-	return c, nil
+	return cursor, nil
 }
 
-// ExecuteAggregateCommand returns a cursor if successful, otherwise an error is returned
+// ExecuteAggregateCommand returns a caller-owned cursor and retains driver
+// error causes. Pipeline data is never included in helper telemetry.
 func (r *MongoRepositoryHelper) ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error) {
-
-	c, err := collection.Aggregate(ctx, mongoPipeline)
+	cursor, err := mongoCommand(ctx, r, "aggregate", collection, func() (*mongo.Cursor, error) { return collection.Aggregate(ctx, mongoPipeline) })
 	if err != nil {
-		r.LogError(ctx, "error-generating-cursor-for-aggregation", err,
-			Field{Key: "operation", Value: "aggregate"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "pipeline", Value: mongoPipeline},
-		)
-		return nil, NewRepositoryError(ErrUnableToGenerateCollectionCursor, err.Error())
+		return nil, NewRepositoryErrorWithCause(ErrUnableToGenerateCollectionCursor, "unable-to-create-cursor", err)
 	}
-
-	return c, nil
+	return cursor, nil
 }
 
-// ExecuteInsertOneCommand executes an insert one command
+// ExecuteInsertOneCommand preserves the driver result and duplicate/retry error
+// identity. Encrypted documents and raw error messages are never logged.
 func (r *MongoRepositoryHelper) ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error) {
-	resultObjectName = strings.ToLower(resultObjectName)
-	res, err := collection.InsertOne(ctx, document)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("error-inserting-%s", resultObjectName), err,
-			Field{Key: "operation", Value: "insert_one"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "document", Value: document},
-		)
-
-		return nil, err
-	}
-
-	return res, nil
+	return mongoCommand(ctx, r, "insert_one", collection, func() (*mongo.InsertOneResult, error) { return collection.InsertOne(ctx, document) })
 }
 
-// ExecuteInsertManyCommand executes an insert many command
+// ExecuteInsertManyCommand inserts documents using the provided context and
+// leaves ordered-write and retry semantics with the driver.
 func (r *MongoRepositoryHelper) ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error) {
-	resultObjectName = strings.ToLower(resultObjectName)
-	res, err := collection.InsertMany(ctx, documents)
-	if err != nil {
-		r.LogError(ctx, fmt.Sprintf("error-inserting-%s", resultObjectName), err,
-			Field{Key: "operation", Value: "insert_many"},
-			Field{Key: "collection", Value: collection.Name()},
-			Field{Key: "documents", Value: documents},
-		)
-
-		return nil, err
-	}
-
-	return res, nil
+	return mongoCommand(ctx, r, "insert_many", collection, func() (*mongo.InsertManyResult, error) { return collection.InsertMany(ctx, documents) })
 }
 
 ////

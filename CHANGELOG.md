@@ -79,6 +79,35 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Result-bearing Mongo mutation helpers, shared managed-client transactions,
+  explicit index/collection setup and a transactional startup probe. Domains
+  retain their schemas, authorization, revision checks and retention policy; see
+  [repository migration guidance](external/repository/README.md#transaction-safe-operations).
+- Reusable [AES-256-GCM payload encryption](external/encryption/README.md),
+  preserving the standard nonce-prefixed byte format and requiring explicit AAD
+  and a host-owned stable key. No automatic key rotation or data rewrite occurs.
+- Opt-in [copy-on-write memory snapshots](external/ephemeral/README.md#process-local-transactional-snapshots)
+  for local/test adapters, with cancellation-aware entry and deep-copy isolation.
+  These are not a Redis replacement or production persistence fallback.
 - Contributor guidance establishing table-driven tests as the default and
   requiring changelog updates for notable changes. The whole-suite test-style
   audit remains separate work.
+
+### Changed
+
+- Redis session lookups now distinguish missing records from operational
+  failures. Use `ephemeral.ErrAuthNotFound` or `errors.Is`; legacy `redis.Nil`
+  remains detectable through wrapping, but direct equality is no longer safe.
+  See [lookup semantics](external/ephemeral/README.md#live-session-lookup).
+- Automatic repository logs now emit only fixed operation/outcome metadata;
+  filters, documents, names and raw database errors are omitted even for custom
+  loggers. Missing-document lookups use debug-level telemetry. Update log
+  consumers for this privacy-oriented change; explicit application `Log*` calls
+  and driver monitors still need their own redaction policy.
+
+### Fixed
+
+- Repository find/count/cursor failures retain native error causes underneath
+  existing error codes, enabling retry-label and cancellation inspection.
+  Single-result cursor mapping closes its cursor and distinguishes iteration
+  errors from missing documents.

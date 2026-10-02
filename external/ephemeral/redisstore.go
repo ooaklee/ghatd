@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -310,23 +311,39 @@ func (c *Client) DeleteAllTokenExceptedSpecified(ctx context.Context, userId str
 	return nil
 }
 
-// FetchAuth retrieves tokendata from persistent storage using combinedUUID
-// TODO: Create tests
+// FetchAuth looks up the live owner of one namespaced session. Absence wraps
+// ErrAuthNotFound and redis.Nil for errors.Is compatibility; other storage and
+// cancellation errors retain their causes. Logs omit identities, keys and raw
+// driver diagnostics. Callers must compare the returned owner to the claims.
 func (c *Client) FetchAuth(ctx context.Context, accessDetails TokenDetailsAccess) (string, error) {
+	if ctx == nil || c == nil || c.client == nil || accessDetails == nil {
+		return "", ErrInvalidAuthLookup
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if accessDetails.GetUserId() == "" || accessDetails.GetTokenAccessUuid() == "" {
+		return "", ErrInvalidAuthLookup
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "fetch-auth")
 
 	combinedID := toolbox.CombinedUuidFormat(accessDetails.GetUserId(), accessDetails.GetTokenAccessUuid())
 
 	completeKey := c.keyPrefix + combinedID
 
-	userID := accessDetails.GetUserId()
 	userIDFromToken, err := c.clientForContext(ctx).Get(completeKey).Result()
+	if contextErr := ctx.Err(); contextErr != nil {
+		return "", contextErr
+	}
 	if err != nil {
-		logger.Error("ephemeral-auth-fetch-failed", zap.String("user-id", userID), zap.Error(err))
+		if errors.Is(err, redis.Nil) {
+			return "", fmt.Errorf("%w: %w", ErrAuthNotFound, err)
+		}
+		logger.Error("ephemeral-auth-fetch-failed")
 		return "", err
 	}
 
-	logger.Debug("ephemeral-auth-fetched", zap.String("user-id", userID))
+	logger.Debug("ephemeral-auth-fetched")
 	return userIDFromToken, nil
 }
 
