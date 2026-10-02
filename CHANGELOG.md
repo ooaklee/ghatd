@@ -92,9 +92,19 @@ when the release version has been selected, and remove unused subsections.
 - Contributor guidance establishing table-driven tests as the default and
   requiring changelog updates for notable changes. The whole-suite test-style
   audit remains separate work.
+- Reusable [manifest-driven HTTP error helpers](external/errormanifest/README.md#wrapped-errors-at-http-boundaries)
+  preserve mapped wrappers and validation joins while rejecting unknown independent
+  causes. A separate strict resolver supports single-cause authentication
+  boundaries. Handler adoption and dependency-map wiring remain explicit.
 
 ### Changed
 
+- **Breaking:** the reply integration rejects invalid or shared custom response
+  prototypes; custom factories must return independent state. Unknown error
+  diagnostics are no longer printed to the standard logger, and joins containing
+  an unmapped cause now return a generic 500. Review the
+  [reply migration guide](https://github.com/ooaklee/reply/blob/38c9f4107f3dce3e9f0c09c8cc919c20d02fa967/UPGRADING.md)
+  and use its safe observer when failure telemetry is required.
 - Redis session lookups now distinguish missing records from operational
   failures. Use `ephemeral.ErrAuthNotFound` or `errors.Is`; legacy `redis.Nil`
   remains detectable through wrapping, but direct equality is no longer safe.
@@ -107,6 +117,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Pin the reply integration upgrade for structural error resolution.
+  This is an immutable, unreleased integration commit, not a tagged release.
+  Reply uses request-local response state, safe opt-in unmapped diagnostics and
+  deterministic error ordering; see
+  its [migration guide](https://github.com/ooaklee/reply/blob/38c9f4107f3dce3e9f0c09c8cc919c20d02fa967/UPGRADING.md).
 - Repository find/count/cursor failures retain native error causes underneath
   existing error codes, enabling retry-label and cancellation inspection.
   Single-result cursor mapping closes its cursor and distinguishes iteration

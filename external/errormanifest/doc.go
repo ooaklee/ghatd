@@ -1,7 +1,12 @@
 // Package errormanifest provides a reusable Composer for building
 // []reply.ErrorManifest slices with explicit layering and last-wins
 // semantics. It is the single authoritative way to compose error maps
-// for handler and middleware wiring in GHATD.
+// for handler and middleware wiring in GHATD. WriteHTTPError and ResponseErrors
+// preserve mapped wrappers and validation collections. CanonicalError retains
+// the stricter single-cause behavior of authentication boundaries. Neither
+// helper replaces complete domain maps or performs authorization. The original
+// error remains the caller's source for retries and redacted diagnostics.
+// See README.md for the complete response-boundary contract.
 //
 // # Conventions
 //

@@ -31,7 +31,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/mergestat/timediff v0.0.4
 	github.com/nikoksr/notify v1.5.0
-	github.com/ooaklee/reply/v2 v2.0.0
+	github.com/ooaklee/reply/v2 v2.0.1-0.20261002222049-38c9f4107f3d
 	github.com/otiai10/copy v1.14.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.70.1
