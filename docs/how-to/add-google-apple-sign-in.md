@@ -58,6 +58,42 @@ Apple. A different provider client/team or a separately implemented native SDK
 flow is not automatically interchangeable with these verified audiences and
 provider subjects.
 
+### Apple signing keys in containers and secret stores
+
+`oauth.NewAppleProviderRequest.PrivateKeyPEM` accepts the decoded PKCS#8 P-256
+PEM. Your host can load it from a narrowly mounted file or decode a standard-base64
+secret in memory. GHATD does not parse environment variables or create temporary
+key files. The [key-loading example](../../examples/oauth/apple_key.go) can be
+copied into a host adapter alongside the [environment placeholders](../../examples/oauth/.env.example).
+
+For the optional `APPLE_OAUTH_PRIVATE_KEY_B64` convention, a non-empty value takes
+precedence over `APPLE_OAUTH_PRIVATE_KEY_PATH`. Use strict standard-base64 decoding
+of the complete `.p8` PEM, including its original line breaks. Invalid encoding
+must fail startup without falling back to an older file; the provider constructor
+then rejects invalid PEM or a key on another curve. Return fixed configuration
+errors without logging key contents, encoded values or secret file paths. Keep
+providers disabled when all their settings are empty, and reject partial settings.
+
+Base64 is encoding, not encryption. Store both raw PEM and encoded values as
+secrets, such as AWS SSM `SecureString` parameters under your service/environment
+prefix. One explicit deployment source selector should request either
+`APPLE_OAUTH_PRIVATE_KEY` for a file or `APPLE_OAUTH_PRIVATE_KEY_B64` for an
+environment value. Provision and verify the separate encoded parameter before
+switching sources, deploy a compatible application image, and omit the Apple
+volume and mount in encoded mode. Retain the raw parameter until rollback is no
+longer needed. Never commit either value, expose it through frontend build
+variables, or inject it into migrations, sidekicks or unrelated workers.
+
+For file mode, project only the Apple key, read-only and readable only by the
+server's user (for example `0400`), into a dedicated directory such as
+`/run/your-service-apple-oauth`. Match the owner or group to the container's user.
+Avoid mounting an entire read-only Secret at `/run`, `/var/run`, `/run/secrets`
+or `/var/run/secrets`: `/var/run` may be a symlink to `/run`, and Kubernetes must
+still create its nested `/var/run/secrets/kubernetes.io/serviceaccount` mount.
+A dedicated Apple directory keeps these mounts disjoint. An individually mounted
+file does not have the same parent-directory conflict, but the dedicated path
+remains a clear deployment convention.
+
 ## 2. Apply the identity migration
 
 Register `user/v2/migrations.InitUsersOAuthIndexesUp(ctx, db)` through your
