@@ -8,6 +8,10 @@ GHAT(D) is an open-source, opinionated, and free full-stack web application foun
 
 We recognise that everyone has unique needs, and ideally their solutions should not start with a messy foundation that requires cleaning up before building. To reduce cognitive load and make preparation easier, we have introduced "building blocks" which we call `Details`. A `Detail` is an independent application that can function both within a GHAT(D) project and on its own. GHAT(D) supports `api`, `web`, and `web-vite` Detail types.
 
+See the [Changelog](./CHANGELOG.md) for notable changes, compatibility notes and
+upgrade guidance. Contributors should update its unreleased section alongside
+notable changes; the file includes the entry template and release conventions.
+
 ## Motivation
 
 GHAT(D) is a hobby project I work on in my spare time. It is designed to provide a friendly starting point for people like me who are interested in Go, APIs, and web applications, and who want a consistent foundation and shared standards to build from. I hope GHAT(D) can serve as an ejectable base for many awesome projects and initiatives.
