@@ -19,13 +19,15 @@ const PostCollection string = "posts"
 
 const defaultCollectionInitMaxAttemptsLimit = 3
 
-// MongoDbStore represents the datastore to hold resource data
+// MongoDbStore delegates commands to GHATD's shared Mongo helpers. Mutations
+// require real command receipts so missing matches are not reported as success.
+// Custom stores must preserve driver error identity and transaction contexts.
 type MongoDbStore interface {
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
-	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	ExecuteDeleteOneCommandResult(ctx context.Context, collection *mongo.Collection, filter any, opts ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
-	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	ExecuteUpdateOneCommandResult(ctx context.Context, collection *mongo.Collection, filter, update any, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
@@ -67,8 +69,20 @@ func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
 
 // GetPostCollection returns collection used for posts domain
 func (r *Repository) GetPostCollection(ctx context.Context) (*mongo.Collection, error) {
+	if ctx == nil {
+		return nil, ErrPostBadRequest
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r == nil || nilPostDependency(r.Store) {
+		return nil, ErrPostUnavailable
+	}
 	r.collectionMutex.Lock()
 	defer r.collectionMutex.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	if r.collection != nil {
 		return r.collection, nil
@@ -80,6 +94,9 @@ func (r *Repository) GetPostCollection(ctx context.Context) (*mongo.Collection, 
 		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
 	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		_, err := r.Store.InitialiseClient(ctx)
 		if err != nil {
 			lastErr = err
@@ -92,6 +109,12 @@ func (r *Repository) GetPostCollection(ctx context.Context) (*mongo.Collection, 
 			continue
 		}
 
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if db == nil {
+			return nil, ErrPostUnavailable
+		}
 		r.collection = db.Collection(PostCollection)
 		return r.collection, nil
 	}
@@ -99,8 +122,12 @@ func (r *Repository) GetPostCollection(ctx context.Context) (*mongo.Collection, 
 	return nil, fmt.Errorf("unable to initialise %s collection after %d attempts: %w", PostCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
-// CreateRawPosts handles creating a tax band from raw definition in repositry
+// CreateRawPosts inserts a caller-supplied identity without mutating its snapshot.
 func (r *Repository) CreateRawPosts(ctx context.Context, newPost *Post) (*Post, error) {
+	if newPost == nil {
+		return nil, ErrPostBadRequest
+	}
+	newPost = copyPost(newPost)
 
 	collection, err := r.GetPostCollection(ctx)
 	if err != nil {
@@ -126,84 +153,64 @@ func (r *Repository) CreateRawPosts(ctx context.Context, newPost *Post) (*Post, 
 		return nil, ErrUrlFriendlyIdIsRequired
 	}
 
-	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, newPost, "post")
+	result, err := r.Store.ExecuteInsertOneCommand(ctx, collection, newPost, "post")
 	if err != nil {
 		return nil, err
+	}
+	if result == nil || !result.Acknowledged || result.InsertedID != newPost.Id {
+		return nil, ErrPostUnavailable
 	}
 
 	return newPost, nil
 }
 
-// GetPostById handles fetching a post in repositry that match the provided Id
+// GetPostById selects a stored identity; only authoritative absence becomes
+// ErrResourceNotFound. Operational and decode errors retain their original cause.
 func (r *Repository) GetPostById(ctx context.Context, postId string) (*Post, error) {
-
-	var (
-		post        Post
-		queryFilter = bson.M{"_id": postId}
-	)
-
-	collection, err := r.GetPostCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &post, "post", true, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return &post, nil
+	return r.getPost(ctx, "_id", postId, ErrIdIsRequired)
 }
 
 // GetPostByNanoId handles fetching a post in repositry that match the provided nano Id
 func (r *Repository) GetPostByNanoId(ctx context.Context, postNanoId string) (*Post, error) {
-
-	var (
-		foundPost         Post
-		queryFilter       = bson.M{"_nano_id": postNanoId}
-		noDocumentMessage = "mongo: no documents in post"
-	)
-
-	collection, err := r.GetPostCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &foundPost, "post", true, nil)
-	if err != nil && err.Error() != noDocumentMessage {
-		return nil, err
-	}
-
-	if err != nil && err.Error() == noDocumentMessage {
-		return nil, ErrResourceNotFound
-	}
-
-	return &foundPost, nil
+	return r.getPost(ctx, "_nano_id", postNanoId, ErrNanoIdIsRequired)
 }
 
 // GetPostByUrlFriendlyId handles fetching a post in repositry that match the provided url friendly id
 func (r *Repository) GetPostByUrlFriendlyId(ctx context.Context, postUrlFriendlyId string) (*Post, error) {
+	return r.getPost(ctx, "_url_friendly_id", postUrlFriendlyId, ErrUrlFriendlyIdIsRequired)
+}
 
-	var (
-		foundPost         Post
-		queryFilter       = bson.M{"_url_friendly_id": postUrlFriendlyId}
-		noDocumentMessage = "mongo: no documents in result"
-	)
-
+// getPost centralizes selector validation and the absence contract for all
+// single-item reads. Passing nil onFailureErr keeps store diagnostics native.
+func (r *Repository) getPost(ctx context.Context, key, value string, missingValue error) (*Post, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, missingValue
+	}
 	collection, err := r.GetPostCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, queryFilter, &foundPost, "post", true, nil)
-	if err != nil && err.Error() != noDocumentMessage {
+	var foundPost Post
+	err = r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{key: value}, &foundPost, "post", true, nil)
+	if err != nil {
+		if postAbsent(err) {
+			return nil, ErrResourceNotFound
+		}
 		return nil, err
 	}
-
-	if err != nil && err.Error() == noDocumentMessage {
-		return nil, ErrResourceNotFound
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-
+	actual := foundPost.Id
+	if key == "_nano_id" {
+		actual = foundPost.NanoId
+	}
+	if key == "_url_friendly_id" {
+		actual = foundPost.UrlFriendlyId
+	}
+	if foundPost.Id == "" || actual != value {
+		return nil, ErrPostUnavailable
+	}
 	return &foundPost, nil
 }
 
@@ -285,8 +292,13 @@ func (r *Repository) GetPostsByUrlFriendlyIds(ctx context.Context, postUrlFriend
 	return post, nil
 }
 
-// CreatePost handles creating a tax band in repositry
+// CreatePost assigns missing identities to a copy and inserts it once. Insert
+// errors may have uncertain outcomes; this repository never retries the write.
 func (r *Repository) CreatePost(ctx context.Context, newPost *Post) (*Post, error) {
+	if newPost == nil {
+		return nil, ErrPostBadRequest
+	}
+	newPost = copyPost(newPost)
 
 	collection, err := r.GetPostCollection(ctx)
 	if err != nil {
@@ -310,16 +322,27 @@ func (r *Repository) CreatePost(ctx context.Context, newPost *Post) (*Post, erro
 		return nil, ErrUrlFriendlyIdIsRequired
 	}
 
-	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, newPost, "post")
+	result, err := r.Store.ExecuteInsertOneCommand(ctx, collection, newPost, "post")
 	if err != nil {
 		return nil, err
+	}
+	if result == nil || !result.Acknowledged || result.InsertedID != newPost.Id {
+		return nil, ErrPostUnavailable
 	}
 
 	return newPost, nil
 }
 
-// UpdatePost handles updating a post in repositry
+// UpdatePost writes a private snapshot and requires one matched document. A
+// matched no-op succeeds; missing matches and malformed receipts are distinct.
 func (r *Repository) UpdatePost(ctx context.Context, post *Post) (*Post, error) {
+	if post == nil {
+		return nil, ErrPostBadRequest
+	}
+	if strings.TrimSpace(post.Id) == "" {
+		return nil, ErrIdIsRequired
+	}
+	post = copyPost(post)
 
 	collection, err := r.GetPostCollection(ctx)
 	if err != nil {
@@ -328,32 +351,52 @@ func (r *Repository) UpdatePost(ctx context.Context, post *Post) (*Post, error) 
 
 	post.SetUpdatedAtTimeToNow()
 
-	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": post.Id}, bson.M{"$set": post}, "post")
-	if err != nil {
+	result, err := r.Store.ExecuteUpdateOneCommandResult(ctx, collection, bson.M{"_id": post.Id}, bson.M{"$set": post})
+	if err := postUpdateOutcome(result, err); err != nil {
 		return nil, err
 	}
 
 	return post, nil
 }
 
-// DeletePost handles deleting a tax band in repositry
+// DeletePost distinguishes a missing match from successful hard deletion. It
+// preserves native errors and does not retry uncertain write outcomes.
 func (r *Repository) DeletePost(ctx context.Context, postId string) error {
+	if strings.TrimSpace(postId) == "" {
+		return ErrIdIsRequired
+	}
 
 	collection, err := r.GetPostCollection(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = r.Store.ExecuteDeleteOneCommand(ctx, collection, bson.M{"_id": postId}, "post")
+	result, err := r.Store.ExecuteDeleteOneCommandResult(ctx, collection, bson.M{"_id": postId})
 	if err != nil {
 		return err
+	}
+	if result == nil || !result.Acknowledged || result.DeletedCount < 0 || result.DeletedCount > 1 {
+		return ErrPostUnavailable
+	}
+	if result.DeletedCount == 0 {
+		return ErrResourceNotFound
 	}
 
 	return nil
 }
 
-// SoftDeletePost handles soft-deleting a tax band in repositry
+// SoftDeletePost records deletion on a copy and requires a matched document.
 func (r *Repository) SoftDeletePost(ctx context.Context, post *Post, userId string) error {
+	if post == nil {
+		return ErrPostBadRequest
+	}
+	if strings.TrimSpace(post.Id) == "" {
+		return ErrIdIsRequired
+	}
+	if strings.TrimSpace(userId) == "" {
+		return ErrUserIdMustBeProvided
+	}
+	post = copyPost(post)
 
 	collection, err := r.GetPostCollection(ctx)
 	if err != nil {
@@ -363,11 +406,22 @@ func (r *Repository) SoftDeletePost(ctx context.Context, post *Post, userId stri
 	post.SetDeletedAtTimeToNow()
 	post.DeletedByUserId = userId
 
-	err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": post.Id}, bson.M{"$set": post}, "post")
+	result, err := r.Store.ExecuteUpdateOneCommandResult(ctx, collection, bson.M{"_id": post.Id}, bson.M{"$set": post})
+	return postUpdateOutcome(result, err)
+}
+
+// postUpdateOutcome accepts a matched no-op but never a missing match, upsert or
+// malformed receipt. Cancellation after a successful write does not erase it.
+func postUpdateOutcome(result *mongo.UpdateResult, err error) error {
 	if err != nil {
 		return err
 	}
-
+	if result == nil || !result.Acknowledged || result.UpsertedID != nil || result.UpsertedCount != 0 || result.MatchedCount < 0 || result.MatchedCount > 1 || result.ModifiedCount < 0 || result.ModifiedCount > result.MatchedCount {
+		return ErrPostUnavailable
+	}
+	if result.MatchedCount == 0 {
+		return ErrResourceNotFound
+	}
 	return nil
 }
 

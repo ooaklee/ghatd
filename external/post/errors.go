@@ -3,6 +3,9 @@ package post
 import "errors"
 
 var (
+	// ErrPostUnavailable identifies invalid wiring or an inconsistent adapter result.
+	// Operational repository errors are returned unchanged instead of using this sentinel.
+	ErrPostUnavailable                               = errors.New("post/unavailable")
 	ErrChangelogPostMustHaveValidTagsSet             = errors.New(ErrKeyChangelogPostMustHaveValidTagsSet)
 	ErrHeaderImageMissing                            = errors.New(ErrKeyHeaderImageMissing)
 	ErrIdIsRequired                                  = errors.New(ErrKeyIdIsRequired)

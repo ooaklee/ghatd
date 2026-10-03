@@ -21,6 +21,21 @@ func TestModel_GenerateUrlFriendlyId(t *testing.T) {
 			providedType:        "article",
 			expectedUrlFriendly: "article-wrapping-up-q2-2025",
 		},
+		{
+			name:     "trim surrounding spaces and lowercase",
+			rawTitle: "  Getting Started  ", providedType: "faq",
+			expectedUrlFriendly: "faq-getting-started",
+		},
+		{
+			name:     "type contributes a distinct prefix",
+			rawTitle: "Getting Started", providedType: "glossary",
+			expectedUrlFriendly: "glossary-getting-started",
+		},
+		{
+			name:     "remove punctuation and preserve digits",
+			rawTitle: "Hello, World! 42", providedType: "other",
+			expectedUrlFriendly: "other-hello-world-42",
+		},
 	}
 
 	for _, test := range tests {

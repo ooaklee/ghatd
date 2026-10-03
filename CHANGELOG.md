@@ -173,6 +173,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** [Post Mongo adapters](external/post/README.md#failure-and-snapshot-contracts)
+  require result-bearing update/delete helpers so missing targets cannot produce
+  false success. Custom stores must supply acknowledgement flags and real counts;
+  unacknowledged writes report unavailability. Shared Mongo repositories already
+  implement these methods.
+  Post reads and writes no longer mutate caller-owned requests or snapshots;
+  read pagination metadata from the response.
 - **Breaking:** [Content Manager and Post callers](external/contentmanager/README.md#actorid-migration)
   now use `ActorID` instead of the eight reader and four mutation `UserId`
   fields. Stored authors and post targets are unchanged. Explicit actors must
@@ -276,6 +283,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Post lookups consistently distinguish confirmed absence from operational errors.
+  Failed slug checks prevent writes; native failures retain shared response mappings.
+  Title and type changes regenerate slugs for field edits and trusted replacements.
+  Invalid dependencies/results return mapped unavailability. Service logs exclude
+  content and raw storage diagnostics; header-image count filters match list filters.
+  Empty post-type selections now receive their mapped validation response.
 - Content Manager validates administrator identity and malformed dependencies
   before dispatch, preserves native mutation error mappings, and reports invalid
   adapter results as unavailable. Public projections copy filters and latest

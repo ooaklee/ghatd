@@ -78,7 +78,45 @@ for _, item := range resp.Posts {
 - `article` posts require `header_image`.
 - non-article posts have `header_image` cleared.
 - changelog posts must use valid tags (`post.DefaultValidPostTags`).
-- URL-friendly ID generation is automatic and must remain unique.
+- URL-friendly ID generation is automatic. Availability checks are advisory;
+  deployments requiring atomic uniqueness must provide a unique database index.
+
+## Failure and snapshot contracts
+
+Single-item repository reads consistently map actual `mongo.ErrNoDocuments`
+to `ErrResourceNotFound`. A bounded single-cause wrapper is accepted; an error
+message, custom `Is` alias or joined error is not evidence of absence. Other
+storage errors retain their original identity and flow through Content Manager's
+shared reply maps and any host overrides. Unknown failures therefore remain
+generic server errors instead of misleading 404 responses.
+
+Create and slug-changing updates proceed only after confirmed absence, or an
+update lookup identifying the same post. A failed availability read never
+authorizes a write. This check is not a transaction or uniqueness constraint;
+this change does not create indexes or repair existing duplicate slugs.
+Title **or type** changes regenerate the slug, including trusted replacements.
+
+Services validate missing requests, contexts, dependencies and inconsistent
+adapter results before dependent work. Invalid wiring/results map to `CNT0-22`
+(503). Caller-owned filters, full replacements and repository read snapshots
+are copied before mutation, including tags and visibility slices. Read pagination
+metadata from the response, not side effects on the original request. Logs retain
+fixed operation events and context metadata, excluding content and raw errors.
+
+**Custom Mongo store migration:** `MongoDbStore` now requires
+`ExecuteUpdateOneCommandResult` and `ExecuteDeleteOneCommandResult` in place of
+the error-only variants. `repository.MongoDbRepository` already provides these
+methods with shared metadata-only logging. Update custom adapters and fakes to
+return real matched/deleted counts: zero matches become `ErrResourceNotFound`,
+while an acknowledged matched no-op is successful. Unacknowledged writes and
+missing/malformed receipts are unavailable, never proof of absence or success.
+Custom adapters must report the acknowledgement flag as well as real counts.
+
+Writes are not automatically retried. A native write error or invalid receipt may
+have an uncertain outcome; reconcile stored state before retrying. Cancellation
+before the next operation prevents dispatch; cancellation after a valid successful
+write receipt does not erase that success. These changes do not add optimistic
+concurrency, transactionally guard deletion state, or alter publication scheduling.
 
 ## Mongo Collection
 
