@@ -173,6 +173,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** [Content Manager and Post callers](external/contentmanager/README.md#actorid-migration)
+  now use `ActorID` instead of the eight reader and four mutation `UserId`
+  fields. Stored authors and post targets are unchanged. Explicit actors must
+  agree with supplied authentication context; trusted internal callers must
+  establish authority themselves. HTTP updates now accept editable fields only,
+  not embedded full-post replacements. Internal replacements must agree with
+  an explicit target ID.
 - **Breaking:** [Billing Manager caller fields](external/billingmanager/README.md#actorid-migration)
   now use `ActorID`; billing-read `UserID` remains the selected account. Update
   checkout, portal, pricing and former `RequestingUserID` callers. Private
@@ -269,6 +276,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Content Manager validates administrator identity and malformed dependencies
+  before dispatch, preserves native mutation error mappings, and reports invalid
+  adapter results as unavailable. Public projections copy filters and latest
+  overview slices; single-item reads exclude soft-deleted content.
 - Billing subscription email association checks the selected account identity
   and preserves dependency failures instead of returning a false no-subscription
   result. Pricing visibility restrictions no longer mutate caller-owned filters.

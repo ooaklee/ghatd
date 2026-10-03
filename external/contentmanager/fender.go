@@ -15,6 +15,12 @@ import (
 
 // mapRequestToCreatePostRequest maps the http request to the create post request
 func mapRequestToCreatePostRequest(r *http.Request, validator contentManagerValidator) (*CreatePostRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context()) == "" {
+		return nil, ErrUnauthorisedCMUser
+	}
 
 	var (
 		err    error
@@ -31,7 +37,7 @@ func mapRequestToCreatePostRequest(r *http.Request, validator contentManagerVali
 	if err != nil {
 		return nil, post.ErrInvalidPostPayload
 	}
-	baseRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	baseRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	parsedRequest.CreatePostRequest = &baseRequest
 
@@ -46,6 +52,12 @@ func mapRequestToCreatePostRequest(r *http.Request, validator contentManagerVali
 
 // mapRequestToUpdatePostByIdRequest maps the http request to the update post by id request
 func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManagerValidator) (*UpdatePostByIdRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context()) == "" {
+		return nil, ErrUnauthorisedCMUser
+	}
 
 	var (
 		err    error
@@ -62,7 +74,12 @@ func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManager
 	if err != nil {
 		return nil, post.ErrInvalidPostPayload
 	}
-	baseRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	baseRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	// Full replacements are an internal domain capability, not an HTTP payload:
+	// only the declared editable fields may cross this transport boundary.
+	if baseRequest.Post != nil {
+		return nil, post.ErrInvalidPostPayload
+	}
 
 	// Extract postId from URI
 	baseRequest.PostId, err = tctcToolbox.GetVariableValueFromUri(r, "postId")
@@ -84,6 +101,12 @@ func mapRequestToUpdatePostByIdRequest(r *http.Request, validator contentManager
 
 // mapRequestToRestorePostByIdRequest maps the http request to the restore post by id request
 func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManagerValidator) (*RestorePostByIdRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context()) == "" {
+		return nil, ErrUnauthorisedCMUser
+	}
 
 	var (
 		err    error
@@ -95,7 +118,7 @@ func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManage
 	)
 
 	baseRequest := post.RestorePostByIdRequest{}
-	baseRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	baseRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// Extract postId from URI
 	baseRequest.Id, err = tctcToolbox.GetVariableValueFromUri(r, "postId")
@@ -117,6 +140,12 @@ func mapRequestToRestorePostByIdRequest(r *http.Request, validator contentManage
 
 // mapRequestToDeletePostByIdRequest maps the http request to the delete post by id request
 func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManagerValidator) (*DeletePostByIdRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context()) == "" {
+		return nil, ErrUnauthorisedCMUser
+	}
 
 	var (
 		err    error
@@ -128,7 +157,7 @@ func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManager
 	)
 
 	baseRequest := post.DeletePostByIdRequest{}
-	baseRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	baseRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// Decode query parameters
 	query := r.URL.Query()
@@ -158,6 +187,9 @@ func mapRequestToDeletePostByIdRequest(r *http.Request, validator contentManager
 
 // mapRequestToGetGlossaryItemsRequest maps the http request to the get glossary items request
 func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManagerValidator) (*GetGlossaryItemsRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -170,7 +202,7 @@ func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManag
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -194,6 +226,9 @@ func mapRequestToGetGlossaryItemsRequest(r *http.Request, validator contentManag
 
 // mapRequestToGetFaqItemsRequest maps the http request to the get faq items request
 func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerValidator) (*GetFaqItemsRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -206,7 +241,7 @@ func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerVal
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -230,6 +265,9 @@ func mapRequestToGetFaqItemsRequest(r *http.Request, validator contentManagerVal
 
 // mapRequestToGetArticlesRequest maps the http request to the get articles request
 func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerValidator) (*GetArticlesRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -242,7 +280,7 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -266,6 +304,9 @@ func mapRequestToGetArticlesRequest(r *http.Request, validator contentManagerVal
 
 // mapRequestToGetArticleSitemapItemsRequest maps the http request to the article sitemap items request.
 func mapRequestToGetArticleSitemapItemsRequest(r *http.Request, validator contentManagerValidator) (*GetArticleSitemapItemsRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 	var (
 		err           error
 		logger        = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")
@@ -286,7 +327,7 @@ func mapRequestToGetArticleSitemapItemsRequest(r *http.Request, validator conten
 		return nil, post.ErrInvalidPostQueryParam
 	}
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	err = validateParsedRequest(parsedRequest, validator)
 	if err != nil {
@@ -299,6 +340,9 @@ func mapRequestToGetArticleSitemapItemsRequest(r *http.Request, validator conten
 
 // mapRequestToGetChangelogItemsRequest maps the http request to the get changelog items request
 func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentManagerValidator) (*GetChangelogItemsRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -311,7 +355,7 @@ func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentMana
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetPostsRequest{}
 
@@ -335,6 +379,9 @@ func mapRequestToGetChangelogItemsRequest(r *http.Request, validator contentMana
 
 // mapRequestToGetChangelogItemByUrlFriendlyIdRequest maps the http request to the get changelog item by url friendly id request
 func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validator contentManagerValidator) (*GetChangelogItemByUrlFriendlyIdRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -343,7 +390,7 @@ func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validat
 		parsedRequest = GetChangelogItemByUrlFriendlyIdRequest{}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// Add urlFriendlyId from uri
 	parsedRequest.UrlFriendlyId, err = tctcToolbox.GetVariableValueFromUri(r, "urlFriendlyId")
@@ -363,6 +410,9 @@ func mapRequestToGetChangelogItemByUrlFriendlyIdRequest(r *http.Request, validat
 
 // mapRequestToGetArticleItemByUrlFriendlyIdRequest maps the http request to the get article item by url friendly id request
 func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator contentManagerValidator) (*GetArticleItemByUrlFriendlyIdRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -371,7 +421,7 @@ func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator
 		parsedRequest = GetArticleItemByUrlFriendlyIdRequest{}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// Add urlFriendlyId from uri
 	parsedRequest.UrlFriendlyId, err = tctcToolbox.GetVariableValueFromUri(r, "urlFriendlyId")
@@ -391,6 +441,9 @@ func mapRequestToGetArticleItemByUrlFriendlyIdRequest(r *http.Request, validator
 
 // mapRequestToGetLatestPostsByTypeRequest maps the http request to the get latest posts by type request
 func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentManagerValidator) (*GetLatestPostsByTypeRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		err    error
@@ -401,7 +454,7 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 		}
 	)
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	baseRequest := post.GetLatestPostsByTypeRequest{}
 
@@ -425,6 +478,9 @@ func mapRequestToGetLatestPostsByTypeRequest(r *http.Request, validator contentM
 
 // mapRequestToGetLatestNotificationOverviewsRequest maps the http request to the get latest notification overviews request
 func mapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validator contentManagerValidator) (*GetLatestNotificationOverviewsRequest, error) {
+	if r == nil || r.URL == nil {
+		return nil, post.ErrPostBadRequest
+	}
 	var (
 		err    error
 		logger *zap.Logger = logger.AcquirePackageFrom(r.Context(), "external/contentmanager")

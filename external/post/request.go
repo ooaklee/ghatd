@@ -5,8 +5,8 @@ type RestorePostByIdRequest struct {
 	// Id is the ID of the post to restore
 	Id string `validate:"required,uuid"`
 
-	// UserId is the ID of the user performing the restoration
-	UserId string `validate:"required,uuid"`
+	// ActorID is the authorized caller used for restoration attribution, not a post owner.
+	ActorID string `json:"-" validate:"required,uuid"`
 }
 
 // DeletePostByIdRequest represents the request payload for deleting a post by its ID
@@ -15,8 +15,8 @@ type DeletePostByIdRequest struct {
 	// Id is the ID of the post to delete
 	Id string `validate:"required,uuid"`
 
-	// UserId is the ID of the user performing the deletion
-	UserId string `validate:"required,uuid"`
+	// ActorID is the authorized caller used for deletion attribution, not a post owner.
+	ActorID string `json:"-" validate:"required,uuid"`
 
 	// HardDelete indicates whether to perform a hard delete
 	// if true, or a soft delete if false
@@ -224,9 +224,9 @@ func (g *GetPostsRequest) GetMetaData() map[string]interface{} {
 //		  }
 type CreatePostRequest struct {
 
-	// UserId is the ID of the user making requests to
-	// create the post on the platform
-	UserId string
+	// ActorID is the authorized creator. The manager or trusted in-process caller
+	// establishes authority; this domain records attribution without authenticating.
+	ActorID string `json:"-"`
 
 	// HeaderImage is the URL or the SVG of the header
 	// image for the post
@@ -308,16 +308,16 @@ type GetLatestPostsByTypeRequest struct {
 //	}
 type UpdatePostRequest struct {
 
-	// UserId is the ID of the user making the request to
-	// update the post on the platform
-	UserId string
+	// ActorID is the authorized editor, distinct from stored authors and the post ID.
+	ActorID string `json:"-"`
 
 	// PostId is the ID of the post to update. This is required
 	// if Post is not provided
 	PostId string
 
-	// Post is the complete post object to update. If provided,
-	// this will be used instead of individual fields
+	// Post is an optional complete replacement for trusted in-process composition.
+	// It must match PostId when both are supplied. HTTP mappers reject replacements
+	// so client payloads cannot replace server-owned attribution and identity fields.
 	Post *Post `json:"post,omitempty"`
 
 	// Title is the updated title of the post

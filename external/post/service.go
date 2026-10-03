@@ -63,7 +63,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	logger.Debug("initiating-create-post-request", zap.Any("request", safeLogValue(req)))
 
-	if req.UserId == "" {
+	if req.ActorID == "" {
 		logger.Warn("a-user-id-must-be-given-to-create-a-post")
 		return nil, ErrUserIdMustBeProvided
 	}
@@ -113,7 +113,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 		Text:            standardisedText,
 		PublishedAt:     publishedAt,
 		PublishedAs:     standardisedPublishedAs,
-		CreatedByUserId: req.UserId,
+		CreatedByUserId: req.ActorID,
 		Tags:            standardiseTags,
 		HeaderImage:     req.HeaderImage,
 	}
@@ -123,7 +123,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	}
 
 	if publishedAt != "" || req.PublishNow {
-		newPost.PublishedByUserId = req.UserId
+		newPost.PublishedByUserId = req.ActorID
 	}
 
 	newPost = newPost.SetPostType(string(req.Type)).SetPostTextFormat(req.TextFormat)
@@ -403,6 +403,13 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 
 // UpdatePost updates an existing post
 func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*UpdatePostResponse, error) {
+	if req == nil || ctx == nil {
+		return nil, ErrPostBadRequest
+	}
+	// A full internal replacement must not change an explicitly selected target.
+	if req.Post != nil && req.PostId != "" && req.Post.Id != req.PostId {
+		return nil, ErrPostBadRequest
+	}
 
 	var (
 		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/post")
@@ -415,7 +422,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 
 	logger.Debug("initiating-update-post-request", zap.Any("request", safeLogValue(req)))
 
-	if req.UserId == "" {
+	if req.ActorID == "" {
 		logger.Warn("a-user-id-must-be-given-to-update-a-post")
 		return nil, ErrUserIdMustBeProvided
 	}
@@ -506,7 +513,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 
 		if req.PublishNow != nil && *req.PublishNow {
 			postToUpdate.PublishedAt = toolbox.TimeNowUTC()
-			postToUpdate.PublishedByUserId = req.UserId
+			postToUpdate.PublishedByUserId = req.ActorID
 		}
 
 		// Check if title changed (which affects URL friendly ID)
@@ -588,7 +595,7 @@ func (s *Service) UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Upda
 	}
 
 	// Set update metadata
-	postToUpdate.UpdatedByUserId = req.UserId
+	postToUpdate.UpdatedByUserId = req.ActorID
 	postToUpdate.SetUpdatedAtTimeToNow()
 
 	updatedPost, err := s.contenterRepository.UpdatePost(ctx, postToUpdate)
@@ -781,7 +788,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 		return nil, ErrIdIsRequired
 	}
 
-	if req.UserId == "" {
+	if req.ActorID == "" {
 		logger.Warn("a-user-id-must-be-given-to-delete-a-post")
 		return nil, ErrUserIdMustBeProvided
 	}
@@ -808,7 +815,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 			return nil, ErrPostAlreadySoftDeleted
 		}
 
-		err = s.contenterRepository.SoftDeletePost(ctx, postToDelete, req.UserId)
+		err = s.contenterRepository.SoftDeletePost(ctx, postToDelete, req.ActorID)
 		if err != nil {
 			logger.Error("failed-to-soft-delete-post-error-soft-deleting-post", zap.Any("request", safeLogValue(req)), zap.Error(err))
 			return nil, err
@@ -834,7 +841,7 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 		return nil, ErrIdIsRequired
 	}
 
-	if req.UserId == "" {
+	if req.ActorID == "" {
 		logger.Warn("a-user-id-must-be-given-to-restore-a-post")
 		return nil, ErrUserIdMustBeProvided
 	}
@@ -855,7 +862,7 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 	postToRestore.DeletedAt = ""
 	postToRestore.DeletedByUserId = ""
 
-	postToRestore.UpdatedByUserId = req.UserId
+	postToRestore.UpdatedByUserId = req.ActorID
 	postToRestore.SetUpdatedAtTimeToNow()
 
 	// Remove any publish metadata so that it has to be explicitly republished

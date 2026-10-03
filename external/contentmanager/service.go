@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/post"
@@ -51,7 +50,7 @@ type postService interface {
 	GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error)
 }
 
-// Service represents the vehicle tax manager service
+// Service composes post operations with caller authorization and public projections.
 type Service struct {
 
 	// postService represents the post service
@@ -61,7 +60,8 @@ type Service struct {
 	userService userService
 }
 
-// NewService returns a new instance of the vehicle tax manager service
+// NewService binds domain ports. Operations reject missing required dependencies;
+// optional author enrichment may fall back to the default display name.
 func NewService(postService postService, userService userService) *Service {
 	return &Service{
 		postService: postService,
@@ -69,29 +69,28 @@ func NewService(postService postService, userService userService) *Service {
 	}
 }
 
-// CreatePost handles logic associate with creating a new post
+// CreatePost authorizes the explicit administrator before forwarding content to
+// the post domain. ActorID supplies attribution, never client-selected ownership.
 func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*CreatePostResponse, error) {
-
-	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
-	logger.Info("handling-create-post-request", zap.Any("request", safeLogValue(req)))
-
-	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-		ID: req.UserId,
-	})
-	if err != nil {
-		logger.Error("failed-to-get-user-associated-with-post-creation-request", zap.String("user-id", req.UserId), zap.Error(err))
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.CreatePostRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if err := s.requireAdministrator(ctx, req.ActorID); err != nil {
 		return nil, err
 	}
 
-	if !requestingUser.User.IsAdmin() {
-		logger.Warn("non-admin-user-attempting-to-create-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
-		return nil, ErrUnauthorisedCMUser
-	}
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-create-post-request", zap.String("actor-id", req.ActorID))
 
 	newPost, err := s.postService.CreatePost(ctx, req.CreatePostRequest)
 	if err != nil {
-		logger.Error("failed-to-create-post", zap.Error(err))
 		return nil, err
+	}
+	if newPost == nil || newPost.Post == nil || newPost.Post.Id == "" {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	return &CreatePostResponse{
@@ -99,29 +98,39 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 	}, nil
 }
 
-// UpdatePostById handles logic associated with updating an existing post by its ID
+// UpdatePostById authorizes the editor independently of the selected post.
+// Trusted replacements must agree with an explicit target; native failures pass
+// through to the response maps without exposing diagnostics in manager logs.
 func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest) (*UpdatePostByIdResponse, error) {
-
-	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
-	logger.Info("handling-update-post-by-id-request", zap.Any("request", safeLogValue(req)))
-
-	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-		ID: req.UserId,
-	})
-	if err != nil {
-		logger.Error("failed-to-get-user-associated-with-post-update-request", zap.String("user-id", req.UserId), zap.Error(err))
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.UpdatePostRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if req.Post != nil && req.PostId != "" && req.Post.Id != req.PostId {
+		return nil, post.ErrPostBadRequest
+	}
+	target := req.PostId
+	if req.Post != nil {
+		target = req.Post.Id
+	}
+	if strings.TrimSpace(target) == "" {
+		return nil, post.ErrIdIsRequired
+	}
+	if err := s.requireAdministrator(ctx, req.ActorID); err != nil {
 		return nil, err
 	}
 
-	if !requestingUser.User.IsAdmin() {
-		logger.Warn("non-admin-user-attempting-to-update-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
-		return nil, ErrUnauthorisedCMUser
-	}
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-update-post-by-id-request", zap.String("actor-id", req.ActorID))
 
 	updatedPost, err := s.postService.UpdatePost(ctx, req.UpdatePostRequest)
 	if err != nil {
-		logger.Error("failed-to-update-post", zap.Error(err))
 		return nil, err
+	}
+	if updatedPost == nil || updatedPost.Post == nil || updatedPost.Post.Id != target {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	return &UpdatePostByIdResponse{
@@ -129,29 +138,28 @@ func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest
 	}, nil
 }
 
-// DeletePostById handles logic associated with deleting an existing post by its ID
+// DeletePostById checks current administrator authority before the lower domain
+// applies its soft/hard deletion rules to the selected post.
 func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest) (*DeletePostByIdResponse, error) {
-
-	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
-	logger.Info("handling-delete-post-by-id-request", zap.Any("request", safeLogValue(req)))
-
-	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-		ID: req.UserId,
-	})
-	if err != nil {
-		logger.Error("failed-to-get-user-associated-with-post-delete-request", zap.String("user-id", req.UserId), zap.Error(err))
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.DeletePostByIdRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if err := s.requireAdministrator(ctx, req.ActorID); err != nil {
 		return nil, err
 	}
 
-	if !requestingUser.User.IsAdmin() {
-		logger.Warn("non-admin-user-attempting-to-delete-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
-		return nil, ErrUnauthorisedCMUser
-	}
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-delete-post-by-id-request", zap.String("actor-id", req.ActorID))
 
 	deletedPostResponse, err := s.postService.DeletePostById(ctx, req.DeletePostByIdRequest)
 	if err != nil {
-		logger.Error("failed-to-delete-post", zap.Error(err))
 		return nil, err
+	}
+	if deletedPostResponse == nil {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	return &DeletePostByIdResponse{
@@ -159,29 +167,28 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 	}, nil
 }
 
-// RestorePostById handles logic associated with restoring a soft-deleted post by ID
+// RestorePostById authorizes the caller separately from the selected post and
+// rejects a successful adapter response naming a different resource.
 func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdRequest) (*RestorePostByIdResponse, error) {
-
-	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
-	logger.Info("handling-restore-post-by-id-request", zap.Any("request", safeLogValue(req)))
-
-	requestingUser, err := s.userService.GetUserByID(ctx, &userV2.GetUserByIDRequest{
-		ID: req.UserId,
-	})
-	if err != nil {
-		logger.Error("failed-to-get-user-associated-with-post-restore-request", zap.String("user-id", req.UserId), zap.Error(err))
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.RestorePostByIdRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
+	if err := s.requireAdministrator(ctx, req.ActorID); err != nil {
 		return nil, err
 	}
 
-	if !requestingUser.User.IsAdmin() {
-		logger.Warn("non-admin-user-attempting-to-restore-post", zap.String("user-id", req.UserId), zap.Any("request", safeLogValue(req)))
-		return nil, ErrUnauthorisedCMUser
-	}
+	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
+	logger.Info("handling-restore-post-by-id-request", zap.String("actor-id", req.ActorID))
 
 	restoredPostResponse, err := s.postService.RestorePostById(ctx, req.RestorePostByIdRequest)
 	if err != nil {
-		logger.Error("failed-to-restore-post", zap.Error(err))
 		return nil, err
+	}
+	if restoredPostResponse == nil || restoredPostResponse.Post == nil || restoredPostResponse.Post.Id != req.Id {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	return &RestorePostByIdResponse{
@@ -189,20 +196,36 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 	}, nil
 }
 
-// GetLatestPostsByType handles logic associated with getting the latest posts by type
+// GetLatestPostsByType resolves the explicit optional viewer and filters a local
+// copy of the domain overviews; unavailable authority keeps the public projection.
 func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.GetLatestPostsByTypeRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
 	logger.Info("handling-get-latest-posts-by-type-request")
 
 	// No name cache is needed here; pass nil.
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, nil, logger)
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, nil, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	matchingPostOverviewsResp, err := s.postService.GetLatestPostsByType(ctx, req.GetLatestPostsByTypeRequest)
 	if err != nil {
-		logger.Error("failed-to-get-latest-posts-by-type", zap.Error(err))
 		return nil, err
 	}
+	if matchingPostOverviewsResp == nil {
+		return nil, ErrContentManagerUnavailable
+	}
+	// Filtering owns its slice and response header; adapters may retain theirs.
+	response := *matchingPostOverviewsResp
+	response.Overviews = slices.Clone(response.Overviews)
+	matchingPostOverviewsResp = &response
 
 	// Non-admin users can only see published, non-deleted content
 	// Admin users can see all content
@@ -217,14 +240,24 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	}, nil
 }
 
-// GetLatestNotificationOverviews handles logic associated with getting the latest notification overviews for the user
+// GetLatestNotificationOverviews forwards the common recipient-oriented feed
+// request. Post feeds are global public content; UserID is not actor authority.
 func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.GetLatestNotificationOverviewsRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/contentmanager", "get-latest-notification-overviews")
 	logger.Debug("handling-get-latest-notification-overviews-request")
 
 	overviews, err := s.postService.GetLatestNotificationOverviews(ctx, req.GetLatestNotificationOverviewsRequest)
 	if err != nil {
 		return nil, err
+	}
+	if overviews == nil {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	return &GetLatestNotificationOverviewsResponse{
@@ -235,6 +268,9 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *GetLa
 // GetChangelogItemByUrlFriendlyId handles logic associated with getting a changelog item
 // by its url friendly id
 func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetChangelogItemByUrlFriendlyIdRequest) (*post.Post, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
@@ -248,15 +284,20 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 		return nil, ErrUnauthorisedCMUser
 	}
 
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
-
-	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
-	if err != nil {
-		logger.Error("failed-to-get-changelog-item", zap.Error(err))
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, userIdToUserFirstNameLastInitial, logger)
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	if (requestingUser == nil || !requestingUser.IsAdmin()) && matchingPost.PublishedAt == "" {
+	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
+	if err != nil {
+		return nil, err
+	}
+	if matchingPost == nil || matchingPost.UrlFriendlyId != req.UrlFriendlyId {
+		return nil, ErrContentManagerUnavailable
+	}
+
+	if (requestingUser == nil || !requestingUser.IsAdmin()) && (matchingPost.PublishedAt == "" || matchingPost.DeletedAt != "") {
 		// make sure unauthed/ non-admin users can only see published content
 		return nil, ErrUnauthorisedCMUser
 	}
@@ -277,6 +318,9 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 // GetArticleItemByUrlFriendlyId handles logic associated with getting an article item
 // by its url friendly id
 func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArticleItemByUrlFriendlyIdRequest) (*post.Post, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
@@ -290,15 +334,20 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 		return nil, ErrUnauthorisedCMUser
 	}
 
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
-
-	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
-	if err != nil {
-		logger.Error("failed-to-get-article-item", zap.Error(err))
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, userIdToUserFirstNameLastInitial, logger)
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	if (requestingUser == nil || !requestingUser.IsAdmin()) && matchingPost.PublishedAt == "" {
+	matchingPost, err := s.postService.GetPostByUrlFriendlyId(ctx, req.UrlFriendlyId)
+	if err != nil {
+		return nil, err
+	}
+	if matchingPost == nil || matchingPost.UrlFriendlyId != req.UrlFriendlyId {
+		return nil, ErrContentManagerUnavailable
+	}
+
+	if (requestingUser == nil || !requestingUser.IsAdmin()) && (matchingPost.PublishedAt == "" || matchingPost.DeletedAt != "") {
 		// make sure unauthed/ non-admin users can only see published content
 		return nil, ErrUnauthorisedCMUser
 	}
@@ -318,6 +367,12 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 
 // GetChangelogItems handles logic associated with getting changelog posts
 func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsRequest) (*GetChangelogItemsResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.GetChangelogItemsRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
@@ -326,18 +381,20 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 
 	logger.Info("handling-get-changelog-items-request")
 
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
-
-	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admin users can only see published content
-		req.GetChangelogItemsRequest.GetPostsRequest.IsPublished = true
-		req.GetChangelogItemsRequest.GetPostsRequest.IsNotDeleted = true
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, userIdToUserFirstNameLastInitial, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	matchingPosts, err := s.postService.GetChangelogItems(ctx, req.GetChangelogItemsRequest)
+	query := *req.GetChangelogItemsRequest
+	query.GetPostsRequest = publicPostQuery(query.GetPostsRequest, requestingUser != nil && requestingUser.IsAdmin())
+
+	matchingPosts, err := s.postService.GetChangelogItems(ctx, &query)
 	if err != nil {
-		logger.Error("failed-to-get-changelog-items", zap.Error(err))
 		return nil, err
+	}
+	if matchingPosts == nil || matchingPosts.GetPostsResponse == nil {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
@@ -349,6 +406,12 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 
 // GetGlossaryItems handles logic associated with getting glossary posts
 func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsRequest) (*GetGlossaryItemsResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.GetGlossaryItemsRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
@@ -357,18 +420,20 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 
 	logger.Info("handling-get-glossary-items-request")
 
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
-
-	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admin users can only see published content
-		req.GetGlossaryItemsRequest.GetPostsRequest.IsPublished = true
-		req.GetGlossaryItemsRequest.GetPostsRequest.IsNotDeleted = true
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, userIdToUserFirstNameLastInitial, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	matchingPosts, err := s.postService.GetGlossaryItems(ctx, req.GetGlossaryItemsRequest)
+	query := *req.GetGlossaryItemsRequest
+	query.GetPostsRequest = publicPostQuery(query.GetPostsRequest, requestingUser != nil && requestingUser.IsAdmin())
+
+	matchingPosts, err := s.postService.GetGlossaryItems(ctx, &query)
 	if err != nil {
-		logger.Error("failed-to-get-glossary-items", zap.Error(err))
 		return nil, err
+	}
+	if matchingPosts == nil || matchingPosts.GetPostsResponse == nil {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
@@ -380,6 +445,12 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 
 // GetFaqItems handles logic associated with getting faq post
 func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*GetFaqItemsResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.GetFaqItemsRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
@@ -388,18 +459,20 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 
 	logger.Info("handling-get-faq-items-request")
 
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
-
-	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admin users can only see published content
-		req.GetFaqItemsRequest.GetPostsRequest.IsPublished = true
-		req.GetFaqItemsRequest.GetPostsRequest.IsNotDeleted = true
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, userIdToUserFirstNameLastInitial, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	matchingPosts, err := s.postService.GetFaqItems(ctx, req.GetFaqItemsRequest)
+	query := *req.GetFaqItemsRequest
+	query.GetPostsRequest = publicPostQuery(query.GetPostsRequest, requestingUser != nil && requestingUser.IsAdmin())
+
+	matchingPosts, err := s.postService.GetFaqItems(ctx, &query)
 	if err != nil {
-		logger.Error("failed-to-get-faq-items", zap.Error(err))
 		return nil, err
+	}
+	if matchingPosts == nil || matchingPosts.GetPostsResponse == nil {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
@@ -411,6 +484,12 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 
 // GetArticles handles logic associated with getting article posts
 func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*GetArticlesResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
+	if req.GetArticlesRequest == nil {
+		return nil, post.ErrPostBadRequest
+	}
 
 	var (
 		logger                           = logger.AcquirePackageFrom(ctx, "external/contentmanager")
@@ -419,18 +498,20 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 
 	logger.Info("handling-get-articles-request")
 
-	requestingUser := s.optionalAuthenticatedRequestingUser(ctx, userIdToUserFirstNameLastInitial, logger)
-
-	if requestingUser == nil || !requestingUser.IsAdmin() {
-		// make sure unauthed/ non-admin users can only see published content
-		req.GetArticlesRequest.GetPostsRequest.IsPublished = true
-		req.GetArticlesRequest.GetPostsRequest.IsNotDeleted = true
+	requestingUser := s.optionalRequestingUser(ctx, req.ActorID, userIdToUserFirstNameLastInitial, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	matchingPosts, err := s.postService.GetArticles(ctx, req.GetArticlesRequest)
+	query := *req.GetArticlesRequest
+	query.GetPostsRequest = publicPostQuery(query.GetPostsRequest, requestingUser != nil && requestingUser.IsAdmin())
+
+	matchingPosts, err := s.postService.GetArticles(ctx, &query)
 	if err != nil {
-		logger.Error("failed-to-get-articles", zap.Error(err))
 		return nil, err
+	}
+	if matchingPosts == nil || matchingPosts.GetPostsResponse == nil {
+		return nil, ErrContentManagerUnavailable
 	}
 
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
@@ -440,12 +521,11 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 	}, nil
 }
 
-// optionalAuthenticatedRequestingUser resolves the authenticated viewer for
-// optional-auth read methods. Anonymous requests fail closed before any user
-// lookup, even when middleware attached a non-empty rate-limit placeholder ID.
-func (s *Service) optionalAuthenticatedRequestingUser(ctx context.Context, nameCache map[string]string, logger *zap.Logger) *userV2.UniversalUser {
-	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)
-	if userID == "" {
+// optionalRequestingUser resolves only the explicit viewer. Missing, anonymous,
+// inconsistent or unavailable authority falls back to the public projection;
+// stored publishing-user IDs remain independent cosmetic author attribution.
+func (s *Service) optionalRequestingUser(ctx context.Context, userID string, nameCache map[string]string, logger *zap.Logger) *userV2.UniversalUser {
+	if !contentActorMatchesContext(ctx, userID) || s == nil || nilContentDependency(s.userService) {
 		return nil
 	}
 
@@ -453,10 +533,10 @@ func (s *Service) optionalAuthenticatedRequestingUser(ctx context.Context, nameC
 		ID: userID,
 	})
 	if err != nil {
-		logger.Warn("failed-to-get-user-associated-with-provided-user-id", zap.String("user-id", userID), zap.Error(err))
+		logger.Warn("content-viewer-authority-unavailable", zap.String("actor-id", userID))
 		return nil
 	}
-	if resp == nil || resp.User == nil {
+	if resp == nil || resp.User == nil || resp.User.ID != userID || ctx.Err() != nil {
 		logger.Warn("user-lookup-returned-empty-user", zap.String("user-id", userID))
 		return nil
 	}
@@ -492,7 +572,7 @@ func displayNameForUser(user *userV2.UniversalUser) string {
 // failures remain observable in user/v2 and degrade this cosmetic enrichment
 // to the same safe fallback.
 func (s *Service) cachePostAuthorDisplayNames(ctx context.Context, posts []post.Post, nameCache map[string]string, logger *zap.Logger) {
-	if len(posts) == 0 || s.userService == nil || nameCache == nil {
+	if len(posts) == 0 || s == nil || nilContentDependency(s.userService) || nameCache == nil || ctx == nil || ctx.Err() != nil {
 		return
 	}
 
@@ -521,7 +601,7 @@ func (s *Service) cachePostAuthorDisplayNames(ctx context.Context, posts []post.
 			PerPage:   len(batch),
 		})
 		if err != nil {
-			logger.Debug("post-author-display-name-enrichment-unavailable", zap.Int("author-count", len(batch)), zap.Error(err))
+			logger.Debug("post-author-display-name-enrichment-unavailable", zap.Int("author-count", len(batch)))
 			for _, userID := range batch {
 				nameCache[userID] = DefaultPostAuthor
 			}

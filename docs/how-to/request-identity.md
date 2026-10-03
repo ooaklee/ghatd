@@ -77,6 +77,14 @@ for the exact source changes and error behavior.
 
 ## Transport binding
 
+Content Manager also uses `ActorID` for its eight reader fields and the four
+mutation fields embedded from `post`. Stored author IDs and selected post IDs
+remain separate. Its services reject contradictory context evidence rather than
+silently using a different caller. HTTP mutation payloads cannot supply complete
+post replacements. See the [Content Manager migration](../../external/contentmanager/README.md#actorid-migration)
+and [Post domain contract](../../external/post/README.md#actorid-migration) for
+trusted composition, public projections and compatibility details.
+
 Actor fields use `json:"-"` and have no query or path tag. The current query
 decoder ignores fields without a query tag but interprets `query:"-"` as a
 literal `-` parameter; it is **not** a skip marker. Test the actual codec rather

@@ -10,7 +10,7 @@ The package follows the standard route -> handler -> service pattern used across
 
 1. **Routes (`routes.go`)**: Defines the `/api/v1/cms` endpoints and middleware requirements.
 2. **Handler (`handler.go`)**: Maps HTTP requests to service requests and writes structured responses.
-3. **Fender (`fender.go`)**: Decodes body/query/path values and injects requestor user ID from access middleware context.
+3. **Fender (`fender.go`)**: Decodes body/query/path values and binds `ActorID` from verified middleware context, separately from post IDs and stored authors.
 4. **Service (`service.go`)**: Orchestrates post retrieval/mutation and applies access rules (admin-only write, published-only public read).
 
 ## Quick Start
@@ -102,6 +102,49 @@ curl "http://localhost:8080/api/v1/cms/changelog?per_page=10&page=1&meta=true&wi
 ```
 
 ## Behaviour Rules to Know
+
+### ActorID migration
+
+This is a breaking Go source change: the eight reader request fields formerly
+named `UserId` now use `ActorID`. The create, update, delete and restore wrappers
+inherit the same rename from their embedded `post` requests. There are no legacy
+caller aliases. Stored `CreatedByUserId`, `PublishedByUserId`, `UpdatedByUserId`
+and `DeletedByUserId` fields are unchanged, as are post target IDs and routes.
+
+Actor fields have `json:"-"` and no query or path tag. Private mutation mappers
+require both a verified authentication flag and a nonempty context ID; public
+read mappers use an empty actor for anonymous requests. An optional-auth
+rate-limit placeholder never establishes viewer authority. Custom HTTP adapters
+must publish verified state, not just a context ID. See the
+[request identity guide](../../docs/how-to/request-identity.md#transport-binding).
+
+Services use the explicit request actor. They no longer silently substitute a
+different viewer from context. When identity evidence is present in context it
+must match: conflicting or anonymous evidence denies mutations and reduces
+reads to public-only content. Trusted in-process callers may use an ordinary
+context, but must establish authority before assigning `ActorID`; IDs are not
+credentials. Mutation authority is resolved against the current actor account,
+never a post's author. Empty actors are forbidden; missing or inconsistent
+dependency results map to `CM00-02` (503). Native dependency errors keep their
+shared mappings and host overrides. Unavailable optional viewer authority falls
+back to the public projection without logging private lookup diagnostics.
+
+Public list restrictions operate on a request-local copy, clearing contradictory
+visibility flags. Public single-item reads also exclude soft-deleted posts.
+Latest-post filtering copies the adapter's overview slice. These changes do not
+introduce a new publication scheduling policy. Sitemap jobs still request only
+published, non-deleted content; direct jobs need no viewer, while the HTTP route
+remains administrator-protected.
+
+HTTP updates accept individual editable fields, not an embedded `post` full
+replacement. Previously that replacement could override the URI-selected post
+and server-owned attribution. Use the field-based update payload over HTTP.
+Trusted internal replacements remain available in `post.UpdatePostRequest`,
+but their ID must match `PostId` when both are supplied.
+
+The common notification request's `UserID` remains a recipient field, not an
+actor. This manager's post feed is global public content and does not use that
+field to authorize access to a private notification inbox.
 
 - Non-admin users are blocked from create/update/delete/restore actions.
 - Public readers only receive published items.

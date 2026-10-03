@@ -36,7 +36,7 @@ postService := post.NewService(postRepository, post.DefaultValidPostTags)
 
 ```go
 created, err := postService.CreatePost(ctx, &post.CreatePostRequest{
-    UserId:     "00000000-0000-0000-0000-000000000001",
+    ActorID:    "00000000-0000-0000-0000-000000000001",
     Title:      "Performance and reliability improvements",
     Type:       post.PostTypeChangelog,
     Text:       "Improved caching and route-level efficiency.",
@@ -73,7 +73,7 @@ for _, item := range resp.Posts {
 
 ## Key Business Rules
 
-- `UserId` is required for create/update/delete/restore operations.
+- `ActorID` is required for create/update/delete/restore operations.
 - `Title` and `Text` are required to create a post.
 - `article` posts require `header_image`.
 - non-article posts have `header_image` cleared.
@@ -158,6 +158,24 @@ seed removals. Review and test every down function before using it. See
 for the complete host workflow.
 
 ## Relationship to Content Manager
+
+### ActorID migration
+
+The four mutation request caller fields formerly named `UserId` now use
+`ActorID`, including fields promoted into Content Manager wrappers. This is a
+breaking source change; update struct literals and selectors. Actor fields are
+excluded from JSON and have no query/path tags. Stored author/editor/deletion
+attribution and post identity fields are unchanged; no data migration is needed.
+
+This lower domain records attribution but does not authenticate the actor or
+look up administrator permissions. Content Manager, or a trusted in-process
+caller, must establish those permissions first. Passing an ID is not proof of
+authority.
+
+An internal `UpdatePostRequest.Post` replacement must agree with `PostId` when
+both are supplied. HTTP Content Manager updates now reject full replacements;
+use individual editable fields so the route-selected target and server-owned
+attribution cannot be replaced by a client object.
 
 For most HTTP/API use-cases, call the `contentmanager` package and let it orchestrate post operations plus access control. Use `post` directly for:
 

@@ -17,13 +17,19 @@ const (
 
 // GetArticleSitemapItems returns seedable sitemap entries for published article posts.
 func (s *Service) GetArticleSitemapItems(ctx context.Context, req *GetArticleSitemapItemsRequest) (*GetArticleSitemapItemsResponse, error) {
+	if err := s.validateOperation(ctx, req); err != nil {
+		return nil, err
+	}
 	return getArticleSitemapItems(ctx, s.postService, req)
 }
 
 // getArticleSitemapItems builds sitemap-ready URLs from published article posts.
 func getArticleSitemapItems(ctx context.Context, postService postService, req *GetArticleSitemapItemsRequest) (*GetArticleSitemapItemsResponse, error) {
-	if req == nil || postService == nil {
+	if req == nil || ctx == nil {
 		return nil, post.ErrPostBadRequest
+	}
+	if nilContentDependency(postService) {
+		return nil, ErrContentManagerUnavailable
 	}
 	if req.Limit < 0 {
 		return nil, post.ErrPostBadRequest
@@ -34,6 +40,9 @@ func getArticleSitemapItems(ctx context.Context, postService postService, req *G
 	}
 
 	for page := 1; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		perPage := defaultArticleSitemapPerPage
 		if req.PerPage > 0 && req.PerPage < perPage {
 			perPage = req.PerPage
@@ -61,7 +70,10 @@ func getArticleSitemapItems(ctx context.Context, postService postService, req *G
 		if err != nil {
 			return nil, err
 		}
-		if articlesResponse == nil || articlesResponse.GetPostsResponse == nil || len(articlesResponse.Posts) == 0 {
+		if articlesResponse == nil || articlesResponse.GetPostsResponse == nil {
+			return nil, ErrContentManagerUnavailable
+		}
+		if len(articlesResponse.Posts) == 0 {
 			break
 		}
 

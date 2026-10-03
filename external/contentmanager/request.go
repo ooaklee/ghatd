@@ -32,17 +32,17 @@ type RestorePostByIdRequest struct {
 // GetChangelogItemsRequest represents the request payload for getting
 // posts of type changelog
 type GetChangelogItemsRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	*post.GetChangelogItemsRequest
 }
 
-// GetChangelogItemByUrlFriendlyIdRequest reprethe request payload for getting
+// GetChangelogItemByUrlFriendlyIdRequest represents the request for getting a
 // changelog item by its url friendly id
 type GetChangelogItemByUrlFriendlyIdRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	// UrlFriendlyId is the url friendly id of the changelog item
 	UrlFriendlyId string
@@ -51,8 +51,8 @@ type GetChangelogItemByUrlFriendlyIdRequest struct {
 // GetGlossaryItemsRequest represents the request payload for getting
 // posts of type glossary
 type GetGlossaryItemsRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	*post.GetGlossaryItemsRequest
 }
@@ -60,8 +60,8 @@ type GetGlossaryItemsRequest struct {
 // GetFaqItemsRequest represents the request payload for getting
 // posts of type faq
 type GetFaqItemsRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	*post.GetFaqItemsRequest
 }
@@ -69,8 +69,8 @@ type GetFaqItemsRequest struct {
 // GetArticlesRequest represents the request payload for getting
 // posts of type article
 type GetArticlesRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	*post.GetArticlesRequest
 }
@@ -78,8 +78,8 @@ type GetArticlesRequest struct {
 // GetArticleItemByUrlFriendlyIdRequest represents the request payload for getting
 // article item by its url friendly id
 type GetArticleItemByUrlFriendlyIdRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	// UrlFriendlyId is the url friendly id of the article item
 	UrlFriendlyId string
@@ -88,8 +88,8 @@ type GetArticleItemByUrlFriendlyIdRequest struct {
 // GetArticleSitemapItemsRequest represents the request payload for building
 // sitemap entries from published article posts.
 type GetArticleSitemapItemsRequest struct {
-	// UserId is the user making the request.
-	UserId string
+	// ActorID is the verified HTTP caller; trusted sitemap jobs need no viewer.
+	ActorID string `json:"-"`
 
 	// CreatedAtFrom filters article posts created from the provided timestamp.
 	CreatedAtFrom string `json:"created_at_from,omitempty" query:"created_at_from"`
@@ -107,8 +107,8 @@ type GetArticleSitemapItemsRequest struct {
 // GetLatestPostsByTypeRequest represents the request payload for getting
 // the latest posts by type
 type GetLatestPostsByTypeRequest struct {
-	// UserId is the user making the request
-	UserId string
+	// ActorID is the optional verified viewer; empty selects public content only.
+	ActorID string `json:"-"`
 
 	*post.GetLatestPostsByTypeRequest
 }
@@ -117,6 +117,8 @@ type GetLatestPostsByTypeRequest struct {
 // the latest notification overviews for the user
 type GetLatestNotificationOverviewsRequest struct {
 
-	// GetLatestNotificationOverviewsRequest is embedded to allow for future expansion of the request without breaking changes
+	// GetLatestNotificationOverviewsRequest retains the shared recipient fields.
+	// Post feeds do not use them for authority; this manager exposes public posts,
+	// not a user's private notification inbox. HTTP binds UserID after decoding.
 	*common.GetLatestNotificationOverviewsRequest
 }
