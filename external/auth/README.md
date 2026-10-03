@@ -54,6 +54,22 @@ be treated as a recent login: refresh changes issuance time but should preserve
 the original authentication time through `CreateTokenWithAuthenticationTime`.
 The plain `CreateToken` method does not invent that freshness evidence.
 
+## Deletion-only verification
+
+`SessionRemovalVerifier.ExtractSessionRemovalMetadata(ctx, token, tokenUse)`
+returns only the signed owner, record ID and selected access/refresh purpose.
+It is a cleanup capability, **not** an authenticated-session result. Only a
+well-formed elapsed expiry is relaxed: HS256, signature, required expiry,
+configured issuer/audience, future `iat`/`nbf`, purpose and identity checks still
+apply. Login/email proofs and malformed present claims are rejected. Legacy
+absent purpose retains the ordinary parser's compatibility rule.
+
+No account lookup, token issuance, refresh or request-context publication occurs.
+The caller must restrict this result to deletion of the identified record. It
+does not establish a live session or a relationship to another credential. Use
+ordinary extraction plus live checks for every admission or management decision;
+those parsers continue to reject expired credentials.
+
 ## Compatibility and rollout
 
 - **Breaking:** verification accepts HS256 only, requires `exp` and rejects

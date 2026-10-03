@@ -241,6 +241,18 @@ func (m *Middleware) attemptTokenRefresh(
 		}
 		return nil, accessmanager.ErrSessionVerificationUnavailable
 	}
+	// Downstream credential-management handlers must see the same pair that
+	// authenticated this request, not the consumed predecessor cookies. This is
+	// still a detached request; rejection never mutates the incoming headers.
+	cookies := retry.Cookies()
+	retry.Header.Del("Cookie")
+	for _, cookie := range cookies {
+		if cookie.Name != m.cookiePrefixAuthToken && cookie.Name != m.cookiePrefixRefreshToken {
+			retry.AddCookie(cookie)
+		}
+	}
+	retry.AddCookie(&http.Cookie{Name: m.cookiePrefixAuthToken, Value: tokenResp.AccessToken})
+	retry.AddCookie(&http.Cookie{Name: m.cookiePrefixRefreshToken, Value: tokenResp.RefreshToken})
 	return &refreshedSession{request: retry.WithContext(ctx), tokens: *tokenResp}, nil
 }
 

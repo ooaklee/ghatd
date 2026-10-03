@@ -369,18 +369,34 @@ func (c *Client) FetchAuth(ctx context.Context, accessDetails TokenDetailsAccess
 	return userIDFromToken, nil
 }
 
-// DeleteAuth deletes metadata with matching combinedUUID key
-// from persistent storage
-// TODO: Create tests
+// DeleteAuth removes one owner:token record. Zero confirms absence, not failure;
+// a storage error preserves its native cause and may represent an uncertain
+// write. This does not remove rotation replay records or a session family.
 func (c *Client) DeleteAuth(ctx context.Context, combinedUUID string) (int64, error) {
+	if c == nil || ctx == nil || nilEphemeralDependency(c.client) {
+		return 0, ErrInvalidSessionCleanup
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	owner, token, ok := strings.Cut(combinedUUID, ":")
+	if !ok || strings.TrimSpace(owner) == "" || strings.TrimSpace(token) == "" || strings.Contains(token, ":") {
+		return 0, ErrInvalidSessionCleanup
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/ephemeral", "delete-auth")
 
 	completeKey := c.keyPrefix + combinedUUID
 
 	deleted, err := c.clientForContext(ctx).Del(completeKey).Result()
 	if err != nil {
-		logger.Error("ephemeral-auth-delete-failed", zap.Error(err))
+		logger.Error("ephemeral-auth-delete-failed")
 		return 0, err
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	if deleted < 0 || deleted > 1 {
+		return 0, ErrInvalidSessionCleanup
 	}
 	logger.Debug("ephemeral-auth-deleted", zap.Int64("deleted", deleted))
 	return deleted, nil

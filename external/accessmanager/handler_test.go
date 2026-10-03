@@ -14,7 +14,6 @@ import (
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/validator"
@@ -31,7 +30,7 @@ type mockAccessmanagerService struct {
 	createInitalLoginOrVerificationTokenEmailFunc func(ctx context.Context, r *accessmanager.CreateInitalLoginOrVerificationTokenEmailRequest) error
 	loginUserFunc                                 func(ctx context.Context, r *accessmanager.LoginUserRequest) (*accessmanager.LoginUserResponse, error)
 	refreshTokenFunc                              func(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error)
-	logoutUserFunc                                func(ctx context.Context, r *http.Request) error
+	logoutUserFunc                                func(ctx context.Context, r *accessmanager.LogoutUserRequest) error
 	createUserAPITokenFunc                        func(ctx context.Context, r *accessmanager.CreateUserAPITokenRequest) (*accessmanager.CreateUserAPITokenResponse, error)
 	deleteUserAPITokenFunc                        func(ctx context.Context, r *accessmanager.DeleteUserAPITokenRequest) error
 	updateUserAPITokenStatusFunc                  func(ctx context.Context, r *accessmanager.UserAPITokenStatusRequest) error
@@ -39,7 +38,6 @@ type mockAccessmanagerService struct {
 	getUserAPITokenThresholdFunc                  func(ctx context.Context, r *accessmanager.GetUserAPITokenThresholdRequest) (*accessmanager.GetUserAPITokenThresholdResponse, error)
 	oauthLoginFunc                                func(ctx context.Context, r *accessmanager.OauthLoginRequest) (*accessmanager.OauthLoginResponse, error)
 	oauthCallbackFunc                             func(ctx context.Context, r *accessmanager.OauthCallbackRequest) (*accessmanager.OauthCallbackResponse, error)
-	removeRefreshTokenWithCookieValueFunc         func(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
 	logoutUserOthersFunc                          func(ctx context.Context, r *accessmanager.LogoutUserOthersRequest) error
 	updateUserEmailFunc                           func(ctx context.Context, r *accessmanager.UpdateUserEmailRequest) (*accessmanager.UpdateUserEmailResponse, error)
 }
@@ -93,7 +91,7 @@ func (m *mockAccessmanagerService) RefreshToken(ctx context.Context, r *accessma
 	return nil, nil
 }
 
-func (m *mockAccessmanagerService) LogoutUser(ctx context.Context, r *http.Request) error {
+func (m *mockAccessmanagerService) LogoutUser(ctx context.Context, r *accessmanager.LogoutUserRequest) error {
 	if m.logoutUserFunc != nil {
 		return m.logoutUserFunc(ctx, r)
 	}
@@ -147,13 +145,6 @@ func (m *mockAccessmanagerService) OauthCallback(ctx context.Context, r *accessm
 		return m.oauthCallbackFunc(ctx, r)
 	}
 	return nil, nil
-}
-
-func (m *mockAccessmanagerService) RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error) {
-	if m.removeRefreshTokenWithCookieValueFunc != nil {
-		return m.removeRefreshTokenWithCookieValueFunc(ctx, refreshTokenCookieValue)
-	}
-	return nil, "", nil
 }
 
 func (m *mockAccessmanagerService) LogoutUserOthers(ctx context.Context, r *accessmanager.LogoutUserOthersRequest) error {

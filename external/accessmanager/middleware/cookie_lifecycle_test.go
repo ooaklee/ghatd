@@ -145,6 +145,12 @@ func TestCookieLifecycle(t *testing.T) {
 					handlerCalls++
 					if tc.replace {
 						require.Equal(t, "Bearer new-access-token", r.Header.Get("Authorization"))
+						access, err := r.Cookie("test_auth")
+						require.NoError(t, err)
+						require.Equal(t, "new-access-token", access.Value)
+						refresh, err := r.Cookie("test_refresh")
+						require.NoError(t, err)
+						require.Equal(t, "new-refresh-token", refresh.Value)
 					}
 					w.WriteHeader(http.StatusOK)
 				})
@@ -152,6 +158,7 @@ func TestCookieLifecycle(t *testing.T) {
 				request.Header.Set("Authorization", "Bearer original-header")
 				request.AddCookie(&http.Cookie{Name: "test_auth", Value: "presented-access"})
 				request.AddCookie(&http.Cookie{Name: "test_refresh", Value: "presented-refresh"})
+				originalCookies := request.Header.Get("Cookie")
 				if tc.cancelAt == "entry" {
 					cancel()
 				}
@@ -170,6 +177,7 @@ func TestCookieLifecycle(t *testing.T) {
 				require.Equal(t, tc.allowed || fallback, handlerCalls == 1)
 				require.LessOrEqual(t, handlerCalls, 1)
 				require.Equal(t, "Bearer original-header", request.Header.Get("Authorization"))
+				require.Equal(t, originalCookies, request.Header.Get("Cookie"))
 				require.NotContains(t, recorder.Body.String(), outage.Error())
 				cookies := recorder.Result().Cookies()
 				for _, cookie := range []struct{ name, value string }{{"test_auth", "new-access-token"}, {"test_refresh", "new-refresh-token"}} {

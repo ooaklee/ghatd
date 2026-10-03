@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -26,7 +25,7 @@ type AccessmanagerService interface {
 	CreateInitalLoginOrVerificationTokenEmail(ctx context.Context, r *CreateInitalLoginOrVerificationTokenEmailRequest) error
 	LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUserResponse, error)
 	RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error)
-	LogoutUser(ctx context.Context, r *http.Request) error
+	LogoutUser(ctx context.Context, r *LogoutUserRequest) error
 	CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error)
 	DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error
 	UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error
@@ -34,7 +33,6 @@ type AccessmanagerService interface {
 	GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error)
 	OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error)
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
-	RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
 	LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error
 	UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (*UpdateUserEmailResponse, error)
 }
@@ -117,24 +115,28 @@ func (h *Handler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, result)
 }
 
-// LogoutUserOthers handles logging out all other sessions for a user
+// LogoutUserOthers requests an owner-scoped sweep retaining the two supplied,
+// owner-verified records. It cannot prove they form the initiating session pair.
+// It never clears cookies on failed authorization or storage work.
 func (h *Handler) LogoutUserOthers(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-logout-user-others")
-
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToLogoutUserOthersRequest(r, h.Validator, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	err = h.Service.LogoutUserOthers(r.Context(), request)
-	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
+		return
+	}
+	if err := h.Service.LogoutUserOthers(r.Context(), request); err != nil {
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
+	if err := r.Context().Err(); err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
@@ -287,70 +289,39 @@ func (h *Handler) CreateUserAPIToken(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, safe.UserAPIToken)
 }
 
-// LogoutUser returns reponse from user logout request.
-// TODO: Create tests
+// LogoutUser clears client cookies on every outcome. Credential selection is
+// transport-only; the manager verifies deletion authority and performs cleanup.
+// Native operational failures never become blank success or a web redirect.
 func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-logout-user")
-
-	// Check if there is a refresh token cookie
-	// although it should be there, there is no guarantee that it will be
-	// there
-	refreshTokenCookie, _ := r.Cookie(h.CookiePrefixRefreshToken)
-	if refreshTokenCookie != nil {
-
-		logger.Info("refresh-token-cookie-found-while-logging-out-will-be-removed")
-		_, _, err := h.Service.RemoveRefreshTokenWithCookieValue(r.Context(), refreshTokenCookie.Value)
-		if err != nil {
-			logger.Warn("failed-to-remove-refresh-token-from-store-during-logout", zap.Error(err))
-		}
-	}
-
-	accessTokenCookie, err := r.Cookie(h.CookiePrefixAuthToken)
-
-	if err != nil && err != http.ErrNoCookie {
-		h.RemoveAuthCookies(w)
-		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
-		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
-
-		if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
-			return
-		}
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.NewHTTPErrorResponse(w, err)
-		return
-	}
-
-	if accessTokenCookie != nil {
-		r.Header["Authorization"] = []string{"Bearer " + accessTokenCookie.Value}
-	}
-
-	if err == http.ErrNoCookie {
-		h.RemoveAuthCookies(w)
-		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
-		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
-
-		if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
-			return
-		}
-		h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
-		return
-	}
-
+	w.Header().Set("Cache-Control", "no-store")
 	h.RemoveAuthCookies(w)
 	h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 	h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
-
-	err = h.Service.LogoutUser(r.Context(), r)
+	request, err := MapRequestToLogoutUserRequest(r, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
 		return
 	}
-	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
+	if err := h.Service.LogoutUser(r.Context(), request); err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if err := r.Context().Err(); err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if redirectToHomeIfPlatformHeaderDetected(w, r) {
+		return
+	}
+	status := http.StatusOK
+	if request.AccessToken == "" {
+		status = http.StatusAccepted
+	}
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, status)
 }
 
 // RefreshToken rotates the selected cookie pair and publishes non-cacheable

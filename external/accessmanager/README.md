@@ -677,3 +677,66 @@ The `/oauth/mobile/connections` routes use the same account, stage and session
 logic, reject browser Origin headers, and bind email proof to the exact native
 return address. They renew cookies through the existing secure mobile cookie
 jar. See the adoption guide for code/link review and platform registration.
+
+## Logout command boundaries
+
+**Breaking:** `Service.LogoutUser` now accepts `*LogoutUserRequest`, not an HTTP
+request. Pass the selected `AccessToken` and/or `RefreshToken`; do not decode this
+command from JSON or pass an unverified actor ID. The manager derives the owner
+from signed credentials through [auth.SessionRemovalVerifier](../auth/README.md#deletion-only-verification).
+Custom auth adapters must implement that narrow capability; missing adapters
+fail closed. Replace `RemoveRefreshTokenWithCookieValue` with
+`LogoutUser(ctx, &LogoutUserRequest{RefreshToken: value})`. The old helper, which
+conflated storage failures with absence, has been removed.
+
+Ordinary logout is cleanup-only: it never issues or refreshes tokens and does not
+require a current ACTIVE account or matching email revision. Correctly signed
+expired credentials may remove their own records but cannot authenticate.
+All supplied credentials must verify and have the same owner before any write.
+The HTTP mapper accepts a bearer or access cookie, rejects conflicting values
+and duplicate credentials, and leaves incoming headers unchanged. It does not
+read query/body identity. No credentials is an idempotent client-cleanup success.
+
+Client auth cookies are cleared on every ordinary logout response. Successful
+API responses remain blank 200 with an access credential, or blank 202 without
+one; successful web/HTMX requests retain their home redirect. Native failures
+use the shared manifest and never become a redirect or blank success. All
+handler responses are `no-store`. A failed request may have removed one record:
+do not infer rollback or confirmed complete revocation from an error. Successful
+cleanup emits best-effort audit attribution to the signed owner; audit failure
+does not undo removal.
+Partial/uncertain cleanup emits a fixed operation warning, not a successful
+logout audit event. Store/audit warnings omit native diagnostic text, which may
+contain secrets; the original error remains available to trusted callers.
+Multiple cleanup failures retain their joined native causes internally. The
+existing strict authentication response policy renders every multi-cause tree
+as generic 500, even when each cause is mapped; a single cause retains its
+canonical status and host override. No raw diagnostic text reaches the client.
+
+**Breaking:** `LogoutUserOthersRequest.UserId` becomes `UserID`, alongside a
+transport-excluded `ActorID`. In-process adapters must preserve explicitly
+verified, unmixed session context and bind both IDs to its owner. The manager
+rechecks the live ACTIVE account, signed type/revision, supplied access UUID
+against the published session, refresh owner/type/revision and both live records.
+It then calls the lower store with exactly those two owned exemptions. API-only
+credentials, forged owners and unrelated credentials cannot select a sweep.
+Errors preserve native causes; confirmed missing records are unauthorized.
+
+The other-sessions route retains its existing cookie-based ACTIVE middleware,
+including its credential selection and refresh policy. A refreshed downstream
+request now contains the replacement cookies as well as the new bearer, so
+management commands do not receive the consumed predecessor. Ordinary logout
+does not use that middleware. Other-sessions success remains blank 202 and does
+not clear the initiating cookies.
+
+### Revocation limits
+
+These commands remove supplied records or perform an owner-scoped SCAN sweep;
+they do **not** provide atomic session-family revocation. Same-owner access and
+refresh possession does not establish a signed pair because current tokens have
+no family ID. Concurrent login/rotation may escape the sweep; rotation replay
+records are not swept, and a successor already issued under an old refresh
+credential may remain live. Bearer-only logout cannot remove an unknown refresh
+credential. Live account checks do not close those races. Clients should discard
+their local credentials on logout, but must not describe this as guaranteed
+revocation of every device or family. See [store semantics](../ephemeral/README.md#target-only-session-cleanup).

@@ -30,6 +30,14 @@ with `redis.Nil` or parse error strings; use the helper for control flow instead
 
 ## Target-only session cleanup
 
+`DeleteAuth(ctx, combinedUUID)` deletes exactly one `owner:token` record. Empty
+segments, nested delimiters, nil/typed-nil dependencies and unusable context fail
+before dispatch. A zero deletion count confirms absence and is suitable for
+idempotent logout; it is not an infrastructure failure. Negative or greater-than-
+one receipts are rejected. Native storage errors and cancellation are preserved
+without logging raw diagnostics; an error does not prove a write was rolled back.
+This primitive does not remove paired credentials, rotation receipts or families.
+
 `DeleteAllTokenExceptedSpecified(ctx, userID, exemptions)` scans only the selected
 account's session namespace, escapes Redis glob characters and deletes in batches
 of at most 128 keys. Empty IDs, the `:` storage delimiter and missing/typed-nil

@@ -51,42 +51,28 @@ func MapRequestToUpdateUserEmailRequest(request *http.Request, _, _ string, vali
 	return result, nil
 }
 
-// MapRequestToLogoutUserOthersRequest maps incoming LogOutUserOthers request to correct struct.
-func MapRequestToLogoutUserOthersRequest(request *http.Request, validator AccessmanagerValidator, authCookiePrefix, refreshCookiePrefix string) (*LogoutUserOthersRequest, error) {
-	var (
-		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
-
-		parsedRequest *LogoutUserOthersRequest = &LogoutUserOthersRequest{}
-	)
-
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
-
-	authTokenCookie, err := request.Cookie(authCookiePrefix)
+// MapRequestToLogoutUserOthersRequest binds a verified session actor and selects
+// credential transport without decoding body/query identity. Validator is kept
+// for source compatibility; this closed command has no client-editable fields.
+func MapRequestToLogoutUserOthersRequest(request *http.Request, _ AccessmanagerValidator, authCookiePrefix, refreshCookiePrefix string) (*LogoutUserOthersRequest, error) {
+	if request == nil {
+		return nil, ErrBadRequest
+	}
+	actor := accessmanagerhelpers.AcquireFrom(request.Context())
+	if err := tokenManagementSession(request.Context(), actor, actor); err != nil {
+		return nil, err
+	}
+	credentials, err := MapRequestToLogoutUserRequest(request, authCookiePrefix, refreshCookiePrefix)
 	if err != nil {
-		logger.Error("unable-to-get-auth-token-cookie", zap.String("user-id", parsedRequest.UserId))
+		return nil, err
+	}
+	if credentials.AccessToken == "" {
 		return nil, ErrInvalidAuthToken
 	}
-
-	refreshTokenCookie, err := request.Cookie(refreshCookiePrefix)
-	if err != nil {
-		logger.Error("unable-to-get-refresh-token-cookie", zap.String("user-id", parsedRequest.UserId))
+	if credentials.RefreshToken == "" {
 		return nil, ErrInvalidRefreshToken
 	}
-
-	parsedRequest.AuthToken = authTokenCookie.Value
-	parsedRequest.RefreshToken = refreshTokenCookie.Value
-
-	if err := toolbox.ValidateParsedRequest(parsedRequest, validator); err != nil {
-		return nil, ErrInvalidLogOutUserOthersRequest
-	}
-
-	if parsedRequest.UserId == "" {
-		logger.Error("unable-get-user-id")
-		return nil, ErrInvalidUserID
-	}
-
-	return parsedRequest, nil
-
+	return &LogoutUserOthersRequest{ActorID: actor, UserID: actor, AuthToken: credentials.AccessToken, RefreshToken: credentials.RefreshToken}, nil
 }
 
 // MapRequestToOauthCallbackRequest maps incoming OauthCallback request to correct struct

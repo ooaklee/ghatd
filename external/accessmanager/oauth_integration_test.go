@@ -282,8 +282,7 @@ func TestOAuthBrowserLifecycleIntegration(t *testing.T) {
 	require.True(t, rotatedDetails.AuthenticationTime.Equal(details.AuthenticationTime))
 	_, err = redisRuntime.Store.FetchAuth(ctx, details)
 	require.Error(t, err)
-	logoutRequest := httptest.NewRequest(http.MethodGet, "https://app.example/api/v1/ams/users/logout", nil)
-	logoutRequest.Header.Set("Authorization", "Bearer "+rotated.AccessToken)
+	logoutRequest := &accessmanager.LogoutUserRequest{AccessToken: rotated.AccessToken, RefreshToken: rotated.RefreshToken}
 	require.NoError(t, service.LogoutUser(ctx, logoutRequest))
 	_, err = redisRuntime.Store.FetchAuth(ctx, rotatedDetails)
 	require.Error(t, err)
@@ -528,15 +527,13 @@ func TestOAuthBrowserLifecycleIntegration(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, int64(1), count)
 
-		// The exchanged session uses the unchanged refresh and logout implementation.
+		// The exchanged session uses the shared refresh and typed logout commands.
 		nativeRotated, err := service.RefreshToken(ctx, &accessmanager.RefreshTokenRequest{RefreshToken: nativeRefresh.Value, AccessToken: nativeAccess.Value})
 		require.NoError(t, err)
 		nativeRotatedDetails, err := authService.ExtractAccessTokenMetadataByString(ctx, nativeRotated.AccessToken)
 		require.NoError(t, err)
 		require.True(t, nativeRotatedDetails.AuthenticationTime.Equal(nativeDetails.AuthenticationTime))
-		nativeLogout := httptest.NewRequest(http.MethodGet, "https://app.example/api/v1/ams/logout", nil)
-		nativeLogout.Header.Set("Authorization", "Bearer "+nativeRotated.AccessToken)
-		require.NoError(t, service.LogoutUser(ctx, nativeLogout))
+		require.NoError(t, service.LogoutUser(ctx, &accessmanager.LogoutUserRequest{AccessToken: nativeRotated.AccessToken, RefreshToken: nativeRotated.RefreshToken}))
 		_, err = redisRuntime.Store.FetchAuth(ctx, nativeRotatedDetails)
 		require.Error(t, err)
 	})

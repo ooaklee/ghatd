@@ -214,18 +214,30 @@ type OauthCallbackRequest struct {
 	RequestCookies []*http.Cookie
 }
 
-// LogoutUserOthersRequest handles logging out all other sessions for a user
-type LogoutUserOthersRequest struct {
+// LogoutUserRequest carries credentials selected by transport, not a trusted
+// actor hint. The manager derives deletion authority from their signatures.
+// This is not a JSON body; credentials must never be logged or persisted here.
+type LogoutUserRequest struct {
+	// AccessToken is an optional bearer or access-cookie credential.
+	AccessToken string `json:"-"`
+	// RefreshToken is an optional refresh-cookie credential of the same owner.
+	RefreshToken string `json:"-"`
+}
 
-	// UserId the user ID the tokens will be deleted for
-	UserId string
+// LogoutUserOthersRequest separates verified caller identity from the account
+// namespace. Both retained credentials must belong to that live session owner.
+type LogoutUserOthersRequest struct {
+	// ActorID is bound from verified session context, never decoded from input.
+	ActorID string `json:"-"`
+	// UserID is the selected owner; this command permits self-service only.
+	UserID string `json:"-"`
 
 	// RefreshToken the current refresh token of the user that will be preserved
 	// after logging out all other sessions
-	RefreshToken string
+	RefreshToken string `json:"-"`
 
 	// AuthToken the current auth token of the user that will be preserved
-	AuthToken string
+	AuthToken string `json:"-"`
 }
 
 // UpdateUserEmailRequest separates verified caller identity from account selection.

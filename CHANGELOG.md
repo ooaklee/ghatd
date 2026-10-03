@@ -381,6 +381,18 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking:** [Logout commands](external/accessmanager/README.md#logout-command-boundaries)
+  now separate typed transport from verified deletion authority. Migrate
+  LogoutUser to LogoutUserRequest and replace RemoveRefreshTokenWithCookieValue
+  with its refresh-only command. Custom auth adapters implement the narrow
+  deletion-only verifier; expired credentials remain unusable for admission.
+  Other-session cleanup requires explicit ActorID and self-service UserID
+  (formerly UserId), verified session context and matching live records/account.
+  Blank 200/202 success contracts remain; native failures are no longer hidden
+  behind success, handler responses are no-store and refreshed downstream
+  cookies match the new bearer. Record deletion validates namespaces/receipts
+  and treats confirmed absence idempotently. Neither command provides atomic
+  session-family revocation or fences concurrent rotation/login.
 - **Breaking:** [API-token management commands](external/accessmanager/README.md#session-bound-management-commands)
   now require an explicit session-bound ActorID and matching live ACTIVE owner,
   including in-process callers. Rename threshold request UserId to UserID and

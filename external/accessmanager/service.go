@@ -222,42 +222,6 @@ func (s *Service) WithGroupService(groupService GroupService) *Service {
 	return s
 }
 
-// LogoutUserOthers handles logic of managing the user's other log in session
-func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error {
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "logout-user-others")
-	logger.Debug("handling-logout-user-others-request")
-
-	var accessTokenId string
-	var refreshTokenId string
-
-	// Check if ID returns valid user
-	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-		ID: r.UserId,
-	})
-	if err != nil {
-		return err
-	}
-
-	// parse auth token to get token id
-	accessToken, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, r.AuthToken)
-	if err != nil {
-		return err
-	}
-
-	accessTokenId = accessToken.AccessUUID
-
-	// parse refresh token to get token id
-	refreshToken, err := s.AuthService.ExtractRefreshTokenMetadataByString(ctx, r.RefreshToken)
-	if err != nil {
-		return err
-	}
-	refreshTokenId = refreshToken.RefreshUUID
-
-	// use user id to call ephemerals store's delete method to remove all tokens except current ones
-	return s.EphemeralStore.DeleteAllTokenExceptedSpecified(ctx, requestingUser.User.ID, []string{
-		toolbox.CombinedUuidFormat(requestingUser.User.ID, accessTokenId), toolbox.CombinedUuidFormat(requestingUser.User.ID, refreshTokenId)})
-}
-
 // GetSpecificUserAPITokens authorizes a live self-service owner, snapshots query
 // filters, and returns secret-free rows. List/count pagination is observational,
 // not an atomic inventory guarantee and never authority to issue another token.
@@ -781,46 +745,6 @@ func requireActiveSession(current *MiddlewareAuthedUserResponse) (*MiddlewareAut
 	return current, nil
 }
 
-// LogoutUser handles the logic of signing user off of platform. Delete token(s) from ephemeral store
-// TODO: Investigate best way to also delete corresponding refresh token
-// TODO: Create tests
-func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
-	accessTokenDetails, err := s.AuthService.ExtractTokenMetadata(ctx, r)
-	if err != nil {
-		return err
-	}
-
-	deleted, err := s.DeleteAuth(ctx, toolbox.CombinedUuidFormat(accessTokenDetails.UserID, accessTokenDetails.AccessUUID))
-	if err != nil {
-		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id", accessTokenDetails.UserID), zap.Error(err))
-		return err
-	}
-
-	if deleted == 0 {
-		logger.Error("ephemeral-delete-failed-after-successful-access-token-retrival", zap.String("user-id", accessTokenDetails.UserID))
-		return ErrUnauthorizedAccessTokenCacheDeletionFailure
-	}
-
-	auditEvent := audit.UserLogout
-	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-		ActorId:    audit.AuditActorIdSystem,
-		Action:     auditEvent,
-		TargetId:   accessTokenDetails.UserID,
-		TargetType: audit.User,
-		Domain:     "accessmanager",
-		// TODO: Investifate details on what can we add to make the audit
-		// more informative, maybe IP address
-	})
-
-	if auditErr != nil {
-		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", accessTokenDetails.UserID), zap.String("event-type", string(auditEvent)))
-	}
-
-	return nil
-}
-
 // RefreshToken validates current account identity and rotates a stored refresh
 // credential once, tolerating concurrent callers via a bounded replay result.
 // Operational failures preserve their causes. A wait timeout does not imply
@@ -1119,40 +1043,6 @@ func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTo
 		return nil, refreshTokenDetails, ErrOAuthReauthenticationRequired
 	}
 	return persistentUserResponse.User, refreshTokenDetails, nil
-}
-
-// RemoveRefreshTokenWithCookieValue removes refresh token with the given cookie value
-// returns the user id of the refresh token and an error if any
-func (s *Service) RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error) {
-
-	var (
-		userId           string
-		refreshTokenUuid string
-		logger           *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-	)
-
-	logger.Info("processing-refresh-token-removal-by-cookie-value")
-
-	tokenUser, refreshTokenDetails, err := s.refreshTokenUserFromCookieValue(ctx, refreshTokenCookieValue)
-	if err != nil {
-		if refreshTokenDetails != nil {
-			refreshTokenUuid = refreshTokenDetails.RefreshUUID
-		}
-		return nil, refreshTokenUuid, err
-	}
-
-	refreshTokenUuid = refreshTokenDetails.RefreshUUID
-	userId = tokenUser.GetUserId()
-
-	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
-	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, refreshTokenDetails.RefreshUUID))
-	if err != nil || deleted == 0 {
-		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id", userId), zap.Error(err))
-		return nil, refreshTokenUuid, ErrUnauthorizedRefreshTokenCacheDeletionFailure
-	}
-
-	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userId), zap.String("refresh-token-id", refreshTokenDetails.RefreshUUID))
-	return tokenUser, refreshTokenUuid, nil
 }
 
 // LoginUser handles an initial login token or code and actions the surrounding
