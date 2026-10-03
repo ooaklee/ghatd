@@ -2,6 +2,47 @@
 
 Pricer is the **source of truth for the pricing catalogue**. It defines plans, feature entitlements, monetary costs, and provider references that describe what your product costs and what end users get at each tier. The `pricer` package provides a full CRUD API for managing these records, and is designed to be composed into your application or exposed through the Billing Manager Service (BMS) for read-only access by frontend and other client applications.
 
+## ActorID migration
+
+The eight mutation commands now use `ActorID`, replacing their previous `UserID`
+caller field: create/update/publish/archive/delete a plan, and create/update/delete
+a feature. This is a breaking Go source change; update struct literals and adapters.
+Stored `CreatedByID`, `UpdatedByID`, `PublishedByID` and `DeletedByID` are attribution
+history, not request actors, and are unchanged.
+
+HTTP mappers bind `ActorID` only from explicitly authenticated shared context.
+An anonymous placeholder or an ID without the authenticated flag is insufficient.
+The actor is excluded from JSON and has no query/path tag. Selected plan/feature
+IDs remain route-owned. Custom authentication adapters must verify credentials
+before publishing context; see [request identity](../../docs/how-to/request-identity.md).
+
+All `/api/v1/pricing` routes still require the configured administrator middleware
+and registry policy. An actor ID does **not** grant access. Trusted in-process
+callers must authenticate and authorize their workflow before invoking Pricer;
+the service rejects an explicit actor that contradicts supplied identity context.
+Public Billing Manager catalogue projections are unaffected.
+
+Full `PricePlan` and `Feature` replacements are in-process capabilities. HTTP
+updates reject non-null replacement objects; use the declared editable fields.
+For a trusted replacement, `ID`, when supplied, must equal the replacement's ID;
+an omitted `ID` selects the nonempty replacement ID. Stored nano-ID, creation,
+publication and deletion history override replacement values. Update attribution
+comes from the current actor. A newly published plan with no publication history
+still receives its normal publication metadata; use the publish operation to
+explicitly publish again.
+
+Mutation entry checks reject nil context/request, cancellation and invalid
+repository wiring. Missing or inconsistent selected-record read results return
+`ErrPricerUnavailable` (`PRC0-27`, 503), while original dependency errors retain
+their shared reply mappings and host overrides. No database schema, route,
+response envelope or existing `PRC0-15` actor-error code changes are required.
+
+Service normalization copies plan/feature scalar fields and plan cost entries
+before modifying them. Arbitrary nested metadata is not deep-cloned and must
+remain read-only in custom adapters. This change does not add transactions,
+revision checks or result-bearing repository writes; concurrent lifecycle edits
+and uncertain write outcomes still require separate handling.
+
 ## Core Packages Overview
 
 The pricer package is self-contained, but integrates with other packages in the ecosystem:
@@ -18,7 +59,7 @@ The pricer package is self-contained, but integrates with other packages in the 
 A price plan is a named tier or product offering. It has a lifecycle, one or more costs, optional feature references, and optional provider refs.
 
 | Field | Type | Description |
-|---|---|---|---|
+|---|---|---|
 | `id` | `string` | Unique identifier (UUID v4) |
 | `slug` | `string` | URL-safe kebab-case identifier |
 | `name` | `string` | Display name |
@@ -522,7 +563,7 @@ pricerService := pricer.NewService(pricerRepository)
 ctx := context.Background()
 
 feature, err := pricerService.CreateFeature(ctx, &pricer.CreateFeatureRequest{
-    UserID:      "admin-user-id",
+    ActorID:     verifiedAdministratorID,
     Name:        "Projects",
     Description: "Number of active projects",
     Type:        pricer.PriceFeatureTypeQuantity,
@@ -536,12 +577,12 @@ feature, err := pricerService.CreateFeature(ctx, &pricer.CreateFeatureRequest{
 
 ```go
 plan, err := pricerService.CreatePricePlan(ctx, &pricer.CreatePricePlanRequest{
-    UserID:      "admin-user-id",
+    ActorID:     verifiedAdministratorID,
     Name:        "Pro",
     Description: "For growing teams",
     Features: []pricer.PlanFeatureRef{
         {
-            FeatureID: feature.ID,
+            FeatureID: feature.Feature.ID,
             Label:     "Projects",
             Included:  true,
             Quantity:  10,
@@ -585,6 +626,7 @@ billingmanagerService.WithPricerService(pricerService)
 ```
 
 The BMS will automatically expose the pricing read endpoints at:
+
 - `GET /api/v1/bms/pricing/plans`
 - `GET /api/v1/bms/pricing/plans/{slug}`
 - `GET /api/v1/bms/pricing/features`
@@ -637,7 +679,7 @@ Client Request
 request mapping (fender.go)
       │  extract IDs from URI
       │  decode body / query params
-      │  acquire user ID from context
+      │  bind verified ActorID from context
       │  validate struct tags
       ▼
 service layer (service.go)

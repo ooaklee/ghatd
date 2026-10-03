@@ -181,8 +181,8 @@ func TestService_CreatePricePlan(t *testing.T) {
 		{
 			name: "Success - creates draft plan",
 			req: &pricer.CreatePricePlanRequest{
-				UserID: testUserID,
-				Name:   testPlanName,
+				ActorID: testUserID,
+				Name:    testPlanName,
 				Costs: []pricer.PriceCost{
 					{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 				},
@@ -195,8 +195,8 @@ func TestService_CreatePricePlan(t *testing.T) {
 		{
 			name: "Success - creates published plan with PublishNow",
 			req: &pricer.CreatePricePlanRequest{
-				UserID: testUserID,
-				Name:   testPlanName,
+				ActorID: testUserID,
+				Name:    testPlanName,
 				Costs: []pricer.PriceCost{
 					{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 				},
@@ -223,8 +223,8 @@ func TestService_CreatePricePlan(t *testing.T) {
 		{
 			name: "Failure - repository error",
 			req: &pricer.CreatePricePlanRequest{
-				UserID: testUserID,
-				Name:   testPlanName,
+				ActorID: testUserID,
+				Name:    testPlanName,
 			},
 			mockRepositoryErr: errors.New("db-error"),
 			expectError:       true,
@@ -232,7 +232,7 @@ func TestService_CreatePricePlan(t *testing.T) {
 		{
 			name: "Failure - PublishNow without cost",
 			req: &pricer.CreatePricePlanRequest{
-				UserID:     testUserID,
+				ActorID:    testUserID,
 				Name:       testPlanName,
 				PublishNow: true,
 			},
@@ -241,8 +241,8 @@ func TestService_CreatePricePlan(t *testing.T) {
 		{
 			name: "Failure - PublishNow without provider ref",
 			req: &pricer.CreatePricePlanRequest{
-				UserID: testUserID,
-				Name:   testPlanName,
+				ActorID: testUserID,
+				Name:    testPlanName,
 				Costs: []pricer.PriceCost{
 					{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 				},
@@ -304,8 +304,8 @@ func TestService_CreatePricePlan_AssignsMissingCostIDsBeforePersistence(t *testi
 	}
 
 	response, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
-		UserID: testUserID,
-		Name:   testPlanName,
+		ActorID: testUserID,
+		Name:    testPlanName,
 		Costs: []pricer.PriceCost{
 			{
 				ID:             existingCostID,
@@ -344,7 +344,7 @@ func TestService_CreatePricePlan_PersistsDisplayOrder(t *testing.T) {
 	}
 
 	response, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
-		UserID:       testUserID,
+		ActorID:      testUserID,
 		Name:         testPlanName,
 		DisplayOrder: &displayOrder,
 	})
@@ -367,9 +367,9 @@ func TestService_CreatePricePlan_NormalisesDirectPublishedStatus(t *testing.T) {
 	}
 
 	response, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
-		UserID: testUserID,
-		Name:   testPlanName,
-		Status: pricer.PricePlanStatusPublished,
+		ActorID: testUserID,
+		Name:    testPlanName,
+		Status:  pricer.PricePlanStatusPublished,
 		Costs: []pricer.PriceCost{
 			{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 		},
@@ -396,9 +396,9 @@ func TestService_CreatePricePlan_RejectsStripePlanThatCheckoutCannotRepresent(t 
 	}
 
 	_, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
-		UserID: testUserID,
-		Name:   testPlanName,
-		Status: pricer.PricePlanStatusPublished,
+		ActorID: testUserID,
+		Name:    testPlanName,
+		Status:  pricer.PricePlanStatusPublished,
 		Costs: []pricer.PriceCost{{
 			Amount:         1000,
 			Currency:       "USD",
@@ -423,8 +423,8 @@ func TestService_CreatePricePlan_RejectsDuplicateCostIDsBeforePersistence(t *tes
 	}
 
 	_, err := newTestService(repo).CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
-		UserID: testUserID,
-		Name:   testPlanName,
+		ActorID: testUserID,
+		Name:    testPlanName,
 		Costs: []pricer.PriceCost{
 			{ID: "duplicate-cost-id", Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 			{ID: "duplicate-cost-id", Amount: 12000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceYearly},
@@ -450,17 +450,17 @@ func TestService_UpdatePricePlan(t *testing.T) {
 		{
 			name: "Success - update plan name",
 			req: &pricer.UpdatePricePlanRequest{
-				ID:     testPlanID,
-				UserID: testUserID,
-				Name:   stringPtr("Updated Plan"),
+				ID:      testPlanID,
+				ActorID: testUserID,
+				Name:    stringPtr("Updated Plan"),
 			},
 		},
 		{
 			name: "Failure - plan not found",
 			req: &pricer.UpdatePricePlanRequest{
-				ID:     testPlanID,
-				UserID: testUserID,
-				Name:   stringPtr("Updated Plan"),
+				ID:      testPlanID,
+				ActorID: testUserID,
+				Name:    stringPtr("Updated Plan"),
 			},
 			mockGetErr:  pricer.ErrPricePlanNotFound,
 			expectError: true,
@@ -476,7 +476,7 @@ func TestService_UpdatePricePlan(t *testing.T) {
 		{
 			name: "Success - update via full PricePlan object",
 			req: &pricer.UpdatePricePlanRequest{
-				UserID:    testUserID,
+				ActorID:   testUserID,
 				PricePlan: makeValidPlan(),
 			},
 		},
@@ -542,8 +542,8 @@ func TestService_UpdatePricePlan_AssignsOnlyNewCostIDsBeforePersistence(t *testi
 	}
 
 	response, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
-		ID:     testPlanID,
-		UserID: testUserID,
+		ID:      testPlanID,
+		ActorID: testUserID,
 		Costs: []pricer.PriceCost{
 			{
 				ID:             existingCostID,
@@ -585,9 +585,9 @@ func TestService_UpdatePricePlan_NormalisesDirectPublishedStatus(t *testing.T) {
 	}
 
 	response, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
-		ID:     testPlanID,
-		UserID: testUserID,
-		Status: &publishedStatus,
+		ID:      testPlanID,
+		ActorID: testUserID,
+		Status:  &publishedStatus,
 	})
 
 	require.NoError(t, err)
@@ -615,7 +615,7 @@ func TestService_UpdatePricePlan_NormalisesFullPublishedPlan(t *testing.T) {
 
 	response, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
 		ID:        testPlanID,
-		UserID:    testUserID,
+		ActorID:   testUserID,
 		PricePlan: fullPlan,
 	})
 
@@ -646,9 +646,9 @@ func TestService_UpdatePricePlan_RejectsStripePlanThatCheckoutCannotRepresent(t 
 	}
 
 	_, err := newTestService(repo).UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
-		ID:     testPlanID,
-		UserID: testUserID,
-		Status: &publishedStatus,
+		ID:      testPlanID,
+		ActorID: testUserID,
+		Status:  &publishedStatus,
 	})
 
 	require.ErrorIs(t, err, pricer.ErrPricePlanStripeCheckoutUnsupported)
@@ -794,15 +794,15 @@ func TestService_PublishPricePlan(t *testing.T) {
 		{
 			name: "Success - publish with cost and provider ref",
 			req: &pricer.PublishPricePlanRequest{
-				ID:     testPlanID,
-				UserID: testUserID,
+				ID:      testPlanID,
+				ActorID: testUserID,
 			},
 		},
 		{
 			name: "Failure - plan not found",
 			req: &pricer.PublishPricePlanRequest{
-				ID:     testPlanID,
-				UserID: testUserID,
+				ID:      testPlanID,
+				ActorID: testUserID,
 			},
 			mockGetErr:  pricer.ErrPricePlanNotFound,
 			expectError: true,
@@ -889,8 +889,8 @@ func TestService_PublishPricePlan_RequiresCostAndProvider(t *testing.T) {
 
 		svc := newTestService(repo)
 		_, err := svc.PublishPricePlan(context.Background(), &pricer.PublishPricePlanRequest{
-			ID:     testPlanID,
-			UserID: testUserID,
+			ID:      testPlanID,
+			ActorID: testUserID,
 		})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), pricer.ErrKeyPricePlanPublishRequiresCost)
@@ -907,8 +907,8 @@ func TestService_PublishPricePlan_RequiresCostAndProvider(t *testing.T) {
 
 		svc := newTestService(repo)
 		_, err := svc.PublishPricePlan(context.Background(), &pricer.PublishPricePlanRequest{
-			ID:     testPlanID + "-2",
-			UserID: testUserID,
+			ID:      testPlanID + "-2",
+			ActorID: testUserID,
 		})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), pricer.ErrKeyPricePlanPublishRequiresProvider)
@@ -937,8 +937,8 @@ func TestService_PublishPricePlan_RejectsStripePlanThatCheckoutCannotRepresent(t
 	}
 
 	_, err := newTestService(repo).PublishPricePlan(context.Background(), &pricer.PublishPricePlanRequest{
-		ID:     testPlanID,
-		UserID: testUserID,
+		ID:      testPlanID,
+		ActorID: testUserID,
 	})
 
 	require.ErrorIs(t, err, pricer.ErrPricePlanStripeCheckoutUnsupported)
@@ -957,8 +957,8 @@ func TestService_ArchivePricePlan(t *testing.T) {
 		{
 			name: "Success - archives plan",
 			req: &pricer.ArchivePricePlanRequest{
-				ID:     testPlanID,
-				UserID: testUserID,
+				ID:      testPlanID,
+				ActorID: testUserID,
 			},
 		},
 		{
@@ -1015,8 +1015,8 @@ func TestService_DeletePricePlan(t *testing.T) {
 		{
 			name: "Success - soft deletes plan",
 			req: &pricer.DeletePricePlanRequest{
-				ID:     testPlanID,
-				UserID: testUserID,
+				ID:      testPlanID,
+				ActorID: testUserID,
 			},
 		},
 		{
@@ -1187,9 +1187,9 @@ func TestService_CreateFeature(t *testing.T) {
 		{
 			name: "Success - creates feature",
 			req: &pricer.CreateFeatureRequest{
-				UserID: testUserID,
-				Name:   testFeatureName,
-				Type:   pricer.PriceFeatureTypeBoolean,
+				ActorID: testUserID,
+				Name:    testFeatureName,
+				Type:    pricer.PriceFeatureTypeBoolean,
 			},
 		},
 		{
@@ -1207,9 +1207,9 @@ func TestService_CreateFeature(t *testing.T) {
 		{
 			name: "Failure - invalid feature type",
 			req: &pricer.CreateFeatureRequest{
-				UserID: testUserID,
-				Name:   testFeatureName,
-				Type:   "invalid_type",
+				ActorID: testUserID,
+				Name:    testFeatureName,
+				Type:    "invalid_type",
 			},
 			expectError: true,
 		},
@@ -1264,17 +1264,17 @@ func TestService_UpdateFeature(t *testing.T) {
 		{
 			name: "Success - update feature name",
 			req: &pricer.UpdateFeatureRequest{
-				ID:     testFeatureID,
-				UserID: testUserID,
-				Name:   stringPtr("Updated Feature"),
+				ID:      testFeatureID,
+				ActorID: testUserID,
+				Name:    stringPtr("Updated Feature"),
 			},
 		},
 		{
 			name: "Failure - feature not found",
 			req: &pricer.UpdateFeatureRequest{
-				ID:     testFeatureID,
-				UserID: testUserID,
-				Name:   stringPtr("Updated Feature"),
+				ID:      testFeatureID,
+				ActorID: testUserID,
+				Name:    stringPtr("Updated Feature"),
 			},
 			mockGetErr:  pricer.ErrPriceFeatureNotFound,
 			expectError: true,
@@ -1339,14 +1339,14 @@ func TestService_DeleteFeature(t *testing.T) {
 		{
 			name: "Success - soft deletes feature",
 			req: &pricer.DeleteFeatureRequest{
-				ID:     testFeatureID,
-				UserID: testUserID,
+				ID:      testFeatureID,
+				ActorID: testUserID,
 			},
 		},
 		{
 			name: "Failure - missing ID",
 			req: &pricer.DeleteFeatureRequest{
-				UserID: testUserID,
+				ActorID: testUserID,
 			},
 			expectError: true,
 		},

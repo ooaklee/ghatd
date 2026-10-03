@@ -19,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	accesshelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/pricer"
 	pricermigrations "github.com/ooaklee/ghatd/external/pricer/migrations"
 	"github.com/ooaklee/ghatd/external/repository"
@@ -82,7 +83,7 @@ type goldenFile struct {
 
 // TestE2E_PricingCardsGolden boots a memongo-backed pricer stack, runs the
 // pricing index plus the tiered test-plan seed, exercises the public price
-// plan HTTP endpoints, and compares the card projection against a golden
+// plan administration endpoints, and compares the card projection against a golden
 // fixture. This is the source-of-truth regression for the Companion app
 // pricing card surface.
 func TestE2E_PricingCardsGolden(t *testing.T) {
@@ -102,7 +103,8 @@ func TestE2E_PricingCardsGolden(t *testing.T) {
 	handler := pricer.NewHandler(service, nil, pricer.PricerErrorMap)
 
 	httpRouter := ghatdrouter.NewRouter(response.GetResourceNotFoundError, response.GetDefault200Response)
-	pricer.AttachRoutes(&pricer.AttachRoutesRequest{Router: httpRouter, Handler: handler})
+	pricer.AttachRoutes(&pricer.AttachRoutesRequest{Router: httpRouter, Handler: handler, AdminOnlyMiddleware: pricingFixtureAdministrator})
+	require.NoError(t, httpRouter.ValidateRoutePolicies())
 
 	got := goldenFile{
 		Version:     2,
@@ -165,7 +167,8 @@ func TestE2E_PricingStripeCheckoutMatrix(t *testing.T) {
 	service := pricer.NewService(repo)
 	handler := pricer.NewHandler(service, nil, pricer.PricerErrorMap)
 	httpRouter := ghatdrouter.NewRouter(response.GetResourceNotFoundError, response.GetDefault200Response)
-	pricer.AttachRoutes(&pricer.AttachRoutesRequest{Router: httpRouter, Handler: handler})
+	pricer.AttachRoutes(&pricer.AttachRoutesRequest{Router: httpRouter, Handler: handler, AdminOnlyMiddleware: pricingFixtureAdministrator})
+	require.NoError(t, httpRouter.ValidateRoutePolicies())
 
 	type expectedCost struct {
 		id              string
@@ -308,9 +311,19 @@ func TestE2E_PricingTestPlansSeedDownRollsBackCleanly(t *testing.T) {
 	}
 }
 
+// pricingFixtureAdministrator models an already verified administrator for
+// catalogue response fixtures. It performs no credential verification and must
+// never be used outside tests; route-contract tests cover denied admission.
+func pricingFixtureAdministrator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := accesshelpers.TransitAuthenticatedWith(accesshelpers.TransitWith(r.Context(), "38b4d074-9362-4d24-b037-4f69ab5764dc"), true)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 // fetchPlanBySlug performs a real HTTP call through the gorilla mux router to
-// the public GetPricePlanBySlug endpoint. Costs, features and providers are
-// always included for single-plan reads.
+// the administrator GetPricePlanBySlug endpoint. Explicit projection flags
+// include costs, features and providers for the golden-card assertion.
 func fetchPlanBySlug(t *testing.T, r *ghatdrouter.Router, slug string) *pricer.PricePlan {
 	t.Helper()
 

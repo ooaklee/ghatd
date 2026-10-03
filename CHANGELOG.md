@@ -173,6 +173,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** [Pricer mutation commands](external/pricer/README.md#actorid-migration)
+  use explicit `ActorID` fields instead of `UserID`. HTTP mappers require
+  authenticated context and reject full plan/feature replacements. Trusted
+  in-process replacements must agree with the selected resource and retain stored
+  audit history; caller authorization remains the integrating workflow's duty.
 - **Breaking:** [Post Mongo adapters](external/post/README.md#failure-and-snapshot-contracts)
   require result-bearing update/delete helpers so missing targets cannot produce
   false success. Custom stores must supply acknowledgement flags and real counts;
@@ -283,6 +288,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Pricer mutation boundaries reject contradictory actors, invalid wiring and
+  inconsistent selected-record reads. Service normalization no longer changes
+  caller-owned scalar history or cost IDs. Native errors retain shared reply
+  mappings and host overrides; mutation service logs omit payloads and diagnostics.
 - Post lookups consistently distinguish confirmed absence from operational errors.
   Failed slug checks prevent writes; native failures retain shared response mappings.
   Title and type changes regenerate slugs for field edits and trusted replacements.

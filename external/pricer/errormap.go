@@ -4,6 +4,7 @@ import "github.com/ooaklee/reply/v2"
 
 // PricerErrorMap holds error keys, their corresponding human-friendly message, and response status code.
 var PricerErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrPricerUnavailable:          {Title: "Service Unavailable", Detail: "Pricing is temporarily unavailable", StatusCode: 503, Code: "PRC0-27"},
 	ErrDatabaseError:              {Title: "Internal Server Error", Detail: "Unable to complete the pricing operation at this time", StatusCode: 500, Code: "PRC0-26"},
 	ErrInvalidPricePlanPayload:    {Title: "Bad Request", Detail: "Invalid price plan payload", StatusCode: 400, Code: "PRC0-01"},
 	ErrInvalidPriceFeaturePayload: {Title: "Bad Request", Detail: "Invalid price feature payload", StatusCode: 400, Code: "PRC0-02"},

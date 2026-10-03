@@ -433,6 +433,8 @@ func TestIntegration_PricePlanRepository_GetBySlug(t *testing.T) {
 	})
 }
 
+// This intentionally sequential lifecycle shares one persisted identity across
+// create, read, update and delete; independent cases would not test that lifecycle.
 func TestIntegration_FeatureRepository_FullLifecycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -442,6 +444,8 @@ func TestIntegration_FeatureRepository_FullLifecycle(t *testing.T) {
 	defer cleanup()
 
 	testFeature := &pricer.PriceFeature{
+		// The service derives slugs; this repository fixture supplies its input.
+		Slug:        "integration-test-feature",
 		Name:        "Integration Test Feature",
 		Description: "A feature created during integration test",
 		Type:        pricer.PriceFeatureTypeQuantity,
@@ -476,6 +480,8 @@ func TestIntegration_FeatureRepository_FullLifecycle(t *testing.T) {
 		updatedName := "Updated Integration Feature"
 		testFeature.Name = updatedName
 		testFeature.Description = "Updated feature description"
+		// Attribution comes from the authorized service caller, not persistence.
+		testFeature.UpdatedByID = testUserID
 
 		updated, err := repo.UpdateFeature(ctx, testFeature)
 		require.NoError(t, err)
@@ -508,6 +514,7 @@ func TestIntegration_FeatureRepository_QueryFilters(t *testing.T) {
 	defer cleanup()
 
 	boolFeature := &pricer.PriceFeature{
+		Slug:        "bool-feature",
 		Name:        "Bool Feature",
 		Type:        pricer.PriceFeatureTypeBoolean,
 		CreatedByID: testUserID,
@@ -515,6 +522,7 @@ func TestIntegration_FeatureRepository_QueryFilters(t *testing.T) {
 	}
 
 	qtyFeature := &pricer.PriceFeature{
+		Slug:        "qty-feature",
 		Name:        "Qty Feature",
 		Type:        pricer.PriceFeatureTypeQuantity,
 		Unit:        pricer.PriceFeatureUnitGB,
@@ -523,6 +531,7 @@ func TestIntegration_FeatureRepository_QueryFilters(t *testing.T) {
 	}
 
 	textFeature := &pricer.PriceFeature{
+		Slug:        "text-feature",
 		Name:        "Text Feature",
 		Type:        pricer.PriceFeatureTypeText,
 		CreatedByID: testUserID,
@@ -538,49 +547,38 @@ func TestIntegration_FeatureRepository_QueryFilters(t *testing.T) {
 	_, err = repo.CreateFeature(ctx, textFeature)
 	require.NoError(t, err)
 
-	_ = createdBool
 	_ = createdQty
 
-	t.Run("Filter by types", func(t *testing.T) {
-		req := &pricer.GetFeaturesRequest{
-			WithTypes: string(pricer.PriceFeatureTypeBoolean) + "," + string(pricer.PriceFeatureTypeQuantity),
-			PerPage:   25,
-			Page:      1,
-		}
-		results, err := repo.GetFeatures(ctx, req)
-		require.NoError(t, err)
-		assert.Len(t, results, 2)
-	})
-
-	t.Run("Filter by units", func(t *testing.T) {
-		req := &pricer.GetFeaturesRequest{
-			WithUnits: string(pricer.PriceFeatureUnitGB),
-			PerPage:   25,
-			Page:      1,
-		}
-		results, err := repo.GetFeatures(ctx, req)
-		require.NoError(t, err)
-		assert.Len(t, results, 1)
-		assert.Equal(t, pricer.PriceFeatureUnitGB, results[0].Unit)
-	})
-
-	t.Run("Filter by slugs", func(t *testing.T) {
-		req := &pricer.GetFeaturesRequest{
-			Slugs:   createdBool.Slug,
-			PerPage: 25,
-			Page:    1,
-		}
-		results, err := repo.GetFeatures(ctx, req)
-		require.NoError(t, err)
-		assert.Len(t, results, 1)
-		assert.Equal(t, createdBool.ID, results[0].ID)
-	})
-
-	t.Run("GetTotalFeatures", func(t *testing.T) {
-		total, err := repo.GetTotalFeatures(ctx, &pricer.GetFeaturesRequest{})
-		require.NoError(t, err)
-		assert.GreaterOrEqual(t, total, int64(3))
-	})
+	// Cases only read this isolated, immutable catalogue; each owns its query.
+	for _, tc := range []struct {
+		name, types, units, slugs, expectedID string
+		count                                 int
+		countOnly                             bool
+	}{
+		{"types", string(pricer.PriceFeatureTypeBoolean) + "," + string(pricer.PriceFeatureTypeQuantity), "", "", "", 2, false},
+		{"units", "", string(pricer.PriceFeatureUnitGB), "", createdQty.ID, 1, false},
+		{"slugs", "", "", createdBool.Slug, createdBool.ID, 1, false},
+		{"total", "", "", "", "", 3, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &pricer.GetFeaturesRequest{WithTypes: tc.types, WithUnits: tc.units, Slugs: tc.slugs, PerPage: 25, Page: 1}
+			if tc.countOnly {
+				total, err := repo.GetTotalFeatures(ctx, req)
+				require.NoError(t, err)
+				require.Equal(t, int64(tc.count), total)
+				return
+			}
+			results, err := repo.GetFeatures(ctx, req)
+			require.NoError(t, err)
+			require.Len(t, results, tc.count)
+			if tc.expectedID != "" {
+				require.Equal(t, tc.expectedID, results[0].ID)
+			}
+			if tc.units != "" {
+				require.Equal(t, pricer.PriceFeatureUnit(tc.units), results[0].Unit)
+			}
+		})
+	}
 }
 
 func TestIntegration_FeatureRepository_GetFeatureByID_NotFound(t *testing.T) {

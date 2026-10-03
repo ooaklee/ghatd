@@ -3,6 +3,8 @@ package pricer
 import "errors"
 
 var (
+	// ErrPricerUnavailable reports invalid wiring or an inconsistent repository result.
+	ErrPricerUnavailable                  = errors.New("pricer/unavailable")
 	ErrDatabaseError                      = errors.New(ErrKeyDatabaseError)
 	ErrDuplicatePlanFeatureRef            = errors.New(ErrKeyDuplicatePlanFeatureRef)
 	ErrDuplicatePriceCostID               = errors.New(ErrKeyDuplicatePriceCostID)

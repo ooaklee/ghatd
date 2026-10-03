@@ -126,8 +126,8 @@ func TestService_PricePlanDiscountsAndPaymentTerms(t *testing.T) {
 		})
 
 		response, err := svc.CreatePricePlan(context.Background(), &pricer.CreatePricePlanRequest{
-			UserID: testUserID,
-			Name:   testPlanName,
+			ActorID: testUserID,
+			Name:    testPlanName,
 			Costs: []pricer.PriceCost{
 				{Amount: 1000, Currency: "USD", BillingCadence: pricer.PriceBillingCadenceMonthly},
 			},
@@ -166,8 +166,8 @@ func TestService_PricePlanDiscountsAndPaymentTerms(t *testing.T) {
 		})
 
 		response, err := svc.UpdatePricePlan(context.Background(), &pricer.UpdatePricePlanRequest{
-			ID:     testPlanID,
-			UserID: testUserID,
+			ID:      testPlanID,
+			ActorID: testUserID,
 			Discounts: []pricer.PriceDiscount{
 				{Type: pricer.PriceDiscountTypeAmount, Amount: 250, Currency: "USD"},
 			},

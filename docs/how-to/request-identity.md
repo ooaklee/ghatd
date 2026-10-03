@@ -77,6 +77,13 @@ for the exact source changes and error behavior.
 
 ## Transport binding
 
+Pricer's eight mutation commands also use `ActorID`. Its HTTP mappers require
+explicit authentication and reject full plan/feature replacement objects.
+Trusted in-process replacements must agree with the selected resource and retain
+stored audit history. Pricer remains a lower-domain service: the caller must
+preserve the administrator authorization enforced by its HTTP route middleware.
+See [Pricer migration](../../external/pricer/README.md#actorid-migration).
+
 Content Manager also uses `ActorID` for its eight reader fields and the four
 mutation fields embedded from `post`. Stored author IDs and selected post IDs
 remain separate. Its services reject contradictory context evidence rather than

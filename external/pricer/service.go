@@ -37,8 +37,11 @@ type PricerService interface {
 	DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) (*DeleteFeatureResponse, error)
 }
 
-// Service represents the pricer service.
+// Service validates catalogue operations and delegates persistence. HTTP route
+// policy, or a trusted in-process caller, must authorize mutations beforehand.
 type Service struct {
+	// PricerRepository persists selected catalogue resources; it must not treat
+	// caller attribution as proof of administrative authority.
 	PricerRepository PricerRepository
 }
 
@@ -51,13 +54,16 @@ func NewService(pricerRepository PricerRepository) *Service {
 
 // CreatePricePlan creates a new price plan.
 func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanRequest) (*CreatePricePlanResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrInvalidPricePlanPayload); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
-	logger.Debug("initiating-create-price-plan-request", zap.Any("request", safeLogValue(req)))
+	logger.Debug("initiating-create-price-plan-request")
 
 	if req == nil {
 		return nil, ErrInvalidPricePlanPayload
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -72,14 +78,14 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		Description:   strings.TrimSpace(req.Description),
 		Status:        req.Status,
 		Features:      req.Features,
-		Costs:         req.Costs,
+		Costs:         append([]PriceCost(nil), req.Costs...),
 		Discounts:     req.Discounts,
 		PaymentTerms:  req.PaymentTerms,
 		ProviderRefs:  req.ProviderRefs,
 		Metadata:      req.Metadata,
 		DisplayOrder:  req.DisplayOrder,
-		CreatedByID:   req.UserID,
-		UpdatedByID:   req.UserID,
+		CreatedByID:   req.ActorID,
+		UpdatedByID:   req.ActorID,
 		PublishedAt:   publishedAt,
 		PublishedByID: "",
 	}
@@ -96,9 +102,9 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 		pricePlan.Status = PricePlanStatusPublished
 		pricePlan.PublishedAt = toolbox.TimeNowUTC()
 	}
-	ensurePublishedPricePlanMetadata(pricePlan, req.UserID)
+	ensurePublishedPricePlanMetadata(pricePlan, req.ActorID)
 	if pricePlan.PublishedAt != "" {
-		pricePlan.PublishedByID = req.UserID
+		pricePlan.PublishedByID = req.ActorID
 	}
 	assignMissingPriceCostIDs(pricePlan.Costs)
 
@@ -109,32 +115,37 @@ func (s *Service) CreatePricePlan(ctx context.Context, req *CreatePricePlanReque
 	}
 
 	if err := pricePlan.Validate(); err != nil {
-		logger.Warn("attempt-made-to-create-invalid-price-plan", zap.Any("price-plan", safeLogValue(pricePlan)), zap.Error(err))
+		logger.Warn("attempt-made-to-create-invalid-price-plan")
 		return nil, err
 	}
 
 	createdPricePlan, err := s.PricerRepository.CreatePricePlan(ctx, pricePlan)
 	if err != nil {
-		logger.Error("failed-to-create-price-plan", zap.Any("request", safeLogValue(req)), zap.Error(err))
+		logger.Error("failed-to-create-price-plan")
 		return &CreatePricePlanResponse{}, err
 	}
 
 	return &CreatePricePlanResponse{PricePlan: createdPricePlan}, nil
 }
 
-// UpdatePricePlan updates an existing price plan.
+// UpdatePricePlan applies editable fields or a trusted matching replacement.
+// Replacement history is taken from storage, update attribution from ActorID;
+// mismatched targets and failed reads never authorize a persistence call.
 func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanRequest) (*UpdatePricePlanResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrInvalidPricePlanPayload); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
-	logger.Debug("initiating-update-price-plan-request", zap.Any("request", safeLogValue(req)))
+	logger.Debug("initiating-update-price-plan-request")
 
 	if req == nil {
 		return nil, ErrInvalidPricePlanPayload
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
-	pricePlanToUpdate := req.PricePlan
+	pricePlanToUpdate := copyMutablePlan(req.PricePlan)
 	if pricePlanToUpdate == nil {
 		if strings.TrimSpace(req.ID) == "" {
 			return nil, ErrPricePlanIDRequired
@@ -147,9 +158,13 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 			IncludeProviders: true,
 		})
 		if err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", req.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-plan")
 			return nil, err
 		}
+		if pricePlanToUpdate == nil || pricePlanToUpdate.ID != req.ID {
+			return nil, ErrPricerUnavailable
+		}
+		pricePlanToUpdate = copyMutablePlan(pricePlanToUpdate)
 
 		if req.Slug != nil {
 			pricePlanToUpdate.Slug = *req.Slug
@@ -167,7 +182,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 			pricePlanToUpdate.Features = req.Features
 		}
 		if req.Costs != nil {
-			pricePlanToUpdate.Costs = req.Costs
+			pricePlanToUpdate.Costs = append([]PriceCost(nil), req.Costs...)
 		}
 		if req.Discounts != nil {
 			pricePlanToUpdate.Discounts = req.Discounts
@@ -186,21 +201,29 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 		}
 	} else if strings.TrimSpace(pricePlanToUpdate.ID) == "" {
 		return nil, ErrPricePlanIDRequired
+	} else if req.ID != "" && req.ID != pricePlanToUpdate.ID {
+		return nil, ErrInvalidPricePlanPayload
 	} else {
 		existingPricePlan, err := s.PricerRepository.GetPricePlanByID(ctx, pricePlanToUpdate.ID, &GetPricePlanByIDRequest{})
 		if err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-plan", zap.String("price-plan-id", pricePlanToUpdate.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-plan")
 			return nil, err
 		}
+		if existingPricePlan == nil || existingPricePlan.ID != pricePlanToUpdate.ID {
+			return nil, ErrPricerUnavailable
+		}
 		preservePricePlanAuditMetadata(pricePlanToUpdate, existingPricePlan)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	if pricePlanToUpdate.Slug == "" {
 		pricePlanToUpdate.Slug = pricePlanToUpdate.Name
 	}
 	pricePlanToUpdate.NormaliseSlug()
-	pricePlanToUpdate.UpdatedByID = req.UserID
-	ensurePublishedPricePlanMetadata(pricePlanToUpdate, req.UserID)
+	pricePlanToUpdate.UpdatedByID = req.ActorID
+	ensurePublishedPricePlanMetadata(pricePlanToUpdate, req.ActorID)
 	assignMissingPriceCostIDs(pricePlanToUpdate.Costs)
 
 	if pricePlanToUpdate.Status == PricePlanStatusPublished {
@@ -210,13 +233,13 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 	}
 
 	if err := pricePlanToUpdate.Validate(); err != nil {
-		logger.Warn("attempt-made-to-update-invalid-price-plan", zap.Any("price-plan", safeLogValue(pricePlanToUpdate)), zap.Error(err))
+		logger.Warn("attempt-made-to-update-invalid-price-plan")
 		return nil, err
 	}
 
 	updatedPricePlan, err := s.PricerRepository.UpdatePricePlan(ctx, pricePlanToUpdate)
 	if err != nil {
-		logger.Error("failed-to-update-price-plan", zap.Any("request", safeLogValue(req)), zap.Error(err))
+		logger.Error("failed-to-update-price-plan")
 		return &UpdatePricePlanResponse{}, err
 	}
 
@@ -225,7 +248,7 @@ func (s *Service) UpdatePricePlan(ctx context.Context, req *UpdatePricePlanReque
 
 // ensurePublishedPricePlanMetadata prevents a published lifecycle state from
 // existing without the publication metadata required by public projections.
-func ensurePublishedPricePlanMetadata(pricePlan *PricePlan, userID string) {
+func ensurePublishedPricePlanMetadata(pricePlan *PricePlan, actorID string) {
 	if pricePlan == nil || pricePlan.Status != PricePlanStatusPublished {
 		return
 	}
@@ -234,7 +257,7 @@ func ensurePublishedPricePlanMetadata(pricePlan *PricePlan, userID string) {
 		pricePlan.PublishedAt = toolbox.TimeNowUTC()
 	}
 	if strings.TrimSpace(pricePlan.PublishedByID) == "" {
-		pricePlan.PublishedByID = userID
+		pricePlan.PublishedByID = actorID
 	}
 }
 
@@ -245,27 +268,11 @@ func preservePricePlanAuditMetadata(pricePlan, existingPricePlan *PricePlan) {
 		return
 	}
 
-	if pricePlan.NanoID == "" {
-		pricePlan.NanoID = existingPricePlan.NanoID
-	}
-	if pricePlan.CreatedAt == "" {
-		pricePlan.CreatedAt = existingPricePlan.CreatedAt
-	}
-	if pricePlan.CreatedByID == "" {
-		pricePlan.CreatedByID = existingPricePlan.CreatedByID
-	}
-	if pricePlan.PublishedAt == "" {
-		pricePlan.PublishedAt = existingPricePlan.PublishedAt
-	}
-	if pricePlan.PublishedByID == "" {
-		pricePlan.PublishedByID = existingPricePlan.PublishedByID
-	}
-	if pricePlan.DeletedAt == "" {
-		pricePlan.DeletedAt = existingPricePlan.DeletedAt
-	}
-	if pricePlan.DeletedByID == "" {
-		pricePlan.DeletedByID = existingPricePlan.DeletedByID
-	}
+	pricePlan.NanoID = existingPricePlan.NanoID
+	pricePlan.CreatedAt, pricePlan.CreatedByID = existingPricePlan.CreatedAt, existingPricePlan.CreatedByID
+	pricePlan.PublishedAt, pricePlan.PublishedByID = existingPricePlan.PublishedAt, existingPricePlan.PublishedByID
+	pricePlan.DeletedAt, pricePlan.DeletedByID = existingPricePlan.DeletedAt, existingPricePlan.DeletedByID
+	pricePlan.UpdatedAt = existingPricePlan.UpdatedAt
 }
 
 func assignMissingPriceCostIDs(costs []PriceCost) {
@@ -456,14 +463,18 @@ func normalisePriceSlugResourceType(value string) (string, string, error) {
 	}
 }
 
-// PublishPricePlan publishes a price plan.
+// PublishPricePlan validates the selected plan before recording this actor as its
+// publisher. It does not modify the repository's returned validation snapshot.
 func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanRequest) (*PublishPricePlanResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrPricePlanIDRequired); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -478,9 +489,16 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 		IncludeProviders: true,
 	})
 	if err != nil {
-		logger.Warn("attempt-made-to-publish-missing-price-plan", zap.String("price-plan-id", req.ID), zap.Error(err))
+		logger.Warn("attempt-made-to-publish-missing-price-plan")
 		return nil, err
 	}
+	if pricePlan == nil || pricePlan.ID != req.ID {
+		return nil, ErrPricerUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	pricePlan = copyMutablePlan(pricePlan)
 
 	pricePlan.Status = PricePlanStatusPublished
 	if publishedAt != "" {
@@ -488,8 +506,8 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 	} else {
 		pricePlan.PublishedAt = toolbox.TimeNowUTC()
 	}
-	pricePlan.PublishedByID = req.UserID
-	pricePlan.UpdatedByID = req.UserID
+	pricePlan.PublishedByID = req.ActorID
+	pricePlan.UpdatedByID = req.ActorID
 
 	if err := validatePricePlanCanPublish(pricePlan); err != nil {
 		return nil, err
@@ -498,9 +516,9 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 		return nil, err
 	}
 
-	err = s.PricerRepository.PublishPricePlan(ctx, req.ID, req.UserID, pricePlan.PublishedAt)
+	err = s.PricerRepository.PublishPricePlan(ctx, req.ID, req.ActorID, pricePlan.PublishedAt)
 	if err != nil {
-		logger.Error("failed-to-publish-price-plan", zap.Any("request", safeLogValue(req)), zap.Error(err))
+		logger.Error("failed-to-publish-price-plan")
 		return &PublishPricePlanResponse{}, err
 	}
 
@@ -512,24 +530,30 @@ func (s *Service) PublishPricePlan(ctx context.Context, req *PublishPricePlanReq
 	if err != nil {
 		return nil, err
 	}
+	if publishedPricePlan == nil || publishedPricePlan.ID != req.ID {
+		return nil, ErrPricerUnavailable
+	}
 
 	return &PublishPricePlanResponse{PricePlan: publishedPricePlan}, nil
 }
 
 // ArchivePricePlan archives a price plan.
 func (s *Service) ArchivePricePlan(ctx context.Context, req *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrPricePlanIDRequired); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "archive-price-plan")
 	logger.Debug("handling-archive-price-plan-request")
 
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
 	updatedAt := toolbox.TimeNowUTC()
-	if err := s.PricerRepository.ArchivePricePlan(ctx, req.ID, req.UserID, updatedAt); err != nil {
+	if err := s.PricerRepository.ArchivePricePlan(ctx, req.ID, req.ActorID, updatedAt); err != nil {
 		return &ArchivePricePlanResponse{}, err
 	}
 
@@ -547,18 +571,21 @@ func (s *Service) ArchivePricePlan(ctx context.Context, req *ArchivePricePlanReq
 
 // DeletePricePlan soft-deletes a price plan.
 func (s *Service) DeletePricePlan(ctx context.Context, req *DeletePricePlanRequest) (*DeletePricePlanResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrPricePlanIDRequired); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "delete-price-plan")
 	logger.Debug("handling-delete-price-plan-request")
 
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPricePlanIDRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
 	deletedAt := toolbox.TimeNowUTC()
-	if err := s.PricerRepository.SoftDeletePricePlan(ctx, req.ID, req.UserID, deletedAt); err != nil {
+	if err := s.PricerRepository.SoftDeletePricePlan(ctx, req.ID, req.ActorID, deletedAt); err != nil {
 		return &DeletePricePlanResponse{}, err
 	}
 
@@ -576,12 +603,15 @@ func (s *Service) DeletePricePlan(ctx context.Context, req *DeletePricePlanReque
 
 // CreateFeature creates a feature catalog item.
 func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) (*CreateFeatureResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrInvalidPriceFeaturePayload); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil {
 		return nil, ErrInvalidPriceFeaturePayload
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -598,8 +628,8 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 		Unit:          req.Unit,
 		SortOrder:     req.SortOrder,
 		Metadata:      req.Metadata,
-		CreatedByID:   req.UserID,
-		UpdatedByID:   req.UserID,
+		CreatedByID:   req.ActorID,
+		UpdatedByID:   req.ActorID,
 		PublishedAt:   publishedAt,
 		PublishedByID: "",
 	}
@@ -612,35 +642,39 @@ func (s *Service) CreateFeature(ctx context.Context, req *CreateFeatureRequest) 
 		feature.PublishedAt = toolbox.TimeNowUTC()
 	}
 	if feature.PublishedAt != "" {
-		feature.PublishedByID = req.UserID
+		feature.PublishedByID = req.ActorID
 	}
 
 	if err := feature.Validate(); err != nil {
-		logger.Warn("attempt-made-to-create-invalid-price-feature", zap.Any("feature", safeLogValue(feature)), zap.Error(err))
+		logger.Warn("attempt-made-to-create-invalid-price-feature")
 		return nil, err
 	}
 
 	createdFeature, err := s.PricerRepository.CreateFeature(ctx, feature)
 	if err != nil {
-		logger.Error("failed-to-create-price-feature", zap.Any("request", safeLogValue(req)), zap.Error(err))
+		logger.Error("failed-to-create-price-feature")
 		return &CreateFeatureResponse{}, err
 	}
 
 	return &CreateFeatureResponse{Feature: createdFeature}, nil
 }
 
-// UpdateFeature updates a feature catalog item.
+// UpdateFeature updates a selected catalogue item while retaining stored audit
+// history. A full replacement is trusted in-process input and must agree with ID.
 func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) (*UpdateFeatureResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrInvalidPriceFeaturePayload); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/pricer")
 
 	if req == nil {
 		return nil, ErrInvalidPriceFeaturePayload
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
-	featureToUpdate := req.Feature
+	featureToUpdate := copyMutableFeature(req.Feature)
 	if featureToUpdate == nil {
 		if strings.TrimSpace(req.ID) == "" {
 			return nil, ErrPriceFeatureIDRequired
@@ -649,9 +683,13 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 		var err error
 		featureToUpdate, err = s.PricerRepository.GetFeatureByID(ctx, req.ID)
 		if err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature-id", req.ID), zap.Error(err))
+			logger.Warn("attempt-made-to-update-missing-price-feature")
 			return nil, err
 		}
+		if featureToUpdate == nil || featureToUpdate.ID != req.ID {
+			return nil, ErrPricerUnavailable
+		}
+		featureToUpdate = copyMutableFeature(featureToUpdate)
 
 		if req.Slug != nil {
 			featureToUpdate.Slug = *req.Slug
@@ -676,27 +714,37 @@ func (s *Service) UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) 
 		}
 	} else if strings.TrimSpace(featureToUpdate.ID) == "" {
 		return nil, ErrPriceFeatureIDRequired
+	} else if req.ID != "" && req.ID != featureToUpdate.ID {
+		return nil, ErrInvalidPriceFeaturePayload
 	} else {
-		if _, err := s.PricerRepository.GetFeatureByID(ctx, featureToUpdate.ID); err != nil {
-			logger.Warn("attempt-made-to-update-missing-price-feature", zap.String("feature-id", featureToUpdate.ID), zap.Error(err))
+		existingFeature, err := s.PricerRepository.GetFeatureByID(ctx, featureToUpdate.ID)
+		if err != nil {
+			logger.Warn("attempt-made-to-update-missing-price-feature")
 			return nil, err
 		}
+		if existingFeature == nil || existingFeature.ID != featureToUpdate.ID {
+			return nil, ErrPricerUnavailable
+		}
+		preserveFeatureAuditMetadata(featureToUpdate, existingFeature)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	if featureToUpdate.Slug == "" {
 		featureToUpdate.Slug = featureToUpdate.Name
 	}
 	featureToUpdate.NormaliseSlug()
-	featureToUpdate.UpdatedByID = req.UserID
+	featureToUpdate.UpdatedByID = req.ActorID
 
 	if err := featureToUpdate.Validate(); err != nil {
-		logger.Warn("attempt-made-to-update-invalid-price-feature", zap.Any("feature", safeLogValue(featureToUpdate)), zap.Error(err))
+		logger.Warn("attempt-made-to-update-invalid-price-feature")
 		return nil, err
 	}
 
 	updatedFeature, err := s.PricerRepository.UpdateFeature(ctx, featureToUpdate)
 	if err != nil {
-		logger.Error("failed-to-update-price-feature", zap.Any("request", safeLogValue(req)), zap.Error(err))
+		logger.Error("failed-to-update-price-feature")
 		return &UpdateFeatureResponse{}, err
 	}
 
@@ -750,18 +798,21 @@ func (s *Service) GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*Ge
 
 // DeleteFeature soft-deletes a feature catalog item.
 func (s *Service) DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) (*DeleteFeatureResponse, error) {
+	if err := s.validateMutation(ctx, req, ErrPriceFeatureIDRequired); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/pricer", "delete-feature")
 	logger.Debug("handling-delete-feature-request")
 
 	if req == nil || strings.TrimSpace(req.ID) == "" {
 		return nil, ErrPriceFeatureIDRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if !priceActorMatchesContext(ctx, req.ActorID) {
 		return nil, ErrPriceUserIDRequired
 	}
 
 	deletedAt := toolbox.TimeNowUTC()
-	if err := s.PricerRepository.SoftDeleteFeature(ctx, req.ID, req.UserID, deletedAt); err != nil {
+	if err := s.PricerRepository.SoftDeleteFeature(ctx, req.ID, req.ActorID, deletedAt); err != nil {
 		return &DeleteFeatureResponse{}, err
 	}
 

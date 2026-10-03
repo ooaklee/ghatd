@@ -5,8 +5,9 @@ type DeletePricePlanRequest struct {
 	// ID is the ID of the price plan to delete.
 	ID string `validate:"required,uuid"`
 
-	// UserID is the ID of the user performing the deletion.
-	UserID string `validate:"required,uuid"`
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-" validate:"required,uuid"`
 }
 
 // DeleteFeatureRequest represents the request payload for soft-deleting a feature by its ID.
@@ -14,8 +15,9 @@ type DeleteFeatureRequest struct {
 	// ID is the ID of the feature to delete.
 	ID string `validate:"required,uuid"`
 
-	// UserID is the ID of the user performing the deletion.
-	UserID string `validate:"required,uuid"`
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-" validate:"required,uuid"`
 }
 
 // GetPricePlanByIDRequest holds everything needed to get a price plan by ID.
@@ -161,8 +163,9 @@ func (g *GetPricePlansRequest) GetMetaData() map[string]interface{} {
 
 // CreatePricePlanRequest holds everything needed to create a price plan.
 type CreatePricePlanRequest struct {
-	// UserID is the ID of the user making the request.
-	UserID string
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-"`
 
 	// Slug is the URL-safe identifier for the price plan.
 	Slug string `json:"slug,omitempty"`
@@ -206,13 +209,15 @@ type CreatePricePlanRequest struct {
 
 // UpdatePricePlanRequest holds everything needed to update a price plan.
 type UpdatePricePlanRequest struct {
-	// UserID is the ID of the user making the request.
-	UserID string `validate:"required,uuid"`
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-" validate:"required,uuid"`
 
 	// ID is the ID of the price plan to update.
 	ID string `validate:"required,uuid"`
 
-	// PricePlan is the complete price plan object to update.
+	// PricePlan is a trusted in-process replacement; HTTP mappers reject it.
+	// If ID is supplied, it must match PricePlan.ID. Stored audit history is retained.
 	PricePlan *PricePlan `json:"price_plan,omitempty"`
 
 	// Slug is the updated URL-safe identifier for the price plan.
@@ -254,8 +259,9 @@ type PublishPricePlanRequest struct {
 	// ID is the ID of the price plan to publish.
 	ID string `validate:"required,uuid"`
 
-	// UserID is the ID of the user publishing the price plan.
-	UserID string `validate:"required,uuid"`
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-" validate:"required,uuid"`
 
 	// PublishAtUtc is the target publish at date for the price plan.
 	PublishAtUtc string `json:"publish_at_utc,omitempty"`
@@ -266,14 +272,16 @@ type ArchivePricePlanRequest struct {
 	// ID is the ID of the price plan to archive.
 	ID string `validate:"required,uuid"`
 
-	// UserID is the ID of the user archiving the price plan.
-	UserID string `validate:"required,uuid"`
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-" validate:"required,uuid"`
 }
 
 // CreateFeatureRequest holds everything needed to create a feature catalog item.
 type CreateFeatureRequest struct {
-	// UserID is the ID of the user making the request.
-	UserID string
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-"`
 
 	// Slug is the URL-safe identifier for the feature.
 	Slug string `json:"slug,omitempty"`
@@ -305,13 +313,15 @@ type CreateFeatureRequest struct {
 
 // UpdateFeatureRequest holds everything needed to update a feature catalog item.
 type UpdateFeatureRequest struct {
-	// UserID is the ID of the user making the request.
-	UserID string `validate:"required,uuid"`
+	// ActorID identifies the verified caller, never a transport-supplied target.
+	// Trusted in-process callers must authorize this actor before invocation.
+	ActorID string `json:"-" validate:"required,uuid"`
 
 	// ID is the ID of the feature to update.
 	ID string `validate:"required,uuid"`
 
-	// Feature is the complete feature object to update.
+	// Feature is a trusted in-process replacement; HTTP mappers reject it.
+	// If ID is supplied, it must match Feature.ID. Stored audit history is retained.
 	Feature *PriceFeature `json:"feature,omitempty"`
 
 	// Slug is the updated URL-safe identifier for the feature.

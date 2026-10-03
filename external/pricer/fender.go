@@ -18,13 +18,19 @@ type PricerValidator interface {
 
 // MapRequestToCreatePricePlanRequest maps incoming CreatePricePlan request to correct struct.
 func MapRequestToCreatePricePlanRequest(request *http.Request, validator PricerValidator) (*CreatePricePlanRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &CreatePricePlanRequest{}
+	if request.Body == nil {
+		return nil, ErrInvalidPricePlanPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
 		return nil, ErrInvalidPricePlanPayload
 	}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -37,7 +43,13 @@ func MapRequestToCreatePricePlanRequest(request *http.Request, validator PricerV
 
 // MapRequestToUpdatePricePlanRequest maps incoming UpdatePricePlan request to correct struct.
 func MapRequestToUpdatePricePlanRequest(request *http.Request, validator PricerValidator) (*UpdatePricePlanRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &UpdatePricePlanRequest{}
+	if request.Body == nil {
+		return nil, ErrInvalidPricePlanPayload
+	}
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
@@ -49,9 +61,13 @@ func MapRequestToUpdatePricePlanRequest(request *http.Request, validator PricerV
 		return nil, ErrInvalidPricePlanPayload
 	}
 	parsedRequest.ID = id
+	// Replacement models carry server-owned history and are not HTTP input.
+	if parsedRequest.PricePlan != nil {
+		return nil, ErrInvalidPricePlanPayload
+	}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -134,6 +150,9 @@ func MapRequestToValidatePriceSlugRequest(request *http.Request, validator Price
 
 // MapRequestToPublishPricePlanRequest maps incoming PublishPricePlan request to correct struct.
 func MapRequestToPublishPricePlanRequest(request *http.Request, validator PricerValidator) (*PublishPricePlanRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &PublishPricePlanRequest{}
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
@@ -147,8 +166,8 @@ func MapRequestToPublishPricePlanRequest(request *http.Request, validator Pricer
 	}
 	parsedRequest.ID = id
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -161,6 +180,9 @@ func MapRequestToPublishPricePlanRequest(request *http.Request, validator Pricer
 
 // MapRequestToArchivePricePlanRequest maps incoming ArchivePricePlan request to correct struct.
 func MapRequestToArchivePricePlanRequest(request *http.Request, validator PricerValidator) (*ArchivePricePlanRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &ArchivePricePlanRequest{}
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
@@ -169,8 +191,8 @@ func MapRequestToArchivePricePlanRequest(request *http.Request, validator Pricer
 	}
 	parsedRequest.ID = id
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -183,6 +205,9 @@ func MapRequestToArchivePricePlanRequest(request *http.Request, validator Pricer
 
 // MapRequestToDeletePricePlanRequest maps incoming DeletePricePlan request to correct struct.
 func MapRequestToDeletePricePlanRequest(request *http.Request, validator PricerValidator) (*DeletePricePlanRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &DeletePricePlanRequest{}
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
@@ -191,8 +216,8 @@ func MapRequestToDeletePricePlanRequest(request *http.Request, validator PricerV
 	}
 	parsedRequest.ID = id
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -205,13 +230,19 @@ func MapRequestToDeletePricePlanRequest(request *http.Request, validator PricerV
 
 // MapRequestToCreateFeatureRequest maps incoming CreateFeature request to correct struct.
 func MapRequestToCreateFeatureRequest(request *http.Request, validator PricerValidator) (*CreateFeatureRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &CreateFeatureRequest{}
+	if request.Body == nil {
+		return nil, ErrInvalidPriceFeaturePayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
 		return nil, ErrInvalidPriceFeaturePayload
 	}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -224,7 +255,13 @@ func MapRequestToCreateFeatureRequest(request *http.Request, validator PricerVal
 
 // MapRequestToUpdateFeatureRequest maps incoming UpdateFeature request to correct struct.
 func MapRequestToUpdateFeatureRequest(request *http.Request, validator PricerValidator) (*UpdateFeatureRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &UpdateFeatureRequest{}
+	if request.Body == nil {
+		return nil, ErrInvalidPriceFeaturePayload
+	}
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
 	if err != nil {
@@ -236,9 +273,13 @@ func MapRequestToUpdateFeatureRequest(request *http.Request, validator PricerVal
 		return nil, ErrInvalidPriceFeaturePayload
 	}
 	parsedRequest.ID = id
+	// Replacement models carry server-owned history and are not HTTP input.
+	if parsedRequest.Feature != nil {
+		return nil, ErrInvalidPriceFeaturePayload
+	}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -265,6 +306,9 @@ func MapRequestToGetFeaturesRequest(request *http.Request, validator PricerValid
 
 // MapRequestToDeleteFeatureRequest maps incoming DeleteFeature request to correct struct.
 func MapRequestToDeleteFeatureRequest(request *http.Request, validator PricerValidator) (*DeleteFeatureRequest, error) {
+	if err := validatePriceActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsedRequest := &DeleteFeatureRequest{}
 
 	id, err := toolbox.GetVariableValueFromUri(request, "id")
@@ -273,8 +317,8 @@ func MapRequestToDeleteFeatureRequest(request *http.Request, validator PricerVal
 	}
 	parsedRequest.ID = id
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrPriceUserIDRequired
 	}
 
@@ -289,7 +333,6 @@ func validateParsedRequest(request interface{}, validator PricerValidator) error
 	if validator == nil {
 		return nil
 	}
-
 	return validator.Validate(request)
 }
 
