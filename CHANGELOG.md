@@ -79,6 +79,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [transactional API-token admission](external/accessmanager/README.md#transactional-api-token-policy),
+  forwarded by the starter, using current grants and fenced owner-wide inventory.
+  Limits, current account reads and insertion share the callback transaction;
+  secrets are delivered only after successful completion. Explicit grant and
+  inventory preparation on one managed Mongo client/database is required.
 - Shared [live-session verification](external/accessmanager/README.md#live-session-authority)
   for explicit credentials and preloaded JWT guards, using current session owner,
   account identity, email revision and type. Active/admin guards enforce current
@@ -140,6 +145,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** credential-management and logout-other-sessions routes require
+  the live active-session middleware. The mixed API-token/JWT route field is
+  retained but ignored; missing session middleware returns 503. See the
+  [migration contract](external/accessmanager/README.md#transactional-api-token-policy).
+- Legacy role admission now requires exact inventory counts from token adapters;
+  there is no paginated-list fallback. This transitional path remains non-atomic
+  and must not share inventory with transactional writers during migration.
 - **Breaking:** custom session adapters must preserve operational failures and
   return consistent live identities. Anonymous fallback requires an anonymous
   placeholder without credential metadata. Joined or unknown failures are not
@@ -221,6 +233,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- Configured token admission never falls back to role allowances on policy
+  denial or outage. It validates adapter results, preserves failure causes and
+  checks cancellation between calls before delivering a secret. Cancellation or
+  an uncertain commit does not prove rollback; issuance is not a secret-recovery
+  API. Native policy error manifests retain host override precedence.
 - Cookie adapters refresh only known absent/expired credentials, preserve cookies
   on account denials or operational failures, and publish replacement cookies
   only after retry identity validation and the final cancellation check. Anonymous

@@ -137,6 +137,9 @@ type GroupService interface {
 
 // Service holds and manages accessmanager service business logic
 type Service struct {
+	// tokenPolicy is configured once at startup; nil retains legacy role limits
+	// during explicit migration. A configured policy never falls back to roles.
+	tokenPolicy           TokenCreationPolicy
 	oauthConnections      *OAuthConnectionsConfig
 	EphemeralStore        EphemeralStore
 	AuditService          AuditService
@@ -165,6 +168,9 @@ const (
 
 // NewServiceRequest holds all expected dependencies for an accessmanager service
 type NewServiceRequest struct {
+	// TokenPolicy supplies live transactional inventory limits. Nil preserves
+	// legacy non-atomic admission until the host explicitly migrates its grants.
+	TokenPolicy TokenCreationPolicy
 	// EphemeralStore handles storing tokens in cache
 	EphemeralStore EphemeralStore
 
@@ -194,6 +200,7 @@ type NewServiceRequest struct {
 func NewService(r *NewServiceRequest) *Service {
 
 	return &Service{
+		tokenPolicy:           r.TokenPolicy,
 		EphemeralStore:        r.EphemeralStore,
 		EmailManager:          r.EmailManager,
 		AuthService:           r.AuthService,
@@ -455,8 +462,25 @@ func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUs
 	}, nil
 }
 
-// GetUserAPITokenThreshold retrieves the thresholds applied to the user r. API tokens
+// GetUserAPITokenThreshold returns display limits for an already authorized
+// owner. Configured live policy never falls back to legacy roles; these values
+// are an observation, not permission to create a credential later.
 func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error) {
+	if s == nil || ctx == nil {
+		return nil, ErrTokenPolicyUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r == nil || r.UserId == "" {
+		return nil, ErrBadRequest
+	}
+	if s.tokenPolicy != nil {
+		return s.policyTokenThreshold(ctx, r.UserId)
+	}
+	if s.UserService == nil {
+		return nil, ErrTokenPolicyUnavailable
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "get-user-api-token-threshold")
 	logger.Debug("handling-get-user-api-token-threshold-request")
 
@@ -464,8 +488,14 @@ func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITok
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
 		ID: r.UserId,
 	})
+	if contextErr := ctx.Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil {
 		return nil, err
+	}
+	if userResponse == nil || userResponse.User == nil || userResponse.User.ID != r.UserId {
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	persistentUser := userResponse.User
@@ -529,17 +559,45 @@ func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenR
 	return s.ApitokenService.DeleteAPIToken(ctx, &apitoken.DeleteAPITokenRequest{UserID: r.UserID, APITokenID: r.APITokenID})
 }
 
-// CreateUserAPIToken generates API token for user
-// TODO: Create tests
+// CreateUserAPIToken issues a credential for an already authorized active owner.
+// Configured policy fences limits and inventory transactionally; nil policy is
+// the transitional, non-atomic legacy role path. No secret escapes an observed
+// cancellation or failed/uncertain adapter outcome. Neither implies rollback.
 func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error) {
+	if s == nil || ctx == nil {
+		return nil, ErrTokenPolicyUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r == nil || r.UserID == "" {
+		return nil, ErrBadRequest
+	}
+	if r.Ttl < 0 {
+		return nil, apitoken.ErrInvalidTokenTTL
+	}
+	request := *r
+	r = &request // Keep owner and requested limits stable across callback retries.
+	if s.tokenPolicy != nil {
+		return s.createPolicyToken(ctx, r)
+	}
+	if s.UserService == nil || s.ApitokenService == nil {
+		return nil, ErrTokenPolicyUnavailable
+	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	// Check if user exist
 	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
 		ID: r.UserID,
 	})
+	if contextErr := ctx.Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil {
 		return nil, err
+	}
+	if userResponse == nil || userResponse.User == nil || userResponse.User.ID != r.UserID || userResponse.User.Status != userv2.AccountStatusKeyActive {
+		return nil, ErrForbiddenUnableToAction
 	}
 
 	persistentUser := userResponse.User
@@ -553,6 +611,9 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 
 	// get user's apitokens count
 	userPermanentTokenCount, userEphemeralTokenCount, err := s.getUserApiTokensCountByType(ctx, persistentUser.ID)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +627,7 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 		return nil, ErrEphemeralAPITokenLimitReached
 	}
 
-	// TODO: Make sure request honor role's increments etc.
+	// Legacy lifetime constraints remain explicit during policy migration.
 	err = s.verifyRequestIsWithinUserRoleTokenConstraints(ctx, persistentUser.ID, r.Ttl, &getUserRoleThresholdAllocation)
 	if err != nil {
 		return nil, err
@@ -579,13 +640,14 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 		TokenTtl:    r.Ttl,
 		Description: r.Description,
 	})
+	if contextErr := ctx.Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	return &CreateUserAPITokenResponse{
-		UserAPIToken: apiTokenResponse.APIToken,
-	}, nil
+	return createdTokenResponse(apiTokenResponse, r.UserID)
 }
 
 // verifyRequestIsWithinUserRoleTokenConstraints is taking the token time and making sure it's within the user's
@@ -608,7 +670,7 @@ func (s *Service) verifyRequestIsWithinUserRoleTokenConstraints(ctx context.Cont
 		return ErrCreateUserAPITokenRequestTtlTooLong
 	}
 
-	if tokenTtl%userRoleThresholds.ShortLivedMinimumIncrements != 0 {
+	if userRoleThresholds.ShortLivedMinimumIncrements <= 0 || tokenTtl%userRoleThresholds.ShortLivedMinimumIncrements != 0 {
 		logger.Error("failed-to-create-user-ephemeral-token", zap.String("failure-reason", "ttl-outside-allowed-increment"), zap.String("user-id", userId), zap.Int64("requested-ttl", tokenTtl), zap.Int64("user-role-rank", userRoleThresholds.Ranking))
 		return ErrCreateUserAPITokenRequestTtlOutsideAllowedIncrement
 	}
@@ -616,41 +678,21 @@ func (s *Service) verifyRequestIsWithinUserRoleTokenConstraints(ctx context.Cont
 	return nil
 }
 
-// getUserApiTokensCountByType is handling getting user's token and returning
-// how many are Permanent or Ephemeral
-func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string) (int, int, error) {
-
-	var (
-		userPermanentToken int
-		userEphemeralToken int
-		logger             *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-	)
-
-	// get user api tokens
-	userApiTokens, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
-		PerPage: 100,
-		Page:    1,
-		ID:      userId,
-	})
-
+// getUserApiTokensCountByType counts exact stored inventory, not a display page.
+// Legacy role admission still needs migration to the transactional policy port.
+func (s *Service) getUserApiTokensCountByType(ctx context.Context, userID string) (int64, int64, error) {
+	inventory, ok := s.ApitokenService.(tokenInventory)
+	if !ok {
+		return 0, 0, ErrTokenPolicyUnavailable
+	}
+	count, err := inventory.CountTokenInventory(ctx, userID)
 	if err != nil {
-		logger.Error("error-fetching-user-auth-tokens", zap.Error(err))
 		return 0, 0, err
 	}
-
-	// get token types
-	for _, apiToken := range userApiTokens.APITokens {
-
-		if apiToken.IsShortLivedToken() {
-			userEphemeralToken++
-			continue
-		}
-
-		userPermanentToken++
-		continue
+	if count.Permanent < 0 || count.Ephemeral < 0 {
+		return 0, 0, ErrTokenPolicyUnavailable
 	}
-
-	return userPermanentToken, userEphemeralToken, nil
+	return count.Permanent, count.Ephemeral, nil
 }
 
 // MiddlewareValidAPITokenRequired validates that the request contains a valid API

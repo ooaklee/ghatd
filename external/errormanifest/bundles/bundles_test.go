@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
+	"github.com/ooaklee/ghatd/external/accesspolicy"
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/billing"
@@ -45,6 +46,7 @@ func TestBundles(t *testing.T) {
 				paymentprovider.PaymentProviderErrorMap,
 				paymentproviderhelpers.PaymentProviderHelperErrorMap,
 				billing.BillingErrorMap,
+				accesspolicy.AccessPolicyErrorMap,
 			},
 		},
 		{

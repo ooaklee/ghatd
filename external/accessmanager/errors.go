@@ -9,7 +9,9 @@ var (
 	ErrRefreshTemporarilyUnavailable = errors.New("accessmanager/refresh-temporarily-unavailable")
 	// ErrSessionVerificationUnavailable rejects incomplete live-session wiring.
 	// It is an operational failure, not evidence that a user has lost authority.
-	ErrSessionVerificationUnavailable                      = errors.New("accessmanager/session-verification-unavailable")
+	ErrSessionVerificationUnavailable = errors.New("accessmanager/session-verification-unavailable")
+	// ErrTokenPolicyUnavailable means configured policy/inventory cannot safely admit creation.
+	ErrTokenPolicyUnavailable                              = errors.New("accessmanager/token-policy-unavailable")
 	ErrAPITokenNotAssociatedWithUser                       = errors.New(ErrKeyAPITokenNotAssociatedWithUser)
 	ErrBadRequest                                          = errors.New(ErrKeyBadRequest)
 	ErrConflictingUserState                                = errors.New(ErrKeyConflictingUserState)

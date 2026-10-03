@@ -1,6 +1,7 @@
 package accessmanager
 
 import (
+	"github.com/ooaklee/ghatd/external/accesspolicy"
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/billing"
@@ -25,6 +26,6 @@ func DependencyErrorMaps() []reply.ErrorManifest {
 		user.UserErrorMap, auth.AuthErrorMap, apitoken.ApitokenErrorMap,
 		toolbox.ToolboxErrorMap, group.GroupErrorMap, billingmanager.BillingManagerErrorMap,
 		paymentprovider.PaymentProviderErrorMap, paymentproviderhelpers.PaymentProviderHelperErrorMap,
-		billing.BillingErrorMap,
+		billing.BillingErrorMap, accesspolicy.AccessPolicyErrorMap,
 	)
 }

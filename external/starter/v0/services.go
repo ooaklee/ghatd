@@ -64,6 +64,10 @@ type PolicyConfig struct {
 // explicit so starter/v0 does not hide app-specific decisions.
 type NewServicesRequest struct {
 	Repositories *Repositories
+	// TokenPolicy opts Access Manager into a live transactional inventory policy.
+	// Initialize/seed it explicitly using the same repositories' Mongo client;
+	// nil leaves the documented legacy admission path during migration.
+	TokenPolicy accessmanager.TokenCreationPolicy
 
 	EphemeralStore accessmanager.EphemeralStore
 	EmailManager   accessmanager.EmailManager
@@ -214,6 +218,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	}
 
 	accessManagerService := accessmanager.NewService(&accessmanager.NewServiceRequest{
+		TokenPolicy:           r.TokenPolicy,
 		EphemeralStore:        r.EphemeralStore,
 		EmailManager:          r.EmailManager,
 		AuthService:           authService,

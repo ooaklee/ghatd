@@ -123,11 +123,13 @@ type AttachRoutesRequest struct {
 	// Handler valid accessmanager handler
 	Handler AccessmanagerHandler
 
-	// ActiveOnlyMiddleware middleware used to lock endpoints down to active users only
+	// ActiveOnlyMiddleware must verify a live, active user session, not an API
+	// credential. Credential-management routes fail closed when it is absent.
 	ActiveOnlyMiddleware mux.MiddlewareFunc
 
-	// ActiveValidApiTokenOrJWTMiddleware is middleware that is used to lock
-	// down endpoints to either tokens or JWT
+	// ActiveValidApiTokenOrJWTMiddleware is retained for source compatibility.
+	// Credential management now uses ActiveOnlyMiddleware; this field is unused
+	// by these routes and must not substitute for a session-only verifier.
 	ActiveValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
 
 	// HardenedRateLimitMiddleware protects code verification endpoints from brute-force attacks
@@ -217,17 +219,14 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		codeVerifyRoutes.Use(request.HardenedRateLimitMiddleware)
 	}
 
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.CreateUserAPIToken).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPIToken, request.Handler.GetSpecificUserAPITokens).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecific, request.Handler.DeleteUserAPIToken).Methods(http.MethodDelete, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificActivate, request.Handler.ActivateUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenSpecificRevoke, request.Handler.RevokeUserAPIToken).Methods(http.MethodPut, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerUserIDAPITokenThreshold, request.Handler.GetUserAPITokenThreshold).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.HandleFunc(APIAccessManagerLogoutOtherSessions, request.Handler.LogoutUserOthers).Methods(http.MethodGet, http.MethodOptions)
-	if request.ActiveValidApiTokenOrJWTMiddleware != nil {
-		accessmanagerActiveValidApiTokenOrJwtOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
-	}
+	accessmanagerCredentialManagementRoutes := request.Router.NewRouteGroup(APIAccessManagerPrefix, router.ActiveSession, request.ActiveOnlyMiddleware)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPIToken, Operation: "accessmanager.CreateUserAPIToken", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateUserAPIToken)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPIToken, Operation: "accessmanager.GetSpecificUserAPITokens", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetSpecificUserAPITokens)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPITokenSpecific, Operation: "accessmanager.DeleteUserAPIToken", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteUserAPIToken)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPITokenSpecificActivate, Operation: "accessmanager.ActivateUserAPIToken", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.ActivateUserAPIToken)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPITokenSpecificRevoke, Operation: "accessmanager.RevokeUserAPIToken", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.RevokeUserAPIToken)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPITokenThreshold, Operation: "accessmanager.GetUserAPITokenThreshold", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserAPITokenThreshold)
+	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerLogoutOtherSessions, Operation: "accessmanager.LogoutUserOthers", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.LogoutUserOthers)
 
 	accessmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
 	accessmanagerActiveOnlyRoutes.HandleFunc("/users/{userID}/email", request.Handler.UpdateUserEmail).Methods(http.MethodPatch, http.MethodOptions)

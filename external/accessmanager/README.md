@@ -206,7 +206,12 @@ All endpoints are prefixed with `/api/v1/ams`.
 - Google/Apple provider discovery, sign-in, callbacks and linking — see [secure provider endpoints](#secure-google-and-apple-sign-in)
 - Optional native discovery, start and exchange — see [native app handoff](#native-app-handoff)
 
-### Authenticated (JWT or API token required)
+### Active owner session required
+
+These credential-management routes no longer accept API-token-only requests.
+Use a verified active JWT/cookie session for the target account; this prevents a
+delegated credential from creating or reactivating account-wide credentials.
+
 - `POST /api/v1/ams/users/{userID}/tokens` — Create an API token
 - `GET /api/v1/ams/users/{userID}/tokens` — List API tokens
 - `DELETE /api/v1/ams/users/{userID}/tokens/{apiTokenID}` — Delete an API token
@@ -217,6 +222,74 @@ All endpoints are prefixed with `/api/v1/ams`.
 
 ### Active users only
 - `PATCH /api/v1/ams/users/{userID}/email` — Update user email address
+
+## Transactional API-token policy
+
+Credential management requires `ActiveOnlyMiddleware` backed by a live, active
+session verifier, such as the preloaded middleware suite's `ActiveOnly`. API tokens
+cannot use the built-in routes to issue or manage credentials or revoke other
+sessions. The deprecated `ActiveValidApiTokenOrJWTMiddleware` route field is
+ignored; missing session middleware returns 503 rather than exposing a handler.
+Handlers still check the requested owner against verified identity. Custom
+middleware is trusted wiring: a pass-through function is not authentication.
+
+Set `NewServiceRequest.TokenPolicy` (or `starter.NewServicesRequest.TokenPolicy`) to
+`accesspolicy.TokenPolicy{Service: policyService, System: "example-system"}` to
+enforce stored limits. Configure the system once on the server; do not derive it
+from a request. The threshold endpoint then reads that same current grant.
+Missing, expired, disabled or invalid grants deny creation without falling back
+to a role, even for an administrator.
+
+Create and initialize the [Mongo policy store](../accesspolicy/README.md#mongo-startup)
+at startup. Call the API-token repository's `InitializeTokenInventory` to create
+its collections and verify transaction support, then explicitly call
+`PrepareTokenInventory` for each provisioned owner before enabling issuance.
+Preparation is idempotent and separate from grants; it creates no credential.
+The policy store, user repository and API-token repository must share the same
+managed Mongo client and database. The built-in API-token service provides the
+required `CountTokenInventoryFenced` capability; custom adapters must provide an
+equivalent owner-wide lock and preserve the callback context. No unfenced-count
+or paginated-list fallback is permitted. See [inventory setup](../apitoken/README.md#transactional-inventory-setup).
+
+Admission reads the current target account, counts all stored owner credentials
+and inserts the new record inside `WithTokenCreation`. The grant write fence
+serializes changes to that owner/system policy, while an API-token-owned lock
+serializes counts/inserts across every system sharing the owner's inventory.
+Each system compares total inventory against its own live allowance; the limit
+is not the minimum across every system's grants. Missing preparation, a foreign
+client or a session without an active transaction fails closed. Aborted
+callbacks may retry; no external effects or secret publication may occur inside
+them. A creation response is returned only after success. An uncertain commit can
+leave a stored token whose secret was never delivered: inspect inventory and
+explicitly delete unwanted records rather than blindly retrying issuance.
+Issuance is not an idempotent secret-recovery API.
+
+Inventory includes revoked, expired and malformed-expiry records until explicit
+deletion. GETs do not clean up records or free slots. Missing/null/empty expiry
+means permanent; every other stored expiry belongs to ephemeral inventory.
+Authentication independently rejects expired or malformed expiry. Reactivation
+does not extend a credential's lifetime or change its inventory class.
+
+**Migration boundary:** an omitted `TokenPolicy` temporarily retains legacy role
+limits, now using exact counts. That old count-then-insert path is still
+non-atomic. All writers to a shared inventory must migrate together and use its
+owner-wide fence; mixing legacy/unfenced writers invalidates the concurrency
+guarantee. Different system grants may safely share the built-in owner fence.
+Direct low-level token creation is trusted infrastructure,
+not an alternative public admission endpoint.
+
+Review and seed grants explicitly before enabling the port. Existing credentials
+are neither deleted nor granted scopes automatically. Token-specific route grants
+remain separate: this port does not copy user scopes onto the issued credential.
+Host rollout, migration/rollback tooling and legacy-tier removal remain required
+before the overall permissions upgrade is complete. Custom HTTP integrations
+must retain owner/session checks and consistent reply error manifests.
+
+Policy failures retain their original causes through admission. The handler's
+dependency manifest includes `accesspolicy` errors; host overrides still take
+precedence. Joined operational failures must not be rewritten as ordinary
+policy denials. Cancellation is checked between adapter calls and before secret
+delivery, but a late cancellation does not prove that a write was rolled back.
 
 ## Configuration and Initialisation
 
@@ -264,7 +337,7 @@ func main() {
 
 When using `starter/v0`, pass the same dependencies to `starter.NewServices`, `starter.NewHandlers`, and `starter.NewMiddleware`, then call `starter.AttachDefaultRoutes`. The starter path attaches the same `/api/v1/ams` routes as the direct `accessmanager.AttachRoutes` call.
 
-> **Error maps:** The `NewHandler` and `NewMiddleware` constructors accept `ErrorMaps []reply.ErrorManifest` to translate domain errors into HTTP responses. Handlers auto-include their own domain error maps as a base layer; callers pass only cross-package/shared maps (e.g. `user`, `auth`) as overrides. Build them with the shared composer:
+> **Error maps:** The `NewHandler` and `NewMiddleware` constructors accept `ErrorMaps []reply.ErrorManifest` to translate domain errors into HTTP responses. The Access Manager handler includes its domain and dependency manifests (including `user`, `auth`, `apitoken` and `accesspolicy`), so expected lifecycle and policy failures remain structured without a host bundle. Caller-supplied manifests override these defaults. Build them with the shared composer:
 >
 > ```go
 > import "github.com/ooaklee/ghatd/external/errormanifest"

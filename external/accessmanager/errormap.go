@@ -14,6 +14,7 @@ import (
 var AccessmanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrRefreshTemporarilyUnavailable:                       {Title: "Service Unavailable", Detail: "Session refresh is temporarily unavailable", StatusCode: 503, Code: "AM00-040"},
 	ErrSessionVerificationUnavailable:                      {Title: "Service Unavailable", Detail: "Session verification is unavailable", StatusCode: 503, Code: "AM00-039"},
+	ErrTokenPolicyUnavailable:                              {Title: "Service Unavailable", Detail: "Token policy is unavailable", StatusCode: 503, Code: "AM00-038"},
 	ErrOAuthDisconnectSessionRequired:                      {Title: "Provider disconnected. Sign in with your verified email.", StatusCode: 503, Code: "OAuthDisconnectSessionRequired"},
 	oauth.ErrDisconnectProofInvalid:                        {Title: "Invalid or expired verification", StatusCode: 400, Code: "DisconnectProofInvalid"},
 	oauth.ErrDisconnectChallengeLocked:                     {Title: "Request a new verification email", StatusCode: 423, Code: "DisconnectChallengeLocked"},
