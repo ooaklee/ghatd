@@ -380,23 +380,28 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 // LoginUser exchanges an email proof for session cookies. Error details come
 // only from manifests; proof values and private adapter diagnostics are not logged.
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-login-user")
 
 	request, err := MapRequestToLoginUserRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("login-request-rejected")
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
+		return
+	}
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable, reply.WithContext(r.Context()))
 		return
 	}
 
 	response, err := h.Service.LoginUser(r.Context(), request)
 	if err != nil {
 		logger.Warn("login-proof-exchange-failed")
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 	if response == nil || response.AccessToken == "" || response.RefreshToken == "" {
-		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable, reply.WithContext(r.Context()))
 		return
 	}
 
@@ -409,7 +414,7 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
+	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt), reply.WithContext(r.Context()))
 }
 
 // CreateInitalLoginOrVerificationToken dependent on the user's account status,
@@ -464,23 +469,28 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 // ValidateEmailVerificationCode delegates one-use proof admission and account
 // activation to the service, publishing cookies only for a complete session.
 func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-validate-email-verification-code")
 
 	request, err := MapRequestToValidateEmailVerificationCodeRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("email-verification-request-rejected")
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
+		return
+	}
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable, reply.WithContext(r.Context()))
 		return
 	}
 
 	revisions, err := h.Service.ValidateEmailVerificationCode(r.Context(), request)
 	if err != nil {
 		logger.Warn("email-verification-proof-exchange-failed")
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 	if revisions == nil || revisions.AccessToken == "" || revisions.RefreshToken == "" {
-		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable, reply.WithContext(r.Context()))
 		return
 	}
 
@@ -493,7 +503,7 @@ func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(revisions.AccessTokenExpiresAt), fmt.Sprint(revisions.RefreshTokenExpiresAt))
+	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(revisions.AccessTokenExpiresAt), fmt.Sprint(revisions.RefreshTokenExpiresAt), reply.WithContext(r.Context()))
 }
 
 // GetBaseResponseHandler composes manager and dependency maps, then host overrides.

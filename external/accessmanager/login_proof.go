@@ -11,16 +11,22 @@ import (
 // proofDependencies checks the adapters needed to create a session from a proof.
 // Cancellation stops admission even when a custom adapter ignores context.
 func (s *Service) proofDependencies(ctx context.Context) error {
-	if ctx == nil || s == nil || s.AuthService == nil || s.EphemeralStore == nil || s.UserService == nil {
+	if ctx == nil || s == nil || nilAccessDependency(s.AuthService) || nilAccessDependency(s.EphemeralStore) || nilAccessDependency(s.UserService) {
 		return ErrSessionVerificationUnavailable
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, ok := s.UserService.(loginStateUsers); !ok {
+		return user.ErrLoginStateUnavailable
+	}
+	return nil
 }
 
 // proofAccount checks a trusted signed identity against the current account.
 // Missing legacy type remains unbound, not reconstructed from client input.
 func (s *Service) proofAccount(ctx context.Context, id, kind string, revision int64) (*user.UniversalUser, error) {
-	if ctx == nil || s == nil || s.UserService == nil {
+	if ctx == nil || s == nil || nilAccessDependency(s.UserService) {
 		return nil, ErrSessionVerificationUnavailable
 	}
 	if err := ctx.Err(); err != nil {

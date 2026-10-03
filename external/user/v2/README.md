@@ -135,13 +135,49 @@ request context and `Cache-Control: no-store` while retaining the 200 user shape
 
 The repository still performs a **broad `$set`**, not a field-level comparison.
 Email, email revision, provider identity and handle fields are excluded, but
-other stale snapshot fields can overwrite newer data. This batch does not make
-login metadata, activation, role changes or other legacy writers race-safe.
+other stale snapshot fields can overwrite newer data. This legacy command does
+not make login metadata, activation, role changes or other broad writers race-safe.
 Migrate each workflow to its own narrow conditional command. No client ETag,
 general snapshot revision or ABA protection is implied. Decode/network and
 unacknowledged failures may have committed: inspect state, do not automatically
 retry or infer rollback. A valid acknowledged post-image remains success despite
 late cancellation. Optional legacy audit remains best-effort, not transactional.
+
+## Conditional login state
+
+`RecordFreshLogin` and `ActivateVerifiedEmail` accept a trusted `AccountSnapshot`,
+not a replacement account or public HTTP payload. The manager must first verify
+and consume the appropriate single-use proof. The domain rereads the account,
+compares mailbox/revision/type/status, validates configured model rules on a
+detached copy, and delegates to `LoginStateRepository`. Native errors retain their
+original trees for shared reply mapping. Missing capabilities or invalid receipts
+return 503 (`USV2-041`); changed state returns 409 (`USV2-040`). Both require a fresh
+sign-in after proof consumption, not automatic replay of the same link or code.
+
+**Breaking for custom adapters:** implement both `SetFreshLogin` and
+`SetVerifiedEmailActivation`, using acknowledged conditional post-images. There
+is no `UpdateUser` fallback. The built-in adapter uses the shared atomic Mongo
+helper, binary security-field comparisons, legacy absent type/revision handling,
+and no retry or upsert. Raw legacy type is retained in storage while the returned
+domain model is hydrated with its configured type.
+
+An ACTIVE login changes only `metadata.last_login_at` and
+`metadata.last_fresh_login_at`, preserving profile `updated_at`. Distinct valid
+proofs may both succeed; these timestamps are last-writer-wins, not monotonic
+sequence numbers. Activation requires PROVISIONED and writes ACTIVE, email
+verification, activation/status-change/updated timestamps and the two login
+timestamps. Both merge only their owned fields into nullable legacy objects;
+unrelated profile, role, provider, phone-verification and extension changes survive.
+Configured clock/string utilities are required. One typed UTC instant supplies
+RFC3339Nano timestamps; old timestamp strings do not need rewriting.
+
+The acknowledged post-image is the source for session claims. These commands do
+not authenticate, consume proofs, create sessions or emit manager audit events.
+They are not a transaction with Redis/signing, general ABA protection, an account
+revocation lock, or protection from later legacy broad writers. A native network
+or decoding failure can follow a committed write; never infer rollback. An
+acknowledged domain receipt stays successful after late cancellation, while the
+manager still denies subsequent session issuance on a canceled request.
 
 ## Conditional profile names
 

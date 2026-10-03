@@ -47,7 +47,7 @@ func TestLoginProofAdmissionAndConsumption(t *testing.T) {
 			{"lost consumption race", accessmanager.ErrUnauthorizedTokenNotFoundInStore, true, false},
 			{"invalid deletion count", accessmanager.ErrSessionVerificationUnavailable, true, false},
 			{"uncertain consumption", outage, true, false},
-			{"account write outage", outage, true, endpoint == "login"},
+			{"account write outage", outage, true, false},
 			{"nil mint result", accessmanager.ErrSessionVerificationUnavailable, true, true},
 			{"cancel after lookup", context.Canceled, false, false},
 			{"cancel after account", context.Canceled, false, false},
@@ -147,7 +147,16 @@ func TestLoginProofAdmissionAndConsumption(t *testing.T) {
 						return nil
 					},
 				}
+				transition := func(_ context.Context, req *user.AccountSnapshot) (*user.UniversalUser, error) {
+					events = append(events, "update")
+					require.Equal(t, account.ID, req.UserID)
+					if tc.name == "account write outage" {
+						return nil, outage
+					}
+					return loginStateReceipt(account, endpoint != "login"), nil
+				}
 				s.UserService = &refreshUserServiceMock{
+					recordFreshLoginFunc: transition, activateVerifiedEmailFunc: transition,
 					getUserByIDFunc: func(context.Context, *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error) {
 						if tc.name == "nil account result" {
 							return nil, nil
@@ -157,12 +166,9 @@ func TestLoginProofAdmissionAndConsumption(t *testing.T) {
 						}
 						return &user.GetUserByIDResponse{User: account}, nil
 					},
-					updateUserFunc: func(_ context.Context, req *user.UpdateUserRequest) (*user.UpdateUserResponse, error) {
-						events = append(events, "update")
-						if tc.name == "account write outage" {
-							return nil, outage
-						}
-						return &user.UpdateUserResponse{User: req.User}, nil
+					updateUserFunc: func(context.Context, *user.UpdateUserRequest) (*user.UpdateUserResponse, error) {
+						t.Fatal("broad update invoked")
+						return nil, nil
 					},
 				}
 				var err error

@@ -96,7 +96,6 @@ type UserService interface {
 	GetUserByNanoID(ctx context.Context, r *userv2.GetUserByNanoIDRequest) (*userv2.GetUserByNanoIDResponse, error)
 	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
 	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
-	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
 	CreateUser(ctx context.Context, r *userv2.CreateUserRequest) (*userv2.CreateUserResponse, error)
 }
 
@@ -1098,32 +1097,8 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 			return nil, err
 		}
 	case userv2.AccountStatusKeyActive:
-		tokenDetails, err = s.createSessionToken(ctx, persistentUser, time.Now())
+		tokenDetails, err = s.completeProofSession(ctx, persistentUser, false)
 		if err != nil {
-			return nil, err
-		}
-
-		// Update the user's login timestamps.
-		persistentUser.SetLastLoginAtNow()
-		persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
-
-		updateUserResponse, updateErr := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-			User: persistentUser,
-		})
-		if updateErr != nil {
-			logger.Error("system-update-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
-			return nil, updateErr
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if updateUserResponse == nil || updateUserResponse.User == nil || updateUserResponse.User.ID != persistentUser.ID {
-			return nil, ErrSessionVerificationUnavailable
-		}
-
-		err = s.EphemeralStore.CreateAuth(ctx, updateUserResponse.User.ID, tokenDetails)
-		if err != nil {
-			logger.Error("ephemeral-store-failed-after-successful-login-initiation", zap.String("user-id", persistentUser.ID))
 			return nil, err
 		}
 	default:
@@ -1134,22 +1109,6 @@ func (s *Service) LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUse
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	auditEvent := audit.UserLogin
-	var auditErr error
-	if s.AuditService != nil {
-		auditErr = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			ActorId:    audit.AuditActorIdSystem,
-			Action:     auditEvent,
-			TargetId:   persistentUser.ID,
-			TargetType: audit.User,
-			Domain:     "accessmanager",
-		})
-	}
-
-	if auditErr != nil {
-		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", persistentUser.ID), zap.String("event-type", string(auditEvent)))
-	}
-
 	return &LoginUserResponse{
 		AccessToken:           tokenDetails.AccessToken,
 		RefreshToken:          tokenDetails.RefreshToken,
@@ -1206,8 +1165,9 @@ func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context,
 	return nil
 }
 
-// ValidateEmailVerificationCode handles updating the system to illustrate a successful email verification
-// TODO: Create tests
+// ValidateEmailVerificationCode validates and consumes a mailbox proof before
+// delegating PROVISIONED activation and session issuance to the manager workflow.
+// Failures retain native causes; a consumed proof is never restored or replayed.
 func (s *Service) ValidateEmailVerificationCode(ctx context.Context, r *ValidateEmailVerificationCodeRequest) (*ValidateEmailVerificationCodeResponse, error) {
 	if r == nil {
 		return nil, ErrBadRequest
@@ -1291,57 +1251,10 @@ func (s *Service) verifyEmailAndCreateSession(ctx context.Context, persistentUse
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "verify-email-and-create-session")
-
 	if persistentUser.Status != userv2.AccountStatusKeyProvisioned {
-		logger.Warn("email-verification-rejected-for-non-provisioned-user", zap.String("user-id", persistentUser.ID), zap.String("user-status", persistentUser.Status))
 		return nil, ErrUserStatusUncaught
 	}
-	if err := s.proofDependencies(ctx); err != nil {
-		return nil, err
-	}
-
-	// Update the user's verification data, login metadata, and state before
-	// creating tokens so the resulting access token is authorised.
-	persistentUser.SetLastLoginAtNow()
-	persistentUser.Metadata.LastFreshLoginAt = persistentUser.Metadata.LastLoginAt
-	persistentUser.VerifyEmail()
-	revisionedUser, err := persistentUser.UpdateStatus(userv2.AccountStatusKeyActive)
-	if err != nil {
-		logger.Error("user-status-update-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
-		return nil, err
-	}
-
-	updateUserResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		User: revisionedUser,
-	})
-	if err != nil {
-		logger.Error("system-update-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if updateUserResponse == nil || updateUserResponse.User == nil || updateUserResponse.User.ID != persistentUser.ID {
-		return nil, ErrSessionVerificationUnavailable
-	}
-
-	newTokenDetails, err := s.createSessionToken(ctx, updateUserResponse.User, time.Now())
-	if err != nil {
-		logger.Error("token-creation-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
-		return nil, err
-	}
-
-	err = s.EphemeralStore.CreateAuth(ctx, persistentUser.ID, newTokenDetails)
-	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-email-verification", zap.String("user-id", persistentUser.ID))
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	return newTokenDetails, nil
+	return s.completeProofSession(ctx, persistentUser, true)
 }
 
 // TokenAsStringValidator verifies a signed access-family token and its live

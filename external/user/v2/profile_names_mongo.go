@@ -48,11 +48,10 @@ func (r *Repository) SetProfileNames(ctx context.Context, req *SetProfileNamesRe
 	if err != nil {
 		return nil, err
 	}
-	filter := bson.M{"_id": a.UserID, "email": a.ExpectedEmail, "status": a.ExpectedStatus, "type": profileSnapshotField(a.ExpectedType), "email_revision": a.ExpectedRevision,
-		"personal_info.first_name": profileSnapshotField(command.Before.FirstName), "personal_info.last_name": profileSnapshotField(command.Before.LastName), "personal_info.full_name": profileSnapshotField(command.Before.FullName)}
-	if a.ExpectedRevision == 0 {
-		filter["email_revision"] = bson.M{"$in": bson.A{nil, int64(0)}}
-	}
+	filter := accountSnapshotFilter(AccountSnapshot{UserID: a.UserID, Email: a.ExpectedEmail, Status: a.ExpectedStatus, Type: a.ExpectedType, EmailRevision: a.ExpectedRevision})
+	filter["personal_info.first_name"] = profileSnapshotField(command.Before.FirstName)
+	filter["personal_info.last_name"] = profileSnapshotField(command.Before.LastName)
+	filter["personal_info.full_name"] = profileSnapshotField(command.Before.FullName)
 	update := mongo.Pipeline{bson.D{{Key: "$set", Value: bson.M{
 		"personal_info": bson.M{"$mergeObjects": bson.A{bson.M{"$ifNull": bson.A{"$personal_info", bson.M{}}}, bson.M{"$literal": bson.M{"first_name": command.After.FirstName, "last_name": command.After.LastName, "full_name": command.After.FullName}}}},
 		"metadata":      bson.M{"$mergeObjects": bson.A{bson.M{"$ifNull": bson.A{"$metadata", bson.M{}}}, bson.M{"updated_at": command.UpdatedAt}}},

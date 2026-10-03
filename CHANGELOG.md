@@ -381,6 +381,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking for custom adapters:** [Proof login](external/accessmanager/README.md#conditional-login-account-transitions)
+  now uses narrow conditional account commands before minting a session from the
+  acknowledged post-image and its fresh-login timestamp. ACTIVE logins update only
+  login metadata; PROVISIONED activation compares security state and merges only
+  its owned fields. Custom user/repository adapters must implement both narrow
+  capabilities; broad snapshot fallback is removed. Native conflicts map to 409,
+  unconfirmed receipts to 503; both require a fresh sign-in after proof consumption.
+  Success contracts remain unchanged, with contextual no-store replies. This is
+  not a transaction with proof/session storage or session-family revocation.
 - **Breaking for custom adapters:** [Legacy user updates](external/user/v2/README.md#legacy-broad-updates)
   now require acknowledged Mongo post-images through the shared repository helper,
   and configured clock/string utilities. Native validation and persistence errors
@@ -388,8 +397,8 @@ when the release version has been selected, and remove unused subsections.
   overwritten by body IDs, conflicting in-process selectors are rejected, and
   caller-owned models are isolated before mutation. The existing snapshot conflict
   has a domain-level 409 mapping; replies carry context and are no-store.
-  Broad snapshot writes remain broad: general field CAS and narrow login/activation
-  workflows are still separate migrations, not guarantees of this change.
+  Broad snapshot writes remain broad: general field CAS is not a guarantee of
+  the legacy command; migrate callers to the operation-specific commands.
 - **Breaking for custom adapters:** [Self-service profile names](external/usermanager/README.md#self-service-profile-names)
   now require the narrow user-domain/profile repository capability instead of a
   broad user snapshot write. Managers require verified session or API context,

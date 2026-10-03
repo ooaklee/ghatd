@@ -230,7 +230,21 @@ func TestServiceCreateInitalLoginTokenReleasesCooldownWhenSendFails(t *testing.T
 	require.Equal(t, 1, store.releaseLoginEmailCooldowns)
 }
 
-func TestServiceLoginUserCodeVerifiesAndActivatesProvisionedUser(t *testing.T) {
+func TestServiceLoginUserAccountTransitions(t *testing.T) {
+	for _, flow := range []string{"provisioned code", "active token"} {
+		t.Run(flow, func(t *testing.T) {
+			if flow == "provisioned code" {
+				testLoginUserCodeActivates(t)
+			} else {
+				testLoginUserActiveToken(t)
+			}
+		})
+	}
+}
+
+// The two helpers retain transport-specific assertions within one flow table.
+func testLoginUserCodeActivates(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	const (
@@ -274,7 +288,7 @@ func TestServiceLoginUserCodeVerifiesAndActivatesProvisionedUser(t *testing.T) {
 		},
 		createTokenFunc: func(ctx context.Context, tokenUser auth.UserModel) (*auth.TokenDetails, error) {
 			require.Equal(t, userv2.AccountStatusKeyActive, tokenUser.GetUserStatus())
-			require.True(t, user.Verification.EmailVerified)
+			require.True(t, tokenUser.(*userv2.UniversalUser).Verification.EmailVerified)
 			return &auth.TokenDetails{
 				AccessToken:  "session-access-token",
 				AccessUUID:   "session-access-uuid",
@@ -288,11 +302,11 @@ func TestServiceLoginUserCodeVerifiesAndActivatesProvisionedUser(t *testing.T) {
 	updateCalls := 0
 	userService := &refreshUserServiceMock{
 		user: user,
-		updateUserFunc: func(ctx context.Context, req *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error) {
+		activateVerifiedEmailFunc: func(ctx context.Context, req *userv2.AccountSnapshot) (*userv2.UniversalUser, error) {
 			updateCalls++
-			require.Equal(t, userv2.AccountStatusKeyActive, req.User.Status)
-			require.True(t, req.User.Verification.EmailVerified)
-			return &userv2.UpdateUserResponse{User: req.User}, nil
+			require.Equal(t, userv2.AccountStatusKeyProvisioned, req.Status)
+			require.Equal(t, user.ID, req.UserID)
+			return loginStateReceipt(user, true), nil
 		},
 	}
 
@@ -316,14 +330,15 @@ func TestServiceLoginUserCodeVerifiesAndActivatesProvisionedUser(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "session-access-token", response.AccessToken)
 	require.Equal(t, "session-refresh-token", response.RefreshToken)
-	require.Equal(t, userv2.AccountStatusKeyActive, user.Status)
-	require.True(t, user.Verification.EmailVerified)
+	require.Equal(t, userv2.AccountStatusKeyProvisioned, user.Status, "caller snapshot must not be mutated")
+	require.False(t, user.Verification.EmailVerified)
 	require.Equal(t, 1, updateCalls)
 	require.Equal(t, 1, auditCalls)
 	require.Equal(t, "user-1:"+verificationUUID, deletedTokenID)
 }
 
-func TestServiceLoginUserKeepsActiveUserOnOrdinaryLoginPath(t *testing.T) {
+func testLoginUserActiveToken(t *testing.T) {
+	t.Helper()
 	t.Parallel()
 
 	const (
@@ -380,11 +395,11 @@ func TestServiceLoginUserKeepsActiveUserOnOrdinaryLoginPath(t *testing.T) {
 		AuthService:    authService,
 		UserService: &refreshUserServiceMock{
 			user: user,
-			updateUserFunc: func(ctx context.Context, req *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error) {
+			recordFreshLoginFunc: func(ctx context.Context, req *userv2.AccountSnapshot) (*userv2.UniversalUser, error) {
 				updateCalls++
-				require.Equal(t, userv2.AccountStatusKeyActive, req.User.Status)
-				require.True(t, req.User.Verification.EmailVerified)
-				return &userv2.UpdateUserResponse{User: req.User}, nil
+				require.Equal(t, userv2.AccountStatusKeyActive, req.Status)
+				require.Equal(t, user.ID, req.UserID)
+				return loginStateReceipt(user, false), nil
 			},
 		},
 		AuditService: &loginAuditServiceMock{},

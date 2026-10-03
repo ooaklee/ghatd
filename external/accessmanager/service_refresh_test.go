@@ -186,9 +186,25 @@ func (m *refreshAuthServiceMock) ExtractAccessTokenMetadataByString(ctx context.
 
 // refreshUserServiceMock returns a fixed user for refresh-service tests.
 type refreshUserServiceMock struct {
-	user            *userv2.UniversalUser
-	getUserByIDFunc func(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
-	updateUserFunc  func(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
+	recordFreshLoginFunc      func(context.Context, *userv2.AccountSnapshot) (*userv2.UniversalUser, error)
+	activateVerifiedEmailFunc func(context.Context, *userv2.AccountSnapshot) (*userv2.UniversalUser, error)
+	user                      *userv2.UniversalUser
+	getUserByIDFunc           func(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	updateUserFunc            func(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
+}
+
+func (m *refreshUserServiceMock) RecordFreshLogin(ctx context.Context, r *userv2.AccountSnapshot) (*userv2.UniversalUser, error) {
+	if m.recordFreshLoginFunc != nil {
+		return m.recordFreshLoginFunc(ctx, r)
+	}
+	return nil, userv2.ErrLoginStateUnavailable
+}
+
+func (m *refreshUserServiceMock) ActivateVerifiedEmail(ctx context.Context, r *userv2.AccountSnapshot) (*userv2.UniversalUser, error) {
+	if m.activateVerifiedEmailFunc != nil {
+		return m.activateVerifiedEmailFunc(ctx, r)
+	}
+	return nil, userv2.ErrLoginStateUnavailable
 }
 
 func (m *refreshUserServiceMock) GetUserByNanoID(ctx context.Context, r *userv2.GetUserByNanoIDRequest) (*userv2.GetUserByNanoIDResponse, error) {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/logger"
+	user "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/validator"
 	"github.com/ooaklee/reply/v2"
 	"github.com/stretchr/testify/require"
@@ -51,6 +52,8 @@ func TestEmailProofHandlerErrorsAndPrivacy(t *testing.T) {
 			{"mixed outage", errors.Join(ErrOAuthReauthenticationRequired, errors.New("private-proof-diagnostic")), 500, ""},
 			{"host override", fmt.Errorf("private-proof-diagnostic: %w", ErrOAuthReauthenticationRequired), 403, "HOST_REAUTH"},
 			{"nil success", nil, 503, "AM00-039"},
+			{"state conflict", user.ErrLoginStateConflict, 409, "USV2-040"},
+			{"state unavailable", fmt.Errorf("private-proof-diagnostic: %w", user.ErrLoginStateUnavailable), 503, "USV2-041"},
 		} {
 			t.Run(endpoint+"/"+tc.name, func(t *testing.T) {
 				service := &proofHandlerService{err: tc.err}
@@ -68,6 +71,7 @@ func TestEmailProofHandlerErrorsAndPrivacy(t *testing.T) {
 				}
 				require.Equal(t, 1, service.calls)
 				require.Equal(t, tc.status, response.Code, response.Body.String())
+				require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
 				if tc.code != "" {
 					require.Contains(t, response.Body.String(), tc.code)
 				}

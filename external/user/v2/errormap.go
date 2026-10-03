@@ -4,6 +4,8 @@ import "github.com/ooaklee/reply/v2"
 
 // UserErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 var UserErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrLoginStateConflict:       {Title: "Account state changed", Detail: "Start a fresh sign-in to continue", StatusCode: 409, Code: "USV2-040"},
+	ErrLoginStateUnavailable:    {Title: "Sign-in unavailable", Detail: "Sign-in could not be confirmed; start a fresh sign-in", StatusCode: 503, Code: "USV2-041"},
 	ErrOAuthConnectionConflict:  {Title: "Account state changed", Detail: "Reload the current account before updating", StatusCode: 409, Code: "OAuthConnectionConflict"},
 	ErrUserUpdateUnavailable:    {Title: "Service unavailable", Detail: "User update could not be confirmed; reload account state before retrying", StatusCode: 503, Code: "USV2-039"},
 	ErrProfileUpdateUnavailable: {Title: "Service unavailable", Detail: "Profile update could not be confirmed; reload account state before retrying", StatusCode: 503, Code: "USV2-037"},

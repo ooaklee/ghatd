@@ -145,6 +145,36 @@ check-time snapshots, not a lock against concurrent account changes. The trusted
 `UserEmailVerificationRevisions` command is not a public proof verifier: internal
 callers must already have validated and consumed a proof.
 
+### Conditional login account transitions
+
+**Breaking for custom user adapters:** proof login requires the narrow
+`RecordFreshLogin` and `ActivateVerifiedEmail` methods described in the
+[user-domain login contract](../user/v2/README.md#conditional-login-state).
+The base manager `UserService` no longer requires broad `UpdateUser`; there is
+no broad-write fallback. Missing narrow capabilities fail before consuming the
+proof. The user domain owns configured transition validation and conditional
+persistence; the manager owns proof consumption, session issuance and login audit.
+
+The order is **consume proof → confirm account transition → mint from the
+post-image → store session**. ACTIVE login no longer mints before persistence.
+The signer receives the exact confirmed fresh-login instant, and current roles
+from the post-image, not the pre-write account snapshot. PROVISIONED activation
+cannot overwrite a concurrent suspension, mailbox/revision change or different
+account type. Two competing activations cannot both change PROVISIONED to ACTIVE.
+
+Success keeps the existing 200 token-expiry response and cookie contract (or
+existing redirect). Login and verification replies include context and
+`Cache-Control: no-store`. Native domain state conflicts are 409 (`USV2-040`),
+unconfirmed state is 503 (`USV2-041`); other native mappings and host overrides
+remain applicable. Clients must start a fresh sign-in after a post-consumption
+failure, including uncertain network outcomes, not resubmit the same proof.
+Persistence, signing, session storage and optional audit are not one transaction;
+the conditional write does not lock against subsequent account changes or provide
+session-family/ABA revocation guarantees.
+Both successful proof endpoints attempt one `USER_LOGIN` audit event from the
+shared manager path. Audit delivery remains optional/best-effort, not part of the
+storage transaction; failed delivery does not expose diagnostics or replay login.
+
 OAuth linking uses the shared live-session verifier plus current ACTIVE/verified
 status and a signed login time within five minutes. Browser initiation rejects
 duplicate access cookies. Server-owned link state carries the signed user type
