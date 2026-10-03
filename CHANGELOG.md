@@ -75,7 +75,7 @@ when the release version has been selected, and remove unused subsections.
 
 ---
 
-## Unreleased
+## [0.4.0] - Unreleased
 
 ### Added
 
@@ -87,13 +87,6 @@ when the release version has been selected, and remove unused subsections.
   Existing contacts remain legacy snapshots and statistics are unchanged; the
   paging index is an explicit migration. Public creation keeps its direct 201
   receipt while explicitly excluding administrative notes, replies and links.
-- Configurable [session-probe responses](external/accessmanager/middleware/README.md#session-probe-response-policy)
-  through middleware and starter composition. Preserve the default `/me` 202
-  error envelope, or explicitly select an empty 202 or structured 401 for a
-  missing session. The private probe now sends no-store and noindex headers;
-  other authentication failures and endpoints retain their existing contracts.
-  An inconsistent identity returned as a successful verification is now a 503
-  verification failure, not a missing-session response.
 - Opt-in [display handles](external/user/v2/README.md#display-handles), with
   per-account-type generation during ordinary and OAuth creation, an explicit
   unique-index migration, independent revision metadata and atomic manual
@@ -108,66 +101,55 @@ when the release version has been selected, and remove unused subsections.
   keeping automatic logs payload-free. Legacy repository interfaces are
   unchanged; before-image upserts and decode failures can follow a successful
   write, so callers must reconcile outcomes before retrying.
-- Opt-in [administrative token-policy management](external/accesspolicymanager/README.md)
-  with strict JSON, preview ETags, create-only or revision-checked applies and
-  write-time audit actors. The live administrator-session adapter rechecks current
-  identity and session state; HTTP requires an explicit bearer with no cookie
-  fallback. No automatic grant seeding, role migration or credential issuance.
-- A [route-policy guard](external/accessmanager/middleware/README.md#route-policy-guard)
-  connects verified session/API context to current grants, resource checks,
-  strong-revision syntax and atomic request-budget admission. Hosts opt in and
-  still recheck ownership and consequential writes at their domain boundary.
 - [Native route error manifests](external/router/README.md#native-policy-error-manifests)
   extend router defaults with copied startup maps and ordered host overrides.
   Mapped native errors no longer need conversion to router sentinels; supplied
   responses must be 4xx/5xx. Joined or unknown policy failures remain opaque 503s.
   This extends the earlier sentinel-only route response contract.
-- Opt-in [transactional API-token admission](external/accessmanager/README.md#transactional-api-token-policy),
-  forwarded by the starter, using current grants and fenced owner-wide inventory.
-  Limits, current account reads and insertion share the callback transaction;
-  secrets are delivered only after successful completion. Explicit grant and
-  inventory preparation on one managed Mongo client/database is required.
-- Shared [live-session verification](external/accessmanager/README.md#live-session-authority)
-  for explicit credentials and preloaded JWT guards, using current session owner,
-  account identity, email revision and type. Active/admin guards enforce current
-  stored status and roles instead of historical signed flags.
-- Defensive session/API identity snapshots and an explicit bearer-only adapter,
-  exposed through the [middleware suite](external/accessmanager/middleware/README.md#explicit-bearer-sessions).
-  Hosts still enforce resource permissions and recheck sensitive mutations.
-- Explicit [API-token inventory primitives](external/apitoken/README.md) with
-  exact retained counts, owner-wide transaction fences and insert-only owner
-  preparation on the managed Mongo client. These do not automatically replace
-  legacy role admission, migrate grants or change route credential selection.
-- Opt-in [system-scoped access policies](external/accesspolicy/README.md) with
-  current grants, audited revision-CAS updates, fixed-window usage and atomic
-  replay receipts on the managed Mongo repository. Business callbacks can share
-  the transaction while rechecking current resource authority on replay.
-- Explicit token-limit review, apply and revision-checked rollback that preserve
-  other grant fields and usage. No automatic role translation, inventory setup,
-  grant seeding, HTTP endpoints or middleware adoption is included.
-- Safe policy error manifests with host overrides, plus context/dependency guards
-  before custom store dispatch. Mongo initialization requires transactions;
-  storage-retention tooling and production failover/load verification remain
-  explicit adoption work.
-- [Typed JWT identity context](external/auth/README.md) carrying stored account
-  type, credential purpose, registered claims and optional issuer/audience
-  binding. Legacy absent context remains explicit; type is classification, not
-  authority. This does not automatically add middleware or route enforcement.
-- Manager-owned dependency error inventories with copied maps and last-wins host
-  overrides. Access, User, Content and Billing handlers include their collaborators
-  by default; existing bundle injection remains supported. See the
-  [composition guide](external/errormanifest/README.md#coverage-and-migration-checks).
-- Opt-in [declarative routes](external/router/README.md#declarative-route-policies)
-  with startup validation, defensive inventories and structured, fail-closed
-  policy responses. Hosts supply enforcing middleware and authorizers; metadata
-  is not a grant, and raw Mux routes remain outside the registry.
-- [Request-local proof admission](external/accessproof/README.md) evaluates exact
-  alternatives, capabilities, assurances, bindings and expiry. Hosts authenticate
-  evidence and retain live transactional ownership and replay checks.
-- [Strong-revision validation](external/router/README.md#shared-strong-revision-validation)
-  parses singular If-Match headers with explicit size, whitespace and byte rules.
-  It does not compare revisions or authorize writes. Unknown or ambiguous route
-  authorizer failures produce 503; deliberate denials must use a route sentinel.
+- Configurable [session-probe responses](external/accessmanager/middleware/README.md#session-probe-response-policy)
+  through middleware and starter composition. Preserve the default `/me` 202
+  error envelope, or explicitly select an empty 202 or structured 401 for a
+  missing session. The private probe now sends no-store and noindex headers;
+  other authentication failures and endpoints retain their existing contracts.
+  An inconsistent identity returned as a successful verification is now a 503
+  verification failure, not a missing-session response.
+- [Explicit session-context authentication](external/accessmanager/middleware/README.md#explicitly-selected-sessions)
+  for hosts with custom credential selection. It reuses live Access Manager
+  verification, rejects incomplete or mixed credential results and clears
+  inherited identity on failure while preserving diagnostic causes. Context
+  publication also clears stale bearer-only transport markers. Verified
+  claim metadata is reusable without a second JWT parse; account/resource policy
+  remains explicit, and the helper performs no refresh or cookie changes.
+- Opt-in [request-local proof admission](external/accessproof/README.md) for
+  exact alternative identity, assurance, capability, resource-binding and expiry
+  requirements. Policies are immutable and default-deny; hosts supply freshly
+  authenticated evidence and retain transactional ownership/replay checks. This
+  does not add guest accounts, persisted grants or implicit quota subjects.
+- Shared [strong-revision validation](external/router/README.md#shared-strong-revision-validation)
+  for singular If-Match headers and opaque ETags. Explicit size, whitespace and
+  byte-policy options let custom proof handlers reuse the standard parser while
+  retaining their wire contract. The route guard uses the same implementation;
+  syntax validation does not replace current resource checks or transactions.
+- Opt-in [token-policy management endpoints](external/accesspolicymanager/README.md)
+  for explicit stored-user preview and revision-checked provisioning. They reuse
+  lower-domain policy/user/inventory repositories and shared reply manifests;
+  no sign-up defaults, role translation or production migration is implied.
+- Reusable bearer-only session middleware and live policy-management authorization.
+  Management routes reject cookie-adapter miswiring, API credentials, stale updates
+  and revoked or demoted administrator sessions. Cookies are never refreshed.
+- Opt-in transactional API-token admission in Access Manager, using live policy
+  limits, exact stored inventory and one fenced count-and-insert transaction.
+  The threshold endpoint uses the same policy. Host rollout and explicit grant
+  migration remain required; see [adoption boundaries](external/accessmanager/README.md#transactional-api-token-policy).
+- Owner-wide token inventory fences shared across system grants, with explicit
+  startup initialization and idempotent owner-lock preparation. Policy adapters
+  must supply fenced counts; missing preparation or unsafe transaction context
+  denies issuance. See [inventory setup](external/apitoken/README.md#transactional-inventory-setup).
+- Explicit [token-limit migration](external/accesspolicy/README.md#explicit-token-limit-migration)
+  planning, audited apply and revision-checked rollback. Existing permissions,
+  scopes, enabled state, expiry and usage are preserved. Host source selection,
+  inventory provisioning and rollout remain explicit; no automatic role seeding
+  or production migration is performed.
 - Result-bearing Mongo mutation helpers, shared managed-client transactions,
   explicit index/collection setup and a transactional startup probe. Domains
   retain their schemas, authorization, revision checks and retention policy; see
@@ -178,6 +160,26 @@ when the release version has been selected, and remove unused subsections.
 - Opt-in [copy-on-write memory snapshots](external/ephemeral/README.md#process-local-transactional-snapshots)
   for local/test adapters, with cancellation-aware entry and deep-copy isolation.
   These are not a Redis replacement or production persistence fallback.
+- [Typed JWT identity claims](external/auth/README.md) carrying the persisted user type, token purpose and
+  standard registered claims, with optional issuer/audience configuration. User
+  type remains classification, not a permission or replacement for the stable
+  user ID. See [authenticated context](docs/how-to/authenticated-session-context.md)
+  for the separate middleware integration.
+- Shared verified session and API-credential context helpers, plus explicit
+  `AuthenticateSession` and `ContextWithAuthentication` entry points for custom
+  transport adapters. Context does not contain the raw credential.
+- Declarative route definitions, startup validation, defensive route inventories
+  and structured policy errors. The opt-in
+  [route-policy guard](external/accessmanager/middleware/README.md#route-policy-guard)
+  connects verified identity to live requirements. Raw Mux routes remain outside
+  the registry; host adoption and complete route coverage are not automatic.
+- System-scoped grants and atomic usage through an opt-in managed
+  [Mongo policy store](external/accesspolicy/README.md), with revision-CAS audit
+  records, current-authority replay checks, fixed-window counters and fenced
+  token-inventory callbacks. Business callbacks can commit changes with quota
+  receipts while rechecking resource authority on replay. Startup initialization
+  requires transaction-capable Mongo. Host wiring, legacy-tier migration and
+  retention tooling are not automatic or complete.
 - Contributor guidance establishing table-driven tests as the default and
   requiring changelog updates for notable changes. The whole-suite test-style
   audit remains separate work.
@@ -266,19 +268,6 @@ when the release version has been selected, and remove unused subsections.
 - Legacy role admission now requires exact inventory counts from token adapters;
   there is no paginated-list fallback. This transitional path remains non-atomic
   and must not share inventory with transactional writers during migration.
-- **Breaking:** custom session adapters must preserve operational failures and
-  return consistent live identities. Anonymous fallback requires an anonymous
-  placeholder without credential metadata. Joined or unknown failures are not
-  evidence of expired credentials; review the
-  [cookie lifecycle contract](external/accessmanager/middleware/README.md#refresh-cookie-timing).
-- Concurrent refresh wait timeouts now return 503 (`AM00-040`) without clearing
-  cookies. Missing verification wiring returns 503 (`AM00-039`). Cookie-pair
-  compatibility remains; atomic session-family revocation is not included.
-- **Breaking:** custom API-token repositories/verifiers must provide exact
-  digest lookup, owner-bound mutations and verified credential IDs. Activation
-  and revocation require the trusted owner ID; usage updates require token ID,
-  owner and digest. Access Manager's corresponding callers are migrated; see
-  the [adapter contract](external/apitoken/README.md#repository-and-adapter-migration).
 - **Breaking:** token digests are no longer JSON fields. Creation returns the
   one-time secret; management reads omit it and no longer delete expired tokens.
   Explicit owner-authorized deletion frees inventory. Description/status filters
@@ -287,10 +276,6 @@ when the release version has been selected, and remove unused subsections.
   future issuance times; metadata extraction rejects empty subjects and record
   IDs. Review custom issuers and plan session rollover before enabling optional
   issuer/audience constraints. See [rollout guidance](external/auth/README.md#compatibility-and-rollout).
-- User ID/nano-ID lookups preserve repository failures and cancellation instead
-  of reporting every failure as not-found. Custom adapters must distinguish
-  absence from outages; [HTTP boundaries](external/user/v2/README.md) must keep
-  raw diagnostics private.
 - **Breaking:** Access Manager's handler error writer requires one unambiguous
   domain cause; custom service adapters returning joined failures now receive a
   generic 500, even when every joined cause is mapped. Classify those failures
@@ -302,23 +287,43 @@ when the release version has been selected, and remove unused subsections.
   an unmapped cause now return a generic 500. Review the
   [reply migration guide](https://github.com/ooaklee/reply/blob/38c9f4107f3dce3e9f0c09c8cc919c20d02fa967/UPGRADING.md)
   and use its safe observer when failure telemetry is required.
+- **Breaking:** credential management now requires an active owner session;
+  API-token-only clients must use a session. Activate/revoke requests require
+  owner IDs, custom repositories need owner-bound status/deletion, and Mongo
+  wrappers need result-bearing mutations. Custom API services must implement
+  exact inventory counting; see [adapter migration](external/apitoken/README.md#repository-and-adapter-migration).
 - Redis session lookups now distinguish missing records from operational
   failures. Use `ephemeral.ErrAuthNotFound` or `errors.Is`; legacy `redis.Nil`
   remains detectable through wrapping, but direct equality is no longer safe.
   See [lookup semantics](external/ephemeral/README.md#live-session-lookup).
+- User ID/nano-ID lookups now preserve repository failures. Custom session
+  adapters must distinguish expected absence from operational failures.
+- API-token reads retain expired/revoked records and no longer delete during
+  GET. Explicit deletion frees inventory slots. Clients must not depend on
+  read-triggered cleanup; authentication still rejects expired credentials.
 - Automatic repository logs now emit only fixed operation/outcome metadata;
   filters, documents, names and raw database errors are omitted even for custom
   loggers. Missing-document lookups use debug-level telemetry. Update log
   consumers for this privacy-oriented change; explicit application `Log*` calls
   and driver monitors still need their own redaction policy.
+- **Breaking:** custom `ApitokenRespository` implementations must provide exact
+  `GetAPITokenByDigest` lookup and atomic `TouchAPIToken` updates. Custom verifiers
+  must return validated credential ID, stored owner ID, owner prefix and validity;
+  last-used requests now require the verified `TokenID`. See
+  [API-token adapter migration](external/apitoken/README.md#repository-and-adapter-migration).
+- Route attachment through `starter/v0` now returns invalid registry
+  configuration errors. Hosts must supply required middleware, configure policy
+  evaluation before creating route groups and check startup errors. Direct route
+  attachment must call `ValidateRoutePolicies()` before serving; see the
+  [router guide](external/router/README.md#declarative-route-policies).
+- Enabling JWT issuer/audience constraints rejects older credentials that do not
+  satisfy them. Plan session rollover when opting in. Legacy sessions without
+  the new user-type or purpose claims remain compatible where supported; missing
+  values do not establish fresh authentication or broader permissions. Login
+  and email-verification proofs require token_use.
 
 ### Fixed
 
-- Optional-authentication routes now admit rate-limited anonymous visitors when
-  no placeholder user ID is configured. The shared context publisher accepts
-  an explicit credential-free anonymous result without inventing an account;
-  configured placeholders, authenticated identity checks and protected-route
-  requirements retain their existing behavior.
 - The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before
   decoding. An uncertain write is no longer misreported as a confirmed missing
@@ -361,25 +366,63 @@ when the release version has been selected, and remove unused subsections.
   Field-only usage/status writes preserve concurrent revocation and deletion;
   invalid status values no longer default to revocation. Display timestamps
   handle offsets/fractions and clear invalid values.
+- Optional-authentication routes now admit rate-limited anonymous visitors when
+  no placeholder user ID is configured. The shared context publisher accepts
+  an explicit credential-free anonymous result without inventing an account;
+  configured placeholders, authenticated identity checks and protected-route
+  requirements retain their existing behavior.
 - Reject invalid UTF-8 account types before signing so JSON encoding cannot
   silently change identity context.
-- Domain and blueprint handlers use the shared manifest writer for wrapped
-  failures and all-mapped validation joins; unknown independent causes return a
-  generic server failure. Access Manager uses strict single-cause resolution.
-  Existing success replies and host overrides are preserved.
-- Complete missing group, pricing and user error mappings, add stable sitemap
-  error codes and include streak failures in User Manager's dependency bundle.
-  Migrated domain-handler logs use safe resolved identities; this does not
-  sanitize all service, authentication or repository logs automatically.
+- Domain and blueprint HTTP handlers now share a [manifest-driven reply writer](external/errormanifest/README.md#wrapped-errors-at-http-boundaries)
+  that preserves wrapped and joined validation errors, including singleton
+  joins, while retaining host overrides and existing success responses. Unknown
+  independent joined causes no longer disappear behind a client error. Existing
+  authentication boundaries retain their strict single-cause behavior.
+- Declarative route authorizers report unknown, joined and ambiguous failures
+  as `ROUTE_UNAVAILABLE` (503). Custom adapters must return or wrap `ErrRouteDenied`
+  or a reviewed native manifest error for deliberate denials; see the
+  [adapter contract](external/router/README.md#native-policy-error-manifests).
+  The router shares the strict manifest resolver and reply writer, preserving
+  mapped single-cause errors and preventing handler execution on any failure.
+  Typed-nil failure nodes are rejected before adapter methods are called.
 - Pin the reply integration upgrade for structural error resolution.
   This is an immutable, unreleased integration commit, not a tagged release.
   Reply uses request-local response state, safe opt-in unmapped diagnostics and
   deterministic error ordering; see
   its [migration guide](https://github.com/ooaklee/reply/blob/38c9f4107f3dce3e9f0c09c8cc919c20d02fa967/UPGRADING.md).
+- Access, User, Content and Billing Manager handlers now own and automatically
+  include their dependency error maps. Existing bundle APIs delegate to those
+  inventories and host overrides still win; omitted host wiring no longer turns
+  known dependency failures into generic 500 responses.
+- Complete missing group-setting, pricing-database and user-extension error
+  entries; add stable sitemap error codes and the streak map to the standard
+  User Manager bundle. Expected group validation now returns 400 and missing
+  user extensions return 404 instead of generic 500 responses. Native contact
+  query validation errors are translated to the mapped invalid-payload error.
+- Standard auth and hardened-limit middleware now resolve wrapped manifest
+  errors without exposing backend diagnostics. Counter failures deny requests
+  without creating an IP ban unless the attempt threshold was actually reached.
+- Preserve management-authorizer dependency/context failures instead of
+  classifying them as explicit policy denials. Transport boundaries must still
+  sanitize operational error details; management remains fail-closed.
+- Count stored API-token inventory beyond the first page; keep list/count type
+  filters consistent for legacy empty/null expiry fields. Reject negative or
+  overflowing creation TTLs and format expiry from the creation clock instant.
+- Populate each API-token human-readable timestamp independently; malformed
+  dates no longer produce fabricated ages or overwrite unrelated display fields.
+- Include API-token lifecycle errors in Access Manager's default reply manifest,
+  preserving structured client errors even without a host-supplied bundle.
+- Resolve ordinary wrapped domain errors in Access Manager responses through
+  a shared [manifest resolver](external/errormanifest/README.md#wrapped-errors-at-http-boundaries).
+  Unknown or ambiguous multi-cause failures use an opaque generic response;
+  recognized client errors cannot hide an unknown infrastructure failure.
 - Repository find/count/cursor failures retain native error causes underneath
   existing error codes, enabling retry-label and cancellation inspection.
   Single-result cursor mapping closes its cursor and distinguishes iteration
   errors from missing documents.
+- API-token last-used updates modify only the timestamp on the exact active
+  credential, removing the paginated lookup and full-record rewrite that could
+  overwrite a concurrent revocation. Deleted tokens are not recreated.
 
 ### Deprecated
 
@@ -467,21 +510,6 @@ when the release version has been selected, and remove unused subsections.
   six handlers send no-store responses. Account checks are point-in-time, not
   locks against concurrent revocation; logout and legacy-tier retirement remain
   separate work.
-- **Breaking:** [Email changes](external/accessmanager/README.md#conditional-email-changes)
-  now use explicit actor/target commands and return confirmed-change receipts
-  with separate cleanup, delivery and audit flags. The user domain atomically
-  guards the prior account state, advances its email revision and clears
-  verification; generic profile updates can no longer change the mailbox.
-  Configure the documented unique index, database privileges and custom adapter
-  capability before rollout. Old session/proof revisions are rejected even when
-  target-only Redis cleanup fails. Uncertain writes are not automatically retried;
-  native errors retain shared manifest mapping without private diagnostics.
-- Self-service notification feeds now bind recipient identity and email to the
-  authenticated caller. Explicit recipient selection remains on administrator
-  routes and requires a matching live ACTIVE administrator account.
-  **Breaking:** in-process notification-overview commands must set `AdminView`
-  to select another recipient; the default is self-service. See
-  [notification recipient boundaries](external/usermanager/README.md#notification-recipient-boundaries).
 - [User Manager mutation boundaries](external/usermanager/README.md#mutation-identity-boundaries)
   bind caller identity independently of JSON and preserve URL-selected group,
   member and contact targets. Self-deletion always selects the verified caller;
@@ -520,22 +548,60 @@ when the release version has been selected, and remove unused subsections.
   checks cancellation between calls before delivering a secret. Cancellation or
   an uncertain commit does not prove rollback; issuance is not a secret-recovery
   API. Native policy error manifests retain host override precedence.
-- Cookie adapters refresh only known absent/expired credentials, preserve cookies
-  on account denials or operational failures, and publish replacement cookies
-  only after retry identity validation and the final cancellation check. Anonymous
-  fallback strips selected credentials/inherited identity and rejects authenticated
-  adapter results. Explicit bearer mode never refreshes or falls back to cookies.
-- Authentication and hardened-limit middleware use canonical manifest responses.
-  Joined storage failures cannot justify an IP ban. Refresh preserves failure
-  causes, rejects malformed token results and omits raw adapter diagnostics from
-  manager logs; injected dependencies retain their own logging responsibility.
+- **Breaking:** [Email changes](external/accessmanager/README.md#conditional-email-changes)
+  now use explicit actor/target commands and return confirmed-change receipts
+  with separate cleanup, delivery and audit flags. The user domain atomically
+  guards the prior account state, advances its email revision and clears
+  verification; generic profile updates can no longer change the mailbox.
+  Configure the documented unique index, database privileges and custom adapter
+  capability before rollout. Old session/proof revisions are rejected even when
+  target-only Redis cleanup fails. Uncertain writes are not automatically retried;
+  native errors retain shared manifest mapping without private diagnostics.
+- Self-service notification feeds now bind recipient identity and email to the
+  authenticated caller. Explicit recipient selection remains on administrator
+  routes and requires a matching live ACTIVE administrator account.
+  **Breaking:** in-process notification-overview commands must set `AdminView`
+  to select another recipient; the default is self-service. See
+  [notification recipient boundaries](external/usermanager/README.md#notification-recipient-boundaries).
 - Session-store absence decisions now inspect every wrapped cause, preserving
   joined storage failures instead of treating them as missing sessions. Native
   and legacy Redis absence remain supported; typed-nil, cyclic, oversized and
   custom `Is`-only errors fail closed. Use
   [`ephemeral.IsAuthNotFound`](external/ephemeral/README.md#live-session-lookup)
   for control flow; one `errors.Is` match is not proof of pure absence.
-- New opaque API secrets use cryptographic randomness. Verification resolves an
-  exact stored digest, checks status/expiry and binds it to the current active
-  owner rather than scanning a page or trusting a public prefix. Assess rotation
-  of older secrets separately; no automatic revocation or reissue occurs.
+- **Breaking:** [SEO](external/seo/README.md) and
+  [communications](external/contacter/README.md) routes now participate in the
+  shared registry. Omitted administrator middleware no longer exposes admin
+  endpoints. Supply the enforcing adapter, select `AdminSessionOrAPI` explicitly
+  through `AdminAccess` when appropriate, and reject startup if
+  `ValidateRoutePolicies()` fails. Invalid configuration closes every descriptor
+  in the router with 503; raw routes remain outside this backstop. Public discovery
+  and sitemap access remain public under valid configuration.
+- Cookie middleware refreshes only known absent/expired access credentials.
+  Account denials and dependency failures neither clear cookies nor downgrade
+  authenticated attempts to public access. Refresh/retry and explicit refresh
+  failures preserve operational causes; rotation wait timeout now returns `503`
+  (`AM00-040`). Missing verification wiring returns `503` (`AM00-039`). Custom
+  adapters must wrap known credential sentinels; matching error text or overriding
+  an HTTP status does not select lifecycle behaviour.
+  Existing cookie-pair selection remains compatible; atomic token-family logout
+  is not supplied by this change. See [cookie timing](external/accessmanager/middleware/README.md#refresh-cookie-timing).
+- Active/admin session guards now verify the live session owner and current
+  account identity before checking current status/roles. Signed administrator
+  flags cannot outlive demotion. Custom session adapters must preserve operational
+  failures and return consistent live identities. Cookie refresh, optional-public fallback and
+  access-only logout remain separate compatibility boundaries; see
+  [live session authority](external/accessmanager/README.md#live-session-authority).
+- Bind API-token deletion and activation/revocation to both owner and token ID
+  inside the database operation, preventing cross-owner mutations by guessed IDs.
+- Generate new API secrets from 32 cryptographically random bytes instead of a
+  shared pseudo-random generator. Existing stored credentials are not automatically
+  revoked; operators should assess rotation of older secrets separately.
+- Verify API tokens through exact prefix/digest lookup with active-status,
+  expiry and owner checks. Reject malformed or ambiguous API-token headers without
+  logging credential fragments, and keep verified API identity separate from JWT
+  session metadata.
+- Pin JWT verification to HS256, require expiry and distinguish new session tokens
+  from login/email-verification proofs. Session verification checks live stored
+  identity, email revision and any signed user type; inconsistent authenticated
+  context is rejected rather than published.
