@@ -206,6 +206,11 @@ type GetLatestNotificationOverviewsRequest struct {
 	// embedded GetLatestNotificationOverviewsRequest.UserID field instead.
 	ActorID string `json:"-"`
 
+	// AdminView enables explicit recipient selectors after a live administrator
+	// check. Mappers derive it from the route, never body or query parameters.
+	// Trusted in-process callers must opt in; the zero value is self-service.
+	AdminView bool `json:"-"`
+
 	// GetLatestNotificationOverviewsRequest carries the underlying notification query parameters.
 	*common.GetLatestNotificationOverviewsRequest
 }

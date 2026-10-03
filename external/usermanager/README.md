@@ -69,6 +69,34 @@ attribution field; anonymous submissions remain unattributed. Vision requests
 delegated to the lower domain and other manager packages are not renamed by
 this migration.
 
+## Notification recipient boundaries
+
+`GET /api/v1/ums/me/notifications/latest` always reads the authenticated caller's
+notifications. It accepts `kinds` and `limit`; supplied `user_id`, `user_email`
+and admin-mode fields cannot redirect the feed, including for administrators.
+The manager resolves the caller's current account email through `UserService`.
+
+Explicit recipient selection belongs on the administrator-session routes:
+
+- `GET /api/v1/ums/notifications/latest?user_id=<recipient-id>`
+- `GET /api/v1/ums/notifications/{userId}/latest`
+- `GET /api/v1/ums/notifications/latest?user_email=<invite-email>`
+
+The path user ID takes precedence over the query user ID. An explicit email
+selects pending invitations by that address, including for recipients without
+an account; otherwise the selected account's current email is resolved. Omitted
+selectors default to the administrator's own account. These routes continue to
+require a session, not an API token. Both route policy and the manager enforce
+administrator authority; the manager rechecks a matching live ACTIVE account.
+Unavailable or inconsistent account lookups never become authorization grants.
+
+**Go API migration:** trusted in-process callers selecting another recipient must
+set `GetLatestNotificationOverviewsRequest.AdminView: true` and supply the verified
+administrator's `ActorID`, not the recipient's ID. The zero value is self-service
+and ignores embedded recipient selectors. `AdminView` is transport-excluded
+intent, not proof of permission. Dependency errors keep their native mappings
+through the shared reply/error-manifest writer.
+
 ## Self-service display handles
 
 Handles are an optional user-domain capability, not another manager collection.

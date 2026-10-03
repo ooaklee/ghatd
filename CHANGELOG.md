@@ -381,6 +381,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- Self-service notification feeds now bind recipient identity and email to the
+  authenticated caller. Explicit recipient selection remains on administrator
+  routes and requires a matching live ACTIVE administrator account.
+  **Breaking:** in-process notification-overview commands must set `AdminView`
+  to select another recipient; the default is self-service. See
+  [notification recipient boundaries](external/usermanager/README.md#notification-recipient-boundaries).
 - [User Manager mutation boundaries](external/usermanager/README.md#mutation-identity-boundaries)
   bind caller identity independently of JSON and preserve URL-selected group,
   member and contact targets. Self-deletion always selects the verified caller;

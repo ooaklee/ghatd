@@ -7,6 +7,7 @@ import (
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/group"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/router"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"go.uber.org/zap"
 )
@@ -235,43 +236,78 @@ func (s *Service) GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*
 	return response, nil
 }
 
-// GetLatestNotificationOverviews fetches latest group notification overviews for the requester.
+// GetLatestNotificationOverviews defaults to the trusted actor's live email,
+// ignoring recipient selectors on self-service commands. Explicit AdminView
+// commands require a live ACTIVE administrator before selecting another account
+// or an invite email. The request is never mutated and dependency errors retain
+// their native identity for the handler's error manifests.
 func (s *Service) GetLatestNotificationOverviews(ctx context.Context, r *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
-
+	if r == nil || strings.TrimSpace(r.ActorID) == "" {
+		return nil, ErrUnableToIdentifyUser
+	}
+	if ctx == nil || s == nil || s.UserService == nil {
+		return nil, router.ErrRouteUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if s.GroupService == nil {
-		logger.Error("group-service-not-enabled", zap.String("user-id", r.ActorID))
 		return nil, ErrGroupServiceNotEnabled
 	}
 
-	targetUserID := strings.TrimSpace(r.ActorID)
-	if r.GetLatestNotificationOverviewsRequest != nil && strings.TrimSpace(r.GetLatestNotificationOverviewsRequest.UserID) != "" {
-		targetUserID = strings.TrimSpace(r.GetLatestNotificationOverviewsRequest.UserID)
-	}
-
-	userEmail := strings.TrimSpace(r.UserEmail)
-	if userEmail == "" {
-		userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: targetUserID})
-		if err != nil {
-			logger.Error("failed-to-resolve-user-email-for-notifications", zap.String("user-id", targetUserID), zap.Error(err))
-			return nil, err
-		}
-
-		userEmail = strings.TrimSpace(userResponse.User.Email)
-	}
-
-	overviews, err := s.GroupService.GetLatestNotificationOverviews(ctx, &common.GetLatestNotificationOverviewsRequest{
-		UserID:    targetUserID,
-		UserEmail: userEmail,
-		Kinds:     r.Kinds,
-		Limit:     r.Limit,
-	})
+	actorID := strings.TrimSpace(r.ActorID)
+	actor, err := s.notificationRecipient(ctx, actorID)
 	if err != nil {
-		logger.Error("failed-to-get-group-notification-overviews", zap.String("user-id", targetUserID), zap.Error(err))
+		return nil, err
+	}
+	query := common.GetLatestNotificationOverviewsRequest{}
+	if r.GetLatestNotificationOverviewsRequest != nil {
+		query = *r.GetLatestNotificationOverviewsRequest
+	}
+	if r.AdminView {
+		if actor.Status != userv2.AccountStatusKeyActive || !actor.IsAdmin() {
+			return nil, router.ErrRouteDenied
+		}
+		query.UserID = strings.TrimSpace(query.UserID)
+		query.UserEmail = strings.TrimSpace(query.UserEmail)
+		if query.UserID == "" {
+			query.UserID = actorID
+		}
+	} else {
+		query.UserID, query.UserEmail = actorID, ""
+	}
+	if query.UserEmail == "" {
+		recipient := actor
+		if query.UserID != actorID {
+			recipient, err = s.notificationRecipient(ctx, query.UserID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		query.UserEmail = strings.TrimSpace(recipient.Email)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	overviews, err := s.GroupService.GetLatestNotificationOverviews(ctx, &query)
+	if err != nil {
 		return nil, err
 	}
 
 	return &GetLatestNotificationOverviewsResponse{GetLatestNotificationOverviewsResponse: overviews}, nil
+}
+
+// notificationRecipient rejects incomplete or mismatched successful lookups;
+// such results cannot establish recipient identity or administrator authority.
+func (s *Service) notificationRecipient(ctx context.Context, id string) (*userv2.UniversalUser, error) {
+	response, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: id})
+	if err != nil {
+		return nil, err
+	}
+	if response == nil || response.User == nil || response.User.ID != id {
+		return nil, router.ErrRouteUnavailable
+	}
+	return response.User, nil
 }
 
 // GetMyGroupInvitations fetches outstanding group invitations for the requester.

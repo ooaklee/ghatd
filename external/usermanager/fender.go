@@ -475,7 +475,9 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 	return &parsedRequest, nil
 }
 
-// MapRequestToGetLatestNotificationOverviewsRequest maps incoming latest notifications request to the correct struct.
+// MapRequestToGetLatestNotificationOverviewsRequest binds self-service reads to
+// the verified actor. Only administrative URLs retain recipient selectors; the
+// service separately verifies live administrator authority before using them.
 func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validator UsermanagerValidator) (*GetLatestNotificationOverviewsRequest, error) {
 	var parsedRequest GetLatestNotificationOverviewsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
@@ -493,12 +495,16 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 		return nil, ErrRequestFailedValidation
 	}
 
-	targetUserID := getOptionalVariableValueFromURI(r, "userId")
-	if targetUserID == "" {
-		targetUserID = strings.TrimSpace(baseRequest.UserID)
-	}
-	if targetUserID == "" {
-		targetUserID = requesterUserID
+	parsedRequest.AdminView = isAdminNotificationRoute(r)
+	targetUserID := requesterUserID
+	if parsedRequest.AdminView {
+		if pathUserID := getOptionalVariableValueFromURI(r, "userId"); pathUserID != "" {
+			targetUserID = pathUserID
+		} else if queryUserID := strings.TrimSpace(baseRequest.UserID); queryUserID != "" {
+			targetUserID = queryUserID
+		}
+	} else {
+		baseRequest.UserEmail = ""
 	}
 	baseRequest.UserID = targetUserID
 	parsedRequest.ActorID = requesterUserID
