@@ -306,6 +306,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Optional-authentication routes now admit rate-limited anonymous visitors when
+  no placeholder user ID is configured. The shared context publisher accepts
+  an explicit credential-free anonymous result without inventing an account;
+  configured placeholders, authenticated identity checks and protected-route
+  requirements retain their existing behavior.
 - The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before
   decoding. An uncertain write is no longer misreported as a confirmed missing

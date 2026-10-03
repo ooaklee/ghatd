@@ -13,6 +13,9 @@ import (
 // hosts that need explicit credential selection without automatic refresh.
 // Inconsistent results fail closed and clear inherited identity/claims.
 // Anonymous placeholder IDs remain distinguishable from authenticated users.
+// A credential-free anonymous result needs no placeholder: an empty identity
+// publishes only the cleared context, never a synthetic user or actor. Existing
+// non-empty placeholder results retain their compatibility behavior.
 // Canceled contexts never receive identity. A nil input yields a cleared
 // background context and an unavailable-verification error rather than panicking.
 func ContextWithAuthentication(ctx context.Context, result *accessmanager.MiddlewareAuthedUserResponse) (context.Context, error) {
@@ -23,7 +26,13 @@ func ContextWithAuthentication(ctx context.Context, result *accessmanager.Middle
 	if err := ctx.Err(); err != nil {
 		return ctx, err
 	}
-	if result == nil || result.User == nil || result.UserID == "" || result.User.GetUserId() != result.UserID {
+	if result == nil {
+		return ctx, auth.ErrUnauthorized
+	}
+	if !result.Authenticated && result.UserID == "" && result.Token == nil && result.APIToken == nil && (result.User == nil || result.User.GetUserId() == "") {
+		return ctx, nil
+	}
+	if result.User == nil || result.UserID == "" || result.User.GetUserId() != result.UserID {
 		return ctx, auth.ErrUnauthorized
 	}
 	if result.Authenticated && result.Token != nil {

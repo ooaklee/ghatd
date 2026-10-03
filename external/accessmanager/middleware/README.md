@@ -204,10 +204,14 @@ preloaded adapters, including anonymous and legacy results. It is not a verifier
 custom session-only flows should use the stricter helper above.
 
 `RateLimitOrActiveJWTRequired` supports authenticated users and rate-limited
-anonymous callers on the same route. For anonymous traffic it places a
-non-empty placeholder ID in the request context and separately records the
-authentication state as false. A non-empty value from `AcquireFrom` therefore
-does not prove that the caller authenticated.
+anonymous callers on the same route. Anonymous callers do not require a
+`StaticPlaceholderUuid`: when it is empty, the context contains no user or actor
+and records authentication as false. A configured non-empty placeholder remains
+available through `AcquireFrom` for compatibility, but does not prove that the
+caller authenticated. Anonymous rate accounting still uses the requestor IP;
+it does not depend on a placeholder. Rate-limit failures, dependency outages and
+account denials are not bypassed. Identity-restricted optional routes continue
+to reject anonymous callers.
 
 Use the access manager context helpers according to the value you need:
 

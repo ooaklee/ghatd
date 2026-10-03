@@ -54,6 +54,7 @@ func TestCookieLifecycleRealStores(t *testing.T) {
 		}{
 			{"valid", false, 0, 200, false},
 			{"no cookies", false, 0, 200, false},
+			{"no cookies without placeholder", false, 0, 200, false},
 			{"wrong session owner", false, 0, 503, false},
 			{"initial Redis outage", false, 0, 500, false},
 			{"rotate missing access", true, 1, 200, true},
@@ -62,9 +63,12 @@ func TestCookieLifecycleRealStores(t *testing.T) {
 		} {
 			t.Run(mode+"/"+tc.name, func(t *testing.T) {
 				f := newConnectionFixture(t)
-				// Optional public routes require a configured anonymous identity;
-				// it must remain distinct from a verified account observation.
-				f.service.StaticPlaceholderUuid = f.namespace + "-anonymous"
+				// Both the optional legacy placeholder and the default empty
+				// anonymous identity must stay distinct from verified accounts.
+				if tc.name != "no cookies without placeholder" {
+					f.service.StaticPlaceholderUuid = f.namespace + "-anonymous"
+				}
+				noCookies := tc.name == "no cookies" || tc.name == "no cookies without placeholder"
 				_, err := f.db.Collection(user.UserCollection).UpdateOne(f.ctx, bson.M{"_id": f.account.ID}, bson.M{"$set": bson.M{"roles": []string{user.UserRoleAdmin}}})
 				require.NoError(t, err)
 				if tc.missingAccess {
@@ -88,7 +92,7 @@ func TestCookieLifecycleRealStores(t *testing.T) {
 				handlerCalls := 0
 				endpoint := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					handlerCalls++
-					if tc.name == "no cookies" {
+					if noCookies {
 						require.False(t, helpers.AcquireAuthenticatedFrom(r.Context()))
 						require.Empty(t, helpers.AcquireAuthenticatedUserIDFrom(r.Context()))
 						require.Nil(t, helpers.AcquireSessionFrom(r.Context()))
@@ -107,14 +111,14 @@ func TestCookieLifecycleRealStores(t *testing.T) {
 					handler = mw.RateLimitOrActiveJWTRequired(endpoint)
 				}
 				request := httptest.NewRequest(http.MethodGet, "/resource", nil)
-				if tc.name != "no cookies" {
+				if !noCookies {
 					request.AddCookie(&http.Cookie{Name: "access", Value: f.tokens.AccessToken})
 					request.AddCookie(&http.Cookie{Name: "refresh", Value: f.tokens.RefreshToken})
 				}
 				recorder := httptest.NewRecorder()
 				handler.ServeHTTP(recorder, request)
 				status := tc.status
-				if tc.name == "no cookies" && mode != "optional" {
+				if noCookies && mode != "optional" {
 					status = http.StatusUnauthorized
 				}
 				require.Equal(t, status, recorder.Code, recorder.Body.String())
@@ -127,7 +131,7 @@ func TestCookieLifecycleRealStores(t *testing.T) {
 						require.NotEmpty(t, cookie.Value)
 						require.GreaterOrEqual(t, cookie.MaxAge, 0)
 					}
-				} else if tc.name == "no cookies" && mode != "optional" {
+				} else if noCookies && mode != "optional" {
 					// Protected cookie adapters retain the legacy missing-pair
 					// cleanup response; this must never mint replacement cookies.
 					require.Len(t, recorder.Result().Cookies(), 2)
