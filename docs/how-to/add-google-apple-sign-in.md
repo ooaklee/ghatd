@@ -1,8 +1,8 @@
 # Add Google and Apple sign-in to a GHATD application
 
 Use this guide to add browser and native sign-in alongside the existing email
-magic-link/code flow. It applies to any GHATD host, including projects that do
-not use Bedrock. The [OAuth package](../../external/oauth/README.md) owns provider
+magic-link/code flow. It applies to any GHATD host. The
+[OAuth package](../../external/oauth/README.md) owns provider
 verification; [Access Manager](../../external/accessmanager/README.md#secure-google-and-apple-sign-in)
 owns the browser/native HTTP contract. A [compile-checked composition example](../../examples/oauth/README.md)
 shows how to connect the existing APIs, with [placeholder configuration](../../examples/oauth/.env.example).
@@ -191,9 +191,8 @@ Native clients use the [native handoff contract](../../external/accessmanager/RE
 Only a one-use code crosses the deep link. Do not copy browser cookies into the
 app, put access/refresh tokens in the URL, or create a second account/token store.
 Do not retry one-use exchanges automatically. Cancel stale attempts and avoid
-late callbacks restoring a session after logout. The existing Flutter companion
-illustrates the flow with `PersistCookieJar` and `FlutterSecureStorage`; another
-client can implement the same HTTP contract using its own secure storage.
+late callbacks restoring a session after logout. Each client must implement the
+same HTTP contract using its platform's secure credential storage.
 
 Native handoff is disabled with an empty allowlist. Its current callback format
 is exactly `com.example.yourapp:/oauth/callback` (one slash, no host/query/fragment).
@@ -219,7 +218,8 @@ and Apple HTTPS callbacks there. Open the web app through that HTTPS origin;
 use it as the phone's API base URL too. The phone's `localhost` is the phone.
 For mobile, every enabled provider callback must use the same HTTPS origin as
 handoff. Keep cookies host-only (`CookieDomain` empty) for local tunnel testing.
-Start the host normally; in Bedrock this means `make start` and `yarn run dev`.
+Start the backend and frontend with your host application's documented
+development commands; GHATD does not prescribe a frontend build tool or script.
 
 If the hostname changes, update provider-console registrations, callback URLs,
 allowed frontend origin and client API base URL, then restart the host. The ngrok `--host-header` flag is currently deprecated; use its documented
@@ -244,11 +244,9 @@ captured by a local development inbox does not validate outbound relay delivery.
 
 ## 7. Record acceptance and roll out
 
-As of 2026-09-30, the Bedrock integration has live Google/Apple web sign-in,
-returning web identity reuse and Apple Hide My Email sign-in evidence. The user
-also confirmed both provider login flows on the connected Android companion
-against the same backend. This is evidence for the browser-handoff integration,
-not certification of every device or deployment.
+Acceptance belongs to each adopting application. Record the tested framework
+revision, client build, environment, provider and platform. Success in one host
+or device does not certify another deployment.
 
 For each adopting application, record:
 
@@ -263,9 +261,9 @@ For each adopting application, record:
   [Apple](https://developer.apple.com/design/human-interface-guidelines/sign-in-with-apple)
   and [Google](https://developers.google.com/identity/branding-guidelines).
 
-The broader native repeat-ID/linking/refresh scenarios, iOS and actual relay
-email delivery remain separate acceptance work; successful Android login does
-not establish them. Automated signed-provider tests with isolated MongoDB/Redis
+Native repeat-ID/linking/refresh scenarios, iOS and actual relay email delivery
+need their own evidence; successful Android login does not establish them.
+Automated signed-provider tests with isolated MongoDB/Redis
 cover the security lifecycle; commands are in the [OAuth package guide](../../external/oauth/README.md).
 Do not use a production store or report credentials, tokens or provider subjects
 in test evidence.
@@ -327,8 +325,9 @@ snapshot race returns `OAuthConnectionConflict` (409), requiring refreshed
 Settings. `OAuthEmailConflict` (409), checked after proof and by the unique index,
 means another account owns the proposed address. Explain that both accounts are
 unchanged; offer a different email or manual support. Never automatically merge
-accounts or infer the destination mailbox behind a relay. A separate explicit
-merge flow is [tracked for exploration](https://commit.boasi.io/boasiHQ/app-bedrock/issues/52).
+accounts or infer the destination mailbox behind a relay. Account merging is
+outside this sign-in and disconnect flow; do not treat an email collision as
+permission to transfer another account's identity or data.
 
 The web flow uses session cookies and same-origin JSON POSTs:
 

@@ -4,7 +4,8 @@ Start with [Add Google and Apple sign-in](../../docs/how-to/add-google-apple-sig
 for registrations, migrations, browser/mobile integration, ngrok and Apple relay
 setup. The [composition example](../../examples/oauth/README.md) and its
 [environment placeholders](../../examples/oauth/.env.example) show the existing
-APIs without depending on Bedrock. This README is the provider API/security guide.
+APIs without depending on a particular host application. This README is the
+provider API/security guide.
 
 `NewGoogleSecureProvider` and `NewAppleProvider` implement the optional
 `ContextualFlowProvider` capability. Supply a private HTTP client (or use the

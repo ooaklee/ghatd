@@ -159,6 +159,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- Clarify [OAuth host adoption](docs/how-to/add-google-apple-sign-in.md) with
+  host-independent startup instructions and per-deployment acceptance evidence.
+  Account collisions do not imply a supported account-merge workflow. This is
+  documentation guidance only; provider APIs and runtime behavior are unchanged.
 - Access Manager login, verification, refresh and optional OAuth endpoints now
   use the [route registry](external/accessmanager/README.md#route-registry),
   preserving paths, methods, optional handler interfaces and OPTIONS precedence.

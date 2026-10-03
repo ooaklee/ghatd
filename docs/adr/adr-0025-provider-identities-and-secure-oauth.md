@@ -76,8 +76,8 @@ provider registrations, migrations, public origins and platform callback setup.
 Vue/Flutter views and native secure-cookie adapters remain in their clients.
 A [shared adoption guide](../how-to/add-google-apple-sign-in.md) and
 [compiled composition example](../../examples/oauth/README.md) carry the reusable
-setup knowledge. No Bedrock-specific environment or UI API is added to core.
+setup knowledge. No host-specific environment or UI API is added to core.
 
-Live Google/Apple web and Android companion login have been confirmed against
-the shared backend. iOS, broader native acceptance and actual relay email
-receipt remain separate validation work, recorded in the adoption guide.
+Host-specific live sign-in evidence is not framework-wide acceptance. Each host
+must verify web and native login, identity reuse, linking, session lifecycle and
+actual relay email receipt in its own environment, following the adoption guide.
