@@ -95,30 +95,31 @@ type DeleteAPITokenRequest struct {
 	UserID string
 }
 
-// updateAPITokenRequest holds everything expected for updating an User API token
-type updateAPITokenRequest struct {
-	APITokenID string `json:"api_token_id"`
-	Status     string
-}
-
 // ActivateAPITokenRequest holds everything needed for ActivateAPIToken request
 type ActivateAPITokenRequest struct {
+	// UserID is the trusted target owner; missing identity never means any owner.
+	UserID string
 	// ID the api token's UUID
 	ID string
 }
 
 // RevokeAPITokenRequest holds everything needed for RevokeAPIToken request
 type RevokeAPITokenRequest struct {
+	// UserID is the trusted target owner; missing identity never means any owner.
+	UserID string
 	// ID the api token's UUID
 	ID string
 }
 
-// UpdateAPITokenLastUsedAtRequest holds everything needed for UpdateAPITokenLastUsedAt request
+// UpdateAPITokenLastUsedAtRequest binds best-effort usage telemetry to the exact
+// credential just verified. These values must come from the verifier, not a body.
 type UpdateAPITokenLastUsedAtRequest struct {
-	// APITokenEncoded the secret passed by user, encoded.
+	// TokenID is the immutable stored credential ID, independent of its owner.
+	TokenID string
+	// APITokenEncoded is the SHA-256 digest, never the plaintext credential.
 	APITokenEncoded []byte
 
-	// ClientID the user's UUID
+	// ClientID is the credential's verified stored owner ID.
 	ClientID string
 }
 

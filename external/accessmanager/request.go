@@ -143,6 +143,8 @@ type DeleteUserAPITokenRequest struct {
 
 // UserAPITokenStatusRequest holds the data required for updating an api token's status
 type UserAPITokenStatusRequest struct {
+	// UserID is the owner checked against authenticated identity by the mapper.
+	UserID string
 	// Status the desired status
 	Status string
 

@@ -79,6 +79,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Explicit [API-token inventory primitives](external/apitoken/README.md) with
+  exact retained counts, owner-wide transaction fences and insert-only owner
+  preparation on the managed Mongo client. These do not automatically replace
+  legacy role admission, migrate grants or change route credential selection.
 - Opt-in [system-scoped access policies](external/accesspolicy/README.md) with
   current grants, audited revision-CAS updates, fixed-window usage and atomic
   replay receipts on the managed Mongo repository. Business callbacks can share
@@ -129,6 +133,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** custom API-token repositories/verifiers must provide exact
+  digest lookup, owner-bound mutations and verified credential IDs. Activation
+  and revocation require the trusted owner ID; usage updates require token ID,
+  owner and digest. Access Manager's corresponding callers are migrated; see
+  the [adapter contract](external/apitoken/README.md#repository-and-adapter-migration).
+- **Breaking:** token digests are no longer JSON fields. Creation returns the
+  one-time secret; management reads omit it and no longer delete expired tokens.
+  Explicit owner-authorized deletion frees inventory. Description/status filters
+  now treat search text as a literal substring, not a regular expression.
 - **Breaking:** JWT verification is pinned to HS256, requires expiry and rejects
   future issuance times; metadata extraction rejects empty subjects and record
   IDs. Review custom issuers and plan session rollover before enabling optional
@@ -160,6 +173,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- API credential lifecycle boundaries reject missing dependencies, cancellation
+  and malformed custom-store results without publishing identity or a secret.
+  Field-only usage/status writes preserve concurrent revocation and deletion;
+  invalid status values no longer default to revocation. Display timestamps
+  handle offsets/fractions and clear invalid values.
 - Reject invalid UTF-8 account types before signing so JSON encoding cannot
   silently change identity context.
 - Domain and blueprint handlers use the shared manifest writer for wrapped
@@ -179,3 +197,16 @@ when the release version has been selected, and remove unused subsections.
   existing error codes, enabling retry-label and cancellation inspection.
   Single-result cursor mapping closes its cursor and distinguishes iteration
   errors from missing documents.
+
+### Deprecated
+
+- API-token repository whole-record updates and unowned deletion remain trusted
+  administrative APIs only. Prefer owner-bound status/delete and field-only
+  usage methods to avoid stale authority overwrites.
+
+### Security
+
+- New opaque API secrets use cryptographic randomness. Verification resolves an
+  exact stored digest, checks status/expiry and binds it to the current active
+  owner rather than scanning a page or trusting a public prefix. Assess rotation
+  of older secrets separately; no automatic revocation or reissue occurs.

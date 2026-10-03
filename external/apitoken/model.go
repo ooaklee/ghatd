@@ -1,35 +1,27 @@
 package apitoken
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
-	"math/rand"
 	"time"
-	"unsafe"
 
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/mergestat/timediff"
-	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
 var (
-	src = rand.NewSource(time.Now().UnixNano())
 	// userAPITokenStatusChoices valid status for user's api token
 	userAPITokenStatusChoices = []string{UserTokenStatusKeyActive, UserTokenStatusKeyRevoked}
 )
 
-const (
-	// letterBytes possible values for key
-	letterBytes   = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123467890_"
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 8                    // # of letter indices fitting in 63 bits
-	tokenLength   = 21
-)
-
 // APITokenRequester information about token requesting resource
 type APITokenRequester struct {
+	// TokenID is the matched persistent credential ID, never its secret or digest.
+	TokenID string `json:"-"`
+	// UserID is the stored credential owner, checked against the resolved account.
 	UserID              string `json:"user_id" validate:"uuid4"`
 	NanoId              string
 	UserAPIToken        string
@@ -37,12 +29,21 @@ type APITokenRequester struct {
 	IsValid             bool
 }
 
+// CredentialDetails carries verified API identity without bearer material.
+// It is a request-time snapshot; recheck the token and owner for later work.
+type CredentialDetails struct {
+	// TokenID identifies the individual credential for delegated grants and audit.
+	TokenID string
+	// UserID is the current owning account's immutable ID.
+	UserID string
+}
+
 // UserAPIToken holds access token information for user
 // plain-text value is NOT saved to DB.
 type UserAPIToken struct {
 	ID              string `json:"id" bson:"_id"`
 	Value           string `json:"value,omitempty" bson:"-"`
-	ValueSHA        []byte `json:"value_sha" bson:"value_sha,omitempty"`
+	ValueSHA        []byte `json:"-" bson:"value_sha,omitempty"`
 	Status          string `json:"status" bson:"status"`
 	Description     string `json:"description" bson:"description,omitempty"`
 	CreatedAt       string `json:"created_at" bson:"created_at,omitempty"`
@@ -86,40 +87,20 @@ func (u *UserAPIToken) GetAttributeByJsonPath(jsonPath string) (any, error) {
 	return result, nil
 }
 
-// GenerateHumanReadable generates human-readable representations of the last used, updated, and TTL expiration times for a UserAPIToken.
-// It updates the HumanReadableLastUsedAt field of the UserAPIToken with the formatted time differences.
-// The function returns the updated UserAPIToken.
+// GenerateHumanReadable derives display-only timestamps without changing stored
+// dates. RFC3339 offsets and fractional seconds are accepted. Invalid or absent
+// dates clear the corresponding display field instead of inventing an age.
 func (u *UserAPIToken) GenerateHumanReadable() *UserAPIToken {
-
-	nowTime := time.Now()
-
-	// last used at
-	if u.LastUsedAt != "" {
-		var lastUsedAt time.Time
-
-		lastUsedAt, _ = time.Parse(common.RFC3339NanoUTC, u.LastUsedAt)
-		lastUsedAtDif := time.Since(lastUsedAt)
-		u.HumanReadableLastUsedAt = timediff.TimeDiff(nowTime.Add(-lastUsedAtDif))
+	render := func(raw string) string {
+		parsed, err := time.Parse(time.RFC3339Nano, raw)
+		if err != nil {
+			return ""
+		}
+		return timediff.TimeDiff(parsed)
 	}
-
-	// updated At
-	if u.UpdatedAt != "" {
-		var updatedAt time.Time
-
-		updatedAt, _ = time.Parse(common.RFC3339NanoUTC, u.UpdatedAt)
-		updatedAtDif := time.Since(updatedAt)
-		u.HumanReadableLastUsedAt = timediff.TimeDiff(nowTime.Add(-updatedAtDif))
-	}
-
-	// expires At
-	if u.TtlExpiresAt != "" {
-		var ttlExpiresAt time.Time
-
-		ttlExpiresAt, _ = time.Parse(common.RFC3339NanoUTC, u.TtlExpiresAt)
-		ttlExpiresAtDif := time.Since(ttlExpiresAt)
-		u.HumanReadableLastUsedAt = timediff.TimeDiff(nowTime.Add(ttlExpiresAtDif))
-	}
-
+	u.HumanReadableLastUsedAt = render(u.LastUsedAt)
+	u.HumanReadableUpdatedAt = render(u.UpdatedAt)
+	u.HumanReadableTtlExpiresAt = render(u.TtlExpiresAt)
 	return u
 }
 
@@ -129,16 +110,17 @@ func (u *UserAPIToken) IsShortLivedToken() bool {
 	return u.TtlExpiresAt != ""
 }
 
-// Generate creates a core token, populated with Value, ValueSHA, and Status.
+// Generate creates a cryptographically random token and its SHA-256 digest.
+// The secret contains 256 bits of entropy and generation is concurrency-safe.
+// Status and ownership are configured separately; old secrets remain verifiable.
 func (u *UserAPIToken) Generate() *UserAPIToken {
-
-	keyAsByte, keyAsString := randStringBytesMaskImprSrcUnsafe(tokenLength)
-
-	hasher := sha256.New()
-	_, _ = hasher.Write(keyAsByte)
-
-	u.Value = keyAsString
-	u.ValueSHA = hasher.Sum(nil)
+	secret := make([]byte, 32)
+	// crypto/rand.Read never returns an error on supported Go versions; a
+	// failure of the operating-system entropy source terminates the process.
+	_, _ = rand.Read(secret)
+	u.Value = base64.RawURLEncoding.EncodeToString(secret)
+	digest := sha256.Sum256([]byte(u.Value))
+	u.ValueSHA = digest[:]
 
 	return u
 }
@@ -183,25 +165,4 @@ func (u *UserAPIToken) SetStatus(status string) *UserAPIToken {
 
 	u.Status = UserTokenStatusKeyRevoked
 	return u
-}
-
-// randStringBytesMaskImprSrcUnsafe generates a random combination of chars from letterBytes
-// lifted from https://stackoverflow.com/a/31832326 and tweaked
-func randStringBytesMaskImprSrcUnsafe(n int) ([]byte, string) {
-	b := make([]byte, n)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-
-	//nolint
-	return b, *(*string)(unsafe.Pointer(&b))
 }

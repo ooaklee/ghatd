@@ -2,7 +2,6 @@ package accessmanager
 
 import (
 	"github.com/ooaklee/ghatd/external/oauth"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -222,9 +221,8 @@ func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validato
 	return &parsedRequest, nil
 }
 
-// MapRequestToRevokeUserAPITokenRequest maps incoming ActivateUserAPIToken request to correct
-// struct.
-// TODO: Refactor
+// MapRequestToRevokeUserAPITokenRequest binds the URI owner to the authenticated
+// requester and preserves that owner for the atomic credential mutation.
 func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*UserAPITokenStatusRequest, error) {
 	var (
 		parsedRequest = &UserAPITokenStatusRequest{}
@@ -251,6 +249,7 @@ func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator Acce
 	}
 
 	parsedRequest.Status = AccessManagerUserTokenStatusKeyRevoked
+	parsedRequest.UserID = userID
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
@@ -260,9 +259,8 @@ func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator Acce
 	return parsedRequest, nil
 }
 
-// MapRequestToActivateUserAPITokenRequest maps incoming ActivateUserAPIToken request to correct
-// struct.
-// TODO: Refactor
+// MapRequestToActivateUserAPITokenRequest binds the URI owner to the authenticated
+// requester; a credential ID alone never authorizes activation.
 func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*UserAPITokenStatusRequest, error) {
 
 	var (
@@ -290,6 +288,7 @@ func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator Ac
 	}
 
 	parsedRequest.Status = AccessManagerUserTokenStatusKeyActive
+	parsedRequest.UserID = userID
 
 	err = validator.Validate(parsedRequest)
 	if err != nil {
@@ -355,14 +354,7 @@ func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator Acce
 
 	err = toolbox.DecodeRequestBody(request, parsedRequest)
 	if err != nil {
-		bodyBytes, err := ioutil.ReadAll(request.Body)
-		if err != nil {
-			logger.Error("unable-to-decode-create-user-api-token-request")
-		}
-
-		if err == nil {
-			logger.Error("unable-to-decode-create-user-api-token-request", zap.Int("request-body-bytes", len(bodyBytes)))
-		}
+		logger.Warn("unable-to-decode-create-user-api-token-request")
 		return nil, ErrInvalidCreateUserAPITokenBody
 	}
 

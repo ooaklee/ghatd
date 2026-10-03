@@ -6,6 +6,10 @@ import (
 
 // ApitokenErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 var ApitokenErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrServiceUnavailable:                 {Title: "Service Unavailable", Detail: "Credential service is unavailable", StatusCode: 503, Code: "APT0-013"},
+	ErrInventoryUnavailable:               {Title: "Service Unavailable", Detail: "Token inventory is not ready", StatusCode: 503, Code: "APT0-012"},
+	ErrInvalidTokenQuery:                  {Title: "Bad Request", Detail: "Token query is invalid", StatusCode: 400, Code: "APT0-011"},
+	ErrInvalidTokenTTL:                    {Title: "Bad Request", Detail: "Token lifetime must be zero or a supported positive number of seconds", StatusCode: 400, Code: "APT0-010"},
 	ErrPageOutOfRange:                     {Title: "Bad Request", Detail: "Page out of range", StatusCode: 400, Code: "APT0-001"},
 	ErrTokenStatusInvalid:                 {Title: "Bad Request", Detail: "Please verify token status", StatusCode: 400, Code: "APT0-002"},
 	ErrNoMatchingUserAPITokenFound:        {Title: "Unauthorized", Detail: "Invalid credentials provided", StatusCode: 401, Code: "APT0-003"},

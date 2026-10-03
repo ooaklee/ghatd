@@ -2,8 +2,12 @@ package apitoken
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -22,8 +26,60 @@ const ApiTokenCollection string = "apitokens"
 
 const defaultCollectionInitMaxAttemptsLimit = 3
 
+// GetAPITokenByDigest performs an exact owner/digest lookup rather than scanning
+// token pages. It intentionally returns no secret and never logs the filter.
+// The service separately checks identity, status and expiry before acceptance.
+func (r *Repository) GetAPITokenByDigest(ctx context.Context, nanoID string, digest []byte) (*UserAPIToken, error) {
+	if nanoID == "" || len(digest) != 32 {
+		return nil, ErrUnableToValidateUserAPIToken
+	}
+	collection, err := r.GetApiTokenCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var result UserAPIToken
+	if err := r.Store.ExecuteFindOneCommandDecodeResult(ctx, collection, bson.M{"created_by_nid": nanoID, "value_sha": digest}, &result, "ApiToken", false, ErrUnableToValidateUserAPIToken); err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, ErrUnableToValidateUserAPIToken
+		}
+		return nil, err
+	}
+	result.Value = ""
+	return &result, nil
+}
+
+// TouchAPIToken atomically updates only usage telemetry for an active, exactly
+// matched credential. A deleted, replaced or revoked token is never recreated.
+// Shared repository telemetry never logs the digest filter or raw errors.
+func (r *Repository) TouchAPIToken(ctx context.Context, tokenID, ownerID string, digest []byte, at time.Time) error {
+	if tokenID == "" || ownerID == "" || len(digest) != 32 || at.IsZero() {
+		return ErrNoMatchingUserAPITokenFound
+	}
+	collection, err := r.GetApiTokenCollection(ctx)
+	if err != nil {
+		return err
+	}
+	result, err := r.Store.ExecuteUpdateOneCommandResult(ctx, collection,
+		bson.M{"_id": tokenID, "created_by_id": ownerID, "value_sha": digest, "status": UserTokenStatusKeyActive},
+		bson.M{"$set": bson.M{"last_used_at": at.UTC().Format(time.RFC3339Nano)}},
+	)
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return ErrServiceUnavailable
+	}
+	if result.MatchedCount != 1 {
+		return ErrNoMatchingUserAPITokenFound
+	}
+	return nil
+}
+
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
+	// Result-bearing writes preserve matched/deleted counts for ownership checks.
+	ExecuteUpdateOneCommandResult(context.Context, *mongo.Collection, any, any, ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	ExecuteDeleteOneCommandResult(context.Context, *mongo.Collection, any, ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
@@ -31,10 +87,6 @@ type MongoDbStore interface {
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
-	// ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
-	// ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
-	// ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
-	// ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
 
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
@@ -42,13 +94,17 @@ type MongoDbStore interface {
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
-// Repository represents the datastore to hold resource data
+// Repository stores credentials through the shared Mongo helpers. It caches the
+// collection safely; optional transactional inventory preparation is explicit.
 type Repository struct {
+	// Store owns the managed client and operation logging; configure before use.
 	Store                          MongoDbStore
 	collectionInitMaxAttemptsLimit int
 
 	collection      *mongo.Collection
 	collectionMutex sync.Mutex
+	// inventoryReady is set only after explicit transactional startup setup.
+	inventoryReady atomic.Bool
 }
 
 // NewRepository initiates new instance of repository
@@ -70,8 +126,17 @@ func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
 
 // GetApiTokenCollection returns collection used for api token domain
 func (r *Repository) GetApiTokenCollection(ctx context.Context) (*mongo.Collection, error) {
+	if r == nil || r.Store == nil || ctx == nil {
+		return nil, ErrServiceUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r.collectionMutex.Lock()
 	defer r.collectionMutex.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	if r.collection != nil {
 		return r.collection, nil
@@ -83,6 +148,9 @@ func (r *Repository) GetApiTokenCollection(ctx context.Context) (*mongo.Collecti
 		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
 	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		_, err := r.Store.InitialiseClient(ctx)
 		if err != nil {
 			lastErr = err
@@ -95,6 +163,12 @@ func (r *Repository) GetApiTokenCollection(ctx context.Context) (*mongo.Collecti
 			continue
 		}
 
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if db == nil {
+			return nil, ErrServiceUnavailable
+		}
 		r.collection = db.Collection(ApiTokenCollection)
 		return r.collection, nil
 	}
@@ -104,6 +178,9 @@ func (r *Repository) GetApiTokenCollection(ctx context.Context) (*mongo.Collecti
 
 // DeleteResourcesByOwnerId deletes all token resources that belongs to the specified user id
 func (r *Repository) DeleteResourcesByOwnerId(ctx context.Context, ownerId string) error {
+	if ownerId == "" {
+		return ErrRequiredUserIDMissing
+	}
 
 	var filter bson.M
 
@@ -124,19 +201,9 @@ func (r *Repository) DeleteResourcesByOwnerId(ctx context.Context, ownerId strin
 
 // GetTotalApiTokens total api token from DB that match passed arguments
 func (r *Repository) GetTotalApiTokens(ctx context.Context, userId, userNanoId, descriptionFilter, statusFilter, to, from string, onlyEphemeral bool, onlyPermanent bool) (int64, error) {
-
-	// Example mongo query
-	// /// get token total
-	// db.getCollection("apitokens").countDocuments({_id: { $exists : true }, created_by_id: "7fd7fa4f-9ccc-4bd6-8e80-0302077ea9eb" })
-	// /// get token with status "x" total
-	// db.getCollection("apitokens").countDocuments({_id: { $exists : true }, created_by_id: "7fd7fa4f-9ccc-4bd6-8e80-0302077ea9eb", status: /^x$/i })
-	// /// get ephemeral token total
-	// db.getCollection("apitokens").countDocuments({_id: { $exists : true }, created_by_id: "7fd7fa4f-9ccc-4bd6-8e80-0302077ea9eb", ttl_expires_at: { $exists: true}, created_at: {
-	// 	$gt: '2023-07-04T00:00:00.000Z',
-	// 	$lt: '2023-07-05T00:00:00.000Z'
-	//   } })
-	// /// get permanent token total
-	// db.getCollection("apitokens").countDocuments({_id: { $exists : true }, created_by_id: "7fd7fa4f-9ccc-4bd6-8e80-0302077ea9eb", ttl_expires_at: { $exists: false} })
+	if onlyEphemeral && onlyPermanent {
+		return 0, ErrInvalidTokenQuery
+	}
 
 	apiTokenFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -150,24 +217,24 @@ func (r *Repository) GetTotalApiTokens(ctx context.Context, userId, userNanoId, 
 
 	if descriptionFilter != "" {
 		apiTokenFilter["description"] = bson.Regex{
-			Pattern: fmt.Sprintf(MongoRegexStringFormat, descriptionFilter),
+			Pattern: fmt.Sprintf(MongoRegexStringFormat, regexp.QuoteMeta(descriptionFilter)),
 			Options: "i",
 		}
 	}
 
 	if statusFilter != "" {
 		apiTokenFilter["status"] = bson.Regex{
-			Pattern: fmt.Sprintf(MongoRegexStringFormat, statusFilter),
+			Pattern: fmt.Sprintf(MongoRegexStringFormat, regexp.QuoteMeta(statusFilter)),
 			Options: "i",
 		}
 	}
 
 	if onlyEphemeral {
-		apiTokenFilter["ttl_expires_at"] = bson.M{"$exists": true}
+		apiTokenFilter["ttl_expires_at"] = bson.M{"$nin": bson.A{nil, ""}}
 	}
 
 	if onlyPermanent {
-		apiTokenFilter["ttl_expires_at"] = bson.M{"$exists": false}
+		apiTokenFilter["ttl_expires_at"] = bson.M{"$in": bson.A{nil, ""}}
 	}
 
 	if to != "" || from != "" {
@@ -195,6 +262,9 @@ func (r *Repository) GetTotalApiTokens(ctx context.Context, userId, userNanoId, 
 
 // CreateUserAPIToken creates an user apitoken in the DB
 func (r *Repository) CreateUserAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error) {
+	if apiToken == nil || apiToken.CreatedByID == "" {
+		return nil, ErrRequiredUserIDMissing
+	}
 
 	collection, err := r.GetApiTokenCollection(ctx)
 	if err != nil {
@@ -203,16 +273,28 @@ func (r *Repository) CreateUserAPIToken(ctx context.Context, apiToken *UserAPITo
 
 	apiToken.Generate().GenerateNewUUID()
 
-	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, apiToken, "api-token")
+	result, err := r.Store.ExecuteInsertOneCommand(ctx, collection, apiToken, "api-token")
 	if err != nil {
 		return nil, err
+	}
+	if result == nil {
+		return nil, ErrServiceUnavailable
+	}
+	insertedID, ok := result.InsertedID.(string)
+	if !ok || insertedID != apiToken.ID {
+		return nil, ErrServiceUnavailable
 	}
 
 	return apiToken, nil
 }
 
-// UpdateAPIToken updates apitoken passed in the DB
+// UpdateAPIToken is a trusted legacy whole-record update, not an owner-checked
+// management operation. Callers must prevent stale authority overwrites.
+// Deprecated: use SetAPITokenStatusFor or TouchAPIToken for field-only mutations.
 func (r *Repository) UpdateAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error) {
+	if apiToken == nil || apiToken.ID == "" {
+		return nil, ErrResourceNotFound
+	}
 
 	collection, err := r.GetApiTokenCollection(ctx)
 	if err != nil {
@@ -230,8 +312,12 @@ func (r *Repository) UpdateAPIToken(ctx context.Context, apiToken *UserAPIToken)
 
 }
 
-// DeleteAPITokenByID removes passed api token ID from DB
+// DeleteAPITokenByID is a trusted administrative deletion without an owner check.
+// Deprecated: use DeleteAPITokenFor for owner-bound credential management.
 func (r *Repository) DeleteAPITokenByID(ctx context.Context, apiTokenID string) error {
+	if apiTokenID == "" {
+		return ErrResourceNotFound
+	}
 	deleteFilter := bson.M{"_id": apiTokenID}
 
 	collection, err := r.GetApiTokenCollection(ctx)
@@ -263,6 +349,9 @@ func (r *Repository) GetAPITokenByID(ctx context.Context, apiTokenID string) (*U
 
 // GetAPITokens returns apitokens matching filters from the DB
 func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest) ([]UserAPIToken, error) {
+	if req == nil || (req.OnlyEphemeral && req.OnlyPermanent) {
+		return nil, ErrInvalidTokenQuery
+	}
 	var (
 		result          []UserAPIToken
 		queryFilter     bson.D = bson.D{}
@@ -278,7 +367,7 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 	// generate query filter from request
 	if req.Description != "" {
 		queryFilter = append(queryFilter, bson.E{Key: "description", Value: bson.Regex{
-			Pattern: fmt.Sprintf(MongoRegexStringFormat, req.Description),
+			Pattern: fmt.Sprintf(MongoRegexStringFormat, regexp.QuoteMeta(req.Description)),
 			Options: "i",
 		},
 		})
@@ -286,7 +375,7 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 
 	if req.Status != "" {
 		queryFilter = append(queryFilter, bson.E{Key: "status", Value: bson.Regex{
-			Pattern: fmt.Sprintf(MongoRegexStringFormat, req.Status),
+			Pattern: fmt.Sprintf(MongoRegexStringFormat, regexp.QuoteMeta(req.Status)),
 			Options: "i",
 		},
 		})
@@ -301,11 +390,11 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 	}
 
 	if req.OnlyEphemeral {
-		queryFilter = append(queryFilter, bson.E{Key: "ttl_expires_at", Value: bson.M{"$exists": true}})
+		queryFilter = append(queryFilter, bson.E{Key: "ttl_expires_at", Value: bson.M{"$nin": bson.A{nil, ""}}})
 	}
 
 	if req.OnlyPermanent {
-		queryFilter = append(queryFilter, bson.E{Key: "ttl_expires_at", Value: bson.M{"$exists": false}})
+		queryFilter = append(queryFilter, bson.E{Key: "ttl_expires_at", Value: bson.M{"$in": bson.A{nil, ""}}})
 	}
 
 	// generate sort filter from request
@@ -330,6 +419,7 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 	}
 
 	// Sort by request field
+	requestFilter = append(requestFilter, bson.E{Key: "_id", Value: 1})
 	findOptions.SetSort(requestFilter)
 
 	collection, err := r.GetApiTokenCollection(ctx)
@@ -349,14 +439,52 @@ func (r *Repository) GetAPITokens(ctx context.Context, req *GetAPITokensRequest)
 	return result, nil
 }
 
-// DeleteAPITokenFor removes apitoken with passed ID from apitoken collection.
-// Also updates user collection to remove reference
+// DeleteAPITokenFor deletes only the exact owner/credential pair, regardless of
+// expiry or status. An absent or differently owned record is indistinguishable.
 func (r *Repository) DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error {
-
-	err := r.DeleteAPITokenByID(ctx, apiTokenID)
+	if ctx == nil || userID == "" || apiTokenID == "" {
+		return ErrResourceNotFound
+	}
+	collection, err := r.GetApiTokenCollection(ctx)
 	if err != nil {
 		return err
 	}
+	result, err := r.Store.ExecuteDeleteOneCommandResult(ctx, collection, bson.M{"_id": apiTokenID, "created_by_id": userID})
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return ErrServiceUnavailable
+	}
+	if result.DeletedCount != 1 {
+		return ErrResourceNotFound
+	}
+	return nil
+}
 
+// SetAPITokenStatusFor updates only status and its change time for the exact
+// owner. It never upserts, rewrites secrets/expiry or uses a stale read/replace.
+// Repeating the same desired state succeeds if the owner/record still matches.
+func (r *Repository) SetAPITokenStatusFor(ctx context.Context, ownerID, tokenID, status string) error {
+	if ctx == nil || ownerID == "" || tokenID == "" {
+		return ErrResourceNotFound
+	}
+	if status != UserTokenStatusKeyActive && status != UserTokenStatusKeyRevoked {
+		return ErrTokenStatusInvalid
+	}
+	collection, err := r.GetApiTokenCollection(ctx)
+	if err != nil {
+		return err
+	}
+	result, err := r.Store.ExecuteUpdateOneCommandResult(ctx, collection, bson.M{"_id": tokenID, "created_by_id": ownerID}, bson.M{"$set": bson.M{"status": status, "updated_at": time.Now().UTC().Format(time.RFC3339Nano)}})
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return ErrServiceUnavailable
+	}
+	if result.MatchedCount != 1 {
+		return ErrResourceNotFound
+	}
 	return nil
 }

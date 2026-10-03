@@ -69,12 +69,6 @@ func (g *GetAPITokensForResponse) GetMetaData() map[string]interface{} {
 	return responseMap
 }
 
-// updateAPITokenResponse holds response data for  updateAPIToken request
-type updateAPITokenResponse struct {
-	// APIToken token updated
-	APIToken UserAPIToken
-}
-
 // CreateAPITokenResponse holds response data for CreateAPIToken request
 type CreateAPITokenResponse struct {
 	// APIToken created token

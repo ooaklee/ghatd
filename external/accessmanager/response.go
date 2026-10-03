@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/apitoken"
+	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/oauth"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
@@ -159,6 +160,13 @@ type OauthCallbackResponse struct {
 
 // MiddlewareAuthedUserResponse holds the data returned for authenticated user
 type MiddlewareAuthedUserResponse struct {
+	// APIToken identifies a separately verified API credential and its owner.
+	// It excludes the secret/hash and must never be populated alongside Token.
+	APIToken *apitoken.CredentialDetails `json:"-"`
+	// Token contains verified access-token claims, never the bearer itself.
+	// It is nil for anonymous and API-token authentication. Claims are a
+	// request snapshot, not a substitute for live authorization on later work.
+	Token *auth.TokenAccessDetails `json:"-"`
 	// Authenticated distinguishes a real user from the placeholder assigned to
 	// public requests handled by optional-auth middleware.
 	Authenticated bool

@@ -481,64 +481,49 @@ func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITok
 
 }
 
-// UpdateUserAPITokenStatus updates status on specified API token
-// TODO: Create tests
+// UpdateUserAPITokenStatus changes only the specified owner's credential state.
+// The HTTP boundary authorizes that owner; arbitrary status values never revoke.
 func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error {
+	if s == nil || s.ApitokenService == nil || ctx == nil {
+		return apitoken.ErrServiceUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if r == nil || r.UserID == "" || r.APITokenID == "" {
+		return ErrAPITokenNotAssociatedWithUser
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "update-user-api-token-status")
 	logger.Debug("handling-update-user-api-token-status-request")
 
 	switch r.Status {
 	case apitoken.UserTokenStatusKeyActive:
 		return s.ApitokenService.ActivateAPIToken(ctx, &apitoken.ActivateAPITokenRequest{
-			ID: r.APITokenID})
-	default:
+			UserID: r.UserID,
+			ID:     r.APITokenID})
+	case apitoken.UserTokenStatusKeyRevoked:
 		return s.ApitokenService.RevokeAPIToken(ctx, &apitoken.RevokeAPITokenRequest{
-			ID: r.APITokenID,
+			UserID: r.UserID,
+			ID:     r.APITokenID,
 		})
+	default:
+		return apitoken.ErrTokenStatusInvalid
 	}
 }
 
-// DeleteUserAPIToken delete specified API token for user
-// TODO: Create tests
+// DeleteUserAPIToken delegates exact owner-bound deletion without a list scan.
+// The HTTP boundary must authorize this target owner before calling the service.
 func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "delete-user-api-token")
-	logger.Debug("handling-delete-user-api-token-request")
-
-	// Check if user exist
-	_, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-		ID: r.UserID,
-	})
-	if err != nil {
+	if s == nil || s.ApitokenService == nil || ctx == nil {
+		return apitoken.ErrServiceUnavailable
+	}
+	if err := ctx.Err(); err != nil {
 		return err
 	}
-
-	// get all user api tokens
-	userApiTokens, err := s.GetSpecificUserAPITokens(ctx, &GetSpecificUserAPITokensRequest{
-		UserID: r.UserID,
-		GetAPITokensForRequest: &apitoken.GetAPITokensForRequest{
-			PerPage: 100, // Fetch all user tokens
-		},
-	})
-	if err != nil {
-		return err
+	if r == nil || r.UserID == "" || r.APITokenID == "" {
+		return ErrAPITokenNotAssociatedWithUser
 	}
-
-	// If the user has tokens, check if the requested token is associated with the user
-	if len(userApiTokens.UserAPITokens) > 0 {
-
-		for _, token := range userApiTokens.UserAPITokens {
-			if token.ID == r.APITokenID {
-				return s.ApitokenService.DeleteAPIToken(ctx,
-					&apitoken.DeleteAPITokenRequest{
-						UserID:     r.UserID,
-						APITokenID: r.APITokenID,
-					})
-			}
-		}
-
-	}
-
-	return ErrAPITokenNotAssociatedWithUser
+	return s.ApitokenService.DeleteAPIToken(ctx, &apitoken.DeleteAPITokenRequest{UserID: r.UserID, APITokenID: r.APITokenID})
 }
 
 // CreateUserAPIToken generates API token for user
@@ -665,51 +650,39 @@ func (s *Service) getUserApiTokensCountByType(ctx context.Context, userId string
 	return userPermanentToken, userEphemeralToken, nil
 }
 
-// MiddlewareAdminAPITokenRequired validates that the request contains a valid API
-// token belonging to an active admin user. Returns the user ID if valid.
-func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
-	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(r.Context(), r)
-	if err != nil {
-		return nil, err
-	}
-
-	persistentUserResponse, err := s.UserService.GetUserByNanoID(r.Context(), &userv2.GetUserByNanoIDRequest{
-		NanoID: tokenRequester.NanoId,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	tokenRequester.UserID = persistentUserResponse.User.ID
-
-	if !persistentUserResponse.User.IsAdmin() {
-		return nil, ErrUnauthorizedAdminAccessAttempted
-	}
-
-	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
-		return nil, ErrUnauthorizedNonActiveStatus
-	}
-
-	_ = s.ApitokenService.UpdateAPITokenLastUsedAt(r.Context(), &apitoken.UpdateAPITokenLastUsedAtRequest{
-		APITokenEncoded: tokenRequester.UserAPITokenEncoded,
-		ClientID:        tokenRequester.UserID,
-	})
-
-	return &MiddlewareAuthedUserResponse{
-		Authenticated: true,
-		UserID:        persistentUserResponse.User.GetUserId(),
-		User:          persistentUserResponse.User,
-	}, nil
-}
-
 // MiddlewareValidAPITokenRequired validates that the request contains a valid API
 // token belonging to an active user. Returns the user ID if valid.
 func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	return s.authenticateAPIToken(r, false)
+}
+
+// MiddlewareAdminAPITokenRequired binds the credential's owner to a current
+// active administrator account before publishing verified API identity.
+func (s *Service) MiddlewareAdminAPITokenRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	return s.authenticateAPIToken(r, true)
+}
+
+// authenticateAPIToken binds the credential's stored owner to the live account
+// resolved by its public prefix before publishing identity or updating usage.
+// A custom verifier must supply IsValid, TokenID and UserID, not just a prefix.
+func (s *Service) authenticateAPIToken(r *http.Request, requireAdmin bool) (*MiddlewareAuthedUserResponse, error) {
+	if s == nil || r == nil || s.ApitokenService == nil || s.UserService == nil {
+		return nil, apitoken.ErrServiceUnavailable
+	}
 	ctx := r.Context()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	tokenRequester, err := s.ApitokenService.ExtractValidateUserAPITokenMetadata(ctx, r)
 	if err != nil {
 		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if tokenRequester == nil || !tokenRequester.IsValid || tokenRequester.TokenID == "" || tokenRequester.UserID == "" || tokenRequester.NanoId == "" {
+		return nil, auth.ErrUnauthorized
 	}
 
 	persistentUserResponse, err := s.UserService.GetUserByNanoID(ctx, &userv2.GetUserByNanoIDRequest{
@@ -719,21 +692,34 @@ func (s *Service) MiddlewareValidAPITokenRequired(r *http.Request) (*MiddlewareA
 		return nil, err
 	}
 
-	tokenRequester.UserID = persistentUserResponse.User.ID
+	if persistentUserResponse == nil || persistentUserResponse.User == nil || persistentUserResponse.User.GetUserId() != tokenRequester.UserID {
+		return nil, auth.ErrUnauthorized
+	}
+	if requireAdmin && !persistentUserResponse.User.IsAdmin() {
+		return nil, ErrUnauthorizedAdminAccessAttempted
+	}
 
 	if persistentUserResponse.User.Status != userv2.AccountStatusKeyActive {
 		return nil, ErrUnauthorizedNonActiveStatus
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	_ = s.ApitokenService.UpdateAPITokenLastUsedAt(ctx, &apitoken.UpdateAPITokenLastUsedAtRequest{
+		TokenID:         tokenRequester.TokenID,
 		APITokenEncoded: tokenRequester.UserAPITokenEncoded,
 		ClientID:        tokenRequester.UserID,
 	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	return &MiddlewareAuthedUserResponse{
 		Authenticated: true,
 		UserID:        persistentUserResponse.User.GetUserId(),
 		User:          persistentUserResponse.User,
+		APIToken:      &apitoken.CredentialDetails{TokenID: tokenRequester.TokenID, UserID: tokenRequester.UserID},
 	}, nil
 }
 
