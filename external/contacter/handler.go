@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
@@ -46,8 +47,8 @@ func (h *Handler) GetAvailableCommsTypes(w http.ResponseWriter, r *http.Request)
 
 	response, err := h.Service.GetAvailableCommsTypes(r.Context())
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -62,15 +63,16 @@ func (h *Handler) GetCommsStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.Validator.Validate(request); err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		// Validator diagnostics are not domain identities or public messages.
+		logger.Warn("handler-returning-error-response", zap.Error(ErrInvalidCommsPayload))
+		h.NewHTTPErrorResponse(w, ErrInvalidCommsPayload)
 		return
 	}
 
 	response, err := h.Service.GetCommsStats(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 

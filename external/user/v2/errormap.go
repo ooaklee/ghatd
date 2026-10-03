@@ -4,6 +4,12 @@ import "github.com/ooaklee/reply/v2"
 
 // UserErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 var UserErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrExtensionNotFound: {
+		Title:      "Not Found",
+		Detail:     "The requested user extension was not found",
+		StatusCode: 404,
+		Code:       "USV2-026",
+	},
 	// Model/Validation Errors
 	ErrUserConfigNotSet: {
 		Title:      "Internal Server Error",

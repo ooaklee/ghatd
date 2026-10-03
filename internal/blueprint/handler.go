@@ -43,15 +43,15 @@ func (h *Handler) CreateBlueprint(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "internal/blueprint", "handle-create-blueprint")
 	request, err := MapRequestToCreateBlueprintRequest(r, h.validator)
 	if err != nil {
-		logger.Warn("blueprint-create-request-map-failed", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("blueprint-create-request-map-failed", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.CreateBlueprint(r.Context(), request)
 	if err != nil {
-		logger.Error("blueprint-create-service-failed", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Error("blueprint-create-service-failed", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -64,15 +64,15 @@ func (h *Handler) GetBlueprints(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "internal/blueprint", "handle-get-blueprints")
 	request, err := MapRequestToGetBlueprintsRequest(r, h.validator)
 	if err != nil {
-		logger.Warn("blueprint-list-request-map-failed", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("blueprint-list-request-map-failed", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.GetBlueprints(r.Context(), request)
 	if err != nil {
-		logger.Error("blueprint-list-service-failed", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Error("blueprint-list-service-failed", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -85,15 +85,15 @@ func (h *Handler) GetBlueprintByID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "internal/blueprint", "handle-get-blueprint-by-id")
 	request, err := MapRequestToGetBlueprintByIDRequest(r, h.validator)
 	if err != nil {
-		logger.Warn("blueprint-get-by-id-request-map-failed", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("blueprint-get-by-id-request-map-failed", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.GetBlueprintByID(r.Context(), request)
 	if err != nil {
-		logger.Error("blueprint-get-by-id-service-failed", zap.String("blueprint-id", request.ID), zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Error("blueprint-get-by-id-service-failed", zap.String("blueprint-id", request.ID), zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -104,10 +104,17 @@ func (h *Handler) GetBlueprintByID(w http.ResponseWriter, r *http.Request) {
 // getBaseResponseHandler returns a response handler with the blueprint error map
 // as the base layer and caller-supplied maps as overrides.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(
-		errormanifest.NewComposer().
-			Add(blueprintErrorMap).
-			AddOverrides(h.errorMaps...).
-			Build(),
-	)
+	return reply.NewReplier(h.responseManifests())
+}
+
+// responseManifests keeps success factories and error writers on the same
+// domain base and last-wins caller override layers.
+func (h *Handler) responseManifests() []reply.ErrorManifest {
+	return errormanifest.NewComposer().Add(blueprintErrorMap).AddOverrides(h.errorMaps...).Build()
+}
+
+// NewHTTPErrorResponse preserves mapped wrappers and validation collections.
+// It returns writer failures and never passes raw diagnostic causes to reply.
+func (h *Handler) NewHTTPErrorResponse(w http.ResponseWriter, err error, attributes ...reply.ResponseAttributes) error {
+	return errormanifest.WriteHTTPError(w, err, h.responseManifests(), attributes...)
 }

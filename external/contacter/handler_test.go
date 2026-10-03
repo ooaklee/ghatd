@@ -90,6 +90,13 @@ func TestHandler_GetCommsStats(t *testing.T) {
 			expectServiceCalled: true,
 			expectRegexValue:    ".*",
 		},
+		{
+			name:                "Failure - native validator diagnostic is translated",
+			query:               "?with_email_regex=[",
+			validatorErr:        errors.New("private validation diagnostic"),
+			expectStatus:        http.StatusBadRequest,
+			expectServiceCalled: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -129,6 +136,7 @@ func TestHandler_GetCommsStats(t *testing.T) {
 			})
 
 			assert.Equal(t, tt.expectStatus, rec.Code)
+			assert.NotContains(t, rec.Body.String(), "private validation diagnostic")
 			assert.Equal(t, tt.expectServiceCalled, serviceCalled)
 			if tt.expectServiceCalled {
 				require.NotNil(t, capturedReq)
@@ -138,28 +146,36 @@ func TestHandler_GetCommsStats(t *testing.T) {
 	}
 }
 
+// TestHandler_GetAvailableCommsTypes verifies configured categories and safe
+// failure responses through the same handler boundary.
 func TestHandler_GetAvailableCommsTypes(t *testing.T) {
 	t.Parallel()
-
-	svc := &handlerMockContacterService{
-		getAvailableCommsTypesFunc: func(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
-			return &contacter.GetAvailableCommsTypesResponse{
-				CommsTypes: contacter.CommsTypeMap{
-					contacter.CommsType("service-question"): "Service Question",
-				},
-			}, nil
-		},
+	for _, tc := range []struct {
+		name   string
+		types  contacter.CommsTypeMap
+		err    error
+		status int
+	}{
+		{"configured types", contacter.CommsTypeMap{contacter.CommsType("service-question"): "Service Question"}, nil, http.StatusOK},
+		{"empty configuration", contacter.CommsTypeMap{}, nil, http.StatusOK},
+		{"service unavailable", nil, errors.New("private service diagnostic"), http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &handlerMockContacterService{getAvailableCommsTypesFunc: func(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
+				return &contacter.GetAvailableCommsTypesResponse{CommsTypes: tc.types}, tc.err
+			}}
+			h := contacter.NewHandler(svc, &handlerMockValidator{})
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/comms/types", nil)
+			rec := httptest.NewRecorder()
+			h.GetAvailableCommsTypes(rec, req)
+			require.Equal(t, tc.status, rec.Code)
+			var envelope struct {
+				Data contacter.CommsTypeMap `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+			assert.Equal(t, tc.types, envelope.Data)
+			assert.NotContains(t, rec.Body.String(), "private service diagnostic")
+		})
 	}
-	h := contacter.NewHandler(svc, &handlerMockValidator{})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/comms/types", nil)
-	rec := httptest.NewRecorder()
-
-	h.GetAvailableCommsTypes(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	var envelope struct {
-		Data map[string]string `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
-	assert.Equal(t, map[string]string{"service-question": "Service Question"}, envelope.Data)
 }

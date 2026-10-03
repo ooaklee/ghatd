@@ -18,6 +18,7 @@ import (
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/streaker"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/vision"
@@ -56,6 +57,7 @@ func TestBundles(t *testing.T) {
 				group.GroupErrorMap,
 				notifier.NotifierErrorMap,
 				reminder.ReminderErrorMap,
+				streaker.StreakErrorMap,
 				vision.VisionErrorMap,
 			},
 		},

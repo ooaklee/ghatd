@@ -44,27 +44,27 @@ func (h *Handler) ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.
 	}
 	request, err := mapRequestToProcessBillingProviderCheckoutRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	checkoutService, ok := h.Service.(billingManagerCheckoutService)
 	if !ok {
 		logger.Error("checkout-service-capability-not-configured")
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerCheckoutConfigurationInvalid)
+		h.NewHTTPErrorResponse(w, ErrBillingManagerCheckoutConfigurationInvalid)
 		return
 	}
 
 	response, err := checkoutService.ProcessBillingProviderCheckout(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	if response == nil || response.Session == nil {
 		logger.Warn("handler-returning-error-response", zap.Error(ErrBillingManagerCheckoutSessionInvalid))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerCheckoutSessionInvalid)
+		h.NewHTTPErrorResponse(w, ErrBillingManagerCheckoutSessionInvalid)
 		return
 	}
 
@@ -82,26 +82,26 @@ func (h *Handler) ProcessBillingProviderPortal(w http.ResponseWriter, r *http.Re
 	}
 	request, err := mapRequestToProcessBillingProviderPortalRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	portalService, ok := h.Service.(billingManagerPortalService)
 	if !ok || isNilCheckoutCapability(portalService) {
 		logger.Error("customer-portal-service-capability-not-configured")
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerPortalConfigurationInvalid)
+		h.NewHTTPErrorResponse(w, ErrBillingManagerPortalConfigurationInvalid)
 		return
 	}
 	response, err := portalService.ProcessBillingProviderPortal(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	if response == nil || response.Session == nil {
 		logger.Warn("handler-returning-error-response", zap.Error(ErrBillingManagerPortalSessionInvalid))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, ErrBillingManagerPortalSessionInvalid)
+		h.NewHTTPErrorResponse(w, ErrBillingManagerPortalSessionInvalid)
 		return
 	}
 
@@ -136,21 +136,18 @@ func (h *Handler) ProcessBillingProviderWebhooks(w http.ResponseWriter, r *http.
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-process-billing-provider-webhooks")
 	request, err := mapRequestToProcessBillingProviderWebhooksRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.ProcessBillingProviderWebhooks(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.getBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
@@ -159,27 +156,23 @@ func (h *Handler) GetUserBillingEvents(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-user-billing-events")
 	request, err := mapRequestToGetUserBillingEventsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserBillingEvents(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if request.Meta {
-		//nolint will set up default fallback later
 		h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Events, reply.WithMeta(response.GetMetaData()))
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Events)
 }
 
@@ -188,21 +181,18 @@ func (h *Handler) GetUserSubscriptionStatus(w http.ResponseWriter, r *http.Reque
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-user-subscription-status")
 	request, err := mapRequestToGetUserSubscriptionStatusRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserSubscriptionStatus(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.SubscriptionStatus)
 }
 
@@ -211,21 +201,18 @@ func (h *Handler) GetUserBillingDetail(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-user-billing-detail")
 	request, err := mapRequestToGetUserBillingDetailRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserBillingDetail(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.BillingDetail)
 }
 
@@ -234,15 +221,15 @@ func (h *Handler) GetPricingPlans(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-pricing-plans")
 	request, err := MapRequestToGetPricingPlansRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricingPlans(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -259,15 +246,15 @@ func (h *Handler) GetPricePlanBySlug(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-price-plan-by-slug")
 	request, err := MapRequestToGetPricePlanBySlugRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricePlanBySlug(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -279,15 +266,15 @@ func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/billingmanager", "handle-get-pricing-features")
 	request, err := MapRequestToGetPriceFeaturesRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetPricingFeatures(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -302,10 +289,17 @@ func (h *Handler) GetPricingFeatures(w http.ResponseWriter, r *http.Request) {
 // getBaseResponseHandler returns response handler with BillingManagerErrorMap
 // as the base layer and caller-supplied maps as overrides.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(
-		errormanifest.NewComposer().
-			Add(BillingManagerErrorMap).
-			AddOverrides(h.ErrorMaps...).
-			Build(),
-	)
+	return reply.NewReplier(h.responseManifests())
+}
+
+// responseManifests keeps success factories and error writers on the same
+// domain base and last-wins caller override layers.
+func (h *Handler) responseManifests() []reply.ErrorManifest {
+	return errormanifest.NewComposer().Add(BillingManagerErrorMap).Add(DependencyErrorMaps()...).AddOverrides(h.ErrorMaps...).Build()
+}
+
+// NewHTTPErrorResponse preserves mapped wrappers and validation collections.
+// It returns writer failures and never passes raw diagnostic causes to reply.
+func (h *Handler) NewHTTPErrorResponse(w http.ResponseWriter, err error, attributes ...reply.ResponseAttributes) error {
+	return errormanifest.WriteHTTPError(w, err, h.responseManifests(), attributes...)
 }

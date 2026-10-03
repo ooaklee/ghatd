@@ -39,13 +39,13 @@ func NewHandler(service sitemapService, validator sitemapValidator, errorMaps ..
 func (h *Handler) CreateSitemapItem(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToCreateSitemapItemRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.CreateSitemapItemIfDoesNotAlreadyExist(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -56,13 +56,13 @@ func (h *Handler) CreateSitemapItem(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) MassSitemapItemCreationByBatch(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToMassSitemapItemCreationByBatchRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.MassSitemapItemCreationByBatch(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -73,13 +73,13 @@ func (h *Handler) MassSitemapItemCreationByBatch(w http.ResponseWriter, r *http.
 func (h *Handler) GetSitemapItems(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGetSitemapItemsRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.GetSitemapItems(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -90,13 +90,13 @@ func (h *Handler) GetSitemapItems(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateSitemapItemByUri(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToUpdateSitemapItemRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.UpdateSitemapItemByUri(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -107,13 +107,13 @@ func (h *Handler) UpdateSitemapItemByUri(w http.ResponseWriter, r *http.Request)
 func (h *Handler) DeleteEntriesWithUriRegex(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToDeleteEntriesWithURIRegexRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.DeleteEntriesWithUriRegex(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -124,13 +124,13 @@ func (h *Handler) DeleteEntriesWithUriRegex(w http.ResponseWriter, r *http.Reque
 func (h *Handler) GenerateSitemap(w http.ResponseWriter, r *http.Request) {
 	request, err := MapRequestToGenerateSitemapRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.GenerateSitemap(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -150,13 +150,13 @@ func (h *Handler) GetSitemap(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) writeSitemapFileResponse(w http.ResponseWriter, r *http.Request, attachment bool) {
 	request, err := MapRequestToDownloadSitemapByPathRequest(r, h.validator)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.service.DownloadSitemapByPath(r.Context(), request)
 	if err != nil {
-		_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -169,10 +169,17 @@ func (h *Handler) writeSitemapFileResponse(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(
-		errormanifest.NewComposer().
-			Add(SitemapErrorMap).
-			AddOverrides(h.errorMaps...).
-			Build(),
-	)
+	return reply.NewReplier(h.responseManifests())
+}
+
+// responseManifests keeps success factories and error writers on the same
+// domain base and last-wins caller override layers.
+func (h *Handler) responseManifests() []reply.ErrorManifest {
+	return errormanifest.NewComposer().Add(SitemapErrorMap).AddOverrides(h.errorMaps...).Build()
+}
+
+// NewHTTPErrorResponse preserves mapped wrappers and validation collections.
+// It returns writer failures and never passes raw diagnostic causes to reply.
+func (h *Handler) NewHTTPErrorResponse(w http.ResponseWriter, err error, attributes ...reply.ResponseAttributes) error {
+	return errormanifest.WriteHTTPError(w, err, h.responseManifests(), attributes...)
 }

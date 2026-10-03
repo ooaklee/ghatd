@@ -28,19 +28,19 @@ type visionUsermanagerService interface {
 func (h *Handler) UpdateVision(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToUpdateVisionRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	// The usermanager edit surface intentionally excludes internal metadata.
 	req.Metadata = nil
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.UpdateVision(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -50,12 +50,12 @@ func (h *Handler) UpdateVision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVisionConfig(w http.ResponseWriter, r *http.Request) {
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.GetVisionConfig(r.Context())
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	setVisionReadCacheHeaders(w, r)
@@ -66,17 +66,17 @@ func (h *Handler) GetVisionConfig(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateVisionStatus(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToUpdateVisionStatusRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.UpdateVisionStatus(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -86,17 +86,17 @@ func (h *Handler) UpdateVisionStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteVision(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToDeleteVisionRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.DeleteVision(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -106,17 +106,17 @@ func (h *Handler) DeleteVision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateVision(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToCreateVisionRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.CreateVision(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response)
@@ -126,17 +126,17 @@ func (h *Handler) CreateVision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVisions(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToGetVisionsRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.GetVisions(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	setVisionReadCacheHeaders(w, r)
@@ -147,17 +147,17 @@ func (h *Handler) GetVisions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVisionByNanoID(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToGetVisionByNanoIDRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.GetVisionByNanoID(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	setVisionReadCacheHeaders(w, r)
@@ -168,17 +168,17 @@ func (h *Handler) GetVisionByNanoID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetVisionVote(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToSetVisionVoteRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.SetVisionVote(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -188,17 +188,17 @@ func (h *Handler) SetVisionVote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveVisionVote(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToRemoveVisionVoteRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.RemoveVisionVote(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -208,17 +208,17 @@ func (h *Handler) RemoveVisionVote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AddVisionComment(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToAddVisionCommentRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.AddVisionComment(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response)
@@ -228,17 +228,17 @@ func (h *Handler) AddVisionComment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetVisionCommentVote(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToSetVisionCommentVoteRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.SetVisionCommentVote(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -248,17 +248,17 @@ func (h *Handler) SetVisionCommentVote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveVisionCommentVote(w http.ResponseWriter, r *http.Request) {
 	req, err := vision.MapRequestToRemoveVisionCommentVoteRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(visionUsermanagerService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
+		h.NewHTTPErrorResponse(w, ErrVisionServiceNotEnabled)
 		return
 	}
 	response, err := service.RemoveVisionCommentVote(r.Context(), req)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)

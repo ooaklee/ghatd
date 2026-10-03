@@ -121,8 +121,8 @@ func (h *Handler) GetAvailableCommsTypes(w http.ResponseWriter, r *http.Request)
 
 	response, err := h.Service.GetAvailableCommsTypes(r.Context())
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -134,15 +134,15 @@ func (h *Handler) GetGroupLineage(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-group-lineage")
 	request, err := MapRequestToGetGroupLineageRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupLineage(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -155,15 +155,15 @@ func (h *Handler) GetGroupDescendants(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-group-descendants")
 	request, err := MapRequestToGetGroupDescendantsRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupDescendants(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -175,15 +175,15 @@ func (h *Handler) GetGroupsByUserID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-groups-by-user-id")
 	request, err := MapRequestToGetGroupsByUserIDRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupsByUserID(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -195,19 +195,18 @@ func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-groups-config")
 	request, err := MapRequestToGetGroupsConfigRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupsConfig(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
 }
 
@@ -221,9 +220,8 @@ func (h *Handler) DeleteUserPermanently(w http.ResponseWriter, r *http.Request) 
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -233,9 +231,8 @@ func (h *Handler) DeleteUserPermanently(w http.ResponseWriter, r *http.Request) 
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -243,7 +240,6 @@ func (h *Handler) DeleteUserPermanently(w http.ResponseWriter, r *http.Request) 
 	h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 	h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
@@ -253,21 +249,18 @@ func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-user-profile")
 	request, err := MapRequestToUpdateUserProfileRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateUserProfile(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 }
 
@@ -277,21 +270,18 @@ func (h *Handler) GetUserMicroProfile(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-user-micro-profile")
 	request, err := MapRequestToGetUserMicroProfileRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserMicroProfile(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.MicroProfile)
 }
 
@@ -300,21 +290,18 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-user-by-id")
 	request, err := MapRequestToGetUserByIDRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserByID(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
 
 }
@@ -324,15 +311,15 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-users")
 	request, err := MapRequestToGetUsersRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUsers(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -350,21 +337,18 @@ func (h *Handler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-user-profile")
 	request, err := MapRequestToGetUserProfileRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserProfile(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
 }
 
@@ -374,21 +358,18 @@ func (h *Handler) CreateComms(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToCreateCommsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	newCommsResponse, err := h.Service.CreateComms(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, newCommsResponse.Comms)
 }
 
@@ -398,27 +379,23 @@ func (h *Handler) GetComms(w http.ResponseWriter, r *http.Request) {
 
 	request, err := mapGetCommsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	getCommsResponse, err := h.Service.GetComms(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if request.Meta {
-		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsResponse.Comms, reply.WithMeta(getCommsResponse.Meta))
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsResponse.Comms)
 }
 
@@ -428,21 +405,18 @@ func (h *Handler) GetCommsStats(w http.ResponseWriter, r *http.Request) {
 
 	request, err := mapGetCommsStatsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	getCommsStatsResponse, err := h.Service.GetCommsStats(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, getCommsStatsResponse.Stats)
 }
 
@@ -452,21 +426,18 @@ func (h *Handler) UpdateComms(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToUpdateCommsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	updateCommsResponse, err := h.Service.UpdateComms(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, updateCommsResponse.Comms)
 }
 
@@ -475,21 +446,18 @@ func (h *Handler) GetEnrichedUserProfile(w http.ResponseWriter, r *http.Request)
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-enriched-user-profile")
 	request, err := MapRequestToGetEnrichedUserProfileRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetEnrichedUserProfile(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Profile)
 }
 
@@ -498,27 +466,23 @@ func (h *Handler) GetUserGroups(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-user-groups")
 	request, err := MapRequestToGetUserGroupsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserGroups(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if request.Meta {
-		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups, reply.WithMeta(response.Meta))
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Groups)
 }
 
@@ -527,15 +491,15 @@ func (h *Handler) GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-user-group-memberships-request")
 	request, err := MapRequestToGetUserGroupMembershipsRequestRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetUserGroupMemberships(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -547,15 +511,15 @@ func (h *Handler) GetLatestNotificationOverviews(w http.ResponseWriter, r *http.
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-latest-notification-overviews")
 	request, err := MapRequestToGetLatestNotificationOverviewsRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetLatestNotificationOverviews(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -572,15 +536,15 @@ func (h *Handler) GetNotifierConfig(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-notifier-config")
 	request, err := MapRequestToGetNotifierConfigRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetNotifierConfig(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -592,15 +556,15 @@ func (h *Handler) RegisterNotificationAddress(w http.ResponseWriter, r *http.Req
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-register-notification-address")
 	request, err := MapRequestToRegisterNotificationAddressRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RegisterNotificationAddress(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -612,15 +576,15 @@ func (h *Handler) ListNotificationAddresses(w http.ResponseWriter, r *http.Reque
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-list-notification-addresses")
 	request, err := MapRequestToListNotificationAddressesRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ListNotificationAddresses(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -653,14 +617,14 @@ func (h *Handler) DeleteNotificationAddress(w http.ResponseWriter, r *http.Reque
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-delete-notification-address")
 	request, err := MapRequestToDeleteNotificationAddressRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if err := h.Service.DeleteNotificationAddress(r.Context(), request); err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -672,15 +636,15 @@ func (h *Handler) GetNotificationPreferences(w http.ResponseWriter, r *http.Requ
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-notification-preferences")
 	request, err := MapRequestToGetNotificationPreferencesRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetNotificationPreferences(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -697,15 +661,15 @@ func (h *Handler) UpdateNotificationPreferences(w http.ResponseWriter, r *http.R
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-notification-preferences")
 	request, err := MapRequestToUpdateNotificationPreferencesRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateNotificationPreferences(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -722,15 +686,15 @@ func (h *Handler) NotifyUser(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-notify-user")
 	request, err := MapRequestToNotifyUserRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.NotifyUser(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -742,15 +706,15 @@ func (h *Handler) NotifyUsers(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-notify-users")
 	request, err := MapRequestToNotifyUsersRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.NotifyUsers(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -762,15 +726,15 @@ func (h *Handler) GetMyGroupInvitations(w http.ResponseWriter, r *http.Request) 
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-my-group-invitations")
 	request, err := MapRequestToGetMyGroupInvitationsRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetMyGroupInvitations(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -782,15 +746,15 @@ func (h *Handler) AcceptMyGroupInvitation(w http.ResponseWriter, r *http.Request
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-accept-my-group-invitation")
 	request, err := MapRequestToAcceptMyGroupInvitationRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.AcceptMyGroupInvitation(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -802,15 +766,15 @@ func (h *Handler) RejectMyGroupInvitation(w http.ResponseWriter, r *http.Request
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-reject-my-group-invitation")
 	request, err := MapRequestToRejectMyGroupInvitationRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RejectMyGroupInvitation(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -822,21 +786,18 @@ func (h *Handler) GetGroupDetail(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-group-detail")
 	request, err := MapRequestToGetGroupDetailRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupDetail(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Detail)
 }
 
@@ -845,21 +806,18 @@ func (h *Handler) GetGroupStats(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-group-stats")
 	request, err := MapRequestToGetGroupStatsRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetGroupStats(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Stats)
 }
 
@@ -868,15 +826,15 @@ func (h *Handler) ValidateGroupName(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-validate-group-name")
 	request, err := MapRequestToValidateGroupNameRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ValidateGroupName(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -888,21 +846,18 @@ func (h *Handler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-create-group")
 	request, err := MapRequestToCreateGroupRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateGroup(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Group)
 }
 
@@ -911,15 +866,15 @@ func (h *Handler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-group")
 	request, err := MapRequestToUpdateGroupRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateGroup(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -931,15 +886,15 @@ func (h *Handler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-delete-group")
 	request, err := MapRequestToDeleteGroupRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.DeleteGroup(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -951,15 +906,15 @@ func (h *Handler) AddGroupMember(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-add-group-member")
 	request, err := MapRequestToAddGroupMemberRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.AddGroupMember(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -971,15 +926,15 @@ func (h *Handler) RemoveGroupMember(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-remove-group-member")
 	request, err := MapRequestToRemoveGroupMemberRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RemoveGroupMember(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -991,15 +946,15 @@ func (h *Handler) UpdateGroupMember(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-group-member")
 	request, err := MapRequestToUpdateGroupMemberRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateGroupMember(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1011,15 +966,15 @@ func (h *Handler) UpdateGroupOwner(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-group-owner")
 	request, err := MapRequestToUpdateGroupOwnerRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateGroupOwner(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1031,15 +986,15 @@ func (h *Handler) CreateReminder(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-create-reminder")
 	request, err := MapRequestToCreateReminderRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateReminder(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1051,15 +1006,15 @@ func (h *Handler) GetReminderByID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-reminder-by-id")
 	request, err := MapRequestToGetReminderByIDRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetReminderByID(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1071,15 +1026,15 @@ func (h *Handler) ListReminders(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-list-reminders")
 	request, err := MapRequestToListRemindersRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ListReminders(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1091,15 +1046,15 @@ func (h *Handler) UpdateReminderByID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-reminder-by-id")
 	request, err := MapRequestToUpdateReminderByIDRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.UpdateReminderByID(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1111,14 +1066,14 @@ func (h *Handler) DeleteReminderByID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-delete-reminder-by-id")
 	request, err := MapRequestToDeleteReminderByIDRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if err := h.Service.DeleteReminderByID(r.Context(), request); err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1130,15 +1085,15 @@ func (h *Handler) DisableReminderByID(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-disable-reminder-by-id")
 	request, err := MapRequestToDisableReminderByIDRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.DisableReminderByID(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1150,15 +1105,15 @@ func (h *Handler) GetReminderStats(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-reminder-stats")
 	request, err := MapRequestToGetReminderStatsRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetReminderStats(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1170,15 +1125,15 @@ func (h *Handler) GetDueReminders(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-due-reminders")
 	request, err := MapRequestToGetDueRemindersRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetDueReminders(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1190,15 +1145,15 @@ func (h *Handler) RecordStreak(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-record-streak")
 	request, err := MapRequestToRecordStreakRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.RecordStreak(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1210,15 +1165,15 @@ func (h *Handler) ListStreaks(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-list-streaks")
 	request, err := MapRequestToListStreaksRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.ListStreaks(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1230,15 +1185,15 @@ func (h *Handler) GetCurrentStreak(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-current-streak")
 	request, err := MapRequestToGetCurrentStreakRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetCurrentStreak(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1250,15 +1205,15 @@ func (h *Handler) GetLongestStreak(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-longest-streak")
 	request, err := MapRequestToGetLongestStreakRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetLongestStreak(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -1270,29 +1225,36 @@ func (h *Handler) GetNumberOfStreaks(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-get-number-of-streaks")
 	request, err := MapRequestToGetNumberOfStreaksRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetNumberOfStreaks(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.GetNumberOfStreaksResponse)
 }
 
-// GetBaseResponseHandler returns response handler configured with auth error map
+// GetBaseResponseHandler composes manager and dependency maps, then host overrides.
 func (h *Handler) GetBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(
-		errormanifest.NewComposer().
-			Add(UsermanagerErrorMap).
-			AddOverrides(h.ErrorMaps...).
-			Build(),
-	)
+	return reply.NewReplier(h.responseManifests())
+}
+
+// responseManifests keeps success factories and error writers on the same
+// domain base and last-wins caller override layers.
+func (h *Handler) responseManifests() []reply.ErrorManifest {
+	return errormanifest.NewComposer().Add(UsermanagerErrorMap).Add(DependencyErrorMaps()...).AddOverrides(h.ErrorMaps...).Build()
+}
+
+// NewHTTPErrorResponse preserves mapped wrappers and validation collections.
+// It returns writer failures and never passes raw diagnostic causes to reply.
+func (h *Handler) NewHTTPErrorResponse(w http.ResponseWriter, err error, attributes ...reply.ResponseAttributes) error {
+	return errormanifest.WriteHTTPError(w, err, h.responseManifests(), attributes...)
 }
 
 // RemoveAuthCookies is handling removing the cookies from the client

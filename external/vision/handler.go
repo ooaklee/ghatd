@@ -43,12 +43,12 @@ func NewHandler(service visionService, validator visionValidator, errorMapLayers
 func (h *Handler) CreateVision(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToCreateVisionRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.CreateVision(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Vision)
@@ -58,12 +58,12 @@ func (h *Handler) CreateVision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVisions(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToGetVisionsRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.GetVisions(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Visions, reply.WithMeta(response.GetMetaData()))
@@ -73,12 +73,12 @@ func (h *Handler) GetVisions(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVisionByNanoID(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToGetVisionByNanoIDRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.GetVisionByNanoID(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -88,12 +88,12 @@ func (h *Handler) GetVisionByNanoID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateVision(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToUpdateVisionRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.UpdateVision(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -103,12 +103,12 @@ func (h *Handler) UpdateVision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateVisionStatus(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToUpdateVisionStatusRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.UpdateVisionStatus(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -118,12 +118,12 @@ func (h *Handler) UpdateVisionStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetVisionVote(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToSetVisionVoteRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.SetVisionVote(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -133,12 +133,12 @@ func (h *Handler) SetVisionVote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveVisionVote(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToRemoveVisionVoteRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.RemoveVisionVote(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -148,12 +148,12 @@ func (h *Handler) RemoveVisionVote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AddVisionComment(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToAddVisionCommentRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.AddVisionComment(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Vision)
@@ -163,12 +163,12 @@ func (h *Handler) AddVisionComment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SetVisionCommentVote(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToSetVisionCommentVoteRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.SetVisionCommentVote(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -178,12 +178,12 @@ func (h *Handler) SetVisionCommentVote(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RemoveVisionCommentVote(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToRemoveVisionCommentVoteRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.RemoveVisionCommentVote(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Vision)
@@ -193,12 +193,12 @@ func (h *Handler) RemoveVisionCommentVote(w http.ResponseWriter, r *http.Request
 func (h *Handler) DeleteVision(w http.ResponseWriter, r *http.Request) {
 	req, err := MapRequestToDeleteVisionRequest(r, h.validator)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.service.DeleteVision(r.Context(), req)
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
@@ -208,7 +208,7 @@ func (h *Handler) DeleteVision(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetVisionConfig(w http.ResponseWriter, r *http.Request) {
 	response, err := h.service.GetVisionConfig(r.Context())
 	if err != nil {
-		h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
@@ -217,10 +217,17 @@ func (h *Handler) GetVisionConfig(w http.ResponseWriter, r *http.Request) {
 // getBaseResponseHandler returns a reply.Replier configured with the vision
 // error map and any handler-level overrides.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
-	return reply.NewReplier(
-		errormanifest.NewComposer().
-			Add(VisionErrorMap).
-			AddOverrides(h.errorMaps...).
-			Build(),
-	)
+	return reply.NewReplier(h.responseManifests())
+}
+
+// responseManifests keeps success factories and error writers on the same
+// domain base and last-wins caller override layers.
+func (h *Handler) responseManifests() []reply.ErrorManifest {
+	return errormanifest.NewComposer().Add(VisionErrorMap).AddOverrides(h.errorMaps...).Build()
+}
+
+// NewHTTPErrorResponse preserves mapped wrappers and validation collections.
+// It returns writer failures and never passes raw diagnostic causes to reply.
+func (h *Handler) NewHTTPErrorResponse(w http.ResponseWriter, err error, attributes ...reply.ResponseAttributes) error {
+	return errormanifest.WriteHTTPError(w, err, h.responseManifests(), attributes...)
 }

@@ -79,6 +79,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Manager-owned dependency error inventories with copied maps and last-wins host
+  overrides. Access, User, Content and Billing handlers include their collaborators
+  by default; existing bundle injection remains supported. See the
+  [composition guide](external/errormanifest/README.md#coverage-and-migration-checks).
 - Opt-in [declarative routes](external/router/README.md#declarative-route-policies)
   with startup validation, defensive inventories and structured, fail-closed
   policy responses. Hosts supply enforcing middleware and authorizers; metadata
@@ -110,6 +114,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** Access Manager's handler error writer requires one unambiguous
+  domain cause; custom service adapters returning joined failures now receive a
+  generic 500, even when every joined cause is mapped. Classify those failures
+  as one reviewed domain sentinel. Built-in invalid request fields remain mapped
+  client errors; see the [strict response contract](external/errormanifest/README.md#strict-single-cause-authentication-boundaries).
 - **Breaking:** the reply integration rejects invalid or shared custom response
   prototypes; custom factories must return independent state. Unknown error
   diagnostics are no longer printed to the standard logger, and joins containing
@@ -128,6 +137,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Domain and blueprint handlers use the shared manifest writer for wrapped
+  failures and all-mapped validation joins; unknown independent causes return a
+  generic server failure. Access Manager uses strict single-cause resolution.
+  Existing success replies and host overrides are preserved.
+- Complete missing group, pricing and user error mappings, add stable sitemap
+  error codes and include streak failures in User Manager's dependency bundle.
+  Migrated domain-handler logs use safe resolved identities; this does not
+  sanitize all service, authentication or repository logs automatically.
 - Pin the reply integration upgrade for structural error resolution.
   This is an immutable, unreleased integration commit, not a tagged release.
   Reply uses request-local response state, safe opt-in unmapped diagnostics and

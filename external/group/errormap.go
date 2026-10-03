@@ -9,6 +9,18 @@ import (
 // GroupErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // nolint will be used later
 var GroupErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrBothAutoJoinAndAutoInviteEnabled: {
+		Title:      "Invalid Group Settings",
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-039",
+		Detail:     "Enable either automatic joining or automatic invitations, not both",
+	},
+	ErrInvalidEmailDomain: {
+		Title:      "Invalid Email Domains",
+		StatusCode: http.StatusBadRequest,
+		Code:       "GRP0-040",
+		Detail:     "Provide non-empty email domains for automatic group membership",
+	},
 	ErrGroupConfigNotSet: {
 		StatusCode: http.StatusInternalServerError,
 		Code:       "GRP0-001",

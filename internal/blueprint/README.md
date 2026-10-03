@@ -46,6 +46,15 @@ Blueprint exposes a small v1 route set:
 
 The list endpoint demonstrates query decoding through `query` tags. The authenticated get-by-ID endpoint demonstrates pulling the requestor ID from middleware-populated context in fender code before passing the request to the service.
 
+Error responses use `Handler.NewHTTPErrorResponse`, backed by the shared
+[manifest writer](../../external/errormanifest/README.md#wrapped-errors-at-http-boundaries).
+`responseManifests` supplies the same domain map and last-wins host overrides to
+both error responses and the existing reply success factory. Expected failures
+must be mapped; wrappers preserve those entries and all-mapped validation joins
+retain every failure. Unknown joined causes cannot disappear behind a mapped
+client error. Keep native causes for internal inspection, and never copy raw
+diagnostics into manifest fields or response metadata.
+
 ## Migration Pattern
 
 `internal/blueprint/migrations` contains the indexes owned by this package. A

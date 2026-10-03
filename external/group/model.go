@@ -214,7 +214,7 @@ func (gs *GroupSettings) ValidateAutoActionConfig() error {
 
 	// If enabled, must have at least one domain configured
 	if len(gs.AutoActionEmailDomains) == 0 {
-		return errors.New("auto-action enabled but no email domains configured")
+		return ErrInvalidEmailDomain
 	}
 
 	// Validate each domain

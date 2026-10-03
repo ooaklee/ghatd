@@ -91,17 +91,15 @@ func (h *Handler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-update-user-email")
 	request, err := MapRequestToUpdateUserEmailRequest(r, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	signOutRequired, err := h.Service.UpdateUserEmail(r.Context(), request)
 	if err != nil && !signOutRequired {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	if err != nil && signOutRequired {
@@ -110,7 +108,7 @@ func (h *Handler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -122,7 +120,6 @@ func (h *Handler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
@@ -132,21 +129,18 @@ func (h *Handler) LogoutUserOthers(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToLogoutUserOthersRequest(r, h.Validator, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.LogoutUserOthers(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
@@ -158,21 +152,18 @@ func (h *Handler) GetUserAPITokenThreshold(w http.ResponseWriter, r *http.Reques
 
 	request, err := MapRequestToGetUserAPITokenThresholdRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	userTokenThreshold, err := h.Service.GetUserAPITokenThreshold(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, userTokenThreshold)
 }
 
@@ -184,27 +175,23 @@ func (h *Handler) GetSpecificUserAPITokens(w http.ResponseWriter, r *http.Reques
 
 	request, err := MapRequestToGetSpecificUserAPITokensRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.GetSpecificUserAPITokens(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if request.Meta {
-		//nolint will set up default fallback later
 		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens, reply.WithMeta(response.GetMetaData()))
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens)
 }
 
@@ -215,21 +202,18 @@ func (h *Handler) RevokeUserAPIToken(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-revoke-user-api-token")
 	request, err := MapRequestToRevokeUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.UpdateUserAPITokenStatus(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
@@ -241,21 +225,18 @@ func (h *Handler) ActivateUserAPIToken(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToActivateUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.UpdateUserAPITokenStatus(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
@@ -267,21 +248,18 @@ func (h *Handler) DeleteUserAPIToken(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToDeleteUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.DeleteUserAPIToken(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
@@ -293,21 +271,18 @@ func (h *Handler) CreateUserAPIToken(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToCreateUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateUserAPIToken(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.UserAPIToken)
 
 }
@@ -341,7 +316,7 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -367,16 +342,14 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 
 	err = h.Service.LogoutUser(r.Context(), r)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	if ok := redirectToHomeIfPlatformHeaderDetected(w, r); ok {
 		return
 	}
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
@@ -391,9 +364,8 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -403,16 +375,14 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
 
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	h.AddAuthCookies(w, response.AccessToken, response.AccessTokenExpiresAt, response.RefreshToken, response.RefreshTokenExpiresAt)
 	toolbox.AddNonSecureAuthInfoCookie(w, h.CookieDomain, h.Environment, response.AccessTokenExpiresAt, response.RefreshTokenExpiresAt)
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
 }
 
@@ -425,17 +395,15 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToLoginUserRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.LoginUser(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -448,7 +416,6 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
 }
 
@@ -464,21 +431,18 @@ func (h *Handler) CreateInitalLoginOrVerificationTokenEmail(w http.ResponseWrite
 
 	request, err := MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	err = h.Service.CreateInitalLoginOrVerificationTokenEmail(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-accepted-after-error", zap.Error(err))
 		h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
@@ -489,21 +453,18 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	request, err := MapRequestToCreateUserRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.CreateUser(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.User)
 }
 
@@ -516,17 +477,15 @@ func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.R
 
 	request, err := MapRequestToValidateEmailVerificationCodeRequest(r, h.Validator)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	revisions, err := h.Service.ValidateEmailVerificationCode(r.Context(), request)
 	if err != nil {
-		//nolint will set up default fallback later
 		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
@@ -539,18 +498,28 @@ func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	//nolint will set up default fallback later
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(revisions.AccessTokenExpiresAt), fmt.Sprint(revisions.RefreshTokenExpiresAt))
 }
 
-// GetBaseResponseHandler returns response handler configured with auth error map
+// GetBaseResponseHandler composes manager and dependency maps, then host overrides.
 func (h *Handler) GetBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(
-		errormanifest.NewComposer().
-			Add(AccessmanagerErrorMap).
-			AddOverrides(h.errorMaps...).
-			Build(),
+		h.responseManifests(),
 	)
+}
+
+// responseManifests shares canonical domain keys and host overrides across
+// direct replies and wrapped-error resolution. Never mutate host manifests.
+func (h *Handler) responseManifests() []reply.ErrorManifest {
+	return errormanifest.NewComposer().Add(AccessmanagerErrorMap).Add(DependencyErrorMaps()...).AddOverrides(h.errorMaps...).Build()
+}
+
+// NewHTTPErrorResponse resolves wrapped domain errors before handing formatting
+// to reply. Unknown or ambiguous causes retain the generic fallback; public
+// details come only from manifests, never from wrapped diagnostic strings.
+func (h *Handler) NewHTTPErrorResponse(w http.ResponseWriter, err error, attributes ...reply.ResponseAttributes) error {
+	manifests := h.responseManifests()
+	return reply.NewReplier(manifests).NewHTTPErrorResponse(w, errormanifest.CanonicalError(err, manifests), attributes...)
 }
 
 // RemoveAuthCookies is handling removing the cookies from the client

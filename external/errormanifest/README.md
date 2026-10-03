@@ -1,7 +1,9 @@
 # Error manifests
 
-`errormanifest` composes the maps consumed by `reply/v2`. Handlers and hosts
-explicitly compose their required base and dependency maps. Later entries for the **same error identity** win. Matching error messages do not make
+`errormanifest` composes the maps consumed by `reply/v2`. Package handlers own
+their base maps and built-in dependency maps; hosts supply additional maps and
+explicit overrides. Later
+entries for the **same error identity** win. Matching error messages do not make
 two distinct errors interchangeable.
 
 ```go
@@ -67,11 +69,18 @@ The original error is never passed to reply's fallback logger. Manifest fields,
 headers and metadata must themselves be safe to publish. These helpers do not
 sanitize earlier service/repository logging or metadata, and shared manifest
 maps must not be mutated during requests.
-Manifest keys must have safe, stable `Error()` text. Register domain sentinels,
-not per-request diagnostics containing credentials or personal information.
-Adoption is explicit: existing or custom handlers must call the shared writer
-or use `ResponseErrors` with their own replier. Adding this package does not
-automatically migrate handler response paths or dependency maps.
+The domain handlers listed below log resolved identities; manifest keys must
+therefore have safe, stable `Error()` text too. Register domain sentinels, not
+per-request diagnostics containing credentials or personal information. Access
+Manager's response sanitization does not redact its existing authentication-path
+log statements; review those separately.
+
+The blueprint and billing, contact, content, group, policy, pricing, sitemap,
+user, user-manager and vision handlers use this writer through
+`Handler.NewHTTPErrorResponse`. Existing public `GetBaseResponseHandler`
+signatures and success responses are unchanged. Direct calls to reply from
+custom handlers do not automatically acquire these guarantees. Hosts with a
+custom reply transfer object can use `ResponseErrors` with their own replier.
 
 ## Strict single-cause authentication boundaries
 
@@ -108,14 +117,43 @@ public classification per authentication failure chain. Do not
 replace an authorization decision with response resolution: neither helper
 authenticates a caller or grants access.
 
-## Coverage and adoption
+Access Manager's `Handler.NewHTTPErrorResponse` uses this resolver and includes
+its own and built-in dependency manifests by default. Custom Access Manager
+service adapters must classify validation failures as one reviewed domain error;
+even all-mapped joins are rejected with a generic 500 at this strict boundary.
+Built-in request mappers translate invalid fields to a single mapped client
+error before response resolution. Existing authentication middleware is a
+separate boundary; handler adoption does not change its credential decisions.
+The declarative router uses the same resolver, then explicitly maps unresolved
+authorization failures to its `ROUTE_UNAVAILABLE` 503 contract rather than the
+generic fallback. A known denial never masks an independent joined failure.
 
-Table-driven tests cover direct and wrapped errors, validation joins, host
-overrides, unknown and malformed causes, bounded traversal, diagnostic privacy,
-response isolation, and encoding/writer failures. They do not certify every
-framework handler or application error map.
+## Coverage and migration checks
 
-For each adopting boundary, compose all expected dependency maps, retain the
-original error for internal inspection, and test its actual HTTP response. Use
-`CanonicalError` only when the boundary intentionally rejects multi-cause errors;
-use `WriteHTTPError` for mapped validation collections. Neither grants access.
+Keep table-driven coverage for direct errors, wrappers, validation joins, host
+overrides, native-to-domain translation and unknown failures. The package tests
+check declared `errors.New` sentinels in the eleven migrated packages and runtime
+responses for their manifests. OAuth user-domain errors are explicitly checked
+in Access Manager's map. This scoped check is not a whole-framework audit of
+every dynamic error or dependency path.
+
+Access, User, Content and Billing Manager handlers always include their
+`DependencyErrorMaps()` inventories, even without a host-supplied bundle. The
+legacy `bundles` functions delegate to these manager-owned factories. Ordering is
+the manager's own map, dependency maps in historical bundle order, then host
+overrides. Known lower-domain errors therefore no longer depend on the host
+remembering the manager's collaborators. Adding a new collaborator still requires
+updating the owning inventory; custom application errors need explicit mappings.
+
+`CloneManifests` copies slices and map entries, preserving order and nil maps.
+Referenced metadata is not deep-copied: treat it as immutable or replace it with
+an independently owned value before editing. `Composer.Build` creates a slice
+but does not clone entries. Do not mutate configuration while serving requests.
+
+Reply now keeps response state request-local and supports `reply.WithContext`
+and an opt-in unmapped-error observer. Custom transfer objects must return
+independent state; manifest metadata and observers must be concurrency-safe.
+GHATD's writer still allocates a response-local replier for caller-specific
+manifests. See reply's [integration guide](https://github.com/ooaklee/reply/blob/38c9f4107f3dce3e9f0c09c8cc919c20d02fa967/UPGRADING.md)
+for behavior changes and immutable commit pinning. A dependency's local `replace`
+is not inherited by host applications.
