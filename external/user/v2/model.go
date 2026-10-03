@@ -595,10 +595,10 @@ func (u *UniversalUser) GetExtension(key string) (interface{}, bool) {
 
 // Validation
 
-// Validate checks if user meets configured requirements
+// Validate returns native configuration/field failures without printing account
+// values. Callers decide how to map errors; model validation owns no diagnostics.
 func (u *UniversalUser) Validate() error {
 	if u.config == nil {
-		fmt.Println("user-configuration-not-set")
 		return ErrUserConfigNotSet
 	}
 
@@ -607,7 +607,6 @@ func (u *UniversalUser) Validate() error {
 		switch field {
 		case "email":
 			if u.Email == "" {
-				fmt.Printf("required-field-missing: %s\n", field)
 				return ErrUserRequiredFieldMissingEmail
 			}
 		case "first_name":
@@ -615,7 +614,6 @@ func (u *UniversalUser) Validate() error {
 				continue
 			}
 			if u.PersonalInfo == nil || u.PersonalInfo.FirstName == "" {
-				fmt.Printf("required-field-missing: %s\n", field)
 				return ErrUserRequiredFieldMissingFirstName
 			}
 		case "last_name":
@@ -623,7 +621,6 @@ func (u *UniversalUser) Validate() error {
 				continue
 			}
 			if u.PersonalInfo == nil || u.PersonalInfo.LastName == "" {
-				fmt.Printf("required-field-missing: %s\n", field)
 				return ErrUserRequiredFieldMissingLastName
 			}
 		}
@@ -631,14 +628,12 @@ func (u *UniversalUser) Validate() error {
 
 	// Validate status
 	if !u.IsValidStatus(u.Status) {
-		fmt.Printf("invalid-status: %s\n", u.Status)
 		return ErrUserInvalidStatus
 	}
 
 	// Validate roles
 	for _, role := range u.Roles {
 		if !u.isValidRole(role) {
-			fmt.Printf("invalid-role: %s\n", role)
 			return ErrUserInvalidRole
 		}
 	}

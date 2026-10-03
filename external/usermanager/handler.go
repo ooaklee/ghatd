@@ -8,6 +8,7 @@ import (
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
@@ -246,22 +247,31 @@ func (h *Handler) DeleteUserPermanently(w http.ResponseWriter, r *http.Request) 
 // UpdateUserProfile returns response for request to update updatedable attributes
 // of the user's profile
 func (h *Handler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-update-user-profile")
 	request, err := MapRequestToUpdateUserProfileRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
+	if nilProfilePort(h.Service) {
+		h.NewHTTPErrorResponse(w, userv2.ErrProfileUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
 	response, err := h.Service.UpdateUserProfile(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	if response == nil || response.UpdateUserResponse == nil || response.User == nil {
+		h.NewHTTPErrorResponse(w, userv2.ErrProfileUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User, reply.WithContext(r.Context()))
 }
 
 // GetUserMicroProfile returns response for request to get user's

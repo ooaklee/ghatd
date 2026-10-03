@@ -199,25 +199,6 @@ func (s *Service) WithVisionService(visionSvc VisionService) *Service {
 	return s
 }
 
-// UpdateUserProfile handles the business logic of updating the requesting user's profile
-func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "external/usermanager", "update-user-profile")
-	logger.Debug("handling-update-user-profile-request")
-
-	serviceResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		ID:        r.ActorID,
-		FirstName: r.FirstName,
-		LastName:  r.LastName,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &UpdateUserProfileResponse{
-		UpdateUserResponse: serviceResponse,
-	}, nil
-}
-
 // GetUserMicroProfile handles the business logic of fetching the requesting user's micro profile
 func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/usermanager", "get-user-micro-profile")

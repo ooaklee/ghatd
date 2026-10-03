@@ -87,7 +87,8 @@ type UpdateUserProfileRequest struct {
 	// ActorID identifies the verified caller whose profile is being updated.
 	ActorID string `json:"-"`
 
-	// UpdateUserRequest carries the underlying user profile updates.
+	// UpdateUserRequest retains the legacy payload shape. Only FirstName and
+	// LastName are forwarded to the narrow domain command; other fields are ignored.
 	*userv2.UpdateUserRequest
 }
 

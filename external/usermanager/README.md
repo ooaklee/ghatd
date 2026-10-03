@@ -18,6 +18,36 @@ Unlike other packages, the `usermanager` doesn't have its own repository or data
 
 ## Mutation identity boundaries
 
+### Self-service profile names
+
+**Breaking for custom adapters:** `UpdateUserProfile` now requires the optional
+`UserProfileNamesService` capability on its user domain. Implement
+`UpdateProfileNames` and the corresponding [conditional repository contract](../user/v2/README.md#conditional-profile-names);
+there is no fallback to broad `UpdateUser` writes. In-process callers must retain
+verified session or API context, not just provide an `ActorID`.
+
+`PATCH /api/v1/ums/me` keeps its existing `ActiveSessionOrAPI` policy. The manager
+binds the self-service actor, rejects mixed/anonymous/bare-ID context, reloads the
+ACTIVE account and checks signed session type/email revision. API admission and
+credential grants remain the authentication/policy middleware's responsibility;
+the context helpers are trusted publishers, not credential verifiers. Account
+snapshot comparisons in the domain protect the subsequent name write.
+
+Only `first_name` and `last_name` are editable here. Legacy payload fields such as
+`id`, email, status, type, roles and extensions are ignored, never forwarded as
+authority or updates. Empty/equal names remain a 200 no-op. Success keeps the
+existing user response shape; native failures use the shared manifest and host
+overrides. All handler responses are `no-store` and carry request context through
+reply. Missing capabilities and malformed receipts fail closed with 503.
+
+After a successful operation, optional best-effort `user.updated` audit attributes
+actor and target to the caller without recording names. Audit failure is a fixed
+warning, not a rollback or raw diagnostic. No-op requests may also emit this
+operation audit. The command does not claim client-version/ABA protection or
+atomic API-token revocation; see the domain contract for concurrency limits.
+
+### Other mutation payloads
+
 Account deletion, contact creation/update, group creation/update, member addition,
 member-role updates and ownership transfers separate trusted identity from editable
 HTTP payloads:

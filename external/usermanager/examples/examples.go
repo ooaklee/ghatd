@@ -6,8 +6,10 @@ import (
 	"strings"
 	"time"
 
+	accesshelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/audit"
+	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/group"
@@ -85,7 +87,11 @@ func Example9_UserProfileManagement() {
 
 	fmt.Printf("User profile: %s %s\n", profileResp.Profile.FirstName, profileResp.Profile.LastName)
 
-	// Update user profile
+	// Fixture-only verified context. Production must obtain this from credential
+	// verification middleware, never by publishing caller-supplied IDs.
+	ctx = accesshelpers.TransitAuthenticatedWith(accesshelpers.TransitWith(ctx, "user-123"), true)
+	ctx = accesshelpers.TransitSessionWith(ctx, &auth.TokenAccessDetails{UserID: "user-123", AccessUUID: "example-session"})
+	// Update user profile through the narrow capability on MockUserService.
 	updateResp, err := service.UpdateUserProfile(ctx, &usermanager.UpdateUserProfileRequest{
 		ActorID: "user-123",
 		UpdateUserRequest: &user.UpdateUserRequest{
@@ -301,6 +307,13 @@ func (m *MockUserService) UpdateUser(ctx context.Context, r *user.UpdateUserRequ
 			},
 		},
 	}, nil
+}
+
+// UpdateProfileNames illustrates the optional adapter contract without storage.
+// A real adapter must compare the supplied snapshot and preserve unrelated data.
+func (m *MockUserService) UpdateProfileNames(ctx context.Context, r *user.UpdateProfileNamesRequest) (*user.UniversalUser, error) {
+	return &user.UniversalUser{ID: r.UserID, Email: r.ExpectedEmail, Status: r.ExpectedStatus, Type: r.ExpectedType, EmailRevision: r.ExpectedRevision,
+		PersonalInfo: &user.PersonalInfo{FirstName: r.FirstName, LastName: r.LastName, FullName: r.FirstName + " " + r.LastName}}, nil
 }
 
 func (m *MockUserService) DeleteUser(ctx context.Context, r *user.DeleteUserRequest) error {

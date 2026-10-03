@@ -22,6 +22,12 @@ import (
 // MapRequestToUpdateUserProfileRequest maps incoming UpdateUserProfile request to correct
 // struct.
 func MapRequestToUpdateUserProfileRequest(r *http.Request, validator UsermanagerValidator) (*UpdateUserProfileRequest, error) {
+	if r == nil || nilProfilePort(r.Body) || nilProfilePort(validator) {
+		return nil, ErrInvalidUserBody
+	}
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
 	var parsedRequest = UpdateUserProfileRequest{
 		UpdateUserRequest: &userv2.UpdateUserRequest{},
 	}
@@ -33,8 +39,8 @@ func MapRequestToUpdateUserProfileRequest(r *http.Request, validator Usermanager
 		return nil, ErrUnableToIdentifyUser
 	}
 
-	err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateUserRequest)
-	if err != nil {
+	err := toolbox.DecodeRequestBody(r, &parsedRequest.UpdateUserRequest)
+	if err != nil || parsedRequest.UpdateUserRequest == nil {
 		return nil, ErrInvalidUserBody
 	}
 

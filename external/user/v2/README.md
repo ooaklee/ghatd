@@ -103,6 +103,42 @@ with actor, target and revision, not handle text. Audit delivery is not atomic
 with the update. Unknown storage errors must pass through the shared safe
 response/error-manifest path; never return or log raw driver payloads.
 
+## Conditional profile names
+
+`Service.UpdateProfileNames` is a narrow, reusable domain command for given and
+family names. The authorized caller supplies the selected account's live email,
+email revision, type and status. The service reloads raw state, applies configured
+name normalization/validation and delegates to `ProfileNamesRepository`. Empty
+names retain existing values; equal names return the observed account without a
+write. Legacy absent type is hydrated only in the returned representation.
+Changing names requires a non-nil configured `StringUtils`; missing normalization
+wiring fails closed rather than keeping a stale full name. The optional
+`TimeProvider` supplies the write timestamp (system UTC otherwise); invalid
+timestamps fail before dispatch.
+
+The built-in repository uses the shared Mongo atomic post-image helper. It guards
+the selected security snapshot and all three stored name fields, then merges only
+names and `metadata.updated_at`. Roles, email, verification, provider identities,
+handles, phone, avatar, extensions and other timestamps remain untouched. Missing
+or null legacy objects are supported. Name values are aggregation literals.
+Concurrent changes to names or the guarded account state, including deletion,
+return `ErrProfileUpdateConflict` (409). Unrelated field updates survive.
+
+Custom repositories must implement `ProfileNamesRepository`; there is no fallback
+to full-user writes. Missing capabilities or invalid post-images return
+`ErrProfileUpdateUnavailable` (503). Native errors retain their identity for the
+shared reply manifest. Unacknowledged/decode/network failures may have committed;
+do not automatically retry or infer rollback. A valid acknowledged receipt remains
+success despite cancellation arriving afterward. Model validation emits no raw
+account diagnostics.
+
+This is server-side snapshot comparison, not a client revision/ETag or ABA-proof
+version check. No-op success is a point-in-time read. It does not change legacy
+generic `UpdateUser` callers: a later broad writer can still overwrite profile
+data. Migrate those workflows deliberately rather than assuming all writes now
+use this command. Authentication, route access policy and audit orchestration
+belong to the manager; the domain does not grant caller authority.
+
 ## Conditional email changes
 
 **Breaking:** ordinary `Service.UpdateUser` requests cannot change the mailbox,

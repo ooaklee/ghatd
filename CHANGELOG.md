@@ -381,6 +381,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking for custom adapters:** [Self-service profile names](external/usermanager/README.md#self-service-profile-names)
+  now require the narrow user-domain/profile repository capability instead of a
+  broad user snapshot write. Managers require verified session or API context,
+  recheck live ACTIVE state and retain native errors for the shared reply map.
+  Conditional Mongo writes preserve unrelated fields and return acknowledged
+  post-images; stale names/account state return 409 and missing capabilities or
+  invalid receipts return 503. Existing 200/no-op behavior remains, responses are
+  no-store and model validation no longer prints private account values.
+  Legacy generic writers and client-revision/ABA protection are not changed.
 - **Breaking:** [Logout commands](external/accessmanager/README.md#logout-command-boundaries)
   now separate typed transport from verified deletion authority. Migrate
   LogoutUser to LogoutUserRequest and replace RemoveRefreshTokenWithCookieValue

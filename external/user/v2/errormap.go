@@ -4,16 +4,18 @@ import "github.com/ooaklee/reply/v2"
 
 // UserErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 var UserErrorMap reply.ErrorManifest = reply.ErrorManifest{
-	ErrEmailChangeUnavailable: {Title: "Service unavailable", Detail: "Email change could not be confirmed; check account state before retrying", StatusCode: 503, Code: "USV2-033"},
-	ErrEmailChangeConflict:    {Title: "Account state changed", Detail: "Reload the current account before changing its email", StatusCode: 409, Code: "USV2-034"},
-	ErrEmailChangeRequired:    {Title: "Email change required", Detail: "Use the email-change operation instead of a profile update", StatusCode: 400, Code: "USV2-035"},
-	ErrEmailIndexesRequired:   {Title: "Service unavailable", Detail: "Email storage is not ready", StatusCode: 503, Code: "USV2-036"},
-	ErrInvalidHandle:          {Title: "Invalid handle", Detail: "Use 3–30 letters, numbers or single hyphen/underscore separators, starting with a letter", StatusCode: 400, Code: "USV2-027"},
-	ErrHandleTaken:            {Title: "Handle unavailable", Detail: "Choose another handle", StatusCode: 409, Code: "USV2-028"},
-	ErrHandleConflict:         {Title: "Handle state changed", Detail: "Reload the current handle before trying again", StatusCode: 412, Code: "USV2-029"},
-	ErrHandleUnsupported:      {Title: "Service unavailable", Detail: "Handle management is not configured", StatusCode: 503, Code: "USV2-030"},
-	ErrHandleIndexesRequired:  {Title: "Service unavailable", Detail: "Handle storage is not ready", StatusCode: 503, Code: "USV2-031"},
-	ErrHandleExhausted:        {Title: "Handle unavailable", Detail: "Try a different handle", StatusCode: 409, Code: "USV2-032"},
+	ErrProfileUpdateUnavailable: {Title: "Service unavailable", Detail: "Profile update could not be confirmed; reload account state before retrying", StatusCode: 503, Code: "USV2-037"},
+	ErrProfileUpdateConflict:    {Title: "Conflict", Detail: "Account or profile changed; reload before updating", StatusCode: 409, Code: "USV2-038"},
+	ErrEmailChangeUnavailable:   {Title: "Service unavailable", Detail: "Email change could not be confirmed; check account state before retrying", StatusCode: 503, Code: "USV2-033"},
+	ErrEmailChangeConflict:      {Title: "Account state changed", Detail: "Reload the current account before changing its email", StatusCode: 409, Code: "USV2-034"},
+	ErrEmailChangeRequired:      {Title: "Email change required", Detail: "Use the email-change operation instead of a profile update", StatusCode: 400, Code: "USV2-035"},
+	ErrEmailIndexesRequired:     {Title: "Service unavailable", Detail: "Email storage is not ready", StatusCode: 503, Code: "USV2-036"},
+	ErrInvalidHandle:            {Title: "Invalid handle", Detail: "Use 3–30 letters, numbers or single hyphen/underscore separators, starting with a letter", StatusCode: 400, Code: "USV2-027"},
+	ErrHandleTaken:              {Title: "Handle unavailable", Detail: "Choose another handle", StatusCode: 409, Code: "USV2-028"},
+	ErrHandleConflict:           {Title: "Handle state changed", Detail: "Reload the current handle before trying again", StatusCode: 412, Code: "USV2-029"},
+	ErrHandleUnsupported:        {Title: "Service unavailable", Detail: "Handle management is not configured", StatusCode: 503, Code: "USV2-030"},
+	ErrHandleIndexesRequired:    {Title: "Service unavailable", Detail: "Handle storage is not ready", StatusCode: 503, Code: "USV2-031"},
+	ErrHandleExhausted:          {Title: "Handle unavailable", Detail: "Try a different handle", StatusCode: 409, Code: "USV2-032"},
 	ErrExtensionNotFound: {
 		Title:      "Not Found",
 		Detail:     "The requested user extension was not found",
