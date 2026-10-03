@@ -7,6 +7,7 @@ import (
 // BillingManagerErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // nolint will be used later
 var BillingManagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrBillingManagerServiceUnavailable:                    {Title: "Service Unavailable", Detail: "Billing service is temporarily unavailable", StatusCode: 503, Code: "BM00-033"},
 	ErrBillingManagerUnableToGetProviderNameFromURI:        {Title: "Bad Request", Detail: "Unable to get provider name from URI", StatusCode: 400, Code: "BM00-001"},
 	ErrBillingManagerUnableToIdentifyUser:                  {Title: "Unauthorized", Detail: "Unable to identify user making the request", StatusCode: 401, Code: "BM00-002"},
 	ErrBillingManagerUnableToGetUserIdFromURI:              {Title: "Bad Request", Detail: "Unable to get user ID from URI", StatusCode: 400, Code: "BM00-003"},

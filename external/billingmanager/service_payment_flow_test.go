@@ -69,7 +69,7 @@ func TestOneOffPaymentCreatesAccessIsIdempotentAndRefundRevokesIt(t *testing.T) 
 		t.Fatalf("correlated invoice ProcessBillingProviderWebhooks() error = %v", err)
 	}
 
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestOneOffPaymentCreatesAccessIsIdempotentAndRefundRevokesIt(t *testing.T) 
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatalf("partial refund ProcessBillingProviderWebhooks() error = %v", err)
 	}
-	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestOneOffPaymentCreatesAccessIsIdempotentAndRefundRevokesIt(t *testing.T) 
 		t.Fatalf("refund ProcessBillingProviderWebhooks() error = %v", err)
 	}
 
-	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestRecurringPaymentReportsAccessAndSubscription(t *testing.T) {
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), webhookRequest("stripe")); err != nil {
 		t.Fatal(err)
 	}
-	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestRecurringTrialGrantsAccessAndAcceptsLaterSubscriptionStatus(t *testing.
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
-	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestRecurringTrialGrantsAccessAndAcceptsLaterSubscriptionStatus(t *testing.
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
-	response, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestStripeLiveDeliveryOrderKeepsSubscriptionTrialAuthoritative(t *testing.T
 		t.Fatalf("checkout ProcessBillingProviderWebhooks() error = %v", err)
 	}
 
-	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +305,7 @@ func TestRecurringRefundIsLedgerOnlyAndMetadataPoorLifecycleStillUpdates(t *test
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +321,7 @@ func TestRecurringRefundIsLedgerOnlyAndMetadataPoorLifecycleStillUpdates(t *test
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
-	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}

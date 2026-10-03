@@ -48,7 +48,7 @@ func (s *Service) ProcessBillingProviderCheckout(ctx context.Context, req *Proce
 		return nil, ErrInvalidBillingManagerRequestPayload
 	}
 
-	userID := strings.TrimSpace(req.UserID)
+	userID := strings.TrimSpace(req.ActorID)
 	providerName := normaliseCheckoutProviderName(req.ProviderName)
 	priceID := strings.TrimSpace(req.PriceID)
 	if userID == "" || !checkoutProviderNamePattern.MatchString(providerName) || priceID == "" ||

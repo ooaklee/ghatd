@@ -54,8 +54,8 @@ func Example2_QueryUserSubscription() {
 	// Get user's subscription status
 	ctx := context.Background()
 	resp, err := service.GetUserSubscriptionStatus(ctx, &billingmanager.GetUserSubscriptionStatusRequest{
-		UserID:           "user-123",
-		RequestingUserID: "user-123", // User querying their own subscription
+		UserID:  "user-123",
+		ActorID: "user-123", // User querying their own subscription
 	})
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -83,11 +83,11 @@ func Example3_GetBillingHistory() {
 	// Get billing events
 	ctx := context.Background()
 	resp, err := service.GetUserBillingEvents(ctx, &billingmanager.GetUserBillingEventsRequest{
-		UserID:           "user-123",
-		RequestingUserID: "user-123",
-		PerPage:          10,
-		Page:             1,
-		Order:            "created_at_desc",
+		UserID:  "user-123",
+		ActorID: "user-123",
+		PerPage: 10,
+		Page:    1,
+		Order:   "created_at_desc",
 	})
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -110,8 +110,8 @@ func Example4_GetBillingDetail() {
 
 	ctx := context.Background()
 	resp, err := service.GetUserBillingDetail(ctx, &billingmanager.GetUserBillingDetailRequest{
-		UserID:           "user-123",
-		RequestingUserID: "user-123",
+		UserID:  "user-123",
+		ActorID: "user-123",
 	})
 	if err != nil {
 		fmt.Println("Error:", err)

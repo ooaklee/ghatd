@@ -186,7 +186,7 @@ func TestE2E_BillingManagerCheckoutFromStripeSeed(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			callsBefore := len(provider.requests)
 			response, err := service.ProcessBillingProviderCheckout(ctx, &billingmanager.ProcessBillingProviderCheckoutRequest{
-				UserID:         "checkout-matrix-user",
+				ActorID:        "checkout-matrix-user",
 				ProviderName:   string(pricer.PriceProviderStripe),
 				PriceID:        test.priceID,
 				IdempotencyKey: "checkout-matrix-attempt",

@@ -34,7 +34,7 @@ func mapRequestToProcessBillingProviderCheckoutRequest(request *http.Request, va
 		return nil, ErrInvalidBillingManagerRequestPayload
 	}
 
-	parsedRequest.UserID = strings.TrimSpace(userID)
+	parsedRequest.ActorID = strings.TrimSpace(userID)
 	parsedRequest.ProviderName = normaliseCheckoutProviderName(providerName)
 	parsedRequest.PriceID = strings.TrimSpace(parsedRequest.PriceID)
 	parsedRequest.IdempotencyKey = strings.TrimSpace(request.Header.Get(common.IdempotencyKeyHttpHeader))
@@ -68,7 +68,7 @@ func mapRequestToProcessBillingProviderPortalRequest(request *http.Request, vali
 		return nil, ErrBillingManagerUnableToIdentifyUser
 	}
 	parsedRequest := &ProcessBillingProviderPortalRequest{
-		UserID:       userID,
+		ActorID:      userID,
 		ProviderName: normaliseCheckoutProviderName(providerName),
 		Origin:       strings.TrimSpace(request.Header.Get("Origin")),
 		SecFetchSite: strings.TrimSpace(request.Header.Get("Sec-Fetch-Site")),
@@ -105,10 +105,13 @@ func mapRequestToProcessBillingProviderWebhooksRequest(request *http.Request, va
 // mapRequestToGetUserBillingEventsRequest maps incoming GetUserBillingEvents request to correct
 // struct.
 func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator BillingManagerValidator) (*GetUserBillingEventsRequest, error) {
+	if request == nil || request.URL == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 	var parsedRequest GetUserBillingEventsRequest
 	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
-	requestingUserId := accessmanagerhelpers.AcquireFrom(request.Context())
+	requestingUserId := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 
 	if requestingUserId == "" {
 		logger.Error("unable-get-user-id")
@@ -129,7 +132,7 @@ func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator Bi
 	}
 
 	parsedRequest.UserID = userId
-	parsedRequest.RequestingUserID = requestingUserId
+	parsedRequest.ActorID = requestingUserId
 
 	return &parsedRequest, nil
 }
@@ -137,10 +140,13 @@ func mapRequestToGetUserBillingEventsRequest(request *http.Request, validator Bi
 // mapRequestToGetUserSubscriptionStatusRequest maps incoming GetUserSubscriptionStatus request to correct
 // struct.
 func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validator BillingManagerValidator) (*GetUserSubscriptionStatusRequest, error) {
+	if request == nil || request.URL == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 	var parsedRequest GetUserSubscriptionStatusRequest
 	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
-	requestingUserId := accessmanagerhelpers.AcquireFrom(request.Context())
+	requestingUserId := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 
 	if requestingUserId == "" {
 		logger.Error("unable-get-user-id")
@@ -154,7 +160,7 @@ func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validat
 	}
 
 	parsedRequest.UserID = userId
-	parsedRequest.RequestingUserID = requestingUserId
+	parsedRequest.ActorID = requestingUserId
 
 	return &parsedRequest, nil
 }
@@ -162,10 +168,13 @@ func mapRequestToGetUserSubscriptionStatusRequest(request *http.Request, validat
 // mapRequestToGetUserBillingDetailRequest maps incoming GetUserBillingDetail request to correct
 // struct.
 func mapRequestToGetUserBillingDetailRequest(request *http.Request, validator BillingManagerValidator) (*GetUserBillingDetailRequest, error) {
+	if request == nil || request.URL == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 	var parsedRequest GetUserBillingDetailRequest
 	requestPath := logger.RequestPath(request)
 	logger := logger.AcquirePackageFrom(request.Context(), "external/billingmanager")
-	requestingUserId := accessmanagerhelpers.AcquireFrom(request.Context())
+	requestingUserId := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 
 	if requestingUserId == "" {
 		logger.Error("unable-get-user-id")
@@ -179,46 +188,55 @@ func mapRequestToGetUserBillingDetailRequest(request *http.Request, validator Bi
 	}
 
 	parsedRequest.UserID = userId
-	parsedRequest.RequestingUserID = requestingUserId
+	parsedRequest.ActorID = requestingUserId
 
 	return &parsedRequest, nil
 }
 
 // MapRequestToGetPricingPlansRequest maps incoming BMS pricing plan list requests.
 func MapRequestToGetPricingPlansRequest(request *http.Request, validator BillingManagerValidator) (*GetPricingPlansRequest, error) {
+	if request == nil || request.URL == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 	parsedRequest, err := pricer.MapRequestToGetPricePlansRequest(request, validator)
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetPricingPlansRequest{
-		UserID:               accessmanagerhelpers.AcquireFrom(request.Context()),
+		ActorID:              accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context()),
 		GetPricePlansRequest: parsedRequest,
 	}, nil
 }
 
 // MapRequestToGetPricePlanBySlugRequest maps incoming BMS price plan slug requests.
 func MapRequestToGetPricePlanBySlugRequest(request *http.Request, validator BillingManagerValidator) (*GetPricePlanBySlugRequest, error) {
+	if request == nil || request.URL == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 	parsedRequest, err := pricer.MapRequestToGetPricePlanBySlugRequest(request, validator)
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetPricePlanBySlugRequest{
-		UserID:                    accessmanagerhelpers.AcquireFrom(request.Context()),
+		ActorID:                   accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context()),
 		GetPricePlanBySlugRequest: parsedRequest,
 	}, nil
 }
 
 // MapRequestToGetPriceFeaturesRequest maps incoming BMS price feature list requests.
 func MapRequestToGetPriceFeaturesRequest(request *http.Request, validator BillingManagerValidator) (*GetPriceFeaturesRequest, error) {
+	if request == nil || request.URL == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 	parsedRequest, err := pricer.MapRequestToGetFeaturesRequest(request, validator)
 	if err != nil {
 		return nil, err
 	}
 
 	return &GetPriceFeaturesRequest{
-		UserID:             accessmanagerhelpers.AcquireFrom(request.Context()),
+		ActorID:            accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context()),
 		GetFeaturesRequest: parsedRequest,
 	}, nil
 }

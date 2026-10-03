@@ -573,44 +573,63 @@ func (s *Service) resolveLedgerUserID(ctx context.Context, providerName string, 
 	return userID, err
 }
 
-// GetPricingPlans retrieves pricing plans for external BMS clients.
+// GetPricingPlans returns public catalogue plans unless the optional ActorID
+// resolves to an administrator. Visibility restrictions use a local filter copy.
 func (s *Service) GetPricingPlans(ctx context.Context, req *GetPricingPlansRequest) (*GetPricingPlansResponse, error) {
+	if s == nil || req == nil || ctx == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 
-	if s.PricerService == nil {
-		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+	if isNilCheckoutCapability(s.PricerService) {
+		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.ActorID))
 		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, req.UserID, logger)
+	isAdmin := s.isRequesterAdmin(ctx, req.ActorID, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	// Restrict a request-local copy, never the caller's reusable filter object.
+	query := pricer.GetPricePlansRequest{}
+	if req.GetPricePlansRequest != nil {
+		query = *req.GetPricePlansRequest
+	}
 	if !isAdmin {
 		// Non-admin users are not allowed to access pricing in certain states, i.e draft, archieved, etc
 		// we should override any queries to ensure they can only see active pricing plans
-		if req.GetPricePlansRequest == nil {
-			req.GetPricePlansRequest = &pricer.GetPricePlansRequest{}
-		}
-		req.GetPricePlansRequest.IsNotDeleted = true
-		req.GetPricePlansRequest.IsPublished = true
-		req.GetPricePlansRequest.WithStatus = string(pricer.PricePlanStatusPublished)
-		logger.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
+		query.IsNotDeleted = true
+		query.IsPublished = true
+		query.WithStatus = string(pricer.PricePlanStatusPublished)
+		logger.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.ActorID))
 	}
 
-	response, err := s.PricerService.GetPricePlans(ctx, req.GetPricePlansRequest)
+	response, err := s.PricerService.GetPricePlans(ctx, &query)
 	if err != nil {
-		logger.Error("failed-to-get-pricing-plans", zap.String("user-id", req.UserID), zap.Error(err))
+		logger.Error("failed-to-get-pricing-plans", zap.String("user-id", req.ActorID), zap.Error(err))
 		return nil, err
 	}
 
 	return &GetPricingPlansResponse{GetPricePlansResponse: response}, nil
 }
 
-// GetPricePlanBySlug retrieves a pricing plan by slug for external BMS clients.
+// GetPricePlanBySlug returns a public plan or an administrator's private view.
+// Missing authority never exposes unpublished, future, archived or deleted plans.
 func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error) {
+	if s == nil || req == nil || ctx == nil || req.GetPricePlanBySlugRequest == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 
-	if s.PricerService == nil {
-		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+	if isNilCheckoutCapability(s.PricerService) {
+		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.ActorID))
 		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
@@ -618,13 +637,19 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 	if err != nil {
 		return nil, err
 	}
+	if response == nil || response.GetPricePlanResponse == nil || response.PricePlan == nil {
+		return nil, ErrBillingManagerServiceUnavailable
+	}
 
-	isAdmin := s.isRequesterAdmin(ctx, req.UserID, logger)
+	isAdmin := s.isRequesterAdmin(ctx, req.ActorID, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !isAdmin {
 		// Non-admin users are not allowed to access pricing in certain states, i.e draft, archieved, etc
 		// we should override any queries to ensure they can only see active pricing plans
 		if response.PricePlan.Status != pricer.PricePlanStatusPublished || response.PricePlan.DeletedAt != "" || !isPricePlanPubliclyVisible(response.PricePlan.PublishedAt) {
-			logger.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.UserID))
+			logger.Debug("non-admin-user-requesting-pricing-plans-only-returning-plans-in-valid-state", zap.String("user-id", req.ActorID))
 			return nil, pricer.ErrPricePlanNotFound
 		}
 	}
@@ -632,29 +657,39 @@ func (s *Service) GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlu
 	return &GetPricePlanBySlugResponse{GetPricePlanBySlugResponse: response}, nil
 }
 
-// GetPricingFeatures retrieves pricing feature catalog items for external BMS clients.
+// GetPricingFeatures applies public-only visibility unless ActorID resolves to
+// an administrator, without mutating the caller's reusable filter object.
 func (s *Service) GetPricingFeatures(ctx context.Context, req *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error) {
+	if s == nil || req == nil || ctx == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/billingmanager")
 
-	if s.PricerService == nil {
-		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.UserID))
+	if isNilCheckoutCapability(s.PricerService) {
+		logger.Error("pricer-service-not-enabled", zap.String("user-id", req.ActorID))
 		return nil, ErrBillingManagerPricerServiceNotSet
 	}
 
-	isAdmin := s.isRequesterAdmin(ctx, req.UserID, logger)
+	isAdmin := s.isRequesterAdmin(ctx, req.ActorID, logger)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	query := pricer.GetFeaturesRequest{}
+	if req.GetFeaturesRequest != nil {
+		query = *req.GetFeaturesRequest
+	}
 	if !isAdmin {
 		// Non-admin users are not allowed to access price features in certain states, i.e draft, archieved, etc
 		// we should override any queries to ensure they can only see active features
-		if req.GetFeaturesRequest == nil {
-			req.GetFeaturesRequest = &pricer.GetFeaturesRequest{}
-		}
-
-		req.GetFeaturesRequest.IsNotDeleted = true
-		req.GetFeaturesRequest.IsPublished = true
-		logger.Debug("non-admin-user-requesting-pricing-features-only-returning-features-in-valid-state", zap.String("user-id", req.UserID))
+		query.IsNotDeleted = true
+		query.IsPublished = true
+		logger.Debug("non-admin-user-requesting-pricing-features-only-returning-features-in-valid-state", zap.String("user-id", req.ActorID))
 	}
 
-	response, err := s.PricerService.GetFeatures(ctx, req.GetFeaturesRequest)
+	response, err := s.PricerService.GetFeatures(ctx, &query)
 	if err != nil {
 		return nil, err
 	}
@@ -684,20 +719,24 @@ func isPricePlanPubliclyVisible(publishedAt string) bool {
 	return !publishedAtTime.After(time.Now().UTC())
 }
 
-// GetUserSubscriptionStatus retrieves a user's subscription status
-// This can be called from anywhere in the application
+// GetUserSubscriptionStatus authorizes the trusted actor against the selected
+// account before reading or repairing its legacy email association. Dependency
+// failures are returned intact rather than reported as absent subscriptions.
 func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSubscriptionStatusRequest) (*GetUserSubscriptionStatusResponse, error) {
+	if s == nil || req == nil || ctx == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 
 	var (
 		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
-		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(req.UserID, req.RequestingUserID)
+		logFields []zap.Field = initLogFieldsWithTargetAndActor(req.UserID, req.ActorID)
 	)
 
 	logger.Info("getting-subscription-status-for-user")
 
-	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.RequestingUserID)
+	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.ActorID)
 	if err != nil {
-		logger.Error("failed-to-access-subscription-status-for-user", append(logFields, zap.Error(err))...)
+		logger.Warn("failed-to-access-subscription-status-for-user", logFields...)
 		return nil, err
 	}
 
@@ -713,33 +752,57 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 		return nil, err
 	}
 
-	// Check if user has any subscriptions
-	if (subscriptionsResp == nil || subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0) && s.UserService != nil {
-		logger.Info("no-active-subscription-with-user-id-falling-back-to-user-email", logFields...)
-		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: req.UserID})
-		if err == nil {
-			emailSubsResp, _ := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: userResp.User.Email})
-			if emailSubsResp != nil && len(emailSubsResp.Subscriptions) > 0 {
-				logger.Info("found-email-based-subscription-associating-with-user", append(logFields,
-					zap.Bool("email-present", emailPresentForLog(userResp.User.Email)),
-					zap.String("email-domain", emailDomainForLog(userResp.User.Email)),
-					zap.Int("found-subscriptions", len(emailSubsResp.Subscriptions)),
-				)...)
-				// Associate found subscriptions with user
-				if _, associateErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
-					UserID: req.UserID,
-					Email:  userResp.User.Email,
-				}); associateErr != nil {
+	// Email association is a target lookup, never an actor lookup. A failed or
+	// inconsistent adapter response must not be reported as "no subscription".
+	if subscriptionsResp == nil {
+		return nil, ErrBillingManagerServiceUnavailable
+	}
+	if (subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0) && !isNilCheckoutCapability(s.UserService) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		target, lookupErr := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: req.UserID})
+		if lookupErr != nil {
+			return nil, lookupErr
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if target == nil || target.User == nil || target.User.ID != req.UserID {
+			return nil, ErrBillingManagerServiceUnavailable
+		}
+		if strings.TrimSpace(target.User.Email) != "" {
+			emailSubs, lookupErr := s.BillingService.GetSubscriptionsByEmail(ctx, &billing.GetSubscriptionsByEmailRequest{Email: target.User.Email})
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if emailSubs == nil {
+				return nil, ErrBillingManagerServiceUnavailable
+			}
+			if len(emailSubs.Subscriptions) > 0 {
+				// Association is a lower-domain write. Keep its target and email
+				// bound to the account selected by the authorized request.
+				_, associateErr := s.BillingService.AssociateSubscriptionsWithUser(ctx, &billing.AssociateSubscriptionsWithUserRequest{
+					UserID: req.UserID, Email: target.User.Email,
+				})
+				if associateErr != nil {
 					return nil, associateErr
 				}
-
-				// Re-query to get updated results
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
 				subscriptionsResp, err = s.BillingService.GetSubscriptions(ctx, &billing.GetSubscriptionsRequest{
-					ForUserIDs: []string{req.UserID},
-					PerPage:    100,
-					Page:       1,
-					Order:      "created_at_desc",
+					ForUserIDs: []string{req.UserID}, PerPage: 100, Page: 1, Order: "created_at_desc",
 				})
+				if err != nil {
+					return nil, err
+				}
+				if subscriptionsResp == nil {
+					return nil, ErrBillingManagerServiceUnavailable
+				}
 			}
 		}
 	}
@@ -796,19 +859,23 @@ func (s *Service) GetUserSubscriptionStatus(ctx context.Context, req *GetUserSub
 	}, nil
 }
 
-// GetUserBillingEvents retrieves billing events for a user
+// GetUserBillingEvents requires a trusted self or administrator actor and queries
+// only the selected account. Authentication remains the caller's responsibility.
 func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingEventsRequest) (*GetUserBillingEventsResponse, error) {
+	if s == nil || req == nil || ctx == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 
 	var (
 		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
-		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(req.UserID, req.RequestingUserID)
+		logFields []zap.Field = initLogFieldsWithTargetAndActor(req.UserID, req.ActorID)
 	)
 
 	logger.Info("getting-billing-events-for-user")
 
-	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.RequestingUserID)
+	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.ActorID)
 	if err != nil {
-		logger.Error("failed-to-access-billing-events-for-user", append(logFields, zap.Error(err))...)
+		logger.Warn("failed-to-access-billing-events-for-user", logFields...)
 		return nil, err
 	}
 
@@ -825,6 +892,9 @@ func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingE
 	}
 
 	// Convert to summary format
+	if eventsResp == nil {
+		return nil, ErrBillingManagerServiceUnavailable
+	}
 	events := make([]EventSummary, len(eventsResp.BillingEvents))
 	for i, e := range eventsResp.BillingEvents {
 		events[i] = EventSummary{
@@ -863,19 +933,23 @@ func (s *Service) GetUserBillingEvents(ctx context.Context, req *GetUserBillingE
 	}, nil
 }
 
-// GetUserBillingDetail retrieves detailed billing information for a user
+// GetUserBillingDetail authorizes the actor before reading the selected account's
+// billing projection. Optional provider invoice enrichment does not grant access.
 func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingDetailRequest) (*GetUserBillingDetailResponse, error) {
+	if s == nil || req == nil || ctx == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
 
 	var (
 		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
-		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(req.UserID, req.RequestingUserID)
+		logFields []zap.Field = initLogFieldsWithTargetAndActor(req.UserID, req.ActorID)
 	)
 
 	logger.Info("getting-billing-detail-for-user")
 
-	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.RequestingUserID)
+	err := s.isUserAuthorisedToProceedWithUserOperation(ctx, req.UserID, req.ActorID)
 	if err != nil {
-		logger.Error("failed-to-access-billing-detail-for-user", append(logFields, zap.Error(err))...)
+		logger.Warn("failed-to-access-billing-detail-for-user", logFields...)
 		return nil, err
 	}
 
@@ -891,8 +965,11 @@ func (s *Service) GetUserBillingDetail(ctx context.Context, req *GetUserBillingD
 		return nil, err
 	}
 
-	// Check if user has any subscriptions
-	if subscriptionsResp == nil || subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
+	if subscriptionsResp == nil {
+		return nil, ErrBillingManagerServiceUnavailable
+	}
+	// A valid empty response means no access; a nil adapter result does not.
+	if subscriptionsResp.Total == 0 || len(subscriptionsResp.Subscriptions) == 0 {
 		logger.Info("no-active-subscription-found", logFields...)
 		return &GetUserBillingDetailResponse{
 			BillingDetail: &BillingDetail{
@@ -1004,47 +1081,56 @@ func validUpcomingInvoicePreview(preview *paymentprovider.UpcomingInvoicePreview
 	return true
 }
 
-// isRequesterAdmin safely checks if the requester has admin privileges
-func (s *Service) isRequesterAdmin(ctx context.Context, userID string, logger *zap.Logger) bool {
-	if s.UserService == nil {
+// isRequesterAdmin permits private catalogue projections only for a resolved
+// actor. Anonymous, missing, inconsistent or unavailable authority falls back to
+// public pricing; no lookup is attempted for an empty actor.
+func (s *Service) isRequesterAdmin(ctx context.Context, actorID string, log *zap.Logger) bool {
+	if strings.TrimSpace(actorID) == "" || isNilCheckoutCapability(s.UserService) || ctx.Err() != nil {
 		return false
 	}
-
-	userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
-	if err != nil || userResp == nil || userResp.User == nil {
-		logger.Warn("unable-to-resolve-requester-for-admin-check", zap.String("user-id", userID), zap.Error(err))
+	result, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: actorID})
+	if err != nil || result == nil || result.User == nil || result.User.ID != actorID || ctx.Err() != nil {
+		log.Warn("unable-to-resolve-actor-for-admin-check", zap.String("actor-id", actorID))
 		return false
 	}
-
-	return userResp.User.IsAdmin()
+	return result.User.IsAdmin()
 }
 
-// isUserAuthorisedToProceedWithUserOperation checks if the requesting user is authorised to perform operations on behalf of the target user.
-// Returns an error if not authorised or prerequisites are not met.
-func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context, targetUserId, requestingUserId string) error {
-	var (
-		logger                = logger.AcquirePackageFrom(ctx, "external/billingmanager")
-		logFields []zap.Field = initLogFieldsWithUserIdAndRequestingUserId(targetUserId, requestingUserId)
-	)
-
-	if targetUserId == "" {
-		logger.Warn("failed-to-get-billing-detail-user-id-is-missing", logFields...)
+// isUserAuthorisedToProceedWithUserOperation requires a nonempty trusted actor
+// and target. Self-service reads need no administrator lookup; cross-account
+// reads resolve the actor, never the target, before dispatching billing work.
+// Dependency failures retain their original cause for the shared error maps.
+func (s *Service) isUserAuthorisedToProceedWithUserOperation(ctx context.Context, targetUserID, actorID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(actorID) == "" {
+		return ErrBillingManagerUnableToIdentifyUser
+	}
+	if strings.TrimSpace(targetUserID) == "" {
 		return ErrBillingManagerRequiresUserIdIsMissing
 	}
-
-	if requestingUserId != "" && requestingUserId != targetUserId {
-
-		userResp, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: requestingUserId})
-		if err != nil {
-			logger.Warn("failed-to-get-billing-detail-requesting-user-not-found", append(logFields, zap.Error(err))...)
-			return ErrBillingManagerRequiresUserIdIsMissing
-		}
-		if !userResp.User.IsAdmin() {
-			logger.Warn("failed-to-get-billing-detail-requesting-user-not-admin", logFields...)
-			return ErrBillingManagerUserUnauthorisedToCarryOutOperation
-		}
-
-		logger.Info("admin-user-requesting-billing-detail-for-another-user", logFields...)
+	if isNilCheckoutCapability(s.BillingService) {
+		return ErrBillingManagerServiceUnavailable
+	}
+	if actorID == targetUserID {
+		return nil
+	}
+	if isNilCheckoutCapability(s.UserService) {
+		return ErrBillingManagerServiceUnavailable
+	}
+	result, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: actorID})
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if result == nil || result.User == nil || result.User.ID != actorID {
+		return ErrBillingManagerServiceUnavailable
+	}
+	if !result.User.IsAdmin() {
+		return ErrBillingManagerUserUnauthorisedToCarryOutOperation
 	}
 	return nil
 }
@@ -1736,8 +1822,9 @@ func subscriptionCommercialAmountKnown(sub *billing.Subscription) bool {
 	return sub != nil && (sub.AmountKnown || sub.Amount != 0)
 }
 
-// initLogFieldsWithUserIdAndRequestingUserId initialises log fields with user ID and requesting user ID
-func initLogFieldsWithUserIdAndRequestingUserId(userId, requestingUserId string) []zap.Field {
+// initLogFieldsWithTargetAndActor keeps target and actor distinct while retaining
+// the existing structured log keys for downstream consumers.
+func initLogFieldsWithTargetAndActor(userId, requestingUserId string) []zap.Field {
 	var logFields []zap.Field
 	if userId != "" {
 		logFields = append(logFields, zap.String("user-id", userId))

@@ -176,7 +176,7 @@ func checkoutPricePlansPage(req *pricer.GetPricePlansRequest, plans []pricer.Pri
 
 func checkoutRequest() *ProcessBillingProviderCheckoutRequest {
 	return &ProcessBillingProviderCheckoutRequest{
-		UserID:         "user_123",
+		ActorID:        "user_123",
 		ProviderName:   "stripe",
 		PriceID:        "price_123",
 		IdempotencyKey: "browser-attempt-123",
@@ -570,7 +570,7 @@ func TestMapRequestToProcessBillingProviderCheckoutRequestUsesOnlyAuthenticatedT
 	if err != nil {
 		t.Fatalf("map checkout request: %v", err)
 	}
-	if got.UserID != "user_123" || got.ProviderName != "stripe" || got.PriceID != "price_123" || got.IdempotencyKey != "attempt_123" || got.Origin != "https://app.example.test" || got.SecFetchSite != "same-origin" {
+	if got.ActorID != "user_123" || got.ProviderName != "stripe" || got.PriceID != "price_123" || got.IdempotencyKey != "attempt_123" || got.Origin != "https://app.example.test" || got.SecFetchSite != "same-origin" {
 		t.Fatalf("mapped request = %#v", got)
 	}
 

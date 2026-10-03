@@ -50,13 +50,30 @@ memberships. Use the authorized cross-user group lookup above for another user;
 do not substitute a target ID for the caller. Internal enrichment keeps its
 already-authorized target queries separate from the self-service actor contract.
 
-Only these User Manager-owned request fields are renamed in this migration.
-Other managers and delegated lower-domain requests retain their current APIs.
+This User Manager migration changes only manager-owned request fields.
+Billing Manager's separate migration is described below; other managers and
+delegated lower-domain requests retain their current APIs.
 Contact creation retains the lower-domain `UserId` attribution field, which its
 HTTP mapper overwrites after decoding; anonymous contact submissions keep an
 empty attribution. Stored IDs, database schemas, routes, JSON target parameters
 and response envelopes are unchanged. Migrating a request field does not rename
 ownership, authorship or proof-subject fields in a stored record.
+
+## Billing Manager migration
+
+Billing Manager now uses `ActorID` for checkout, portal and optional catalogue
+callers, and in place of `RequestingUserID` on its three private billing reads.
+The reads' `UserID` remains the selected account. Checkout and portal are
+self-service: the actor owns the provider customer. Lower billing/provider
+ownership fields and webhook account resolution are unchanged.
+
+Private billing reads reject an empty actor, including trusted in-process calls.
+Cross-account reads look up the actor's administrative role, not the target's;
+missing or inconsistent authority fails closed. Public catalogue requests still
+work without authentication, using an empty actor and public-only projections.
+An anonymous rate-limit placeholder cannot enable administrative pricing.
+See [Billing Manager](../../external/billingmanager/README.md#actorid-migration)
+for the exact source changes and error behavior.
 
 ## Transport binding
 

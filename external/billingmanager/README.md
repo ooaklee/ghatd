@@ -219,8 +219,8 @@ After webhooks are processed, you can query subscription and billing information
 // Get user's subscription status
 ctx := context.Background()
 statusResp, err := manager.GetUserSubscriptionStatus(ctx, &billingmanager.GetUserSubscriptionStatusRequest{
-    UserID:           "user-123",
-    RequestingUserID: "user-123", // User querying their own subscription
+    UserID:  "user-123",
+    ActorID: "user-123", // User querying their own subscription
 })
 
 if err != nil {
@@ -240,8 +240,8 @@ if status.HasSubscription {
 
 // Get billing event history
 eventsResp, err := manager.GetUserBillingEvents(ctx, &billingmanager.GetUserBillingEventsRequest{
-    UserID:           "user-123",
-    RequestingUserID: "user-123",
+    UserID:  "user-123",
+    ActorID: "user-123",
     PerPage:          10,
     Page:             1,
     Order:            "created_at_desc",
@@ -735,6 +735,53 @@ The billing system tracks various subscription states:
 
 ## Authorisation & Security
 
+### ActorID migration
+
+The caller is now explicit and separate from the selected billing account:
+
+| Request | Previous caller field | Replacement | Target |
+| --- | --- | --- | --- |
+| Checkout, portal | `UserID` | `ActorID` | The actor's own provider customer |
+| Subscription status, billing events, billing detail | `RequestingUserID` | `ActorID` | Existing `UserID`, unchanged |
+| Pricing plans, plan by slug, features | `UserID` | `ActorID` | Catalogue; no target account |
+
+This is a breaking Go source change with no caller aliases. Update struct
+literals, selectors, custom adapters and tests; do not rename lower-domain
+`billing` or `paymentprovider` ownership IDs. Webhooks, database fields, URL
+parameters and response envelopes are unchanged.
+
+Actor fields are excluded from JSON and have no query/path tags. HTTP mappers
+use `AcquireAuthenticatedUserIDFrom`: both a verified authentication result and
+a nonempty ID are required for private billing routes. Built-in middleware
+publishes these values. A custom adapter that only sets a context ID must migrate
+to the verified context publication described in the
+[request identity guide](../../docs/how-to/request-identity.md#transport-binding).
+Never derive an actor from a body or query parameter.
+
+Private read services reject empty actors even for direct in-process calls.
+They allow self-reads or resolve the actor's administrator role for another
+account. Trusted in-process callers must establish authority before constructing
+these requests; IDs are not credentials. Missing dependencies or inconsistent
+authority results produce `BM00-033` (503). Dependency errors retain their
+original causes for the shared error maps and host overrides rather than being
+misreported as a missing target.
+For example, a dependency's mapped `user.ErrUserNotFound` now retains its 404
+response on cross-account reads rather than the previous missing-user-ID 400;
+unknown failures remain generic 500 responses, subject to explicit host maps.
+
+The subscription-status legacy email association resolves the selected account,
+checks that its returned ID matches, and propagates lookup/association/re-query
+failures. A valid empty result still means no subscription; an invalid nil
+dependency result is unavailable, not evidence that the account has no access.
+
+Public pricing remains public. With no verified actor it uses public-only
+filters without an account lookup; an anonymous placeholder cannot select an
+administrator. A verified administrator can retain private catalogue filters
+when the host provides authenticated context. Unresolvable authority falls back
+to the public projection. The default public route attachment does not itself
+authenticate credentials. Pricing filters are copied before applying public
+restrictions so a reusable caller request is not mutated.
+
 ### Checkout Security
 
 The checkout route is attached only to the active authenticated route group.
@@ -763,14 +810,14 @@ The `billingmanager` includes built-in authorisation checks:
 ```go
 // User querying their own subscription (allowed)
 statusResp, err := manager.GetUserSubscriptionStatus(ctx, &billingmanager.GetUserSubscriptionStatusRequest{
-    UserID:           "user-123",
-    RequestingUserID: "user-123",
+    UserID:  "user-123",
+    ActorID: "user-123",
 })
 
 // Admin querying another user's subscription (requires admin role via UserService)
 statusResp, err := manager.GetUserSubscriptionStatus(ctx, &billingmanager.GetUserSubscriptionStatusRequest{
-    UserID:           "user-456",
-    RequestingUserID: "admin-user-123", // Must be an admin
+    UserID:  "user-456",
+    ActorID: "admin-user-123", // Must be an admin
 })
 ```
 

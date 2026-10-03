@@ -99,7 +99,7 @@ func (s *portalBillingServiceStub) GetSubscriptions(_ context.Context, req *bill
 
 func portalRequest() *ProcessBillingProviderPortalRequest {
 	return &ProcessBillingProviderPortalRequest{
-		UserID:       "user_123",
+		ActorID:      "user_123",
 		ProviderName: "stripe",
 		Origin:       "https://app.example.test",
 		SecFetchSite: "same-origin",
@@ -219,12 +219,12 @@ func TestProcessBillingProviderPortalRejectsUntrustedInputsBeforeBillingLookup(t
 		want        error
 	}{
 		{name: "missing user", request: &ProcessBillingProviderPortalRequest{ProviderName: "stripe"}, returnURL: portalTestReturnURL, want: ErrInvalidBillingManagerRequestPayload},
-		{name: "malformed provider", request: &ProcessBillingProviderPortalRequest{UserID: "user_123", ProviderName: "stripe/other"}, returnURL: portalTestReturnURL, want: ErrInvalidBillingManagerRequestPayload},
+		{name: "malformed provider", request: &ProcessBillingProviderPortalRequest{ActorID: "user_123", ProviderName: "stripe/other"}, returnURL: portalTestReturnURL, want: ErrInvalidBillingManagerRequestPayload},
 		{name: "provider unavailable", request: portalRequest(), returnURL: portalTestReturnURL, registryErr: paymentprovider.ErrPaymentProviderNotFound, want: ErrBillingManagerPortalProviderUnavailable},
 		{name: "provider config invalid", request: portalRequest(), returnURL: portalTestReturnURL, configErr: paymentprovider.ErrPaymentProviderInvalidConfiguration, want: ErrBillingManagerPortalConfigurationInvalid},
 		{name: "missing return URL", request: portalRequest(), want: ErrBillingManagerPortalConfigurationInvalid},
-		{name: "mismatched origin", request: &ProcessBillingProviderPortalRequest{UserID: "user_123", ProviderName: "stripe", Origin: "https://attacker.example.test"}, returnURL: portalTestReturnURL, want: ErrBillingManagerPortalOriginRejected},
-		{name: "cross-site", request: &ProcessBillingProviderPortalRequest{UserID: "user_123", ProviderName: "stripe", Origin: "https://app.example.test", SecFetchSite: "cross-site"}, returnURL: portalTestReturnURL, want: ErrBillingManagerPortalOriginRejected},
+		{name: "mismatched origin", request: &ProcessBillingProviderPortalRequest{ActorID: "user_123", ProviderName: "stripe", Origin: "https://attacker.example.test"}, returnURL: portalTestReturnURL, want: ErrBillingManagerPortalOriginRejected},
+		{name: "cross-site", request: &ProcessBillingProviderPortalRequest{ActorID: "user_123", ProviderName: "stripe", Origin: "https://app.example.test", SecFetchSite: "cross-site"}, returnURL: portalTestReturnURL, want: ErrBillingManagerPortalOriginRejected},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -356,7 +356,7 @@ func TestMapRequestToProcessBillingProviderPortalRequestUsesOnlyAuthenticatedTra
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.UserID != "user_123" || got.ProviderName != "stripe" || got.Origin != "https://app.example.test" || got.SecFetchSite != "same-origin" {
+	if got.ActorID != "user_123" || got.ProviderName != "stripe" || got.Origin != "https://app.example.test" || got.SecFetchSite != "same-origin" {
 		t.Fatalf("mapped request = %#v", got)
 	}
 
@@ -476,9 +476,9 @@ func TestProcessBillingProviderPortalRejectsTypedNilDependencies(t *testing.T) {
 
 func TestPortalRequestBounds(t *testing.T) {
 	tests := []*ProcessBillingProviderPortalRequest{
-		{UserID: "user_123", ProviderName: strings.Repeat("p", 65)},
-		{UserID: "user_123", ProviderName: "stripe", Origin: strings.Repeat("o", checkoutMaxOriginLength+1)},
-		{UserID: "user_123", ProviderName: "stripe", SecFetchSite: strings.Repeat("s", checkoutMaxFetchSiteLength+1)},
+		{ActorID: "user_123", ProviderName: strings.Repeat("p", 65)},
+		{ActorID: "user_123", ProviderName: "stripe", Origin: strings.Repeat("o", checkoutMaxOriginLength+1)},
+		{ActorID: "user_123", ProviderName: "stripe", SecFetchSite: strings.Repeat("s", checkoutMaxFetchSiteLength+1)},
 	}
 	for _, request := range tests {
 		service := &Service{}

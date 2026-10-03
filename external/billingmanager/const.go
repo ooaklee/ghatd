@@ -12,6 +12,9 @@ const (
 
 const (
 
+	// ErrKeyBillingManagerServiceUnavailable identifies unavailable trusted dependencies.
+	ErrKeyBillingManagerServiceUnavailable = "BillingManagerServiceUnavailable"
+
 	// ErrKeyBillingManagerUnableToGetProviderNameFromURI is returned when the provider name cannot be extracted from the URI
 	ErrKeyBillingManagerUnableToGetProviderNameFromURI = "BillingManagerUnableToGetProviderNameFromURI"
 

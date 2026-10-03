@@ -3,6 +3,8 @@ package billingmanager
 import "errors"
 
 var (
+	// ErrBillingManagerServiceUnavailable rejects missing or inconsistent trusted dependencies.
+	ErrBillingManagerServiceUnavailable                    = errors.New(ErrKeyBillingManagerServiceUnavailable)
 	ErrBillingManagerFailedToProcessEvent                  = errors.New(ErrKeyBillingManagerFailedToProcessEvent)
 	ErrBillingManagerFailedToRetrieveBillingEvents         = errors.New(ErrKeyBillingManagerFailedToRetrieveBillingEvents)
 	ErrBillingManagerFailedToRetrieveSubscriptionStatus    = errors.New(ErrKeyBillingManagerFailedToRetrieveSubscriptionStatus)

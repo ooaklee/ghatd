@@ -35,7 +35,7 @@ func TestSubscriptionLifecycleProjectsCommercialTermsWithoutChangingLedgerAmount
 		t.Fatal(err)
 	}
 
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestSubscriptionLifecycleProjectsCommercialTermsWithoutChangingLedgerAmount
 	if got.TrialEndsAt == nil || !got.TrialEndsAt.Equal(trialEnd) {
 		t.Fatalf("trial end = %#v", got.TrialEndsAt)
 	}
-	detail, err := manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	detail, err := manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestKnownFreeAndLegacyRecurringAmountsRemainPresenceAware(t *testing.T) {
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), webhookRequest("stripe")); err != nil {
 		t.Fatal(err)
 	}
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestKnownFreeAndLegacyRecurringAmountsRemainPresenceAware(t *testing.T) {
 	if !strings.Contains(string(encoded), `"amount":0`) || !strings.Contains(string(encoded), `"amount_known":true`) {
 		t.Fatalf("known-free JSON = %s", encoded)
 	}
-	detail, err := manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	detail, err := manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestKnownFreeAndLegacyRecurringAmountsRemainPresenceAware(t *testing.T) {
 	if err := legacyManager.ProcessBillingProviderWebhooks(context.Background(), webhookRequest("legacy-provider")); err != nil {
 		t.Fatal(err)
 	}
-	legacyStatus, err := legacyManager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	legacyStatus, err := legacyManager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestPaidZeroTrialCheckoutBeforeLifecycleKeepsTrialAndLearnsRecurringTerms(t
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestPaidZeroTrialCheckoutBeforeLifecycleKeepsTrialAndLearnsRecurringTerms(t
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), request); err != nil {
 		t.Fatal(err)
 	}
-	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err = manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestOneOffAccessKeepsTransactionAmountAndCurrency(t *testing.T) {
 	if err := manager.ProcessBillingProviderWebhooks(context.Background(), webhookRequest("stripe")); err != nil {
 		t.Fatal(err)
 	}
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestLegacyStoredNonzeroAmountIsExposedAsKnown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	status, err := manager.GetUserSubscriptionStatus(context.Background(), &GetUserSubscriptionStatusRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestBillingDetailBestEffortUpcomingInvoiceEstimate(t *testing.T) {
 		Subtotal: 1800, TaxAmount: 360, Total: 2160, AmountDue: 0, Currency: "USD",
 	}}
 	manager.UpcomingInvoicePreviewProviderRegistry = &invoicePreviewRegistryStub{provider: provider}
-	response, err := manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err := manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestBillingDetailBestEffortUpcomingInvoiceEstimate(t *testing.T) {
 
 	provider.err = errors.New("provider unavailable")
 	provider.preview = nil
-	response, err = manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err = manager.GetUserBillingDetail(context.Background(), &GetUserBillingDetailRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil || response.BillingDetail.UpcomingInvoiceEstimate != nil {
 		t.Fatalf("provider failure response = %#v, %v", response, err)
 	}
@@ -353,7 +353,7 @@ func TestBillingDetailBestEffortUpcomingInvoiceEstimate(t *testing.T) {
 	provider.wait = true
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	response, err = manager.GetUserBillingDetail(ctx, &GetUserBillingDetailRequest{UserID: "user_1", RequestingUserID: "user_1"})
+	response, err = manager.GetUserBillingDetail(ctx, &GetUserBillingDetailRequest{UserID: "user_1", ActorID: "user_1"})
 	if err != nil || response.BillingDetail.UpcomingInvoiceEstimate != nil {
 		t.Fatalf("preview timeout response = %#v, %v", response, err)
 	}

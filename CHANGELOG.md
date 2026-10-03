@@ -173,6 +173,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** [Billing Manager caller fields](external/billingmanager/README.md#actorid-migration)
+  now use `ActorID`; billing-read `UserID` remains the selected account. Update
+  checkout, portal, pricing and former `RequestingUserID` callers. Private
+  billing reads reject missing actors and HTTP mappers require verified context.
+  Public pricing remains available anonymously with public-only projections.
+  Cross-account lookup errors retain their mapped status (including user-not-found
+  404 instead of the previous missing-ID 400); unavailable authority returns 503.
 - **Breaking:** User Manager's direct caller fields now use `ActorID`, separate
   from embedded target IDs. Update Go callers using its former `UserId`/`UserID`
   fields or `GetGroupsByUserIDRequest.ID`; target parameters and stored ownership
@@ -262,6 +269,9 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Billing subscription email association checks the selected account identity
+  and preserves dependency failures instead of returning a false no-subscription
+  result. Pricing visibility restrictions no longer mutate caller-owned filters.
 - API credential lifecycle boundaries reject missing dependencies, cancellation
   and malformed custom-store results without publishing identity or a secret.
   Field-only usage/status writes preserve concurrent revocation and deletion;

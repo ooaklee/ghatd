@@ -26,7 +26,7 @@ func (s *Service) ProcessBillingProviderPortal(ctx context.Context, req *Process
 		return nil, ErrInvalidBillingManagerRequestPayload
 	}
 
-	userID := strings.TrimSpace(req.UserID)
+	userID := strings.TrimSpace(req.ActorID)
 	providerName := normaliseCheckoutProviderName(req.ProviderName)
 	if userID == "" || !checkoutProviderNamePattern.MatchString(providerName) ||
 		len(strings.TrimSpace(req.Origin)) > checkoutMaxOriginLength || len(strings.TrimSpace(req.SecFetchSite)) > checkoutMaxFetchSiteLength {
