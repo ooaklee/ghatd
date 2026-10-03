@@ -45,9 +45,11 @@ type UserValidator interface {
 
 // Handler manages user requests
 type Handler struct {
-	Service   UserService
-	Validator UserValidator
-	ErrorMaps []reply.ErrorManifest
+	// StatusManager owns administrative authority and audit, separate from Service.
+	StatusManager StatusManager
+	Service       UserService
+	Validator     UserValidator
+	ErrorMaps     []reply.ErrorManifest
 }
 
 // NewHandler returns a new user handler
@@ -216,22 +218,31 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 
 // UpdateUserStatus handles user status updates
 func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/user/v2", "handle-update-user-status")
 	request, err := MapRequestToUpdateUserStatusRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	response, err := h.Service.UpdateUserStatus(r.Context(), request)
+	if nilUserDependency(h.StatusManager) {
+		h.NewHTTPErrorResponse(w, ErrStatusUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	response, err := h.StatusManager.UpdateUserStatus(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	if response == nil || response.User == nil || response.User.ID != request.ID {
+		h.NewHTTPErrorResponse(w, ErrStatusUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User, reply.WithContext(r.Context()))
 }
 
 // AddUserRole handles adding a role to a user
@@ -476,22 +487,31 @@ func (h *Handler) ValidateUser(w http.ResponseWriter, r *http.Request) {
 
 // BulkUpdateUsersStatus handles bulk updating user statuses
 func (h *Handler) BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/user/v2", "handle-bulk-update-users-status")
 	request, err := MapRequestToBulkUpdateUsersStatusRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	response, err := h.Service.BulkUpdateUsersStatus(r.Context(), request)
+	if nilUserDependency(h.StatusManager) {
+		h.NewHTTPErrorResponse(w, ErrStatusUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	response, err := h.StatusManager.BulkUpdateUsersStatus(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)
+	if response == nil {
+		h.NewHTTPErrorResponse(w, ErrStatusUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response, reply.WithContext(r.Context()))
 }
 
 // GetUserStats handles retrieving aggregated stats about platform users

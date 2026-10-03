@@ -19,9 +19,58 @@ raw driver diagnostics to clients.
 - [MongoDB Setup](#mongodb-setup)
 - [Display handles](#display-handles)
 - [Conditional email changes](#conditional-email-changes)
+- [Conditional account status](#conditional-account-status)
 - [API Endpoints](#api-endpoints)
 - [Configuration Examples](#configuration-examples)
 - [Testing](#testing)
+
+## Conditional account status
+
+**Breaking for custom wiring:** status HTTP handlers now require
+`Handler.WithStatusManager`. Standard `starter/v0` composition supplies the user
+manager and its live administrator verifier automatically. Custom composition
+must provide those ports; a missing or typed-nil manager fails closed with 503,
+without falling back to the trusted domain service. See
+[manager composition](../../usermanager/README.md#administrative-account-status).
+
+`PATCH /api/v2/users/{userID}/status` and `POST /api/v2/users/bulk/status` retain
+their existing administrator-session policies and 200 data envelopes. The URL
+selects the single target after body decoding; body identity cannot retarget it.
+Responses use request context and `Cache-Control: no-store`. Native domain and
+authority errors use their canonical manifests, with host overrides last.
+
+`Service.UpdateUserStatus` is a **trusted internal domain command**, not a caller
+authorization API. Custom repositories must implement `AccountStatusRepository`.
+It reads the target, validates `UpdateStatus` using that account's configuration
+on a detached model, then sends a narrow `SetAccountStatusRequest` with one UTC
+instant. Mongo compares ID, exact email, email revision, raw type and source
+status; absent/null legacy type and revision are supported. No broad replacement,
+upsert or automatic command retry is allowed. The acknowledged post-image must
+match every owned field. Native read/write failures are preserved; actual missing
+accounts remain 404, changed snapshots are 409 (`USV2-042`), and missing wiring or
+unconfirmed receipts are 503 (`USV2-043`). Nil-success repository results are
+invalid receipts, not evidence of absence. Unknown failures remain safely mapped
+by the shared response boundary, not exposed as driver diagnostics.
+
+Owned fields are status, updated/status-change timestamps, and activated time
+whenever the resolved destination is ACTIVE. `EMAIL_CHANGE` retains the model's
+configured destination and optional email-unverification side effect. When
+clearing verification, both the previous verification flag and timestamp are
+also compared, preserving a concurrent verification instead of overwriting it.
+Other verification fields, roles, profile, provider identities and metadata are
+preserved. This command validates the status transition, not a replacement
+profile or a new email proof: it does not call general `Validate`, change the
+mailbox, increment its revision, or invent a new activation policy. Use the
+dedicated email-change flow to change an email address.
+
+Audit attribution now belongs to the manager; trusted internal callers of the
+single/bulk domain methods must provide their own authorization and audit.
+Bulk HTTP orchestration is also manager-owned and remains non-transactional.
+Reload uncertain/failed accounts before retrying: a failed response does not
+prove rollback. These writes do not provide general ABA protection, an atomic
+lock against concurrent administrator revocation, or session-family revocation.
+Other legacy broad writers are separate migrations and may still conflict with
+these operations; this is not a claim that all user writes are now conditional.
 
 ## Display handles
 

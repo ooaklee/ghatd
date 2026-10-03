@@ -132,15 +132,17 @@ type NotifierService interface {
 
 // Service holds and manages usermanager business logic
 type Service struct {
-	UserService      UserService
-	ApiTokenService  ApiTokenService
-	AuditService     AuditService
-	ContacterService ContacterService
-	GroupService     GroupService
-	NotifierService  NotifierService
-	ReminderService  ReminderService
-	StreakService    StreakService
-	VisionService    VisionService
+	// administratorAuthorizer rechecks live session authority for administrative writes.
+	administratorAuthorizer AdministratorAuthorizer
+	UserService             UserService
+	ApiTokenService         ApiTokenService
+	AuditService            AuditService
+	ContacterService        ContacterService
+	GroupService            GroupService
+	NotifierService         NotifierService
+	ReminderService         ReminderService
+	StreakService           StreakService
+	VisionService           VisionService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service

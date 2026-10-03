@@ -145,21 +145,27 @@ func MapRequestToGetUsersRequest(request *http.Request, validator UserValidator)
 	return parsedRequest, nil
 }
 
-// MapRequestToUpdateUserStatusRequest maps incoming UpdateUserStatus request to correct struct
+// MapRequestToUpdateUserStatusRequest decodes the transition, then binds the URL
+// target. Neither a body ID nor any supplied actor can retarget this operation.
 func MapRequestToUpdateUserStatusRequest(request *http.Request, validator UserValidator) (*UpdateUserStatusRequest, error) {
-	var err error
+	if request == nil || request.URL == nil || nilUserDependency(request.Body) || nilUserDependency(validator) {
+		return nil, ErrInvalidUserBody
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
 	parsedRequest := &UpdateUserStatusRequest{}
 
-	// get user id from uri
-	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
+	id, err := toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
 		return nil, ErrInvalidUserID
 	}
 
-	err = toolbox.DecodeRequestBody(request, parsedRequest)
-	if err != nil {
+	err = toolbox.DecodeRequestBody(request, &parsedRequest)
+	if err != nil || parsedRequest == nil {
 		return nil, ErrInvalidUserBody
 	}
+	parsedRequest.ID = id
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, ErrInvalidUserBody
@@ -412,10 +418,16 @@ func MapRequestToValidateUserRequest(request *http.Request, validator UserValida
 
 // MapRequestToBulkUpdateUsersStatusRequest maps incoming BulkUpdateUsersStatus request to correct struct
 func MapRequestToBulkUpdateUsersStatusRequest(request *http.Request, validator UserValidator) (*BulkUpdateUsersStatusRequest, error) {
+	if request == nil || request.URL == nil || nilUserDependency(request.Body) || nilUserDependency(validator) {
+		return nil, ErrInvalidUserBody
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
 	parsedRequest := &BulkUpdateUsersStatusRequest{}
 
-	err := toolbox.DecodeRequestBody(request, parsedRequest)
-	if err != nil {
+	err := toolbox.DecodeRequestBody(request, &parsedRequest)
+	if err != nil || parsedRequest == nil {
 		return nil, ErrInvalidUserBody
 	}
 

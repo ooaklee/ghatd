@@ -168,7 +168,11 @@ func (h *Handler) GetBaseResponseHandler() *reply.Replier {
 // responseManifests keeps success factories and error writers on the same
 // domain base and last-wins caller override layers.
 func (h *Handler) responseManifests() []reply.ErrorManifest {
-	return errormanifest.NewComposer().Add(UserErrorMap).AddOverrides(h.ErrorMaps...).Build()
+	c := errormanifest.NewComposer().Add(UserErrorMap)
+	if !nilUserDependency(h.StatusManager) {
+		c.Add(h.StatusManager.StatusManagerErrorMaps()...)
+	}
+	return c.AddOverrides(h.ErrorMaps...).Build()
 }
 
 // NewHTTPErrorResponse preserves mapped wrappers and validation collections.

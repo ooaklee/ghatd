@@ -18,6 +18,51 @@ Unlike other packages, the `usermanager` doesn't have its own repository or data
 
 ## Mutation identity boundaries
 
+### Administrative account status
+
+The existing `user/v2` single and bulk status routes now delegate to this manager.
+Standard starter composition wires them automatically. For manual composition,
+install the access manager as the verifier and this service as the handler port:
+
+```go
+manager.WithAdministratorAuthorizer(accessManager)
+userHandler.WithStatusManager(manager)
+```
+
+`AdministratorAuthorizer` includes both live authorization and its native error
+manifests. Use the shared access manager implementation; simply extracting an ID
+or trusting token administrator flags is insufficient. It rechecks the live
+session, current account type/email revision, ACTIVE status and current roles.
+API-only, mixed and anonymous contexts cannot authorize these operations. Route
+middleware remains required and is not replaced by manager checks.
+
+`UpdateUserStatus` binds `ActorID` from verified context and calls
+`ChangeAccountStatus` with independent `ActorID` and `TargetUserID`. Trusted
+in-process callers retain the same verified context; supplying an actor string
+alone is not authority. Self-targeted administration is not newly prohibited.
+The domain owns configured transition rules and the
+[conditional field write](../user/v2/README.md#conditional-account-status).
+One `user.status_updated` audit event follows each validated successful receipt,
+with actor, target, requested transition and actual resolved destination. Audit
+delivery is best effort: an outage emits a diagnostic-free warning and does not
+turn an acknowledged write into a retry request. No domain audit is duplicated.
+
+Bulk requests keep their ordered, non-atomic `{updated_count, failed_ids}` data
+shape. Initial authority failure returns its mapped error before any write.
+Each item then rechecks current authority; item failures, including cancellation
+or revocation during the batch, join `failed_ids`. Already acknowledged successes
+remain counted and audited. An uncertain failed item may have committed, so this
+response is not a rollback guarantee or a reason to replay the entire batch.
+No new per-item error schema, batch limit or all-or-nothing transaction is added.
+
+The manager fails closed without the narrow domain capability or verifier.
+Native failures flow through the domain/authority manifests and `reply`, with
+request context, no-store and last-wins host overrides. Custom verifier error
+maps must describe public responses, never embed private diagnostics. A live
+authority check is point-in-time; it is not a transaction with the target write
+or audit sink. General revocation generations and other user-management command
+migrations remain separate work.
+
 ### Self-service profile names
 
 **Breaking for custom adapters:** `UpdateUserProfile` now requires the optional

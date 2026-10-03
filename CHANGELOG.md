@@ -381,6 +381,16 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking for custom wiring:** [Administrative status changes](external/usermanager/README.md#administrative-account-status)
+  now pass through a manager that rechecks live administrator-session authority
+  and records actor-bound audit. Custom handlers must install the manager and
+  verifier; repositories must implement narrow conditional status writes. Status
+  rules and EMAIL_CHANGE side effects are preserved without broad snapshots;
+  security or owned-verification races return 409, unconfirmed receipts 503.
+  Single and bulk HTTP routes retain their 200 data shapes with contextual
+  no-store replies. Bulk rechecks authority per item and retains partial results.
+  Trusted domain calls no longer emit unattributed audit. These operations are
+  not transactions with administrator revocation or audit delivery.
 - **Breaking for custom adapters:** [Proof login](external/accessmanager/README.md#conditional-login-account-transitions)
   now uses narrow conditional account commands before minting a session from the
   acknowledged post-image and its fresh-login timestamp. ACTIVE logins update only

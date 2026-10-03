@@ -610,47 +610,11 @@ func (s *Service) GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) 
 	return &GetTotalUsersResponse{Total: total}, nil
 }
 
-// UpdateUserStatus updates a user's status
+// UpdateUserStatus is a trusted domain transition, not an authorization boundary.
+// It validates the configured model and conditionally writes only owned fields.
+// External callers must use the manager for live authority and actor-bound audit.
 func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusRequest) (*UpdateUserStatusResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "update-user-status"))
-
-	// Get user
-	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
-	if err != nil {
-		logger.Error("failed-to-get-user-for-status-update", zap.Error(err), zap.String("id", req.ID))
-		return nil, ErrUserNotFound
-	}
-
-	// Reinject dependencies
-	s.setUserDependencies(user)
-
-	// Update status
-	updatedUser, err := user.UpdateStatus(req.DesiredStatus)
-	if err != nil {
-		logger.Error("failed-to-update-user-status", zap.Error(err))
-		return nil, err
-	}
-
-	// Save to repository
-	updatedUser, err = s.UserRepository.UpdateUser(ctx, updatedUser)
-	if err != nil {
-		logger.Error("failed-to-save-user-after-status-update", zap.Error(err))
-		return nil, ErrDatabaseError
-	}
-
-	// Audit log
-	if s.AuditService != nil {
-		_ = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:     "user.status_updated",
-			TargetId:   updatedUser.ID,
-			TargetType: audit.TargetType("user"),
-			Details:    map[string]interface{}{"user_id": updatedUser.ID, "new_status": req.DesiredStatus},
-		})
-	}
-
-	logger.Info("user-status-updated-successfully", zap.String("user-id", updatedUser.ID), zap.String("status", req.DesiredStatus))
-
-	return &UpdateUserStatusResponse{User: updatedUser}, nil
+	return s.updateAccountStatus(ctx, req)
 }
 
 // AddUserRole adds a role to a user

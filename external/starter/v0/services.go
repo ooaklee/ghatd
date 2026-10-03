@@ -228,6 +228,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		AuditService:          auditService,
 		StaticPlaceholderUuid: r.StaticPlaceholderUUID,
 	}).WithBillingService(billingService).WithGroupService(groupService)
+	userManagerService.WithAdministratorAuthorizer(accessManagerService)
 
 	contentManagerService := contentmanager.NewService(postService, userService)
 	billingManagerService := billingmanager.NewService(paymentProviderRegistry, billingService)

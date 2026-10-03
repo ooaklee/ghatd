@@ -683,14 +683,11 @@ func (s *Service) MiddlewareActiveJWTRequired(r *http.Request) (*MiddlewareAuthe
 // historical metadata, not a substitute for current roles/status. Promotions and
 // demotions take effect on the next check without requiring a fresh token.
 func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
-	current, err := s.MiddlewareActiveJWTRequired(r)
+	current, err := s.MiddlewareJWTRequired(r)
 	if err != nil {
 		return nil, err
 	}
-	if !current.User.IsAdmin() {
-		return nil, ErrUnauthorizedAdminAccessAttempted
-	}
-	return current, nil
+	return requireAdministrator(current)
 }
 
 // MiddlewareRateLimitOrActiveJWTRequired validates authenticated requests via JWT or

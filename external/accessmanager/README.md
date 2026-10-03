@@ -759,6 +759,21 @@ management commands do not receive the consumed predecessor. Ordinary logout
 does not use that middleware. Other-sessions success remains blank 202 and does
 not clear the initiating cookies.
 
+### Transport-independent administrator authority
+
+`AuthorizeAdministrator(ctx)` is the shared manager-facing counterpart of
+administrator-session middleware. It consumes context published by trusted
+authentication middleware, then repeats live session/account checks, including
+email revision and type, before applying the same ACTIVE/current-role rule as
+`MiddlewareAdminJWTRequired`. A signed administrator flag alone is not authority;
+API, mixed and anonymous contexts are rejected. The result is the verified actor
+ID, not a resource target. `AdministratorErrorMaps` supplies its canonical native
+failure mappings for downstream handlers, before host overrides.
+
+Standard starter composition injects this port into administrative account-status
+management. It does not replace route middleware, authorize other resources or
+make the subsequent domain write atomic with administrator revocation.
+
 ### Revocation limits
 
 These commands remove supplied records or perform an owner-scoped SCAN sweep;
