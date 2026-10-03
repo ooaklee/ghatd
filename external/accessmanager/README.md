@@ -4,6 +4,14 @@ The `accessmanager` package handles authentication, authorisation, and user life
 
 ## Integration Model
 
+For explicit token-policy provisioning, use the reusable
+[access-policy manager](../accesspolicymanager/README.md). The
+`PolicyManagementAuthorizer(system)` adapter checks the live session owner and
+current account identity, email/type revisions, active status and administrator
+role before returning an audit actor. It rejects API/anonymous/mixed contexts;
+signed administrator claims alone never authorize changes. The HTTP manager also
+requires the shared bearer-only middleware, with no cookie fallback or refresh.
+
 A GHATD host application usually wires Access Manager alongside the router, email manager, user manager, Redis-backed ephemeral storage, and any OAuth providers.
 
 The common setup is:

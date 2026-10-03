@@ -5,6 +5,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/router/routecontext"
+	"github.com/ooaklee/reply/v2"
 )
 
 // Router composes Mux routing, default handlers and opt-in route policy metadata.
@@ -21,6 +22,9 @@ type Router struct {
 	authorizer RouteAuthorizer
 	// policyValidator checks adapter-owned names/dependencies during registration.
 	policyValidator func(RouteDefinition) error
+	// policyErrorMaps owns startup copies of native-domain maps and host overrides.
+	// It affects response formatting only, never the authorizer's decision.
+	policyErrorMaps []reply.ErrorManifest
 	// policyStarted freezes evaluator configuration when the first group is created.
 	policyStarted bool
 }

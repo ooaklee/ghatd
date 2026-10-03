@@ -8,8 +8,11 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/gorilla/mux"
+	"github.com/ooaklee/ghatd/external/errormanifest"
+	"github.com/ooaklee/reply/v2"
 )
 
 // AccessMode names the existing trusted authentication adapter, not a token
@@ -109,8 +112,11 @@ type policyMatcher struct {
 // RouteAuthorizer evaluates trusted route requirements using already verified
 // request context. It must fail closed on missing/unknown grants or checks. Do
 // not infer API-token authority from the owning user's roles or JWT metadata.
-// Return or wrap a route sentinel for a known rejection. Unknown, joined or
+// Return the original failure; register native domain manifests with
+// ConfigureRoutePolicy instead of translating dependency errors. Unknown, joined or
 // ambiguous failures produce ROUTE_UNAVAILABLE (503), not ROUTE_DENIED (403).
+// A custom Is method may declare a response classification, never grant access;
+// adapters must not classify an availability failure as an ordinary denial.
 type RouteAuthorizer func(context.Context, *http.Request, RouteDefinition) error
 
 // SetRouteAuthorizer sets the evaluator before any policy routes are registered.
@@ -126,12 +132,25 @@ func (r *Router) SetRouteAuthorizer(authorize RouteAuthorizer) error {
 
 // ConfigureRoutePolicy installs both request enforcement and adapter-specific
 // startup validation. Call before creating any group. Nil callbacks are rejected;
-// SetRouteAuthorizer remains available for simpler custom evaluators.
-func (r *Router) ConfigureRoutePolicy(authorize RouteAuthorizer, validate func(RouteDefinition) error) error {
-	if authorize == nil || validate == nil || r.policyStarted {
+// SetRouteAuthorizer remains available for simpler custom evaluators. Optional
+// manifests extend router defaults and override duplicate keys in argument order.
+// Map entries are copied; reference-valued metadata remains immutable host data.
+// Every supplied error must have a 4xx/5xx status; successful error overrides are
+// rejected here even though the general reply composer permits them elsewhere.
+// Formatting overrides never authorize dispatch or imply a retry is safe.
+func (r *Router) ConfigureRoutePolicy(authorize RouteAuthorizer, validate func(RouteDefinition) error, manifests ...reply.ErrorManifest) error {
+	if r == nil || authorize == nil || validate == nil || r.policyStarted {
 		return ErrRouteConfiguration
 	}
+	for _, manifest := range manifests {
+		for key, response := range manifest {
+			if key == nil || response.StatusCode < 400 || response.StatusCode > 599 {
+				return ErrRouteConfiguration
+			}
+		}
+	}
 	r.authorizer, r.policyValidator = authorize, validate
+	r.policyErrorMaps = errormanifest.CloneManifests(manifests...)
 	return nil
 }
 
@@ -216,12 +235,12 @@ func (g *RouteGroup) Handle(def RouteDefinition, handler http.HandlerFunc) {
 		// A duplicate can shadow an invalid later declaration. Refuse every
 		// policy handler when any registry configuration error was recorded.
 		if len(g.owner.policyErrors) != 0 {
-			writeRouteError(request.Context(), w, ErrRouteConfiguration)
+			writeRouteError(request.Context(), w, ErrRouteConfiguration, g.owner.policyErrorMaps...)
 			return
 		}
 		if authorize != nil {
 			if err := authorize(request.Context(), request, cloneRoute(full)); err != nil {
-				writeRouteError(request.Context(), w, err)
+				writeRouteError(request.Context(), w, err, g.owner.policyErrorMaps...)
 				return
 			}
 		}
@@ -315,7 +334,7 @@ func validPolicy(p RoutePolicy) bool {
 
 // validPolicyName accepts exact, bounded identifiers; it never expands wildcards.
 func validPolicyName(s string) bool {
-	return s != "" && len(s) <= 256 && !strings.Contains(s, "*") && strings.IndexFunc(s, func(r rune) bool {
+	return s != "" && len(s) <= 256 && utf8.ValidString(s) && !strings.Contains(s, "*") && strings.IndexFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsControl(r)
 	}) < 0
 }

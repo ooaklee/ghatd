@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
+	"github.com/ooaklee/ghatd/external/accessmanager/middleware"
+	"github.com/ooaklee/ghatd/external/accesspolicy"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -49,6 +51,12 @@ func TestSessionGuardsLiveAuthority(t *testing.T) {
 			before, err := f.service.MiddlewareActiveJWTRequired(r)
 			require.NoError(t, err)
 			require.Equal(t, tc.name != "promoted", before.Token.IsAdmin)
+			// Management receives the original verified context, then must resolve
+			// current authority again after the persisted/session changes below.
+			managementContext, err := middleware.ContextWithAuthentication(f.ctx, before)
+			require.NoError(t, err)
+			authorize, err := f.service.PolicyManagementAuthorizer("sample")
+			require.NoError(t, err)
 			var change bson.M
 			switch tc.name {
 			case "promoted":
@@ -79,19 +87,33 @@ func TestSessionGuardsLiveAuthority(t *testing.T) {
 				require.NoError(t, err)
 			}
 			got, err := f.service.MiddlewareAdminJWTRequired(r)
+			actor, managementErr := authorize(managementContext, "sample")
 			if tc.name == "Redis unavailable" {
 				require.Error(t, err)
 				require.NotErrorIs(t, err, accessmanager.ErrUnauthorizedTokenNotFoundInStore)
 				require.False(t, ephemeral.IsAuthNotFound(err))
 				require.Nil(t, got)
+				require.Error(t, managementErr)
+				require.NotErrorIs(t, managementErr, accesspolicy.ErrDenied)
+				require.False(t, ephemeral.IsAuthNotFound(managementErr))
+				require.Empty(t, actor)
 				return
 			}
 			require.ErrorIs(t, err, tc.want)
 			if tc.want == nil {
 				require.True(t, got.User.IsAdmin())
 				require.Equal(t, current.ID, got.UserID)
+				require.NoError(t, managementErr)
+				require.Equal(t, current.ID, actor)
 			} else {
 				require.Nil(t, got)
+				require.Error(t, managementErr)
+				require.Empty(t, actor)
+				if tc.name == "demoted" || tc.name == "suspended" {
+					require.ErrorIs(t, managementErr, accesspolicy.ErrDenied)
+				} else {
+					require.ErrorIs(t, managementErr, tc.want)
+				}
 			}
 			if tc.name == "revoked" || tc.name == "wrong session owner" {
 				for _, mode := range []string{"standard", "active", "optional"} {

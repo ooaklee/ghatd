@@ -79,6 +79,20 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [administrative token-policy management](external/accesspolicymanager/README.md)
+  with strict JSON, preview ETags, create-only or revision-checked applies and
+  write-time audit actors. The live administrator-session adapter rechecks current
+  identity and session state; HTTP requires an explicit bearer with no cookie
+  fallback. No automatic grant seeding, role migration or credential issuance.
+- A [route-policy guard](external/accessmanager/middleware/README.md#route-policy-guard)
+  connects verified session/API context to current grants, resource checks,
+  strong-revision syntax and atomic request-budget admission. Hosts opt in and
+  still recheck ownership and consequential writes at their domain boundary.
+- [Native route error manifests](external/router/README.md#native-policy-error-manifests)
+  extend router defaults with copied startup maps and ordered host overrides.
+  Mapped native errors no longer need conversion to router sentinels; supplied
+  responses must be 4xx/5xx. Joined or unknown policy failures remain opaque 503s.
+  This extends the earlier sentinel-only route response contract.
 - Opt-in [transactional API-token admission](external/accessmanager/README.md#transactional-api-token-policy),
   forwarded by the starter, using current grants and fenced owner-wide inventory.
   Limits, current account reads and insertion share the callback transaction;
@@ -233,6 +247,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- Administrative target lookup distinguishes actual wrapped absence from joined
+  failures or custom error aliases; inconsistent results fail closed. Cancellation
+  stops work between adapters. Known policy commits retain their receipts even
+  when transport cancellation races the return; uncertain outcomes remain errors.
+  Session/account checks are not atomic with Mongo policy commits.
+- Route-policy checks preserve original error causes and stop handler dispatch
+  after observed cancellation. A charged request budget is not automatically
+  refunded. Credential grants never inherit the owner's account grants, and
+  response-map overrides cannot grant access.
 - Configured token admission never falls back to role allowances on policy
   denial or outage. It validates adapter results, preserves failure causes and
   checks cancellation between calls before delivering a secret. Cancellation or

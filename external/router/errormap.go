@@ -9,8 +9,8 @@ import (
 )
 
 // PolicyErrorManifest returns independent, client-safe policy error definitions.
-// Callers may compose the copy with their reply manifests without changing the
-// router's responses. Underlying dependency messages and identifiers are omitted.
+// Mutating the copy alone does not change router responses. Supply overrides to
+// ConfigureRoutePolicy at startup. Dependency messages and identifiers are omitted.
 func PolicyErrorManifest() reply.ErrorManifest {
 	return reply.ErrorManifest{
 		ErrRouteConfiguration:   {Title: "Endpoint unavailable.", StatusCode: http.StatusServiceUnavailable, Code: "ROUTE_CONFIGURATION"},
@@ -27,11 +27,17 @@ func PolicyErrorManifest() reply.ErrorManifest {
 // Unknown, joined or malformed failures mean authorization is unavailable,
 // never a proven client denial. The shared strict resolver retains no private
 // diagnostics; the shared writer carries request context without serializing it.
-func writeRouteError(ctx context.Context, w http.ResponseWriter, err error) {
-	manifest := PolicyErrorManifest()
-	manifests := []reply.ErrorManifest{manifest}
+func writeRouteError(ctx context.Context, w http.ResponseWriter, err error, overrides ...reply.ErrorManifest) {
+	manifests := errormanifest.NewComposer().Add(PolicyErrorManifest()).AddOverrides(overrides...).Build()
 	public := errormanifest.CanonicalError(err, manifests)
-	if _, known := manifest[public]; !known {
+	known := false
+	for _, manifest := range manifests {
+		if _, found := manifest[public]; found {
+			known = true
+			break
+		}
+	}
+	if !known {
 		public = ErrRouteUnavailable
 	}
 	w.Header().Set("Cache-Control", "no-store")

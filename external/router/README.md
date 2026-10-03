@@ -52,6 +52,23 @@ short-circuits before a descriptor handler. Registration/configuration is
 startup-only and must not run concurrently with serving. Concurrent requests and
 inventory reads receive independent policy snapshots.
 
+### Native policy error manifests
+
+`ConfigureRoutePolicy(authorize, validate, manifests...)` extends the router's
+default error maps. Return native errors from the authorizer rather than replacing
+them with router sentinels. Later manifests override earlier entries for the same
+identity. Map entries are copied before registration; reference-valued metadata
+must remain immutable. Every supplied error needs a 4xx/5xx status, so a policy
+failure cannot be configured as an HTTP success or redirect.
+
+The access-manager guard installs its policy-domain map automatically. Supply
+resource-domain maps and host overrides through `guard.Install(router, maps...)`.
+These response settings never authorize handler dispatch. Wrapped single-cause
+errors resolve by manifest identity; joined, unknown, ambiguous or malformed
+errors remain `ROUTE_UNAVAILABLE` (503). Custom `Is` classifications affect only
+the public response; adapters must not mislabel dependency outages as denials.
+Original errors remain available to direct callers for internal cause inspection.
+
 ### Coverage and explicit raw-route boundaries
 
 Existing framework domain attachments and arbitrary host routes do not become

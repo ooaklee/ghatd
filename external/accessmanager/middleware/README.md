@@ -172,6 +172,62 @@ during the request. A persisted author ID read from a content record is domain
 data and may still be resolved for display-name enrichment when the viewer is
 anonymous.
 
+## Route-policy guard
+
+`NewRoutePolicyGuard(system, service, resourceChecks)` adapts verified context to
+the [declarative router](../../router/README.md#declarative-route-policies).
+Call `guard.Install(router)` before creating any route group. Installation copies
+the check registry and configures both startup validation and request enforcement.
+Unknown resource-check names fail registration. Validate the completed route
+registry before serving.
+
+The injected `RoutePolicyService` must implement current exact-AND scope and
+permission checks and atomic `ConsumeAuthorized` admissions. The
+[`accesspolicy` package](../../accesspolicy/README.md) currently defines the
+service/store contracts and an opt-in transactional Mongo implementation.
+This guard is opt-in; existing host composition is not automatically upgraded.
+Do not substitute an allow-all stub or assume that declaring metadata activates
+a missing policy backend.
+
+The guard uses `AcquireSessionFrom` or `AcquireAPITokenFrom`, not raw headers,
+body IDs, or inferred email roles. Sessions select a `(system, user, userID)`
+subject. API credentials select `(system, api_token, tokenID)` and do not union
+their owner's user grants into credential grants. Session-only modes reject API
+credentials. Active/admin requirements are also checked against the current user
+snapshot; user type is classification, never administrator authority.
+
+Enforcement order is identity/account/type → grants → revision syntax → live
+resource check → usage admission. A resource check receives the verified actor
+ID and request; it can acquire credential metadata from the trusted context when
+delegation matters. It must resolve ownership from storage, not a body owner ID.
+
+`RevisionRequired` demands a single non-empty strong `If-Match` entity tag, at
+most 256 bytes including quotes. Weak tags, lists, wildcard and multiple headers
+are rejected. The domain still compares the actual revision inside its mutation
+transaction. The guard does not perform optimistic concurrency by itself.
+
+`UsageMetric` is an enforced request budget, not best-effort telemetry. Each
+admitted HTTP attempt gets a new server-generated key; client replay headers
+cannot avoid counting. Policy/counter failure denies the request. Admission
+rechecks the same required scopes/permissions within its atomic grant boundary.
+Domain ownership and consequential mutations still need their own transactional
+authority checks, including replay. For business-unit quotas, consume at that
+domain boundary rather than charging a route attempt. This API does not currently
+return quota-reset metadata in the HTTP error response.
+
+The guard returns original domain errors. `Install(router, overrides...)`
+registers the access-policy manifest with the router; supply additional resource
+maps or host overrides there, not an `errors.Is` translation in the guard.
+Wrapped native denials retain their codes, while joined/unknown/ambiguous failures
+produce the router's opaque 503. Overrides are copied at startup and must use
+4xx/5xx statuses. Custom `Is` methods are explicit response classifications,
+never evidence of authority or safe retries.
+
+Cancellation is checked at entry and after grant, resource and usage adapters;
+no later handler is dispatched after an observed cancellation. Usage may already
+have committed when cancellation is noticed; this does not undo a charged attempt.
+See [explicit bearer sessions](#explicit-bearer-sessions) for credential selection.
+
 ## Explicit bearer sessions
 
 `Middleware.BearerSessionRequired` (also `Suite.BearerSession`) accepts exactly one
@@ -183,6 +239,6 @@ resource checks remain the route or manager's responsibility.
 `IsExplicitBearerSession(ctx)` checks a private transport-origin marker bound to
 the verified account and session ID. Replacing the identity or publishing a
 cookie-only context cannot satisfy it. It is credential-selection evidence, not
-permission. Hosts may require this marker in addition to live administrator
-authority to prevent ordinary cookie middleware from enabling bearer-only
-management actions.
+permission. The [policy manager](../../accesspolicymanager/README.md) requires this
+marker as well as live administrator authority, so ordinary cookie middleware
+cannot accidentally enable cookie-authenticated policy changes.
