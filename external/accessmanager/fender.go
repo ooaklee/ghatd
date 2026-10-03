@@ -8,10 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/apitoken"
-	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ritwickdey/querydecoder"
-	"go.uber.org/zap"
 )
 
 // MapRequestToUpdateUserEmailRequest binds authenticated context and route target
@@ -308,30 +306,24 @@ func MapRequestToRefreshTokenRequest(request *http.Request, refreshCookieName, a
 	return parsedRequest, nil
 }
 
-// MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest maps incoming CreateInitalLoginOrVerificationTokenEmail request
-// to correct struct
+// MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest validates transport
+// input before the enumeration-resistant delivery boundary. It never logs the
+// mailbox or redirect. Missing validation wiring is an operational failure.
 func MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(request *http.Request, validator AccessmanagerValidator) (*CreateInitalLoginOrVerificationTokenEmailRequest, error) {
-
-	var (
-		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
-
-		parsedRequest *CreateInitalLoginOrVerificationTokenEmailRequest = &CreateInitalLoginOrVerificationTokenEmailRequest{}
-	)
-
-	err := toolbox.DecodeRequestBody(request, parsedRequest)
-	if err != nil {
+	if request == nil || request.URL == nil || request.Body == nil {
 		return nil, ErrInvalidUserEmail
 	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
+	if nilAccessDependency(validator) {
+		return nil, ErrLoginEmailUnavailable
+	}
+	parsedRequest := &CreateInitalLoginOrVerificationTokenEmailRequest{}
+	if err := toolbox.DecodeRequestBody(request, &parsedRequest); err != nil || parsedRequest == nil {
 		return nil, ErrInvalidUserEmail
 	}
-
-	logger.Debug("login-request-submitted.", emailLogFields("email", parsedRequest.Email)...)
-
+	if err := validator.Validate(parsedRequest); err != nil {
+		return nil, ErrInvalidUserEmail
+	}
 	return parsedRequest, nil
-
 }
 
 // MapRequestToCreateUserRequest maps incoming CreateUser request to correct

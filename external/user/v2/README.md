@@ -12,6 +12,17 @@ configuration fails closed. Custom repositories must distinguish absence from
 outages. HTTP callers should resolve configured error manifests and never return
 raw driver diagnostics to clients.
 
+`GetUserByEmail` and `FindUserByEmail` share a normalized, guarded lookup. Native
+repository errors retain their exact identity/tree, rather than becoming
+not-found or generic database errors. **Custom callers must handle native
+operational failures**, not infer absence from every failed lookup. The strict
+method still requests repository absence diagnostics; the optional method does
+not. Neither duplicates raw diagnostic logging. Nil/mismatched results and
+missing wiring are operational failures (`ErrDatabaseError`), not absence.
+Successful results are detached before dependency hydration; callers must not
+depend on pointer identity with an adapter's model. Nested arbitrary extension
+values and injected configuration remain read-only shared values.
+
 ## Table of Contents
 
 - [Key Features](#key-features)

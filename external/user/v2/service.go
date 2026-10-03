@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"maps"
 	"regexp"
 	"strings"
@@ -265,56 +264,19 @@ func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDReque
 	return &GetUserByNanoIDResponse{User: user}, nil
 }
 
-// GetUserByEmail retrieves a user by email
+// GetUserByEmail performs a strict normalized lookup. It preserves native
+// failures, including absence, for the caller's shared error manifest.
 func (s *Service) GetUserByEmail(ctx context.Context, req *GetUserByEmailRequest) (*GetUserByEmailResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "get-user-by-email"))
-
-	if req.Email == "" {
-		return nil, ErrInvalidEmail
-	}
-
-	user, err := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), true)
-	if err != nil {
-		logger.Error("failed to get user by email", append(emailLogFields("email", req.Email), zap.Error(err))...)
-		return nil, ErrUserNotFound
-	}
-
-	// Reinject dependencies
-	s.setUserDependencies(user)
-
-	return &GetUserByEmailResponse{User: user}, nil
+	return s.lookupEmail(ctx, req, true)
 }
 
 // FindUserByEmail looks up a user for workflows where absence is an expected
 // outcome, such as availability checks and optional account association. A
-// missing user returns ErrUserNotFound without emitting repository or service
-// diagnostics. Unexpected repository failures emit one root diagnostic and
-// return ErrDatabaseError.
-//
-// GetUserByEmail remains the strict public lookup for callers that expect the
-// user to exist.
+// missing user retains its native absence error without service diagnostics.
+// Operational failures also retain their original error tree, never masquerading
+// as absence. Nil/mismatched adapter receipts are operational failures.
 func (s *Service) FindUserByEmail(ctx context.Context, req *GetUserByEmailRequest) (*GetUserByEmailResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "find-user-by-email"))
-
-	if req.Email == "" {
-		return nil, ErrInvalidEmail
-	}
-
-	user, err := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), false)
-	if errors.Is(err, ErrUserNotFound) {
-		return nil, ErrUserNotFound
-	}
-	if err != nil {
-		logger.Error("failed to find user by email", append(emailLogFields("email", req.Email), zap.Error(err))...)
-		return nil, ErrDatabaseError
-	}
-	if user == nil {
-		logger.Error("user lookup by email returned an empty user", emailLogFields("email", req.Email)...)
-		return nil, ErrDatabaseError
-	}
-
-	s.setUserDependencies(user)
-	return &GetUserByEmailResponse{User: user}, nil
+	return s.lookupEmail(ctx, req, false)
 }
 
 // UpdateUser applies a trusted legacy broad update to a detached account model.

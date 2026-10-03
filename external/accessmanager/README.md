@@ -27,6 +27,34 @@ The `/v0/auth/verify` bridge is intentionally separate from `/api/v1/ams`. Email
 
 ## Session Cookies And Client Contract
 
+### Initial email delivery
+
+`POST /api/v1/ams/login` retains the same enumeration-resistant 202 blank reply
+after valid request mapping for success, cooldown suppression, absent/restricted
+accounts and service outages. The legacy reply body is `{"data":"{}"}`; it does
+not confirm delivery or contain an error/account payload. Mapping failures use
+canonical error manifests and last-wins host overrides. Email now has explicit
+required/address validation; missing validator wiring returns 503/`AM00-041`.
+All responses carry request context and `Cache-Control: no-store`, without
+setting authentication cookies or logging raw mailbox/redirect/adapter values.
+
+The manager selects an existing account using the normalized mailbox, validates
+the returned identity and retains the ACTIVE/login or PROVISIONED/verification
+choice. Direct callers receive native errors; public outcome masking belongs
+only to the handler. Nil or inconsistent adapters fail closed. Initial proof
+creation isolates model fields and token receipts from adapter mutation, checks
+cancellation between phases and validates UUID/token/TTL before storage. A mail
+adapter's accepted result remains success despite late cancellation. Acceptance
+is not proof of inbox delivery. No account/session is created by this request.
+
+The existing 60-second login cooldown remains best-effort. Its boolean acquisition
+and unconditional release are **not an ownership-fenced lease**; a delayed release
+can affect a later claim. Code check/reservation is likewise not atomic. Earlier
+proof writes are not rolled back on later failure, and delivery errors can be
+uncertain. Do not automatically replay requests or infer rollback. Atomic code
+reservation, owned cooldown cleanup and lower mail-provider error handling remain
+separate work; this contract makes no end-to-end delivery or rate-limit guarantee.
+
 ### Live session authority
 
 `AuthenticateSession`, `MiddlewareJWTRequired`, and the authenticated branches

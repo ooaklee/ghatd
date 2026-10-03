@@ -3,6 +3,9 @@ package accessmanager
 import "errors"
 
 var (
+	// ErrLoginEmailUnavailable rejects incomplete delivery wiring or invalid
+	// adapter receipts. Public login initiation still masks service outcomes.
+	ErrLoginEmailUnavailable = errors.New("accessmanager/login-email-unavailable")
 	// ErrRefreshTemporarilyUnavailable means a concurrent rotation did not
 	// produce an observable result before this request's bounded wait ended.
 	// It does not prove that the credential is invalid or that rotation failed.

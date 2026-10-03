@@ -417,31 +417,30 @@ func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt), reply.WithContext(r.Context()))
 }
 
-// CreateInitalLoginOrVerificationToken dependent on the user's account status,
-// this handles sending users verification emails where they can `ACTIVATE` their
-// account if their account is `PROVISIONED`, or creates a temporary token which will be sent to user's email
-// to verify their identity and allow them to sign in to the platform.
-//
-// Should always return 202 unless mapping request fails. (makes bad actors finding out users on platform harder)
-// TODO: Create tests
+// CreateInitalLoginOrVerificationTokenEmail returns the blank reply 202 for every
+// service outcome after valid request mapping, including absence and outages.
+// This is an enumeration-resistant receipt, not confirmation of email delivery.
+// The legacy blank reply is {"data":"{}"}, not an error or account payload.
+// Only mapping failures use public error manifests; credentials are never set.
 func (h *Handler) CreateInitalLoginOrVerificationTokenEmail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-create-initial-login-or-verification-token-email")
 
 	request, err := MapRequestToCreateInitalLoginOrVerificationTokenEmailRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.NewHTTPErrorResponse(w, err)
+		logger.Warn("login-email-request-rejected")
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
-
-	err = h.Service.CreateInitalLoginOrVerificationTokenEmail(r.Context(), request)
+	if nilAccessDependency(h.Service) {
+		err = ErrLoginEmailUnavailable
+	} else {
+		err = h.Service.CreateInitalLoginOrVerificationTokenEmail(r.Context(), request)
+	}
 	if err != nil {
-		logger.Warn("handler-returning-accepted-after-error", zap.Error(err))
-		h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
-		return
+		logger.Warn("login-email-delivery-not-confirmed")
 	}
-
-	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
+	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted, reply.WithContext(r.Context()))
 }
 
 // CreateUser returns reponse from user creation

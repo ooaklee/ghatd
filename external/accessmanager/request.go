@@ -97,8 +97,8 @@ type UserEmailVerificationRevisionsRequest struct {
 // CreateInitalLoginOrVerificationTokenEmailRequest holds data used for generating respective
 // Inital Login Or Verification Token Email
 type CreateInitalLoginOrVerificationTokenEmailRequest struct {
-	// Email user's registered email address
-	Email string `json:"email"`
+	// Email selects an existing account; it is never evidence of possession.
+	Email string `json:"email" validate:"required,email"`
 
 	// Dashboard whether the request originates from dashboard portal
 	Dashboard bool `json:"dashboard"`

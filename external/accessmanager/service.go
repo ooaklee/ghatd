@@ -1123,43 +1123,11 @@ func (s *Service) DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 	return s.EphemeralStore.DeleteAuth(ctx, tokenID)
 }
 
-// CreateInitalLoginOrVerificationTokenEmail handles sending user specific emails (intial login / verification) dependent on user's
-// account status
-// TODO: Create tests
-// TODO: Add logic to send email when dashboard access is attempted by non
-// admin user
+// CreateInitalLoginOrVerificationTokenEmail selects the existing account's proof
+// flow. It preserves native errors; the public handler, not this manager, owns
+// the enumeration-resistant 202 response. It never creates an account or session.
 func (s *Service) CreateInitalLoginOrVerificationTokenEmail(ctx context.Context, r *CreateInitalLoginOrVerificationTokenEmailRequest) error {
-
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
-	// This is intentionally a strict lookup: token delivery requires an
-	// existing account and a missing user is an actionable failure.
-	persistentUserResponse, err := s.UserService.GetUserByEmail(ctx, &userv2.GetUserByEmailRequest{Email: r.Email})
-	if err != nil {
-		return err
-	}
-
-	switch persistentUserResponse.User.Status {
-	case userv2.AccountStatusKeyActive:
-		_, err = s.CreateInitalLoginToken(ctx, persistentUserResponse.User, r.Dashboard, r.RequestUrl)
-		if err != nil {
-			return err
-		}
-	case userv2.AccountStatusKeyProvisioned:
-		_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
-			User:               persistentUserResponse.User,
-			IsDashboardRequest: r.Dashboard,
-			RequestUrl:         r.RequestUrl,
-		})
-		if err != nil {
-			return err
-		}
-	default:
-		logger.Error("requested-user-in-unexpected-state", zap.String("user-id", persistentUserResponse.User.ID), zap.String("user-status", persistentUserResponse.User.Status))
-		return ErrUserStatusUncaught
-	}
-
-	return nil
+	return s.deliverInitialEmail(ctx, r)
 }
 
 // ValidateEmailVerificationCode validates and consumes a mailbox proof before
@@ -1373,76 +1341,11 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 	return response, nil
 }
 
-// CreateInitalLoginToken creates token used to initiate login flow for user passed
-// TODO: Create tests
+// CreateInitalLoginToken creates and delivers an initial proof for a trusted
+// account snapshot. An empty successful result means the cooldown suppressed
+// delivery. Partial failures are not rolled back or automatically retried.
 func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.UniversalUser, isDashboardRequest bool, requestUrl string) (string, error) {
-
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
-	// cooldownAcquired is false when a recent accepted login email already exists for this user/context.
-	cooldownAcquired, err := s.EphemeralStore.AcquireLoginEmailCooldown(ctx, user.ID, isDashboardRequest, requestUrl, loginEmailCooldownTTL)
-	if err != nil {
-		logger.Error("unable-to-acquire-login-email-cooldown:", zap.String("user-id", user.ID), zap.Error(err))
-		return "", err
-	}
-	if !cooldownAcquired {
-		logger.Info("login-email-cooldown-active", zap.String("user-id", user.ID))
-		return "", nil
-	}
-
-	// keepCooldown flips to true only after the email send has been accepted by the email manager.
-	keepCooldown := false
-	defer func() {
-		if keepCooldown {
-			return
-		}
-
-		if _, releaseErr := s.EphemeralStore.ReleaseLoginEmailCooldown(ctx, user.ID, isDashboardRequest, requestUrl); releaseErr != nil {
-			logger.Warn("login-email-cooldown-release-failed", zap.String("user-id", user.ID), zap.Error(releaseErr))
-		}
-	}()
-
-	tokenDetails, err := s.AuthService.CreateInitalToken(ctx, user)
-	if err != nil {
-		logger.Error("unable-to-generate-initiate-login-email-token:", zap.String("user-id", user.ID))
-		return "", err
-	}
-
-	err = s.EphemeralStore.StoreToken(ctx, tokenDetails.EphemeralUUID, user.ID, tokenDetails.EtTTL)
-	if err != nil {
-		logger.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
-		return "", err
-	}
-
-	loginCode, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, tokenDetails.EtTTL)
-	if err != nil {
-		logger.Error("unable-to-generate-login-code:", zap.String("user-id", user.ID), zap.Error(err))
-		return "", err
-	}
-
-	err = s.EphemeralStore.StoreCodeMapping(ctx, loginCode, tokenDetails.EphemeralToken, tokenDetails.EtTTL)
-	if err != nil {
-		logger.Error("unable-to-store-login-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
-		return "", err
-	}
-
-	// Beging email sending process
-	err = s.EmailManager.SendLoginEmail(ctx, &emailmanager.SendLoginEmailRequest{
-		Email:              user.Email,
-		Token:              tokenDetails.EphemeralToken,
-		Code:               loginCode,
-		IsDashboardRequest: isDashboardRequest,
-		RequestUrl:         requestUrl,
-		UserId:             user.ID,
-	})
-	if err != nil {
-		logger.Error("unable-to-send-initiate-login-email:", zap.String("user-id", user.ID))
-		return "", err
-	}
-
-	keepCooldown = true
-
-	return tokenDetails.EphemeralToken, nil
+	return s.deliverLoginProof(ctx, user, isDashboardRequest, requestUrl)
 }
 
 // CreateEmailVerificationToken creates and stores a proof for the supplied
@@ -1459,11 +1362,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 	if s == nil || nilAccessDependency(s.AuthService) || nilAccessDependency(s.EphemeralStore) || nilAccessDependency(s.EmailManager) {
 		return "", userv2.ErrEmailChangeUnavailable
 	}
-	account := *r.User
-	if account.PersonalInfo != nil {
-		info := *account.PersonalInfo
-		account.PersonalInfo = &info
-	}
+	account := copyEmailProofAccount(r.User)
 	requestURL, dashboard := r.RequestUrl, r.IsDashboardRequest
 	// Keep delivery/ownership scalars separate from the signer-owned model.
 	owner, email := account.ID, account.Email
@@ -1471,7 +1370,7 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEma
 	if account.PersonalInfo != nil {
 		first, last = account.PersonalInfo.FirstName, account.PersonalInfo.LastName
 	}
-	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, &account)
+	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, account)
 	if err != nil {
 		return "", err
 	}

@@ -12,6 +12,7 @@ import (
 // TODO: remove nolint
 // nolint will be used later
 var AccessmanagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrLoginEmailUnavailable:                               {Title: "Service Unavailable", Detail: "Sign-in email delivery is unavailable", StatusCode: 503, Code: "AM00-041"},
 	ErrRefreshTemporarilyUnavailable:                       {Title: "Service Unavailable", Detail: "Session refresh is temporarily unavailable", StatusCode: 503, Code: "AM00-040"},
 	ErrSessionVerificationUnavailable:                      {Title: "Service Unavailable", Detail: "Session verification is unavailable", StatusCode: 503, Code: "AM00-039"},
 	ErrTokenPolicyUnavailable:                              {Title: "Service Unavailable", Detail: "Token policy is unavailable", StatusCode: 503, Code: "AM00-038"},

@@ -191,6 +191,15 @@ func (r *Repository) GetUserByNanoID(ctx context.Context, nanoID string) (*Unive
 
 // GetUserByEmail retrieves a user by email
 func (r *Repository) GetUserByEmail(ctx context.Context, email string, logError bool) (*UniversalUser, error) {
+	if ctx == nil || r == nil || nilUserDependency(r.Store) {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if normaliseUserEmail(email) == "" {
+		return nil, ErrInvalidEmail
+	}
 	collection, err := r.GetUserCollection(ctx)
 	if err != nil {
 		return nil, err

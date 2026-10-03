@@ -381,6 +381,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- [Initial sign-in email delivery](external/accessmanager/README.md#initial-email-delivery)
+  now validates adapter receipts and wiring, preserves request context and uses
+  no-store replies without raw diagnostic logging at the manager boundary.
+  The existing uniform 202 blank envelope is retained; delivery is not confirmed.
+  Malformed email input is now explicitly validated. **Breaking for custom
+  callers:** email lookups preserve native operational failures instead of
+  coercing them to absence/generic errors and return detached hydrated models.
+  Invalid lookup receipts fail closed. Legacy cooldown ownership, non-atomic
+  code reservations and lower mail-provider handling remain separate work.
 - **Breaking for custom wiring:** [Administrative role changes](external/usermanager/README.md#administrative-account-roles)
   now use live manager authorization, actor-bound audit and narrow conditional
   repository writes. Custom handlers require a role manager and repositories
