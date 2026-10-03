@@ -8,6 +8,8 @@ import (
 )
 
 var (
+	// ErrInvalidSessionCleanup rejects unusable account namespaces or adapter receipts.
+	ErrInvalidSessionCleanup = errors.New("ephemeral/invalid-session-cleanup")
 	// ErrAuthNotFound means the requested session is absent or expired, not that
 	// its backing store is unavailable. Custom session adapters should return it
 	// for expected absence and preserve operational errors separately.
@@ -18,6 +20,19 @@ var (
 	ErrHardenedRateLimitExceeded = errors.New(ErrKeyHardenedRateLimitExceeded)
 	ErrRequestorLimitExceeded    = errors.New(ErrKeyRequestorLimitExceeded)
 )
+
+// nilEphemeralDependency rejects missing and typed-nil storage adapters.
+func nilEphemeralDependency(value any) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	}
+	return false
+}
 
 // IsAuthNotFound recognises expected session absence from current adapters and
 // legacy Redis adapters. Every leaf must be an absence sentinel: a joined

@@ -144,13 +144,13 @@ const (
 	UpdateUserEmailOldEmailNotificationBodyTmpl string = `<td style="font-family: sans-serif; font-size: 14px; vertical-align: top;">
 	<br>
 	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
-		<br> A request to change your account email from <b><code>%s</code></b> to <b><code>%s</code></b> is being processed. You can no longer use your this email to access your account (ID: <b><code>%s</code></b>).
+		<br> Your account email has changed from <b><code>%s</code></b> to <b><code>%s</code></b>. The previous address can no longer be used to sign in to this account (ID: <b><code>%s</code></b>).
 	</p>
 	<p style="font-family: sans-serif; font-size: 14px; font-weight: normal; margin: 0; Margin-bottom: 15px;">
 		<b>Important Note:</b>
 		<br>
 		<br>
-		All critical authentication and essential emails will now be sent to your new email address. Additionally, you have been signed out of all active sessions associated with the old email. Please check your new email address for instructions on verifying it as your primary email.
+		Account emails will now be addressed to your new email address. Previous sign-in sessions and email proofs are no longer valid. Check your new inbox for verification instructions; if they have not arrived, request a new verification email from the sign-in page.
 		<br><br>
 		If you are unable to access the new email address or did not request this change, please contact us directly through our website for immediate assistance.
 	</p>

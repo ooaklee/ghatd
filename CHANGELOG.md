@@ -381,6 +381,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking:** [Email changes](external/accessmanager/README.md#conditional-email-changes)
+  now use explicit actor/target commands and return confirmed-change receipts
+  with separate cleanup, delivery and audit flags. The user domain atomically
+  guards the prior account state, advances its email revision and clears
+  verification; generic profile updates can no longer change the mailbox.
+  Configure the documented unique index, database privileges and custom adapter
+  capability before rollout. Old session/proof revisions are rejected even when
+  target-only Redis cleanup fails. Uncertain writes are not automatically retried;
+  native errors retain shared manifest mapping without private diagnostics.
 - Self-service notification feeds now bind recipient identity and email to the
   authenticated caller. Explicit recipient selection remains on administrator
   routes and requires a matching live ACTIVE administrator account.

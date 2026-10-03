@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -63,10 +62,21 @@ func (r *Repository) WithCollectionInitMaxAttemptsLimit(limit int) *Repository {
 	return r
 }
 
-// GetUserCollection returns collection used for users domain
+// GetUserCollection returns the cached user collection. Setup retries never
+// retry writes; exhausted setup preserves its last native failure. Cancellation
+// and incomplete adapters fail before a nil client/database can be dereferenced.
 func (r *Repository) GetUserCollection(ctx context.Context) (*mongo.Collection, error) {
+	if ctx == nil || r == nil || nilUserDependency(r.Store) {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r.collectionMutex.Lock()
 	defer r.collectionMutex.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	if r.collection != nil {
 		return r.collection, nil
@@ -78,23 +88,41 @@ func (r *Repository) GetUserCollection(ctx context.Context) (*mongo.Collection, 
 		collectionInitMaxAttemptsLimit = defaultCollectionInitMaxAttemptsLimit
 	}
 	for attempt := 1; attempt <= collectionInitMaxAttemptsLimit; attempt++ {
-		_, err := r.Store.InitialiseClient(ctx)
+		client, err := r.Store.InitialiseClient(ctx)
 		if err != nil {
 			lastErr = err
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if client == nil {
+			return nil, ErrDatabaseError
 		}
 
 		db, err := r.Store.GetDatabase(ctx, "")
 		if err != nil {
 			lastErr = err
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if db == nil {
+			return nil, ErrDatabaseError
 		}
 
 		r.collection = db.Collection(UserCollection)
 		return r.collection, nil
 	}
 
-	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, UserCollection, collectionInitMaxAttemptsLimit, lastErr)
+	return nil, lastErr
 }
 
 // CreateUser creates a new user in the repository
@@ -183,6 +211,9 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string, logError 
 
 // UpdateUser updates an existing user
 func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*UniversalUser, error) {
+	if user == nil || user.ID == "" {
+		return nil, ErrInvalidUserBody
+	}
 	collection, err := r.GetUserCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -190,6 +221,9 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 
 	queryFilter := bson.M{
 		"_id": user.ID,
+		// A full-profile write can never select an old snapshot and replace the
+		// address. Dedicated mailbox operations own email and its revision.
+		"email": user.Email,
 	}
 
 	// Missing revisions are legacy revision zero. Security changes increment this
@@ -213,6 +247,7 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 	delete(fields, "oauth_identity_keys")
 	delete(fields, "had_oauth_identity")
 	delete(fields, "email_revision")
+	delete(fields, "email")
 	delete(fields, "handle")
 	delete(fields, "handle_metadata")
 	delete(fields, "_id")
@@ -479,4 +514,12 @@ func (r *Repository) buildSortOptions(order string) bson.D {
 // normaliseUserEmail standardises email to lowercase
 func normaliseUserEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// NormalizeEmail applies the domain's mailbox canonicalization: trim surrounding
+// whitespace and lowercase the address. It does not validate syntax or prove
+// ownership. Managers use it to compare domain receipts without duplicating
+// normalization rules; persistence and validation remain domain responsibilities.
+func NormalizeEmail(email string) string {
+	return normaliseUserEmail(email)
 }

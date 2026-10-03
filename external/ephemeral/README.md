@@ -28,6 +28,23 @@ their original cause. Automatic lookup logs contain fixed outcome metadata, not
 session keys, owner IDs or raw driver diagnostics. Do not rely on direct equality
 with `redis.Nil` or parse error strings; use the helper for control flow instead.
 
+## Target-only session cleanup
+
+`DeleteAllTokenExceptedSpecified(ctx, userID, exemptions)` scans only the selected
+account's session namespace, escapes Redis glob characters and deletes in batches
+of at most 128 keys. Empty IDs, the `:` storage delimiter and missing/typed-nil
+adapters are rejected. Exemptions are combined `userID:tokenID` values without the
+application/environment prefix; pass none when invalidating all target sessions.
+Foreign or nested-namespace results from custom clients are ignored. Do not use
+an administrator's cookie values as exemptions for another account.
+
+SCAN is not a snapshot. A nil result acknowledges the completed scan/deletion
+work, not that no concurrent session can exist. Deletions completed before a
+cancellation or failure are not rolled back; errors preserve their native cause.
+Live account-revision checks enforce email-change revocation independently of
+this best-effort cleanup. Other Redis namespaces, proof aliases and rotation
+receipts are not swept. Logs for this operation omit keys, owners and raw errors.
+
 ## Process-local transactional snapshots
 
 `NewMemorySnapshot(initial, clone)` provides reusable copy-on-write state for

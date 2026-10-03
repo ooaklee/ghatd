@@ -2,8 +2,6 @@ package accessmanager
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -222,178 +220,6 @@ func (s *Service) WithBillingService(billingService BillingService) *Service {
 func (s *Service) WithGroupService(groupService GroupService) *Service {
 	s.GroupService = groupService
 	return s
-}
-
-// UpdateUserEmail updates the email address of a user. It performs the following steps:
-// 1. Checks if the requesting user is the same as the target user or if the requesting user is an admin.
-// 2. Retrieves the current email address of the target user.
-// 3. Checks if the new email address is the same as the current email address.
-// 4. Checks if the new email address is already in use by another user.
-// 5. Sends an email notification to the current email address about the email change request.
-// 6. Updates the target user's email address and status.
-// 7. Logs out all other sessions of the target user.
-// 8. Sends a verification email to the new email address.
-// 9. Logs an audit event for the email change.
-// The function returns a boolean indicating whether the user needs to be signed out of the platform, and an error if any.
-func (s *Service) UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (bool, error) {
-
-	var (
-		logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-
-		// whether a change has taken place in this method which means that the user needs to be
-		// signed off of the client they are currently using to make the request
-		signUserOutOfPlatform bool = false
-
-		requestingUser *userv2.UniversalUser
-	)
-
-	// check that the user id the same as the target user id or the user is an admin
-	if r.UserId != r.TargetUserId {
-		// check if the user is an admin
-		userByIdResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-			ID: r.UserId,
-		})
-		if err != nil {
-			logger.Error("failed-to-get-requesting-user-by-id", zap.Error(err))
-			return signUserOutOfPlatform, err
-		}
-
-		requestingUser = userByIdResponse.User
-
-		if !requestingUser.IsAdmin() {
-			logger.Warn("non-admin-user-attempted-to-update-another-user-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-			return signUserOutOfPlatform, ErrForbiddenUnableToAction
-		}
-	}
-
-	// check if the user's old email is the same as the new email (error with no neeed to signout)
-	userByIdResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-		ID: r.TargetUserId,
-	})
-	if err != nil {
-		logger.Error("failed-to-get-target-user-by-id", zap.Error(err))
-		return signUserOutOfPlatform, err
-	}
-
-	targetUser := userByIdResponse.User
-
-	// if above ok, take copy the user's old email
-
-	standardiseExistingEmail := toolbox.StringStandardisedToLower(targetUser.GetUserEmail())
-	standardiseNewEmail := toolbox.StringStandardisedToLower(r.Email)
-	if standardiseExistingEmail == standardiseNewEmail {
-		logger.Warn("user-attempted-to-update-email-to-same-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-		return signUserOutOfPlatform, ErrConflictingUserState
-	}
-
-	// check if the new email is already in use
-	userByEmailResponse, newEmailInUseErr := findUserByEmail(ctx, s.UserService, &userv2.GetUserByEmailRequest{
-		Email: r.Email,
-	})
-	if newEmailInUseErr != nil && !errors.Is(newEmailInUseErr, userv2.ErrUserNotFound) {
-		logger.Error("failed-to-verify-whether-new-email-already-in-use", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(newEmailInUseErr))
-		return signUserOutOfPlatform, newEmailInUseErr
-	}
-	if newEmailInUseErr == nil {
-		logger.Warn("new-email-already-in-use", zap.String("existing-user-id", userByEmailResponse.User.ID), zap.String("target-user-id", r.TargetUserId), zap.String("user-id", r.UserId))
-		return signUserOutOfPlatform, ErrConflictingUserState
-	}
-
-	// if here, then the new email is not in use
-
-	// send email to old email
-	emailBodyToNotifyExistingEmail := fmt.Sprintf(UpdateUserEmailOldEmailNotificationBodyTmpl, standardiseExistingEmail, standardiseNewEmail, targetUser.ID)
-
-	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{
-		EmailSubject:  "Email Change Request Received",
-		EmailPreview:  "A request to change your account email is being processed",
-		EmailTo:       standardiseExistingEmail,
-		EmailBody:     emailBodyToNotifyExistingEmail,
-		WithFooter:    true,
-		UserId:        targetUser.ID,
-		RecipientType: string(audit.User),
-	})
-	if err != nil {
-		logger.Error("unable-to-send-change-of-email-request-notification-email-for-to-old-email:", zap.String("user-id", r.TargetUserId))
-		return signUserOutOfPlatform, err
-	}
-
-	// update the target users' account with the new email, make sure the email is unique
-	// and unverify the email on the account
-	_, err = targetUser.UpdateStatus(userv2.AccountStatusValidOriginKeyEmailChange)
-	if err != nil {
-		logger.Warn("unable-to-update-status-of-user-to-provisioned-after-email-change", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
-		return signUserOutOfPlatform, ErrConflictingUserState
-	}
-
-	// set the new email
-	targetUser.Email = toolbox.StringStandardisedToLower(r.Email)
-	targetUser.SetUpdatedAtNow()
-
-	// update the user
-	_, err = s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		User: targetUser,
-	})
-	if err != nil {
-		logger.Error("failed-to-update-user-with-new-email", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(err))
-		return signUserOutOfPlatform, err
-	}
-
-	// From here, we need to sign out of platform
-	// on failure/ success
-	signUserOutOfPlatform = true
-
-	// stop all other sessions (ignore errors)
-	wipeOldSessionsErr := s.LogoutUserOthers(ctx, &LogoutUserOthersRequest{
-		UserId:       r.TargetUserId,
-		RefreshToken: r.RefreshToken,
-		AuthToken:    r.AuthToken,
-	})
-	if wipeOldSessionsErr != nil {
-		logger.Error("failed-to-logout-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(wipeOldSessionsErr))
-	}
-	if wipeOldSessionsErr == nil {
-		logger.Info("logged-out-users-other-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-	}
-
-	// log out of the current session (ignore errors)
-	logOutCurrentSessionErr := s.LogoutUser(ctx, r.Request)
-	if logOutCurrentSessionErr != nil {
-		logger.Error("failed-to-logout-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.Error(logOutCurrentSessionErr))
-	}
-	if logOutCurrentSessionErr == nil {
-		logger.Info("logged-out-user-current-sessions-for-email-change-request", zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId))
-	}
-
-	// send a verification email to the new email address
-	logger.Info("initiate-verification-email-for-user-with-changed-email", zap.String("user-id", targetUser.ID))
-	_, err = s.CreateEmailVerificationToken(ctx, &CreateEmailVerificationTokenRequest{
-		User:       targetUser,
-		RequestUrl: "",
-	})
-	if err != nil {
-		logger.Error("failed-to-initiate-verification-email-for-user-with-changed-email", zap.String("user-id", targetUser.ID), zap.Error(err))
-		return signUserOutOfPlatform, err
-	}
-
-	auditEvent := audit.UserAccountChangeEmail
-	auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-		ActorId:    audit.AuditActorIdSystem,
-		Action:     auditEvent,
-		TargetId:   targetUser.ID,
-		TargetType: audit.User,
-		Domain:     "accessmanager",
-		Details: map[string]interface{}{
-			"email_old": standardiseExistingEmail,
-			"email_new": standardiseNewEmail,
-		},
-	})
-
-	if auditErr != nil {
-		logger.Warn("failed-to-log-event", zap.String("actor-id", audit.AuditActorIdSystem), zap.String("user-id", r.UserId), zap.String("target-user-id", r.TargetUserId), zap.String("event-type", string(auditEvent)))
-	}
-
-	return signUserOutOfPlatform, nil
 }
 
 // LogoutUserOthers handles logic of managing the user's other log in session
@@ -1803,53 +1629,67 @@ func (s *Service) CreateInitalLoginToken(ctx context.Context, user *userv2.Unive
 	return tokenDetails.EphemeralToken, nil
 }
 
-// CreateEmailVerificationToken create token used to validate email associated to user's accounts
+// CreateEmailVerificationToken creates and stores a proof for the supplied
+// account revision, then asks the mail adapter to deliver it. Earlier steps are
+// not rolled back when a later step fails. Native failures remain available to
+// the shared manifest; this method never logs raw credentials or diagnostics.
 func (s *Service) CreateEmailVerificationToken(ctx context.Context, r *CreateEmailVerificationTokenRequest) (string, error) {
-
-	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
-	user := r.User
-
-	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, user)
-	if err != nil {
-		logger.Error("unable-to-generate-verification-email-token:", zap.String("user-id", user.ID))
+	if ctx == nil || r == nil || r.User == nil || r.User.ID == "" || r.User.Email == "" || r.User.EmailRevision < 0 {
+		return "", ErrBadRequest
+	}
+	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-
-	err = s.EphemeralStore.StoreToken(ctx, tokenDetails.EmailVerificationUUID, user.ID, tokenDetails.EvTTL)
+	if s == nil || nilAccessDependency(s.AuthService) || nilAccessDependency(s.EphemeralStore) || nilAccessDependency(s.EmailManager) {
+		return "", userv2.ErrEmailChangeUnavailable
+	}
+	account := *r.User
+	if account.PersonalInfo != nil {
+		info := *account.PersonalInfo
+		account.PersonalInfo = &info
+	}
+	requestURL, dashboard := r.RequestUrl, r.IsDashboardRequest
+	// Keep delivery/ownership scalars separate from the signer-owned model.
+	owner, email := account.ID, account.Email
+	first, last := "", ""
+	if account.PersonalInfo != nil {
+		first, last = account.PersonalInfo.FirstName, account.PersonalInfo.LastName
+	}
+	tokenDetails, err := s.AuthService.CreateEmailVerificationToken(ctx, &account)
 	if err != nil {
-		logger.Error("unable-to-store-token-in-ephemeral-store:", zap.String("user-id", user.ID))
 		return "", err
 	}
-
-	verificationCode, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, tokenDetails.EvTTL)
-	if err != nil {
-		logger.Error("unable-to-generate-verification-code:", zap.String("user-id", user.ID), zap.Error(err))
+	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-
-	err = s.EphemeralStore.StoreCodeMapping(ctx, verificationCode, tokenDetails.EmailVerificationToken, tokenDetails.EvTTL)
-	if err != nil {
-		logger.Error("unable-to-store-verification-code-mapping:", zap.String("user-id", user.ID), zap.Error(err))
+	if tokenDetails == nil || tokenDetails.EmailVerificationToken == "" || tokenDetails.EmailVerificationUUID == "" || tokenDetails.EvTTL <= 0 {
+		return "", userv2.ErrEmailChangeUnavailable
+	}
+	proof := *tokenDetails
+	if err := s.EphemeralStore.StoreToken(ctx, proof.EmailVerificationUUID, owner, proof.EvTTL); err != nil {
 		return "", err
 	}
-
-	// Beging email sending process
-	err = s.EmailManager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailRequest{
-		FirstName:          user.PersonalInfo.FirstName,
-		LastName:           user.PersonalInfo.LastName,
-		Email:              user.Email,
-		Token:              tokenDetails.EmailVerificationToken,
-		Code:               verificationCode,
-		IsDashboardRequest: r.IsDashboardRequest,
-		RequestUrl:         r.RequestUrl,
-		UserId:             user.ID,
-	})
-	if err != nil {
-		logger.Error("unable-to-send-verification-email:", zap.String("user-id", user.ID))
+	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-
-	return tokenDetails.EmailVerificationToken, nil
+	code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, s.EphemeralStore, proof.EvTTL)
+	if err != nil {
+		return "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if err := s.EphemeralStore.StoreCodeMapping(ctx, code, proof.EmailVerificationToken, proof.EvTTL); err != nil {
+		return "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	err = s.EmailManager.SendVerificationEmail(ctx, &emailmanager.SendVerificationEmailRequest{FirstName: first, LastName: last, Email: email, Token: proof.EmailVerificationToken, Code: code, IsDashboardRequest: dashboard, RequestUrl: requestURL, UserId: owner})
+	if err != nil {
+		return "", err
+	}
+	return proof.EmailVerificationToken, nil
 }
 
 // getValidRequestorIP returns the best IP to refernce an requestor by.

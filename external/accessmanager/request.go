@@ -214,24 +214,13 @@ type LogoutUserOthersRequest struct {
 	AuthToken string
 }
 
-// UpdateUserEmailRequest holds all the data needed to change a user's  email
+// UpdateUserEmailRequest separates verified caller identity from account selection.
+// The HTTP mapper decodes only Email; no cookies or request objects cross this port.
 type UpdateUserEmailRequest struct {
-
-	// UserId the ID of the user making the request
-	UserId string `json:"-"`
-
-	// TargetUserId the ID of the user to update the email for
-	TargetUserId string `json:"-"`
-
-	// Email the new email to assign to the user
+	// ActorID is supplied by authentication middleware or a trusted service caller.
+	ActorID string `json:"-"`
+	// TargetUserID is selected from the route and independently authorized.
+	TargetUserID string `json:"-"`
+	// Email is the requested new mailbox; the user domain normalizes and validates it.
 	Email string `json:"email"`
-
-	// RefreshToken the current refresh token of the user
-	RefreshToken string
-
-	// AuthToken the current access token of the user
-	AuthToken string
-
-	// Request the request that triggered the update request
-	Request *http.Request
 }

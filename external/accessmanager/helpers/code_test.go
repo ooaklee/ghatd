@@ -3,18 +3,20 @@ package accessmanagerhelpers_test
 import (
 	"context"
 	"errors"
-	"testing"
-	"time"
-
+	"fmt"
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
+	"testing"
+	"time"
 )
 
-// mockCodeStore implements the CodeStore interface for testing
+// mockCodeStore provides case-owned phase results; it is not an atomic allocator.
 type mockCodeStore struct {
-	codeExistsFunc func(ctx context.Context, code string) (bool, error)
-	storeCodeFunc  func(ctx context.Context, code string, ttl time.Duration) error
+	codeExistsFunc func(context.Context, string) (bool, error)
+	storeCodeFunc  func(context.Context, string, time.Duration) error
 }
 
 func (m *mockCodeStore) CodeExists(ctx context.Context, code string) (bool, error) {
@@ -23,175 +25,86 @@ func (m *mockCodeStore) CodeExists(ctx context.Context, code string) (bool, erro
 	}
 	return false, nil
 }
-
 func (m *mockCodeStore) StoreCode(ctx context.Context, code string, ttl time.Duration) error {
 	if m.storeCodeFunc != nil {
 		return m.storeCodeFunc(ctx, code, ttl)
 	}
 	return nil
 }
+func testCtx() context.Context { return logger.TransitWith(context.Background(), zap.NewNop()) }
 
-// testCtx returns a context with a no-op logger attached
-func testCtx() context.Context {
-	return logger.TransitWith(context.Background(), zap.NewNop())
-}
-
-func TestGenerateUniqueCode_Success(t *testing.T) {
-	t.Parallel()
-
-	ctx := testCtx()
-	store := &mockCodeStore{
-		codeExistsFunc: func(ctx context.Context, code string) (bool, error) {
-			return false, nil
-		},
-		storeCodeFunc: func(ctx context.Context, code string, ttl time.Duration) error {
-			return nil
-		},
-	}
-
-	code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, 10*time.Minute)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(code) != 8 {
-		t.Errorf("expected code length 8, got %d: %q", len(code), code)
-	}
-
-	for _, c := range code {
-		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-			t.Errorf("code contains invalid character: %c in %q", c, code)
-		}
-	}
-}
-
-func TestGenerateUniqueCode_CollisionRetry(t *testing.T) {
-	t.Parallel()
-
-	ctx := testCtx()
-
-	callCount := 0
-	store := &mockCodeStore{
-		codeExistsFunc: func(ctx context.Context, code string) (bool, error) {
-			callCount++
-			if callCount <= 2 {
-				return true, nil
+func TestGenerateUniqueCode(t *testing.T) {
+	native := errors.New("private-store-diagnostic")
+	for _, tc := range []struct {
+		name                               string
+		collisions, samples, reads, writes int
+		want                               error
+	}{
+		{"success", 0, 1, 1, 1, nil}, {"format samples", 0, 20, 20, 20, nil},
+		{"collision retry", 2, 1, 3, 1, nil}, {"exhausted", 5, 1, 5, 0, accessmanagerhelpers.ErrCodeGenerationFailure},
+		{"lookup failure", 0, 1, 1, 0, native}, {"store failure", 0, 1, 1, 1, native},
+		{"nil context", 0, 1, 0, 0, accessmanagerhelpers.ErrCodeGenerationFailure},
+		{"nil store", 0, 1, 0, 0, accessmanagerhelpers.ErrCodeGenerationFailure},
+		{"typed nil", 0, 1, 0, 0, accessmanagerhelpers.ErrCodeGenerationFailure},
+		{"zero ttl", 0, 1, 0, 0, accessmanagerhelpers.ErrCodeGenerationFailure},
+		{"canceled", 0, 1, 0, 0, context.Canceled}, {"cancel lookup", 0, 1, 1, 0, context.Canceled}, {"cancel store", 0, 1, 1, 1, context.Canceled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			core, logs := observer.New(zap.DebugLevel)
+			ctx, cancel := context.WithCancel(logger.TransitWith(context.Background(), zap.New(core)))
+			defer cancel()
+			reads, writes := 0, 0
+			p := &mockCodeStore{}
+			p.codeExistsFunc = func(context.Context, string) (bool, error) {
+				reads++
+				if tc.name == "lookup failure" {
+					return false, native
+				}
+				if tc.name == "cancel lookup" {
+					cancel()
+				}
+				return reads <= tc.collisions, nil
 			}
-			return false, nil
-		},
-		storeCodeFunc: func(ctx context.Context, code string, ttl time.Duration) error {
-			return nil
-		},
-	}
-
-	code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, 10*time.Minute)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(code) != 8 {
-		t.Errorf("expected code length 8, got %d: %q", len(code), code)
-	}
-
-	if callCount != 3 {
-		t.Errorf("expected 3 CodeExists calls (2 collisions + 1 success), got %d", callCount)
-	}
-}
-
-func TestGenerateUniqueCode_MaxRetriesExceeded(t *testing.T) {
-	t.Parallel()
-
-	ctx := testCtx()
-	store := &mockCodeStore{
-		codeExistsFunc: func(ctx context.Context, code string) (bool, error) {
-			return true, nil
-		},
-	}
-
-	code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, 10*time.Minute)
-	if err == nil {
-		t.Fatal("expected error when max retries exceeded, got nil")
-	}
-	if !errors.Is(err, accessmanagerhelpers.ErrCodeGenerationFailure) {
-		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrCodeGenerationFailure, err.Error())
-	}
-	if code != "" {
-		t.Errorf("expected empty code on failure, got %q", code)
-	}
-}
-
-func TestGenerateUniqueCode_CodeExistsError(t *testing.T) {
-	t.Parallel()
-
-	ctx := testCtx()
-	store := &mockCodeStore{
-		codeExistsFunc: func(ctx context.Context, code string) (bool, error) {
-			return false, errors.New("redis unavailable")
-		},
-	}
-
-	code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, 10*time.Minute)
-	if err == nil {
-		t.Fatal("expected error when CodeExists fails, got nil")
-	}
-	if !errors.Is(err, accessmanagerhelpers.ErrCodeGenerationFailure) {
-		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrCodeGenerationFailure, err.Error())
-	}
-	if code != "" {
-		t.Errorf("expected empty code on failure, got %q", code)
-	}
-}
-
-func TestGenerateUniqueCode_StoreCodeError(t *testing.T) {
-	t.Parallel()
-
-	ctx := testCtx()
-	store := &mockCodeStore{
-		codeExistsFunc: func(ctx context.Context, code string) (bool, error) {
-			return false, nil
-		},
-		storeCodeFunc: func(ctx context.Context, code string, ttl time.Duration) error {
-			return errors.New("redis unavailable")
-		},
-	}
-
-	code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, 10*time.Minute)
-	if err == nil {
-		t.Fatal("expected error when StoreCode fails, got nil")
-	}
-	if !errors.Is(err, accessmanagerhelpers.ErrCodeGenerationFailure) {
-		t.Errorf("expected error %q, got %q", accessmanagerhelpers.ErrCodeGenerationFailure, err.Error())
-	}
-	if code != "" {
-		t.Errorf("expected empty code on failure, got %q", code)
-	}
-}
-
-func TestGenerateUniqueCode_FormatValidation(t *testing.T) {
-	t.Parallel()
-
-	ctx := testCtx()
-	store := &mockCodeStore{
-		codeExistsFunc: func(ctx context.Context, code string) (bool, error) {
-			return false, nil
-		},
-		storeCodeFunc: func(ctx context.Context, code string, ttl time.Duration) error {
-			return nil
-		},
-	}
-
-	for i := 0; i < 20; i++ {
-		code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, 10*time.Minute)
-		if err != nil {
-			t.Fatalf("unexpected error on iteration %d: %v", i, err)
-		}
-		if len(code) != 8 {
-			t.Errorf("iteration %d: expected length 8, got %d: %q", i, len(code), code)
-		}
-		for _, c := range code {
-			if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
-				t.Errorf("iteration %d: invalid char %c in code %q", i, c, code)
+			p.storeCodeFunc = func(_ context.Context, code string, ttl time.Duration) error {
+				writes++
+				require.Equal(t, time.Minute, ttl)
+				require.Regexp(t, "^[A-Z0-9]{8}$", code)
+				if tc.name == "store failure" {
+					return native
+				}
+				if tc.name == "cancel store" {
+					cancel()
+				}
+				return nil
 			}
-		}
+			var store accessmanagerhelpers.CodeStore = p
+			ttl := time.Minute
+			switch tc.name {
+			case "nil context":
+				ctx = nil
+			case "nil store":
+				store = nil
+			case "typed nil":
+				store = (*mockCodeStore)(nil)
+			case "zero ttl":
+				ttl = 0
+			case "canceled":
+				cancel()
+			}
+			for i := 0; i < tc.samples; i++ {
+				code, err := accessmanagerhelpers.GenerateUniqueCode(ctx, store, ttl)
+				require.Equal(t, tc.want, err)
+				if tc.want == nil {
+					require.Regexp(t, "^[A-Z0-9]{8}$", code)
+				} else {
+					require.Empty(t, code)
+				}
+			}
+			require.Equal(t, tc.reads, reads)
+			require.Equal(t, tc.writes, writes)
+			for _, entry := range logs.All() {
+				require.NotContains(t, fmt.Sprint(entry.Message, entry.ContextMap()), "private-store-diagnostic")
+			}
+		})
 	}
 }

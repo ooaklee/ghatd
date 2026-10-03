@@ -11,6 +11,7 @@ import (
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
+	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
 )
@@ -34,7 +35,7 @@ type AccessmanagerService interface {
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
 	RemoveRefreshTokenWithCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
 	LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error
-	UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (bool, error)
+	UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (*UpdateUserEmailResponse, error)
 }
 
 // AccessmanagerValidator expected methods of a valid
@@ -84,43 +85,35 @@ func NewHandler(r *NewHandlerRequest) *Handler {
 	}
 }
 
-// UpdateUserEmail handles updating a user's email address. If the update requires the user to sign out,
-// it will remove the user's auth cookies and redirect them to the home page. Otherwise, it will return
-// a blank response with a 200 status code.
+// UpdateUserEmail returns a confirmed mutation receipt with post-commit delivery
+// flags. Errors use the shared manifest; neither local logs nor reply receive raw
+// private diagnostics here. Only a valid self-change receipt clears caller cookies.
 func (h *Handler) UpdateUserEmail(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-update-user-email")
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToUpdateUserEmailRequest(r, h.CookiePrefixAuthToken, h.CookiePrefixRefreshToken, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	signOutRequired, err := h.Service.UpdateUserEmail(r.Context(), request)
-	if err != nil && !signOutRequired {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, userv2.ErrEmailChangeUnavailable)
+		return
+	}
+	result, err := h.Service.UpdateUserEmail(r.Context(), request)
+	if err != nil {
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-	if err != nil && signOutRequired {
+	if result == nil || !result.Changed || result.SignOutRequired != (request.ActorID == request.TargetUserID) {
+		h.NewHTTPErrorResponse(w, userv2.ErrEmailChangeUnavailable)
+		return
+	}
+	if result.SignOutRequired {
 		h.RemoveAuthCookies(w)
 		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
 		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
-
-		logger.Warn("handler-returning-error-response", zap.Error(err))
-		h.NewHTTPErrorResponse(w, err)
-		return
 	}
-
-	if signOutRequired {
-		// complete the cleanup process of removing the cookies
-		h.RemoveAuthCookies(w)
-		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
-		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
-
-	}
-
-	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, result)
 }
 
 // LogoutUserOthers handles logging out all other sessions for a user

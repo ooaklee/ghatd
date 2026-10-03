@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v7"
@@ -252,62 +253,84 @@ func (c *Client) ReleaseLoginEmailCooldown(ctx context.Context, userID string, i
 	return deleted, nil
 }
 
-// DeleteAllTokenExceptedSpecified deletes all keys except the ones specified
-//
-// Note, the exemptionKey should be in the format <userId>:<tokenUuid>
+// DeleteAllTokenExceptedSpecified deletes selected account session keys in bounded
+// batches. Identity components cannot contain the ':' storage delimiter; Redis
+// glob metacharacters are escaped. It never logs keys, owners or raw diagnostics.
+// SCAN is not a snapshot: concurrent sessions may appear after cleanup. Live
+// account-revision checks, not this best-effort deletion, enforce revocation.
 func (c *Client) DeleteAllTokenExceptedSpecified(ctx context.Context, userId string, exemptionTokenIds []string) error {
-	logger := logger.AcquirePackageFrom(ctx, "external/ephemeral")
-
-	var cursor uint64
-	var completeExemptionTokenIds []string
-	var foundTokenIds []string
-	var authTokenPrefix string = c.keyPrefix + userId + ":*"
-
-	for _, key := range exemptionTokenIds {
-		completeExemptionTokenIds = append(completeExemptionTokenIds, c.keyPrefix+key)
+	if ctx == nil || c == nil || nilEphemeralDependency(c.client) || strings.TrimSpace(userId) == "" || strings.Contains(userId, ":") {
+		return ErrInvalidSessionCleanup
 	}
-
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	log := logger.AcquireOperationFrom(ctx, "external/ephemeral", "delete-user-sessions")
+	prefix := c.keyPrefix + userId + ":"
+	pattern := strings.NewReplacer("\\", "\\\\", "*", "\\*", "?", "\\?", "[", "\\[", "]", "\\]").Replace(prefix) + "*"
+	exempt := make(map[string]bool, len(exemptionTokenIds))
+	for _, id := range exemptionTokenIds {
+		exempt[c.keyPrefix+id] = true
+	}
+	client := c.clientForContext(ctx)
+	if nilEphemeralDependency(client) {
+		return ErrInvalidSessionCleanup
+	}
+	var cursor uint64
 	for {
-		var keys []string
-		var err error
-		keys, cursor, err = c.clientForContext(ctx).Scan(cursor, authTokenPrefix, 0).Result()
-		if err != nil {
-			logger.Error("unable-to-find-tokens-matching-prefix", zap.String("search-prefix", authTokenPrefix), zap.Error(err))
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-
-		foundTokenIds = append(foundTokenIds, keys...)
-
-		if cursor == 0 { // no more keys
-			break
+		keys, next, err := client.Scan(cursor, pattern, 128).Result()
+		if err != nil {
+			log.Error("session-cleanup-scan-failed")
+			return err
 		}
-	}
-
-	// Remove keys form the found keys that is in the exemption list
-	for _, exemptionKey := range completeExemptionTokenIds {
-		for i, key := range foundTokenIds {
-			if key == exemptionKey {
-				logger.Info("protecting-current-token-from-token-removal-list", zap.String("token-id", key), zap.String("user-id", userId))
-				foundTokenIds = append(foundTokenIds[:i], foundTokenIds[i+1:]...)
-				break
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		selected := make([]string, 0, 128)
+		flush := func() error {
+			if len(selected) == 0 {
+				return nil
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			count, err := client.Del(selected...).Result()
+			if err != nil {
+				log.Error("session-cleanup-delete-failed")
+				return err
+			}
+			if count < 0 || count > int64(len(selected)) {
+				return ErrInvalidSessionCleanup
+			}
+			selected = selected[:0]
+			return nil
+		}
+		for _, key := range keys {
+			// Reject foreign adapter results and delimiter-colliding namespaces.
+			if !strings.HasPrefix(key, prefix) || key == prefix || strings.Contains(strings.TrimPrefix(key, prefix), ":") {
+				continue
+			}
+			if exempt[key] {
+				continue
+			}
+			selected = append(selected, key)
+			if len(selected) == 128 {
+				if err := flush(); err != nil {
+					return err
+				}
 			}
 		}
-	}
-
-	// Delete remaining keys
-	if len(foundTokenIds) > 0 {
-		_, err := c.clientForContext(ctx).Del(foundTokenIds...).Result()
-		if err != nil {
-			logger.Error("error-while-wiping-other-user-tokens", zap.Strings("exemption-token-ids", completeExemptionTokenIds), zap.Strings("found-token-ids", foundTokenIds), zap.String("user-id", userId), zap.Error(err))
+		if err := flush(); err != nil {
 			return err
 		}
-
-		logger.Info("user-tokens-wiped", zap.Strings("exemption-token-ids", completeExemptionTokenIds), zap.Strings("found-token-ids", foundTokenIds), zap.String("user-id", userId))
-		return nil
+		if next == 0 {
+			return nil
+		}
+		cursor = next
 	}
-
-	logger.Info("no-other-token-detected", zap.Strings("exemption-token-ids", completeExemptionTokenIds), zap.String("user-id", userId))
-	return nil
 }
 
 // FetchAuth looks up the live owner of one namespaced session. Absence wraps

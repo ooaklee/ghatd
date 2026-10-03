@@ -18,6 +18,7 @@ raw driver diagnostics to clients.
 - [Architecture](#architecture)
 - [MongoDB Setup](#mongodb-setup)
 - [Display handles](#display-handles)
+- [Conditional email changes](#conditional-email-changes)
 - [API Endpoints](#api-endpoints)
 - [Configuration Examples](#configuration-examples)
 - [Testing](#testing)
@@ -101,6 +102,65 @@ best-effort `user.handle_updated` events only after an actual manual change,
 with actor, target and revision, not handle text. Audit delivery is not atomic
 with the update. Unknown storage errors must pass through the shared safe
 response/error-manifest path; never return or log raw driver payloads.
+
+## Conditional email changes
+
+**Breaking:** ordinary `Service.UpdateUser` requests cannot change the mailbox,
+including through a replacement `User`. They return `ErrEmailChangeRequired`.
+`Repository.UpdateUser` excludes email from updates and guards the stored email
+and revision, so a stale profile cannot undo a concurrent security change.
+Use [Access Manager's authorized flow](../../accessmanager/README.md#conditional-email-changes)
+for transport-facing changes, not a direct profile patch or raw database write.
+
+`Service.ChangeUserEmail(ctx, command)` is a trusted domain command, not an
+authentication boundary. Its caller supplies an authorized target and the exact
+expected email, revision, status and type from a current read. The service
+re-reads raw persisted state, resolves that type's `EMAIL_CHANGE` transition and
+calls the optional `EmailChangeRepository`. Custom repositories without this
+capability fail closed; the base `UserRepository` interface is unchanged.
+
+The Mongo adapter performs one conditional update through the shared managed
+repository, requiring the expected fields with simple binary collation. It
+normalizes the new mailbox, clears email verification and its timestamp, advances
+`EmailRevision` exactly once, updates timestamps and applies the type's default
+status. Other profile, role, handle and provider-identity fields remain intact.
+Types that do not require verification still lose the old address's verified
+flag. Missing/null legacy revisions mean zero; missing/null legacy types resolve
+through the default configuration while the write guards their raw stored value.
+Negative/exhausted revisions and invalid or unchanged addresses are rejected.
+`NormalizeEmail` exposes the same trim/lowercase rule for receipt comparisons;
+it is not syntax validation or proof of ownership.
+
+Before enabling this flow, apply `migrations.InitUsersIndexesUp(db)` and resolve
+legacy duplicate/noncanonical addresses deliberately. The request-time gate
+requires completed `idx_users_email`: unique, single ascending email key, no
+sparse/partial filter, simple collation. Hidden completed indexes still enforce
+uniqueness and are accepted. In-progress builds are distinguished using
+`listIndexes` with `includeBuildUUIDs`; failure to inspect indexes fails closed.
+No request creates or repairs indexes. Retain the constraint while writers run.
+The application's runtime database role needs `listIndexes` on the users
+collection in addition to its ordinary read/write privileges. Verify that role
+and the completed index before enabling email changes; an index-inspection
+permission failure stops the request before mutation and is not retried.
+
+The integration suite exercises completed and invalid indexes on MongoDB 8.
+Unfinished `spec`/`buildUUID` records are covered by deterministic BSON unit
+cases, not by racing a live index build. A passing local suite does not validate
+the permissions or server compatibility of a deployment's database.
+
+Only an exact no-match receipt becomes `ErrEmailChangeConflict`; only a native,
+unambiguous duplicate of the email constraint becomes `ErrEmailAlreadyExists`.
+Other operational/decode/write-concern errors retain their cause. An invalid
+post-update receipt returns `ErrEmailChangeUnavailable`, never fabricated success.
+Such errors may follow a committed write: there is no automatic mutation retry
+or read-after-write reconciliation. Custom adapters must provide equivalent
+atomicity, uniqueness, preservation and exact post-image semantics. Use acknowledged
+writes; unacknowledged outcomes cannot establish successful revocation.
+
+This change does not invalidate API credentials, remove provider links, provide
+an old-address proof challenge or atomically deliver notifications. Live session
+and proof admission must compare the current revision. Keep these checks enabled
+in every consumer during rollout; do not restore an old revision on rollback.
 
 ## Key Features
 

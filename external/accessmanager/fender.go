@@ -14,59 +14,41 @@ import (
 	"go.uber.org/zap"
 )
 
-// MapRequestToUpdateUserEmailRequest maps incoming UpdateUserEmail request to correct struct.
-func MapRequestToUpdateUserEmailRequest(request *http.Request, cookiePrefixAuthToken, cookiePrefixRefreshToken string, validator AccessmanagerValidator) (*UpdateUserEmailRequest, error) {
-	var (
-		logger        *zap.Logger             = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
-		parsedRequest *UpdateUserEmailRequest = &UpdateUserEmailRequest{}
-		err           error
-	)
-
-	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		logger.Error("unable-decode-request-body-for-updating-user-email")
-		return nil, ErrInvalidUserEmail
-	}
-
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserId == "" {
-		logger.Error("unable-get-requestor-user-id")
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
-	}
-
-	parsedRequest.TargetUserId, err = getUserIDFromURI(request)
-	if err != nil {
-		logger.Error("unable-get-target-user-id")
-		return nil, err
-	}
-
-	// get the access token from the cookie
-	// check to see if request is coming with cookies
-	cookie, aTokenErr := request.Cookie(cookiePrefixAuthToken)
-	if aTokenErr != nil {
-		logger.Error("unable-get-access-token-from-cookie", zap.String("user-id", parsedRequest.UserId), zap.String("target-user-id", parsedRequest.TargetUserId))
-		return nil, aTokenErr
-	}
-
-	parsedRequest.AuthToken = cookie.Value
-
-	refreshTokenCookie, rAuthErr := request.Cookie(cookiePrefixRefreshToken)
-	if rAuthErr != nil {
-		logger.Error("unable-get-access-token-from-cookie", zap.String("user-id", parsedRequest.UserId), zap.String("target-user-id", parsedRequest.TargetUserId))
-		return nil, rAuthErr
-	}
-
-	parsedRequest.RefreshToken = refreshTokenCookie.Value
-
-	// Add request
-	parsedRequest.Request = request
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		logger.Error("unable-validate-request-for-updating-user-email")
+// MapRequestToUpdateUserEmailRequest binds authenticated context and route target
+// independently of its email-only payload. Cookie-name arguments are retained
+// for source compatibility, but credential cleanup no longer uses caller cookies.
+func MapRequestToUpdateUserEmailRequest(request *http.Request, _, _ string, validator AccessmanagerValidator) (*UpdateUserEmailRequest, error) {
+	if request == nil || request.URL == nil || nilAccessDependency(request.Body) {
 		return nil, ErrBadRequest
 	}
-
-	return parsedRequest, nil
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
+	actor := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if strings.TrimSpace(actor) == "" {
+		return nil, ErrUnauthorizedUnableToAttainRequestorID
+	}
+	target, err := getUserIDFromURI(request)
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Email string `json:"email"`
+	}
+	if err := toolbox.DecodeRequestBody(request, &payload); err != nil {
+		return nil, ErrInvalidUserEmail
+	}
+	if nilAccessDependency(validator) {
+		return nil, ErrBadRequest
+	}
+	result := &UpdateUserEmailRequest{ActorID: actor, TargetUserID: target, Email: payload.Email}
+	if err := validator.Validate(result); err != nil {
+		return nil, ErrBadRequest
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // MapRequestToLogoutUserOthersRequest maps incoming LogOutUserOthers request to correct struct.

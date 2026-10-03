@@ -317,6 +317,15 @@ func (s *Service) FindUserByEmail(ctx context.Context, req *GetUserByEmailReques
 
 // UpdateUser updates an existing user
 func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*UpdateUserResponse, error) {
+	if req == nil {
+		return nil, ErrInvalidUserBody
+	}
+	if s == nil || ctx == nil || nilUserDependency(s.UserRepository) {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "update-user"))
 
 	targetUserId := req.ID
@@ -327,8 +336,16 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	// Get existing user
 	user, err := s.UserRepository.GetUserByID(ctx, targetUserId)
 	if err != nil {
-		logger.Error("failed-to-get-user-for-update", zap.Error(err), zap.String("id", targetUserId))
+		return nil, err
+	}
+	if user == nil || user.ID != targetUserId {
 		return nil, ErrUserNotFound
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if (req.User != nil && req.User.Email != user.Email) || (req.Email != "" && req.Email != user.Email) {
+		return nil, ErrEmailChangeRequired
 	}
 
 	if req.User != nil {
@@ -346,15 +363,6 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 		userWithProvidedData.SetDependencies(config, s.IDGenerator, s.TimeProvider, s.StringUtils)
 		userWithProvidedData.Type = config.GetType(s.defaultConfig())
-
-		if userWithProvidedData.Email != "" && userWithProvidedData.Email != user.Email {
-			// Check if new email already exists
-			existingUser, _ := s.UserRepository.GetUserByEmail(ctx, userWithProvidedData.Email, false)
-			if existingUser != nil && existingUser.ID != user.ID {
-				return nil, ErrEmailAlreadyExists
-			}
-			user.Email = normaliseUserEmail(userWithProvidedData.Email)
-		}
 
 		userWithProvidedData.SetFullName()
 
@@ -377,16 +385,6 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 			user.Type = config.GetType(s.defaultConfig())
 			user.SetDependencies(config, s.IDGenerator, s.TimeProvider, s.StringUtils)
-			hasChanges = true
-		}
-
-		if req.Email != "" && req.Email != user.Email {
-			// Check if new email already exists
-			existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
-			if existingUser != nil && existingUser.ID != user.ID {
-				return nil, ErrEmailAlreadyExists
-			}
-			user.Email = normaliseUserEmail(req.Email)
 			hasChanges = true
 		}
 

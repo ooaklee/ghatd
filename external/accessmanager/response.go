@@ -9,6 +9,25 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
+// UpdateUserEmailResponse reports a confirmed address change separately from
+// subsequent work. False completion flags require recovery/observability, not
+// blindly repeating the committed email-change command. No credentials are exposed.
+type UpdateUserEmailResponse struct {
+	// Changed is true only after the domain returns a valid committed receipt.
+	Changed bool `json:"changed"`
+	// SignOutRequired clears caller cookies for self-change, never an administrator.
+	SignOutRequired bool `json:"sign_out_required"`
+	// SessionCleanupComplete acknowledges best-effort target-only cache deletion.
+	SessionCleanupComplete bool `json:"session_cleanup_complete"`
+	// VerificationEmailSent means the mail adapter accepted the new-address email.
+	// It is not an assertion of delivery into the recipient's inbox.
+	VerificationEmailSent bool `json:"verification_email_sent"`
+	// PreviousAddressNotified means the mail adapter accepted the security notice.
+	PreviousAddressNotified bool `json:"previous_address_notified"`
+	// AuditRecorded means the configured audit adapter acknowledged the event.
+	AuditRecorded bool `json:"audit_recorded"`
+}
+
 // CreateUserAPITokenResponse  holds response data for CreateUserAPIToken request
 type CreateUserAPITokenResponse struct {
 	// UserAPIToken represents the apitoken created on the platform

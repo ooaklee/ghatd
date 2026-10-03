@@ -41,7 +41,7 @@ type mockAccessmanagerService struct {
 	oauthCallbackFunc                             func(ctx context.Context, r *accessmanager.OauthCallbackRequest) (*accessmanager.OauthCallbackResponse, error)
 	removeRefreshTokenWithCookieValueFunc         func(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, string, error)
 	logoutUserOthersFunc                          func(ctx context.Context, r *accessmanager.LogoutUserOthersRequest) error
-	updateUserEmailFunc                           func(ctx context.Context, r *accessmanager.UpdateUserEmailRequest) (bool, error)
+	updateUserEmailFunc                           func(ctx context.Context, r *accessmanager.UpdateUserEmailRequest) (*accessmanager.UpdateUserEmailResponse, error)
 }
 
 func (m *mockAccessmanagerService) DeleteAuth(ctx context.Context, tokenID string) (int64, error) {
@@ -163,11 +163,11 @@ func (m *mockAccessmanagerService) LogoutUserOthers(ctx context.Context, r *acce
 	return nil
 }
 
-func (m *mockAccessmanagerService) UpdateUserEmail(ctx context.Context, r *accessmanager.UpdateUserEmailRequest) (bool, error) {
+func (m *mockAccessmanagerService) UpdateUserEmail(ctx context.Context, r *accessmanager.UpdateUserEmailRequest) (*accessmanager.UpdateUserEmailResponse, error) {
 	if m.updateUserEmailFunc != nil {
 		return m.updateUserEmailFunc(ctx, r)
 	}
-	return false, nil
+	return nil, nil
 }
 
 // Compile-time guard: mock satisfies the production service interface.

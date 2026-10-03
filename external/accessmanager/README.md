@@ -277,6 +277,76 @@ delegated credential from creating or reactivating account-wide credentials.
 ### Active users only
 - `PATCH /api/v1/ams/users/{userID}/email` — Update user email address
 
+## Conditional email changes
+
+**Breaking:** `UpdateUserEmail` now takes `ActorID`, `TargetUserID` and `Email`,
+and returns `(*UpdateUserEmailResponse, error)` rather than `(bool, error)`.
+Update custom service adapters and clients that expected an empty response.
+The HTTP payload remains `{"email":"new@example.test"}`. The mapper binds the
+actor from authenticated context and the target from the URI; body identity
+fields cannot select either. Cookie tokens and the HTTP request are no longer
+part of this command.
+
+The manager requires explicit authenticated context, then loads current ACTIVE
+actor authority. It permits self-service or a current administrator acting on
+another account. Trusted in-process callers must publish verified identity with
+the context helpers before invoking it; passing an `ActorID` on a bare context
+is rejected. Context publication is trusted wiring, not authentication itself.
+The standard route requires an active session. This command does not add a
+recent-login or old-inbox-proof requirement; hosts needing step-up authentication
+must enforce that before dispatch. Authorization of a different administrator
+is a pre-write check, not a transaction lock against later role changes.
+
+The [user domain](../user/v2/README.md#conditional-email-changes) owns the atomic
+mailbox, verification-state and revision update. Configure its explicit unique
+email index and optional `ChangeUserEmail` adapter capability first. No legacy
+full-profile update fallback is allowed. Old access/refresh/login/verification
+proofs fail their live revision checks even if Redis cleanup fails. Provider
+identity links and API credentials are not removed by this operation.
+
+A confirmed change returns HTTP 200 with `Cache-Control: no-store` and this
+object in the shared reply response's `data` field:
+
+```json
+{
+  "changed": true,
+  "sign_out_required": true,
+  "session_cleanup_complete": true,
+  "verification_email_sent": true,
+  "previous_address_notified": true,
+  "audit_recorded": true
+}
+```
+
+The handler clears the two authentication cookies and two marker cookies only
+for a confirmed self-change. An administrator changing another account keeps
+their own cookies. Cleanup selects only the target's sessions, without exemptions
+copied from the administrator. The security notice goes to the previous address
+only after the database change, with escaped HTML fields; audit records use the
+actual actor, target and new revision, without email addresses.
+
+`changed: true` remains true when a post-commit action fails. Mail flags mean the
+adapter accepted the request, not that a message reached an inbox. A false flag
+requires recovery, not repeating the committed mutation: request verification
+through the normal sign-in flow at the new address; investigate cleanup, notice
+or audit failures operationally. There is no durable outbox or automatic retry
+queue here. Mongo, Redis, mail and audit are not a distributed transaction.
+
+An error or lost response can have an unknown database outcome. Reconcile current
+account state before retrying; do not assume rollback. Native failures reach
+the shared error manifest, where unknown/multiple causes stay opaque and host
+overrides remain supported. Manager logs use fixed phase outcomes. Injected
+adapters remain responsible for their own privacy-safe logging.
+
+Verification-proof creation rejects incomplete dependencies and malformed token
+receipts, snapshots delivery fields, and stops between phases on cancellation.
+Earlier token/code writes are not rolled back after a later mail failure.
+`helpers.GenerateUniqueCode` now preserves native storage failures instead of
+replacing them with `ErrCodeGenerationFailure`; exhaustion/invalid inputs retain
+that sentinel. Its legacy existence-check/store contract is not an atomic code
+reservation, despite retrying observed collisions. One-use proof consumption is
+separate from code allocation.
+
 ## Transactional API-token policy
 
 Credential management requires `ActiveOnlyMiddleware` backed by a live, active

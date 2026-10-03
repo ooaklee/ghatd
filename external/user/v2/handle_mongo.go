@@ -14,9 +14,9 @@ import (
 // UserHandleIndexName identifies the explicit, partial, globally unique index.
 const UserHandleIndexName = "idx_users_handle"
 
-// handleMongoStore opts into atomic post-image writes without expanding the
+// atomicUserMongoStore opts into atomic post-image writes without expanding the
 // legacy MongoDbStore interface required by existing applications and mocks.
-type handleMongoStore interface {
+type atomicUserMongoStore interface {
 	ExecuteFindOneAndUpdateCommandDecodeResult(context.Context, *mongo.Collection, any, any, any, ...options.Lister[options.FindOneAndUpdateOptions]) error
 }
 
@@ -28,7 +28,7 @@ func (r *Repository) handleCollection(ctx context.Context) (*mongo.Collection, e
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if _, ok := r.Store.(handleMongoStore); !ok {
+	if _, ok := r.Store.(atomicUserMongoStore); !ok {
 		return nil, ErrHandleUnsupported
 	}
 	return r.GetUserCollection(ctx)
@@ -225,7 +225,7 @@ func (r *Repository) SetUserHandle(ctx context.Context, req *UpdateUserHandleReq
 		"handle_metadata": bson.M{"$cond": bson.A{bson.M{"$eq": bson.A{"$handle", req.Handle}}, "$handle_metadata", metadata}},
 	}}}}
 	var updated UniversalUser
-	err = r.Store.(handleMongoStore).ExecuteFindOneAndUpdateCommandDecodeResult(ctx, collection, filter, update, &updated, options.FindOneAndUpdate().SetReturnDocument(options.After).SetCollation(&options.Collation{Locale: "simple"}))
+	err = r.Store.(atomicUserMongoStore).ExecuteFindOneAndUpdateCommandDecodeResult(ctx, collection, filter, update, &updated, options.FindOneAndUpdate().SetReturnDocument(options.After).SetCollation(&options.Collation{Locale: "simple"}))
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, ErrHandleConflict
