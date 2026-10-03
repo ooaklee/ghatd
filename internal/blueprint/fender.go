@@ -12,37 +12,46 @@ import (
 
 // MapRequestToCreateBlueprintRequest maps an incoming CreateBlueprint request.
 func MapRequestToCreateBlueprintRequest(request *http.Request, validator blueprintValidator) (*CreateBlueprintRequest, error) {
+	if err := validateBlueprintHTTPRequest(request, true); err != nil {
+		return nil, err
+	}
+	if nilBlueprintDependency(request.Body) {
+		return nil, ErrBlueprintInvalidPayload
+	}
 	parsedRequest := &CreateBlueprintRequest{}
 	logger := logger.AcquireOperationFrom(request.Context(), "internal/blueprint", "map-create-blueprint-request")
 
 	if err := toolbox.DecodeRequestBody(request, parsedRequest); err != nil {
-		logger.Warn("blueprint-request-body-decode-failed", zap.Error(err))
+		logger.Warn("blueprint-request-body-decode-failed")
 		return nil, ErrBlueprintInvalidPayload
 	}
 
-	parsedRequest.CreatedByUserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		logger.Warn("blueprint-request-validation-failed", zap.Error(err))
+		logger.Warn("blueprint-request-validation-failed")
 		return nil, ErrBlueprintInvalidPayload
 	}
 
-	logger.Debug("blueprint-create-request-mapped", zap.String("created-by-user-id", parsedRequest.CreatedByUserID), zap.String("kind", normaliseBlueprintKind(parsedRequest.Kind)))
+	logger.Debug("blueprint-create-request-mapped")
 	return parsedRequest, nil
 }
 
 // MapRequestToGetBlueprintsRequest maps an incoming GetBlueprints request.
 func MapRequestToGetBlueprintsRequest(request *http.Request, validator blueprintValidator) (*GetBlueprintsRequest, error) {
+	if err := validateBlueprintHTTPRequest(request, false); err != nil {
+		return nil, err
+	}
 	parsedRequest := &GetBlueprintsRequest{}
 	logger := logger.AcquireOperationFrom(request.Context(), "internal/blueprint", "map-get-blueprints-request")
 
 	if err := querydecoder.New(request.URL.Query()).Decode(parsedRequest); err != nil {
-		logger.Warn("blueprint-query-decode-failed", zap.Error(err))
+		logger.Warn("blueprint-query-decode-failed")
 		return nil, ErrBlueprintInvalidQueryParam
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		logger.Warn("blueprint-query-validation-failed", zap.Error(err))
+		logger.Warn("blueprint-query-validation-failed")
 		return nil, ErrBlueprintInvalidQueryParam
 	}
 
@@ -52,28 +61,27 @@ func MapRequestToGetBlueprintsRequest(request *http.Request, validator blueprint
 
 // MapRequestToGetBlueprintByIDRequest maps an incoming GetBlueprintByID request.
 func MapRequestToGetBlueprintByIDRequest(request *http.Request, validator blueprintValidator) (*GetBlueprintByIDRequest, error) {
+	if err := validateBlueprintHTTPRequest(request, true); err != nil {
+		return nil, err
+	}
 	parsedRequest := &GetBlueprintByIDRequest{}
 	logger := logger.AcquireOperationFrom(request.Context(), "internal/blueprint", "map-get-blueprint-by-id-request")
 
 	id, err := toolbox.GetVariableValueFromUri(request, BlueprintURIVariableID)
 	if err != nil {
-		logger.Warn("blueprint-id-uri-variable-missing", zap.Error(err))
+		logger.Warn("blueprint-id-uri-variable-missing")
 		return nil, ErrBlueprintIDIsRequired
 	}
 	parsedRequest.ID = id
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
-	if parsedRequest.UserID == "" {
-		logger.Warn("blueprint-request-user-id-missing", zap.String("blueprint-id", parsedRequest.ID))
-		return nil, ErrBlueprintUserIDIsRequired
-	}
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
-		logger.Warn("blueprint-id-request-validation-failed", zap.String("blueprint-id", parsedRequest.ID), zap.Error(err))
+		logger.Warn("blueprint-id-request-validation-failed")
 		return nil, ErrBlueprintIDIsRequired
 	}
 
-	logger.Debug("blueprint-id-request-mapped", zap.String("blueprint-id", parsedRequest.ID), zap.String("user-id", parsedRequest.UserID))
+	logger.Debug("blueprint-id-request-mapped")
 	return parsedRequest, nil
 }
 

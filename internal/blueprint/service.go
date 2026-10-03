@@ -5,10 +5,11 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/logger"
-	"go.uber.org/zap"
 )
 
-// BlueprintRepository defines the repository surface used by the service.
+// BlueprintRepository is the domain persistence port. Implementations must
+// preserve native failures and return the selected record, not a nil success.
+// Callers and adapters treat nested Metadata values as read-only during a call.
 type BlueprintRepository interface {
 	CreateBlueprint(ctx context.Context, blueprint *Blueprint) (*Blueprint, error)
 	DeleteBlueprintByID(ctx context.Context, id string) error
@@ -19,186 +20,226 @@ type BlueprintRepository interface {
 	UpdateBlueprint(ctx context.Context, blueprint *Blueprint) (*Blueprint, error)
 }
 
-// Service holds and manages blueprint business logic.
+// Service demonstrates lower-domain validation and persistence orchestration.
+// It does not replace route admission or a manager's resource authorization.
 type Service struct {
+	// BlueprintRepository is required for CRUD; typed-nil adapters fail closed.
 	BlueprintRepository BlueprintRepository
-	Registry            *Registry
+	// Registry owns optional package registrations independently of persistence.
+	Registry *Registry
 }
 
-// NewService creates a blueprint service.
+// NewService uses the supplied registry, or creates an empty registry by default.
 func NewService(blueprintRepository BlueprintRepository, registry ...*Registry) *Service {
 	resolvedRegistry := MustRegistry()
 	if len(registry) > 0 && registry[0] != nil {
 		resolvedRegistry = registry[0]
 	}
-
-	return &Service{
-		BlueprintRepository: blueprintRepository,
-		Registry:            resolvedRegistry,
-	}
+	return &Service{BlueprintRepository: blueprintRepository, Registry: resolvedRegistry}
 }
 
-// CreateBlueprint creates a blueprint record.
+// CreateBlueprint generates identity and creation attribution for an authorized
+// caller. Dependency failures are returned unchanged; writes are never retried.
 func (s *Service) CreateBlueprint(ctx context.Context, req *CreateBlueprintRequest) (*BlueprintResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "create-blueprint")
-
-	if req == nil || normaliseBlueprintName(req.Name) == "" {
-		logger.Warn("blueprint-create-missing-name")
-		return nil, ErrBlueprintNameIsRequired
-	}
-	if normaliseBlueprintKind(req.Kind) == "" {
-		logger.Warn("blueprint-create-missing-kind", zap.String("name", normaliseBlueprintName(req.Name)))
-		return nil, ErrBlueprintKindIsRequired
-	}
-
-	blueprint := NewBlueprint(req)
-	blueprint.GenerateID()
-	blueprint.GenerateNanoID()
-	blueprint.SetCreatedAtTimeToNow()
-
-	created, err := s.BlueprintRepository.CreateBlueprint(ctx, blueprint)
-	if err != nil {
-		logger.Error("blueprint-create-failed", zap.String("blueprint-id", blueprint.ID), zap.String("kind", blueprint.Kind), zap.Error(err))
+	if err := s.validateEntry(ctx, req); err != nil {
 		return nil, err
 	}
-
-	logger.Info("blueprint-created", zap.String("blueprint-id", created.ID), zap.String("kind", created.Kind))
+	input := *req
+	if normaliseBlueprintName(input.Name) == "" {
+		return nil, ErrBlueprintNameIsRequired
+	}
+	if normaliseBlueprintKind(input.Kind) == "" {
+		return nil, ErrBlueprintKindIsRequired
+	}
+	if !blueprintActorMatchesContext(ctx, input.ActorID) {
+		return nil, ErrBlueprintUserIDIsRequired
+	}
+	log := logger.AcquireOperationFrom(ctx, "internal/blueprint", "create-blueprint")
+	value := NewBlueprint(&input).GenerateID().GenerateNanoID().SetCreatedAtTimeToNow()
+	id, actor := value.ID, input.ActorID
+	created, err := s.BlueprintRepository.CreateBlueprint(ctx, value)
+	if err != nil {
+		log.Error("blueprint-create-failed")
+		return nil, err
+	}
+	if err := blueprintResult(ctx, created, id); err != nil {
+		return nil, err
+	}
+	if created.CreatedByUserID != actor {
+		return nil, ErrBlueprintUnavailable
+	}
+	log.Info("blueprint-created")
 	return &BlueprintResponse{Blueprint: created}, nil
 }
 
-// GetBlueprintByID retrieves a blueprint by ID.
+// GetBlueprintByID reads a selected record for an authorized caller. ActorID and
+// ID are independent; no ownership or administrator authority is inferred here.
 func (s *Service) GetBlueprintByID(ctx context.Context, req *GetBlueprintByIDRequest) (*BlueprintResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "get-blueprint-by-id")
-
-	if req == nil || strings.TrimSpace(req.ID) == "" {
-		logger.Warn("blueprint-get-by-id-missing-id")
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	id, actor := strings.TrimSpace(req.ID), req.ActorID
+	if id == "" {
 		return nil, ErrBlueprintIDIsRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
-		logger.Warn("blueprint-get-by-id-missing-user-id", zap.String("blueprint-id", strings.TrimSpace(req.ID)))
+	if !blueprintActorMatchesContext(ctx, actor) {
 		return nil, ErrBlueprintUserIDIsRequired
 	}
-
-	blueprint, err := s.BlueprintRepository.GetBlueprintByID(ctx, strings.TrimSpace(req.ID))
+	value, err := s.BlueprintRepository.GetBlueprintByID(ctx, id)
 	if err != nil {
-		logger.Error("blueprint-get-by-id-failed", zap.String("blueprint-id", strings.TrimSpace(req.ID)), zap.Error(err))
 		return nil, err
 	}
-
-	logger.Debug("blueprint-get-by-id-completed", zap.String("blueprint-id", blueprint.ID), zap.String("kind", blueprint.Kind))
-	return &BlueprintResponse{Blueprint: blueprint}, nil
+	if err := blueprintResult(ctx, value, id); err != nil {
+		return nil, err
+	}
+	return &BlueprintResponse{Blueprint: value}, nil
 }
 
-// GetBlueprintByName retrieves a blueprint by name and kind.
+// GetBlueprintByName is a trusted lower-domain natural-key lookup. A manager
+// exposing it must enforce its own permission policy before calling the service.
 func (s *Service) GetBlueprintByName(ctx context.Context, req *GetBlueprintByNameRequest) (*BlueprintResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "get-blueprint-by-name")
-
-	if req == nil || normaliseBlueprintName(req.Name) == "" {
-		logger.Warn("blueprint-get-by-name-missing-name")
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	name, kind := normaliseBlueprintName(req.Name), normaliseBlueprintKind(req.Kind)
+	if name == "" {
 		return nil, ErrBlueprintNameIsRequired
 	}
-	if normaliseBlueprintKind(req.Kind) == "" {
-		logger.Warn("blueprint-get-by-name-missing-kind", zap.String("name", normaliseBlueprintName(req.Name)))
+	if kind == "" {
 		return nil, ErrBlueprintKindIsRequired
 	}
-
-	blueprint, err := s.BlueprintRepository.GetBlueprintByNameAndKind(ctx, req.Name, req.Kind)
+	value, err := s.BlueprintRepository.GetBlueprintByNameAndKind(ctx, name, kind)
 	if err != nil {
-		logger.Error("blueprint-get-by-name-failed", zap.String("name", normaliseBlueprintName(req.Name)), zap.String("kind", normaliseBlueprintKind(req.Kind)), zap.Error(err))
 		return nil, err
 	}
-
-	logger.Debug("blueprint-get-by-name-completed", zap.String("blueprint-id", blueprint.ID), zap.String("kind", blueprint.Kind))
-	return &BlueprintResponse{Blueprint: blueprint}, nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if value == nil || strings.TrimSpace(value.ID) == "" || value.Name != name || value.Kind != kind {
+		return nil, ErrBlueprintUnavailable
+	}
+	return &BlueprintResponse{Blueprint: value}, nil
 }
 
-// GetBlueprints retrieves a filtered page of blueprints.
+// GetBlueprints performs independent list/count reads, not a transactional
+// snapshot. A nil request retains the unfiltered-query convention. Route or
+// manager authorization owns access to this actor-independent lower query.
 func (s *Service) GetBlueprints(ctx context.Context, req *GetBlueprintsRequest) (*GetBlueprintsResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "get-blueprints")
-
-	blueprints, err := s.BlueprintRepository.GetBlueprints(ctx, req)
-	if err != nil {
-		logger.Error("blueprints-list-failed", zap.Error(err))
+	if req == nil {
+		req = &GetBlueprintsRequest{}
+	}
+	if err := s.validateEntry(ctx, req); err != nil {
 		return nil, err
 	}
-
-	total, err := s.BlueprintRepository.GetTotalBlueprints(ctx, req)
+	input := *req
+	listInput := input
+	values, err := s.BlueprintRepository.GetBlueprints(ctx, &listInput)
 	if err != nil {
-		logger.Error("blueprints-count-failed", zap.Error(err))
 		return nil, err
 	}
-
-	logger.Debug("blueprints-list-completed", zap.Int("returned", len(blueprints)), zap.Int64("total", total))
-	return &GetBlueprintsResponse{Blueprints: blueprints, Total: total}, nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	total, err := s.BlueprintRepository.GetTotalBlueprints(ctx, &input)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if total < 0 {
+		return nil, ErrBlueprintUnavailable
+	}
+	return &GetBlueprintsResponse{Blueprints: values, Total: total}, nil
 }
 
-// UpdateBlueprint updates mutable fields on a blueprint.
+// UpdateBlueprint applies nonempty scalar fields and an optional metadata map
+// to a copy of the selected record. Empty strings retain existing values. Nested
+// metadata is read-only by convention, not deeply copied; no CAS is implied.
 func (s *Service) UpdateBlueprint(ctx context.Context, req *UpdateBlueprintRequest) (*BlueprintResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "update-blueprint")
-
-	if req == nil || strings.TrimSpace(req.ID) == "" {
-		logger.Warn("blueprint-update-missing-id")
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	input := *req
+	id := strings.TrimSpace(input.ID)
+	if id == "" {
 		return nil, ErrBlueprintIDIsRequired
 	}
-
-	current, err := s.BlueprintRepository.GetBlueprintByID(ctx, strings.TrimSpace(req.ID))
+	if !blueprintActorMatchesContext(ctx, input.ActorID) {
+		return nil, ErrBlueprintUserIDIsRequired
+	}
+	current, err := s.BlueprintRepository.GetBlueprintByID(ctx, id)
 	if err != nil {
-		logger.Error("blueprint-update-current-lookup-failed", zap.String("blueprint-id", strings.TrimSpace(req.ID)), zap.Error(err))
 		return nil, err
 	}
-
-	if name := normaliseBlueprintName(req.Name); name != "" {
-		current.Name = name
-	}
-	if kind := normaliseBlueprintKind(req.Kind); kind != "" {
-		current.Kind = kind
-	}
-	if req.Description != "" {
-		current.Description = strings.TrimSpace(req.Description)
-	}
-	if status := normaliseBlueprintStatus(req.Status); status != "" {
-		current.Status = status
-	}
-	if req.Metadata != nil {
-		current.Metadata = req.Metadata
-	}
-	current.UpdatedByUserID = strings.TrimSpace(req.UpdatedByUserID)
-	current.SetUpdatedAtTimeToNow()
-
-	updated, err := s.BlueprintRepository.UpdateBlueprint(ctx, current)
-	if err != nil {
-		logger.Error("blueprint-update-failed", zap.String("blueprint-id", current.ID), zap.Error(err))
+	if err := blueprintResult(ctx, current, id); err != nil {
 		return nil, err
 	}
-
-	logger.Info("blueprint-updated", zap.String("blueprint-id", updated.ID), zap.String("kind", updated.Kind))
+	value := *current
+	if name := normaliseBlueprintName(input.Name); name != "" {
+		value.Name = name
+	}
+	if kind := normaliseBlueprintKind(input.Kind); kind != "" {
+		value.Kind = kind
+	}
+	if input.Description != "" {
+		value.Description = strings.TrimSpace(input.Description)
+	}
+	if status := normaliseBlueprintStatus(input.Status); status != "" {
+		value.Status = status
+	}
+	if input.Metadata != nil {
+		value.Metadata = input.Metadata
+	}
+	value.UpdatedByUserID = input.ActorID
+	value.SetUpdatedAtTimeToNow()
+	updated, err := s.BlueprintRepository.UpdateBlueprint(ctx, &value)
+	if err != nil {
+		return nil, err
+	}
+	if err := blueprintResult(ctx, updated, id); err != nil {
+		return nil, err
+	}
+	if updated.UpdatedByUserID != input.ActorID {
+		return nil, ErrBlueprintUnavailable
+	}
 	return &BlueprintResponse{Blueprint: updated}, nil
 }
 
-// DeleteBlueprint deletes a blueprint by ID.
+// DeleteBlueprint removes a selected record after caller validation. Adapters
+// must report absence or operational failures; this service does not retry them.
 func (s *Service) DeleteBlueprint(ctx context.Context, req *DeleteBlueprintRequest) (*DeleteBlueprintResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "internal/blueprint", "delete-blueprint")
-
-	if req == nil || strings.TrimSpace(req.ID) == "" {
-		logger.Warn("blueprint-delete-missing-id")
-		return nil, ErrBlueprintIDIsRequired
-	}
-
-	if err := s.BlueprintRepository.DeleteBlueprintByID(ctx, strings.TrimSpace(req.ID)); err != nil {
-		logger.Error("blueprint-delete-failed", zap.String("blueprint-id", strings.TrimSpace(req.ID)), zap.Error(err))
+	if err := s.validateEntry(ctx, req); err != nil {
 		return nil, err
 	}
-
-	logger.Info("blueprint-deleted", zap.String("blueprint-id", strings.TrimSpace(req.ID)))
+	id, actor := strings.TrimSpace(req.ID), req.ActorID
+	if id == "" {
+		return nil, ErrBlueprintIDIsRequired
+	}
+	if !blueprintActorMatchesContext(ctx, actor) {
+		return nil, ErrBlueprintUserIDIsRequired
+	}
+	if err := s.BlueprintRepository.DeleteBlueprintByID(ctx, id); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return &DeleteBlueprintResponse{Deleted: true}, nil
 }
 
-// RegisterBlueprint adds a blueprint registration to the package registry.
+// RegisterBlueprint adds a registration independently of repository wiring.
 func (s *Service) RegisterBlueprint(entry Registration) error {
+	if s == nil || s.Registry == nil {
+		return ErrBlueprintUnavailable
+	}
 	return s.Registry.Register(entry)
 }
 
-// GetBlueprintRegistration retrieves a blueprint registration by key.
+// GetBlueprintRegistration resolves a registration independently of persistence.
 func (s *Service) GetBlueprintRegistration(key string) (Registration, error) {
+	if s == nil || s.Registry == nil {
+		return Registration{}, ErrBlueprintUnavailable
+	}
 	return s.Registry.MustGet(key)
 }

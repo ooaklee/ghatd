@@ -55,7 +55,7 @@ func (h *Handler) CreateBlueprint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Debug("blueprint-create-response-written", zap.String("blueprint-id", response.Blueprint.ID))
+	logger.Debug("blueprint-create-response-written")
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.Blueprint)
 }
 
@@ -92,12 +92,12 @@ func (h *Handler) GetBlueprintByID(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.service.GetBlueprintByID(r.Context(), request)
 	if err != nil {
-		logger.Error("blueprint-get-by-id-service-failed", zap.String("blueprint-id", request.ID), zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
+		logger.Error("blueprint-get-by-id-service-failed", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
-	logger.Debug("blueprint-get-by-id-response-written", zap.String("blueprint-id", response.Blueprint.ID))
+	logger.Debug("blueprint-get-by-id-response-written")
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Blueprint)
 }
 

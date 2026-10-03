@@ -39,7 +39,7 @@ func NewBlueprint(req *CreateBlueprintRequest) *Blueprint {
 		Description:     strings.TrimSpace(req.Description),
 		Status:          status,
 		Metadata:        req.Metadata,
-		CreatedByUserID: strings.TrimSpace(req.CreatedByUserID),
+		CreatedByUserID: req.ActorID,
 	}
 }
 

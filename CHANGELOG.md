@@ -173,6 +173,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking template change:** [Blueprint](internal/blueprint/README.md#actorid-migration)
+  uses `ActorID` for create, get-by-ID, update and delete requests. Actor-bearing
+  HTTP mappers require explicit authenticated context; stored attribution and
+  route permissions are unchanged. Update copied request types and adapters.
 - **Breaking:** [Vision mutation commands](external/vision/README.md#actorid-migration)
   use explicit `ActorID` fields, including deletion. HTTP mappers require verified
   authentication; User Manager edits and deletion require agreement with the
@@ -292,6 +296,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Blueprint services reject contradictory caller identity, invalid entry state
+  and mismatched dependency results. Updates preserve fetched scalar state, list
+  and count receive separate query copies, and native failures retain shared
+  response mappings. Mapper/service logs no longer include raw diagnostics.
 - Vision rejects contradictory caller context and invalid mutation dependencies
   or selected-record results. Scalar edits and User Manager metadata filtering no
   longer mutate caller-owned input. Native errors retain shared response mappings;

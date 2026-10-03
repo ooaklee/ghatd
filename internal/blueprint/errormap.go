@@ -8,6 +8,12 @@ import (
 
 // blueprintErrorMap holds Error keys, their corresponding human-friendly message, and response status code.
 var blueprintErrorMap = reply.ErrorManifest{
+	ErrBlueprintUnavailable: {
+		Title:      "Blueprint Unavailable",
+		Detail:     "Unable to complete the blueprint operation at this time",
+		StatusCode: http.StatusServiceUnavailable,
+		Code:       "BLP0-013",
+	},
 	ErrBlueprintError: {
 		Title:      "Bad Request",
 		Detail:     "Some blueprint error",

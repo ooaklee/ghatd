@@ -44,7 +44,61 @@ Blueprint exposes a small v1 route set:
 - `POST /api/v1/blueprints`
 - `GET /api/v1/blueprints/{blueprintId}`
 
-The list endpoint demonstrates query decoding through `query` tags. The authenticated get-by-ID endpoint demonstrates pulling the requestor ID from middleware-populated context in fender code before passing the request to the service.
+The list endpoint demonstrates query decoding through `query` tags. Create is an
+administrator-session route; list and get-by-ID are authenticated-session routes.
+Create and get-by-ID bind their actor from verified middleware context before
+passing the request to the service. No update or delete HTTP route is registered.
+
+## ActorID migration
+
+Use this convention when copying the template into a new domain:
+
+| Request | Previous caller field | Current caller field |
+| --- | --- | --- |
+| Create | `CreatedByUserID` | `ActorID` |
+| Get by ID | `UserID` | `ActorID` |
+| Update | `UpdatedByUserID` | `ActorID` |
+| Delete | None | Required `ActorID` |
+
+These are source changes to the reference package, not stored-schema changes.
+The model's `CreatedByUserID` and `UpdatedByUserID` remain audit attribution;
+`ID` still selects the record. Rename request literals and adapters, not stored
+fields. Actor fields use `json:"-"` with no query/path tag: this query decoder
+interprets `query:"-"` as a literal parameter, not an exclusion marker.
+
+HTTP actor binding requires both an authenticated flag and a nonempty caller ID.
+An ID-only context or anonymous placeholder is insufficient. All actor-bearing
+service commands reject empty/padded IDs and disagreement with published caller
+or cached-user context. Trusted in-process calls may supply an actor on a bare
+context, but their integrating manager must establish permission first. An actor
+string does not prove ownership or administrator access. Natural-key and list
+queries remain actor-independent lower-domain operations; their integrating
+manager or route middleware owns admission. See the
+[request-identity guide](../../docs/how-to/request-identity.md).
+
+## Service boundaries
+
+Service entry checks reject nil contexts, absent command pointers, cancelled
+contexts and nil/typed-nil repositories before invoking dependencies. List retains
+its nil-request convention for an unfiltered query. A missing registry does not
+disable CRUD; registry operations fail explicitly when their wiring is absent.
+
+Selected-record and create/update results must match the expected identity;
+create/update attribution must match the caller. Invalid wiring/results return
+`ErrBlueprintUnavailable` (`BLP0-013`, HTTP 503), not record-not-found. Native
+dependency errors remain intact for shared response mappings. A failed or invalid
+write result is **not** evidence of rollback; the service never retries writes.
+
+Updates copy the selected record before editing scalar fields. Nonempty strings
+replace existing values; empty strings retain them. Supplied metadata replaces
+the map. Nested metadata is read-only during a call, not deeply copied. List and
+count receive separate scalar query copies and are independent reads, not a
+transactional snapshot. These checks do not add ownership policy, concurrent
+update protection, durable deletion attribution or Mongo matched-count checks.
+
+Mapper and service logging avoids raw payloads and dependency diagnostics. The
+composed HTTP tests verify these layers with recording adapters; this is not a
+claim that every concrete persistence adapter has been hardened.
 
 Error responses use `Handler.NewHTTPErrorResponse`, backed by the shared
 [manifest writer](../../external/errormanifest/README.md#wrapped-errors-at-http-boundaries).
@@ -74,6 +128,19 @@ for the reusable registration adapter and rollback precautions.
 
 ## Testing Pattern
 
-The tests are table-driven and cover both successful and failing behaviour. When adding new package behaviour, prefer adding focused table cases before adding broad integration tests.
+Use named table-driven cases for related successful and failing behaviour. The
+actor, mapper, handler and service suites cover verified and denied identities,
+transport spoofing, selected-record failures, scalar-copy guarantees and native
+error-map propagation. The single Mongo CRUD lifecycle is intentionally sequential:
+each operation must observe the record created or updated in the prior step.
+
+Set `GHATD_TEST_MONGO_URI` to a disposable Mongo instance to make that lifecycle
+mandatory; an explicit unavailable URI fails rather than skipping. Without it,
+the test may start optional local Mongo or skip when that runtime is unavailable.
+The test uses and cleans up a unique database. Run:
+
+```sh
+asdf exec go test -race ./internal/blueprint/...
+```
 
 Remove unused layers when creating a smaller package. The goal is a clean package boundary, not a required file checklist.

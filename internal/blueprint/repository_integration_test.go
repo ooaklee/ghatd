@@ -3,7 +3,9 @@ package blueprint_test
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/benweissmann/memongo"
 	"github.com/stretchr/testify/assert"
@@ -14,37 +16,50 @@ import (
 	"github.com/ooaklee/ghatd/internal/blueprint"
 )
 
+// This stateful lifecycle deliberately follows the same record through each
+// operation; splitting its steps into independent table cases would lose that contract.
 func TestIntegration_BlueprintRepository_FullLifecycle(t *testing.T) {
-	if testing.Short() {
+	uri := os.Getenv("GHATD_TEST_MONGO_URI")
+	if testing.Short() && uri == "" {
 		t.Skip("skipping integration test in short mode")
 	}
 
-	ctx := context.Background()
-
-	mongoServer, err := memongo.StartWithOptions(&memongo.Options{MongoVersion: "7.0.14"})
-	if err != nil {
-		t.Skipf("skipping integration test: unable to start memongo: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	t.Cleanup(cancel)
+	if uri == "" {
+		mongoServer, err := memongo.StartWithOptions(&memongo.Options{MongoVersion: "7.0.14"})
+		if err != nil {
+			t.Skipf("unable to start optional memongo: %v", err)
+		}
+		t.Cleanup(mongoServer.Stop)
+		uri = mongoServer.URI()
 	}
-	t.Cleanup(func() {
-		mongoServer.Stop()
-	})
 
 	dbName := memongo.RandomDatabase()
-	mongoHandler, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(mongoServer.URI(), dbName))
+	mongoHandler, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(uri, dbName))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_ = mongoHandler.Close(ctx)
+		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		require.NoError(t, mongoHandler.Close(cleanup))
 	})
 
 	store := repository.NewMongoDbRepositoryWithDefaults(mongoHandler, dbName)
 	repo := blueprint.NewRepository(store)
+	collection, err := repo.GetBlueprintCollection(ctx)
+	require.NoError(t, err, "an explicit Mongo URI must be reachable")
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		require.NoError(t, collection.Database().Drop(cleanup))
+	})
 
 	newBlueprint := blueprint.NewBlueprint(&blueprint.CreateBlueprintRequest{
-		Name:            "Starter API",
-		Kind:            "Service",
-		Description:     "Reference package wiring",
-		Status:          blueprint.BlueprintStatusActive,
-		CreatedByUserID: "user-1",
+		Name:        "Starter API",
+		Kind:        "Service",
+		Description: "Reference package wiring",
+		Status:      blueprint.BlueprintStatusActive,
+		ActorID:     "user-1",
 	})
 	newBlueprint.GenerateID()
 	newBlueprint.GenerateNanoID()

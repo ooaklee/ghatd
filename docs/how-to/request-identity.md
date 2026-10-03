@@ -77,6 +77,13 @@ for the exact source changes and error behavior.
 
 ## Transport binding
 
+The [Blueprint reference template](../../internal/blueprint/README.md#actorid-migration)
+uses `ActorID` for create, get-by-ID, update and delete requests. Its actor-bearing
+HTTP mappers require verified authentication, while lower services accept trusted
+in-process composition and reject contradictory published identity. Stored audit
+fields and route admission remain unchanged; copying the template does not supply
+a product's resource-ownership policy.
+
 Vision's nine mutation commands use `ActorID`, including deletion. Stored
 authorship and vote ownership remain distinct from request identity. Its lower
 service accepts trusted in-process calls but never derives permissions from an
