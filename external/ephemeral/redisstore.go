@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -336,7 +335,7 @@ func (c *Client) FetchAuth(ctx context.Context, accessDetails TokenDetailsAccess
 		return "", contextErr
 	}
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
+		if IsAuthNotFound(err) {
 			return "", fmt.Errorf("%w: %w", ErrAuthNotFound, err)
 		}
 		logger.Error("ephemeral-auth-fetch-failed")

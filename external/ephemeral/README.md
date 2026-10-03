@@ -10,15 +10,23 @@ utility below; no production Redis fallback is selected automatically.
 `Client.FetchAuth(ctx, details)` returns the owner stored for a namespaced
 session. The caller must compare it with the signed owner; a successful lookup
 is not authorization by itself. Missing/expired records wrap `ErrAuthNotFound`
-and retain `errors.Is(err, redis.Nil)` compatibility. Use `IsAuthNotFound` when
-supporting older Redis adapters. Custom adapters should return the framework
+and retain `errors.Is(err, redis.Nil)` compatibility. Use `IsAuthNotFound` for
+absence-driven control flow, including when supporting older Redis adapters.
+Custom adapters should return or ordinarily wrap the framework
 sentinel for absence and preserve outages/cancellation as distinct errors.
+
+The helper accepts only error trees whose leaves are `ErrAuthNotFound` or
+`redis.Nil`, including the native dual-sentinel wrapper. A joined operational
+failure must not be treated as a missing session. Nil causes, typed-nil errors,
+cycles and trees exceeding 64 nodes fail closed; error strings and custom `Is`
+methods cannot establish absence. Ordinary `errors.Is` remains useful for
+diagnostics, but one matching cause alone is insufficient for absence decisions.
 
 Nil context/client/identity and empty IDs are rejected before storage access.
 Cancellation is checked before and after the read, and operational errors retain
 their original cause. Automatic lookup logs contain fixed outcome metadata, not
 session keys, owner IDs or raw driver diagnostics. Do not rely on direct equality
-with `redis.Nil` or parse error strings; use `errors.Is` or the helper instead.
+with `redis.Nil` or parse error strings; use the helper for control flow instead.
 
 ## Process-local transactional snapshots
 

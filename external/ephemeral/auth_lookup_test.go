@@ -47,6 +47,7 @@ func (c *authLookupClient) Get(key string) *redis.StringCmd {
 
 func TestFetchAuthBoundariesAndErrorCauses(t *testing.T) {
 	driverErr := errors.New("private-driver-diagnostic")
+	mixedErr := errors.Join(redis.Nil, driverErr)
 	for _, tc := range []struct {
 		name, variant string
 		want          error
@@ -56,6 +57,7 @@ func TestFetchAuthBoundariesAndErrorCauses(t *testing.T) {
 		{"missing session", "missing", ErrAuthNotFound, 1},
 		{"wrapped Redis absence", "wrapped-missing", ErrAuthNotFound, 1},
 		{"storage failure", "driver", driverErr, 1},
+		{"absence mixed with storage failure", "mixed", mixedErr, 1},
 		{"nil client", "nil-client", ErrInvalidAuthLookup, 0},
 		{"nil store", "nil-store", ErrInvalidAuthLookup, 0},
 		{"nil context", "nil-context", ErrInvalidAuthLookup, 0},
@@ -79,6 +81,8 @@ func TestFetchAuthBoundariesAndErrorCauses(t *testing.T) {
 				client.err = fmt.Errorf("lookup: %w", redis.Nil)
 			case "driver":
 				client.err = driverErr
+			case "mixed":
+				client.err = mixedErr
 			case "nil-client":
 				store.client = nil
 			case "nil-store":
@@ -113,6 +117,11 @@ func TestFetchAuthBoundariesAndErrorCauses(t *testing.T) {
 				require.True(t, IsAuthNotFound(err))
 				require.Zero(t, logs.Len(), "expected absence is not an operational error")
 			}
+			if tc.variant == "mixed" {
+				require.Same(t, mixedErr, err, "preserve the original operational error")
+				require.False(t, IsAuthNotFound(err))
+				require.Equal(t, 1, logs.FilterMessage("ephemeral-auth-fetch-failed").Len())
+			}
 			for _, log := range logs.All() {
 				encoded := fmt.Sprint(log.Message, log.ContextMap())
 				for _, private := range []string{"private-owner", "private-session", "private-driver-diagnostic"} {
@@ -124,6 +133,10 @@ func TestFetchAuthBoundariesAndErrorCauses(t *testing.T) {
 }
 
 func TestIsAuthNotFound(t *testing.T) {
+	boundary := error(ErrAuthNotFound)
+	for i := 0; i < 63; i++ {
+		boundary = fmt.Errorf("lookup: %w", boundary)
+	}
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -135,7 +148,45 @@ func TestIsAuthNotFound(t *testing.T) {
 		{"legacy Redis", redis.Nil, true},
 		{"lookalike", errors.New(ErrAuthNotFound.Error()), false},
 		{"outage", context.DeadlineExceeded, false},
+		{"native dual absence", fmt.Errorf("%w: %w", ErrAuthNotFound, redis.Nil), true},
+		{"joined outage", errors.Join(ErrAuthNotFound, context.DeadlineExceeded), false},
+		{"wrapped joined outage", fmt.Errorf("lookup: %w", errors.Join(redis.Nil, context.Canceled)), false},
+		{"typed nil", (*nilAuthLookupError)(nil), false},
+		{"cycle", &cyclicAuthLookupError{}, false},
+		{"64 nodes", boundary, true},
+		{"65 nodes", fmt.Errorf("lookup: %w", boundary), false},
+		{"custom Is is not proof of absence", authLookupIsOnlyError{}, false},
+		{"uncomparable error", authLookupSliceError{"opaque"}, false},
+		{"empty multi wrapper", authLookupMultiError{}, false},
+		{"nil branch", authLookupMultiError{ErrAuthNotFound, nil}, false},
+		{"all absence branches", authLookupMultiError{ErrAuthNotFound, redis.Nil}, true},
+		{"oversized branching", authLookupMultiError(make([]error, 64)), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) { require.Equal(t, tc.want, IsAuthNotFound(tc.err)) })
 	}
 }
+
+// nilAuthLookupError exposes adapters that dereference typed-nil errors.
+type nilAuthLookupError struct{ cause error }
+
+func (e *nilAuthLookupError) Error() string { return e.cause.Error() }
+func (e *nilAuthLookupError) Unwrap() error { return e.cause }
+
+type cyclicAuthLookupError struct{}
+
+func (e *cyclicAuthLookupError) Error() string { return "cycle" }
+func (e *cyclicAuthLookupError) Unwrap() error { return e }
+
+type authLookupIsOnlyError struct{}
+
+func (authLookupIsOnlyError) Error() string        { return "opaque" }
+func (authLookupIsOnlyError) Is(target error) bool { return target == ErrAuthNotFound }
+
+type authLookupSliceError []string
+
+func (authLookupSliceError) Error() string { return "opaque" }
+
+type authLookupMultiError []error
+
+func (authLookupMultiError) Error() string     { return "multiple causes" }
+func (e authLookupMultiError) Unwrap() []error { return e }

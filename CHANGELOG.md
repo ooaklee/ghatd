@@ -206,6 +206,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- Session-store absence decisions now inspect every wrapped cause, preserving
+  joined storage failures instead of treating them as missing sessions. Native
+  and legacy Redis absence remain supported; typed-nil, cyclic, oversized and
+  custom `Is`-only errors fail closed. Use
+  [`ephemeral.IsAuthNotFound`](external/ephemeral/README.md#live-session-lookup)
+  for control flow; one `errors.Is` match is not proof of pure absence.
 - New opaque API secrets use cryptographic randomness. Verification resolves an
   exact stored digest, checks status/expiry and binds it to the current active
   owner rather than scanning a page or trusting a public prefix. Assess rotation
