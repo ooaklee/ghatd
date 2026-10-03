@@ -79,6 +79,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Shared [live-session verification](external/accessmanager/README.md#live-session-authority)
+  for explicit credentials and preloaded JWT guards, using current session owner,
+  account identity, email revision and type. Active/admin guards enforce current
+  stored status and roles instead of historical signed flags.
+- Defensive session/API identity snapshots and an explicit bearer-only adapter,
+  exposed through the [middleware suite](external/accessmanager/middleware/README.md#explicit-bearer-sessions).
+  Hosts still enforce resource permissions and recheck sensitive mutations.
 - Explicit [API-token inventory primitives](external/apitoken/README.md) with
   exact retained counts, owner-wide transaction fences and insert-only owner
   preparation on the managed Mongo client. These do not automatically replace
@@ -133,6 +140,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** custom session adapters must preserve operational failures and
+  return consistent live identities. Anonymous fallback requires an anonymous
+  placeholder without credential metadata. Joined or unknown failures are not
+  evidence of expired credentials; review the
+  [cookie lifecycle contract](external/accessmanager/middleware/README.md#refresh-cookie-timing).
+- Concurrent refresh wait timeouts now return 503 (`AM00-040`) without clearing
+  cookies. Missing verification wiring returns 503 (`AM00-039`). Cookie-pair
+  compatibility remains; atomic session-family revocation is not included.
 - **Breaking:** custom API-token repositories/verifiers must provide exact
   digest lookup, owner-bound mutations and verified credential IDs. Activation
   and revocation require the trusted owner ID; usage updates require token ID,
@@ -206,6 +221,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- Cookie adapters refresh only known absent/expired credentials, preserve cookies
+  on account denials or operational failures, and publish replacement cookies
+  only after retry identity validation and the final cancellation check. Anonymous
+  fallback strips selected credentials/inherited identity and rejects authenticated
+  adapter results. Explicit bearer mode never refreshes or falls back to cookies.
+- Authentication and hardened-limit middleware use canonical manifest responses.
+  Joined storage failures cannot justify an IP ban. Refresh preserves failure
+  causes, rejects malformed token results and omits raw adapter diagnostics from
+  manager logs; injected dependencies retain their own logging responsibility.
 - Session-store absence decisions now inspect every wrapped cause, preserving
   joined storage failures instead of treating them as missing sessions. Native
   and legacy Redis absence remain supported; typed-nil, cyclic, oversized and

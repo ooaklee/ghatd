@@ -2,13 +2,16 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/ephemeral"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/reply/v2"
 	"go.uber.org/zap"
@@ -80,18 +83,23 @@ func NewHardenedRateLimitProtection(r *NewHardenedRateLimitProtectionRequest) *H
 func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := r.Context().Err(); err != nil {
+				h.fail(w, err)
+				return
+			}
 
 			logger := logger.AcquirePackageFrom(r.Context(), "external/accessmanager/middleware")
 
 			clientIP := getValidClientIP(r)
 
 			blocked, err := h.ephemeralStore.IsIPBlocked(r.Context(), clientIP)
+			if contextErr := r.Context().Err(); contextErr != nil {
+				h.fail(w, contextErr)
+				return
+			}
 			if err != nil {
-				logger.Error("failed-to-check-ip-block-status",
-					zap.String("client-ip", clientIP),
-					zap.Error(err),
-				)
-				h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				logger.Error("failed-to-check-ip-block-status")
+				h.fail(w, err)
 				return
 			}
 
@@ -100,31 +108,38 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 					zap.String("client-ip", clientIP),
 				)
 
-				h.getBaseResponseHandler().NewHTTPErrorResponse(w, ephemeral.ErrHardenedRateLimitExceeded)
+				h.fail(w, ephemeral.ErrHardenedRateLimitExceeded)
 				return
 			}
 
 			code := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("c")))
 
 			err = h.ephemeralStore.TrackHardenedAttempt(r.Context(), clientIP, code, h.maxAttempts, h.windowDuration)
+			if contextErr := r.Context().Err(); contextErr != nil {
+				h.fail(w, contextErr)
+				return
+			}
 			if err != nil {
+				// A failed counter read/write does not prove abuse. Deny this
+				// request, but never create an IP ban merely because storage failed.
+				if !isHardenedLimitExceeded(err) {
+					logger.Error("verification-rate-limit-storage-failed")
+					h.fail(w, err)
+					return
+				}
 				logger.Warn("rate-limit-exceeded-blocking-ip",
 					zap.String("client-ip", clientIP),
 					zap.Bool("code-present", code != ""),
 					zap.Int("code-length", len(code)),
 					zap.Int("max-attempts", h.maxAttempts),
-					zap.Error(err),
 				)
 
 				blockErr := h.ephemeralStore.BlockIP(r.Context(), clientIP, h.blockDuration)
 				if blockErr != nil {
-					logger.Error("failed-to-block-ip-after-rate-limit-exceeded",
-						zap.String("client-ip", clientIP),
-						zap.Error(blockErr),
-					)
+					logger.Error("failed-to-block-ip-after-rate-limit-exceeded")
 				}
 
-				h.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+				h.fail(w, err)
 				return
 			}
 
@@ -139,9 +154,38 @@ func (h *HardenedRateLimitProtection) Middleware() mux.MiddlewareFunc {
 	}
 }
 
+// isHardenedLimitExceeded accepts one ordinarily wrapped threshold sentinel.
+// A joined outage or custom Is-only match cannot justify a consequential ban.
+// Bounded traversal also rejects cycles and typed-nil adapter errors.
+func isHardenedLimitExceeded(err error) bool {
+	for depth := 0; err != nil && depth < 64; depth++ {
+		value := reflect.ValueOf(err)
+		switch value.Kind() {
+		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+			if value.IsNil() {
+				return false
+			}
+		}
+		if err == ephemeral.ErrHardenedRateLimitExceeded {
+			return true
+		}
+		if _, joined := err.(interface{ Unwrap() []error }); joined {
+			return false
+		}
+		err = errors.Unwrap(err)
+	}
+	return false
+}
+
 // getBaseResponseHandler returns a response handler configured with the rate limit error maps.
 func (h *HardenedRateLimitProtection) getBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(h.errorMaps)
+}
+
+// fail retains configured response overrides without exposing wrapped driver
+// diagnostics through the HTTP response or the replier's fallback logging.
+func (h *HardenedRateLimitProtection) fail(w http.ResponseWriter, err error) {
+	_ = h.getBaseResponseHandler().NewHTTPErrorResponse(w, errormanifest.CanonicalError(err, h.errorMaps))
 }
 
 // getValidClientIP returns the best IP address to reference a requester by.

@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/accessmanager"
-	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	"github.com/ooaklee/reply/v2"
@@ -179,14 +179,25 @@ func (m *Middleware) getCookies(req *http.Request) (authCookie, refreshCookie *h
 	return authCookie, refreshCookie, nil
 }
 
-// attemptTokenRefresh attempts to refresh tokens and retry validation
+// refreshedSession holds a validated request and replacement cookies until the
+// final publication boundary. Preparing it never mutates the caller's request
+// or writes a response; cancellation can still prevent cookie publication.
+type refreshedSession struct {
+	request *http.Request
+	tokens  accessmanager.RefreshTokenResponse
+}
+
+// attemptTokenRefresh rotates once, verifies the replacement and prepares its
+// identity context. The caller must publish only through serveRefreshed.
 func (m *Middleware) attemptTokenRefresh(
-	w http.ResponseWriter,
 	req *http.Request,
 	refreshCookie *http.Cookie,
 	validateFunc func(*http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error),
-) (*accessmanager.MiddlewareAuthedUserResponse, error) {
-	if refreshCookie.Value == "" {
+) (*refreshedSession, error) {
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
+	if refreshCookie == nil || refreshCookie.Value == "" {
 		return nil, accessmanager.ErrEmptyRefreshToken
 	}
 
@@ -194,20 +205,51 @@ func (m *Middleware) attemptTokenRefresh(
 	tokenResp, err := m.service.RefreshToken(req.Context(), &accessmanager.RefreshTokenRequest{
 		RefreshToken: refreshCookie.Value,
 	})
+	if contextErr := req.Context().Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil {
 		return nil, err
 	}
+	if tokenResp == nil || tokenResp.AccessToken == "" || tokenResp.RefreshToken == "" {
+		return nil, accessmanager.ErrSessionVerificationUnavailable
+	}
 
-	// Update request header with new access token
-	req.Header["Authorization"] = []string{"Bearer " + tokenResp.AccessToken}
+	// Validate a detached header set so rejected refreshes cannot replace the
+	// caller's presented credential. Publish it only after validation succeeds.
+	retry := req.Clone(req.Context())
+	retry.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
 
 	// Retry validation with new token
-	authedUserResp, err := validateFunc(req)
+	authedUserResp, err := validateFunc(retry)
+	if contextErr := req.Context().Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil {
 		return nil, err
 	}
+	if authedUserResp == nil || !authedUserResp.Authenticated {
+		return nil, accessmanager.ErrSessionVerificationUnavailable
+	}
+	ctx, err := ContextWithAuthentication(retry.Context(), authedUserResp)
+	if err != nil {
+		if contextErr := retry.Context().Err(); contextErr != nil {
+			return nil, contextErr
+		}
+		return nil, accessmanager.ErrSessionVerificationUnavailable
+	}
+	return &refreshedSession{request: retry.WithContext(ctx), tokens: *tokenResp}, nil
+}
 
-	// Set new tokens in cookies only after the retry accepts the refreshed token.
+// serveRefreshed commits replacement cookies only after identity publication and
+// the final cancellation check. Cancellation after this boundary cannot undo
+// headers already written, nor does it roll back server-side token rotation.
+func (m *Middleware) serveRefreshed(w http.ResponseWriter, handler http.Handler, session *refreshedSession) {
+	if err := session.request.Context().Err(); err != nil {
+		m.fail(w, err)
+		return
+	}
+	tokenResp := session.tokens
 	toolbox.AddAuthCookies(
 		w,
 		m.environment,
@@ -220,7 +262,7 @@ func (m *Middleware) attemptTokenRefresh(
 		tokenResp.RefreshTokenExpiresAt,
 	)
 
-	return authedUserResp, nil
+	handler.ServeHTTP(w, session.request)
 }
 
 // handleJWTRequest is a unified handler for all JWT validation types
@@ -230,11 +272,16 @@ func (m *Middleware) handleJWTRequest(
 	handler http.Handler,
 	validationType jwtValidationType,
 ) {
+	req = req.Clone(req.Context())
+	if err := req.Context().Err(); err != nil {
+		m.fail(w, err)
+		return
+	}
 	// Get cookies
 	authCookie, refreshCookie, err := m.getCookies(req)
 	if err != nil {
 		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		m.fail(w, err)
 		return
 	}
 
@@ -249,25 +296,41 @@ func (m *Middleware) handleJWTRequest(
 	// Attempt validation
 	authedUserResp, err := validateFunc(req)
 	if err != nil {
-		// Try token refresh
-		authedUserResp, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, validateFunc)
+		if contextErr := req.Context().Err(); contextErr != nil {
+			m.fail(w, contextErr)
+			return
+		}
+		kind := accessmanager.ClassifySessionError(err)
+		if kind != accessmanager.SessionErrorRefreshable {
+			if kind == accessmanager.SessionErrorInvalidCredential {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+			}
+			m.fail(w, err)
+			return
+		}
+		// Only an absent/expired access credential can trigger refresh. Account
+		// denials and dependency failures cannot be repaired by rotating tokens.
+		refreshed, refreshErr := m.attemptTokenRefresh(req, refreshCookie, validateFunc)
 		if refreshErr != nil {
-			toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
-			m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+			kind := accessmanager.ClassifySessionError(refreshErr)
+			if kind == accessmanager.SessionErrorInvalidCredential || kind == accessmanager.SessionErrorRefreshable {
+				toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
+			}
+			m.fail(w, refreshErr)
 			return
 		}
 
 		// Refresh succeeded, use the new authedUser
-		req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-		handler.ServeHTTP(w, req)
+		m.serveRefreshed(w, handler, refreshed)
 		return
 	}
 
 	// Validation succeeded
-	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-	handler.ServeHTTP(w, req)
+	if authedUserResp == nil || !authedUserResp.Authenticated {
+		m.fail(w, accessmanager.ErrSessionVerificationUnavailable)
+		return
+	}
+	m.serveAuthenticated(w, req, handler, authedUserResp)
 }
 
 // RateLimitOrActiveJWTRequired creates a middleware ensuring that the request is rate limited if
@@ -276,6 +339,11 @@ func (m *Middleware) handleJWTRequest(
 //	or passed with a valid token, and the user is in an `ACTIVE` state (status)
 func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req = req.Clone(req.Context())
+		if err := req.Context().Err(); err != nil {
+			m.fail(w, err)
+			return
+		}
 		authCookie, _ := req.Cookie(m.cookiePrefixAuthToken)
 		refreshCookie, _ := req.Cookie(m.cookiePrefixRefreshToken)
 		hasAuthCookie := authCookie != nil && authCookie.Value != ""
@@ -302,22 +370,40 @@ func (m *Middleware) RateLimitOrActiveJWTRequired(handler http.Handler) http.Han
 
 		authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
 		if err != nil {
-			// Try token refresh
-			authedUserResp, refreshErr := m.attemptTokenRefresh(w, req, refreshCookie, m.service.MiddlewareRateLimitOrActiveJWTRequired)
+			if contextErr := req.Context().Err(); contextErr != nil {
+				m.fail(w, contextErr)
+				return
+			}
+			kind := accessmanager.ClassifySessionError(err)
+			if kind == accessmanager.SessionErrorUnknown || kind == accessmanager.SessionErrorDenied {
+				m.fail(w, err)
+				return
+			}
+			if kind == accessmanager.SessionErrorInvalidCredential {
+				m.handleRateLimitOrActiveUnauthenticated(w, req, handler, true, "invalid-auth-credential", err, authCookie, refreshCookie)
+				return
+			}
+			// Refresh never runs for infrastructure errors or account denials.
+			refreshed, refreshErr := m.attemptTokenRefresh(req, refreshCookie, m.service.MiddlewareRateLimitOrActiveJWTRequired)
 			if refreshErr != nil {
-				m.handleRateLimitOrActiveUnauthenticated(w, req, handler, true, "auth-validation-or-refresh-failed", err, authCookie, refreshCookie)
+				kind := accessmanager.ClassifySessionError(refreshErr)
+				if kind == accessmanager.SessionErrorUnknown || kind == accessmanager.SessionErrorDenied {
+					m.fail(w, refreshErr)
+					return
+				}
+				m.handleRateLimitOrActiveUnauthenticated(w, req, handler, true, "auth-validation-or-refresh-failed", refreshErr, authCookie, refreshCookie)
 				return
 			}
 
-			req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-			handler.ServeHTTP(w, req)
+			m.serveRefreshed(w, handler, refreshed)
 			return
 		}
 
-		req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-		handler.ServeHTTP(w, req)
+		if authedUserResp == nil || !authedUserResp.Authenticated {
+			m.fail(w, accessmanager.ErrSessionVerificationUnavailable)
+			return
+		}
+		m.serveAuthenticated(w, req, handler, authedUserResp)
 	})
 }
 
@@ -333,28 +419,46 @@ func (m *Middleware) handleRateLimitOrActiveUnauthenticated(
 	authCookie *http.Cookie,
 	refreshCookie *http.Cookie,
 ) {
+	if err := req.Context().Err(); err != nil {
+		m.fail(w, err)
+		return
+	}
 	if clearCookies {
 		toolbox.RemoveAuthCookies(w, m.environment, m.cookieDomain, m.cookiePrefixAuthToken, m.cookiePrefixRefreshToken)
 		logger.Info(req.Context(), "rate-limit-or-active-auth-downgraded",
 			zap.String("reason", reason),
+			zap.Uint8("cause-kind", uint8(accessmanager.ClassifySessionError(authErr))),
 			zap.Bool("has-auth-cookie", authCookie != nil),
 			zap.Bool("auth-cookie-empty", authCookie != nil && authCookie.Value == ""),
 			zap.Bool("has-refresh-cookie", refreshCookie != nil),
 			zap.Bool("refresh-cookie-empty", refreshCookie != nil && refreshCookie.Value == ""),
-			zap.Error(authErr),
 		)
 	}
 
+	// The anonymous adapter must not inherit any selected credential or actor.
+	// Preserve unrelated cookies/metadata, but reject authenticated results even
+	// if a custom adapter selects a credential outside the supported transports.
+	req = req.Clone(clearAuthentication(req.Context()))
 	req.Header.Del("Authorization")
+	req.Header.Del(common.SystemWideXApiToken)
+	cookies := req.Cookies()
+	req.Header.Del("Cookie")
+	for _, cookie := range cookies {
+		if cookie.Name != m.cookiePrefixAuthToken && cookie.Name != m.cookiePrefixRefreshToken {
+			req.AddCookie(cookie)
+		}
+	}
 	authedUserResp, err := m.service.MiddlewareRateLimitOrActiveJWTRequired(req)
 	if err != nil {
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		m.fail(w, err)
+		return
+	}
+	if authedUserResp == nil || authedUserResp.Authenticated || authedUserResp.Token != nil || authedUserResp.APIToken != nil {
+		m.fail(w, accessmanager.ErrSessionVerificationUnavailable)
 		return
 	}
 
-	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-	handler.ServeHTTP(w, req)
+	m.serveAuthenticated(w, req, handler, authedUserResp)
 }
 
 // handleAdminAPITokenRequiredRequest is checking to make sure the request
@@ -362,13 +466,11 @@ func (m *Middleware) handleRateLimitOrActiveUnauthenticated(
 func (m *Middleware) handleAdminAPITokenRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
 	authedUserResp, err := m.service.MiddlewareAdminAPITokenRequired(req)
 	if err != nil {
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		m.fail(w, err)
 		return
 	}
 
-	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-	handler.ServeHTTP(w, req)
+	m.serveAuthenticated(w, req, handler, authedUserResp)
 }
 
 // handleValidAPITokenRequiredRequest is checking to make sure the request
@@ -376,27 +478,35 @@ func (m *Middleware) handleAdminAPITokenRequiredRequest(w http.ResponseWriter, r
 func (m *Middleware) handleValidAPITokenRequiredRequest(w http.ResponseWriter, req *http.Request, handler http.Handler) {
 	authedUserResp, err := m.service.MiddlewareValidAPITokenRequired(req)
 	if err != nil {
-		m.getBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		m.fail(w, err)
 		return
 	}
 
-	req = handleTransmittingAuthenticatedUserDetails(req, authedUserResp)
-
-	handler.ServeHTTP(w, req)
+	m.serveAuthenticated(w, req, handler, authedUserResp)
 }
 
-// handleTransmittingAuthenticatedUserDetails extends the request context with
-// the authenticated user's details including user ID and/or the user object
-func handleTransmittingAuthenticatedUserDetails(req *http.Request, authedUserResp *accessmanager.MiddlewareAuthedUserResponse) *http.Request {
-
-	req = req.WithContext(accessmanagerhelpers.TransitUserWith(req.Context(), authedUserResp.User))
-	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), authedUserResp.User.GetUserId()))
-	req = req.WithContext(accessmanagerhelpers.TransitAuthenticatedWith(req.Context(), authedUserResp.Authenticated))
-
-	return req
+// serveAuthenticated publishes a validated result through the shared context
+// adapter. Inconsistent identities fail before a protected handler can run.
+func (m *Middleware) serveAuthenticated(w http.ResponseWriter, req *http.Request, handler http.Handler, result *accessmanager.MiddlewareAuthedUserResponse) {
+	if err := req.Context().Err(); err != nil {
+		m.fail(w, err)
+		return
+	}
+	ctx, err := ContextWithAuthentication(req.Context(), result)
+	if err != nil {
+		m.fail(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
+		return
+	}
+	handler.ServeHTTP(w, req.WithContext(ctx))
 }
 
 // getBaseResponseHandler returns response handler configured with auth error map
 func (m *Middleware) getBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(m.errorMaps)
+}
+
+// fail resolves ordinary wrapped manifest errors before delegating to reply.
+// Unknown or ambiguous failures use opaque responses, never raw diagnostics.
+func (m *Middleware) fail(w http.ResponseWriter, err error) {
+	_ = m.getBaseResponseHandler().NewHTTPErrorResponse(w, errormanifest.CanonicalError(err, m.errorMaps))
 }

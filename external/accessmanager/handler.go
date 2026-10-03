@@ -353,10 +353,16 @@ func (h *Handler) LogoutUser(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusOK)
 }
 
-// RefreshToken returns reponse from user's request to refresh their token
-// TODO: Create tests
+// RefreshToken rotates the selected cookie pair and publishes non-cacheable
+// expiry metadata. Known credential rejections clear authentication cookies;
+// account denials and operational failures preserve them for reconciliation.
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-refresh-token")
+	w.Header().Set("Cache-Control", "no-store")
+	if err := r.Context().Err(); err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
 
 	request, err := MapRequestToRefreshTokenRequest(r, h.CookiePrefixRefreshToken, h.CookiePrefixAuthToken, h.Validator)
 	if err != nil {
@@ -371,12 +377,26 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.Service.RefreshToken(r.Context(), request)
 	if err != nil {
-		h.RemoveAuthCookies(w)
-		h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
-		h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
+		if contextErr := r.Context().Err(); contextErr != nil {
+			err = contextErr
+		}
+		kind := ClassifySessionError(err)
+		if kind == SessionErrorInvalidCredential || kind == SessionErrorRefreshable {
+			h.RemoveAuthCookies(w)
+			h.RemoveCookiesWithName(w, common.AccessTokenAuthInfoCookieName)
+			h.RemoveCookiesWithName(w, common.RefreshTokenAuthInfoCookieName)
+		}
 
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+		logger.Warn("refresh-request-rejected")
 		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if err := r.Context().Err(); err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if response == nil || response.AccessToken == "" || response.RefreshToken == "" {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
 		return
 	}
 

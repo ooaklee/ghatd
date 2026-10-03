@@ -47,6 +47,9 @@ type OauthService interface {
 type EphemeralStore interface {
 	CreateAuth(ctx context.Context, userID string, tokenDetails ephemeral.TokenDetailsAuth) error
 	StoreToken(ctx context.Context, accessTokenUUID string, userID string, ttl time.Duration) error
+	// FetchAuth returns the live session owner. Expected absence uses
+	// ephemeral.ErrAuthNotFound (legacy redis.Nil is accepted); other errors
+	// represent operational failures and must not masquerade as revocation.
 	FetchAuth(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error)
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 	// AcquireRefreshTokenRotationLock claims the right to rotate one refresh token.
@@ -726,88 +729,143 @@ func (s *Service) authenticateAPIToken(r *http.Request, requireAdmin bool) (*Mid
 // MiddlewareJWTRequired validates that the request contains a valid, non-expired
 // JWT token. Returns the user ID if the token is valid and active in the store.
 func (s *Service) MiddlewareJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	if r == nil || s == nil || s.AuthService == nil {
+		return nil, ErrSessionVerificationUnavailable
+	}
 	ctx := r.Context()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(ctx, r)
 	if err != nil {
 		return nil, err
 	}
+	return s.authenticateTokenDetails(ctx, tokenAuth)
+}
 
-	if _, err = s.EphemeralStore.FetchAuth(ctx, tokenAuth); err != nil {
-		return nil, ErrUnauthorizedTokenNotFoundInStore
+// AuthenticateSession verifies one explicitly selected bearer without HTTP,
+// cookie selection, refresh, or anonymous fallback. It checks signature,
+// expiry, live session presence, current user identity and email revision.
+// Hosts retain responsibility for account-status, verification, audience and
+// resource permissions. Call again before sensitive work or response replay;
+// a previously returned result is only a snapshot of current authority.
+func (s *Service) AuthenticateSession(ctx context.Context, credential string) (*MiddlewareAuthedUserResponse, error) {
+	if ctx == nil || s == nil || s.AuthService == nil {
+		return nil, ErrSessionVerificationUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if credential == "" {
+		return nil, auth.ErrNoBearerHeaderFound
+	}
+	details, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, credential)
+	if err != nil {
+		return nil, err
+	}
+	return s.authenticateTokenDetails(ctx, details)
+}
+
+// authenticateTokenDetails shares live authority checks between the HTTP and
+// transport-independent entry points. It never trusts a token's user ID alone.
+func (s *Service) authenticateTokenDetails(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (*MiddlewareAuthedUserResponse, error) {
+	if ctx == nil || s == nil || s.EphemeralStore == nil || s.UserService == nil {
+		return nil, ErrSessionVerificationUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !tokenAuth.IsSessionCredential() || tokenAuth.UserID == "" || tokenAuth.AccessUUID == "" {
+		return nil, auth.ErrUnauthorized
+	}
+
+	storedUserID, err := s.EphemeralStore.FetchAuth(ctx, tokenAuth)
+	if err != nil {
+		if ephemeral.IsAuthNotFound(err) {
+			return nil, ErrUnauthorizedTokenNotFoundInStore
+		}
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if storedUserID != tokenAuth.UserID {
+		// A successful lookup with an empty or mismatched owner is malformed
+		// authority, not evidence of absence that permits a refresh attempt.
+		return nil, ErrSessionVerificationUnavailable
 	}
 
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: tokenAuth.UserID})
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if persistentUserResponse == nil || persistentUserResponse.User == nil || persistentUserResponse.User.GetUserId() != tokenAuth.UserID {
+		return nil, auth.ErrUnauthorized
+	}
 
 	if persistentUserResponse.User.EmailRevision != tokenAuth.EmailRevision {
 		return nil, ErrOAuthReauthenticationRequired
 	}
+	if !auth.MatchesUserType(tokenAuth.UserType, persistentUserResponse.User) {
+		return nil, ErrOAuthReauthenticationRequired
+	}
 	return &MiddlewareAuthedUserResponse{
+		Token:         tokenAuth,
 		Authenticated: true,
 		UserID:        persistentUserResponse.User.GetUserId(),
 		User:          persistentUserResponse.User,
 	}, nil
 }
 
-// MiddlewareActiveJWTRequired validates that the request contains a valid JWT token
-// and the associated user account is in an ACTIVE status. Returns the user ID if valid.
+// MiddlewareActiveJWTRequired verifies the live session and current ACTIVE
+// account. A signed authorization flag alone cannot restore a revoked session.
 func (s *Service) MiddlewareActiveJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
-	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
+	current, err := s.MiddlewareJWTRequired(r)
 	if err != nil {
 		return nil, err
 	}
-
-	return s.checkActivenessOfUser(r.Context(), tokenAuth)
+	return requireActiveSession(current)
 }
 
-// MiddlewareAdminJWTRequired validates that the request contains a valid JWT token
-// belonging to an active admin user. Returns the user ID if valid.
+// MiddlewareAdminJWTRequired adds current stored administrator authority to
+// live-session and ACTIVE-account checks. Signed IsAdmin/IsAuthorized flags are
+// historical metadata, not a substitute for current roles/status. Promotions and
+// demotions take effect on the next check without requiring a fresh token.
 func (s *Service) MiddlewareAdminJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
-	ctx := r.Context()
-
-	tokenAuth, err := s.AuthService.ExtractTokenMetadata(ctx, r)
+	current, err := s.MiddlewareActiveJWTRequired(r)
 	if err != nil {
 		return nil, err
 	}
-
-	if !tokenAuth.IsAdmin {
+	if !current.User.IsAdmin() {
 		return nil, ErrUnauthorizedAdminAccessAttempted
 	}
-
-	if !tokenAuth.IsAuthorized {
-		return nil, ErrUnauthorizedNonActiveStatus
-	}
-
-	if _, err = s.EphemeralStore.FetchAuth(ctx, tokenAuth); err != nil {
-		return nil, ErrUnauthorizedTokenNotFoundInStore
-	}
-
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: tokenAuth.UserID})
-	if err != nil {
-		return nil, err
-	}
-
-	if persistentUserResponse.User.EmailRevision != tokenAuth.EmailRevision {
-		return nil, ErrOAuthReauthenticationRequired
-	}
-	return &MiddlewareAuthedUserResponse{
-		Authenticated: true,
-		UserID:        persistentUserResponse.User.GetUserId(),
-		User:          persistentUserResponse.User,
-	}, nil
+	return current, nil
 }
 
 // MiddlewareRateLimitOrActiveJWTRequired validates authenticated requests via JWT or
 // applies rate limiting to unauthenticated requests. Unauthenticated requests are assigned
 // a placeholder user ID and tracked by IP address. Returns the user ID or placeholder.
 func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*MiddlewareAuthedUserResponse, error) {
+	if r == nil || s == nil || s.AuthService == nil || s.EphemeralStore == nil {
+		return nil, ErrSessionVerificationUnavailable
+	}
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
 	tokenAuth, err := s.AuthService.ExtractTokenMetadata(r.Context(), r)
-	if err != nil && errors.Is(err, auth.ErrNoBearerHeaderFound) {
+	if contextErr := r.Context().Err(); contextErr != nil {
+		return nil, contextErr
+	}
+	if knownSessionCause(err) == auth.ErrNoBearerHeaderFound {
 		if ephErr := s.EphemeralStore.AddRequestCountEntry(r.Context(), getValidRequestorIP(r)); ephErr != nil {
 			return nil, ephErr
+		}
+		if err := r.Context().Err(); err != nil {
+			return nil, err
 		}
 
 		return &MiddlewareAuthedUserResponse{
@@ -823,25 +881,20 @@ func (s *Service) MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*Midd
 		return nil, err
 	}
 
-	return s.checkActivenessOfUser(r.Context(), tokenAuth)
+	current, err := s.authenticateTokenDetails(r.Context(), tokenAuth)
+	if err != nil {
+		return nil, err
+	}
+	return requireActiveSession(current)
 }
 
-// checkActivenessOfUser verifies that the user account is currently in an ACTIVE status.
-// Returns the user ID if active, otherwise returns an error.
-func (s *Service) checkActivenessOfUser(ctx context.Context, tokenAuth *auth.TokenAccessDetails) (*MiddlewareAuthedUserResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "check-activeness-of-user")
-	logger.Debug("handling-check-activeness-of-user-request")
-
-	user, isActiveUser := s.isUserLiveStatusActive(ctx, tokenAuth.UserID)
-	if !isActiveUser || user.EmailRevision != tokenAuth.EmailRevision {
+// requireActiveSession applies status policy only after the common verifier has
+// bound an authenticated session to its current stored owner and identity.
+func requireActiveSession(current *MiddlewareAuthedUserResponse) (*MiddlewareAuthedUserResponse, error) {
+	if current.User.Status != userv2.AccountStatusKeyActive {
 		return nil, ErrUnauthorizedNonActiveStatus
 	}
-
-	return &MiddlewareAuthedUserResponse{
-		Authenticated: true,
-		UserID:        user.GetUserId(),
-		User:          user,
-	}, nil
+	return current, nil
 }
 
 // LogoutUser handles the logic of signing user off of platform. Delete token(s) from ephemeral store
@@ -884,10 +937,21 @@ func (s *Service) LogoutUser(ctx context.Context, r *http.Request) error {
 	return nil
 }
 
-// RefreshToken handles the logic of creating a new pair of tokens as well as the relevent sanity
-// checks
-// TODO: Create tests
+// RefreshToken validates current account identity and rotates a stored refresh
+// credential once, tolerating concurrent callers via a bounded replay result.
+// Operational failures preserve their causes. A wait timeout does not imply
+// credential rejection; an uncertain write may still have consumed the old
+// credential. This is not atomic session-family revocation.
 func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error) {
+	if ctx == nil || s == nil || s.AuthService == nil || s.UserService == nil || s.EphemeralStore == nil || r == nil {
+		return nil, ErrSessionVerificationUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r.RefreshToken == "" {
+		return nil, ErrEmptyRefreshToken
+	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	tokenUser, refreshTokenDetails, err := s.refreshTokenUserFromCookieValue(ctx, r.RefreshToken)
@@ -901,13 +965,13 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 	if response, err := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); err != nil {
 		return nil, err
 	} else if response != nil {
-		logger.Info("refresh-token-rotation-replayed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
+		logger.Info("refresh-token-rotation-replayed")
 		return response, nil
 	}
 
 	lockAcquired, err := s.EphemeralStore.AcquireRefreshTokenRotationLock(ctx, userID, refreshTokenUuid, refreshTokenRotationLockTTL)
 	if err != nil {
-		logger.Error("refresh-token-rotation-lock-failed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(err))
+		logger.Error("refresh-token-rotation-lock-failed")
 		return nil, err
 	}
 	if !lockAcquired {
@@ -916,59 +980,82 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 			return nil, waitErr
 		}
 		if response != nil {
-			logger.Info("refresh-token-rotation-replayed-after-wait", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
+			logger.Info("refresh-token-rotation-replayed-after-wait")
 			return response, nil
 		}
 
-		logger.Error("refresh-token-rotation-lock-timeout-without-result", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
-		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
+		logger.Error("refresh-token-rotation-lock-timeout-without-result")
+		return nil, ErrRefreshTemporarilyUnavailable
 	}
 	defer func() {
 		if _, releaseErr := s.EphemeralStore.ReleaseRefreshTokenRotationLock(ctx, userID, refreshTokenUuid); releaseErr != nil {
-			logger.Warn("refresh-token-rotation-lock-release-failed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(releaseErr))
+			logger.Warn("refresh-token-rotation-lock-release-failed")
 		}
 	}()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// Delete previous refresh token matching key (<userID>:<tokenUUID>)
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userID, refreshTokenUuid))
-	if err != nil || deleted == 0 {
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if deleted == 0 {
 		if response, replayErr := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid); replayErr != nil {
 			return nil, replayErr
 		} else if response != nil {
-			logger.Info("refresh-token-rotation-replayed-after-delete-miss", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
+			logger.Info("refresh-token-rotation-replayed-after-delete-miss")
 			return response, nil
 		}
 
-		logger.Error("ephemeral-delete-failed-after-successful-refresh-token-validation", zap.String("user-id", userID), zap.Error(err))
+		// This legacy sentinel means confirmed absence after a successful delete,
+		// not an operational deletion failure (which returned its cause above).
+		logger.Debug("refresh-token-record-absent")
 		return nil, ErrUnauthorizedRefreshTokenCacheDeletionFailure
 	}
 
-	logger.Info("refresh-token-successfully-removed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
+	logger.Info("refresh-token-successfully-removed")
 
 	// check if access token is present and clean up along with it
 	if r.AccessToken != "" {
 
-		logger.Info("access-token-present-in-refresh-token-request", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
+		logger.Info("access-token-present-in-refresh-token-request")
 
 		err := s.RemoveAccessTokenWithCookieValue(ctx, userID, r.AccessToken)
 		if err != nil {
-			logger.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.Error(err))
+			logger.Warn("access-token-failed-to-delete-after-successful-refresh-token-clean-up")
 		} else {
-			logger.Info("access-token-deleted-after-successful-refresh-token-clean-up", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid))
+			logger.Info("access-token-deleted-after-successful-refresh-token-clean-up")
 		}
 
 	}
 
 	// Create new pair of refresh and access tokens
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	newTokensDetails, err := s.createSessionToken(ctx, tokenUser, refreshTokenDetails.AuthenticationTime)
 	if err != nil {
 		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if newTokensDetails == nil || newTokensDetails.AccessToken == "" || newTokensDetails.RefreshToken == "" || newTokensDetails.AccessUUID == "" || newTokensDetails.RefreshUUID == "" {
+		return nil, ErrSessionVerificationUnavailable
 	}
 
 	// Save the tokens to ephemeralstore
 	err = s.EphemeralStore.CreateAuth(ctx, userID, newTokensDetails)
 	if err != nil {
-		logger.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration", zap.String("user-id", userID), zap.Error(err))
+		logger.Error("ephemeral-store-failed-after-successful-refresh-token-regeneration")
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
@@ -980,7 +1067,10 @@ func (s *Service) RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*Re
 		RefreshTokenExpiresAt: newTokensDetails.RtExpires,
 	}
 	if err := s.EphemeralStore.StoreRefreshTokenRotationResult(ctx, userID, refreshTokenUuid, rotationResult, refreshTokenRotationReplayTTL); err != nil {
-		logger.Warn("refresh-token-rotation-result-store-failed", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(err))
+		logger.Warn("refresh-token-rotation-result-store-failed")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return &RefreshTokenResponse{
@@ -997,8 +1087,14 @@ func (s *Service) refreshTokenRotationResponse(ctx context.Context, userID, refr
 	logger.Debug("handling-refresh-token-rotation-response-request")
 
 	result, err := s.EphemeralStore.GetRefreshTokenRotationResult(ctx, userID, refreshTokenUuid)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return nil, contextErr
+	}
 	if err != nil || result == nil {
 		return nil, err
+	}
+	if result.AccessToken == "" || result.RefreshToken == "" {
+		return nil, ErrSessionVerificationUnavailable
 	}
 
 	return &RefreshTokenResponse{
@@ -1019,22 +1115,21 @@ func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userI
 	ticker := time.NewTicker(refreshTokenRotationWaitInterval)
 	defer ticker.Stop()
 
-	var lastErr error
 	for {
 		response, err := s.refreshTokenRotationResponse(ctx, userID, refreshTokenUuid)
 		if response != nil {
 			return response, nil
 		}
 		if err != nil {
-			lastErr = err
-			logger.Warn("refresh-token-rotation-result-fetch-failed-during-wait", zap.String("user-id", userID), zap.String("refresh-token-id", refreshTokenUuid), zap.Error(err))
+			logger.Warn("refresh-token-rotation-result-fetch-failed-during-wait")
+			return nil, err
 		}
 
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-timeout.C:
-			return nil, lastErr
+			return nil, ErrRefreshTemporarilyUnavailable
 		case <-ticker.C:
 		}
 	}
@@ -1042,29 +1137,56 @@ func (s *Service) waitForRefreshTokenRotationResponse(ctx context.Context, userI
 
 // RemoveAccessTokenWithCookieValue removes access token with the given cookie value
 func (s *Service) RemoveAccessTokenWithCookieValue(ctx context.Context, userId, accessTokenCookieValue string) error {
+	if ctx == nil || s == nil || s.AuthService == nil || s.EphemeralStore == nil {
+		return ErrSessionVerificationUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if userId == "" || accessTokenCookieValue == "" {
+		return auth.ErrUnauthorized
+	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	logger.Info("processing-access-token-removal-by-cookie-value")
 
 	accessTokenDetails, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, accessTokenCookieValue)
 	if err != nil {
-		logger.Error("failed-to-extract-access-token-details-from-cookie-value", zap.Error(err))
+		logger.Error("failed-to-extract-access-token-details-from-cookie-value")
 		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if accessTokenDetails == nil || !accessTokenDetails.IsSessionCredential() || accessTokenDetails.AccessUUID == "" || accessTokenDetails.UserID != userId {
+		return auth.ErrUnauthorized
 	}
 
 	deleted, err := s.EphemeralStore.DeleteAuth(ctx, toolbox.CombinedUuidFormat(userId, accessTokenDetails.AccessUUID))
-	if err != nil || deleted == 0 {
-		logger.Warn("access-token-removal-failed", zap.String("user-id", userId), zap.String("access-token-id", accessTokenDetails.AccessUUID), zap.Error(err))
+	if err != nil {
+		logger.Warn("access-token-removal-failed")
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if deleted == 0 {
+		return ErrUnauthorizedAccessTokenCacheDeletionFailure
+	}
 
-	logger.Info("access-token-successfully-removed", zap.String("user-id", userId), zap.String("access-token-id", accessTokenDetails.AccessUUID))
+	logger.Info("access-token-successfully-removed")
 
 	return nil
 }
 
 // refreshTokenUserFromCookieValue validates a refresh cookie and returns its user and token metadata.
 func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTokenCookieValue string) (auth.UserModel, *auth.TokenRefreshDetails, error) {
+	if ctx == nil || s == nil || s.AuthService == nil || s.UserService == nil {
+		return nil, nil, ErrSessionVerificationUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
 	logger.Info("processing-refresh-token-by-cookie-value")
@@ -1072,26 +1194,44 @@ func (s *Service) refreshTokenUserFromCookieValue(ctx context.Context, refreshTo
 	// Check validity
 	refreshToken, err := s.AuthService.CheckRefreshTokenIsValid(ctx, refreshTokenCookieValue)
 	if err != nil {
-		logger.Error("failed-to-check-if-refresh-token-is-valid", zap.Error(err))
+		logger.Error("failed-to-check-if-refresh-token-is-valid")
 		return nil, nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if refreshToken == nil || !refreshToken.Valid {
+		return nil, nil, auth.ErrUnauthorized
 	}
 
 	// Get token details
 	refreshTokenDetails, err := s.AuthService.GetRefreshTokenUUID(ctx, refreshToken)
 	if err != nil {
-		logger.Error("failed-to-get-refresh-token-by-its-uuid", zap.Error(err))
+		logger.Error("failed-to-get-refresh-token-by-its-uuid")
 		return nil, nil, err
+	}
+	if refreshTokenDetails == nil || refreshTokenDetails.RefreshUUID == "" || refreshTokenDetails.UserID == "" {
+		return nil, nil, auth.ErrUnauthorized
+	}
+	if refreshTokenDetails.TokenUse != "" && refreshTokenDetails.TokenUse != auth.TokenUseRefresh {
+		return nil, nil, auth.ErrUnauthorized
 	}
 
 	// Get user details
 	persistentUserResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
 		ID: refreshTokenDetails.UserID})
 	if err != nil {
-		logger.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid", zap.Error(err))
+		logger.Error("unable-to-find-user-for-refresh-token-by-its-provided-user-uuid")
+		return nil, refreshTokenDetails, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, refreshTokenDetails, err
 	}
 
-	if persistentUserResponse.User.EmailRevision != refreshTokenDetails.EmailRevision {
+	if persistentUserResponse == nil || persistentUserResponse.User == nil || persistentUserResponse.User.ID != refreshTokenDetails.UserID {
+		return nil, refreshTokenDetails, auth.ErrUnauthorized
+	}
+	if persistentUserResponse.User.EmailRevision != refreshTokenDetails.EmailRevision || !auth.MatchesUserType(refreshTokenDetails.UserType, persistentUserResponse.User) {
 		return nil, refreshTokenDetails, ErrOAuthReauthenticationRequired
 	}
 	return persistentUserResponse.User, refreshTokenDetails, nil
@@ -1610,26 +1750,6 @@ func findUserByEmail(ctx context.Context, userService UserService, req *userv2.G
 		return finder.FindUserByEmail(ctx, req)
 	}
 	return userService.GetUserByEmail(ctx, req)
-}
-
-// isUserLiveStatusActive checks if the user account with the given ID has an ACTIVE status.
-// Returns the user object and true if active, otherwise nil and false.
-func (s *Service) isUserLiveStatusActive(ctx context.Context, userID string) (*userv2.UniversalUser, bool) {
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "is-user-live-status-active")
-	logger.Debug("handling-is-user-live-status-active-request")
-
-	persistentUserResponse, err := s.UserService.GetUserByID(ctx,
-		&userv2.GetUserByIDRequest{ID: userID},
-	)
-	if err != nil {
-		return nil, false
-	}
-
-	if persistentUserResponse.User.Status == userv2.AccountStatusKeyActive {
-		return persistentUserResponse.User, true
-	}
-
-	return nil, false
 }
 
 // resolveTokenFromCode looks up the given code in ephemeral storage and returns the

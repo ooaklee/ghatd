@@ -24,6 +24,8 @@ var (
 // Suite composes the accessmanager Middleware and HardenedRateLimitProtection
 // into named mux.MiddlewareFunc fields for convenient wiring.
 type Suite struct {
+	// BearerSession accepts only an explicit session bearer, with no cookie refresh.
+	BearerSession                      mux.MiddlewareFunc
 	AdminOnly                          mux.MiddlewareFunc
 	ActiveOnly                         mux.MiddlewareFunc
 	Authenticated                      mux.MiddlewareFunc
@@ -88,6 +90,7 @@ func NewSuite(r *NewSuiteRequest) (*Suite, error) {
 	customMaps := BuildCustomMeEndpointErrorMap(errorMaps)
 
 	return &Suite{
+		BearerSession:                      mw.BearerSessionRequired,
 		AdminOnly:                          func(next http.Handler) http.Handler { return mw.AdminJWTRequired(next) },
 		ActiveOnly:                         func(next http.Handler) http.Handler { return mw.ActiveJWTRequired(next) },
 		Authenticated:                      func(next http.Handler) http.Handler { return mw.JWTRequired(next) },

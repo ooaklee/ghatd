@@ -3,6 +3,13 @@ package accessmanager
 import "errors"
 
 var (
+	// ErrRefreshTemporarilyUnavailable means a concurrent rotation did not
+	// produce an observable result before this request's bounded wait ended.
+	// It does not prove that the credential is invalid or that rotation failed.
+	ErrRefreshTemporarilyUnavailable = errors.New("accessmanager/refresh-temporarily-unavailable")
+	// ErrSessionVerificationUnavailable rejects incomplete live-session wiring.
+	// It is an operational failure, not evidence that a user has lost authority.
+	ErrSessionVerificationUnavailable                      = errors.New("accessmanager/session-verification-unavailable")
 	ErrAPITokenNotAssociatedWithUser                       = errors.New(ErrKeyAPITokenNotAssociatedWithUser)
 	ErrBadRequest                                          = errors.New(ErrKeyBadRequest)
 	ErrConflictingUserState                                = errors.New(ErrKeyConflictingUserState)

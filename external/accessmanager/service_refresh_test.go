@@ -412,21 +412,30 @@ func TestServiceRefreshTokenReplaysWhenDeleteMissesAfterAnotherRotation(t *testi
 // TestServiceRefreshTokenReturnsContextCancellationWhileWaitingForRotation verifies waiters respect request cancellation.
 func TestServiceRefreshTokenReturnsContextCancellationWhileWaitingForRotation(t *testing.T) {
 	t.Parallel()
-
-	store := &refreshEphemeralStoreMock{
-		acquireRefreshTokenRotationLockFunc: func(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error) {
-			return false, nil
-		},
+	for _, tc := range []struct {
+		name   string
+		before bool
+		locks  int
+	}{{"before entry", true, 0}, {"while waiting", false, 1}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			store := &refreshEphemeralStoreMock{
+				acquireRefreshTokenRotationLockFunc: func(context.Context, string, string, time.Duration) (bool, error) {
+					cancel()
+					return false, nil
+				},
+			}
+			if tc.before {
+				cancel()
+			}
+			service := newRefreshTokenTestService(store, &refreshAuthServiceMock{})
+			response, err := service.RefreshToken(ctx, &accessmanager.RefreshTokenRequest{RefreshToken: "old-refresh-token"})
+			require.Nil(t, response)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Zero(t, store.deleteAuthCalls)
+			require.Equal(t, tc.locks, store.acquireRefreshTokenRotationLockCalls)
+			require.Zero(t, store.releaseRefreshTokenRotationLockCalls)
+		})
 	}
-	service := newRefreshTokenTestService(store, &refreshAuthServiceMock{})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	response, err := service.RefreshToken(ctx, &accessmanager.RefreshTokenRequest{RefreshToken: "old-refresh-token"})
-
-	require.Nil(t, response)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Zero(t, store.deleteAuthCalls)
-	require.Equal(t, 1, store.acquireRefreshTokenRotationLockCalls)
-	require.Zero(t, store.releaseRefreshTokenRotationLockCalls)
 }

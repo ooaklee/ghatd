@@ -19,6 +19,36 @@ The `/v0/auth/verify` bridge is intentionally separate from `/api/v1/ams`. Email
 
 ## Session Cookies And Client Contract
 
+### Live session authority
+
+`AuthenticateSession`, `MiddlewareJWTRequired`, and the authenticated branches
+of the active/admin/optional service guards share one verifier. It checks signed
+access-token identity, the exact live session owner, current stored user ID,
+email revision and account type. Active guards then check current status;
+administrator guards check current roles. Signed `IsAdmin` and `IsAuthorized`
+values are historical metadata, not current authority. Promotions and demotions
+take effect on the next check without minting a replacement access token.
+
+Custom session stores should return `ephemeral.ErrAuthNotFound` for an absent
+session; legacy `redis.Nil` remains supported. Storage outages and cancellations
+are returned as operational errors, never treated as missing sessions. The
+Redis session lookup logs fixed outcomes without keys, identities or raw driver
+errors. Current-user ID/nano-ID lookups also preserve repository failures instead
+of turning every failure into a missing account. Configure HTTP error manifests
+and sanitize errors at the transport boundary; do not serialize raw causes.
+
+This is a check-time guarantee, not a transaction lock or token-family revocation.
+The cookie wrappers retain automatic refresh and optional-public fallback.
+Deleting an access token alone does not invalidate its refresh token; the legacy
+logout service currently removes only the access record. Cookie wrappers now
+distinguish absent/expired access credentials from account denials and operational
+failures; an outage never triggers refresh or anonymous fallback. The cookie
+handler performs best-effort removal of the presented refresh token during
+logout, but that is not atomic revocation of a rotating session family.
+Use the [explicit bearer adapter](middleware/README.md#explicit-bearer-sessions)
+where refresh or anonymous fallback is inappropriate. Recheck authority inside
+sensitive domain operations and enforce resource ownership separately.
+
 Successful login, email verification, token refresh, and OAuth callback responses set two `HttpOnly` cookies:
 
 | Cookie | Purpose |
@@ -41,7 +71,35 @@ Browser clients should use credentialed requests, such as Axios `withCredentials
 
 Access Manager treats refresh-token rotation as a one-winner operation. The first request that validates a refresh token claims a short-lived rotation lock, consumes the old refresh token, creates the replacement access and refresh tokens, and stores a short-lived replay result in ephemeral storage.
 
-Near-concurrent duplicate refreshes for the same user and refresh token do not rotate a second time. They first check for an existing replay result, then wait briefly when another request already holds the lock. If the winning request completes, the duplicate receives the same replacement token pair. If no result appears before the wait expires, the duplicate is rejected and the client should resolve the session again through the normal `/me` probe or login flow.
+Near-concurrent duplicate refreshes first check for an existing replay result,
+then wait briefly when another request holds the lock. If the winner completes,
+the duplicate receives the same replacement pair. If no result appears before
+the wait expires, the request fails with `ErrRefreshTemporarilyUnavailable`
+(`503`, `AM00-040`), without clearing cookies. This is not evidence that the
+credential is invalid. A later session probe can reconcile the outcome; avoid
+unbounded automatic refresh loops. The lock/replay window is bounded, not an
+atomic session-family transaction or an exactly-once guarantee across failures.
+
+`ClassifySessionError` defines cookie behaviour independently of HTTP response
+overrides. Custom adapters should wrap known credential sentinels, not synthesize
+their text or rely on custom `Is` methods. Lifecycle decisions use the actual
+leaf cause. Unknown, joined, cancellation and dependency errors fail closed and
+preserve cookies. Current account-role/status denials also preserve cookies and
+cannot be repaired by refresh. Known invalid credentials can clear cookies;
+only explicitly optional routes may then use their rate-limited public branch.
+The explicit refresh endpoint applies the same distinction and sends `no-store`.
+
+The legacy `ErrUnauthorizedRefreshTokenCacheDeletionFailure` sentinel means a
+successful delete confirmed no refresh record and no replay was available. An
+actual storage deletion failure retains its original cause; it is not this
+credential rejection. Refresh responses reject missing token data, and observed
+cancellation stops later writes or publication. Manager refresh logs omit raw
+adapter diagnostics and credential identifiers; hosts remain responsible for
+the logging behavior of their injected dependencies.
+
+Preserving cookies does not undo a completed rotation: a failure after consuming
+the old refresh token may require replay reconciliation or reauthentication.
+See [cookie timing and compatibility](middleware/README.md#refresh-cookie-timing).
 
 Middleware refreshes also validate the retried request before writing replacement cookies to the response. This avoids committing cookies for a token pair that the protected route would immediately reject.
 
