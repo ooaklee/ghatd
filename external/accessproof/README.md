@@ -6,8 +6,9 @@ member OR a current guest capability bound to this document**, without giving
 the guest a member account or borrowing another user's permissions.
 
 This package is opt-in. It does not verify JWTs, read cookies, persist grants,
-perform resource ownership queries, or meter usage. Proof categories are
-request-local facts, not persisted administrative grants or account roles.
+perform resource ownership queries, or meter usage. It is separate from
+[`accesspolicy`](../accesspolicy/README.md), whose subjects and grants are
+persisted administrative policy. Proof kinds do not expand that subject model.
 
 ## Usage and trust boundary
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-redis/redis/v7"
 	"github.com/ooaklee/ghatd/external/accessmanager"
+	"github.com/ooaklee/ghatd/external/accessmanager/middleware"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/emailmanager"
 	"github.com/ooaklee/ghatd/external/ephemeral"
@@ -103,7 +104,10 @@ func newConnectionFixture(t *testing.T) *connectionFixture {
 	require.NoError(t, f.service.ConfigureOAuthConnections(accessmanager.OAuthConnectionsConfig{Origin: "https://app.example", Store: oauth.NewRedisDisconnectChallengeStore(runtime.Client, f.namespace)}))
 	f.handler = accessmanager.NewHandler(&accessmanager.NewHandlerRequest{Service: f.service, Validator: validator.NewValidator(), ErrorMaps: []reply.ErrorManifest{accessmanager.AccessmanagerErrorMap}, Environment: "production", CookiePrefixAuthToken: "access", CookiePrefixRefreshToken: "refresh", OAuthOrigin: "https://app.example"})
 	routes := router.NewRouter(nil, nil)
-	accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{Router: routes, Handler: f.handler})
+	suite, err := middleware.NewSuite(&middleware.NewSuiteRequest{Service: f.service, EphemeralStore: runtime.Store, Environment: "production", CookiePrefixAuthToken: "access", CookiePrefixRefreshToken: "refresh"})
+	require.NoError(t, err)
+	accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{Router: routes, Handler: f.handler, ActiveOnlyMiddleware: suite.ActiveOnly, HardenedRateLimitMiddleware: suite.HardenedRateLimit})
+	require.NoError(t, routes.ValidateRoutePolicies(), "integration fixtures must install required protections")
 	f.router = routes.GetRouter()
 	f.account, f.tokens = f.newAccount(t, "original@example.test", "subject")
 	return f

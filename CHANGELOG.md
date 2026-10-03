@@ -159,6 +159,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- Access Manager login, verification, refresh and optional OAuth endpoints now
+  use the [route registry](external/accessmanager/README.md#route-registry),
+  preserving paths, methods, optional handler interfaces and OPTIONS precedence.
+  **Breaking:** custom attachments must provide both the active-session and
+  hardened code-rate-limit adapters and reject failed startup validation.
+  Handler-verified labels document proof obligations; they do not enforce them.
+- Authentication error replies consistently use canonical manifests. Native OAuth
+  retains its fixed error vocabulary, with 500 for unknown or multi-cause failures
+  and 503 for unavailable session verification instead of a client denial.
 - Domain HTTP attachments now use the [shared route registry](external/router/README.md#coverage-and-explicit-raw-route-boundaries)
   for billing, content, groups, policy documents, pricing, users, user workflows,
   visions, the blueprint, SEO and communications. Paths, method order, middleware
@@ -259,6 +268,21 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- [Email-proof admission](external/accessmanager/README.md#proof-admission-and-upgrade-compatibility)
+  checks exact stored ownership, current account identity, signed type/revision
+  and permitted purpose before atomically consuming the proof and issuing a
+  session. Concurrent reuse has one winner. Custom stores must return accurate
+  atomic exact-key deletion counts. Failures after consumption require a new
+  proof; account updates and session storage are not one transaction.
+- **Breaking:** login and email verification reject proofs without a signed
+  token_use claim, as well as session/refresh credentials. Request fresh email
+  links or codes after upgrading old signers. Ordinary legacy sessions remain
+  compatible; missing account type remains unbound rather than inferred.
+- OAuth linking reuses live-session authority and carries signed account type
+  through pending browser/native flows. Duplicate browser access cookies are
+  rejected. Current identity, type/revision, status and recent authentication
+  are rechecked; operational errors no longer become reauthentication denials.
+  These are check-time guarantees, not locks against concurrent account changes.
 - Administrative target lookup distinguishes actual wrapped absence from joined
   failures or custom error aliases; inconsistent results fail closed. Cancellation
   stops work between adapters. Known policy commits retain their receipts even

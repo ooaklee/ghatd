@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	"github.com/ooaklee/ghatd/external/accessmanager"
 	"github.com/ooaklee/ghatd/external/billingmanager"
 	"github.com/ooaklee/ghatd/external/contentmanager"
 	"github.com/ooaklee/ghatd/external/group"
@@ -28,6 +29,12 @@ import (
 
 //go:embed testdata/domain_routes.json
 var domainContractJSON []byte
+
+// The separate fixture preserves the login/OAuth paths and optional ports from
+// before their descriptor migration, including overlapping OPTIONS precedence.
+//
+//go:embed testdata/accessmanager_routes.json
+var accessmanagerContractJSON []byte
 
 // routeContract is reviewed expected API behavior, not live registry output.
 // Update it deliberately when an endpoint changes; never regenerate during tests.
@@ -49,7 +56,10 @@ func contracts(t *testing.T) []routeContract {
 	var all []routeContract
 	require.NoError(t, json.Unmarshal(domainContractJSON, &all))
 	require.Len(t, all, 182)
-	return all
+	var authentication []routeContract
+	require.NoError(t, json.Unmarshal(accessmanagerContractJSON, &authentication))
+	require.Len(t, authentication, 37)
+	return append(all, authentication...)
 }
 
 // domainContracts preserves registration order, including overlapping OPTIONS.
@@ -68,6 +78,8 @@ func domainContracts(all []routeContract, domain string) []routeContract {
 // verifiers; live credential lifecycle tests reside with Access Manager.
 func attach(domain string, r *router.Router, h *routeRecorder, mw func(string) mux.MiddlewareFunc) {
 	switch domain {
+	case "accessmanager":
+		accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{Router: r, Handler: h, ActiveOnlyMiddleware: mw("ActiveOnlyMiddleware"), HardenedRateLimitMiddleware: mw("HardenedRateLimitMiddleware")})
 	case "billingmanager":
 		billingmanager.AttachRoutes(&billingmanager.AttachRoutesRequest{Router: r, Handler: h, MiddlewareActiveValidApiTokenOrJWTMiddleware: mw("MiddlewareActiveValidApiTokenOrJWTMiddleware")})
 	case "contentmanager":
@@ -102,6 +114,12 @@ func concretePath(t *testing.T, c routeContract) string {
 		value := "00000000-0000-4000-8000-000000000001"
 		if name == "slug" {
 			value = "sample-plan"
+		}
+		if name == "provider" {
+			value = "google"
+		}
+		if name == "challengeID" {
+			value = strings.Repeat("a", 43)
 		}
 		pairs = append(pairs, name, value)
 	}

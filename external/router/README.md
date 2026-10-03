@@ -87,12 +87,17 @@ The legacy duplicate admin declaration for `GET /api/v1/ums/users` was already
 shadowed by the earlier authenticated declaration; that reachable route and its
 service-level group-membership filtering are preserved.
 
+Access Manager also registers login, email verification, refresh and optional
+OAuth endpoints. Its `HandlerVerified` proof names are documentation, not proof
+verification. Keep the service's one-use, live-session and provider checks;
+install both the active-session and hardened code-rate-limit adapters. See its
+[route contract](../accessmanager/README.md#route-registry) for compatibility.
+
 Some framework HTTP surfaces still use raw Mux routing and are deliberately
 **not** certified by `ValidateRoutePolicies()`:
 
 | Surface | Current boundary and host responsibility |
 | --- | --- |
-| Access Manager login, verification and OAuth endpoints | Credential-management routes have descriptors; remaining login/proof routes still use their existing middleware and handler checks. Their migration is separate. |
 | Constructor-supplied health handler | Host-owned response and any global middleware; no descriptor-specific access or method restriction. Do not expose private diagnostics. |
 | Default auth-verification redirect | Redirects to the configured login/email-verification endpoints; those endpoints must validate the proof. The redirect is not authentication. |
 | SPA/static fallback | Serves the configured filesystem and path rewrite. Mount after API routes; never put protected data or business commands in the fallback. |

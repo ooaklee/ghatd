@@ -139,15 +139,14 @@ type AttachRoutesRequest struct {
 // AttachRoutes attaches accessmanager handler to corresponding
 // routes on router
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	accessmanagerRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
-	accessmanagerRoutes.HandleFunc(APIAccessManagerUserSignUp, request.Handler.CreateUser).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.CreateInitalLoginOrVerificationTokenEmail).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerUserLogout, request.Handler.LogoutUser).Methods(http.MethodGet, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc(APIAccessManagerUserRefreshToken, request.Handler.RefreshToken).Methods(http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/callback", request.Handler.OauthCallback).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
-	accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/login", request.Handler.OauthLogin).Methods(http.MethodGet, http.MethodOptions)
+	accessmanagerRoutes := request.Router.NewRouteGroup(APIAccessManagerPrefix, router.Public, nil)
+	accessmanagerRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserSignUp, Operation: "accessmanager.CreateUser", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateUser)
+	accessmanagerRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserLogin, Operation: "accessmanager.CreateInitalLoginOrVerificationTokenEmail", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateInitalLoginOrVerificationTokenEmail)
+	accessmanagerRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserLogout, Operation: "accessmanager.LogoutUser", Methods: []string{http.MethodGet, http.MethodOptions}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "session-removal-only"}}, request.Handler.LogoutUser)
+	accessmanagerRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserRefreshToken, Operation: "accessmanager.RefreshToken", Methods: []string{http.MethodPost, http.MethodOptions}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "refresh-token-and-live-rotation"}}, request.Handler.RefreshToken)
+	accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/{provider:google|apple}/callback", Operation: "accessmanager.OauthCallback", Methods: []string{http.MethodGet, http.MethodPost, http.MethodOptions}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "oauth-state-pkce-provider-identity"}}, request.Handler.OauthCallback)
+	accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/{provider:google|apple}/login", Operation: "accessmanager.OauthLogin", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.OauthLogin)
 	if mobile, ok := request.Handler.(interface {
 		MobileOAuthProviders(http.ResponseWriter, *http.Request)
 		MobileOAuthLogin(http.ResponseWriter, *http.Request)
@@ -155,18 +154,18 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		MobileOAuthStart(http.ResponseWriter, *http.Request)
 		MobileOAuthExchange(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/providers", mobile.MobileOAuthProviders).Methods(http.MethodGet)
-		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/mobile/login", mobile.MobileOAuthLogin).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/mobile/link", mobile.MobileOAuthLink).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/start", mobile.MobileOAuthStart).Methods(http.MethodGet)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/exchange", mobile.MobileOAuthExchange).Methods(http.MethodPost)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/providers", Operation: "accessmanager.MobileOAuthProviders", Methods: []string{http.MethodGet}}, mobile.MobileOAuthProviders)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/{provider:google|apple}/mobile/login", Operation: "accessmanager.MobileOAuthLogin", Methods: []string{http.MethodPost}}, mobile.MobileOAuthLogin)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/{provider:google|apple}/mobile/link", Operation: "accessmanager.MobileOAuthLink", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "live-session-and-recent-login"}}, mobile.MobileOAuthLink)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/start", Operation: "accessmanager.MobileOAuthStart", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "one-time-launch-proof"}}, mobile.MobileOAuthStart)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/exchange", Operation: "accessmanager.MobileOAuthExchange", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "one-time-grant-and-pkce"}}, mobile.MobileOAuthExchange)
 	}
 	if optional, ok := request.Handler.(interface {
 		OAuthProviders(http.ResponseWriter, *http.Request)
 		OAuthLink(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/providers", optional.OAuthProviders).Methods(http.MethodGet, http.MethodOptions)
-		accessmanagerRoutes.HandleFunc("/oauth/{provider:google|apple}/link", optional.OAuthLink).Methods(http.MethodPost, http.MethodOptions)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/providers", Operation: "accessmanager.OAuthProviders", Methods: []string{http.MethodGet, http.MethodOptions}}, optional.OAuthProviders)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/{provider:google|apple}/link", Operation: "accessmanager.OAuthLink", Methods: []string{http.MethodPost, http.MethodOptions}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "live-session-and-recent-login"}}, optional.OAuthLink)
 	}
 
 	if optional, ok := request.Handler.(interface {
@@ -174,22 +173,22 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		StartOAuthDisconnect(http.ResponseWriter, *http.Request)
 		ConfirmOAuthDisconnect(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/connections", optional.OAuthConnections).Methods(http.MethodGet)
-		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect", optional.StartOAuthDisconnect).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/confirm", optional.ConfirmOAuthDisconnect).Methods(http.MethodPost)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections", Operation: "accessmanager.OAuthConnections", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "live-session"}}, optional.OAuthConnections)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections/{provider:google|apple}/disconnect", Operation: "accessmanager.StartOAuthDisconnect", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "live-session-and-recent-login"}}, optional.StartOAuthDisconnect)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections/{provider:google|apple}/disconnect/confirm", Operation: "accessmanager.ConfirmOAuthDisconnect", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "session-and-one-time-challenge"}}, optional.ConfirmOAuthDisconnect)
 	}
 	if optional, ok := request.Handler.(interface {
 		ReviewOAuthDisconnectChallenge(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", optional.ReviewOAuthDisconnectChallenge).Methods(http.MethodGet)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", Operation: "accessmanager.ReviewOAuthDisconnectChallenge", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "session-and-one-time-challenge"}}, optional.ReviewOAuthDisconnectChallenge)
 	}
 
 	if optional, ok := request.Handler.(interface {
 		OAuthConnectionVerification(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/reauthenticate", optional.OAuthConnectionVerification).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/reauthenticate/confirm", optional.OAuthConnectionVerification).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", optional.OAuthConnectionVerification).Methods(http.MethodGet)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections/{provider:google|apple}/reauthenticate", Operation: "accessmanager.OAuthConnectionVerification", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "session-and-provider-challenge"}}, optional.OAuthConnectionVerification)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections/{provider:google|apple}/reauthenticate/confirm", Operation: "accessmanager.OAuthConnectionVerification", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "session-and-provider-challenge"}}, optional.OAuthConnectionVerification)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", Operation: "accessmanager.OAuthConnectionVerification", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "session-and-provider-challenge"}}, optional.OAuthConnectionVerification)
 	}
 
 	if native, ok := request.Handler.(interface {
@@ -198,26 +197,23 @@ func AttachRoutes(request *AttachRoutesRequest) {
 		ConfirmMobileOAuthDisconnect(http.ResponseWriter, *http.Request)
 		ReviewMobileOAuthDisconnectChallenge(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections", native.MobileOAuthConnections).Methods(http.MethodGet)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect", native.StartMobileOAuthDisconnect).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect/confirm", native.ConfirmMobileOAuthDisconnect).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", native.ReviewMobileOAuthDisconnectChallenge).Methods(http.MethodGet)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections", Operation: "accessmanager.MobileOAuthConnections", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "live-native-session"}}, native.MobileOAuthConnections)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections/{provider:google|apple}/disconnect", Operation: "accessmanager.StartMobileOAuthDisconnect", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "native-session-and-recent-login"}}, native.StartMobileOAuthDisconnect)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections/{provider:google|apple}/disconnect/confirm", Operation: "accessmanager.ConfirmMobileOAuthDisconnect", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "native-session-and-one-time-challenge"}}, native.ConfirmMobileOAuthDisconnect)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections/{provider:google|apple}/disconnect/challenges/{challengeID:[A-Za-z0-9_-]{43}}", Operation: "accessmanager.ReviewMobileOAuthDisconnectChallenge", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "native-session-and-one-time-challenge"}}, native.ReviewMobileOAuthDisconnectChallenge)
 	}
 
 	if native, ok := request.Handler.(interface {
 		MobileOAuthConnectionVerification(http.ResponseWriter, *http.Request)
 	}); ok {
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate", native.MobileOAuthConnectionVerification).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate/confirm", native.MobileOAuthConnectionVerification).Methods(http.MethodPost)
-		accessmanagerRoutes.HandleFunc("/oauth/mobile/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", native.MobileOAuthConnectionVerification).Methods(http.MethodGet)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections/{provider:google|apple}/reauthenticate", Operation: "accessmanager.MobileOAuthConnectionVerification", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "native-session-and-provider-challenge"}}, native.MobileOAuthConnectionVerification)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections/{provider:google|apple}/reauthenticate/confirm", Operation: "accessmanager.MobileOAuthConnectionVerification", Methods: []string{http.MethodPost}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "native-session-and-provider-challenge"}}, native.MobileOAuthConnectionVerification)
+		accessmanagerRoutes.Handle(router.RouteDefinition{Path: "/oauth/mobile/connections/{provider:google|apple}/reauthenticate/challenges/{challengeID:[A-Za-z0-9_-]{43}}", Operation: "accessmanager.MobileOAuthConnectionVerification", Methods: []string{http.MethodGet}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "native-session-and-provider-challenge"}}, native.MobileOAuthConnectionVerification)
 	}
 
-	codeVerifyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
-	codeVerifyRoutes.HandleFunc(APIAccessManagerUserLogin, request.Handler.LoginUser).Methods(http.MethodGet, http.MethodOptions)
-	codeVerifyRoutes.HandleFunc(APIAccessManagerUserEmail, request.Handler.ValidateEmailVerificationCode).Methods(http.MethodGet, http.MethodOptions)
-	if request.HardenedRateLimitMiddleware != nil {
-		codeVerifyRoutes.Use(request.HardenedRateLimitMiddleware)
-	}
+	codeVerifyRoutes := request.Router.NewRouteGroup(APIAccessManagerPrefix, router.PublicRateLimited, request.HardenedRateLimitMiddleware)
+	codeVerifyRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserLogin, Operation: "accessmanager.LoginUser", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.LoginUser)
+	codeVerifyRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserEmail, Operation: "accessmanager.ValidateEmailVerificationCode", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ValidateEmailVerificationCode)
 
 	accessmanagerCredentialManagementRoutes := request.Router.NewRouteGroup(APIAccessManagerPrefix, router.ActiveSession, request.ActiveOnlyMiddleware)
 	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPIToken, Operation: "accessmanager.CreateUserAPIToken", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateUserAPIToken)
@@ -228,10 +224,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerUserIDAPITokenThreshold, Operation: "accessmanager.GetUserAPITokenThreshold", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserAPITokenThreshold)
 	accessmanagerCredentialManagementRoutes.Handle(router.RouteDefinition{Path: APIAccessManagerLogoutOtherSessions, Operation: "accessmanager.LogoutUserOthers", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.LogoutUserOthers)
 
-	accessmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIAccessManagerPrefix).Subrouter()
-	accessmanagerActiveOnlyRoutes.HandleFunc("/users/{userID}/email", request.Handler.UpdateUserEmail).Methods(http.MethodPatch, http.MethodOptions)
-	if request.ActiveOnlyMiddleware != nil {
-		accessmanagerActiveOnlyRoutes.Use(request.ActiveOnlyMiddleware)
-	}
+	accessmanagerActiveOnlyRoutes := request.Router.NewRouteGroup(APIAccessManagerPrefix, router.ActiveSession, request.ActiveOnlyMiddleware)
+	accessmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/users/{userID}/email", Operation: "accessmanager.UpdateUserEmail", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateUserEmail)
 
 }

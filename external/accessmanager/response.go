@@ -23,6 +23,10 @@ type CreateUserResponse struct {
 
 // TokenAsStringValidatorResponse holds the response for TokenAsStringValidator request
 type TokenAsStringValidatorResponse struct {
+	// UserType is signed identity context for the subsequent live account check.
+	UserType string `json:"-"`
+	// TokenUse binds new proofs to login or email verification, not API sessions.
+	TokenUse      string `json:"-"`
 	EmailRevision int64
 	// UserID represents the user ID pulled from the token
 	UserID string

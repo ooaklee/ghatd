@@ -40,22 +40,22 @@ func (h *Handler) MobileOAuthConnections(w http.ResponseWriter, r *http.Request)
 	oauthHeaders(w)
 	redirect, err := nativeConnectionRedirect(r)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(mobileOAuthConnectionsService)
 	if !ok {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		_ = h.NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := service.OAuthConnections(r.Context(), token)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response.DisconnectAvailable = response.DisconnectAvailable && service.MobileOAuthDisconnectRedirectAllowed(redirect)
@@ -76,22 +76,22 @@ func (h *Handler) StartMobileOAuthDisconnect(w http.ResponseWriter, r *http.Requ
 	// JSON-only POST plus rejecting any Origin follows the existing native OAuth
 	// guards: cross-site forms cannot supply JSON and fetches carry an Origin.
 	if !decodeMobileJSON(w, r, &body) {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+		_ = h.NewHTTPErrorResponse(w, ErrBadRequest)
 		return
 	}
 	service, ok := h.Service.(mobileOAuthConnectionsService)
 	if !ok {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		_ = h.NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := service.StartMobileOAuthDisconnect(r.Context(), mux.Vars(r)["provider"], body.Email, body.RedirectURI, token)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusAccepted, response)
@@ -106,22 +106,22 @@ func (h *Handler) ConfirmMobileOAuthDisconnect(w http.ResponseWriter, r *http.Re
 		RedirectURI string `json:"redirect_uri"`
 	}
 	if !decodeMobileJSON(w, r, &body) {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+		_ = h.NewHTTPErrorResponse(w, ErrBadRequest)
 		return
 	}
 	service, ok := h.Service.(mobileOAuthConnectionsService)
 	if !ok {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		_ = h.NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := service.ConfirmMobileOAuthDisconnect(r.Context(), mux.Vars(r)["provider"], &body.OAuthDisconnectConfirmRequest, body.RedirectURI, token)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.writeOAuthDisconnectResponse(w, response)
@@ -134,23 +134,23 @@ func (h *Handler) ReviewMobileOAuthDisconnectChallenge(w http.ResponseWriter, r 
 	oauthHeaders(w)
 	redirect, err := nativeConnectionRedirect(r)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	service, ok := h.Service.(mobileOAuthConnectionsService)
 	if !ok {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		_ = h.NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	vars := mux.Vars(r)
 	response, err := service.ReviewMobileOAuthDisconnectChallenge(r.Context(), vars["provider"], vars["challengeID"], redirect, token)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	_ = h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response)

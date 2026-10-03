@@ -169,26 +169,33 @@ func (s *Service) connectionAccount(ctx context.Context, token string, fresh boo
 // whether the signed authentication time is recent (<=5 minutes). Legacy
 // zero-time sessions are never fresh.
 func (s *Service) connectionAccountWithFreshness(ctx context.Context, token string) (*user.UniversalUser, *auth.TokenAccessDetails, bool, error) {
-	details, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, token)
-	if err != nil || details == nil || !details.IsAuthorized {
-		return nil, nil, false, ErrOAuthReauthenticationRequired
-	}
-	owner, err := s.EphemeralStore.FetchAuth(ctx, details)
-	if err != nil || owner != details.UserID {
-		return nil, nil, false, ErrOAuthReauthenticationRequired
-	}
-	fresh := !details.AuthenticationTime.IsZero() && !details.AuthenticationTime.After(time.Now()) && time.Since(details.AuthenticationTime) <= 5*time.Minute
-	result, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: details.UserID})
+	result, err := s.AuthenticateSession(ctx, token)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, false, oauthSessionError(err)
 	}
-	if result == nil || !oauthAccountActive(result.User) {
+	if !result.Token.IsAuthorized || !oauthAccountActive(result.User) {
 		return nil, nil, false, user.ErrOAuthRestricted
 	}
-	if result.User.EmailRevision != details.EmailRevision {
-		return nil, nil, false, ErrOAuthReauthenticationRequired
+	now := time.Now()
+	fresh := recentOAuthAuthentication(result.Token.AuthenticationTime, now)
+	return result.User, result.Token, fresh, nil
+}
+
+// oauthSessionError preserves operational failures for native error maps. Only
+// a known credential failure asks the user to sign in again; outages, joined
+// failures and custom Is aliases must not be mistaken for missing authority.
+func oauthSessionError(err error) error {
+	switch ClassifySessionError(err) {
+	case SessionErrorRefreshable, SessionErrorInvalidCredential:
+		return ErrOAuthReauthenticationRequired
+	default:
+		return err
 	}
-	return result.User, details, fresh, nil
+}
+
+// recentOAuthAuthentication checks signed login time, never token issuance.
+func recentOAuthAuthentication(at, now time.Time) bool {
+	return !at.IsZero() && !at.After(now) && now.Sub(at) <= 5*time.Minute
 }
 
 // supportsConnectionRevisions checks the optional signer capability required

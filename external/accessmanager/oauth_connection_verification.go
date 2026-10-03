@@ -278,7 +278,7 @@ func (h *Handler) MobileOAuthConnectionVerification(w http.ResponseWriter, r *ht
 	oauthHeaders(w)
 	service, ok := h.Service.(mobileConnectionVerificationService)
 	if !ok {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		_ = h.NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	var body struct {
@@ -292,12 +292,12 @@ func (h *Handler) MobileOAuthConnectionVerification(w http.ResponseWriter, r *ht
 		err = ErrBadRequest
 	}
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	provider := mux.Vars(r)["provider"]
@@ -320,7 +320,7 @@ func (h *Handler) MobileOAuthConnectionVerification(w http.ResponseWriter, r *ht
 		response, err = service.StartMobileOAuthConnectionVerification(r.Context(), provider, body.RedirectURI, token)
 	}
 	if err != nil {
-		_ = h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		_ = h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	status := http.StatusAccepted

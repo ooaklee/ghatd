@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	user "github.com/ooaklee/ghatd/external/user/v2"
+	"github.com/ooaklee/reply/v2"
 	"io"
 	"net/http"
 	"net/url"
@@ -51,7 +53,7 @@ func (h *Handler) OauthLogin(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	request, err := MapRequestToOauthLoginRequest(r, h.Validator)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.Service.OauthLogin(r.Context(), request)
@@ -60,7 +62,7 @@ func (h *Handler) OauthLogin(w http.ResponseWriter, r *http.Request) {
 			h.oauthErrorRedirect(w, r, err, request.RequestUrl)
 			return
 		}
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.setOAuthCookie(w, response.CookieCore, request.Provider)
@@ -81,17 +83,17 @@ func (h *Handler) OAuthProviders(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) OAuthLink(w http.ResponseWriter, r *http.Request) {
 	oauthHeaders(w)
 	if r.Method != http.MethodPost || h.OAuthOrigin == "" || r.Header.Get("Origin") != h.OAuthOrigin {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrForbiddenUnableToAction)
+		h.NewHTTPErrorResponse(w, ErrForbiddenUnableToAction)
 		return
 	}
 	service, ok := h.Service.(oauthLinkService)
 	if !ok {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
+		h.NewHTTPErrorResponse(w, user.ErrOAuthUnsupported)
 		return
 	}
 	provider, err := getProviderNameFromURI(r)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	var body struct {
@@ -102,22 +104,22 @@ func (h *Handler) OAuthLink(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&body) != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrBadRequest)
+		h.NewHTTPErrorResponse(w, ErrBadRequest)
 		return
 	}
 	path, err := oauth.ValidateSecureReturnPath(body.RequestURL)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-	cookie, err := r.Cookie(h.CookiePrefixAuthToken)
+	token, err := uniqueConnectionCookie(r, h.CookiePrefixAuthToken)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, ErrOAuthReauthenticationRequired)
+		h.NewHTTPErrorResponse(w, ErrOAuthReauthenticationRequired)
 		return
 	}
-	response, err := service.OAuthLink(r.Context(), &OauthLoginRequest{Provider: provider, RequestUrl: path, Browser: body.Browser}, cookie.Value)
+	response, err := service.OAuthLink(r.Context(), &OauthLoginRequest{Provider: provider, RequestUrl: path, Browser: body.Browser}, token)
 	if err != nil {
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	h.setOAuthCookie(w, response.CookieCore, provider)
@@ -133,7 +135,7 @@ func (h *Handler) OauthCallback(w http.ResponseWriter, r *http.Request) {
 			h.oauthErrorRedirect(w, r, err, "/app")
 			return
 		}
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	response, err := h.Service.OauthCallback(r.Context(), request)
@@ -153,7 +155,7 @@ func (h *Handler) OauthCallback(w http.ResponseWriter, r *http.Request) {
 			h.oauthErrorRedirect(w, r, err, "/app")
 			return
 		}
-		h.GetBaseResponseHandler().NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 	if !response.Linked {
@@ -175,8 +177,11 @@ func (h *Handler) OauthCallback(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
 }
 
-// oauthErrorCode maps failures to a fixed vocabulary without leaking provider responses.
+// oauthErrorCode adapts canonical manifest keys to the existing browser/native
+// protocol vocabulary. Unknown or multi-cause failures cannot become client
+// denials merely because one nested cause is recognized.
 func oauthErrorCode(err error) string {
+	err = errormanifest.CanonicalError(err, []reply.ErrorManifest{AccessmanagerErrorMap, user.UserErrorMap})
 	switch {
 	case errors.Is(err, oauth.ErrProviderCancelled):
 		return "cancelled"
@@ -190,7 +195,7 @@ func oauthErrorCode(err error) string {
 		return "restricted"
 	case errors.Is(err, oauth.ErrSecureIDTokenUnverified):
 		return "unverified_email"
-	case errors.Is(err, ErrProvidersPassedNotFound), errors.Is(err, oauth.ErrSecureProviderIncompleteConfig), errors.Is(err, user.ErrOAuthUnsupported):
+	case errors.Is(err, ErrProvidersPassedNotFound), errors.Is(err, oauth.ErrSecureProviderIncompleteConfig), errors.Is(err, user.ErrOAuthUnsupported), errors.Is(err, ErrSessionVerificationUnavailable):
 		return "unavailable"
 	case errors.Is(err, ErrBadRequest), errors.Is(err, ErrProviderCookieNotFound), errors.Is(err, oauth.ErrSecureTransactionInvalidState), errors.Is(err, oauth.ErrSecureTransactionNotFound), errors.Is(err, oauth.ErrSecureTransactionExpired), errors.Is(err, oauth.ErrSecureIDTokenInvalid):
 		return "invalid"

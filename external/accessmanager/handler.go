@@ -406,24 +406,26 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPTokenResponse(w, http.StatusOK, fmt.Sprint(response.AccessTokenExpiresAt), fmt.Sprint(response.RefreshTokenExpiresAt))
 }
 
-// LoginUser returns reponse from user login.
-// Verifies a valid InitalLoginToken was provided and if so provides user's
-// access and refresh token
-// TODO: Create tests
+// LoginUser exchanges an email proof for session cookies. Error details come
+// only from manifests; proof values and private adapter diagnostics are not logged.
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-login-user")
 
 	request, err := MapRequestToLoginUserRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+		logger.Warn("login-request-rejected")
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	response, err := h.Service.LoginUser(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+		logger.Warn("login-proof-exchange-failed")
 		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if response == nil || response.AccessToken == "" || response.RefreshToken == "" {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
 		return
 	}
 
@@ -488,24 +490,26 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.User)
 }
 
-// ValidateEmailVerificationCode handles requests to verify a user's email by validating a correct token was provided.
-// If the token is validated, the user's account status is updated to `ACTIVE`  & the user is
-// returned a pair of access and refresh tokens
-// TODO: Create tests
+// ValidateEmailVerificationCode delegates one-use proof admission and account
+// activation to the service, publishing cookies only for a complete session.
 func (h *Handler) ValidateEmailVerificationCode(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-validate-email-verification-code")
 
 	request, err := MapRequestToValidateEmailVerificationCodeRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+		logger.Warn("email-verification-request-rejected")
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
 	revisions, err := h.Service.ValidateEmailVerificationCode(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+		logger.Warn("email-verification-proof-exchange-failed")
 		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if revisions == nil || revisions.AccessToken == "" || revisions.RefreshToken == "" {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
 		return
 	}
 

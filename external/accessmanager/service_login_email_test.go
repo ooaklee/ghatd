@@ -270,7 +270,7 @@ func TestServiceLoginUserCodeVerifiesAndActivatesProvisionedUser(t *testing.T) {
 			return &jwt.Token{Valid: true}, nil
 		},
 		checkAccessTokenValidityGetDetails: func(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error) {
-			return &auth.TokenAccessDetails{UserID: "user-1", AccessUUID: verificationUUID}, nil
+			return &auth.TokenAccessDetails{UserID: "user-1", AccessUUID: verificationUUID, TokenUse: auth.TokenUseEmailVerification}, nil
 		},
 		createTokenFunc: func(ctx context.Context, tokenUser auth.UserModel) (*auth.TokenDetails, error) {
 			require.Equal(t, userv2.AccountStatusKeyActive, tokenUser.GetUserStatus())
@@ -360,7 +360,7 @@ func TestServiceLoginUserKeepsActiveUserOnOrdinaryLoginPath(t *testing.T) {
 			return &jwt.Token{Valid: true}, nil
 		},
 		checkAccessTokenValidityGetDetails: func(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error) {
-			return &auth.TokenAccessDetails{UserID: "user-1", AccessUUID: loginUUID}, nil
+			return &auth.TokenAccessDetails{UserID: "user-1", AccessUUID: loginUUID, TokenUse: auth.TokenUseLogin}, nil
 		},
 		createTokenFunc: func(ctx context.Context, tokenUser auth.UserModel) (*auth.TokenDetails, error) {
 			require.Equal(t, userv2.AccountStatusKeyActive, tokenUser.GetUserStatus())
@@ -431,7 +431,7 @@ func TestServiceLoginUserRejectsNonLiveAccountStatuses(t *testing.T) {
 						return &jwt.Token{Valid: true}, nil
 					},
 					checkAccessTokenValidityGetDetails: func(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error) {
-						return &auth.TokenAccessDetails{UserID: "user-1", AccessUUID: "one-time-uuid"}, nil
+						return &auth.TokenAccessDetails{UserID: "user-1", AccessUUID: "one-time-uuid", TokenUse: auth.TokenUseLogin}, nil
 					},
 					createTokenFunc: func(ctx context.Context, tokenUser auth.UserModel) (*auth.TokenDetails, error) {
 						createTokenCalls++

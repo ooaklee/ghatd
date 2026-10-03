@@ -15,6 +15,7 @@ import (
 	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/ooaklee/ghatd/external/accessmanager"
+	"github.com/ooaklee/ghatd/external/accessmanager/middleware"
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/ephemeral"
@@ -133,7 +134,10 @@ func TestOAuthBrowserLifecycleIntegration(t *testing.T) {
 	handler := accessmanager.NewHandler(&accessmanager.NewHandlerRequest{Service: service, Validator: validator.NewValidator(), ErrorMaps: []reply.ErrorManifest{accessmanager.AccessmanagerErrorMap}, Environment: "production", CookiePrefixAuthToken: "access", CookiePrefixRefreshToken: "refresh", CookieDomain: "app.example", OAuthOrigin: "https://app.example"})
 
 	httpRouter := router.NewRouter(nil, nil)
-	accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{Router: httpRouter, Handler: handler})
+	suite, err := middleware.NewSuite(&middleware.NewSuiteRequest{Service: service, EphemeralStore: redisRuntime.Store, Environment: "production", CookiePrefixAuthToken: "access", CookiePrefixRefreshToken: "refresh", CookieDomain: "app.example"})
+	require.NoError(t, err)
+	accessmanager.AttachRoutes(&accessmanager.AttachRoutesRequest{Router: httpRouter, Handler: handler, ActiveOnlyMiddleware: suite.ActiveOnly, HardenedRateLimitMiddleware: suite.HardenedRateLimit})
+	require.NoError(t, httpRouter.ValidateRoutePolicies(), "integration fixtures must install required protections")
 	serve := func(method, path, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, "https://app.example"+path, strings.NewReader(body))
 		request.Header.Set("Origin", "https://app.example")

@@ -87,6 +87,8 @@ type TokenAsStringValidatorRequest struct {
 // UserEmailVerificationRevisionsRequest holds information needed to make revision on
 // system to show email verification was successful
 type UserEmailVerificationRevisionsRequest struct {
+	// UserType carries trusted signed context, never a value taken from JSON input.
+	UserType      string `json:"-"`
 	EmailRevision int64
 	// UserID the user ID the token was successfully validated for
 	UserID string

@@ -30,10 +30,29 @@ type authenticationTimeCreator interface {
 
 // createSessionToken carries trusted login time; legacy implementations grant no linking freshness.
 func (s *Service) createSessionToken(ctx context.Context, user auth.UserModel, at time.Time) (*auth.TokenDetails, error) {
-	if creator, ok := s.AuthService.(authenticationTimeCreator); ok {
-		return creator.CreateTokenWithAuthenticationTime(ctx, user, at)
+	if ctx == nil || s == nil || s.AuthService == nil || user == nil {
+		return nil, ErrSessionVerificationUnavailable
 	}
-	return s.AuthService.CreateToken(ctx, user)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var tokens *auth.TokenDetails
+	var err error
+	if creator, ok := s.AuthService.(authenticationTimeCreator); ok {
+		tokens, err = creator.CreateTokenWithAuthenticationTime(ctx, user, at)
+	} else {
+		tokens, err = s.AuthService.CreateToken(ctx, user)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if tokens == nil {
+		return nil, ErrSessionVerificationUnavailable
+	}
+	return tokens, nil
 }
 
 // secureOAuthProvider fails closed when a legacy provider lacks token/state guarantees.
@@ -95,18 +114,22 @@ func (s *Service) OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthL
 
 // validateOAuthLinkProof rechecks the initiating session, freshness and current account state.
 func (s *Service) validateOAuthLinkProof(ctx context.Context, proof *oauth.LinkProof) error {
-	if proof == nil || proof.UserID == "" || proof.AccessUUID == "" || proof.AuthenticationTime.IsZero() || proof.AuthenticationTime.After(time.Now()) || time.Since(proof.AuthenticationTime) > 5*time.Minute {
+	if ctx == nil || s == nil {
+		return ErrSessionVerificationUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if proof == nil || proof.UserID == "" || proof.AccessUUID == "" || !recentOAuthAuthentication(proof.AuthenticationTime, time.Now()) {
 		return ErrOAuthReauthenticationRequired
 	}
-	owner, err := s.EphemeralStore.FetchAuth(ctx, &auth.TokenAccessDetails{UserID: proof.UserID, AccessUUID: proof.AccessUUID})
-	if err != nil || owner != proof.UserID {
-		return ErrOAuthReauthenticationRequired
-	}
-	response, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: proof.UserID})
+	// This evidence comes only from a validated session and server-owned OAuth
+	// transaction, never request JSON. Reuse current ownership/revision/type checks.
+	response, err := s.authenticateTokenDetails(ctx, &auth.TokenAccessDetails{UserID: proof.UserID, AccessUUID: proof.AccessUUID, TokenUse: auth.TokenUseAccess, UserType: proof.UserType, EmailRevision: proof.EmailRevision})
 	if err != nil {
-		return ErrOAuthReauthenticationRequired
+		return oauthSessionError(err)
 	}
-	if !oauthAccountActive(response.User) || response.User.EmailRevision != proof.EmailRevision {
+	if !oauthAccountActive(response.User) {
 		return user.ErrOAuthRestricted
 	}
 	return nil
@@ -114,12 +137,15 @@ func (s *Service) validateOAuthLinkProof(ctx context.Context, proof *oauth.LinkP
 
 // OAuthLink starts linking using a signed access cookie rather than a client-supplied user ID.
 func (s *Service) OAuthLink(ctx context.Context, r *OauthLoginRequest, accessToken string) (*OauthLoginResponse, error) {
-	details, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, accessToken)
-	if err != nil || !details.IsAuthorized {
-		return nil, ErrOAuthReauthenticationRequired
+	if r == nil {
+		return nil, ErrBadRequest
+	}
+	_, details, err := s.connectionAccount(ctx, accessToken, true)
+	if err != nil {
+		return nil, err
 	}
 	request := *r
-	request.Link = &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime, EmailRevision: details.EmailRevision}
+	request.Link = &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime, EmailRevision: details.EmailRevision, UserType: details.UserType}
 	return s.OauthLogin(ctx, &request)
 }
 

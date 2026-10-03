@@ -122,6 +122,52 @@ The access manager supports a dual-channel verification flow: users receive both
 
 See the [Email Manager](../emailmanager/README.md) documentation for details on the email templates that deliver both channels.
 
+### Proof admission and upgrade compatibility
+
+Login accepts signed `login` or `email_verification` proofs; the email-verification
+endpoint accepts only `email_verification`. Neither accepts access/refresh tokens
+or credentials without a `token_use` claim. **On upgrade, users with older links
+or codes must request a new email.** Ordinary legacy session verification is
+unchanged; a missing purpose cannot establish a fresh login.
+
+Before issuance, both flows check the live proof's exact stored owner and the
+current account ID, email revision, signed user type and allowed status. A legacy
+missing user type remains unbound. Custom signers must populate purpose for new
+proofs, and custom stores must implement atomic exact-key `DeleteAuth` with an
+accurate deleted count. Only one confirmed deletion admits account writes and
+session minting. Concurrent reuse fails; a storage failure is not proof absence.
+The manual code points to the same proof and cannot bypass consumption.
+
+Consumption is not a transaction with account updates or session storage. If
+anything fails after consumption, request a new proof; do not restore the old
+one or assume that an error rolled back an account update. Authority checks are
+check-time snapshots, not a lock against concurrent account changes. The trusted
+`UserEmailVerificationRevisions` command is not a public proof verifier: internal
+callers must already have validated and consumed a proof.
+
+OAuth linking uses the shared live-session verifier plus current ACTIVE/verified
+status and a signed login time within five minutes. Browser initiation rejects
+duplicate access cookies. Server-owned link state carries the signed user type
+and email revision for callback revalidation; native exchange also requires the
+same initiating session snapshot. Restart pending linking after an incompatible
+claim change. Operational failures retain their cause until the response boundary,
+instead of asking users to sign in again during an outage.
+
+### Route registry
+
+`AttachRoutes` registers login, verification, refresh, OAuth and credential
+management with the [shared registry](../router/README.md). Supply both
+`ActiveOnlyMiddleware` and `HardenedRateLimitMiddleware`, then reject startup if
+`ValidateRoutePolicies` fails. Missing required adapters invalidate all descriptors.
+Optional OAuth handler interfaces still control which endpoints are mounted.
+Existing paths, methods and first-match OPTIONS behaviour are preserved.
+
+`HandlerVerified` names document a handler's proof obligation; route metadata
+does not itself verify email codes, provider identities or session ownership.
+Hosts must retain the corresponding service checks. Native OAuth errors keep
+their fixed `error` vocabulary; unknown/multi-cause failures now return 500,
+and unavailable session verification returns 503 rather than a client denial.
+
 ## Authentication Flows
 
 ### Signup And Email Verification
@@ -145,7 +191,7 @@ Use verification type `2` when the client is tracking a pending signup or email-
 5. The API returns `202 Accepted` for both success and most lookup failures so callers do not leak whether an email address exists.
 6. The user clicks `/v0/auth/verify?type=1&__t=<token>&request_url=<path>`.
 7. The bridge redirects to `/api/v1/ams/login?t=<token>&next_step=<frontend-url>`.
-8. Access Manager validates the login token, creates an authenticated session, stores it in ephemeral storage, invalidates the initial login token, sets auth cookies, and returns `200 OK` or redirects to `next_step`.
+8. Access Manager validates and consumes the login proof, creates an authenticated session, stores it in ephemeral storage, sets auth cookies, and returns `200 OK` or redirects to `next_step`.
 
 For an active user, duplicate login-initiation requests for the same user, dashboard flag, and requested return URL are suppressed for a short cooldown window. The API still preserves its non-enumerating response behavior, but only the first accepted request should send an email. If token setup or email delivery fails before the email is accepted, the cooldown is released so a retry can send a new email.
 
@@ -158,7 +204,7 @@ Use verification type `1` when the client is tracking a pending login email.
 1. The app starts the same login flow with `POST /api/v1/ams/login`.
 2. The user enters the 8-character code from the email.
 3. The app normalises the code to uppercase and calls `GET /api/v1/ams/login?c=<code>`.
-4. Access Manager resolves the code from ephemeral storage, validates the underlying token, creates the same cookie session as the magic-link flow, invalidates the initial login token, and returns `200 OK`.
+4. Access Manager resolves the code from ephemeral storage, validates and consumes the underlying proof, creates the same cookie session as the magic-link flow, and returns `200 OK`.
 
 The code is a manual-entry alias for the underlying token. This keeps the email link and manual code paths equivalent after code resolution.
 
@@ -194,7 +240,7 @@ The precise route and linking contract is [below](#secure-google-and-apple-sign-
 | **Collision resistance** | Ephemeral storage check with up to 5 retry attempts |
 | **Brute-force protection** | `HardenedRateLimitProtection` middleware tracks attempts per IP and per code within a configurable window (default: 5/hr per IP, 5/hr per code) |
 | **Auto-blocking** | IPs exceeding the threshold are temporarily blocked (default: 1 hour) |
-| **One-time use** | Codes and tokens are invalidated after successful verification |
+| **One-time use** | The underlying proof is atomically consumed before account changes or session issuance |
 | **Refresh rotation tolerance** | One request rotates a refresh token while short-lived replay results tolerate near-concurrent duplicate refreshes |
 | **Login email cooldown** | Duplicate login email sends for the same active user/context are suppressed during a short cooldown window |
 | **Audit logging** | All verification attempts and rate-limit blocks are logged for monitoring |
@@ -358,7 +404,15 @@ When using `starter/v0`, pass the same dependencies to `starter.NewServices`, `s
 >     Build()
 > ```
 >
-> See [package errormanifest](../errormanifest/) for the full convention docs.
+> Handler error responses resolve unambiguous `%w` causes through
+> `Handler.NewHTTPErrorResponse`. Unknown or multi-cause errors receive an opaque
+> generic response; host overrides still win for the same domain key. Keep the
+> original error for redacted diagnostics. The current reply dependency also
+> resolves wrapped errors. This handler adds the stricter authentication policy:
+> unknown or multi-cause failures remain opaque, rather than selecting a nested
+> client denial. Use it consistently for authentication error responses.
+>
+> See [package errormanifest](../errormanifest/README.md) for the full convention docs.
 
 For a complete setup guide, see the [Router documentation](../router/README.md).
 

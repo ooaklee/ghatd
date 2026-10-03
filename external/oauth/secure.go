@@ -97,6 +97,9 @@ type MobileFlowContext struct {
 
 // LinkProof binds linking to fresh, signed session evidence checked by the host.
 type LinkProof struct {
+	// UserType retains signed account classification across the pending flow.
+	// Empty remains legacy/unbound; a stored value must still match at completion.
+	UserType           string    `json:"user_type,omitempty"`
 	EmailRevision      int64     `json:"email_revision,omitempty"`
 	UserID             string    `json:"user_id"`
 	AccessUUID         string    `json:"access_uuid"`

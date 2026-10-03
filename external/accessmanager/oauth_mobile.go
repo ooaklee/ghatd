@@ -155,11 +155,11 @@ func (s *Service) mobileOAuthLinkProof(ctx context.Context, token string) (*oaut
 	if token == "" {
 		return nil, ErrOAuthReauthenticationRequired
 	}
-	details, err := s.AuthService.ExtractAccessTokenMetadataByString(ctx, token)
-	if err != nil || details == nil || !details.IsAuthorized {
-		return nil, ErrOAuthReauthenticationRequired
+	_, details, err := s.connectionAccount(ctx, token, true)
+	if err != nil {
+		return nil, err
 	}
-	proof := &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime, EmailRevision: details.EmailRevision}
+	proof := &oauth.LinkProof{UserID: details.UserID, AccessUUID: details.AccessUUID, AuthenticationTime: details.AuthenticationTime, EmailRevision: details.EmailRevision, UserType: details.UserType}
 	if err := s.validateOAuthLinkProof(ctx, proof); err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (s *Service) completeMobileOAuth(ctx context.Context, grant *mobileOAuthGra
 		if err != nil {
 			return nil, err
 		}
-		if proof.UserID != grant.Link.UserID || proof.AccessUUID != grant.Link.AccessUUID || !proof.AuthenticationTime.Equal(grant.Link.AuthenticationTime) {
+		if proof.UserID != grant.Link.UserID || proof.AccessUUID != grant.Link.AccessUUID || !proof.AuthenticationTime.Equal(grant.Link.AuthenticationTime) || proof.UserType != grant.Link.UserType || proof.EmailRevision != grant.Link.EmailRevision {
 			return nil, ErrOAuthReauthenticationRequired
 		}
 	}
@@ -219,6 +219,9 @@ func mobileCookie(r *http.Request, name string) string {
 func (h *Handler) mobileError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	code := oauthErrorCode(err)
+	if code == "failed" {
+		status = http.StatusInternalServerError
+	}
 	if code == "unavailable" {
 		status = http.StatusServiceUnavailable
 	}
