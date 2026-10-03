@@ -18,13 +18,13 @@ func (s *Service) RecordStreak(ctx context.Context, r *RecordStreakRequest) (*Re
 	if r == nil || r.RecordStreakRequest == nil {
 		return nil, ErrRequestFailedValidation
 	}
-	if _, _, err := s.validateStreakRequester(ctx, r.UserID); err != nil {
+	if _, _, err := s.validateStreakRequester(ctx, r.ActorID); err != nil {
 		return nil, err
 	}
 
 	baseRequest := *r.RecordStreakRequest
-	baseRequest.OwnerId = strings.TrimSpace(r.UserID)
-	baseRequest.CreatedByUserId = strings.TrimSpace(r.UserID)
+	baseRequest.OwnerId = strings.TrimSpace(r.ActorID)
+	baseRequest.CreatedByUserId = strings.TrimSpace(r.ActorID)
 
 	response, err := s.StreakService.RecordStreak(ctx, &baseRequest)
 	if err != nil {
@@ -43,7 +43,7 @@ func (s *Service) ListStreaks(ctx context.Context, r *ListStreaksRequest) (*List
 		return nil, ErrRequestFailedValidation
 	}
 
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateStreakRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (s *Service) GetCurrentStreak(ctx context.Context, r *GetCurrentStreakReque
 		return nil, ErrRequestFailedValidation
 	}
 
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateStreakRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (s *Service) GetLongestStreak(ctx context.Context, r *GetLongestStreakReque
 		return nil, ErrRequestFailedValidation
 	}
 
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateStreakRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (s *Service) GetNumberOfStreaks(ctx context.Context, r *GetNumberOfStreaksR
 		return nil, ErrRequestFailedValidation
 	}
 
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateStreakRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err

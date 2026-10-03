@@ -27,8 +27,8 @@ func MapRequestToUpdateUserProfileRequest(r *http.Request, validator Usermanager
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -50,10 +50,10 @@ func MapRequestToUpdateUserProfileRequest(r *http.Request, validator Usermanager
 // struct.
 func MapRequestToGetUserMicroProfileRequest(r *http.Request, validator UsermanagerValidator) (*GetUserMicroProfileRequest, error) {
 	var parsedRequest GetUserMicroProfileRequest
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	if parsedRequest.UserId == "" {
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -66,8 +66,8 @@ func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator Usermanager
 	var parsedRequest GetGroupsByUserIDRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.ID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.ID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -102,12 +102,12 @@ func MapRequestToGetGroupsByUserIDRequest(r *http.Request, validator Usermanager
 // MapRequestToGetUserByIDRequest maps incoming GetUserByID request to correct struct
 func MapRequestToGetUserByIDRequest(r *http.Request, validator UsermanagerValidator) (*GetUserByIDRequest, error) {
 	var parsedRequest GetUserByIDRequest
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := userv2.GetUserByIDRequest{}
 
-	if parsedRequest.UserId == "" {
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -137,8 +137,8 @@ func MapRequestToGetUsersRequest(r *http.Request, validator UsermanagerValidator
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -167,8 +167,8 @@ func MapRequestToGetGroupLineageRequest(r *http.Request, validator UsermanagerVa
 		GetGroupLineageRequest: &baseRequest,
 	}
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -199,8 +199,8 @@ func MapRequestToGetGroupDescendantsRequest(r *http.Request, validator Usermanag
 		GetGroupDescendantsRequest: &baseRequest,
 	}
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -226,8 +226,8 @@ func MapRequestToGetGroupsConfigRequest(r *http.Request, validator UsermanagerVa
 	var parsedRequest GetGroupsConfigRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -246,7 +246,7 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 
 	baseRequest := userv2.GetUserProfileRequest{}
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	// get request queries
 	query := r.URL.Query()
@@ -257,7 +257,7 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 
 	parsedRequest.GetUserProfileRequest = &baseRequest
 
-	if parsedRequest.UserId == "" {
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -270,15 +270,15 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 // another account, even when called by an administrator.
 func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator UsermanagerValidator) (*DeleteUserPermanentlyRequest, error) {
 	var parsedRequest DeleteUserPermanentlyRequest
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	if parsedRequest.UserId == "" {
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
-	parsedRequest.ID = parsedRequest.UserId
+	parsedRequest.ID = parsedRequest.ActorID
 
 	var payload struct {
 		// Reason explains the deletion without granting authority over its target.
@@ -336,7 +336,10 @@ func mapGetCommsRequest(r *http.Request, validator UsermanagerValidator) (*GetCo
 
 	baseRequest := contacter.GetCommsRequest{}
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
+		return nil, ErrUnableToIdentifyUser
+	}
 
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
@@ -362,7 +365,10 @@ func mapGetCommsStatsRequest(r *http.Request, validator UsermanagerValidator) (*
 
 	baseRequest := contacter.GetCommsStatsRequest{}
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
+		return nil, ErrUnableToIdentifyUser
+	}
 
 	query := r.URL.Query()
 	err := querydecoder.New(query).Decode(&baseRequest)
@@ -390,8 +396,8 @@ func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValida
 
 	var parsedRequest UpdateCommsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		return nil, ErrUnableToIdentifyUser
 	}
 
@@ -425,8 +431,8 @@ func MapRequestToGetEnrichedUserProfileRequest(r *http.Request, validator Userma
 	var parsedRequest GetEnrichedUserProfileRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -449,8 +455,8 @@ func MapRequestToGetUserGroupsRequest(r *http.Request, validator UsermanagerVali
 	var parsedRequest GetUserGroupsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -474,7 +480,7 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 	var parsedRequest GetLatestNotificationOverviewsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	requesterUserID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if requesterUserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -495,7 +501,7 @@ func MapRequestToGetLatestNotificationOverviewsRequest(r *http.Request, validato
 		targetUserID = requesterUserID
 	}
 	baseRequest.UserID = targetUserID
-	parsedRequest.UserId = requesterUserID
+	parsedRequest.ActorID = requesterUserID
 	parsedRequest.GetLatestNotificationOverviewsRequest = &baseRequest
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
@@ -511,8 +517,8 @@ func MapRequestToGetNotifierConfigRequest(r *http.Request, validator Usermanager
 	var parsedRequest GetNotifierConfigRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -526,7 +532,7 @@ func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator U
 	var parsedRequest RegisterNotificationAddressRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	requesterUserID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if requesterUserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -544,7 +550,7 @@ func MapRequestToRegisterNotificationAddressRequest(r *http.Request, validator U
 	}
 	baseRequest.UserID = userID
 
-	parsedRequest.UserId = requesterUserID
+	parsedRequest.ActorID = requesterUserID
 	parsedRequest.RegisterAddressRequest = &baseRequest
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		logger.Error("register-notification-address-request-validation-failed", zap.Error(err))
@@ -559,7 +565,7 @@ func MapRequestToListNotificationAddressesRequest(r *http.Request, validator Use
 	var parsedRequest ListNotificationAddressesRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	requesterUserID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if requesterUserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -572,7 +578,7 @@ func MapRequestToListNotificationAddressesRequest(r *http.Request, validator Use
 	baseRequest.Channel = baseRequest.Channel.Normalised()
 	baseRequest.Status = baseRequest.Status.Normalised()
 
-	parsedRequest.UserId = requesterUserID
+	parsedRequest.ActorID = requesterUserID
 	parsedRequest.AdminView = isAdminNotificationRoute(r)
 	parsedRequest.IncludeUsers = parsedRequest.AdminView
 	if includeUsers := strings.TrimSpace(r.URL.Query().Get("include_users")); includeUsers != "" {
@@ -592,7 +598,7 @@ func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator Use
 	var parsedRequest DeleteNotificationAddressRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	requesterUserID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if requesterUserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -609,7 +615,7 @@ func MapRequestToDeleteNotificationAddressRequest(r *http.Request, validator Use
 		targetUserID = requesterUserID
 	}
 
-	parsedRequest.UserId = requesterUserID
+	parsedRequest.ActorID = requesterUserID
 	parsedRequest.DeleteNotificationAddressRequest = &notifier.DeleteNotificationAddressRequest{
 		UserID:    targetUserID,
 		AddressID: addressID,
@@ -622,7 +628,7 @@ func MapRequestToGetNotificationPreferencesRequest(r *http.Request, validator Us
 	var parsedRequest GetNotificationPreferencesRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	requesterUserID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if requesterUserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -633,7 +639,7 @@ func MapRequestToGetNotificationPreferencesRequest(r *http.Request, validator Us
 		targetUserID = requesterUserID
 	}
 
-	parsedRequest.UserId = requesterUserID
+	parsedRequest.ActorID = requesterUserID
 	parsedRequest.IncludeUser = isAdminNotificationRoute(r)
 	parsedRequest.GetNotificationPreferencesRequest = &notifier.GetNotificationPreferencesRequest{UserID: targetUserID}
 	return &parsedRequest, nil
@@ -644,7 +650,7 @@ func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator
 	var parsedRequest UpdateNotificationPreferencesRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	requesterUserID := accessmanagerhelpers.AcquireFrom(r.Context())
+	requesterUserID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if requesterUserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -660,7 +666,7 @@ func MapRequestToUpdateNotificationPreferencesRequest(r *http.Request, validator
 	}
 	baseRequest.UserID = targetUserID
 
-	parsedRequest.UserId = requesterUserID
+	parsedRequest.ActorID = requesterUserID
 	parsedRequest.IncludeUser = isAdminNotificationRoute(r)
 	parsedRequest.UpdateNotificationPreferencesRequest = &baseRequest
 	return &parsedRequest, nil
@@ -671,8 +677,8 @@ func MapRequestToNotifyUserRequest(r *http.Request, validator UsermanagerValidat
 	var parsedRequest NotifyUserRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -703,8 +709,8 @@ func MapRequestToNotifyUsersRequest(r *http.Request, validator UsermanagerValida
 	var parsedRequest NotifyUsersRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -728,8 +734,8 @@ func MapRequestToGetMyGroupInvitationsRequest(r *http.Request, validator Userman
 	var parsedRequest GetMyGroupInvitationsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -751,8 +757,8 @@ func MapRequestToAcceptMyGroupInvitationRequest(r *http.Request, validator Userm
 	var parsedRequest AcceptMyGroupInvitationRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -776,8 +782,8 @@ func MapRequestToRejectMyGroupInvitationRequest(r *http.Request, validator Userm
 	var parsedRequest RejectMyGroupInvitationRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -804,8 +810,8 @@ func MapRequestToGetUserGroupMembershipsRequestRequest(r *http.Request, validato
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -829,8 +835,8 @@ func MapRequestToGetGroupDetailRequest(r *http.Request, validator UsermanagerVal
 	var parsedRequest GetGroupDetailRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -861,8 +867,8 @@ func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerVali
 	var parsedRequest GetGroupStatsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -896,8 +902,8 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 
 	baseRequest := group.CreateGroupRequest{}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -925,8 +931,8 @@ func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValida
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-	if parsedRequest.UserId == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -960,8 +966,8 @@ func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValida
 
 	baseRequest := group.DeleteGroupRequest{}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -996,8 +1002,8 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1025,8 +1031,8 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 	var parsedRequest RemoveGroupMemberRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1067,8 +1073,8 @@ func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator Usermanager
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1105,8 +1111,8 @@ func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerV
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1129,8 +1135,8 @@ func MapRequestToValidateGroupNameRequest(r *http.Request, validator Usermanager
 	var parsedRequest ValidateGroupNameRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1159,7 +1165,7 @@ func MapRequestToCreateReminderRequest(r *http.Request, validator UsermanagerVal
 	var parsedRequest CreateReminderRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1171,7 +1177,7 @@ func MapRequestToCreateReminderRequest(r *http.Request, validator UsermanagerVal
 	}
 	baseRequest.UserID = userID
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 	parsedRequest.CreateReminderRequest = &baseRequest
 
 	return &parsedRequest, nil
@@ -1182,7 +1188,7 @@ func MapRequestToGetReminderByIDRequest(r *http.Request, validator UsermanagerVa
 	var parsedRequest GetReminderByIDRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1194,7 +1200,7 @@ func MapRequestToGetReminderByIDRequest(r *http.Request, validator UsermanagerVa
 		return nil, ErrRequestFailedValidation
 	}
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 	parsedRequest.Id = reminderID
 
 	return &parsedRequest, nil
@@ -1205,13 +1211,13 @@ func MapRequestToListRemindersRequest(r *http.Request, validator UsermanagerVali
 	var parsedRequest ListRemindersRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 
 	if err := querydecoder.New(r.URL.Query()).Decode(&parsedRequest); err != nil {
 		return nil, ErrRequestFailedValidation
@@ -1225,7 +1231,7 @@ func MapRequestToUpdateReminderByIDRequest(r *http.Request, validator Usermanage
 	var parsedRequest UpdateReminderByIDRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1244,7 +1250,7 @@ func MapRequestToUpdateReminderByIDRequest(r *http.Request, validator Usermanage
 	baseRequest.UserID = userID
 	baseRequest.Id = reminderID
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 	parsedRequest.Id = reminderID
 	parsedRequest.UpdateReminderByIDRequest = &baseRequest
 
@@ -1256,7 +1262,7 @@ func MapRequestToDeleteReminderByIDRequest(r *http.Request, validator Usermanage
 	var parsedRequest DeleteReminderByIDRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1268,7 +1274,7 @@ func MapRequestToDeleteReminderByIDRequest(r *http.Request, validator Usermanage
 		return nil, ErrRequestFailedValidation
 	}
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 	parsedRequest.Id = reminderID
 
 	return &parsedRequest, nil
@@ -1279,7 +1285,7 @@ func MapRequestToDisableReminderByIDRequest(r *http.Request, validator Usermanag
 	var parsedRequest DisableReminderByIDRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1291,7 +1297,7 @@ func MapRequestToDisableReminderByIDRequest(r *http.Request, validator Usermanag
 		return nil, ErrRequestFailedValidation
 	}
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 	parsedRequest.Id = reminderID
 
 	return &parsedRequest, nil
@@ -1302,8 +1308,8 @@ func MapRequestToGetReminderStatsRequest(r *http.Request, validator UsermanagerV
 	var parsedRequest GetReminderStatsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1320,8 +1326,8 @@ func MapRequestToGetDueRemindersRequest(r *http.Request, validator UsermanagerVa
 	var parsedRequest GetDueRemindersRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1342,7 +1348,7 @@ func MapRequestToRecordStreakRequest(r *http.Request, validator UsermanagerValid
 	var parsedRequest RecordStreakRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	userID := accessmanagerhelpers.AcquireFrom(r.Context())
+	userID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if userID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1355,7 +1361,7 @@ func MapRequestToRecordStreakRequest(r *http.Request, validator UsermanagerValid
 	baseRequest.OwnerId = userID
 	baseRequest.CreatedByUserId = userID
 
-	parsedRequest.UserID = userID
+	parsedRequest.ActorID = userID
 	parsedRequest.RecordStreakRequest = &baseRequest
 
 	return &parsedRequest, nil
@@ -1366,8 +1372,8 @@ func MapRequestToListStreaksRequest(r *http.Request, validator UsermanagerValida
 	parsedRequest := ListStreaksRequest{ListStreaksRequest: &streaker.ListStreaksRequest{}}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1390,8 +1396,8 @@ func MapRequestToGetCurrentStreakRequest(r *http.Request, validator UsermanagerV
 	parsedRequest := GetCurrentStreakRequest{GetCurrentCountRequest: &streaker.GetCurrentCountRequest{}}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1414,8 +1420,8 @@ func MapRequestToGetLongestStreakRequest(r *http.Request, validator UsermanagerV
 	parsedRequest := GetLongestStreakRequest{GetLongestStreakRequest: &streaker.GetLongestStreakRequest{}}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}
@@ -1438,8 +1444,8 @@ func MapRequestToGetNumberOfStreaksRequest(r *http.Request, validator Usermanage
 	parsedRequest := GetNumberOfStreaksRequest{GetNumberOfStreaksRequest: &streaker.GetNumberOfStreaksRequest{}}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
-	if parsedRequest.UserID == "" {
+	parsedRequest.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.ActorID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
 	}

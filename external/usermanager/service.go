@@ -205,7 +205,7 @@ func (s *Service) UpdateUserProfile(ctx context.Context, r *UpdateUserProfileReq
 	logger.Debug("handling-update-user-profile-request")
 
 	serviceResponse, err := s.UserService.UpdateUser(ctx, &userv2.UpdateUserRequest{
-		ID:        r.UserId,
+		ID:        r.ActorID,
 		FirstName: r.FirstName,
 		LastName:  r.LastName,
 	})
@@ -224,7 +224,7 @@ func (s *Service) GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfil
 	logger.Debug("handling-get-user-micro-profile-request")
 
 	serviceResponse, err := s.UserService.GetUserMicroProfile(ctx, &userv2.GetUserMicroProfileRequest{
-		ID: r.UserId,
+		ID: r.ActorID,
 	})
 	if err != nil {
 		return nil, err
@@ -247,16 +247,16 @@ func (s *Service) GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetU
 		return nil, err
 	}
 
-	if requestedUser.User.GetUserId() != r.UserId {
-		logger.Warn("user-attempting-to-access-another-user-by-id", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+	if requestedUser.User.GetUserId() != r.ActorID {
+		logger.Warn("user-attempting-to-access-another-user-by-id", zap.String("requesting-user-id", r.ActorID), zap.String("requested-user-id", r.ID))
 
-		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.ActorID})
 		if err != nil {
 			return nil, err
 		}
 
 		if !requestingUser.User.IsAdmin() {
-			logger.Warn("non-admin-user-attempting-to-access-another-user-by-id", zap.String("user-id", r.UserId))
+			logger.Warn("non-admin-user-attempting-to-access-another-user-by-id", zap.String("user-id", r.ActorID))
 			return nil, userv2.ErrUnauthorisedAccess
 		}
 	}
@@ -272,7 +272,7 @@ func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersRe
 	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
 	logger.Debug("fetching-users", zap.Any("filters", safeLogValue(r.GetUsersRequest)))
-	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+	requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.ActorID})
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +285,7 @@ func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersRe
 		// r.GetUsersRequest.IDsFilter to ensure that the user can only see users that are in the same group (or sub-group) as them.
 		// If these conditions are not met, we return an empty list to avoid unauthorised access, and log the attempt.
 		if r.GroupID == "" {
-			logger.Warn("non-admin-user-attempting-to-access-users-without-group-filter", zap.String("user-id", r.UserId))
+			logger.Warn("non-admin-user-attempting-to-access-users-without-group-filter", zap.String("user-id", r.ActorID))
 			return &GetUsersResponse{
 				GetUsersResponse: &userv2.GetUsersResponse{
 					Users: []userv2.UniversalUser{},
@@ -293,14 +293,14 @@ func (s *Service) GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersRe
 			}, nil
 		}
 
-		userGroupAccessMap, err := s.GroupService.GetUserGroupAccessMap(ctx, r.UserId)
+		userGroupAccessMap, err := s.GroupService.GetUserGroupAccessMap(ctx, r.ActorID)
 		if err != nil {
 			return nil, err
 		}
 
 		userGroupAccess, ok := userGroupAccessMap[r.GroupID]
 		if !ok || !userGroupAccess.IsAccessible {
-			logger.Warn("non-admin-user-attempting-to-access-users-for-a-group-they-do-not-have-access-to", zap.String("user-id", r.UserId), zap.String("group-id", r.GroupID))
+			logger.Warn("non-admin-user-attempting-to-access-users-for-a-group-they-do-not-have-access-to", zap.String("user-id", r.ActorID), zap.String("group-id", r.GroupID))
 			return &GetUsersResponse{
 				GetUsersResponse: &userv2.GetUsersResponse{
 					Users: []userv2.UniversalUser{},
@@ -346,25 +346,25 @@ func (s *Service) GetUserProfile(ctx context.Context, r *GetUserProfileRequest) 
 
 	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 
-	logger.Debug("fetching-user-profile", zap.String("user-id", r.UserId))
+	logger.Debug("fetching-user-profile", zap.String("user-id", r.ActorID))
 
 	serviceResponse, err := s.UserService.GetUserProfile(ctx, &userv2.GetUserProfileRequest{
-		ID: r.UserId,
+		ID: r.ActorID,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	if serviceResponse.Profile.ID != r.UserId {
-		logger.Warn("user-attempting-to-access-another-user-profile", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", r.ID))
+	if serviceResponse.Profile.ID != r.ActorID {
+		logger.Warn("user-attempting-to-access-another-user-profile", zap.String("requesting-user-id", r.ActorID), zap.String("requested-user-id", r.ID))
 
-		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.ActorID})
 		if err != nil {
 			return nil, err
 		}
 
 		if !requestingUser.User.IsAdmin() {
-			logger.Warn("non-admin-user-attempting-to-access-another-user-profile", zap.String("user-id", r.UserId))
+			logger.Warn("non-admin-user-attempting-to-access-another-user-profile", zap.String("user-id", r.ActorID))
 			return nil, userv2.ErrUnauthorisedAccess
 		}
 	}
@@ -382,7 +382,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 	var err error
 	targetUserID := strings.TrimSpace(r.ID)
 	if targetUserID == "" {
-		logger.Warn("delete-user-permanently-request-with-empty-user-id", zap.String("requesting-user-id", r.UserId))
+		logger.Warn("delete-user-permanently-request-with-empty-user-id", zap.String("requesting-user-id", r.ActorID))
 		return errors.New(userv2.ErrInvalidUserID.Error())
 	}
 
@@ -395,16 +395,16 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 
 	requestingUserEmail := ""
 
-	if requestedUser.User.GetUserId() != r.UserId {
-		logger.Warn("user-attempting-to-delete-another-user", zap.String("requesting-user-id", r.UserId), zap.String("requested-user-id", targetUserID))
+	if requestedUser.User.GetUserId() != r.ActorID {
+		logger.Warn("user-attempting-to-delete-another-user", zap.String("requesting-user-id", r.ActorID), zap.String("requested-user-id", targetUserID))
 
-		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.UserId})
+		requestingUser, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{ID: r.ActorID})
 		if err != nil {
 			return err
 		}
 
 		if !requestingUser.User.IsAdmin() {
-			logger.Warn("non-admin-user-attempting-to-delete-another-user", zap.String("user-id", r.UserId))
+			logger.Warn("non-admin-user-attempting-to-delete-another-user", zap.String("user-id", r.ActorID))
 			return userv2.ErrUnauthorisedAccess
 		}
 
@@ -414,13 +414,13 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 	if s.AuditService != nil {
 		reason := strings.TrimSpace(r.Reason)
 		targetUserEmail := strings.TrimSpace(requestedUser.User.GetUserEmail())
-		requestedBySelf := strings.TrimSpace(r.UserId) == targetUserID
+		requestedBySelf := strings.TrimSpace(r.ActorID) == targetUserID
 		if requestingUserEmail == "" && requestedBySelf {
 			requestingUserEmail = targetUserEmail
 		}
 
 		auditDetails := map[string]interface{}{
-			"requesting_user_id": r.UserId,
+			"requesting_user_id": r.ActorID,
 			"target_user_id":     targetUserID,
 			"requested_by_self":  requestedBySelf,
 		}
@@ -435,7 +435,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 		}
 
 		auditErr := s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			ActorId:    r.UserId,
+			ActorId:    r.ActorID,
 			Action:     "user.account.delete.requested",
 			TargetId:   targetUserID,
 			TargetType: audit.TargetTypeUser,
@@ -446,7 +446,7 @@ func (s *Service) DeleteUserPermanently(ctx context.Context, r *DeleteUserPerman
 			logger.Warn(
 				"failed-to-log-delete-user-permanently-audit-event",
 				zap.Error(auditErr),
-				zap.String("requesting-user-id", r.UserId),
+				zap.String("requesting-user-id", r.ActorID),
 				zap.String("requested-user-id", targetUserID),
 			)
 		}

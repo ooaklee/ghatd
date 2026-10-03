@@ -10,21 +10,23 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
-// GetUserGroups handles fetching groups for a user with filtering
+// GetGroupsByUserIDRequest separates the caller from the user whose groups are
+// requested. The service requires administrative authority for a different user.
 type GetGroupsByUserIDRequest struct {
 
-	// ID is the ID of the making the request
-	ID string
+	// ActorID identifies the verified caller, not the embedded target UserID.
+	ActorID string `json:"-"`
 
 	// GetGroupsByUserIDRequest carries the underlying group lookup parameters.
 	*group.GetGroupsByUserIDRequest
 }
 
-// GetUserGroupMembershipsRequest represents the request for fetching user group memberships with filtering options
+// GetUserGroupMembershipsRequest retrieves the caller's own memberships. Use
+// GetGroupsByUserIDRequest for an authorized cross-user lookup instead.
 type GetUserGroupMembershipsRequest struct {
 
-	// UserID is the ID of the user making the request
-	UserID string
+	// ActorID identifies the verified caller whose memberships are requested.
+	ActorID string `json:"-"`
 
 	// GroupType if specified, filters groups to a specific type (e.g. "team", "department")
 	GroupType string `query:"group_type"`
@@ -39,16 +41,16 @@ type GetUserGroupMembershipsRequest struct {
 // GetUserMicroProfileRequest holds all the data needed to action request
 type GetUserMicroProfileRequest struct {
 
-	// UserId the ID of the user requesting their micro profile
-	UserId string
+	// ActorID identifies the verified caller requesting their micro profile.
+	ActorID string `json:"-"`
 }
 
 // GetUserProfileRequest holds all the data needed to action user
 // profile retrieval request
 type GetUserProfileRequest struct {
 
-	// UserId the ID of the user requesting their profile
-	UserId string
+	// ActorID identifies the verified caller requesting their own profile.
+	ActorID string `json:"-"`
 
 	// GetUserProfileRequest carries the underlying profile lookup parameters.
 	*userv2.GetUserProfileRequest
@@ -57,8 +59,8 @@ type GetUserProfileRequest struct {
 // GetUserByIDRequest holds all the data needed to action user retrieval request
 type GetUserByIDRequest struct {
 
-	// UserId the ID of the user making the request
-	UserId string
+	// ActorID identifies the verified caller, independently of the target ID.
+	ActorID string `json:"-"`
 
 	// GetUserByIDRequest carries the underlying target-user lookup parameters.
 	*userv2.GetUserByIDRequest
@@ -67,8 +69,8 @@ type GetUserByIDRequest struct {
 // GetUsersRequest holds all the data needed to action user list retrieval request
 type GetUsersRequest struct {
 
-	// UserId is the ID of the user making the request
-	UserId string
+	// ActorID is the ID of the user making the request
+	ActorID string `json:"-"`
 
 	// GroupID if specified, filters users to those that are
 	// members of the root group of the specified group id
@@ -82,8 +84,8 @@ type GetUsersRequest struct {
 // profile update request
 type UpdateUserProfileRequest struct {
 
-	// UserId the ID of the user requesting their profile
-	UserId string
+	// ActorID identifies the verified caller whose profile is being updated.
+	ActorID string `json:"-"`
 
 	// UpdateUserRequest carries the underlying user profile updates.
 	*userv2.UpdateUserRequest
@@ -92,11 +94,11 @@ type UpdateUserProfileRequest struct {
 // DeleteUserPermanentlyRequest holds all the data needed to delete user and resources
 type DeleteUserPermanentlyRequest struct {
 
-	// UserId identifies the trusted actor; callers must not decode it from input.
-	UserId string
+	// ActorID identifies the trusted actor; callers must not decode it from input.
+	ActorID string `json:"-"`
 
 	// ID selects the account to delete. The HTTP /me mapper always binds it to
-	// UserId. Trusted in-process admin workflows may select a different account;
+	// ActorID. Trusted in-process admin workflows may select a different account;
 	// the service checks that actor's administrative authority.
 	ID string `path:"userID"`
 
@@ -106,8 +108,8 @@ type DeleteUserPermanentlyRequest struct {
 
 // GetUserInsightsUsageRequest holds all the data needed to get basic user insights
 type GetUserInsightsUsageRequest struct {
-	// UserId the ID of the user requesting basic insights
-	UserId string
+	// ActorID identifies the verified caller requesting their basic insights.
+	ActorID string `json:"-"`
 
 	// From the date from when the queries should be run between
 	From string `query:"from"`
@@ -127,8 +129,8 @@ type CreateCommsRequest struct {
 // the request to get a comms
 type GetCommsRequest struct {
 
-	// UserId is the id of the user making the request
-	UserId string
+	// ActorID is the id of the user making the request
+	ActorID string `json:"-"`
 
 	// GetCommsRequest carries the underlying comms query parameters.
 	*contacter.GetCommsRequest
@@ -138,9 +140,9 @@ type GetCommsRequest struct {
 // the request to update a comms
 type UpdateCommsRequest struct {
 
-	// UserId is the verified actor supplied by the HTTP mapper. Admin authority
+	// ActorID is the verified actor supplied by the HTTP mapper. Admin authority
 	// is enforced by route middleware, not by the contact persistence service.
-	UserId string
+	ActorID string `json:"-"`
 
 	// UpdateCommsRequest carries the underlying comms update payload.
 	*contacter.UpdateCommsRequest
@@ -150,8 +152,8 @@ type UpdateCommsRequest struct {
 // the request to get comms stats
 type GetCommsStatsRequest struct {
 
-	// UserId is the id of the user making the request
-	UserId string
+	// ActorID is the id of the user making the request
+	ActorID string `json:"-"`
 
 	// GetCommsStatsRequest carries the underlying comms stats query parameters.
 	*contacter.GetCommsStatsRequest
@@ -160,8 +162,8 @@ type GetCommsStatsRequest struct {
 // GetEnrichedUserProfileRequest holds the data needed to get an enriched user profile
 type GetEnrichedUserProfileRequest struct {
 
-	// UserId is the ID of the user requesting their enriched profile
-	UserId string
+	// ActorID is the ID of the user requesting their enriched profile
+	ActorID string `json:"-"`
 
 	// IncludeAllGroups indicates whether to include all group memberships
 	IncludeAllGroups bool `query:"include_all_groups"`
@@ -173,8 +175,8 @@ type GetEnrichedUserProfileRequest struct {
 // GetUserGroupsRequest holds the data needed to get groups for a user
 type GetUserGroupsRequest struct {
 
-	// UserId is the ID of the user
-	UserId string
+	// ActorID identifies the verified caller whose own groups are requested.
+	ActorID string `json:"-"`
 
 	// GroupType filters by group type (optional: TEAM, DEPARTMENT, etc.)
 	GroupType string `query:"types"`
@@ -197,12 +199,12 @@ type GetUserGroupsRequest struct {
 
 // GetLatestNotificationOverviewsRequest holds the data needed to fetch latest notification overviews.
 type GetLatestNotificationOverviewsRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// On admin routes this remains the admin user's ID for authorisation,
 	// logging, and audit context. The target user being queried lives in the
 	// embedded GetLatestNotificationOverviewsRequest.UserID field instead.
-	UserId string
+	ActorID string `json:"-"`
 
 	// GetLatestNotificationOverviewsRequest carries the underlying notification query parameters.
 	*common.GetLatestNotificationOverviewsRequest
@@ -210,8 +212,8 @@ type GetLatestNotificationOverviewsRequest struct {
 
 // GetNotifierConfigRequest holds the data needed to fetch notifier config.
 type GetNotifierConfigRequest struct {
-	// UserId is the authenticated requester asking for notifier config.
-	UserId string
+	// ActorID is the authenticated requester asking for notifier config.
+	ActorID string `json:"-"`
 
 	// GetNotifierConfigRequest carries the underlying notifier config request.
 	*notifier.GetNotifierConfigRequest
@@ -219,11 +221,11 @@ type GetNotifierConfigRequest struct {
 
 // RegisterNotificationAddressRequest holds the data needed to register a notification address for the current user.
 type RegisterNotificationAddressRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// On admin routes this remains the admin user's ID. The target user whose
 	// address is being registered lives in RegisterAddressRequest.UserID.
-	UserId string
+	ActorID string `json:"-"`
 
 	// RegisterAddressRequest carries the underlying notification address payload.
 	*notifier.RegisterAddressRequest
@@ -231,11 +233,11 @@ type RegisterNotificationAddressRequest struct {
 
 // ListNotificationAddressesRequest holds the data needed to list notification addresses for the current user.
 type ListNotificationAddressesRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// On admin routes this remains the admin user's ID. The target filter lives
 	// in ListNotificationAddressesRequest.UserID on the embedded notifier request.
-	UserId string
+	ActorID string `json:"-"`
 
 	// AdminView indicates whether the request came through the admin notifications route.
 	AdminView bool
@@ -249,11 +251,11 @@ type ListNotificationAddressesRequest struct {
 
 // DeleteNotificationAddressRequest holds the data needed to delete a notification address for the current user.
 type DeleteNotificationAddressRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// On admin routes this remains the admin user's ID. The target user whose
 	// address is being deleted lives in DeleteNotificationAddressRequest.UserID.
-	UserId string
+	ActorID string `json:"-"`
 
 	// DeleteNotificationAddressRequest carries the target user and address identifiers.
 	*notifier.DeleteNotificationAddressRequest
@@ -261,11 +263,11 @@ type DeleteNotificationAddressRequest struct {
 
 // GetNotificationPreferencesRequest holds the data needed to fetch notification preferences.
 type GetNotificationPreferencesRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// On admin routes this remains the admin user's ID. The target user whose
 	// preferences are being fetched lives in GetNotificationPreferencesRequest.UserID.
-	UserId string
+	ActorID string `json:"-"`
 
 	// IncludeUser indicates whether the response should include the target user's profile.
 	IncludeUser bool
@@ -276,11 +278,11 @@ type GetNotificationPreferencesRequest struct {
 
 // UpdateNotificationPreferencesRequest holds the data needed to update notification preferences.
 type UpdateNotificationPreferencesRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// On admin routes this remains the admin user's ID. The target user whose
 	// preferences are being updated lives in UpdateNotificationPreferencesRequest.UserID.
-	UserId string
+	ActorID string `json:"-"`
 
 	// IncludeUser indicates whether the response should include the target user's profile.
 	IncludeUser bool
@@ -291,11 +293,11 @@ type UpdateNotificationPreferencesRequest struct {
 
 // NotifyUserRequest holds the data needed for an admin/service notification send.
 type NotifyUserRequest struct {
-	// UserId is the authenticated requester/actor ID.
+	// ActorID is the authenticated requester/actor ID.
 	//
 	// The target notification recipient lives in NotifyUserRequest.UserID on the
 	// embedded notifier request.
-	UserId string
+	ActorID string `json:"-"`
 
 	// NotifyUserRequest carries the target recipient and notification payload.
 	*notifier.NotifyUserRequest
@@ -304,8 +306,8 @@ type NotifyUserRequest struct {
 // NotifyUsersRequest holds the data needed for an admin notification dispatch
 // to zero or more users across zero or more channels.
 type NotifyUsersRequest struct {
-	// UserId is the authenticated requester/actor ID.
-	UserId string
+	// ActorID is the authenticated requester/actor ID.
+	ActorID string `json:"-"`
 
 	// NotifyUsersRequest carries the target users, notification payload, and
 	// optional channel filters.
@@ -314,8 +316,8 @@ type NotifyUsersRequest struct {
 
 // GetMyGroupInvitationsRequest holds the data needed to fetch the current user's group invitations.
 type GetMyGroupInvitationsRequest struct {
-	// UserId is the ID of the requester.
-	UserId string
+	// ActorID is the ID of the requester.
+	ActorID string `json:"-"`
 
 	// PrefixName if true, prefixes child group names with the root group's name.
 	PrefixName bool `query:"prefix_name"`
@@ -323,16 +325,16 @@ type GetMyGroupInvitationsRequest struct {
 
 // AcceptMyGroupInvitationRequest holds the data needed to accept one of the current user's group invitations.
 type AcceptMyGroupInvitationRequest struct {
-	// UserId is the ID of the requester.
-	UserId string
+	// ActorID is the ID of the requester.
+	ActorID string `json:"-"`
 	// GroupID is the ID of the group invitation to accept.
 	GroupID string `path:"groupID"`
 }
 
 // RejectMyGroupInvitationRequest holds the data needed to reject one of the current user's group invitations.
 type RejectMyGroupInvitationRequest struct {
-	// UserId is the ID of the requester.
-	UserId string
+	// ActorID is the ID of the requester.
+	ActorID string `json:"-"`
 	// GroupID is the ID of the group invitation to reject.
 	GroupID string `path:"groupID"`
 }
@@ -340,8 +342,8 @@ type RejectMyGroupInvitationRequest struct {
 // UpdateGroupRequest holds the data needed to update a group
 type UpdateGroupRequest struct {
 
-	// UserId is the trusted actor used for group authorization, not a body field.
-	UserId string
+	// ActorID is the trusted actor used for group authorization, not a body field.
+	ActorID string `json:"-"`
 
 	// UpdateGroupRequest carries the underlying update. HTTP accepts editable
 	// fields only and binds ID from the URL; Group is reserved for trusted code.
@@ -351,8 +353,8 @@ type UpdateGroupRequest struct {
 // ValidateGroupNameRequest holds the data needed to validate a group name
 type ValidateGroupNameRequest struct {
 
-	// UserID is the ID of the user making the request
-	UserID string
+	// ActorID is the ID of the user making the request
+	ActorID string `json:"-"`
 
 	// ValidateGroupNameRequest carries the underlying group-name validation parameters.
 	*group.ValidateGroupNameRequest
@@ -361,9 +363,9 @@ type ValidateGroupNameRequest struct {
 // CreateGroupRequest holds the data needed for a user to create a new group
 type CreateGroupRequest struct {
 
-	// UserID is the trusted actor used for authorization and default ownership.
+	// ActorID is the trusted actor used for authorization and default ownership.
 	// The HTTP mapper binds it independently of the group creation payload.
-	UserID string
+	ActorID string `json:"-"`
 
 	// CreateGroupRequest carries the underlying group creation payload.
 	*group.CreateGroupRequest
@@ -372,8 +374,8 @@ type CreateGroupRequest struct {
 // DeleteGroupRequest holds the data needed for a user to delete a group
 type DeleteGroupRequest struct {
 
-	// UserID is the ID of the user making the request
-	UserID string
+	// ActorID is the ID of the user making the request
+	ActorID string `json:"-"`
 
 	// DeleteGroupRequest carries the underlying group deletion parameters.
 	*group.DeleteGroupRequest
@@ -382,8 +384,8 @@ type DeleteGroupRequest struct {
 // GetGroupDetailRequest holds the data needed to fetch a specific group's detail
 type GetGroupDetailRequest struct {
 
-	// UserId is the ID of the requester
-	UserId string
+	// ActorID is the ID of the requester
+	ActorID string `json:"-"`
 
 	// GroupID is the ID of the group to fetch
 	GroupID string
@@ -395,8 +397,8 @@ type GetGroupDetailRequest struct {
 // GetGroupStatsRequest holds the data needed to fetch stats for a specific group
 type GetGroupStatsRequest struct {
 
-	// UserId is the ID of the requester
-	UserId string
+	// ActorID is the ID of the requester
+	ActorID string `json:"-"`
 
 	// GroupID is the ID of the group to fetch
 	GroupID string
@@ -408,15 +410,15 @@ type GetGroupStatsRequest struct {
 // GetGroupsConfigRequest holds the data needed to retrieve the group service config
 type GetGroupsConfigRequest struct {
 
-	// UserId is the ID of the requester
-	UserId string
+	// ActorID is the ID of the requester
+	ActorID string `json:"-"`
 }
 
 // GetGroupLineageRequest holds the data needed to fetch a group's lineage
 type GetGroupLineageRequest struct {
 
-	// UserId is the ID of the requester
-	UserId string
+	// ActorID is the ID of the requester
+	ActorID string `json:"-"`
 
 	// GetGroupLineageRequest carries the underlying lineage query parameters.
 	*group.GetGroupLineageRequest
@@ -425,8 +427,8 @@ type GetGroupLineageRequest struct {
 // GetGroupDescendantsRequest holds the data needed to fetch a group's descendants
 type GetGroupDescendantsRequest struct {
 
-	// UserId is the ID of the requester
-	UserId string
+	// ActorID is the ID of the requester
+	ActorID string `json:"-"`
 
 	// GetGroupDescendantsRequest carries the underlying descendants query parameters.
 	*group.GetGroupDescendantsRequest
@@ -435,8 +437,8 @@ type GetGroupDescendantsRequest struct {
 // AddGroupMemberRequest holds the data needed to add a user to a group
 type AddGroupMemberRequest struct {
 
-	// UserID is the trusted actor, distinct from the member selected in the body.
-	UserID string
+	// ActorID is the trusted actor, distinct from the member selected in the body.
+	ActorID string `json:"-"`
 
 	// AddMemberRequest carries the underlying member-addition payload.
 	*group.AddMemberRequest
@@ -445,8 +447,8 @@ type AddGroupMemberRequest struct {
 // RemoveGroupMemberRequest holds the data needed to remove a user from a group
 type RemoveGroupMemberRequest struct {
 
-	// UserID is the ID of the user making the request
-	UserID string
+	// ActorID is the ID of the user making the request
+	ActorID string `json:"-"`
 
 	// RemoveMemberRequest carries the underlying member-removal parameters.
 	*group.RemoveMemberRequest
@@ -455,8 +457,8 @@ type RemoveGroupMemberRequest struct {
 // UpdateGroupMemberRequest holds the data needed to update a user's role in a group
 type UpdateGroupMemberRequest struct {
 
-	// UserID is the trusted actor, distinct from the URL-selected member.
-	UserID string
+	// ActorID is the trusted actor, distinct from the URL-selected member.
+	ActorID string `json:"-"`
 
 	// UpdateMemberRoleRequest carries the underlying member-role update payload.
 	*group.UpdateMemberRoleRequest
@@ -464,8 +466,8 @@ type UpdateGroupMemberRequest struct {
 
 // CreateReminderRequest holds the data needed to create a reminder for the current user.
 type CreateReminderRequest struct {
-	// UserID is the authenticated requester creating the reminder.
-	UserID string
+	// ActorID is the authenticated requester creating the reminder.
+	ActorID string `json:"-"`
 
 	// CreateReminderRequest carries the underlying reminder creation payload.
 	*reminder.CreateReminderRequest
@@ -473,8 +475,8 @@ type CreateReminderRequest struct {
 
 // GetReminderByIDRequest holds the data needed to get a reminder.
 type GetReminderByIDRequest struct {
-	// UserID is the authenticated requester fetching the reminder.
-	UserID string
+	// ActorID is the authenticated requester fetching the reminder.
+	ActorID string `json:"-"`
 
 	// Id is the reminder identifier to fetch.
 	Id string
@@ -482,8 +484,8 @@ type GetReminderByIDRequest struct {
 
 // ListRemindersRequest holds the data needed to list reminders.
 type ListRemindersRequest struct {
-	// UserID is the authenticated requester listing reminders.
-	UserID string
+	// ActorID is the authenticated requester listing reminders.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters reminders by a single target user.
 	FilterUserID string `query:"user_id"`
@@ -506,8 +508,8 @@ type ListRemindersRequest struct {
 
 // UpdateReminderByIDRequest holds the data needed to update a reminder.
 type UpdateReminderByIDRequest struct {
-	// UserID is the authenticated requester updating the reminder.
-	UserID string
+	// ActorID is the authenticated requester updating the reminder.
+	ActorID string `json:"-"`
 
 	// Id is the reminder identifier to update.
 	Id string
@@ -518,8 +520,8 @@ type UpdateReminderByIDRequest struct {
 
 // DeleteReminderByIDRequest holds the data needed to delete a reminder.
 type DeleteReminderByIDRequest struct {
-	// UserID is the authenticated requester deleting the reminder.
-	UserID string
+	// ActorID is the authenticated requester deleting the reminder.
+	ActorID string `json:"-"`
 
 	// Id is the reminder identifier to delete.
 	Id string
@@ -527,8 +529,8 @@ type DeleteReminderByIDRequest struct {
 
 // DisableReminderByIDRequest holds the data needed to disable a reminder.
 type DisableReminderByIDRequest struct {
-	// UserID is the authenticated requester disabling the reminder.
-	UserID string
+	// ActorID is the authenticated requester disabling the reminder.
+	ActorID string `json:"-"`
 
 	// Id is the reminder identifier to disable.
 	Id string
@@ -536,8 +538,8 @@ type DisableReminderByIDRequest struct {
 
 // GetDueRemindersRequest holds the data needed to get due reminders.
 type GetDueRemindersRequest struct {
-	// UserID is the authenticated requester fetching due reminders.
-	UserID string
+	// ActorID is the authenticated requester fetching due reminders.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters due reminders by a single target user.
 	FilterUserID string `query:"user_id"`
@@ -554,8 +556,8 @@ type GetDueRemindersRequest struct {
 
 // GetReminderStatsRequest holds the data needed to get reminder stats.
 type GetReminderStatsRequest struct {
-	// UserID is the authenticated requester fetching reminder stats.
-	UserID string
+	// ActorID is the authenticated requester fetching reminder stats.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters reminder stats by a single target user.
 	FilterUserID string `query:"user_id"`
@@ -566,8 +568,8 @@ type GetReminderStatsRequest struct {
 
 // RecordStreakRequest holds the data needed to record a streak for the current user.
 type RecordStreakRequest struct {
-	// UserID is the authenticated requester recording the streak.
-	UserID string
+	// ActorID is the authenticated requester recording the streak.
+	ActorID string `json:"-"`
 
 	// RecordStreakRequest carries the underlying streak creation payload.
 	*streaker.RecordStreakRequest
@@ -575,8 +577,8 @@ type RecordStreakRequest struct {
 
 // ListStreaksRequest holds the data needed to list streak history.
 type ListStreaksRequest struct {
-	// UserID is the authenticated requester listing streaks.
-	UserID string
+	// ActorID is the authenticated requester listing streaks.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters streaks by a target user on admin/service routes.
 	FilterUserID string `query:"user_id"`
@@ -587,8 +589,8 @@ type ListStreaksRequest struct {
 
 // GetCurrentStreakRequest holds filters used to get the current streak count.
 type GetCurrentStreakRequest struct {
-	// UserID is the authenticated requester getting streak stats.
-	UserID string
+	// ActorID is the authenticated requester getting streak stats.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters streaks by a target user on admin/service routes.
 	FilterUserID string `query:"user_id"`
@@ -599,8 +601,8 @@ type GetCurrentStreakRequest struct {
 
 // GetLongestStreakRequest holds filters used to get the personal best streak.
 type GetLongestStreakRequest struct {
-	// UserID is the authenticated requester getting streak stats.
-	UserID string
+	// ActorID is the authenticated requester getting streak stats.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters streaks by a target user on admin/service routes.
 	FilterUserID string `query:"user_id"`
@@ -611,8 +613,8 @@ type GetLongestStreakRequest struct {
 
 // GetNumberOfStreaksRequest holds filters used to count streak entries.
 type GetNumberOfStreaksRequest struct {
-	// UserID is the authenticated requester getting streak stats.
-	UserID string
+	// ActorID is the authenticated requester getting streak stats.
+	ActorID string `json:"-"`
 
 	// FilterUserID optionally filters streaks by a target user on admin/service routes.
 	FilterUserID string `query:"user_id"`
@@ -624,8 +626,8 @@ type GetNumberOfStreaksRequest struct {
 // UpdateGroupOwnerRequest holds the data needed to update group ownership
 type UpdateGroupOwnerRequest struct {
 
-	// UserID is the trusted actor, distinct from the proposed new owner.
-	UserID string
+	// ActorID is the trusted actor, distinct from the proposed new owner.
+	ActorID string `json:"-"`
 
 	// UpdateOwnerRequest carries the underlying group-owner update payload.
 	*group.UpdateOwnerRequest

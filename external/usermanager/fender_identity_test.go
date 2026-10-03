@@ -14,7 +14,7 @@ import (
 )
 
 // mappedIdentity captures the authority and mutable payload delivered to a
-// manager service, independently of each endpoint's legacy field names.
+// manager service, independently of each endpoint's lower-domain target fields.
 type mappedIdentity struct {
 	// actor is the authenticated caller, never a body-provided identity.
 	actor string
@@ -36,7 +36,7 @@ func mapIdentityFixture(operation string, r *http.Request) (mappedIdentity, erro
 		if err != nil {
 			return mappedIdentity{}, err
 		}
-		return mappedIdentity{actor: p.UserId, target: p.ID, value: p.Reason}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.ID, value: p.Reason}, nil
 	case "create contact":
 		p, err := MapRequestToCreateCommsRequest(r, v)
 		if err != nil {
@@ -52,13 +52,13 @@ func mapIdentityFixture(operation string, r *http.Request) (mappedIdentity, erro
 		if p.AdminNotes != nil {
 			value = *p.AdminNotes
 		}
-		return mappedIdentity{actor: p.UserId, target: p.CommsId, value: value}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.CommsId, value: value}, nil
 	case "create group":
 		p, err := MapRequestToCreateGroupRequest(r, v)
 		if err != nil {
 			return mappedIdentity{}, err
 		}
-		return mappedIdentity{actor: p.UserID, target: p.ParentGroupID, member: p.OwnerID, value: p.Name}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.ParentGroupID, member: p.OwnerID, value: p.Name}, nil
 	case "update group":
 		p, err := MapRequestToUpdateGroupRequest(r, v)
 		if err != nil {
@@ -68,19 +68,19 @@ func mapIdentityFixture(operation string, r *http.Request) (mappedIdentity, erro
 		if p.Name != nil {
 			value = *p.Name
 		}
-		return mappedIdentity{actor: p.UserId, target: p.ID, value: value, wholeGroup: p.Group != nil}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.ID, value: value, wholeGroup: p.Group != nil}, nil
 	case "add member":
 		p, err := MapRequestToAddGroupMemberRequest(r, v)
 		if err != nil {
 			return mappedIdentity{}, err
 		}
-		return mappedIdentity{actor: p.UserID, target: p.GroupID, member: p.MemberID, value: p.Role}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.GroupID, member: p.MemberID, value: p.Role}, nil
 	case "update member":
 		p, err := MapRequestToUpdateGroupMemberRequest(r, v)
 		if err != nil {
 			return mappedIdentity{}, err
 		}
-		return mappedIdentity{actor: p.UserID, target: p.GroupID, member: p.MemberID, value: p.NewRole}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.GroupID, member: p.MemberID, value: p.NewRole}, nil
 	case "update owner":
 		p, err := MapRequestToUpdateGroupOwnerRequest(r, v)
 		if err != nil {
@@ -90,7 +90,7 @@ func mapIdentityFixture(operation string, r *http.Request) (mappedIdentity, erro
 		if p.OwnerID != nil {
 			owner = *p.OwnerID
 		}
-		return mappedIdentity{actor: p.UserID, target: p.GroupID, member: owner}, nil
+		return mappedIdentity{actor: p.ActorID, target: p.GroupID, member: owner}, nil
 	default:
 		panic("unknown identity fixture operation")
 	}
@@ -116,6 +116,8 @@ func TestMutationMappersBindIdentityAfterDecode(t *testing.T) {
 		t.Run(endpoint.name, func(t *testing.T) {
 			for _, payload := range []struct{ name, suffix string }{
 				{"ordinary", ""},
+				{"forged actor", `,"ActorID":"forged","actorid":"forged","actor_id":"forged"`},
+				{"null actor", `,"ActorID":null,"actorid":null,"actor_id":null`},
 				{"forged IDs", `,"UserId":"forged","UserID":"forged","ID":"forged","GroupID":"forged","MemberID":"forged","CommsId":"forged"`},
 				{"case variants", `,"userid":"forged","id":"forged","groupid":"forged","memberid":"forged","commsid":"forged"`},
 				{"null IDs", `,"UserId":null,"ID":null,"GroupID":null,"MemberID":null,"CommsId":null`},

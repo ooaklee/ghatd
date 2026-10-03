@@ -265,11 +265,13 @@ func newTestHandler(svc usermanager.UsermanagerService) *usermanager.Handler {
 }
 
 // authenticatedRequest returns an *http.Request whose context carries the
-// given user ID so fender mappers treat the caller as signed-in.
+// given user ID and verified authentication state. It simulates the middleware
+// publication boundary, not credential verification itself.
 func authenticatedRequest(method, target string, body []byte, userID string) *http.Request {
 	req := httptest.NewRequest(method, target, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), userID))
+	ctx := accessmanagerhelpers.TransitWith(req.Context(), userID)
+	req = req.WithContext(accessmanagerhelpers.TransitAuthenticatedWith(ctx, true))
 	return req
 }
 
@@ -323,7 +325,7 @@ func TestHandler_GetNotifierConfig_Success(t *testing.T) {
 
 	svc := &mockUmsService{
 		getNotifierConfigFunc: func(ctx context.Context, r *usermanager.GetNotifierConfigRequest) (*usermanager.GetNotifierConfigResponse, error) {
-			require.Equal(t, "user-1", r.UserId)
+			require.Equal(t, "user-1", r.ActorID)
 			return &usermanager.GetNotifierConfigResponse{
 				GetNotifierConfigResponse: &notifier.GetNotifierConfigResponse{Config: expectedConfig},
 			}, nil
@@ -381,7 +383,7 @@ func TestHandler_GetLatestNotificationOverviews_AdminRouteTargetsPathUser(t *tes
 
 	svc := &mockUmsService{
 		getLatestNotificationOverviewsFunc: func(ctx context.Context, r *usermanager.GetLatestNotificationOverviewsRequest) (*usermanager.GetLatestNotificationOverviewsResponse, error) {
-			require.Equal(t, "admin-1", r.UserId)
+			require.Equal(t, "admin-1", r.ActorID)
 			require.NotNil(t, r.GetLatestNotificationOverviewsRequest)
 			require.Equal(t, "target-user-1", r.GetLatestNotificationOverviewsRequest.UserID)
 			require.Equal(t, "group_invite_outstanding", r.Kinds)
@@ -424,7 +426,7 @@ func TestHandler_RegisterNotificationAddress_WebPush(t *testing.T) {
 
 	svc := &mockUmsService{
 		registerNotificationAddressFunc: func(ctx context.Context, r *usermanager.RegisterNotificationAddressRequest) (*usermanager.RegisterNotificationAddressResponse, error) {
-			require.Equal(t, "user-1", r.UserId)
+			require.Equal(t, "user-1", r.ActorID)
 			require.NotNil(t, r.RegisterAddressRequest)
 			require.Equal(t, notifier.NotificationChannelWebPush, r.RegisterAddressRequest.Channel)
 			return &usermanager.RegisterNotificationAddressResponse{
@@ -491,7 +493,7 @@ func TestHandler_RegisterNotificationAddress_AdminRouteCanRegisterForTargetUser(
 
 	svc := &mockUmsService{
 		registerNotificationAddressFunc: func(ctx context.Context, r *usermanager.RegisterNotificationAddressRequest) (*usermanager.RegisterNotificationAddressResponse, error) {
-			require.Equal(t, "admin-1", r.UserId)
+			require.Equal(t, "admin-1", r.ActorID)
 			require.NotNil(t, r.RegisterAddressRequest)
 			require.Equal(t, "target-user-1", r.RegisterAddressRequest.UserID)
 			require.Equal(t, notifier.NotificationChannelWebPush, r.RegisterAddressRequest.Channel)
@@ -574,7 +576,7 @@ func TestHandler_ListNotificationAddresses_Success(t *testing.T) {
 
 	svc := &mockUmsService{
 		listNotificationAddressesFunc: func(ctx context.Context, r *usermanager.ListNotificationAddressesRequest) (*usermanager.ListNotificationAddressesResponse, error) {
-			require.Equal(t, "user-1", r.UserId)
+			require.Equal(t, "user-1", r.ActorID)
 			return &usermanager.ListNotificationAddressesResponse{
 				ListNotificationAddressesResponse: &notifier.ListNotificationAddressesResponse{Addresses: summaries},
 			}, nil
@@ -639,7 +641,7 @@ func TestHandler_ListNotificationAddresses_AdminRouteCanListPlatformDevices(t *t
 
 	svc := &mockUmsService{
 		listNotificationAddressesFunc: func(ctx context.Context, r *usermanager.ListNotificationAddressesRequest) (*usermanager.ListNotificationAddressesResponse, error) {
-			require.Equal(t, "admin-1", r.UserId)
+			require.Equal(t, "admin-1", r.ActorID)
 			require.True(t, r.AdminView)
 			require.True(t, r.IncludeUsers)
 			require.NotNil(t, r.ListNotificationAddressesRequest)
@@ -706,7 +708,7 @@ func TestHandler_DeleteNotificationAddress_Success(t *testing.T) {
 
 	svc := &mockUmsService{
 		deleteNotificationAddressFunc: func(ctx context.Context, r *usermanager.DeleteNotificationAddressRequest) error {
-			require.Equal(t, "user-1", r.UserId)
+			require.Equal(t, "user-1", r.ActorID)
 			require.Equal(t, "addr-to-delete", r.DeleteNotificationAddressRequest.AddressID)
 			return nil
 		},
@@ -770,7 +772,7 @@ func TestHandler_DeleteNotificationAddress_AdminRouteTargetsPathUser(t *testing.
 
 	svc := &mockUmsService{
 		deleteNotificationAddressFunc: func(ctx context.Context, r *usermanager.DeleteNotificationAddressRequest) error {
-			require.Equal(t, "admin-id", r.UserId)
+			require.Equal(t, "admin-id", r.ActorID)
 			require.Equal(t, "target-user-1", r.DeleteNotificationAddressRequest.UserID)
 			require.Equal(t, "addr-to-delete", r.DeleteNotificationAddressRequest.AddressID)
 			return nil
@@ -800,7 +802,7 @@ func TestHandler_GetNotificationPreferences_Success(t *testing.T) {
 
 	svc := &mockUmsService{
 		getNotificationPreferencesFunc: func(ctx context.Context, r *usermanager.GetNotificationPreferencesRequest) (*usermanager.GetNotificationPreferencesResponse, error) {
-			require.Equal(t, "user-1", r.UserId)
+			require.Equal(t, "user-1", r.ActorID)
 			return &usermanager.GetNotificationPreferencesResponse{
 				GetNotificationPreferencesResponse: &notifier.GetNotificationPreferencesResponse{Preferences: prefs},
 			}, nil
@@ -868,7 +870,7 @@ func TestHandler_GetNotificationPreferences_AdminRouteReturnsUserDetails(t *test
 
 	svc := &mockUmsService{
 		getNotificationPreferencesFunc: func(ctx context.Context, r *usermanager.GetNotificationPreferencesRequest) (*usermanager.GetNotificationPreferencesResponse, error) {
-			require.Equal(t, "admin-id", r.UserId)
+			require.Equal(t, "admin-id", r.ActorID)
 			require.Equal(t, "target-user-1", r.GetNotificationPreferencesRequest.UserID)
 			require.True(t, r.IncludeUser)
 			return &usermanager.GetNotificationPreferencesResponse{
@@ -909,7 +911,7 @@ func TestHandler_UpdateNotificationPreferences_Success(t *testing.T) {
 
 	svc := &mockUmsService{
 		updateNotificationPreferencesFunc: func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error) {
-			require.Equal(t, "user-1", r.UserId)
+			require.Equal(t, "user-1", r.ActorID)
 			require.NotNil(t, r.UpdateNotificationPreferencesRequest)
 			return &usermanager.UpdateNotificationPreferencesResponse{
 				UpdateNotificationPreferencesResponse: &notifier.UpdateNotificationPreferencesResponse{Preferences: updated},
@@ -966,7 +968,7 @@ func TestHandler_UpdateNotificationPreferences_AdminRouteTargetsPathUser(t *test
 
 	svc := &mockUmsService{
 		updateNotificationPreferencesFunc: func(ctx context.Context, r *usermanager.UpdateNotificationPreferencesRequest) (*usermanager.UpdateNotificationPreferencesResponse, error) {
-			require.Equal(t, "admin-1", r.UserId)
+			require.Equal(t, "admin-1", r.ActorID)
 			require.NotNil(t, r.UpdateNotificationPreferencesRequest)
 			require.Equal(t, "target-user-1", r.UpdateNotificationPreferencesRequest.UserID)
 			require.True(t, r.IncludeUser)
@@ -1010,7 +1012,7 @@ func TestHandler_NotifyUser_Success(t *testing.T) {
 
 	svc := &mockUmsService{
 		notifyUserFunc: func(ctx context.Context, r *usermanager.NotifyUserRequest) (*usermanager.NotifyUserResponse, error) {
-			require.Equal(t, "admin-id", r.UserId)
+			require.Equal(t, "admin-id", r.ActorID)
 			require.NotNil(t, r.NotifyUserRequest)
 			require.Equal(t, "target-user-789", r.NotifyUserRequest.UserID)
 			require.Equal(t, "Hello", r.NotifyUserRequest.Title)
@@ -1153,7 +1155,7 @@ func TestHandler_NotifyUsers_GOOD_TargetedMultiUser(t *testing.T) {
 
 	svc := &mockUmsService{
 		notifyUsersFunc: func(ctx context.Context, r *usermanager.NotifyUsersRequest) (*usermanager.NotifyUsersResponse, error) {
-			require.Equal(t, "admin-id", r.UserId)
+			require.Equal(t, "admin-id", r.ActorID)
 			require.NotNil(t, r.NotifyUsersRequest)
 			require.Equal(t, []string{"user-1", "user-2"}, r.NotifyUsersRequest.UserIDs)
 			require.Equal(t, "Broadcast Title", r.NotifyUsersRequest.Title)

@@ -209,6 +209,13 @@ The starter-created reminder and streaker services are attached to
 those services. To attach a different implementation to UMS, pass
 `NewServicesRequest.ReminderService` or `NewServicesRequest.StreakService`.
 
+Direct calls through `Services.UserManager` use `ActorID` for the verified
+caller, separately from a target-user filter. Existing host adapters using
+User Manager's former caller fields must follow the
+[request-identity migration](../../../docs/how-to/request-identity.md).
+Starter's access middleware publishes the authentication flag and caller ID;
+custom replacements must preserve that verified-context contract.
+
 `streaker` does not have a standalone starter route group in v0. Host
 applications still own product-specific streak workflows, schedulers, and
 custom API routes. Those workflows can call `Services.Streaker` directly or

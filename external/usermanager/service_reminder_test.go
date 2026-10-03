@@ -98,130 +98,78 @@ func (m *mockReminderService) GetDueReminders(ctx context.Context, r *reminder.G
 	return &reminder.GetDueRemindersResponse{}, nil
 }
 
-func TestServiceListRemindersLocksNonAdminToOwnUserID(t *testing.T) {
-	t.Parallel()
-
-	reminderSvc := &mockReminderService{}
-	svc := &usermanager.Service{
-		UserService: &mockReminderUserService{
-			users: map[string]*userv2.UniversalUser{
-				"user-1": {ID: "user-1"},
-			},
-		},
-		ReminderService: reminderSvc,
+// TestReminderListActorScope keeps an admin's identity separate from the target
+// filter while ordinary users remain restricted to their own reminders.
+func TestReminderListActorScope(t *testing.T) {
+	for _, tc := range []struct {
+		name, actor, target, want string
+		admin                     bool
+	}{
+		{"member cannot select another user", "caller", "target", "caller", false},
+		{"admin can list all users", "admin", "", "", true},
+		{"admin can select a different user", "admin", "target", "target", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			reminders := &mockReminderService{}
+			actor := &userv2.UniversalUser{ID: tc.actor}
+			if tc.admin {
+				actor.Roles = []string{"ADMIN"}
+			}
+			service := &usermanager.Service{UserService: &mockReminderUserService{users: map[string]*userv2.UniversalUser{tc.actor: actor}}, ReminderService: reminders}
+			result, err := service.ListReminders(context.Background(), &usermanager.ListRemindersRequest{ActorID: tc.actor, FilterUserID: tc.target})
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.NotNil(t, reminders.listRemindersRequest)
+			assert.Equal(t, tc.want, reminders.listRemindersRequest.UserID)
+		})
 	}
-
-	res, err := svc.ListReminders(context.Background(), &usermanager.ListRemindersRequest{
-		UserID:       "user-1",
-		FilterUserID: "user-2",
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.NotNil(t, reminderSvc.listRemindersRequest)
-	assert.Equal(t, "user-1", reminderSvc.listRemindersRequest.UserID)
 }
 
-func TestServiceListRemindersAllowsAdminAllUserScope(t *testing.T) {
-	t.Parallel()
-
-	reminderSvc := &mockReminderService{}
-	svc := &usermanager.Service{
-		UserService: &mockReminderUserService{
-			users: map[string]*userv2.UniversalUser{
-				"admin-1": {ID: "admin-1", Roles: []string{"ADMIN"}},
-			},
-		},
-		ReminderService: reminderSvc,
+// TestReminderAggregateActorScope applies the same actor-versus-target contract
+// to scheduler queries and statistics, preserving filters, due time and limit.
+func TestReminderAggregateActorScope(t *testing.T) {
+	for _, operation := range []string{"due", "stats"} {
+		t.Run(operation, func(t *testing.T) {
+			for _, tc := range []struct {
+				name, actor, target, wantID string
+				admin                       bool
+				targets, wantIDs            []string
+			}{
+				{"member filters cannot widen scope", "caller", "target", "caller", false, []string{"other"}, nil},
+				{"admin can combine target filters", "admin", "target", "", true, []string{"other", "third"}, []string{"target", "other", "third"}},
+				{"admin can query all users", "admin", "", "", true, nil, nil},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					t.Parallel()
+					reminders := &mockReminderService{}
+					actor := &userv2.UniversalUser{ID: tc.actor}
+					if tc.admin {
+						actor.Roles = []string{"ADMIN"}
+					}
+					service := &usermanager.Service{UserService: &mockReminderUserService{users: map[string]*userv2.UniversalUser{tc.actor: actor}}, ReminderService: reminders}
+					var target string
+					var targets []string
+					switch operation {
+					case "due":
+						result, err := service.GetDueReminders(context.Background(), &usermanager.GetDueRemindersRequest{ActorID: tc.actor, FilterUserID: tc.target, FilterUserIDs: tc.targets, DueBefore: "2026-05-15T10:00:00Z", Limit: 20})
+						require.NoError(t, err)
+						require.NotNil(t, result)
+						require.NotNil(t, reminders.getDueRequest)
+						target, targets = reminders.getDueRequest.UserID, reminders.getDueRequest.UserIDs
+						assert.Equal(t, "2026-05-15T10:00:00Z", reminders.getDueRequest.DueBefore)
+						assert.EqualValues(t, 20, reminders.getDueRequest.Limit)
+					case "stats":
+						result, err := service.GetReminderStats(context.Background(), &usermanager.GetReminderStatsRequest{ActorID: tc.actor, FilterUserID: tc.target, FilterUserIDs: tc.targets})
+						require.NoError(t, err)
+						require.NotNil(t, result)
+						require.NotNil(t, reminders.getStatsRequest)
+						target, targets = reminders.getStatsRequest.UserID, reminders.getStatsRequest.UserIDs
+					}
+					assert.Equal(t, tc.wantID, target)
+					assert.Equal(t, tc.wantIDs, targets)
+				})
+			}
+		})
 	}
-
-	res, err := svc.ListReminders(context.Background(), &usermanager.ListRemindersRequest{
-		UserID: "admin-1",
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.NotNil(t, reminderSvc.listRemindersRequest)
-	assert.Empty(t, reminderSvc.listRemindersRequest.UserID)
-}
-
-func TestServiceGetDueRemindersPassesOptionalUserFilters(t *testing.T) {
-	t.Parallel()
-
-	reminderSvc := &mockReminderService{}
-	svc := &usermanager.Service{
-		UserService: &mockReminderUserService{
-			users: map[string]*userv2.UniversalUser{
-				"admin-1": {ID: "admin-1", Roles: []string{"ADMIN"}},
-			},
-		},
-		ReminderService: reminderSvc,
-	}
-
-	res, err := svc.GetDueReminders(context.Background(), &usermanager.GetDueRemindersRequest{
-		UserID:        "admin-1",
-		FilterUserID:  "user-1",
-		FilterUserIDs: []string{"user-2", "user-3"},
-		DueBefore:     "2026-05-15T10:00:00Z",
-		Limit:         20,
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.NotNil(t, reminderSvc.getDueRequest)
-	assert.Empty(t, reminderSvc.getDueRequest.UserID)
-	assert.Equal(t, []string{"user-1", "user-2", "user-3"}, reminderSvc.getDueRequest.UserIDs)
-	assert.Equal(t, "2026-05-15T10:00:00Z", reminderSvc.getDueRequest.DueBefore)
-	assert.EqualValues(t, 20, reminderSvc.getDueRequest.Limit)
-}
-
-func TestServiceGetDueRemindersLocksNonAdminToOwnUserID(t *testing.T) {
-	t.Parallel()
-
-	reminderSvc := &mockReminderService{}
-	svc := &usermanager.Service{
-		UserService: &mockReminderUserService{
-			users: map[string]*userv2.UniversalUser{
-				"user-1": {ID: "user-1"},
-			},
-		},
-		ReminderService: reminderSvc,
-	}
-
-	res, err := svc.GetDueReminders(context.Background(), &usermanager.GetDueRemindersRequest{
-		UserID:        "user-1",
-		FilterUserID:  "user-2",
-		FilterUserIDs: []string{"user-3"},
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.NotNil(t, reminderSvc.getDueRequest)
-	assert.Equal(t, "user-1", reminderSvc.getDueRequest.UserID)
-	assert.Empty(t, reminderSvc.getDueRequest.UserIDs)
-}
-
-func TestServiceGetReminderStatsLocksNonAdminToOwnUserID(t *testing.T) {
-	t.Parallel()
-
-	reminderSvc := &mockReminderService{}
-	svc := &usermanager.Service{
-		UserService: &mockReminderUserService{
-			users: map[string]*userv2.UniversalUser{
-				"user-1": {ID: "user-1"},
-			},
-		},
-		ReminderService: reminderSvc,
-	}
-
-	res, err := svc.GetReminderStats(context.Background(), &usermanager.GetReminderStatsRequest{
-		UserID:        "user-1",
-		FilterUserIDs: []string{"user-2"},
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.NotNil(t, reminderSvc.getStatsRequest)
-	assert.Equal(t, "user-1", reminderSvc.getStatsRequest.UserID)
-	assert.Empty(t, reminderSvc.getStatsRequest.UserIDs)
 }

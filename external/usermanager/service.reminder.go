@@ -33,12 +33,12 @@ func (s *Service) GetReminderByID(ctx context.Context, r *GetReminderByIDRequest
 		return nil, ErrRequestFailedValidation
 	}
 
-	_, isAdmin, err := s.validateReminderRequester(ctx, r.UserID)
+	_, isAdmin, err := s.validateReminderRequester(ctx, r.ActorID)
 	if err != nil {
 		return nil, err
 	}
 
-	effectiveUserID := strings.TrimSpace(r.UserID)
+	effectiveUserID := strings.TrimSpace(r.ActorID)
 	if isAdmin {
 		effectiveUserID = ""
 	}
@@ -63,7 +63,7 @@ func (s *Service) ListReminders(ctx context.Context, r *ListRemindersRequest) (*
 		return nil, ErrRequestFailedValidation
 	}
 
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateReminderRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (s *Service) UpdateReminderByID(ctx context.Context, r *UpdateReminderByIDR
 	if r == nil {
 		return nil, ErrRequestFailedValidation
 	}
-	if _, _, err := s.validateReminderRequester(ctx, r.UserID); err != nil {
+	if _, _, err := s.validateReminderRequester(ctx, r.ActorID); err != nil {
 		return nil, err
 	}
 
@@ -113,12 +113,12 @@ func (s *Service) DeleteReminderByID(ctx context.Context, r *DeleteReminderByIDR
 	if r == nil {
 		return ErrRequestFailedValidation
 	}
-	if _, _, err := s.validateReminderRequester(ctx, r.UserID); err != nil {
+	if _, _, err := s.validateReminderRequester(ctx, r.ActorID); err != nil {
 		return err
 	}
 
 	return s.ReminderService.DeleteReminderByID(ctx, &reminder.DeleteReminderByIDRequest{
-		UserID: r.UserID,
+		UserID: r.ActorID,
 		Id:     r.Id,
 	})
 }
@@ -131,12 +131,12 @@ func (s *Service) DisableReminderByID(ctx context.Context, r *DisableReminderByI
 	if r == nil {
 		return nil, ErrRequestFailedValidation
 	}
-	if _, _, err := s.validateReminderRequester(ctx, r.UserID); err != nil {
+	if _, _, err := s.validateReminderRequester(ctx, r.ActorID); err != nil {
 		return nil, err
 	}
 
 	response, err := s.ReminderService.DisableReminderByID(ctx, &reminder.DisableReminderByIDRequest{
-		UserID: r.UserID,
+		UserID: r.ActorID,
 		Id:     r.Id,
 	})
 	if err != nil {
@@ -154,7 +154,7 @@ func (s *Service) GetReminderStats(ctx context.Context, r *GetReminderStatsReque
 	if r == nil {
 		return nil, ErrRequestFailedValidation
 	}
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateReminderRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (s *Service) GetDueReminders(ctx context.Context, r *GetDueRemindersRequest
 	if r == nil {
 		return nil, ErrRequestFailedValidation
 	}
-	requestingUserID := strings.TrimSpace(r.UserID)
+	requestingUserID := strings.TrimSpace(r.ActorID)
 	_, isAdmin, err := s.validateReminderRequester(ctx, requestingUserID)
 	if err != nil {
 		return nil, err

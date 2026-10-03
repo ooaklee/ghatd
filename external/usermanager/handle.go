@@ -32,7 +32,7 @@ type UserHandleService interface {
 // MyHandleRequest identifies the self-service actor, never a client-chosen target.
 type MyHandleRequest struct {
 	// ActorID must come from the already verified active session.
-	ActorID string
+	ActorID string `json:"-"`
 	// Handle is the only editable payload for validate/update operations.
 	Handle string
 	// ExpectedRevision is read from the mandatory If-Match on updates.

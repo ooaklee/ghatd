@@ -59,3 +59,13 @@
 - Keep public documentation, examples and commit messages free of credentials,
   private project details and machine-specific paths. Use generic examples and
   review the exact staged changes before publishing.
+
+## Request identity
+
+- Use `ActorID` for a verified caller at manager boundaries. Reserve `UserID`,
+  `TargetUserID` and resource IDs for the selected target; do not infer one from
+  the other unless the operation is explicitly self-service.
+- Keep actor fields out of transport decoding and bind them from verified
+  context. Audit embedded/promoted fields when renaming; stored ownership or
+  authorship IDs are not automatically actors. Follow the migration and codec
+  guidance in `docs/how-to/request-identity.md`.

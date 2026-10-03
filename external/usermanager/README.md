@@ -37,7 +37,7 @@ HTTP payloads:
   cannot redirect an update through a nested ID. Use the dedicated membership
   and ownership endpoints for those changes.
 
-**Compatibility:** these protected mutation mappers require both an authenticated
+**Compatibility:** the actor-bearing mappers in `fender.go` require both an authenticated
 flag and nonempty caller ID. A context ID alone (including an anonymous placeholder)
 is insufficient. GHATD authentication middleware publishes both; custom adapters
 must publish a trusted authentication result through
@@ -47,11 +47,27 @@ Unknown fields retain the existing ignore behavior; client-supplied actor IDs an
 target overrides do not grant authority. HTTP clients that previously sent full
 group records must switch to the editable fields above.
 
-Exported manager request fields retain their existing names for Go compatibility.
-Direct service calls are trusted in-process commands, not HTTP authentication
-boundaries: their callers must establish the actor and authorize privileged
-workflows. Services retain their domain authorization; this change does not add
-HTTP-context requirements to them or certify every other manager endpoint.
+### ActorID migration
+
+The 52 direct caller fields in `request.go` now use `ActorID`. This is a breaking
+Go API change: update the former `UserId`/`UserID` actor fields, and
+`GetGroupsByUserIDRequest.ID`, in struct literals and selectors. Embedded target
+IDs, `FilterUserID(s)`, stored ownership and HTTP target parameters are unchanged.
+`MyHandleRequest.ActorID` retains its existing session-only semantics.
+
+See [Request identity and migration](../../docs/how-to/request-identity.md) for
+the shared convention, examples, promoted-field hazards and custom middleware
+requirements. Direct service calls remain trusted in-process commands, not HTTP
+authentication boundaries. Services retain their existing domain authorization;
+administrative route middleware is still required where authorization is owned
+by the route. `ActorID` by itself does not grant permission.
+
+`GetUserGroupMembershipsRequest` is a self-service request. Internal enrichment
+uses target-only lower-domain queries instead of presenting a target as an actor.
+The optional-auth contact creation request still embeds the lower contact-domain
+attribution field; anonymous submissions remain unattributed. Vision requests
+delegated to the lower domain and other manager packages are not renamed by
+this migration.
 
 ## Self-service display handles
 
@@ -229,7 +245,7 @@ falls back to `AdminOnlyMiddleware`.
 
 UMS uses one `ListReminders` service method for both `GET /me/reminders` and
 `GET /reminders`. The service checks the requesting user through `UserService`.
-If the requester is not an admin, the request is locked to their own `UserID`
+If the requester is not an admin, the request is locked to their own `ActorID`
 even if a different `user_id` filter is supplied. Admin users may omit
 `user_id` to list across users, or pass it to inspect one user's reminders.
 

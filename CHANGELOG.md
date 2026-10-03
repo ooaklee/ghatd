@@ -173,6 +173,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** User Manager's direct caller fields now use `ActorID`, separate
+  from embedded target IDs. Update Go callers using its former `UserId`/`UserID`
+  fields or `GetGroupsByUserIDRequest.ID`; target parameters and stored ownership
+  remain unchanged. Its actor-bearing request mappers require verified context,
+  not an anonymous placeholder or context ID alone. Custom middleware must
+  publish authentication state as described in the
+  [migration guide](docs/how-to/request-identity.md). Optional anonymous contact
+  submissions remain supported; other managers and delegated domain requests
+  are not renamed by this change.
 - Clarify [OAuth host adoption](docs/how-to/add-google-apple-sign-in.md) with
   host-independent startup instructions and per-deployment acceptance evidence.
   Account collisions do not imply a supported account-merge workflow. This is

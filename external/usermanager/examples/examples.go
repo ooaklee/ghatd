@@ -21,7 +21,7 @@ func Example1_GetEnrichedUserProfile() {
 
 	ctx := context.Background()
 	resp, err := service.GetEnrichedUserProfile(ctx, &usermanager.GetEnrichedUserProfileRequest{
-		UserId:           "user-123",
+		ActorID:          "user-123",
 		IncludeAllGroups: true,
 		PrefixName:       true,
 	})
@@ -45,7 +45,7 @@ func Example5_GetUserGroups() {
 
 	ctx := context.Background()
 	resp, err := service.GetUserGroups(ctx, &usermanager.GetUserGroupsRequest{
-		UserId:     "user-123",
+		ActorID:    "user-123",
 		GroupType:  group.GroupTypeTeam,
 		Status:     group.GroupStatusActive,
 		Page:       1,
@@ -76,7 +76,7 @@ func Example9_UserProfileManagement() {
 
 	// Get user profile
 	profileResp, err := service.GetUserProfile(ctx, &usermanager.GetUserProfileRequest{
-		UserId: "user-123",
+		ActorID: "user-123",
 	})
 	if err != nil {
 		fmt.Println("Error getting profile:", err)
@@ -87,7 +87,7 @@ func Example9_UserProfileManagement() {
 
 	// Update user profile
 	updateResp, err := service.UpdateUserProfile(ctx, &usermanager.UpdateUserProfileRequest{
-		UserId: "user-123",
+		ActorID: "user-123",
 		UpdateUserRequest: &user.UpdateUserRequest{
 			FirstName: "John",
 			LastName:  "Smith",
@@ -131,7 +131,7 @@ func Example10_CommunicationManagement() {
 
 	// Get communications
 	getResp, err := service.GetComms(ctx, &usermanager.GetCommsRequest{
-		UserId: "user-123",
+		ActorID: "user-123",
 		GetCommsRequest: &contacter.GetCommsRequest{
 			Page:    1,
 			PerPage: 10,
@@ -155,7 +155,7 @@ func Example12_AdminCreateGroup() {
 
 	// Create a new engineering team
 	createResp, err := service.CreateGroup(ctx, &usermanager.CreateGroupRequest{
-		UserID: "admin-user-123",
+		ActorID: "admin-user-123",
 		CreateGroupRequest: &group.CreateGroupRequest{
 			Name:        "Machine Learning Team",
 			Type:        group.GroupTypeTeam,
