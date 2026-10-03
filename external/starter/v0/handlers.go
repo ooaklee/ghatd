@@ -103,7 +103,7 @@ func NewHandlers(r *NewHandlersRequest) (*Handlers, error) {
 		Group:  group.NewHandler(r.Services.Group, r.Validator, resolveHandlerErrorMaps(errorMaps.Group, nil)...),
 		Policy: policy.NewHandler(r.Services.Policy, r.Validator, resolveHandlerErrorMaps(errorMaps.Policy, nil)...),
 		Pricer: pricer.NewHandler(r.Services.Pricer, r.Validator, resolveHandlerErrorMaps(errorMaps.Pricer, nil)...),
-		User:   userv2.NewHandler(r.Services.User, r.Validator, resolveHandlerErrorMaps(errorMaps.User, nil)...).WithStatusManager(r.Services.UserManager),
+		User:   userv2.NewHandler(r.Services.User, r.Validator, resolveHandlerErrorMaps(errorMaps.User, nil)...).WithStatusManager(r.Services.UserManager).WithRoleManager(r.Services.UserManager),
 		UserManager: usermanager.NewHandler(&usermanager.NewHandlerRequest{
 			Service:                  r.Services.UserManager,
 			Validator:                r.Validator,

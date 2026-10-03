@@ -174,21 +174,28 @@ func MapRequestToUpdateUserStatusRequest(request *http.Request, validator UserVa
 	return parsedRequest, nil
 }
 
-// MapRequestToAddUserRoleRequest maps incoming AddUserRole request to correct struct
+// MapRequestToAddUserRoleRequest binds the URL target after body decoding.
+// Body identity cannot select the target or provide administrator authority.
 func MapRequestToAddUserRoleRequest(request *http.Request, validator UserValidator) (*AddUserRoleRequest, error) {
-	var err error
+	if request == nil || request.URL == nil || nilUserDependency(request.Body) || nilUserDependency(validator) {
+		return nil, ErrInvalidUserBody
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
 	parsedRequest := &AddUserRoleRequest{}
 
 	// get user id from uri
-	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
+	id, err := toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
 		return nil, ErrInvalidUserID
 	}
 
-	err = toolbox.DecodeRequestBody(request, parsedRequest)
-	if err != nil {
+	err = toolbox.DecodeRequestBody(request, &parsedRequest)
+	if err != nil || parsedRequest == nil {
 		return nil, ErrInvalidUserBody
 	}
+	parsedRequest.ID = id
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, ErrInvalidUserBody
@@ -197,21 +204,27 @@ func MapRequestToAddUserRoleRequest(request *http.Request, validator UserValidat
 	return parsedRequest, nil
 }
 
-// MapRequestToRemoveUserRoleRequest maps incoming RemoveUserRole request to correct struct
+// MapRequestToRemoveUserRoleRequest binds the URL target after decoding the role.
 func MapRequestToRemoveUserRoleRequest(request *http.Request, validator UserValidator) (*RemoveUserRoleRequest, error) {
-	var err error
+	if request == nil || request.URL == nil || nilUserDependency(request.Body) || nilUserDependency(validator) {
+		return nil, ErrInvalidUserBody
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
 	parsedRequest := &RemoveUserRoleRequest{}
 
 	// get user id from uri
-	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
+	id, err := toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
 		return nil, ErrInvalidUserID
 	}
 
-	err = toolbox.DecodeRequestBody(request, parsedRequest)
-	if err != nil {
+	err = toolbox.DecodeRequestBody(request, &parsedRequest)
+	if err != nil || parsedRequest == nil {
 		return nil, ErrInvalidUserBody
 	}
+	parsedRequest.ID = id
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, ErrInvalidUserBody

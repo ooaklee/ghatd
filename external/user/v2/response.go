@@ -59,11 +59,15 @@ type UpdateUserStatusResponse struct {
 // AddUserRoleResponse holds the response for adding a role to a user
 type AddUserRoleResponse struct {
 	User *UniversalUser `json:"user"`
+	// Changed reports an acknowledged role mutation, not an idempotent no-op.
+	Changed bool `json:"-"`
 }
 
 // RemoveUserRoleResponse holds the response for removing a role from a user
 type RemoveUserRoleResponse struct {
 	User *UniversalUser `json:"user"`
+	// Changed lets management avoid auditing a no-op as a role revocation.
+	Changed bool `json:"-"`
 }
 
 // VerifyUserEmailResponse holds the response for verifying a user's email
@@ -169,6 +173,9 @@ func (h *Handler) GetBaseResponseHandler() *reply.Replier {
 // domain base and last-wins caller override layers.
 func (h *Handler) responseManifests() []reply.ErrorManifest {
 	c := errormanifest.NewComposer().Add(UserErrorMap)
+	if !nilUserDependency(h.RoleManager) {
+		c.Add(h.RoleManager.RoleManagerErrorMaps()...)
+	}
 	if !nilUserDependency(h.StatusManager) {
 		c.Add(h.StatusManager.StatusManagerErrorMaps()...)
 	}

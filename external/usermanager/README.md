@@ -18,6 +18,30 @@ Unlike other packages, the `usermanager` doesn't have its own repository or data
 
 ## Mutation identity boundaries
 
+### Administrative account roles
+
+The existing role-add/remove HTTP routes delegate to this manager. Standard
+starter wiring installs both the port and the shared live administrator verifier.
+Custom composition must call `manager.WithAdministratorAuthorizer(accessManager)`
+and `userHandler.WithRoleManager(manager)`; route middleware remains required.
+Native verifier/domain failures join the shared manifest chain before host
+overrides. Missing dependencies fail closed, with no broad domain fallback.
+
+`ChangeAccountRole` separates trusted-context `ActorID` from `TargetUserID` and
+rechecks current administrator-session authority. The transport adapters bind
+the actor from verified context, never request bodies. API/mixed/anonymous,
+revoked and stale identity contexts cannot substitute for live authority.
+The domain owns configured additions, remove-all revocation and
+[conditional persistence](../user/v2/README.md#conditional-account-roles).
+
+A validated changed receipt triggers one actor/target `user.role_added` or
+`user.role_removed` audit event. Confirmed no-ops do not emit mutation events.
+Optional audit outages log a fixed diagnostic-free warning, not a retry request.
+Self-targeting remains allowed; removing one's own last administrator role causes
+subsequent administrator calls to fail live checks. Admission and target storage
+are point-in-time operations, not an atomic lock against concurrent revocation.
+No automatic retries, session-family invalidation or transactional audit is added.
+
 ### Administrative account status
 
 The existing `user/v2` single and bulk status routes now delegate to this manager.

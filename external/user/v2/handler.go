@@ -45,6 +45,8 @@ type UserValidator interface {
 
 // Handler manages user requests
 type Handler struct {
+	// RoleManager owns role authorization and audit, not the trusted domain.
+	RoleManager RoleManager
 	// StatusManager owns administrative authority and audit, separate from Service.
 	StatusManager StatusManager
 	Service       UserService
@@ -247,42 +249,60 @@ func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 
 // AddUserRole handles adding a role to a user
 func (h *Handler) AddUserRole(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/user/v2", "handle-add-user-role")
 	request, err := MapRequestToAddUserRoleRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	response, err := h.Service.AddUserRole(r.Context(), request)
+	if nilUserDependency(h.RoleManager) {
+		h.NewHTTPErrorResponse(w, ErrRoleUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	response, err := h.RoleManager.AddUserRole(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	if response == nil || response.User == nil || response.User.ID != request.ID {
+		h.NewHTTPErrorResponse(w, ErrRoleUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User, reply.WithContext(r.Context()))
 }
 
 // RemoveUserRole handles removing a role from a user
 func (h *Handler) RemoveUserRole(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/user/v2", "handle-remove-user-role")
 	request, err := MapRequestToRemoveUserRoleRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	response, err := h.Service.RemoveUserRole(r.Context(), request)
+	if nilUserDependency(h.RoleManager) {
+		h.NewHTTPErrorResponse(w, ErrRoleUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	response, err := h.RoleManager.RemoveUserRole(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	if response == nil || response.User == nil || response.User.ID != request.ID {
+		h.NewHTTPErrorResponse(w, ErrRoleUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User, reply.WithContext(r.Context()))
 }
 
 // VerifyUserEmail handles marking a user's email as verified

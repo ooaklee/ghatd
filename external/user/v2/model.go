@@ -3,6 +3,7 @@ package user
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -515,14 +516,13 @@ func (u *UniversalUser) AddRole(role string) *UniversalUser {
 	return u
 }
 
-// RemoveRole removes a role from the user
+// RemoveRole removes every exact occurrence, preserving other roles and order.
+// Legacy duplicates must not leave authority behind after a role revocation.
 func (u *UniversalUser) RemoveRole(role string) *UniversalUser {
-	for i, r := range u.Roles {
-		if r == role {
-			u.Roles = append(u.Roles[:i], u.Roles[i+1:]...)
-			u.SetUpdatedAtNow()
-			break
-		}
+	before := len(u.Roles)
+	u.Roles = slices.DeleteFunc(u.Roles, func(r string) bool { return r == role })
+	if len(u.Roles) != before {
+		u.SetUpdatedAtNow()
 	}
 	return u
 }

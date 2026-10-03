@@ -20,9 +20,47 @@ raw driver diagnostics to clients.
 - [Display handles](#display-handles)
 - [Conditional email changes](#conditional-email-changes)
 - [Conditional account status](#conditional-account-status)
+- [Conditional account roles](#conditional-account-roles)
 - [API Endpoints](#api-endpoints)
 - [Configuration Examples](#configuration-examples)
 - [Testing](#testing)
+
+## Conditional account roles
+
+**Breaking for custom wiring:** role HTTP handlers require `WithRoleManager`;
+standard starter composition supplies the user manager and its live administrator
+verifier. Missing or typed-nil management fails closed, never falling back to
+trusted domain methods. See [manager composition](../../usermanager/README.md#administrative-account-roles).
+POST and DELETE on `/api/v2/users/{userID}/roles` retain their administrator-session
+policy and 200 user data envelopes. Body IDs cannot override the URL target.
+Replies carry request context and no-store, canonical native maps and last-wins
+host overrides. Invalid configured additions now return `ErrUserInvalidRole`
+(400), rather than silently reporting success. Blank roles are rejected.
+
+`AddUserRole` and `RemoveUserRole` are trusted domain methods, not authorization
+APIs. Custom repositories must implement `AccountRolesRepository`. The domain
+uses a detached model and one UTC clock; Mongo compares raw security state and
+the complete ordered prior role array with binary equality. Missing/null legacy
+roles compare as empty. Native failures remain unchanged; changed snapshots are
+409 (`USV2-044`), unavailable adapters or unconfirmed receipts 503 (`USV2-045`).
+Only roles and, for an actual change, `metadata.updated_at` are written; unrelated
+profile, verification and provider data survive. No broad replacement, retry or
+upsert is used. Already-present valid additions and absent removals are confirmed
+no-ops without timestamp churn. `Changed` on domain responses is not serialized
+and lets management avoid emitting a mutation audit for these no-ops.
+
+Removal retires **every** exact occurrence, including duplicate legacy `ADMIN`
+roles, while preserving other roles and their order. It can remove a role no
+longer allowed by current configuration. The model's `RemoveRole` shares this
+remove-all behavior. Role spelling remains exact; no new case normalization is
+introduced. Audit now belongs to the authorized manager. Trusted internal callers
+must provide their own authorization and attributable audit.
+
+This does not provide ABA protection, session-family revocation, or a transaction
+between administrator authorization and storage. Concurrent role changes conflict
+instead of silently overwriting each other; reload before deciding to retry.
+An uncertain error may follow a committed write. Other legacy broad writers still
+need migration, so this is not a claim of global conditional-write coverage.
 
 ## Conditional account status
 

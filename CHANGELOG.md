@@ -381,6 +381,16 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking for custom wiring:** [Administrative role changes](external/usermanager/README.md#administrative-account-roles)
+  now use live manager authorization, actor-bound audit and narrow conditional
+  repository writes. Custom handlers require a role manager and repositories
+  require the documented role capability. Removal clears every duplicate role;
+  invalid configured additions return 400 instead of silent success. Confirmed
+  no-ops preserve timestamps and emit no mutation audit. Unrelated fields survive;
+  conflicting snapshots return 409 and unconfirmed receipts 503 through native
+  manifests. Existing HTTP shapes remain unchanged, with context and no-store.
+  Trusted domain callers own audit. No automatic retry or revocation transaction
+  is implied.
 - **Breaking for custom wiring:** [Administrative status changes](external/usermanager/README.md#administrative-account-status)
   now pass through a manager that rechecks live administrator-session authority
   and records actor-bound audit. Custom handlers must install the manager and

@@ -53,11 +53,13 @@ func (s *Service) StatusManagerErrorMaps() []reply.ErrorManifest {
 	return c.Build()
 }
 
-// statusActor validates wiring and obtains independent current administrator
+// administratorActor validates wiring and obtains independent current administrator
 // authority. Helpers only bind a prior verified identity; they do not verify it.
-func (s *Service) statusActor(ctx context.Context, actor string) error {
+// unavailable is the caller's canonical missing-capability error, not a wrapper
+// for native authorization failures, which are always returned unchanged.
+func (s *Service) administratorActor(ctx context.Context, actor string, unavailable error) error {
 	if s == nil || ctx == nil || nilProfilePort(s.UserService) || nilProfilePort(s.administratorAuthorizer) {
-		return user.ErrStatusUpdateUnavailable
+		return unavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -87,7 +89,7 @@ func (s *Service) ChangeAccountStatus(ctx context.Context, req *ChangeAccountSta
 		return nil, ErrInvalidUserBody
 	}
 	r := *req
-	if err := s.statusActor(ctx, r.ActorID); err != nil {
+	if err := s.administratorActor(ctx, r.ActorID, user.ErrStatusUpdateUnavailable); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(r.TargetUserID) == "" || strings.TrimSpace(r.DesiredStatus) == "" {
@@ -137,7 +139,7 @@ func (s *Service) BulkUpdateUsersStatus(ctx context.Context, req *user.BulkUpdat
 		return nil, ErrInvalidUserBody
 	}
 	actor := helpers.AcquireAuthenticatedUserIDFrom(ctx)
-	if err := s.statusActor(ctx, actor); err != nil {
+	if err := s.administratorActor(ctx, actor, user.ErrStatusUpdateUnavailable); err != nil {
 		return nil, err
 	}
 	ids, desired := append([]string(nil), req.IDs...), req.DesiredStatus

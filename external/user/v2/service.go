@@ -617,82 +617,30 @@ func (s *Service) UpdateUserStatus(ctx context.Context, req *UpdateUserStatusReq
 	return s.updateAccountStatus(ctx, req)
 }
 
-// AddUserRole adds a role to a user
+// AddUserRole is a trusted configured domain command. External callers use the
+// manager for live authority and actor-bound audit; native errors remain intact.
 func (s *Service) AddUserRole(ctx context.Context, req *AddUserRoleRequest) (*AddUserRoleResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "add-user-role"))
-
-	// Get user
-	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
+	if req == nil {
+		return nil, ErrInvalidUserBody
+	}
+	v, changed, err := s.updateAccountRole(ctx, req.ID, req.Role, false)
 	if err != nil {
-		logger.Error("failed-to-get-user-for-adding-role", zap.Error(err), zap.String("id", req.ID))
-		return nil, ErrUserNotFound
+		return nil, err
 	}
-
-	// Reinject dependencies
-	s.setUserDependencies(user)
-
-	// Add role
-	user.AddRole(req.Role)
-
-	// Save to repository
-	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
-	if err != nil {
-		logger.Error("failed-to-save-user-after-adding-role", zap.Error(err))
-		return nil, ErrDatabaseError
-	}
-
-	// Audit log
-	if s.AuditService != nil {
-		_ = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:     "user.role_added",
-			TargetId:   updatedUser.ID,
-			TargetType: audit.TargetType("user"),
-			Details:    map[string]interface{}{"user_id": updatedUser.ID, "role": req.Role},
-		})
-	}
-
-	logger.Info("user-role-added-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
-
-	return &AddUserRoleResponse{User: updatedUser}, nil
+	return &AddUserRoleResponse{User: v, Changed: changed}, nil
 }
 
-// RemoveUserRole removes a role from a user
+// RemoveUserRole conditionally removes all occurrences of the selected role.
+// It permits retiring obsolete roles and confirms no-ops without timestamp churn.
 func (s *Service) RemoveUserRole(ctx context.Context, req *RemoveUserRoleRequest) (*RemoveUserRoleResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "remove-user-role"))
-
-	// Get user
-	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
+	if req == nil {
+		return nil, ErrInvalidUserBody
+	}
+	v, changed, err := s.updateAccountRole(ctx, req.ID, req.Role, true)
 	if err != nil {
-		logger.Error("failed-to-get-user-for-removing-role", zap.Error(err), zap.String("id", req.ID))
-		return nil, ErrUserNotFound
+		return nil, err
 	}
-
-	// Reinject dependencies
-	s.setUserDependencies(user)
-
-	// Remove role
-	user.RemoveRole(req.Role)
-
-	// Save to repository
-	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
-	if err != nil {
-		logger.Error("failed-to-save-user-after-removing-role", zap.Error(err))
-		return nil, ErrDatabaseError
-	}
-
-	// Audit log
-	if s.AuditService != nil {
-		_ = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
-			Action:     "user.role_removed",
-			TargetId:   updatedUser.ID,
-			TargetType: audit.TargetType("user"),
-			Details:    map[string]interface{}{"user_id": updatedUser.ID, "role": req.Role},
-		})
-	}
-
-	logger.Info("user-role-removed-successfully", zap.String("user-id", updatedUser.ID), zap.String("role", req.Role))
-
-	return &RemoveUserRoleResponse{User: updatedUser}, nil
+	return &RemoveUserRoleResponse{User: v, Changed: changed}, nil
 }
 
 // VerifyUserEmail marks a user's email as verified
