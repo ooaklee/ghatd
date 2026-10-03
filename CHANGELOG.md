@@ -299,6 +299,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
+  rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before
+  decoding. An uncertain write is no longer misreported as a confirmed missing
+  match; other native failures retain their identity. Callers must reconcile
+  these outcomes rather than infer rollback or blindly retry. Absent images
+  are logged as `no_document_image`, including successful before-image upserts.
 - Blueprint validates insert, update and delete receipts, accepts matched no-op
   updates and reports missing targets separately from uncertain writes. Native
   read/setup failures retain their response mappings; operational failures are

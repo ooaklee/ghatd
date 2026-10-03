@@ -81,6 +81,15 @@ decides its HTTP/error-map meaning. With an explicitly enabled **before-image
 upsert**, the same error can accompany a successful insert because no previous
 document existed. Do not interpret every error as proof that no write occurred.
 
+Writes without an acknowledged receipt return `ErrUnacknowledgedMongoWrite`,
+not success or an authoritative `mongo.ErrNoDocuments`. Their destination is
+left untouched: neither the image nor absence from an unacknowledged result is
+reliable. Other native driver failures still retain precedence and identity.
+Use acknowledged writes for conditional mutations and reconcile uncertain
+outcomes; this sentinel does not establish rollback or make a retry safe.
+The helper logs an absent acknowledged image as `no_document_image`, not as
+proof that no mutation occurred: a before-image upsert may have inserted a row.
+
 Nil/non-pointer destinations are rejected before driver work, but a valid pointer
 can still fail BSON decoding **after the write**. Discard partially decoded data.
 Return errors from transaction callbacks so the transaction owner can abort or

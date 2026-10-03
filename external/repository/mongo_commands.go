@@ -14,6 +14,11 @@ import (
 // not trigger a fallback store.
 var ErrInvalidMongoOperation = errors.New("repository/invalid-mongo-operation")
 
+// ErrUnacknowledgedMongoWrite means the driver did not provide an authoritative
+// mutation receipt. The write may have committed; this is neither a confirmed
+// missing match nor evidence that retrying is safe.
+var ErrUnacknowledgedMongoWrite = errors.New("repository/unacknowledged-mongo-write")
+
 // observeMongo logs only fixed operation and error-class metadata. Driver error
 // messages (including duplicate-key values), queries and documents are private.
 // The original error is returned by the caller, never reconstructed from text.
@@ -21,11 +26,21 @@ func observeMongo(ctx context.Context, log RepositoryLogger, operation string, e
 	if nilRepositoryLogger(log) || ctx == nil {
 		return
 	}
+	noDocument := errors.Is(err, mongo.ErrNoDocuments)
+	if operation == "find_one_and_update_decode" {
+		// For this result-bearing mutation, a codec error that wraps the
+		// sentinel is still a database failure, not an absent result image.
+		noDocument = err == mongo.ErrNoDocuments
+	}
 	class := "database"
 	switch {
 	case err == nil:
 		class = "success"
-	case errors.Is(err, mongo.ErrNoDocuments):
+	case noDocument && operation == "find_one_and_update_decode":
+		// A before-image upsert can commit without returning an image.
+		// This classification is about the result, not mutation success.
+		class = "no_document_image"
+	case noDocument:
 		class = "not_found"
 	case errors.Is(err, context.Canceled):
 		class = "cancelled"
@@ -35,9 +50,11 @@ func observeMongo(ctx context.Context, log RepositoryLogger, operation string, e
 		class = "duplicate_key"
 	case errors.Is(err, ErrInvalidMongoOperation):
 		class = "invalid_operation"
+	case errors.Is(err, ErrUnacknowledgedMongoWrite):
+		class = "unacknowledged"
 	}
 	fields := []Field{{Key: "operation", Value: operation}, {Key: "outcome", Value: class}}
-	if err == nil || errors.Is(err, mongo.ErrNoDocuments) {
+	if err == nil || noDocument {
 		log.Debug(ctx, "mongo-operation", nil, fields...)
 	} else {
 		log.Error(ctx, "mongo-operation-failed", nil, fields...)
@@ -111,6 +128,9 @@ func (r *MongoDbRepository) ExecuteUpdateOneCommandResult(ctx context.Context, c
 // prove the write was rolled back; discard any partially decoded result and
 // reconcile uncertain outcomes instead of blindly retrying. Within a managed
 // transaction, return the error so its owner can abort or retry appropriately.
+// Unacknowledged writes return ErrUnacknowledgedMongoWrite rather than decoding
+// an unreliable image or reporting ErrNoDocuments as an authoritative no-match.
+// Other native driver failures retain precedence and their original identity.
 //
 // Nil and non-pointer destinations are rejected before writing, but this does
 // not prevalidate their BSON schema or custom decoder. Filters, updates, result
@@ -125,7 +145,17 @@ func (r *MongoDbRepository) ExecuteFindOneAndUpdateCommandDecodeResult(ctx conte
 		return ErrInvalidMongoOperation
 	}
 	_, err := mongoCommand(ctx, r.helper, "find_one_and_update_decode", collection, func() (struct{}, error) {
-		return struct{}{}, collection.FindOneAndUpdate(ctx, filter, update, opts...).Decode(result)
+		receipt := collection.FindOneAndUpdate(ctx, filter, update, opts...)
+		// The pinned driver returns the bare sentinel for an absent image.
+		// Do not use errors.Is: a caller's BSON codec can wrap that sentinel
+		// in a genuine MarshalError, which must retain native precedence.
+		if err := receipt.Err(); err != nil && err != mongo.ErrNoDocuments {
+			return struct{}{}, err
+		}
+		if !receipt.Acknowledged {
+			return struct{}{}, ErrUnacknowledgedMongoWrite
+		}
+		return struct{}{}, receipt.Decode(result)
 	})
 	return err
 }

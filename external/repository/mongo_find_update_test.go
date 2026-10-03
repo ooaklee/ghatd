@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/writeconcern"
 )
 
 // atomicUpdateRecord keeps the fixture revision separate from private payloads
@@ -86,6 +87,127 @@ func TestFindOneAndUpdateRejectsInvalidEntry(t *testing.T) {
 	}
 }
 
+// TestFindOneAndUpdateAcknowledgement distinguishes absent documents from
+// absent write receipts. Each case owns its database, destination and logger.
+func TestFindOneAndUpdateAcknowledgement(t *testing.T) {
+	for _, acknowledged := range []bool{true, false} {
+		for _, tc := range []struct {
+			// name identifies the image/selection contract under test.
+			name string
+			// exists seeds a match before the conditional write.
+			exists bool
+			// after requests the post-image instead of the driver's default.
+			after bool
+			// upsert permits insertion when no match exists.
+			upsert bool
+		}{
+			{"existing before", true, false, false},
+			{"existing after", true, true, false},
+			{"missing", false, false, false},
+			{"before upsert", false, false, true},
+			{"after upsert", false, true, true},
+		} {
+			t.Run(fmt.Sprintf("acknowledged=%t/%s", acknowledged, tc.name), func(t *testing.T) {
+				repo, db, ctx, log := isolatedRepository(t)
+				collection := db.Collection("records")
+				if tc.exists {
+					_, err := collection.InsertOne(ctx, atomicUpdateRecord{ID: "private-id", Revision: 1})
+					require.NoError(t, err)
+				}
+				if !acknowledged {
+					collection = db.Collection("records", options.Collection().SetWriteConcern(writeconcern.Unacknowledged()))
+				}
+				opts := options.FindOneAndUpdate().SetUpsert(tc.upsert)
+				if tc.after {
+					opts.SetReturnDocument(options.After)
+				}
+				image := atomicUpdateRecord{ID: "destination-sentinel", Revision: -1}
+				log.entries = nil
+				err := repo.ExecuteFindOneAndUpdateCommandDecodeResult(ctx, collection,
+					bson.M{"_id": "private-id"}, bson.M{"$inc": bson.M{"revision": 1}}, &image, opts)
+				outcome := "success"
+				switch {
+				case !acknowledged:
+					require.ErrorIs(t, err, ErrUnacknowledgedMongoWrite)
+					require.NotErrorIs(t, err, mongo.ErrNoDocuments)
+					require.Equal(t, atomicUpdateRecord{ID: "destination-sentinel", Revision: -1}, image)
+					outcome = "unacknowledged"
+					// No read-after-write asserts rollback: an unacknowledged
+					// mutation may already have changed the persisted document.
+				case !tc.exists && (!tc.upsert || !tc.after):
+					require.ErrorIs(t, err, mongo.ErrNoDocuments)
+					outcome = "no_document_image"
+				default:
+					require.NoError(t, err)
+					require.Equal(t, "private-id", image.ID)
+				}
+				require.Len(t, log.entries, 1)
+				require.Nil(t, log.entries[0].err)
+				require.Equal(t, []Field{{Key: "operation", Value: "find_one_and_update_decode"}, {Key: "outcome", Value: outcome}}, log.entries[0].fields)
+				require.NotContains(t, fmt.Sprint(log.entries[0]), "private-id")
+			})
+		}
+	}
+}
+
+// atomicUpdateFailingMarshaler exposes a native codec failure before any I/O.
+type atomicUpdateFailingMarshaler struct {
+	// cause is deliberately allowed to wrap a result sentinel; it is still
+	// an encoding failure, never an authoritative no-match result.
+	cause error
+}
+
+// MarshalBSON returns the configured codec cause without producing a document.
+func (m atomicUpdateFailingMarshaler) MarshalBSON() ([]byte, error) {
+	return nil, m.cause
+}
+
+// TestFindOneAndUpdateNativeErrorPrecedence protects native failures whose
+// SingleResult has a default-false acknowledgement flag before driver execution.
+func TestFindOneAndUpdateNativeErrorPrecedence(t *testing.T) {
+	for _, acknowledged := range []bool{true, false} {
+		for _, tc := range []struct {
+			name    string
+			filter  any
+			update  any
+			want    error
+			marshal bool
+		}{
+			{"nil filter", nil, bson.M{"$set": bson.M{"value": 1}}, mongo.ErrNilDocument, false},
+			{"nil update", bson.M{}, nil, mongo.ErrNilDocument, false},
+			{"codec wraps no-documents", atomicUpdateFailingMarshaler{cause: fmt.Errorf("private-codec: %w", mongo.ErrNoDocuments)}, bson.M{"$set": bson.M{"value": 1}}, mongo.ErrNoDocuments, true},
+		} {
+			t.Run(fmt.Sprintf("acknowledged=%t/%s", acknowledged, tc.name), func(t *testing.T) {
+				client, err := mongo.Connect(options.Client().ApplyURI("mongodb://127.0.0.1:1"))
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, client.Disconnect(context.Background())) })
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				log := &findOneRecordingLogger{}
+				repo := NewMongoDbRepository(nil, log, "")
+				collection := client.Database("native_error_fixture").Collection("records")
+				if !acknowledged {
+					collection = client.Database("native_error_fixture").Collection("records", options.Collection().SetWriteConcern(writeconcern.Unacknowledged()))
+				}
+				image := atomicUpdateRecord{ID: "destination-sentinel"}
+				err = repo.ExecuteFindOneAndUpdateCommandDecodeResult(ctx, collection, tc.filter, tc.update, &image)
+				require.ErrorIs(t, err, tc.want)
+				require.NotErrorIs(t, err, ErrUnacknowledgedMongoWrite)
+				if tc.marshal {
+					var native mongo.MarshalError
+					require.ErrorAs(t, err, &native)
+					require.NotEqual(t, mongo.ErrNoDocuments, err)
+				}
+				require.Equal(t, atomicUpdateRecord{ID: "destination-sentinel"}, image)
+				require.Len(t, log.entries, 1)
+				require.Nil(t, log.entries[0].err)
+				require.Equal(t, []Field{{Key: "operation", Value: "find_one_and_update_decode"}, {Key: "outcome", Value: "database"}}, log.entries[0].fields)
+				require.NotContains(t, fmt.Sprint(log.entries[0]), "private-codec")
+			})
+		}
+	}
+}
+
 func TestFindOneAndUpdateImagesAndErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -99,10 +221,10 @@ func TestFindOneAndUpdateImagesAndErrors(t *testing.T) {
 		{"pipeline update", 3, 1, 3, "success"},
 		{"projected image", 2, 1, 2, "success"},
 		{"no-op update", 1, 1, 1, "success"},
-		{"missing match", 0, 0, 0, "not_found"},
-		{"stale revision", 0, 1, 1, "not_found"},
+		{"missing match", 0, 0, 0, "no_document_image"},
+		{"stale revision", 0, 1, 1, "no_document_image"},
 		{"after image upsert", 1, 1, 1, "success"},
-		{"before image upsert", 0, 1, 1, "not_found"},
+		{"before image upsert", 0, 1, 1, "no_document_image"},
 		{"duplicate key", 0, 2, 1, "duplicate_key"},
 		{"invalid update", 0, 1, 1, "database"},
 		{"decode failure after write", 0, 1, 2, "database"},
@@ -152,7 +274,7 @@ func TestFindOneAndUpdateImagesAndErrors(t *testing.T) {
 			switch tc.outcome {
 			case "success":
 				require.NoError(t, err)
-			case "not_found":
+			case "no_document_image":
 				require.ErrorIs(t, err, mongo.ErrNoDocuments)
 			case "duplicate_key":
 				require.True(t, mongo.IsDuplicateKeyError(err), "native duplicate identity lost: %v", err)
