@@ -79,6 +79,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [declarative routes](external/router/README.md#declarative-route-policies)
+  with startup validation, defensive inventories and structured, fail-closed
+  policy responses. Hosts supply enforcing middleware and authorizers; metadata
+  is not a grant, and raw Mux routes remain outside the registry.
+- [Request-local proof admission](external/accessproof/README.md) evaluates exact
+  alternatives, capabilities, assurances, bindings and expiry. Hosts authenticate
+  evidence and retain live transactional ownership and replay checks.
+- [Strong-revision validation](external/router/README.md#shared-strong-revision-validation)
+  parses singular If-Match headers with explicit size, whitespace and byte rules.
+  It does not compare revisions or authorize writes. Unknown or ambiguous route
+  authorizer failures produce 503; deliberate denials must use a route sentinel.
 - Result-bearing Mongo mutation helpers, shared managed-client transactions,
   explicit index/collection setup and a transactional startup probe. Domains
   retain their schemas, authorization, revision checks and retention policy; see

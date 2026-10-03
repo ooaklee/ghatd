@@ -62,6 +62,11 @@ func TestNewRouter(t *testing.T) {
 			requestPath:  testHealthEndpoint,
 			expectStatus: http.StatusOK,
 		},
+		{
+			name:         "Success - no configured handlers uses Mux 404",
+			requestPath:  "/anything",
+			expectStatus: http.StatusNotFound,
+		},
 	}
 
 	for _, tt := range tests {
@@ -116,21 +121,6 @@ func TestNewRouter(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestNewRouter_NoHandlersConfigured(t *testing.T) {
-	t.Parallel()
-
-	// When no 404 handler is provided, mux falls back to the default 404 response.
-	r := router.NewRouter(nil, nil)
-	require.NotNil(t, r)
-	require.NotNil(t, r.GetRouter())
-
-	req := httptest.NewRequest(http.MethodGet, "/anything", nil)
-	rec := httptest.NewRecorder()
-	r.GetRouter().ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 func TestNewAuthVerifyHandler(t *testing.T) {
@@ -249,49 +239,43 @@ func TestNewAuthVerifyHandler(t *testing.T) {
 	}
 }
 
-// TestNewAuthVerifyHandler_RegisteredOnRouter wires the handler onto a Router via
-// the public NewRouter constructor to verify end-to-end integration through mux.
-func TestNewAuthVerifyHandler_RegisteredOnRouter(t *testing.T) {
+// TestAuthVerifyHandlerTransport exercises direct and Mux-mounted handlers with
+// relative and absolute API URLs; each case owns its request and router.
+func TestAuthVerifyHandlerTransport(t *testing.T) {
 	t.Parallel()
-
-	r := router.NewRouter(nil, nil)
-	r.GetRouter().HandleFunc(
-		router.AuthVerifyEndpoint,
-		router.NewAuthVerifyHandler(testApiVerifyEndpoint, testApiLoginEndpoint, testFrontendLoginUrl, testFrontendAppUrl),
-	)
-
-	req := httptest.NewRequest(http.MethodGet, router.AuthVerifyEndpoint+"?__t=token-abc&type=2&request_url=/welcome", nil)
-	req.URL.RawQuery = "__t=token-abc&type=2&request_url=/welcome"
-	rec := httptest.NewRecorder()
-
-	r.GetRouter().ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusTemporaryRedirect, rec.Code)
-	assert.Equal(t, "/v1/ams/verify?t=token-abc&next_step="+url.QueryEscape("https://app.example.com/welcome"), rec.Header().Get("Location"))
-}
-
-func TestNewAuthVerifyHandler_LocalDevLocationHeaderCarriesFrontendNextStep(t *testing.T) {
-	t.Parallel()
-
-	handler := router.NewAuthVerifyHandler(
-		"http://localhost:4000/api/v1/ams/verify/email?t=%s",
-		"http://localhost:4000/api/v1/ams/login?t=%s",
-		"http://localhost:5173/auth/login",
-		"http://localhost:5173/",
-	)
-
-	req := httptest.NewRequest(http.MethodGet, router.AuthVerifyEndpoint, nil)
-	req.URL.RawQuery = "__t=token-abc&type=1&request_url=%2Fapp%2Fplan%3Fslug%3Dpro"
-	rec := httptest.NewRecorder()
-
-	handler(rec, req)
-
-	assert.Equal(t, http.StatusTemporaryRedirect, rec.Code)
-	assert.Equal(
-		t,
-		"http://localhost:4000/api/v1/ams/login?t=token-abc&next_step="+url.QueryEscape("http://localhost:5173/app/plan?slug=pro"),
-		rec.Header().Get("Location"),
-	)
+	for _, tc := range []struct {
+		name      string
+		localURLs bool
+		mounted   bool
+		query     string
+		location  string
+	}{
+		{"relative API through Mux", false, true, "__t=token-abc&type=2&request_url=/welcome", "/v1/ams/verify?t=token-abc&next_step=" + url.QueryEscape("https://app.example.com/welcome")},
+		{"absolute local API directly", true, false, "__t=token-abc&type=1&request_url=%2Fapp%2Fplan%3Fslug%3Dpro", "http://localhost:4000/api/v1/ams/login?t=token-abc&next_step=" + url.QueryEscape("http://localhost:5173/app/plan?slug=pro")},
+		{"absolute local API through Mux", true, true, "__t=token-abc&type=1&request_url=%2Fapp%2Fplan%3Fslug%3Dpro", "http://localhost:4000/api/v1/ams/login?t=token-abc&next_step=" + url.QueryEscape("http://localhost:5173/app/plan?slug=pro")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			verify, login := testApiVerifyEndpoint, testApiLoginEndpoint
+			frontendLogin, frontendApp := testFrontendLoginUrl, testFrontendAppUrl
+			if tc.localURLs {
+				verify, login = "http://localhost:4000/api/v1/ams/verify/email?t=%s", "http://localhost:4000/api/v1/ams/login?t=%s"
+				frontendLogin, frontendApp = "http://localhost:5173/auth/login", "http://localhost:5173/"
+			}
+			var handler http.Handler = http.HandlerFunc(router.NewAuthVerifyHandler(verify, login, frontendLogin, frontendApp))
+			if tc.mounted {
+				r := router.NewRouter(nil, nil)
+				r.GetRouter().Handle(router.AuthVerifyEndpoint, handler)
+				handler = r.GetRouter()
+			}
+			req := httptest.NewRequest(http.MethodGet, router.AuthVerifyEndpoint, nil)
+			req.URL.RawQuery = tc.query
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusTemporaryRedirect, rec.Code)
+			assert.Equal(t, tc.location, rec.Header().Get("Location"))
+		})
+	}
 }
 
 func TestAttachDefaultAuthVerifyRoute(t *testing.T) {

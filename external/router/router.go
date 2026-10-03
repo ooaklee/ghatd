@@ -7,12 +7,26 @@ import (
 	"github.com/ooaklee/ghatd/external/router/routecontext"
 )
 
-// Router handles routing on lambda
+// Router composes Mux routing, default handlers and opt-in route policy metadata.
+// Configure it before serving; registrations must not race with requests.
 type Router struct {
+	// httpRouter retains the underlying Mux dispatch and middleware order.
 	httpRouter *mux.Router
+	// policyRoutes and policyErrors are assembled before serving, like Mux routes.
+	policyRoutes []RouteDefinition
+	policyErrors []error
+	// policyMatchers supports duplicate-equivalence and earlier-pattern checks.
+	policyMatchers []policyMatcher
+	// authorizer is fixed before route registration, never swapped during requests.
+	authorizer RouteAuthorizer
+	// policyValidator checks adapter-owned names/dependencies during registration.
+	policyValidator func(RouteDefinition) error
+	// policyStarted freezes evaluator configuration when the first group is created.
+	policyStarted bool
 }
 
-// NewRouter creates a Router
+// NewRouter creates a Mux-backed router with optional fallback and health handlers.
+// Route observation precedes supplied middleware. Policy adoption is explicit.
 func NewRouter(default404Handler func(w http.ResponseWriter, r *http.Request), defaultHealthcheckHandler func(w http.ResponseWriter, r *http.Request), mwf ...mux.MiddlewareFunc) *Router {
 	httpRouter := mux.NewRouter()
 	// Capture route templates before a supplied middleware can respond without
