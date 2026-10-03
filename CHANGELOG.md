@@ -79,6 +79,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [system-scoped access policies](external/accesspolicy/README.md) with
+  current grants, audited revision-CAS updates, fixed-window usage and atomic
+  replay receipts on the managed Mongo repository. Business callbacks can share
+  the transaction while rechecking current resource authority on replay.
+- Explicit token-limit review, apply and revision-checked rollback that preserve
+  other grant fields and usage. No automatic role translation, inventory setup,
+  grant seeding, HTTP endpoints or middleware adoption is included.
+- Safe policy error manifests with host overrides, plus context/dependency guards
+  before custom store dispatch. Mongo initialization requires transactions;
+  storage-retention tooling and production failover/load verification remain
+  explicit adoption work.
 - [Typed JWT identity context](external/auth/README.md) carrying stored account
   type, credential purpose, registered claims and optional issuer/audience
   binding. Legacy absent context remains explicit; type is classification, not
