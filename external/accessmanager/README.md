@@ -73,7 +73,7 @@ Cookie attributes come from the handler configuration:
 | `local` | `false` | `Lax` |
 | non-`local` | `true` | `Strict` |
 
-Browser clients should use credentialed requests, such as Axios `withCredentials: true`, and native clients should use a persistent cookie jar. Clients do not need to store JWTs themselves. To resolve the current session, call `GET /api/v1/ums/me`; a `200` response means the cookie session is usable, while `401` or `403` should clear local user state and send the user through the login flow again.
+Browser clients should use credentialed requests, such as Axios `withCredentials: true`, and native clients should use a persistent cookie jar. Clients do not need to store JWTs themselves. To resolve the current session, call `GET /api/v1/ums/me`; a `200` user projection means the session is usable. The default probe returns `202` with `AM00-013` for a missing session; hosts can explicitly select an empty `202` or structured `401`. A probe `202` is not authentication success. Handle credential failures separately from dependency outages and permission denials; an outage should not erase a usable session. See the [session-probe response policy](middleware/README.md#session-probe-response-policy) before changing a client's wire contract.
 
 ## Refresh Rotation Tolerance
 

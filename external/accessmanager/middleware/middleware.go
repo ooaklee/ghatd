@@ -46,6 +46,9 @@ type Middleware struct {
 	cookiePrefixRefreshToken string
 	environment              string
 	cookieDomain             string
+	// emptyMeSessionResponse is set only on a route-local /me copy. Other
+	// middleware keep manifest responses, including the legacy 202 envelope.
+	emptyMeSessionResponse bool
 }
 
 // NewMiddlewareRequest holds expected dependencies for an accessmanager middleware
@@ -494,7 +497,9 @@ func (m *Middleware) serveAuthenticated(w http.ResponseWriter, req *http.Request
 	}
 	ctx, err := ContextWithAuthentication(req.Context(), result)
 	if err != nil {
-		m.fail(w, accessmanager.ErrUnauthorizedUnableToAttainRequestorID)
+		// A successful verifier returned an inconsistent identity, not evidence
+		// of an absent visitor session. Never convert this to a probe's 202.
+		m.fail(w, accessmanager.ErrSessionVerificationUnavailable)
 		return
 	}
 	handler.ServeHTTP(w, req.WithContext(ctx))
@@ -508,5 +513,10 @@ func (m *Middleware) getBaseResponseHandler() *reply.Replier {
 // fail resolves ordinary wrapped manifest errors before delegating to reply.
 // Unknown or ambiguous failures use opaque responses, never raw diagnostics.
 func (m *Middleware) fail(w http.ResponseWriter, err error) {
-	_ = m.getBaseResponseHandler().NewHTTPErrorResponse(w, errormanifest.CanonicalError(err, m.errorMaps))
+	public := errormanifest.CanonicalError(err, m.errorMaps)
+	if m.emptyMeSessionResponse && public == accessmanager.ErrUnauthorizedUnableToAttainRequestorID {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	_ = m.getBaseResponseHandler().NewHTTPErrorResponse(w, public)
 }

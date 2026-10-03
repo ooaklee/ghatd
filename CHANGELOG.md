@@ -79,6 +79,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Configurable [session-probe responses](external/accessmanager/middleware/README.md#session-probe-response-policy)
+  through middleware and starter composition. Preserve the default `/me` 202
+  error envelope, or explicitly select an empty 202 or structured 401 for a
+  missing session. The private probe now sends no-store and noindex headers;
+  other authentication failures and endpoints retain their existing contracts.
+  An inconsistent identity returned as a successful verification is now a 503
+  verification failure, not a missing-session response.
 - Opt-in [display handles](external/user/v2/README.md#display-handles), with
   per-account-type generation during ordinary and OAuth creation, an explicit
   unique-index migration, independent revision metadata and atomic manual

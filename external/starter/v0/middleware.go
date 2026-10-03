@@ -28,6 +28,9 @@ type NewMiddlewareRequest struct {
 
 	EphemeralStore HardenedRateLimitStore
 	ErrorMaps      []reply.ErrorManifest
+	// MeEndpointResponseMode selects the /me missing-session wire contract.
+	// Zero preserves legacy 202 JSON; other endpoints retain their own policy.
+	MeEndpointResponseMode accessmiddleware.MeEndpointResponseMode
 
 	Environment              string
 	CookiePrefixAuthToken    string
@@ -59,6 +62,7 @@ func NewMiddleware(r *NewMiddlewareRequest) (*Middleware, error) {
 		Service:                  r.Services.AccessManager,
 		EphemeralStore:           ephemeralStore,
 		ErrorMaps:                r.ErrorMaps,
+		MeEndpointResponseMode:   r.MeEndpointResponseMode,
 		Environment:              r.Environment,
 		CookiePrefixAuthToken:    r.CookiePrefixAuthToken,
 		CookiePrefixRefreshToken: r.CookiePrefixRefreshToken,

@@ -43,6 +43,68 @@ responses; configured overrides still take precedence. Hardened-limit storage
 failures deny the request but do not create an IP ban: only a confirmed threshold
 error triggers that additional action.
 
+## Session-probe response policy
+
+The `/me` compatibility middleware has always had a route-local override for
+`ErrUnauthorizedUnableToAttainRequestorID` (`AM00-013`). The general manifest's
+401 does not remove that override. Choose the probe's wire contract at startup:
+
+| `MeEndpointResponseMode` | Missing-session response |
+| --- | --- |
+| `MeEndpointLegacyAccepted` (zero value) | 202 with the existing `errors` JSON envelope |
+| `MeEndpointAcceptedEmpty` | 202 with no response body |
+| `MeEndpointUnauthorized` | 401 with the same error code/title and status 401 in the envelope |
+
+Set the field on `NewSuiteRequest` or `starter.NewMiddlewareRequest`. Direct
+middleware users can call `mw.MeEndpointMiddleware(mode)` and handle its error.
+Unknown modes reject construction. The existing `BuildCustomMeEndpointErrorMap`
+helper continues to select the legacy 202 envelope.
+
+```go
+// Pass these fields alongside the host's existing dependencies.
+options := middleware.NewSuiteRequest{
+    MeEndpointResponseMode: middleware.MeEndpointAcceptedEmpty,
+}
+_ = options
+```
+
+The selected policy wins over `ErrorMaps` for **AM00-013 only**, without mutating
+those maps. It does not change credential selection, refresh, cookie cleanup,
+handler admission, permission denials or operational-error classification.
+Unknown and mixed-cause failures do not become an empty 202. Explicit host maps
+still own other error responses; do not map outages or denials to success.
+Keep all maps immutable after constructing middleware.
+
+Clients must treat the selected 202 response as **not authenticated**, not as a
+successful user projection. Empty mode requires checking the status before JSON
+decoding. Do not switch an existing client's mode without updating its contract
+tests; mobile clients expecting 401 can use the explicit unauthorized mode.
+The option does not affect `/me/handle`, explicit bearer guards or other routes.
+
+The custom `/me` wrapper sets `Cache-Control: no-store` (replacing inherited
+cache directives for this private projection) and adds
+`X-Robots-Tag: noindex` to both success and failure responses, preserving existing
+robots directives. Place it outside other middleware if their early returns
+also need these headers, and do not override them downstream for this private
+projection. These response headers do not propagate to an enclosing HTML page.
+
+**SEO is separate from session-probe compatibility.** Public pages should return
+their useful public content with 200 even when an optional session probe finds
+no visitor session. Private API URLs should not be listed in public sitemaps.
+An empty body, `{}`, or an error envelope with a 2xx status does not guarantee
+that Google will consider a URL useful/indexable: see
+[Google's HTTP status guidance](https://developers.google.com/crawling/docs/troubleshooting/http-status-codes).
+Use intentional indexing rules instead of a status-code workaround. Google
+must be able to crawl a response to read its `noindex` directive; blocking it
+in `robots.txt` prevents that. See
+[Google's noindex guidance](https://developers.google.com/search/docs/crawling-indexing/block-indexing).
+Neither robots directives nor no-store replace authorization.
+
+A verifier reporting success with an inconsistent identity is an unavailable
+verification result (503 with the standard maps), not an anonymous visitor.
+This also applies to ordinary authenticated middleware; it cannot trigger the
+probe's 202 compatibility response.
+
 ## Refresh Cookie Timing
 
 `JWTRequired` and `RateLimitOrActiveJWTRequired` can refresh an expired access

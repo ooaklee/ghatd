@@ -39,9 +39,12 @@ type Suite struct {
 
 // NewSuiteRequest holds the dependencies for creating a Suite.
 type NewSuiteRequest struct {
-	Service                  accessManagerService
-	EphemeralStore           hardenedRateLimitEphemeralStore
-	ErrorMaps                []reply.ErrorManifest
+	Service        accessManagerService
+	EphemeralStore hardenedRateLimitEphemeralStore
+	ErrorMaps      []reply.ErrorManifest
+	// MeEndpointResponseMode controls only the /me missing-session response.
+	// Its zero value preserves 202 with the legacy error envelope.
+	MeEndpointResponseMode   MeEndpointResponseMode
 	Environment              string
 	CookiePrefixAuthToken    string
 	CookiePrefixRefreshToken string
@@ -87,7 +90,10 @@ func NewSuite(r *NewSuiteRequest) (*Suite, error) {
 		BlockDuration:  r.BlockDuration,
 	})
 
-	customMaps := BuildCustomMeEndpointErrorMap(errorMaps)
+	meEndpoint, err := mw.MeEndpointMiddleware(r.MeEndpointResponseMode)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Suite{
 		BearerSession:                      mw.BearerSessionRequired,
@@ -98,7 +104,7 @@ func NewSuite(r *NewSuiteRequest) (*Suite, error) {
 		ActiveValidApiTokenOrJWT:           func(next http.Handler) http.Handler { return mw.ActiveValidApiTokenOrJWTRequired(next) },
 		ActiveValidApiTokenOrAuthenticated: func(next http.Handler) http.Handler { return mw.ActiveValidApiTokenOrAuthenticated(next) },
 		AdminApiTokenOrJWT:                 func(next http.Handler) http.Handler { return mw.AdminApiTokenOrJWTRequired(next) },
-		CustomMeEndpointValidApiTokenOrJWT: mw.CustomMeEndpointValidApiTokenOrJWTMiddleware(customMaps),
+		CustomMeEndpointValidApiTokenOrJWT: meEndpoint,
 		HardenedRateLimit:                  hrl.Middleware(),
 	}, nil
 }
