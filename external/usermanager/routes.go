@@ -89,6 +89,9 @@ const (
 // AttachRoutesRequest holds everything needed to attach usermanager
 // routes to router
 type AttachRoutesRequest struct {
+	// EnableHandles registers the optional self-handle API after its explicit
+	// storage migration. It requires ActiveOnlyMiddleware and a route evaluator.
+	EnableHandles bool
 	// Router main router being served by API
 	Router *router.Router
 
@@ -99,8 +102,8 @@ type AttachRoutesRequest struct {
 	// attachment uses the session-or-API adapters instead.
 	AuthenticatedMiddleware mux.MiddlewareFunc
 
-	// ActiveOnlyMiddleware is retained for source compatibility; this attachment
-	// uses ActiveValidApiTokenOrJWTMiddleware instead.
+	// ActiveOnlyMiddleware verifies an ACTIVE JWT session for optional handle
+	// routes. Existing active routes still use the session-or-API adapter.
 	ActiveOnlyMiddleware mux.MiddlewareFunc
 
 	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
@@ -131,6 +134,9 @@ type AttachRoutesRequest struct {
 // Optional adapters retain their documented stricter fallbacks. Every required
 // adapter must be present; check Router.ValidateRoutePolicies before serving.
 func AttachRoutes(request *AttachRoutesRequest) {
+	if request.EnableHandles {
+		attachHandleRoutes(request)
+	}
 
 	userManagerOpenRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.OptionalActive, request.RateLimitOrActiveMiddleware)
 	userManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/comms", Operation: "usermanager.CreateComms", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateComms)

@@ -79,6 +79,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [display handles](external/user/v2/README.md#display-handles), with
+  per-account-type generation during ordinary and OAuth creation, an explicit
+  unique-index migration, independent revision metadata and atomic manual
+  updates. Stale profile writes preserve handles; old names are released.
+  The [session-only self-service API](external/usermanager/README.md#self-service-display-handles)
+  uses strict payloads, required update ETags and shared reply error maps.
+  Existing adapters and routes remain unchanged unless enabled. There is no
+  automatic backfill, settings UI or change to identity/authorization claims.
 - An opt-in [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   returns the selected document image without a separate read. It preserves
   native errors, caller sessions, collection codecs and driver options while

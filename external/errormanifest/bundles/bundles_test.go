@@ -19,6 +19,7 @@ import (
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/pricer"
 	"github.com/ooaklee/ghatd/external/reminder"
+	"github.com/ooaklee/ghatd/external/router"
 	"github.com/ooaklee/ghatd/external/streaker"
 	"github.com/ooaklee/ghatd/external/toolbox"
 	user "github.com/ooaklee/ghatd/external/user/v2"
@@ -61,6 +62,7 @@ func TestBundles(t *testing.T) {
 				reminder.ReminderErrorMap,
 				streaker.StreakErrorMap,
 				vision.VisionErrorMap,
+				router.PolicyErrorManifest(),
 			},
 		},
 		{

@@ -44,9 +44,12 @@ const (
 // attach every standard GHATD API route group. Groups listed in Skip are
 // omitted; their handler may be nil.
 type AttachDefaultRoutesRequest struct {
-	Router *router.Router
-	Stack  *Stack
-	Skip   []RouteGroup
+	// EnableUserHandles opts into the session-only handle API after the host has
+	// installed its unique index and configured a route-policy evaluator.
+	EnableUserHandles bool
+	Router            *router.Router
+	Stack             *Stack
+	Skip              []RouteGroup
 }
 
 // AttachDefaultRoutes attaches standard GHATD API routes to the given router
@@ -141,6 +144,7 @@ func AttachDefaultRoutes(r *AttachDefaultRoutesRequest) error {
 
 	if !skip[RouteGroupUserManager] {
 		usermanager.AttachRoutes(&usermanager.AttachRoutesRequest{
+			EnableHandles:                                r.EnableUserHandles,
 			Router:                                       r.Router,
 			Handler:                                      r.Stack.Handlers.UserManager,
 			AuthenticatedMiddleware:                      mw.Authenticated,

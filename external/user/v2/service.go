@@ -31,6 +31,9 @@ type UserRepository interface {
 
 // Service holds and manages user business logic
 type Service struct {
+	// handleGenerator is optional startup-only candidate generation, not entropy
+	// for credentials. Nil uses the standard adjective/animal generator.
+	handleGenerator            func() string
 	UserRepository             UserRepository
 	AuditService               AuditService
 	Config                     *UserConfig
@@ -78,6 +81,15 @@ func (s *Service) WithConfigs(configs ...*UserConfig) *Service {
 
 // CreateUser creates a new user
 func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*CreateUserResponse, error) {
+	if req == nil {
+		return nil, ErrInvalidUserBody
+	}
+	if s == nil || s.UserRepository == nil || ctx == nil {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "create-user"))
 	config, err := s.resolveRequestedConfig(req.Type)
 	if err != nil {
@@ -86,7 +98,10 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	}
 
 	// Check if user already exists
-	existingUser, _ := s.UserRepository.GetUserByEmail(ctx, req.Email, false)
+	existingUser, lookupErr := s.UserRepository.GetUserByEmail(ctx, normaliseUserEmail(req.Email), false)
+	if lookupErr != nil && lookupErr != ErrUserNotFound {
+		return nil, lookupErr
+	}
 	if existingUser != nil {
 		logger.Error("user-with-email-already-exists", emailLogFields("email", req.Email)...)
 		return nil, ErrEmailAlreadyExists
@@ -163,9 +178,12 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	}
 
 	// Create user in repository
-	createdUser, err := s.UserRepository.CreateUser(ctx, user)
+	createdUser, err := createWithHandle(ctx, s, config, user, func() (*UniversalUser, error) { return s.UserRepository.CreateUser(ctx, user) })
 	if err != nil {
-		logger.Error("failed-to-create-user", zap.Error(err))
+		logger.Error("failed-to-create-user")
+		return nil, err
+	}
+	if createdUser == nil {
 		return nil, ErrDatabaseError
 	}
 

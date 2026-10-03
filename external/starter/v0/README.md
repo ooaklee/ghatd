@@ -321,6 +321,22 @@ if err != nil {
 }
 ```
 
+### Optional display-handle API
+
+`AttachDefaultRoutesRequest.EnableUserHandles` defaults to false. After applying
+the explicit [user handle migration](../../user/v2/README.md#display-handles),
+set it to true to attach session-only GET/PATCH `/api/v1/ums/me/handle` and POST
+`/api/v1/ums/me/handle/validate`. Configure a route-policy evaluator before
+attachment: PATCH declares `RevisionRequired`, and attachment returns an error
+if the registry is incomplete. Skipping `RouteGroupUserManager` also omits these
+routes. The existing active-session middleware is forwarded; API tokens do not
+qualify. Hosts still own CSRF/origin policy, authenticated rate limits and CORS.
+
+Per-type `UserConfig.GenerateHandle` is independent of route exposure and is
+also false by default. Starter neither applies the migration nor backfills
+existing accounts. See the [User Manager contract](../../usermanager/README.md#self-service-display-handles)
+for payloads, ETags, error codes and compatibility requirements.
+
 ### RouteGroup constants
 
 | Constant                              | Routes attached                                      |

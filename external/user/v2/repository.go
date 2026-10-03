@@ -99,6 +99,12 @@ func (r *Repository) GetUserCollection(ctx context.Context) (*mongo.Collection, 
 
 // CreateUser creates a new user in the repository
 func (r *Repository) CreateUser(ctx context.Context, user *UniversalUser) (*UniversalUser, error) {
+	if user == nil {
+		return nil, ErrValidationFailed
+	}
+	if err := r.prepareHandleInsert(ctx, user); err != nil {
+		return nil, err
+	}
 	collection, err := r.GetUserCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -106,6 +112,9 @@ func (r *Repository) CreateUser(ctx context.Context, user *UniversalUser) (*Univ
 
 	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, user, "user")
 	if err != nil {
+		if handleDuplicate(err) {
+			return nil, ErrHandleTaken
+		}
 		return nil, err
 	}
 
@@ -204,6 +213,8 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 	delete(fields, "oauth_identity_keys")
 	delete(fields, "had_oauth_identity")
 	delete(fields, "email_revision")
+	delete(fields, "handle")
+	delete(fields, "handle_metadata")
 	delete(fields, "_id")
 	update := bson.M{"$set": fields}
 

@@ -17,9 +17,90 @@ raw driver diagnostics to clients.
 - [Key Features](#key-features)
 - [Architecture](#architecture)
 - [MongoDB Setup](#mongodb-setup)
+- [Display handles](#display-handles)
 - [API Endpoints](#api-endpoints)
 - [Configuration Examples](#configuration-examples)
 - [Testing](#testing)
+
+## Display handles
+
+`UniversalUser.Handle` is a mutable display name, not a login credential, token
+claim, role or authorization key. Persistent user IDs remain authoritative.
+`GetAsProfile` and `GetAsMicroProfile` include the bare handle when assigned;
+clients can display an `@` prefix. Lifecycle metadata is excluded from ordinary
+user JSON and exposed only through the self-service `UserHandle` projection.
+
+### Enable deliberately
+
+1. Inspect existing `users.handle` values before rollout. Resolve duplicate,
+   noncanonical or malformed lifecycle data explicitly; the migration does not
+   rename, delete or backfill accounts.
+2. Apply `migrations.InitUsersHandleIndexesUp(ctx, db)` through the host migrator.
+   It creates `idx_users_handle`: unique ascending `handle`, simple collation,
+   partial filter `{handle: {$gt: ""}}`. Multiple legacy users without handles
+   remain valid. Conflicting indexes or duplicates fail rather than being dropped.
+   Migration driver errors can contain private values; do not publish them.
+3. Set `UserConfig.GenerateHandle = true` on each account type that should receive
+   a handle at creation, before serving concurrent requests. It defaults to false.
+   `ToCapabilities` reports this through `generates_handle`. Existing users are
+   unchanged; they may make an explicit first assignment through self-service.
+4. Enable the separate [User Manager handle API](../../usermanager/README.md#self-service-display-handles)
+   if desired. Generation and HTTP exposure are independent opt-ins.
+
+The standard repository verifies the exact index contract without creating
+indexes during requests. Missing capability/indexes fail closed; outages remain
+operational errors, never "available". Keep the index installed while any handle
+writer is running. Roll back by disabling generation and the routes first, and
+retain the index and data. There is intentionally no destructive down migration.
+
+The legacy `UserRepository` interface is unchanged. Custom adapters opt into
+`HandleRepository` and must enforce ACTIVE status, global uniqueness across user
+types, independent revision checks and exact returned write images atomically.
+They must also preserve handle fields on ordinary profile writes. Mongo adapters
+need the shared repository's `ExecuteFindOneAndUpdateCommandDecodeResult`
+capability; enabling generation with an older adapter returns an error.
+
+### Creation and manual changes
+
+`NormalizeHandle` accepts outer whitespace and one optional `@`, then canonicalizes
+to lowercase ASCII. Names contain 3–30 characters, start with a letter, and use
+letters, digits and single hyphen/underscore separators. Adjacent or trailing
+separators, dots and Unicode lookalikes are rejected. Reserved names, rename
+cooldowns and product-specific naming policies are not supplied by this feature.
+
+Ordinary and OAuth account creation assign the generated handle in the same
+insert as the account. The default adjective/animal name is normalized and
+truncated, followed by up to 99 numeric-suffix alternatives. Only a proven
+handle-index collision is retried; ambiguous failures, outages and unrelated
+constraints are not. OAuth retries still resolve the existing provider identity
+before considering another handle. `WithHandleGenerator` accepts an optional
+concurrency-safe startup-only generator; unusable output returns
+`ErrInvalidHandle`. The generator is not a credential entropy source.
+
+`GetUserHandle` reads without generating. `ValidateUserHandle` performs at most
+ten indexed availability checks (requested name plus nine suffixes), returning
+one suggestion or `available: false` without a suggestion. These are advisory,
+not reservations; hosts should rate-limit authenticated validation calls.
+`UpdateUserHandle` applies the exact normalized candidate, never a silent suffix.
+Only a live ACTIVE user can use these methods. Direct service calls are trusted
+in-process commands; their caller must establish the actor's authority.
+
+An unset handle has revision 0. Automatic creation starts revision 1 with manual
+`change_count: 0`; the first manual assignment starts revision 1/count 1. Each
+actual manual change increments both counters and updates UTC RFC3339Nano
+timestamps; `created_at` remains stable. A same-handle write with the current
+revision is a no-op. A stale revision fails even when the name already matches.
+Revision/count values are bounded to exact JSON integers; writes reject an
+exhausted revision. Handle revisions do not change email/session revisions.
+
+Old handles become available immediately: there are no aliases, redirects or
+previous-name history. Do not use handles in durable identity links. Generic
+`Repository.UpdateUser` strips handle and lifecycle fields so stale profile
+snapshots cannot undo a concurrent rename. Supplied audit services receive
+best-effort `user.handle_updated` events only after an actual manual change,
+with actor, target and revision, not handle text. Audit delivery is not atomic
+with the update. Unknown storage errors must pass through the shared safe
+response/error-manifest path; never return or log raw driver payloads.
 
 ## Key Features
 

@@ -53,6 +53,60 @@ boundaries: their callers must establish the actor and authorize privileged
 workflows. Services retain their domain authorization; this change does not add
 HTTP-context requirements to them or certify every other manager endpoint.
 
+## Self-service display handles
+
+Handles are an optional user-domain capability, not another manager collection.
+Apply the [handle index migration and domain configuration](../user/v2/README.md#display-handles)
+first, then set `AttachRoutesRequest.EnableHandles: true`. Supply the existing
+`ActiveOnlyMiddleware` (session-only, not the API-token-or-JWT alternative),
+configure the [shared route-policy evaluator](../router/README.md), and reject
+startup if `ValidateRoutePolicies` fails. Missing handlers, middleware or the
+PATCH revision evaluator fail registration validation. Existing route inventories
+are unchanged when this option is false. Starter exposes the same opt-in as
+`AttachDefaultRoutesRequest.EnableUserHandles`.
+
+All three endpoints require a verified live session and current ACTIVE account:
+
+| Method | Path under `/api/v1/ums` | Result |
+| --- | --- | --- |
+| GET | `/me/handle` | Current name and private lifecycle metadata; strong ETag |
+| POST | `/me/handle/validate` | Advisory availability and optional suggestion |
+| PATCH | `/me/handle` | Exact-candidate update under mandatory `If-Match` |
+
+The handler uses verified session context to construct `MyHandleRequest.ActorID`.
+The manager delegates to optional `UserHandleService`, implemented by `user/v2`.
+API tokens, mixed credentials, login/email proofs, anonymous placeholders and
+mismatched account/type contexts cannot use this API. Legacy session claims are
+accepted only through the existing verified-session compatibility path. A query
+or body cannot select another account. This is not an admin rename endpoint.
+
+POST/PATCH accept exactly one case-sensitive, non-null string field:
+
+```json
+{"handle":"calm-fox"}
+```
+
+Send one `Content-Type: application/json` header (optional UTF-8 charset), an
+unencoded body of at most 1024 bytes, and no extra fields. Duplicate keys, target
+IDs, malformed/trailing JSON and invalid UTF-8 are rejected. On PATCH, send the
+quoted numeric ETag from GET, for example `If-Match: "0"` for an unset handle.
+Weak tags, wildcards, lists, repeated headers, leading zeroes and overflow are
+invalid. Same-value requests still require the current revision.
+
+Success uses the standard reply `data` envelope. GET/PATCH return `ETag`; all
+handler responses use `Cache-Control: no-store`. CORS configuration must expose
+`ETag` and allow `If-Match` for cross-origin clients. Cookie CSRF/origin checks,
+credential selection and authenticated rate limits remain host-owned; strict
+JSON parsing is not a replacement for those protections.
+
+The default dependency manifest includes user and router errors; explicit host
+maps can override them. Syntax errors return 400, taken names 409, stale revisions
+412 and missing `If-Match` 428. Missing storage capability/index readiness returns
+503; unknown or mixed operational failures retain the safe 500 fallback. No raw
+driver error or supplied name is included in public diagnostics. On an uncertain
+write outcome, reread the current handle before retrying. The backend does not
+add profile/settings UI, automatic backfill, aliases or identity lookup by handle.
+
 ## Key Features
 
 The `usermanager` is designed to streamline complex user-related workflows into single API calls.

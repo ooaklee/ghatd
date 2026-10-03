@@ -31,6 +31,8 @@ type StringUtils interface {
 
 // UserConfigCapabilities describes what a given user config preset supports.
 type UserConfigCapabilities struct {
+	// GeneratesHandle reports whether new accounts receive a generated handle.
+	GeneratesHandle             bool                `json:"generates_handle"`
 	DefaultStatus               string              `json:"default_status"`
 	SupportedStatusTransitions  map[string][]string `json:"supported_status_transitions"`
 	RequiredFields              []string            `json:"required_fields"`
@@ -64,6 +66,9 @@ type UserStats struct {
 
 // UserConfig holds configuration for user behavior
 type UserConfig struct {
+	// GenerateHandle requires atomic handle assignment on creation for this type.
+	// Configure before serving; false preserves legacy accounts and adapters.
+	GenerateHandle            bool
 	Type                      string
 	DefaultStatus             string
 	StatusTransitions         map[string][]string
@@ -120,6 +125,7 @@ func (c *UserConfig) ToCapabilities(fallback *UserConfig) *UserConfigCapabilitie
 	}
 
 	return &UserConfigCapabilities{
+		GeneratesHandle:             c.GenerateHandle,
 		DefaultStatus:               c.DefaultStatus,
 		SupportedStatusTransitions:  c.StatusTransitions,
 		RequiredFields:              c.RequiredFields,
@@ -150,6 +156,10 @@ func (c *UserConfig) GetType(fallback *UserConfig) string {
 
 // UniversalUser represents a flexible user model
 type UniversalUser struct {
+	// Handle is a mutable, canonical display identifier, never an authority claim.
+	Handle string `json:"handle,omitempty" bson:"handle,omitempty"`
+	// HandleMetadata is private lifecycle state written only by handle operations.
+	HandleMetadata *HandleMetadata `json:"-" bson:"handle_metadata,omitempty"`
 	// OAuthIdentities and OAuthIdentityKeys are written only by trusted provider operations.
 	OAuthIdentities   []OAuthIdentity `json:"-" bson:"oauth_identities,omitempty"`
 	OAuthIdentityKeys []string        `json:"-" bson:"oauth_identity_keys,omitempty"`
@@ -662,6 +672,8 @@ func (u *UniversalUser) GetAttributeByJSONPath(jsonPath string) (interface{}, er
 
 // UserProfile represents a simplified user profile
 type UserProfile struct {
+	// Handle is the public display handle without an @ prefix.
+	Handle        string   `json:"handle,omitempty"`
 	ID            string   `json:"id"`
 	FirstName     string   `json:"first_name"`
 	LastName      string   `json:"last_name"`
@@ -674,6 +686,8 @@ type UserProfile struct {
 
 // UserMicroProfile represents a minimal user profile
 type UserMicroProfile struct {
+	// Handle is display-only; ID remains the stable identity.
+	Handle string   `json:"handle,omitempty"`
 	ID     string   `json:"id"`
 	Roles  []string `json:"roles"`
 	Status string   `json:"status"`
@@ -682,6 +696,7 @@ type UserMicroProfile struct {
 // GetAsProfile returns a profile representation
 func (u *UniversalUser) GetAsProfile() *UserProfile {
 	profile := &UserProfile{
+		Handle: u.Handle,
 		ID:     u.ID,
 		Status: u.Status,
 		Roles:  u.Roles,
@@ -707,6 +722,7 @@ func (u *UniversalUser) GetAsProfile() *UserProfile {
 // GetAsMicroProfile returns a minimal profile representation
 func (u *UniversalUser) GetAsMicroProfile() *UserMicroProfile {
 	return &UserMicroProfile{
+		Handle: u.Handle,
 		ID:     u.ID,
 		Roles:  u.Roles,
 		Status: u.Status,

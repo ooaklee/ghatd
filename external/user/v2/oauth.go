@@ -150,12 +150,15 @@ func (r *Repository) CreateOAuthUser(ctx context.Context, user *UniversalUser) (
 	if err = r.requireOAuthIndexes(ctx, collection); err != nil {
 		return nil, err
 	}
-	_, err = collection.InsertOne(ctx, user)
+	if err = r.prepareHandleInsert(ctx, user); err != nil {
+		return nil, err
+	}
+	_, err = r.Store.ExecuteInsertOneCommand(ctx, collection, user, "user")
 	if err == nil {
 		return &CreateOAuthUserResponse{User: user, Created: true}, nil
 	}
-	if !mongo.IsDuplicateKeyError(err) {
-		return nil, ErrDatabaseError
+	if !oauthCreationDuplicate(err) {
+		return nil, err
 	}
 	winner, lookupErr := r.GetUserByOAuthIdentity(ctx, identity)
 	if lookupErr == nil {
@@ -163,6 +166,9 @@ func (r *Repository) CreateOAuthUser(ctx context.Context, user *UniversalUser) (
 	}
 	if !errors.Is(lookupErr, ErrUserNotFound) {
 		return nil, lookupErr
+	}
+	if handleDuplicate(err) {
+		return nil, ErrHandleTaken
 	}
 	return nil, ErrOAuthLinkRequired
 }
@@ -276,6 +282,12 @@ func (s *Service) GetUserByOAuthIdentity(ctx context.Context, identity *OAuthIde
 
 // CreateOAuthUser creates a verified active account without weakening email signup rules.
 func (s *Service) CreateOAuthUser(ctx context.Context, req *CreateOAuthUserRequest) (*CreateOAuthUserResponse, error) {
+	if s == nil || s.UserRepository == nil || ctx == nil {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	repo, ok := s.UserRepository.(OAuthRepository)
 	if !ok {
 		return nil, ErrOAuthUnsupported
@@ -321,8 +333,11 @@ func (s *Service) CreateOAuthUser(ctx context.Context, req *CreateOAuthUserReque
 	if user.Validate() != nil {
 		return nil, ErrValidationFailed
 	}
-	response, err := repo.CreateOAuthUser(ctx, user)
+	response, err := createWithHandle(ctx, s, config, user, func() (*CreateOAuthUserResponse, error) { return repo.CreateOAuthUser(ctx, user) })
 	if err == nil {
+		if response == nil || response.User == nil {
+			return nil, ErrDatabaseError
+		}
 		s.setUserDependencies(response.User)
 	}
 	return response, err
