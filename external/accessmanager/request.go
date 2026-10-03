@@ -122,8 +122,11 @@ type LoginUserRequest struct {
 
 // CreateUserAPITokenRequest holds the data required for creating an api token
 type CreateUserAPITokenRequest struct {
-	// UserID the user ID the token will be created for
-	UserID string
+	// ActorID comes only from verified session context, never request data.
+	ActorID string `json:"-" query:"-"`
+	// UserID selects the owner and must equal ActorID; administrators cannot
+	// create another account's credentials through this self-service command.
+	UserID string `json:"-" query:"-"`
 
 	// Ttl is the time to live on the access token
 	Ttl int64 `json:"ttl"`
@@ -136,37 +139,48 @@ type CreateUserAPITokenRequest struct {
 
 // DeleteUserAPITokenRequest holds the data required for deleting an api token
 type DeleteUserAPITokenRequest struct {
-	// UserID the user ID the token belongs to
-	UserID string
+	// ActorID is the verified session caller, independent of target selection.
+	ActorID string `json:"-" query:"-"`
+	// UserID selects the owner and must match ActorID.
+	UserID string `json:"-" query:"-"`
 
 	// APITokenID the apitoken ID that will be deleted
-	APITokenID string
+	APITokenID string `json:"-" query:"-"`
 }
 
 // UserAPITokenStatusRequest holds the data required for updating an api token's status
 type UserAPITokenStatusRequest struct {
-	// UserID is the owner checked against authenticated identity by the mapper.
-	UserID string
-	// Status the desired status
-	Status string
+	// ActorID is the verified session caller, not an API credential owner claim.
+	ActorID string `json:"-" query:"-"`
+	// UserID is the target owner; both mapper and manager enforce self-service.
+	UserID string `json:"-" query:"-"`
+	// Status is chosen by the route, never decoded from the request body.
+	Status string `json:"-" query:"-"`
 
 	// APITokenID the apitoken ID that will have its status updated
-	APITokenID string
+	APITokenID string `json:"-" query:"-"`
 }
 
 // GetSpecificUserAPITokensRequest holds the data required for get user's an api tokens
 type GetSpecificUserAPITokensRequest struct {
-	// UserID the user ID the tokens belongs to
-	UserID string
+	// ActorID comes from authenticated session context.
+	ActorID string `json:"-" query:"-"`
+	// UserID selects the target owner and must equal ActorID.
+	UserID string `json:"-" query:"-"`
 
-	*apitoken.GetAPITokensForRequest
+	// GetAPITokensForRequest carries display filters. The manager snapshots them
+	// and replaces embedded ID/NanoId/TotalCount rather than trusting selectors.
+	*apitoken.GetAPITokensForRequest `json:"-" query:"-"`
 }
 
 // GetUserAPITokenThresholdRequest holds the data required for getting
 // user's an api tokens threshold based on their role
 type GetUserAPITokenThresholdRequest struct {
-	// UserID the user ID the tokens threshold will apply to
-	UserId string
+	// ActorID comes from authenticated session context.
+	ActorID string `json:"-" query:"-"`
+	// UserID selects the owner whose current policy is displayed, not authority
+	// to issue a future credential. It must equal ActorID.
+	UserID string `json:"-" query:"-"`
 }
 
 // OauthLoginRequest hold the data required for inititing a

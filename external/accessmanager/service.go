@@ -258,38 +258,49 @@ func (s *Service) LogoutUserOthers(ctx context.Context, r *LogoutUserOthersReque
 		toolbox.CombinedUuidFormat(requestingUser.User.ID, accessTokenId), toolbox.CombinedUuidFormat(requestingUser.User.ID, refreshTokenId)})
 }
 
-// GetSpecificUserAPITokens retrieves API token for a specific user
-// TODO: Create tests
+// GetSpecificUserAPITokens authorizes a live self-service owner, snapshots query
+// filters, and returns secret-free rows. List/count pagination is observational,
+// not an atomic inventory guarantee and never authority to issue another token.
 func (s *Service) GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error) {
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "get-specific-user-api-tokens")
-	logger.Debug("handling-get-specific-user-api-tokens-request")
-
+	if s == nil || ctx == nil || nilAccessDependency(s.ApitokenService) {
+		return nil, apitoken.ErrServiceUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r == nil || r.GetAPITokensForRequest == nil || strings.TrimSpace(r.UserID) == "" {
+		return nil, ErrBadRequest
+	}
+	input, filters := *r, *r.GetAPITokensForRequest
+	if err := tokenManagementSession(ctx, input.ActorID, input.UserID); err != nil {
+		return nil, err
+	}
+	if _, err := s.tokenManagementOwner(ctx, input.ActorID); err != nil {
+		return nil, err
+	}
 	userApiTokenResponse, err := s.ApitokenService.GetAPITokensFor(ctx, &apitoken.GetAPITokensForRequest{
-		ID:            r.UserID,
-		Order:         r.Order,
-		PerPage:       r.PerPage,
-		Page:          r.Page,
-		Description:   r.Description,
-		Status:        r.Status,
-		Meta:          r.Meta,
-		OnlyEphemeral: r.OnlyEphemeral,
-		OnlyPermanent: r.OnlyPermanent,
+		ID:            input.UserID,
+		Order:         filters.Order,
+		PerPage:       filters.PerPage,
+		Page:          filters.Page,
+		Description:   filters.Description,
+		Status:        filters.Status,
+		Meta:          filters.Meta,
+		OnlyEphemeral: filters.OnlyEphemeral,
+		OnlyPermanent: filters.OnlyPermanent,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &GetSpecificUserAPITokensResponse{
-		UserAPITokens:    userApiTokenResponse.APITokens,
-		Total:            userApiTokenResponse.Total,
-		TotalPages:       userApiTokenResponse.TotalPages,
-		Page:             userApiTokenResponse.Page,
-		ResourcesPerPage: userApiTokenResponse.APITokensPerPage,
-	}, nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return tokenListResponse(userApiTokenResponse, input.UserID)
 }
 
-// GetUserAPITokenThreshold returns display limits for an already authorized
-// owner. Configured live policy never falls back to legacy roles; these values
+// GetUserAPITokenThreshold authorizes a live self-service owner and returns
+// display limits. Configured policy never falls back to legacy roles; these values
 // are an observation, not permission to create a credential later.
 func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error) {
 	if s == nil || ctx == nil {
@@ -298,33 +309,20 @@ func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITok
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if r == nil || r.UserId == "" {
+	if r == nil || strings.TrimSpace(r.UserID) == "" {
 		return nil, ErrBadRequest
 	}
-	if s.tokenPolicy != nil {
-		return s.policyTokenThreshold(ctx, r.UserId)
+	input := *r
+	if err := tokenManagementSession(ctx, input.ActorID, input.UserID); err != nil {
+		return nil, err
 	}
-	if s.UserService == nil {
-		return nil, ErrTokenPolicyUnavailable
-	}
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "get-user-api-token-threshold")
-	logger.Debug("handling-get-user-api-token-threshold-request")
-
-	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-		ID: r.UserId,
-	})
-	if contextErr := ctx.Err(); contextErr != nil {
-		return nil, contextErr
-	}
+	persistentUser, err := s.tokenManagementOwner(ctx, input.ActorID)
 	if err != nil {
 		return nil, err
 	}
-	if userResponse == nil || userResponse.User == nil || userResponse.User.ID != r.UserId {
-		return nil, ErrForbiddenUnableToAction
+	if s.tokenPolicy != nil {
+		return s.policyTokenThreshold(ctx, input.UserID)
 	}
-
-	persistentUser := userResponse.User
 
 	// Pull user role so we can get their limits
 	userHighestRankingRole := common.GetUsersHighestRankedRole(persistentUser.Roles)
@@ -341,51 +339,77 @@ func (s *Service) GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITok
 }
 
 // UpdateUserAPITokenStatus changes only the specified owner's credential state.
-// The HTTP boundary authorizes that owner; arbitrary status values never revoke.
+// Both manager and mapper bind the session caller to the owner; arbitrary status
+// values never revoke. Domain failures retain their native error identities.
 func (s *Service) UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error {
-	if s == nil || s.ApitokenService == nil || ctx == nil {
+	if s == nil || nilAccessDependency(s.ApitokenService) || ctx == nil {
 		return apitoken.ErrServiceUnavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if r == nil || r.UserID == "" || r.APITokenID == "" {
+	if r == nil || strings.TrimSpace(r.UserID) == "" || strings.TrimSpace(r.APITokenID) == "" {
 		return ErrAPITokenNotAssociatedWithUser
 	}
-	logger := logger.AcquireOperationFrom(ctx, "external/accessmanager", "update-user-api-token-status")
-	logger.Debug("handling-update-user-api-token-status-request")
+	input := *r
+	r = &input
+	if err := tokenManagementSession(ctx, r.ActorID, r.UserID); err != nil {
+		return err
+	}
+	if r.Status != apitoken.UserTokenStatusKeyActive && r.Status != apitoken.UserTokenStatusKeyRevoked {
+		return apitoken.ErrTokenStatusInvalid
+	}
+	if _, err := s.tokenManagementOwner(ctx, r.ActorID); err != nil {
+		return err
+	}
+	var err error
 
 	switch r.Status {
 	case apitoken.UserTokenStatusKeyActive:
-		return s.ApitokenService.ActivateAPIToken(ctx, &apitoken.ActivateAPITokenRequest{
+		err = s.ApitokenService.ActivateAPIToken(ctx, &apitoken.ActivateAPITokenRequest{
 			UserID: r.UserID,
 			ID:     r.APITokenID})
 	case apitoken.UserTokenStatusKeyRevoked:
-		return s.ApitokenService.RevokeAPIToken(ctx, &apitoken.RevokeAPITokenRequest{
+		err = s.ApitokenService.RevokeAPIToken(ctx, &apitoken.RevokeAPITokenRequest{
 			UserID: r.UserID,
 			ID:     r.APITokenID,
 		})
 	default:
 		return apitoken.ErrTokenStatusInvalid
 	}
+	if err != nil {
+		return err
+	}
+	return ctx.Err()
 }
 
 // DeleteUserAPIToken delegates exact owner-bound deletion without a list scan.
-// The HTTP boundary must authorize this target owner before calling the service.
+// A verified session and current matching ACTIVE owner are required even for
+// trusted in-process callers. Cancellation after a write does not undo deletion.
 func (s *Service) DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error {
-	if s == nil || s.ApitokenService == nil || ctx == nil {
+	if s == nil || nilAccessDependency(s.ApitokenService) || ctx == nil {
 		return apitoken.ErrServiceUnavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if r == nil || r.UserID == "" || r.APITokenID == "" {
+	if r == nil || strings.TrimSpace(r.UserID) == "" || strings.TrimSpace(r.APITokenID) == "" {
 		return ErrAPITokenNotAssociatedWithUser
 	}
-	return s.ApitokenService.DeleteAPIToken(ctx, &apitoken.DeleteAPITokenRequest{UserID: r.UserID, APITokenID: r.APITokenID})
+	input := *r
+	if err := tokenManagementSession(ctx, input.ActorID, input.UserID); err != nil {
+		return err
+	}
+	if _, err := s.tokenManagementOwner(ctx, input.ActorID); err != nil {
+		return err
+	}
+	if err := s.ApitokenService.DeleteAPIToken(ctx, &apitoken.DeleteAPITokenRequest{UserID: input.UserID, APITokenID: input.APITokenID}); err != nil {
+		return err
+	}
+	return ctx.Err()
 }
 
-// CreateUserAPIToken issues a credential for an already authorized active owner.
+// CreateUserAPIToken issues a credential only for a verified session's live owner.
 // Configured policy fences limits and inventory transactionally; nil policy is
 // the transitional, non-atomic legacy role path. No secret escapes an observed
 // cancellation or failed/uncertain adapter outcome. Neither implies rollback.
@@ -396,7 +420,7 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if r == nil || r.UserID == "" {
+	if r == nil || strings.TrimSpace(r.UserID) == "" {
 		return nil, ErrBadRequest
 	}
 	if r.Ttl < 0 {
@@ -404,35 +428,27 @@ func (s *Service) CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenR
 	}
 	request := *r
 	r = &request // Keep owner and requested limits stable across callback retries.
+	if err := tokenManagementSession(ctx, r.ActorID, r.UserID); err != nil {
+		return nil, err
+	}
 	if s.tokenPolicy != nil {
 		return s.createPolicyToken(ctx, r)
 	}
-	if s.UserService == nil || s.ApitokenService == nil {
+	if nilAccessDependency(s.UserService) || nilAccessDependency(s.ApitokenService) {
 		return nil, ErrTokenPolicyUnavailable
 	}
 	var logger *zap.Logger = logger.AcquirePackageFrom(ctx, "external/accessmanager")
 
-	// Check if user exist
-	userResponse, err := s.UserService.GetUserByID(ctx, &userv2.GetUserByIDRequest{
-		ID: r.UserID,
-	})
-	if contextErr := ctx.Err(); contextErr != nil {
-		return nil, contextErr
-	}
+	persistentUser, err := s.tokenManagementOwner(ctx, r.ActorID)
 	if err != nil {
 		return nil, err
 	}
-	if userResponse == nil || userResponse.User == nil || userResponse.User.ID != r.UserID || userResponse.User.Status != userv2.AccountStatusKeyActive {
-		return nil, ErrForbiddenUnableToAction
-	}
-
-	persistentUser := userResponse.User
 
 	// Pull user role so we can get their limits
 	userHighestRankingRole := common.GetUsersHighestRankedRole(persistentUser.Roles)
 	getUserRoleThresholdAllocation := common.UserRolesThresholds.RolesDetails[common.UserRole(userHighestRankingRole)]
 	if !toolbox.StringInSlice(userHighestRankingRole, persistentUser.Roles) {
-		logger.Error("highest-role-pulled-is-not-found-in-user-allocated-role", zap.String("user-id", persistentUser.ID), zap.String("role-pulled", userHighestRankingRole), zap.String("user-roles", strings.Join(persistentUser.Roles, ", ")))
+		logger.Warn("token-policy-legacy-default-role-selected")
 	}
 
 	// get user's apitokens count

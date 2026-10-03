@@ -133,228 +133,156 @@ func MapRequestToOauthLoginRequest(request *http.Request, validator Accessmanage
 	return &OauthLoginRequest{Provider: provider, RequestUrl: path, Browser: browser == "true"}, nil
 }
 
-// MapRequestToGetUserAPITokenThresholdRequest maps incoming GetUserAPITokenThreshold request to correct
-// struct.
-// TODO: Refactor
-func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validator AccessmanagerValidator) (*GetUserAPITokenThresholdRequest, error) {
-	parsedRequest := &GetUserAPITokenThresholdRequest{}
-
-	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
-	if requestorID == "" {
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
+// tokenManagementRequestIdentity binds the session caller separately from the
+// URI owner. It does not decode payloads or treat an API token as a session.
+func tokenManagementRequestIdentity(request *http.Request) (string, string, error) {
+	if request == nil || request.URL == nil {
+		return "", "", ErrBadRequest
 	}
-
-	userId, err := getUserIDFromURI(request)
+	if err := request.Context().Err(); err != nil {
+		return "", "", err
+	}
+	actor := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
+	if err := tokenManagementSession(request.Context(), actor, actor); err != nil {
+		return "", "", err
+	}
+	owner, err := getUserIDFromURI(request)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
-
-	if userId != requestorID {
-		return nil, ErrForbiddenUnableToAction
+	if strings.TrimSpace(owner) == "" {
+		return "", "", ErrInvalidUserID
 	}
-
-	parsedRequest.UserId = userId
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, ErrBadRequest
+	if owner != actor {
+		return "", "", ErrForbiddenUnableToAction
 	}
-
-	return parsedRequest, nil
+	return actor, owner, nil
 }
 
-// MapRequestToGetSpecificUserAPITokensRequest maps incoming GetSpecificUserAPITokens request to correct
-// struct.
-func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validator AccessmanagerValidator) (*GetSpecificUserAPITokensRequest, error) {
-
-	var err error
-	parsedRequest := GetSpecificUserAPITokensRequest{}
-	baseRequest := apitoken.GetAPITokensForRequest{}
-
-	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
-	if requestorID == "" {
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
+// validateTokenManagementRequest checks the final server-bound command without
+// exposing validator diagnostics. Canceled requests never dispatch downstream.
+func validateTokenManagementRequest(request *http.Request, validator AccessmanagerValidator, value any) error {
+	if nilAccessDependency(validator) {
+		return ErrBadRequest
 	}
+	if err := validator.Validate(value); err != nil {
+		return ErrBadRequest
+	}
+	return request.Context().Err()
+}
 
-	// Add used Id from uri
-	parsedRequest.UserID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
+// MapRequestToGetUserAPITokenThresholdRequest binds self-service session identity.
+func MapRequestToGetUserAPITokenThresholdRequest(request *http.Request, validator AccessmanagerValidator) (*GetUserAPITokenThresholdRequest, error) {
+	actor, owner, err := tokenManagementRequestIdentity(request)
 	if err != nil {
 		return nil, err
 	}
-
-	if parsedRequest.UserID != requestorID {
-		return nil, ErrForbiddenUnableToAction
+	result := &GetUserAPITokenThresholdRequest{ActorID: actor, UserID: owner}
+	if err := validateTokenManagementRequest(request, validator, result); err != nil {
+		return nil, err
 	}
+	return result, nil
+}
 
-	// get query params from request
-	query := request.URL.Query()
-	err = querydecoder.New(query).Decode(&baseRequest)
+// MapRequestToGetSpecificUserAPITokensRequest decodes only display filters.
+// Embedded lower-domain identity fields never receive transport input.
+func MapRequestToGetSpecificUserAPITokensRequest(request *http.Request, validator AccessmanagerValidator) (*GetSpecificUserAPITokensRequest, error) {
+	actor, owner, err := tokenManagementRequestIdentity(request)
 	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Order         string `query:"order"`
+		PerPage       int    `query:"per_page"`
+		Page          int    `query:"page"`
+		Description   string `query:"description"`
+		Status        string `query:"status"`
+		Meta          bool   `query:"meta"`
+		OnlyEphemeral bool   `query:"only_ephemeral"`
+		OnlyPermanent bool   `query:"only_permanent"`
+	}
+	if err := querydecoder.New(request.URL.Query()).Decode(&payload); err != nil {
 		return nil, ErrInvalidResultQueryParam
 	}
-
-	parsedRequest.GetAPITokensForRequest = &baseRequest
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, ErrBadRequest
+	result := &GetSpecificUserAPITokensRequest{ActorID: actor, UserID: owner, GetAPITokensForRequest: &apitoken.GetAPITokensForRequest{Order: payload.Order, PerPage: payload.PerPage, Page: payload.Page, Description: payload.Description, Status: payload.Status, Meta: payload.Meta, OnlyEphemeral: payload.OnlyEphemeral, OnlyPermanent: payload.OnlyPermanent}}
+	if err := validateTokenManagementRequest(request, validator, result); err != nil {
+		return nil, err
 	}
-
-	return &parsedRequest, nil
+	return result, nil
 }
 
-// MapRequestToRevokeUserAPITokenRequest binds the URI owner to the authenticated
-// requester and preserves that owner for the atomic credential mutation.
+// mapTokenStatusRequest binds both URI selectors and the route-owned status.
+func mapTokenStatusRequest(request *http.Request, validator AccessmanagerValidator, status string) (*UserAPITokenStatusRequest, error) {
+	actor, owner, err := tokenManagementRequestIdentity(request)
+	if err != nil {
+		return nil, err
+	}
+	tokenID, err := getTokenIDFromURI(request)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(tokenID) == "" {
+		return nil, ErrInvalidAPITokenID
+	}
+	result := &UserAPITokenStatusRequest{ActorID: actor, UserID: owner, APITokenID: tokenID, Status: status}
+	if err := validateTokenManagementRequest(request, validator, result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// MapRequestToRevokeUserAPITokenRequest never accepts a body-selected status.
 func MapRequestToRevokeUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*UserAPITokenStatusRequest, error) {
-	var (
-		parsedRequest = &UserAPITokenStatusRequest{}
-		err           error
-	)
-
-	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
-	if requestorID == "" {
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
-	}
-
-	userID, err := getUserIDFromURI(request)
-	if err != nil {
-		return nil, err
-	}
-
-	if userID != requestorID {
-		return nil, ErrForbiddenUnableToAction
-	}
-
-	parsedRequest.APITokenID, err = getTokenIDFromURI(request)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedRequest.Status = AccessManagerUserTokenStatusKeyRevoked
-	parsedRequest.UserID = userID
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, ErrBadRequest
-	}
-
-	return parsedRequest, nil
+	return mapTokenStatusRequest(request, validator, AccessManagerUserTokenStatusKeyRevoked)
 }
 
-// MapRequestToActivateUserAPITokenRequest binds the URI owner to the authenticated
-// requester; a credential ID alone never authorizes activation.
+// MapRequestToActivateUserAPITokenRequest requires a session for the URI owner.
 func MapRequestToActivateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*UserAPITokenStatusRequest, error) {
-
-	var (
-		parsedRequest = &UserAPITokenStatusRequest{}
-		err           error
-	)
-
-	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
-	if requestorID == "" {
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
-	}
-
-	userID, err := getUserIDFromURI(request)
-	if err != nil {
-		return nil, err
-	}
-
-	if userID != requestorID {
-		return nil, ErrForbiddenUnableToAction
-	}
-
-	parsedRequest.APITokenID, err = getTokenIDFromURI(request)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedRequest.Status = AccessManagerUserTokenStatusKeyActive
-	parsedRequest.UserID = userID
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, ErrBadRequest
-	}
-
-	return parsedRequest, nil
+	return mapTokenStatusRequest(request, validator, AccessManagerUserTokenStatusKeyActive)
 }
 
-// MapRequestToDeleteUserAPITokenRequest maps incoming DeleteUserAPIToken request to correct
-// struct.
+// MapRequestToDeleteUserAPITokenRequest binds an exact token and self-service owner.
 func MapRequestToDeleteUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*DeleteUserAPITokenRequest, error) {
-	var (
-		parsedRequest = &DeleteUserAPITokenRequest{}
-		err           error
-	)
-
-	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
-	if requestorID == "" {
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
-	}
-
-	parsedRequest.UserID, err = getUserIDFromURI(request)
+	actor, owner, err := tokenManagementRequestIdentity(request)
 	if err != nil {
 		return nil, err
 	}
-
-	if parsedRequest.UserID != requestorID {
-		return nil, ErrForbiddenUnableToAction
-	}
-
-	parsedRequest.APITokenID, err = getTokenIDFromURI(request)
+	tokenID, err := getTokenIDFromURI(request)
 	if err != nil {
 		return nil, err
 	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, ErrBadRequest
+	if strings.TrimSpace(tokenID) == "" {
+		return nil, ErrInvalidAPITokenID
 	}
-
-	return parsedRequest, nil
+	result := &DeleteUserAPITokenRequest{ActorID: actor, UserID: owner, APITokenID: tokenID}
+	if err := validateTokenManagementRequest(request, validator, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-// MapRequestToCreateUserAPITokenRequest maps incoming CreateUserAPIToken request to correct
-// struct.
+// MapRequestToCreateUserAPITokenRequest accepts only lifetime and description;
+// omitted lifetime remains permanent, subject to the live issuance policy.
 func MapRequestToCreateUserAPITokenRequest(request *http.Request, validator AccessmanagerValidator) (*CreateUserAPITokenRequest, error) {
-
-	var (
-		logger *zap.Logger = logger.AcquirePackageFrom(request.Context(), "external/accessmanager")
-
-		parsedRequest *CreateUserAPITokenRequest = &CreateUserAPITokenRequest{}
-		err           error
-	)
-
-	// Default to permanent
-	parsedRequest.Ttl = 0
-
-	requestorID := accessmanagerhelpers.AcquireFrom(request.Context())
-	if requestorID == "" {
-		return nil, ErrUnauthorizedUnableToAttainRequestorID
-	}
-
-	err = toolbox.DecodeRequestBody(request, parsedRequest)
+	actor, owner, err := tokenManagementRequestIdentity(request)
 	if err != nil {
-		logger.Warn("unable-to-decode-create-user-api-token-request")
+		return nil, err
+	}
+	if nilAccessDependency(request.Body) {
 		return nil, ErrInvalidCreateUserAPITokenBody
 	}
-
-	parsedRequest.UserID, err = getUserIDFromURI(request)
-	if err != nil {
+	var payload struct {
+		Ttl         int64  `json:"ttl"`
+		Description string `json:"description,omitempty"`
+	}
+	if err := toolbox.DecodeRequestBody(request, &payload); err != nil {
+		return nil, ErrInvalidCreateUserAPITokenBody
+	}
+	result := &CreateUserAPITokenRequest{ActorID: actor, UserID: owner, Ttl: payload.Ttl, Description: payload.Description}
+	if err := validateTokenManagementRequest(request, validator, result); err != nil {
 		return nil, err
 	}
-
-	if parsedRequest.UserID != requestorID {
-		return nil, ErrForbiddenUnableToAction
-	}
-
-	err = validator.Validate(parsedRequest)
-	if err != nil {
-		return nil, ErrBadRequest
-	}
-
-	return parsedRequest, nil
+	return result, nil
 }
 
 // MapRequestToRefreshTokenRequest maps incoming RefreshToken request to correct

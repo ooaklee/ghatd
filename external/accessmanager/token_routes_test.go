@@ -8,7 +8,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/accessmanager"
-	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/router"
 	"github.com/ooaklee/reply/v2"
@@ -148,7 +147,7 @@ func TestStatusMapperRetainsVerifiedTargetOwner(t *testing.T) {
 			if tc.wrongOwner {
 				actor = "other-owner"
 			}
-			req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), actor))
+			req = req.WithContext(tokenSessionContext(req.Context(), actor))
 			req = mux.SetURLVars(req, map[string]string{accessmanager.UserURIVariableID: owner, accessmanager.APITokenURIVariableID: token})
 			var got *accessmanager.UserAPITokenStatusRequest
 			var err error

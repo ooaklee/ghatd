@@ -151,7 +151,7 @@ func TestPolicyTokenCreationBoundaries(t *testing.T) {
 				api.createErr = storageFailure
 			}
 			service := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: policy, ApiTokenService: api, UserService: &creationUserStub{user: user, requireTransaction: true}})
-			got, err := service.CreateUserAPIToken(context.Background(), &accessmanager.CreateUserAPITokenRequest{UserID: "owner", Ttl: tc.ttl})
+			got, err := service.CreateUserAPIToken(tokenSessionContext(context.Background(), "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner", Ttl: tc.ttl})
 			if tc.want != nil {
 				require.ErrorIs(t, err, tc.want)
 				require.Nil(t, got)
@@ -174,8 +174,8 @@ func TestPolicyTokenThresholds(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			policy := &creationPolicyStub{limits: accesspolicy.TokenLimits{Permanent: 7, Ephemeral: 3, MinimumTTL: 120, MaximumTTL: 7200, TTLIncrement: 60}, err: tc.err}
-			service := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: policy}) // no UserService: role fallback would panic
-			got, err := service.GetUserAPITokenThreshold(context.Background(), &accessmanager.GetUserAPITokenThresholdRequest{UserId: "owner"})
+			service := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: policy, UserService: &boundaryTokenUser{}}) // Grant values differ from legacy role limits.
+			got, err := service.GetUserAPITokenThreshold(tokenSessionContext(context.Background(), "owner"), &accessmanager.GetUserAPITokenThresholdRequest{ActorID: "owner", UserID: "owner"})
 			if tc.want != nil {
 				require.ErrorIs(t, err, tc.want)
 				require.Nil(t, got)
@@ -200,8 +200,8 @@ func TestInvalidLimitsFailClosedForDisplay(t *testing.T) {
 		{"no valid increment within range", accesspolicy.TokenLimits{Ephemeral: 1, MinimumTTL: 61, MaximumTTL: 119, TTLIncrement: 60}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			service := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: &creationPolicyStub{limits: tc.limits}})
-			got, err := service.GetUserAPITokenThreshold(context.Background(), &accessmanager.GetUserAPITokenThresholdRequest{UserId: "owner"})
+			service := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: &creationPolicyStub{limits: tc.limits}, UserService: &boundaryTokenUser{}})
+			got, err := service.GetUserAPITokenThreshold(tokenSessionContext(context.Background(), "owner"), &accessmanager.GetUserAPITokenThresholdRequest{ActorID: "owner", UserID: "owner"})
 			require.ErrorIs(t, err, accessmanager.ErrTokenPolicyUnavailable)
 			require.Nil(t, got)
 		})
@@ -232,12 +232,12 @@ func TestLegacyAdmissionRequiresExactInventoryAndPresentOwner(t *testing.T) {
 				port = &verifiedAPIStub{}
 			}
 			service := accessmanager.NewService(&accessmanager.NewServiceRequest{UserService: &creationUserStub{user: user}, ApiTokenService: port})
-			got, err := service.CreateUserAPIToken(context.Background(), &accessmanager.CreateUserAPITokenRequest{UserID: "owner"})
+			got, err := service.CreateUserAPIToken(tokenSessionContext(context.Background(), "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner"})
 			require.ErrorIs(t, err, tc.want)
 			require.Nil(t, got)
 			require.Zero(t, api.created)
 			if tc.missingUser {
-				display, err := service.GetUserAPITokenThreshold(context.Background(), &accessmanager.GetUserAPITokenThresholdRequest{UserId: "owner"})
+				display, err := service.GetUserAPITokenThreshold(tokenSessionContext(context.Background(), "owner"), &accessmanager.GetUserAPITokenThresholdRequest{ActorID: "owner", UserID: "owner"})
 				require.ErrorIs(t, err, accessmanager.ErrForbiddenUnableToAction)
 				require.Nil(t, display)
 			}
@@ -262,7 +262,7 @@ func TestPolicyAdmissionRejectsUnfencedAdapters(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := accessmanager.NewService(&accessmanager.NewServiceRequest{ApiTokenService: tc.api, TokenPolicy: &creationPolicyStub{limits: accesspolicy.TokenLimits{Permanent: 1}}, UserService: &creationUserStub{user: &userv2.UniversalUser{ID: "owner", Status: userv2.AccountStatusKeyActive}}})
-			got, err := s.CreateUserAPIToken(context.Background(), &accessmanager.CreateUserAPITokenRequest{UserID: "owner"})
+			got, err := s.CreateUserAPIToken(tokenSessionContext(context.Background(), "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner"})
 			require.ErrorIs(t, err, accessmanager.ErrTokenPolicyUnavailable)
 			require.Nil(t, got)
 		})

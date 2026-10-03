@@ -381,6 +381,16 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking:** [API-token management commands](external/accessmanager/README.md#session-bound-management-commands)
+  now require an explicit session-bound ActorID and matching live ACTIVE owner,
+  including in-process callers. Rename threshold request UserId to UserID and
+  preserve verified session context in custom adapters and transaction callbacks.
+  Forged selectors and API-token-only callers cannot manage credentials. List
+  rows are owner-checked and copied without secrets; native errors retain shared
+  reply mappings. Existing 201/200/202 success contracts are unchanged and the
+  six handlers send no-store responses. Account checks are point-in-time, not
+  locks against concurrent revocation; logout and legacy-tier retirement remain
+  separate work.
 - **Breaking:** [Email changes](external/accessmanager/README.md#conditional-email-changes)
   now use explicit actor/target commands and return confirmed-change receipts
   with separate cleanup, delivery and audit flags. The user domain atomically

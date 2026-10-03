@@ -23,8 +23,8 @@ func TestTokenPolicyEntryBoundaries(t *testing.T) {
 				// rejection must happen before either lookup or issuance.
 				s := &accessmanager.Service{UserService: &creationUserStub{}, ApitokenService: &creationAPIStub{}}
 				ctx := context.Background()
-				create := &accessmanager.CreateUserAPITokenRequest{UserID: "owner"}
-				display := &accessmanager.GetUserAPITokenThresholdRequest{UserId: "owner"}
+				create := &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner"}
+				display := &accessmanager.GetUserAPITokenThresholdRequest{ActorID: "owner", UserID: "owner"}
 				want := accessmanager.ErrTokenPolicyUnavailable
 				switch variant {
 				case "nil service":
@@ -38,17 +38,17 @@ func TestTokenPolicyEntryBoundaries(t *testing.T) {
 				case "nil request":
 					create, display, want = nil, nil, accessmanager.ErrBadRequest
 				case "empty owner":
-					create.UserID, display.UserId, want = "", "", accessmanager.ErrBadRequest
+					create.UserID, display.UserID, want = "", "", accessmanager.ErrBadRequest
 				case "missing wiring":
 					s = &accessmanager.Service{}
 				}
 				require.NotPanics(t, func() {
 					if operation == "create" {
-						got, err := s.CreateUserAPIToken(ctx, create)
+						got, err := s.CreateUserAPIToken(tokenSessionContext(ctx, "owner"), create)
 						require.ErrorIs(t, err, want)
 						require.Nil(t, got)
 					} else {
-						got, err := s.GetUserAPITokenThreshold(ctx, display)
+						got, err := s.GetUserAPITokenThreshold(tokenSessionContext(ctx, "owner"), display)
 						require.ErrorIs(t, err, want)
 						require.Nil(t, got)
 					}
@@ -80,14 +80,14 @@ func TestTokenPolicyPreservesFailureCauses(t *testing.T) {
 			{"cancellation", context.Canceled},
 		} {
 			t.Run(operation+"/"+tc.name, func(t *testing.T) {
-				s := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: &creationPolicyStub{err: tc.cause}, UserService: &creationUserStub{}, ApiTokenService: &creationAPIStub{}})
+				s := accessmanager.NewService(&accessmanager.NewServiceRequest{TokenPolicy: &creationPolicyStub{err: tc.cause}, UserService: &boundaryTokenUser{}, ApiTokenService: &creationAPIStub{}})
 				var err error
 				if operation == "create" {
-					got, failure := s.CreateUserAPIToken(context.Background(), &accessmanager.CreateUserAPITokenRequest{UserID: "owner"})
+					got, failure := s.CreateUserAPIToken(tokenSessionContext(context.Background(), "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner"})
 					require.Nil(t, got)
 					err = failure
 				} else {
-					got, failure := s.GetUserAPITokenThreshold(context.Background(), &accessmanager.GetUserAPITokenThresholdRequest{UserId: "owner"})
+					got, failure := s.GetUserAPITokenThreshold(tokenSessionContext(context.Background(), "owner"), &accessmanager.GetUserAPITokenThresholdRequest{ActorID: "owner", UserID: "owner"})
 					require.Nil(t, got)
 					err = failure
 				}
@@ -241,7 +241,7 @@ func TestTokenIssuanceCancellationBoundaries(t *testing.T) {
 				if mode == "policy" {
 					config.TokenPolicy = policy
 				}
-				got, err := accessmanager.NewService(config).CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "owner"})
+				got, err := accessmanager.NewService(config).CreateUserAPIToken(tokenSessionContext(ctx, "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner"})
 				require.ErrorIs(t, err, context.Canceled)
 				require.Nil(t, got)
 				require.Equal(t, tc.reads, users.calls)
@@ -261,7 +261,7 @@ func TestTokenThresholdCancellationBoundaries(t *testing.T) {
 			if mode == "policy" {
 				config.TokenPolicy = &boundaryTokenPolicy{before: cancel}
 			}
-			got, err := accessmanager.NewService(config).GetUserAPITokenThreshold(ctx, &accessmanager.GetUserAPITokenThresholdRequest{UserId: "owner"})
+			got, err := accessmanager.NewService(config).GetUserAPITokenThreshold(tokenSessionContext(ctx, "owner"), &accessmanager.GetUserAPITokenThresholdRequest{ActorID: "owner", UserID: "owner"})
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 		})
@@ -293,7 +293,7 @@ func TestTokenCreationAdapterResults(t *testing.T) {
 				if mode == "policy" {
 					config.TokenPolicy = &boundaryTokenPolicy{limits: accesspolicy.TokenLimits{Permanent: 2}, nilTransaction: variant == "nil transaction"}
 				}
-				got, err := accessmanager.NewService(config).CreateUserAPIToken(context.Background(), &accessmanager.CreateUserAPITokenRequest{UserID: "owner"})
+				got, err := accessmanager.NewService(config).CreateUserAPIToken(tokenSessionContext(context.Background(), "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner"})
 				if variant == "valid snapshot" {
 					require.NoError(t, err)
 					result.APIToken.ValueSHA[0] = 9

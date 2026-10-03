@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/errormanifest"
@@ -137,147 +138,153 @@ func (h *Handler) LogoutUserOthers(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
-// GetUserAPITokenThreshold returns user's API tokens
-// User requesting must be active & be the same person as target
-// TODO: Create tests
+// GetUserAPITokenThreshold writes current display limits through reply. A
+// missing adapter result is unavailable, never an unlimited allowance.
 func (h *Handler) GetUserAPITokenThreshold(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-get-user-api-token-threshold")
-
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToGetUserAPITokenThresholdRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	userTokenThreshold, err := h.Service.GetUserAPITokenThreshold(r.Context(), request)
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
+	result, err := h.Service.GetUserAPITokenThreshold(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, userTokenThreshold)
+	if !validTokenThresholdResponse(result) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, result)
 }
 
-// GetSpecificUserAPITokens returns user's API tokens
-// User requesting must be active & be the same person as target
-// TODO: Create tests
+// GetSpecificUserAPITokens returns owner-checked display rows, never plaintext
+// secrets. Both default and custom manager adapters pass the same projection.
 func (h *Handler) GetSpecificUserAPITokens(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-get-specific-user-api-tokens")
-
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToGetSpecificUserAPITokensRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
 	response, err := h.Service.GetSpecificUserAPITokens(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	if request.Meta {
-		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens, reply.WithMeta(response.GetMetaData()))
+	if response == nil {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
 		return
 	}
-
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.UserAPITokens)
+	safe, err := tokenListResponse(&apitoken.GetAPITokensForResponse{APITokens: response.UserAPITokens, Total: response.Total, TotalPages: response.TotalPages, Page: response.Page, APITokensPerPage: response.ResourcesPerPage}, request.UserID)
+	if err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if request.Meta {
+		h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, safe.UserAPITokens, reply.WithMeta(safe.GetMetaData()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, safe.UserAPITokens)
 }
 
-// RevokeUserAPIToken returns whether a request to revoke an API token was successful.
-// User requesting must be active and must be the same person as target.
-// TODO: Create tests
+// RevokeUserAPIToken preserves the established 202 blank success contract.
+// Native failures are resolved by the shared manifest without raw diagnostic logs.
 func (h *Handler) RevokeUserAPIToken(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-revoke-user-api-token")
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToRevokeUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	err = h.Service.UpdateUserAPITokenStatus(r.Context(), request)
-	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
+	if err := h.Service.UpdateUserAPITokenStatus(r.Context(), request); err != nil {
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
-// ActivateUserAPIToken returns whether a request to activate an API token was successful.
-// User requesting must be active and must be the same person as target.
-// TODO: Create tests
+// ActivateUserAPIToken preserves the established 202 blank success contract.
+// Native failures are resolved by the shared manifest without raw diagnostic logs.
 func (h *Handler) ActivateUserAPIToken(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-activate-user-api-token")
-
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToActivateUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	err = h.Service.UpdateUserAPITokenStatus(r.Context(), request)
-	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
+	if err := h.Service.UpdateUserAPITokenStatus(r.Context(), request); err != nil {
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
-// DeleteUserAPIToken returns whether a request to delete an API token was successful.
-// User requesting must be active and must be the same person as target.
-// TODO: Create tests
+// DeleteUserAPIToken preserves the established 202 blank success contract.
+// Native failures are resolved by the shared manifest without raw diagnostic logs.
 func (h *Handler) DeleteUserAPIToken(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-delete-user-api-token")
-
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToDeleteUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	err = h.Service.DeleteUserAPIToken(r.Context(), request)
-	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
+	if err := h.Service.DeleteUserAPIToken(r.Context(), request); err != nil {
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
 	h.GetBaseResponseHandler().NewHTTPBlankResponse(w, http.StatusAccepted)
 }
 
-// CreateUserAPIToken returns whether a request to create an API token was successful.
-// User requesting must be active & be the same person as target
-// TODO: Create tests
+// CreateUserAPIToken publishes a validated creation-only secret and a 201
+// response. Failure/uncertain outcomes do not expose any adapter-supplied secret.
 func (h *Handler) CreateUserAPIToken(w http.ResponseWriter, r *http.Request) {
-	logger := logger.AcquireOperationFrom(r.Context(), "external/accessmanager", "handle-create-user-api-token")
-
+	w.Header().Set("Cache-Control", "no-store")
 	request, err := MapRequestToCreateUserAPITokenRequest(r, h.Validator)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
+	if nilAccessDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
 	response, err := h.Service.CreateUserAPIToken(r.Context(), request)
 	if err != nil {
-		logger.Warn("handler-returning-error-response", zap.Error(err))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
-
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, response.UserAPIToken)
-
+	if response == nil {
+		h.NewHTTPErrorResponse(w, ErrTokenPolicyUnavailable)
+		return
+	}
+	safe, err := createdTokenResponse(&apitoken.CreateAPITokenResponse{APIToken: response.UserAPIToken}, request.UserID)
+	if err != nil {
+		h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, safe.UserAPIToken)
 }
 
 // LogoutUser returns reponse from user logout request.

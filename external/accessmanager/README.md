@@ -349,6 +349,44 @@ separate from code allocation.
 
 ## Transactional API-token policy
 
+### Session-bound management commands
+
+The create, list, threshold, delete, activate and revoke commands require an
+explicit `ActorID` and a target `UserID`. Both must match the verified session
+owner; an administrator cannot use these self-service commands for another user.
+The manager requires authenticated session context with a nonempty access-session
+ID, rejects competing API-credential context, and reads the current matching
+`ACTIVE` account. Its email revision and any signed user type must still match.
+Previously verified legacy sessions without a signed user type remain supported.
+
+**Go API migration:** populate `ActorID` from trusted authentication, not from the
+target or request payload, and rename threshold request `UserId` to `UserID`.
+An owner ID or `helpers.TransitWith` alone is no longer sufficient. Custom
+in-process adapters must verify credentials and live session admission before
+publishing context through the [session authentication helper](middleware/README.md#explicitly-selected-sessions). Publishing
+context is trusted wiring, not authentication. Use the preloaded session
+middleware where possible.
+
+HTTP mappers bind owner and token selectors from the URI and status from the
+route. JSON/query payloads cannot override those fields or the actor. List
+filters are copied; embedded identity and count selectors are ignored. List
+responses validate ownership and copy rows without plaintext secrets or digests,
+including responses from custom manager adapters. Only successful creation
+returns the new secret. Nil or malformed adapter results fail closed.
+
+The six handlers set `Cache-Control: no-store` and retain their existing success
+contracts: create `201`, reads `200`, and delete/activate/revoke `202` with a blank
+response. Native errors go through shared reply manifests without raw diagnostic
+logging by these handlers. This does not change logout endpoints.
+
+Live-account checks are point-in-time observations, not account locks. Policy
+creation repeats the check inside each transaction attempt; custom transaction
+adapters must preserve verified context as well as the managed database session.
+Other management operations are not transactional with concurrent account
+suspension or session revocation. Cancellation after a mutation is not rollback.
+
+### Policy admission and rollout
+
 Credential management requires `ActiveOnlyMiddleware` backed by a live, active
 session verifier, such as the preloaded middleware suite's `ActiveOnly`. API tokens
 cannot use the built-in routes to issue or manage credentials or revoke other

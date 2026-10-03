@@ -5,7 +5,6 @@ import (
 
 	"github.com/ooaklee/ghatd/external/accesspolicy"
 	"github.com/ooaklee/ghatd/external/apitoken"
-	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 )
 
 // TokenCreationPolicy supplies live limits from a server-configured system.
@@ -36,14 +35,14 @@ type fencedTokenInventory interface {
 }
 
 // createPolicyToken admits inventory against a live owner grant, independent of
-// roles and signed claims. HTTP callers must already have a verified active
-// owner session; this trusted service port does not authenticate a request.
+// roles and signed claims. The exported command requires verified session
+// context; current owner state is checked inside each transaction attempt.
 // Grants for using the issued credential are separate and are not copied from
 // the owner. No secret is returned on a failed/uncertain transaction outcome.
 func (s *Service) createPolicyToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error) {
 	// The exported entry point validates request/context and selects this path.
 	inventory, ok := s.ApitokenService.(fencedTokenInventory)
-	if !ok || s.UserService == nil {
+	if !ok || nilAccessDependency(s.ApitokenService) || nilAccessDependency(s.UserService) || nilAccessDependency(s.tokenPolicy) {
 		return nil, ErrTokenPolicyUnavailable
 	}
 	var response *CreateUserAPITokenResponse
@@ -55,15 +54,12 @@ func (s *Service) createPolicyToken(ctx context.Context, r *CreateUserAPITokenRe
 		if err := checkTokenLifetime(r.Ttl, limits); err != nil {
 			return err
 		}
-		user, err := s.UserService.GetUserByID(tx, &userv2.GetUserByIDRequest{ID: r.UserID})
+		user, err := s.tokenManagementOwner(tx, r.ActorID)
 		if contextErr := tokenCreationContext(ctx, tx); contextErr != nil {
 			return contextErr
 		}
 		if err != nil {
 			return err
-		}
-		if user == nil || user.User == nil || user.User.ID != r.UserID || user.User.Status != userv2.AccountStatusKeyActive {
-			return ErrForbiddenUnableToAction
 		}
 		count, err := inventory.CountTokenInventoryFenced(tx, r.UserID)
 		if contextErr := tokenCreationContext(ctx, tx); contextErr != nil {
@@ -81,7 +77,7 @@ func (s *Service) createPolicyToken(ctx context.Context, r *CreateUserAPITokenRe
 		if r.Ttl > 0 && count.Ephemeral >= limits.Ephemeral {
 			return ErrEphemeralAPITokenLimitReached
 		}
-		created, err := s.ApitokenService.CreateAPIToken(tx, &apitoken.CreateAPITokenRequest{UserID: user.User.ID, UserNanoId: user.User.NanoID, TokenTtl: r.Ttl, Description: r.Description})
+		created, err := s.ApitokenService.CreateAPIToken(tx, &apitoken.CreateAPITokenRequest{UserID: user.ID, UserNanoId: user.NanoID, TokenTtl: r.Ttl, Description: r.Description})
 		if contextErr := tokenCreationContext(ctx, tx); contextErr != nil {
 			return contextErr
 		}
@@ -133,6 +129,9 @@ func checkTokenLifetime(ttl int64, limits accesspolicy.TokenLimits) error {
 // policyTokenThreshold keeps the established response schema while sourcing
 // values from live policy. Missing grants never display legacy role allowances.
 func (s *Service) policyTokenThreshold(ctx context.Context, userID string) (*GetUserAPITokenThresholdResponse, error) {
+	if nilAccessDependency(s.tokenPolicy) {
+		return nil, ErrTokenPolicyUnavailable
+	}
 	limits, err := s.tokenPolicy.TokenLimits(ctx, userID)
 	if contextErr := ctx.Err(); contextErr != nil {
 		return nil, contextErr

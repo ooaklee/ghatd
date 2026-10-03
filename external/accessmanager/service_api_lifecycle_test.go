@@ -8,7 +8,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/accessmanager"
-	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/apitoken"
 	"github.com/ooaklee/reply/v2"
 	"github.com/stretchr/testify/require"
@@ -44,7 +43,7 @@ func TestAPILifecycleOwnerPropagation(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				t.Cleanup(cancel)
 				api := &lifecycleAPI{}
-				svc := &accessmanager.Service{ApitokenService: api}
+				svc := &accessmanager.Service{ApitokenService: api, UserService: &boundaryTokenUser{}}
 				owner, token := "owner", "token"
 				want := accessmanager.ErrAPITokenNotAssociatedWithUser
 				switch variant {
@@ -72,11 +71,11 @@ func TestAPILifecycleOwnerPropagation(t *testing.T) {
 				var err error
 				require.NotPanics(t, func() {
 					if operation == "delete" {
-						req := &accessmanager.DeleteUserAPITokenRequest{UserID: owner, APITokenID: token}
+						req := &accessmanager.DeleteUserAPITokenRequest{ActorID: owner, UserID: owner, APITokenID: token}
 						if variant == "nil request" {
 							req = nil
 						}
-						err = svc.DeleteUserAPIToken(ctx, req)
+						err = svc.DeleteUserAPIToken(tokenSessionContext(ctx, "owner"), req)
 					} else {
 						status := apitoken.UserTokenStatusKeyActive
 						if operation == "revoke" {
@@ -85,11 +84,11 @@ func TestAPILifecycleOwnerPropagation(t *testing.T) {
 						if variant == "bad status" {
 							status = "INVALID"
 						}
-						req := &accessmanager.UserAPITokenStatusRequest{UserID: owner, APITokenID: token, Status: status}
+						req := &accessmanager.UserAPITokenStatusRequest{ActorID: owner, UserID: owner, APITokenID: token, Status: status}
 						if variant == "nil request" {
 							req = nil
 						}
-						err = svc.UpdateUserAPITokenStatus(ctx, req)
+						err = svc.UpdateUserAPITokenStatus(tokenSessionContext(ctx, "owner"), req)
 					}
 				})
 				if want != nil {
@@ -117,7 +116,7 @@ func TestAPILifecycleMappersBindActorToOwner(t *testing.T) {
 				if actor == "owner" {
 					identity = owner
 				}
-				req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), identity))
+				req = req.WithContext(tokenSessionContext(req.Context(), identity))
 				req = mux.SetURLVars(req, map[string]string{accessmanager.UserURIVariableID: owner, accessmanager.APITokenURIVariableID: token})
 				var err error
 				var gotOwner, gotToken string

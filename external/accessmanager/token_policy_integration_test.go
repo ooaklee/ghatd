@@ -117,7 +117,7 @@ func TestMongoPolicyTokenAdmission(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					<-start
-					got, err := service.CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "owner", Ttl: ttl})
+					got, err := service.CreateUserAPIToken(tokenSessionContext(ctx, "owner"), &accessmanager.CreateUserAPITokenRequest{ActorID: "owner", UserID: "owner", Ttl: ttl})
 					outcomes <- outcome{got, err}
 				}()
 			}
@@ -218,7 +218,7 @@ func TestMongoMultiSystemInventory(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					<-start
-					got, err := services[index].CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: owners[index]})
+					got, err := services[index].CreateUserAPIToken(tokenSessionContext(ctx, owners[index]), &accessmanager.CreateUserAPITokenRequest{ActorID: owners[index], UserID: owners[index]})
 					if err != nil && got != nil {
 						outcomes <- errors.New("secret returned on failed admission")
 						return

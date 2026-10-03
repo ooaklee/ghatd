@@ -11,8 +11,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ooaklee/ghatd/external/accessmanager"
+	accesshelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/accesspolicy"
 	"github.com/ooaklee/ghatd/external/apitoken"
+	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/repository"
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
@@ -33,6 +35,14 @@ func (a *policyUserAdapter) GetUserByID(ctx context.Context, r *userv2.GetUserBy
 		return nil, err
 	}
 	return &userv2.GetUserByIDResponse{User: u}, nil
+}
+
+// policyIssuanceSession models trusted session publication for the selected
+// owner's separate issuance command. These policy tests do not verify credentials.
+func policyIssuanceSession(ctx context.Context) context.Context {
+	ctx = accesshelpers.TransitWith(ctx, "selected")
+	ctx = accesshelpers.TransitAuthenticatedWith(ctx, true)
+	return accesshelpers.TransitSessionWith(ctx, &auth.TokenAccessDetails{UserID: "selected", AccessUUID: "test-session", TokenUse: auth.TokenUseAccess, IsAuthorized: true})
 }
 
 // managerMongoFixture creates a unique case-owned database on an explicit test
@@ -90,7 +100,7 @@ func TestMongoExplicitProvisioning(t *testing.T) {
 			ctx, core, manager, issuer := managerMongoFixture(t)
 			db, err := core.GetDatabase(ctx, "")
 			require.NoError(t, err)
-			_, err = issuer.CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "selected"})
+			_, err = issuer.CreateUserAPIToken(policyIssuanceSession(ctx), &accessmanager.CreateUserAPITokenRequest{ActorID: "selected", UserID: "selected"})
 			require.ErrorIs(t, err, accesspolicy.ErrDenied)
 			limits := accesspolicy.TokenLimits{Permanent: tc.allowance}
 			preview, err := manager.Preview(ctx, tc.target, limits)
@@ -110,11 +120,11 @@ func TestMongoExplicitProvisioning(t *testing.T) {
 					require.Empty(t, grant.Scopes)
 				}
 			}
-			got, err := issuer.CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "selected"})
+			got, err := issuer.CreateUserAPIToken(policyIssuanceSession(ctx), &accessmanager.CreateUserAPITokenRequest{ActorID: "selected", UserID: "selected"})
 			if tc.apply && tc.want == nil && tc.allowance > 0 {
 				require.NoError(t, err)
 				require.NotEmpty(t, got.UserAPIToken.Value)
-				got, err = issuer.CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "selected"})
+				got, err = issuer.CreateUserAPIToken(policyIssuanceSession(ctx), &accessmanager.CreateUserAPITokenRequest{ActorID: "selected", UserID: "selected"})
 				require.ErrorIs(t, err, accessmanager.ErrPermanentAPITokenLimitReached)
 				require.Nil(t, got)
 			} else {
@@ -159,7 +169,7 @@ func TestMongoManagementConcurrency(t *testing.T) {
 						results <- err
 						return
 					}
-					_, err := issuer.CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "selected"})
+					_, err := issuer.CreateUserAPIToken(policyIssuanceSession(ctx), &accessmanager.CreateUserAPITokenRequest{ActorID: "selected", UserID: "selected"})
 					results <- err
 				}(i)
 			}
@@ -186,7 +196,7 @@ func TestMongoManagementConcurrency(t *testing.T) {
 				preview, err := manager.Preview(ctx, "selected", accesspolicy.TokenLimits{})
 				require.NoError(t, err)
 				require.Equal(t, int64(2), preview.Before.Revision)
-				got, err := issuer.CreateUserAPIToken(ctx, &accessmanager.CreateUserAPITokenRequest{UserID: "selected"})
+				got, err := issuer.CreateUserAPIToken(policyIssuanceSession(ctx), &accessmanager.CreateUserAPITokenRequest{ActorID: "selected", UserID: "selected"})
 				require.ErrorIs(t, err, accessmanager.ErrPermanentAPITokenLimitReached)
 				require.Nil(t, got)
 			}
