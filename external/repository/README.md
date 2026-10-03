@@ -31,6 +31,8 @@ This helper is not a hard wall-clock deadline or a resource-authorization check.
 
 - `ExecuteReplaceOneCommandResult` retains `MatchedCount` and upsert results.
 - `ExecuteUpdateOneCommandResult` retains matched/modified counts.
+- `ExecuteFindOneAndUpdateCommandDecodeResult` atomically updates and decodes
+  one selected document image using the caller's collection codec registry.
 - `ExecuteDeleteOneCommandResult` retains `DeletedCount`.
 - `ExecuteCountDocuments`, `ExecuteFindCommand` and cursor mappers preserve native
   error causes underneath their existing repository error codes.
@@ -48,6 +50,45 @@ error, and a successful no-op need not increment `ModifiedCount`. The older
 error-only mutation helpers remain source-compatible; they cannot report CAS
 success. No methods were added to the existing `CommonOperations` interface.
 Map application errors after transaction retry decisions whenever possible.
+
+### Atomic update and selected document image
+
+Use `ExecuteFindOneAndUpdateCommandDecodeResult` when a domain must return the
+revision written by that operation. A separate update followed by a read can
+observe a later concurrent writer. Pass a non-nil pointer as the destination and
+include the expected revision and resource constraints in the filter:
+
+```go
+var updated Record
+err := repo.ExecuteFindOneAndUpdateCommandDecodeResult(
+    ctx, collection,
+    bson.M{"_id": recordID, "revision": expectedRevision},
+    bson.M{"$set": changes, "$inc": bson.M{"revision": 1}},
+    &updated,
+    options.FindOneAndUpdate().SetReturnDocument(options.After),
+)
+```
+
+`Record`, `changes` and revision policy belong to the calling domain. The helper
+passes options unchanged: by default MongoDB returns the **before** image, and
+upsert is off. `SetReturnDocument(options.After)` returns the **after** image.
+Projection, sort, update pipelines and explicit upsert retain their driver
+semantics. See the [MongoDB compound-operation documentation](https://www.mongodb.com/docs/drivers/go/current/fundamentals/crud/compound-operations/).
+
+Native errors, duplicate-key information and transaction labels are preserved.
+`mongo.ErrNoDocuments` can mean a missing match or stale revision; the domain
+decides its HTTP/error-map meaning. With an explicitly enabled **before-image
+upsert**, the same error can accompany a successful insert because no previous
+document existed. Do not interpret every error as proof that no write occurred.
+
+Nil/non-pointer destinations are rejected before driver work, but a valid pointer
+can still fail BSON decoding **after the write**. Discard partially decoded data.
+Return errors from transaction callbacks so the transaction owner can abort or
+retry; outside transactions, reconcile ambiguous writes instead of retrying them
+blindly. The helper does not invent an idempotency key or start a transaction.
+It uses the caller's session without substituting another client. No method was
+added to `CommonOperations` or `RepositoryHelper`; custom adapters can opt into
+this capability through a narrow interface without changing legacy adapters.
 
 The repository does not own schemas, revision fields, indexes, grant policy or
 retention. Explicit collections/databases must belong to the intended host

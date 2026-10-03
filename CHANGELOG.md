@@ -79,6 +79,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- An opt-in [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
+  returns the selected document image without a separate read. It preserves
+  native errors, caller sessions, collection codecs and driver options while
+  keeping automatic logs payload-free. Legacy repository interfaces are
+  unchanged; before-image upserts and decode failures can follow a successful
+  write, so callers must reconcile outcomes before retrying.
 - Opt-in [administrative token-policy management](external/accesspolicymanager/README.md)
   with strict JSON, preview ETags, create-only or revision-checked applies and
   write-time audit actors. The live administrator-session adapter rechecks current

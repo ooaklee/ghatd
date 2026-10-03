@@ -9,8 +9,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// ErrInvalidMongoOperation indicates a missing repository, collection, context
-// or callback. It is not a database outage and must not trigger a fallback store.
+// ErrInvalidMongoOperation indicates a missing repository, collection, context,
+// callback or required decode destination. It is not a database outage and must
+// not trigger a fallback store.
 var ErrInvalidMongoOperation = errors.New("repository/invalid-mongo-operation")
 
 // observeMongo logs only fixed operation and error-class metadata. Driver error
@@ -95,6 +96,38 @@ func (r *MongoDbRepository) ExecuteUpdateOneCommandResult(ctx context.Context, c
 	return mongoCommand(ctx, r.helper, "update_one", collection, func() (*mongo.UpdateResult, error) {
 		return collection.UpdateOne(ctx, filter, update, opts...)
 	})
+}
+
+// ExecuteFindOneAndUpdateCommandDecodeResult atomically updates one matching
+// document and decodes the selected image into result, a non-nil pointer. It
+// uses the caller's context, session and collection codec registry unchanged.
+// Options retain driver semantics: the default returns the pre-update image;
+// use SetReturnDocument(options.After) to obtain the exact post-update image.
+// Upsert is disabled unless explicitly requested by the caller.
+//
+// Errors retain native identity and labels, including mongo.ErrNoDocuments for
+// a missing match. A before-image upsert also returns mongo.ErrNoDocuments even
+// though it inserts a document. Decode, network and write-concern errors do not
+// prove the write was rolled back; discard any partially decoded result and
+// reconcile uncertain outcomes instead of blindly retrying. Within a managed
+// transaction, return the error so its owner can abort or retry appropriately.
+//
+// Nil and non-pointer destinations are rejected before writing, but this does
+// not prevalidate their BSON schema or custom decoder. Filters, updates, result
+// bytes and raw errors are excluded from automatic operation telemetry. Resource
+// authorization, revision filters and error-to-domain mapping belong to callers.
+func (r *MongoDbRepository) ExecuteFindOneAndUpdateCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter, update, result any, opts ...options.Lister[options.FindOneAndUpdateOptions]) error {
+	if r == nil || r.helper == nil || result == nil {
+		return ErrInvalidMongoOperation
+	}
+	destination := reflect.ValueOf(result)
+	if destination.Kind() != reflect.Pointer || destination.IsNil() {
+		return ErrInvalidMongoOperation
+	}
+	_, err := mongoCommand(ctx, r.helper, "find_one_and_update_decode", collection, func() (struct{}, error) {
+		return struct{}{}, collection.FindOneAndUpdate(ctx, filter, update, opts...).Decode(result)
+	})
+	return err
 }
 
 // ExecuteDeleteOneCommandResult retains DeletedCount so stale revisions or
