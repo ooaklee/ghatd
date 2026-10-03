@@ -79,6 +79,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Private contact conversations](external/contacter/README.md#conversations-and-email-integration-hooks)
+  support attributed, append-only administrator notes and recorded replies,
+  bounded keyset history and atomic request/provider-message deduplication.
+  Admin-session routes recheck live authority; trusted in-process email hooks
+  preserve threading metadata without connecting a provider or sending mail.
+  Existing contacts remain legacy snapshots and statistics are unchanged; the
+  paging index is an explicit migration. Public creation keeps its direct 201
+  receipt while explicitly excluding administrative notes, replies and links.
 - Configurable [session-probe responses](external/accessmanager/middleware/README.md#session-probe-response-policy)
   through middleware and starter composition. Preserve the default `/me` 202
   error envelope, or explicitly select an empty 202 or structured 401 for a

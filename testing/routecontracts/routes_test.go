@@ -55,7 +55,7 @@ func contracts(t *testing.T) []routeContract {
 	t.Helper()
 	var all []routeContract
 	require.NoError(t, json.Unmarshal(domainContractJSON, &all))
-	require.Len(t, all, 182)
+	require.Len(t, all, 184)
 	var authentication []routeContract
 	require.NoError(t, json.Unmarshal(accessmanagerContractJSON, &authentication))
 	require.Len(t, authentication, 37)

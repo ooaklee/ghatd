@@ -127,6 +127,12 @@ func (h *routeRecorder) GetChangelogItems(w http.ResponseWriter, _ *http.Request
 	h.record(w, "GetChangelogItems")
 }
 func (h *routeRecorder) GetComms(w http.ResponseWriter, _ *http.Request) { h.record(w, "GetComms") }
+func (h *routeRecorder) GetCommsConversation(w http.ResponseWriter, _ *http.Request) {
+	h.record(w, "GetCommsConversation")
+}
+func (h *routeRecorder) AppendCommsConversationEntry(w http.ResponseWriter, _ *http.Request) {
+	h.record(w, "AppendCommsConversationEntry")
+}
 func (h *routeRecorder) GetCommsStats(w http.ResponseWriter, _ *http.Request) {
 	h.record(w, "GetCommsStats")
 }

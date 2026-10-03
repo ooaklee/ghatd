@@ -207,6 +207,7 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/comments/{commentID}/votes", Operation: "usermanager.RemoveVisionCommentVote", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.RemoveVisionCommentVote)
 
 	usermanagerAdminRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.AdminSession, request.AdminOnlyMiddleware)
+	attachCommsConversationRoutes(usermanagerAdminRoutes, request.Handler)
 	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms", Operation: "usermanager.GetComms", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetComms)
 	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms/stats", Operation: "usermanager.GetCommsStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetCommsStats)
 	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms/{id}", Operation: "usermanager.UpdateComms", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateComms)

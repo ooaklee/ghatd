@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/common"
+	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
@@ -380,7 +381,11 @@ func (h *Handler) CreateComms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, newCommsResponse.Comms)
+	if newCommsResponse == nil || newCommsResponse.Comms == nil {
+		h.NewHTTPErrorResponse(w, contacter.ErrCommsConversationUnavailable)
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, newCommsResponse.Comms.CreationReceipt())
 }
 
 // GetComms handles the request to get a comms

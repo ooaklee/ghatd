@@ -1,5 +1,5 @@
-// Package contacter implements contact management functionality for managing
-// user contacts, addresses, and communication preferences.
+// Package contacter manages contact submissions and attributed administrative
+// conversations. Recording correspondence does not send mail or verify delivery.
 package contacter
 
 import (

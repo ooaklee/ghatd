@@ -470,3 +470,15 @@ func main() {
 	// ... set up and start the HTTP server with ghatdRouter
 }
 ```
+
+## Contact conversations
+
+The optional conversation manager port adds admin-session-only
+`GET` and `POST /api/v1/ums/comms/{id}/conversation`. It rechecks live administrator
+authority for both reading private history and appending an attributed note or
+recorded reply. Configure `WithAdministratorAuthorizer` in custom composition;
+the standard starter supplies it. No provider delivery is performed, and the
+existing public contact-creation response is unchanged.
+
+See the canonical [contacter conversation guide](../contacter/README.md#conversations-and-email-integration-hooks)
+for payloads, pagination, replay rules, storage migration and trusted email hooks.
