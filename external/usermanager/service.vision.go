@@ -66,17 +66,19 @@ func (s *Service) GetVisionConfig(ctx context.Context) (*vision.GetVisionConfigR
 // UpdateVision authorizes an owner or platform administrator, restricts the
 // mutation to descriptive fields, and enriches the result.
 func (s *Service) UpdateVision(ctx context.Context, req *vision.UpdateVisionRequest) (*GetVisionResponse, error) {
-	if s.VisionService == nil {
+	if s == nil || s.VisionService == nil {
 		return nil, ErrVisionServiceNotEnabled
 	}
-	if req == nil {
+	if req == nil || ctx == nil {
 		return nil, vision.ErrVisionInvalidPayload
 	}
-	requesterID := strings.TrimSpace(accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx))
-	if requesterID == "" {
+	requesterID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)
+	if requesterID == "" || strings.TrimSpace(requesterID) != requesterID || req.ActorID != requesterID {
 		return nil, ErrVisionEditForbidden
 	}
-	req.UpdatedByUserID = requesterID
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	current, err := s.VisionService.GetVisionByNanoID(
 		ctx,
@@ -86,14 +88,19 @@ func (s *Service) UpdateVision(ctx context.Context, req *vision.UpdateVisionRequ
 		return nil, err
 	}
 	if current == nil || current.Vision == nil ||
+		current.Vision.NanoID != req.NanoID ||
 		!visionViewerCanManage(ctx, current.Vision) {
 		return nil, ErrVisionEditForbidden
 	}
 
 	// Metadata is an internal extension surface and is intentionally excluded
 	// from the owner/admin descriptive edit route.
-	req.Metadata = nil
-	response, err := s.VisionService.UpdateVision(ctx, req)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	editable := *req
+	editable.Metadata = nil
+	response, err := s.VisionService.UpdateVision(ctx, &editable)
 	if err != nil {
 		return nil, err
 	}
@@ -115,11 +122,18 @@ func (s *Service) UpdateVisionStatus(ctx context.Context, req *vision.UpdateVisi
 // DeleteVision authorizes the owner or a platform administrator before
 // delegating permanent deletion.
 func (s *Service) DeleteVision(ctx context.Context, req *vision.DeleteVisionRequest) (*vision.DeleteVisionResponse, error) {
-	if s.VisionService == nil {
+	if s == nil || s.VisionService == nil {
 		return nil, ErrVisionServiceNotEnabled
 	}
-	if req == nil {
+	if req == nil || ctx == nil {
 		return nil, vision.ErrVisionNanoIDIsRequired
+	}
+	requesterID := accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)
+	if requesterID == "" || strings.TrimSpace(requesterID) != requesterID || req.ActorID != requesterID {
+		return nil, ErrVisionDeleteForbidden
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	current, err := s.VisionService.GetVisionByNanoID(
 		ctx,
@@ -129,8 +143,12 @@ func (s *Service) DeleteVision(ctx context.Context, req *vision.DeleteVisionRequ
 		return nil, err
 	}
 	if current == nil || current.Vision == nil ||
+		current.Vision.NanoID != req.NanoID ||
 		!visionViewerCanManage(ctx, current.Vision) {
 		return nil, ErrVisionDeleteForbidden
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return s.VisionService.DeleteVision(ctx, req)
 }
@@ -325,17 +343,20 @@ func projectVision(
 // visionViewerCanManage reports whether the authenticated viewer owns the
 // vision or is a platform administrator.
 func visionViewerCanManage(ctx context.Context, item *vision.Vision) bool {
-	if item == nil {
+	if ctx == nil || item == nil {
 		return false
 	}
 	viewerID := strings.TrimSpace(accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx))
 	if viewerID == "" {
 		return false
 	}
+	requester := accessmanagerhelpers.AcquireUserFrom(ctx)
+	if ctx.Value(accessmanagerhelpers.RequestorUserKey) != nil && (requester == nil || requester.GetUserId() != viewerID) {
+		return false
+	}
 	if item.CreatedByUserID == viewerID {
 		return true
 	}
-	requester := accessmanagerhelpers.AcquireUserFrom(ctx)
 	return requester != nil &&
 		requester.GetUserId() == viewerID &&
 		requester.IsAdmin()

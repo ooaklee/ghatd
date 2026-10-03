@@ -3,6 +3,8 @@ package vision
 import "errors"
 
 var (
+	// ErrVisionUnavailable indicates invalid wiring or an inconsistent adapter result.
+	ErrVisionUnavailable              = errors.New("vision/unavailable")
 	ErrVisionCommentNotFound          = errors.New(ErrMessageVisionCommentNotFound)
 	ErrVisionCommentMessageIsRequired = errors.New(ErrMessageVisionCommentMessageIsRequired)
 	ErrVisionConfigInvalid            = errors.New(ErrMessageVisionConfigInvalid)

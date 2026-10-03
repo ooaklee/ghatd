@@ -10,11 +10,17 @@ import (
 
 // MapRequestToCreateVisionRequest maps a create request.
 func MapRequestToCreateVisionRequest(request *http.Request, validator visionValidator) (*CreateVisionRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsed := &CreateVisionRequest{}
+	if request.Body == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsed); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
-	parsed.CreatedByUserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsed.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -48,7 +54,13 @@ func MapRequestToGetVisionByNanoIDRequest(request *http.Request, validator visio
 
 // MapRequestToUpdateVisionRequest maps a descriptive update.
 func MapRequestToUpdateVisionRequest(request *http.Request, validator visionValidator) (*UpdateVisionRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsed := &UpdateVisionRequest{}
+	if request.Body == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsed); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -57,7 +69,7 @@ func MapRequestToUpdateVisionRequest(request *http.Request, validator visionVali
 		return nil, err
 	}
 	parsed.NanoID = nanoID
-	parsed.UpdatedByUserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsed.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -66,7 +78,13 @@ func MapRequestToUpdateVisionRequest(request *http.Request, validator visionVali
 
 // MapRequestToUpdateVisionStatusRequest maps a roadmap transition.
 func MapRequestToUpdateVisionStatusRequest(request *http.Request, validator visionValidator) (*UpdateVisionStatusRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsed := &UpdateVisionStatusRequest{}
+	if request.Body == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsed); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -75,7 +93,7 @@ func MapRequestToUpdateVisionStatusRequest(request *http.Request, validator visi
 		return nil, err
 	}
 	parsed.NanoID = nanoID
-	parsed.UpdatedByUserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsed.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -85,7 +103,13 @@ func MapRequestToUpdateVisionStatusRequest(request *http.Request, validator visi
 // MapRequestToSetVisionVoteRequest maps a vote and always sources the user ID
 // from authenticated context.
 func MapRequestToSetVisionVoteRequest(request *http.Request, validator visionValidator) (*SetVisionVoteRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsed := &SetVisionVoteRequest{}
+	if request.Body == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsed); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -94,7 +118,7 @@ func MapRequestToSetVisionVoteRequest(request *http.Request, validator visionVal
 		return nil, err
 	}
 	parsed.NanoID = nanoID
-	parsed.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsed.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -103,13 +127,16 @@ func MapRequestToSetVisionVoteRequest(request *http.Request, validator visionVal
 
 // MapRequestToRemoveVisionVoteRequest maps vote removal.
 func MapRequestToRemoveVisionVoteRequest(request *http.Request, validator visionValidator) (*RemoveVisionVoteRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	nanoID, err := visionNanoIDFromRequest(request)
 	if err != nil {
 		return nil, err
 	}
 	parsed := &RemoveVisionVoteRequest{
-		NanoID: nanoID,
-		UserID: accessmanagerhelpers.AcquireFrom(request.Context()),
+		NanoID:  nanoID,
+		ActorID: accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context()),
 	}
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
@@ -119,7 +146,13 @@ func MapRequestToRemoveVisionVoteRequest(request *http.Request, validator vision
 
 // MapRequestToAddVisionCommentRequest maps a comment append.
 func MapRequestToAddVisionCommentRequest(request *http.Request, validator visionValidator) (*AddVisionCommentRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsed := &AddVisionCommentRequest{}
+	if request.Body == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsed); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -128,7 +161,7 @@ func MapRequestToAddVisionCommentRequest(request *http.Request, validator vision
 		return nil, err
 	}
 	parsed.NanoID = nanoID
-	parsed.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsed.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -137,7 +170,13 @@ func MapRequestToAddVisionCommentRequest(request *http.Request, validator vision
 
 // MapRequestToSetVisionCommentVoteRequest maps a nested comment vote.
 func MapRequestToSetVisionCommentVoteRequest(request *http.Request, validator visionValidator) (*SetVisionCommentVoteRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	parsed := &SetVisionCommentVoteRequest{}
+	if request.Body == nil {
+		return nil, ErrVisionInvalidPayload
+	}
 	if err := toolbox.DecodeRequestBody(request, parsed); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -151,7 +190,7 @@ func MapRequestToSetVisionCommentVoteRequest(request *http.Request, validator vi
 	}
 	parsed.NanoID = nanoID
 	parsed.CommentID = commentID
-	parsed.UserID = accessmanagerhelpers.AcquireFrom(request.Context())
+	parsed.ActorID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
 	}
@@ -160,6 +199,9 @@ func MapRequestToSetVisionCommentVoteRequest(request *http.Request, validator vi
 
 // MapRequestToRemoveVisionCommentVoteRequest maps nested comment vote removal.
 func MapRequestToRemoveVisionCommentVoteRequest(request *http.Request, validator visionValidator) (*RemoveVisionCommentVoteRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	nanoID, err := visionNanoIDFromRequest(request)
 	if err != nil {
 		return nil, err
@@ -171,7 +213,7 @@ func MapRequestToRemoveVisionCommentVoteRequest(request *http.Request, validator
 	parsed := &RemoveVisionCommentVoteRequest{
 		NanoID:    nanoID,
 		CommentID: commentID,
-		UserID:    accessmanagerhelpers.AcquireFrom(request.Context()),
+		ActorID:   accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context()),
 	}
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionInvalidPayload
@@ -181,11 +223,14 @@ func MapRequestToRemoveVisionCommentVoteRequest(request *http.Request, validator
 
 // MapRequestToDeleteVisionRequest maps a delete path NanoID.
 func MapRequestToDeleteVisionRequest(request *http.Request, validator visionValidator) (*DeleteVisionRequest, error) {
+	if err := validateVisionActorRequest(request); err != nil {
+		return nil, err
+	}
 	nanoID, err := visionNanoIDFromRequest(request)
 	if err != nil {
 		return nil, err
 	}
-	parsed := &DeleteVisionRequest{NanoID: nanoID}
+	parsed := &DeleteVisionRequest{NanoID: nanoID, ActorID: accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(request.Context())}
 	if err := validateParsedRequest(parsed, validator); err != nil {
 		return nil, ErrVisionNanoIDIsRequired
 	}

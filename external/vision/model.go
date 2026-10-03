@@ -56,7 +56,7 @@ func NewVision(req *CreateVisionRequest, config *VisionConfig) *Vision {
 	vision.Type = normaliseVisionType(req.Type)
 	vision.Description = strings.TrimSpace(req.Description)
 	vision.Metadata = req.Metadata
-	vision.CreatedByUserID = strings.TrimSpace(req.CreatedByUserID)
+	vision.CreatedByUserID = strings.TrimSpace(req.ActorID)
 	return vision
 }
 

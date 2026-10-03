@@ -173,6 +173,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** [Vision mutation commands](external/vision/README.md#actorid-migration)
+  use explicit `ActorID` fields, including deletion. HTTP mappers require verified
+  authentication; User Manager edits and deletion require agreement with the
+  current caller. Stored authorship and vote ownership are unchanged.
 - **Breaking:** [Pricer mutation commands](external/pricer/README.md#actorid-migration)
   use explicit `ActorID` fields instead of `UserID`. HTTP mappers require
   authenticated context and reject full plan/feature replacements. Trusted
@@ -288,6 +292,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Vision rejects contradictory caller context and invalid mutation dependencies
+  or selected-record results. Scalar edits and User Manager metadata filtering no
+  longer mutate caller-owned input. Native errors retain shared response mappings;
+  invalid create receipts cannot trigger automatic retries or leak diagnostics.
 - Pricer mutation boundaries reject contradictory actors, invalid wiring and
   inconsistent selected-record reads. Service normalization no longer changes
   caller-owned scalar history or cost IDs. Native errors retain shared reply

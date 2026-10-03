@@ -247,120 +247,77 @@ func TestVisionProjectionIdentifiesViewerAndEditCapability(t *testing.T) {
 	assert.True(t, adminResponse.Vision.CanDelete)
 }
 
-func TestVisionUpdateAllowsOwnerOrAdminAndRejectsOtherUsers(t *testing.T) {
-	title := "Updated title"
-	description := ""
-	item := &vision.Vision{
-		ID:              "vision-1",
-		NanoID:          "vision-nano",
-		Title:           "Original title",
-		Description:     "Original description",
-		CreatedByUserID: "owner-user",
+func TestVisionManagementAuthority(t *testing.T) {
+	for _, op := range []string{"update", "delete"} {
+		for _, tc := range []struct {
+			name, caller, actor string
+			admin               bool
+			allowed             bool
+		}{
+			{"owner", "owner", "owner", false, true}, {"admin", "admin", "admin", true, true},
+			{"nonowner", "other", "other", false, false}, {"conflicting owner", "other", "owner", false, false},
+			{"empty actor", "owner", "", false, false},
+			{"conflicting cached user", "owner", "owner", false, false},
+			{"foreign selected record", "owner", "owner", false, false},
+			{"bare context", "owner", "owner", false, false},
+			{"nil cached user", "owner", "owner", false, false},
+			{"padded context", " owner ", "owner", false, false},
+			{"padded actor", "owner", " owner ", false, false},
+			{"both padded", " owner ", " owner ", false, false},
+		} {
+			t.Run(op+"/"+tc.name, func(t *testing.T) {
+				item := &vision.Vision{ID: "vision-1", NanoID: "vision-nano", CreatedByUserID: "owner", Title: "Original", Description: "Original"}
+				raw := &mockVisionService{item: item}
+				s := usermanager.NewService(&usermanager.NewServiceRequest{UserService: &mockVisionUserService{}}).WithVisionService(raw)
+				user := &userv2.UniversalUser{ID: tc.caller, Roles: []string{userv2.UserRoleUser}}
+				if tc.admin {
+					user.Roles = []string{userv2.UserRoleAdmin}
+				}
+				ctx := authenticatedVisionContext(context.Background(), user)
+				if tc.name == "bare context" {
+					ctx = context.Background()
+				}
+				if tc.name == "nil cached user" {
+					ctx = accessmanagerhelpers.TransitUserWith(ctx, nil)
+				}
+				if tc.name == "conflicting cached user" {
+					ctx = accessmanagerhelpers.TransitUserWith(ctx, &userv2.UniversalUser{ID: "other"})
+				}
+				if tc.name == "foreign selected record" {
+					item.NanoID = "other"
+				}
+				title, description := "Updated", ""
+				if op == "update" {
+					req := &vision.UpdateVisionRequest{NanoID: "vision-nano", ActorID: tc.actor, Title: &title, Description: &description, Metadata: map[string]interface{}{"internal": "unchanged"}}
+					response, err := s.UpdateVision(ctx, req)
+					require.Equal(t, tc.actor, req.ActorID)
+					require.Equal(t, "unchanged", req.Metadata["internal"])
+					if !tc.allowed {
+						require.ErrorIs(t, err, usermanager.ErrVisionEditForbidden)
+						require.Nil(t, raw.updatedRequest)
+						return
+					}
+					require.NoError(t, err)
+					require.Equal(t, title, response.Vision.Title)
+					require.Empty(t, response.Vision.Description)
+					require.Nil(t, raw.updatedRequest.Metadata)
+					require.NotSame(t, req, raw.updatedRequest)
+				} else {
+					req := &vision.DeleteVisionRequest{NanoID: "vision-nano", ActorID: tc.actor}
+					response, err := s.DeleteVision(ctx, req)
+					require.Equal(t, tc.actor, req.ActorID)
+					if !tc.allowed {
+						require.ErrorIs(t, err, usermanager.ErrVisionDeleteForbidden)
+						require.False(t, raw.deleted)
+						return
+					}
+					require.NoError(t, err)
+					require.True(t, response.Deleted)
+					require.True(t, raw.deleted)
+				}
+			})
+		}
 	}
-	rawService := &mockVisionService{item: item}
-	users := map[string]userv2.UniversalUser{
-		"owner-user": {
-			ID:     "owner-user",
-			NanoID: "owner-nano",
-			Roles:  []string{userv2.UserRoleUser},
-		},
-	}
-	service := usermanager.NewService(&usermanager.NewServiceRequest{
-		UserService: &mockVisionUserService{users: users},
-	}).WithVisionService(rawService)
-
-	owner := users["owner-user"]
-	response, err := service.UpdateVision(
-		authenticatedVisionContext(context.Background(), &owner),
-		&vision.UpdateVisionRequest{
-			NanoID:          item.NanoID,
-			Title:           &title,
-			Description:     &description,
-			Metadata:        map[string]interface{}{"not": "owner editable"},
-			UpdatedByUserID: "owner-user",
-		},
-	)
-	require.NoError(t, err)
-	assert.Equal(t, title, response.Vision.Title)
-	assert.Empty(t, response.Vision.Description)
-	assert.Nil(t, rawService.updatedRequest.Metadata)
-
-	otherUser := userv2.UniversalUser{
-		ID:    "other-user",
-		Roles: []string{userv2.UserRoleUser},
-	}
-	_, err = service.UpdateVision(
-		authenticatedVisionContext(context.Background(), &otherUser),
-		&vision.UpdateVisionRequest{
-			NanoID:          item.NanoID,
-			Title:           &title,
-			UpdatedByUserID: "owner-user",
-		},
-	)
-	assert.ErrorIs(t, err, usermanager.ErrVisionEditForbidden)
-
-	admin := userv2.UniversalUser{
-		ID:    "admin-user",
-		Roles: []string{userv2.UserRoleAdmin},
-	}
-	_, err = service.UpdateVision(
-		authenticatedVisionContext(context.Background(), &admin),
-		&vision.UpdateVisionRequest{
-			NanoID:          item.NanoID,
-			Title:           &title,
-			UpdatedByUserID: admin.ID,
-		},
-	)
-	require.NoError(t, err)
-}
-
-func TestVisionDeleteAllowsOwnerOrAdminAndRejectsOtherUsers(t *testing.T) {
-	item := &vision.Vision{
-		ID:              "vision-1",
-		NanoID:          "vision-nano",
-		CreatedByUserID: "owner-user",
-	}
-	rawService := &mockVisionService{item: item}
-	service := usermanager.NewService(&usermanager.NewServiceRequest{
-		UserService: &mockVisionUserService{},
-	}).WithVisionService(rawService)
-	request := &vision.DeleteVisionRequest{NanoID: item.NanoID}
-
-	otherUser := &userv2.UniversalUser{
-		ID:    "other-user",
-		Roles: []string{userv2.UserRoleUser},
-	}
-	_, err := service.DeleteVision(
-		authenticatedVisionContext(context.Background(), otherUser),
-		request,
-	)
-	assert.ErrorIs(t, err, usermanager.ErrVisionDeleteForbidden)
-	assert.False(t, rawService.deleted)
-
-	owner := &userv2.UniversalUser{
-		ID:    "owner-user",
-		Roles: []string{userv2.UserRoleUser},
-	}
-	response, err := service.DeleteVision(
-		authenticatedVisionContext(context.Background(), owner),
-		request,
-	)
-	require.NoError(t, err)
-	assert.True(t, response.Deleted)
-	assert.True(t, rawService.deleted)
-
-	rawService.deleted = false
-	admin := &userv2.UniversalUser{
-		ID:    "admin-user",
-		Roles: []string{userv2.UserRoleAdmin},
-	}
-	response, err = service.DeleteVision(
-		authenticatedVisionContext(context.Background(), admin),
-		request,
-	)
-	require.NoError(t, err)
-	assert.True(t, response.Deleted)
-	assert.True(t, rawService.deleted)
 }
 
 func authenticatedVisionContext(ctx context.Context, user *userv2.UniversalUser) context.Context {
@@ -451,9 +408,9 @@ func TestVisionAdminOperationsReturnSafeConfigAndEnrichedProjection(t *testing.T
 	updateResponse, err := service.UpdateVisionStatus(
 		context.Background(),
 		&vision.UpdateVisionStatusRequest{
-			NanoID:          item.NanoID,
-			Status:          vision.VisionStatusUnderReview,
-			UpdatedByUserID: "admin-user",
+			NanoID:  item.NanoID,
+			Status:  vision.VisionStatusUnderReview,
+			ActorID: "admin-user",
 		},
 	)
 	require.NoError(t, err)
@@ -466,7 +423,7 @@ func TestVisionAdminOperationsReturnSafeConfigAndEnrichedProjection(t *testing.T
 	}
 	deleteResponse, err := service.DeleteVision(
 		authenticatedVisionContext(context.Background(), admin),
-		&vision.DeleteVisionRequest{NanoID: item.NanoID},
+		&vision.DeleteVisionRequest{NanoID: item.NanoID, ActorID: admin.ID},
 	)
 	require.NoError(t, err)
 	assert.True(t, deleteResponse.Deleted)

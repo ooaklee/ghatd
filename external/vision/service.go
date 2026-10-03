@@ -6,7 +6,6 @@ import (
 
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/toolbox"
-	"go.uber.org/zap"
 )
 
 // VisionRepository defines the persistence surface used by Service.
@@ -49,6 +48,12 @@ func NewService(visionRepository VisionRepository, configs ...*VisionConfig) (*S
 
 // CreateVision creates feedback or a bug report with no roadmap status.
 func (s *Service) CreateVision(ctx context.Context, req *CreateVisionRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/vision", "create-vision")
 	if req == nil || normaliseVisionTitle(req.Title) == "" {
 		return nil, ErrVisionTitleIsRequired
@@ -56,20 +61,27 @@ func (s *Service) CreateVision(ctx context.Context, req *CreateVisionRequest) (*
 	if !s.Config.IsValidType(req.Type) {
 		return nil, ErrVisionInvalidType
 	}
-	if strings.TrimSpace(req.CreatedByUserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 
 	vision := NewVision(req, s.Config)
 	vision.GenerateID().GenerateNanoID().SetCreatedAtTimeToNow()
+	// Pin identity before the adapter call: a custom adapter may return or mutate
+	// its input pointer, which must not redefine the expected receipt identity.
+	expectedID, expectedNanoID := vision.ID, vision.NanoID
 
 	created, err := s.VisionRepository.CreateVision(ctx, vision)
 	if err != nil {
-		logger.Error("vision-create-failed", zap.String("vision-id", vision.ID), zap.Error(err))
+		logger.Error("vision-create-failed")
 		return nil, err
 	}
-	created.SetConfig(s.Config)
-	return &VisionResponse{Vision: created}, nil
+	if created == nil || created.ID != expectedID || created.NanoID != expectedNanoID {
+		return nil, ErrVisionUnavailable
+	}
+	result := *created
+	result.SetConfig(s.Config)
+	return &VisionResponse{Vision: &result}, nil
 }
 
 // GetVisionByNanoID retrieves a full vision, including comments.
@@ -112,10 +124,16 @@ func (s *Service) GetVisions(ctx context.Context, req *GetVisionsRequest) (*GetV
 
 // UpdateVision updates descriptive fields without changing type or status.
 func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
-	if strings.TrimSpace(req.UpdatedByUserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 	if req.Title == nil && req.Description == nil && req.Metadata == nil {
@@ -139,7 +157,7 @@ func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*
 	if req.Metadata != nil {
 		current.Metadata = req.Metadata
 	}
-	current.UpdatedByUserID = strings.TrimSpace(req.UpdatedByUserID)
+	current.UpdatedByUserID = strings.TrimSpace(req.ActorID)
 	current.SetUpdatedAtTimeToNow()
 
 	if err = s.VisionRepository.UpdateVision(ctx, current); err != nil {
@@ -150,10 +168,16 @@ func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*
 
 // UpdateVisionStatus validates and persists a roadmap transition.
 func (s *Service) UpdateVisionStatus(ctx context.Context, req *UpdateVisionStatusRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
-	if strings.TrimSpace(req.UpdatedByUserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 
@@ -164,7 +188,7 @@ func (s *Service) UpdateVisionStatus(ctx context.Context, req *UpdateVisionStatu
 	if err = current.UpdateStatus(req.Status); err != nil {
 		return nil, err
 	}
-	current.UpdatedByUserID = strings.TrimSpace(req.UpdatedByUserID)
+	current.UpdatedByUserID = strings.TrimSpace(req.ActorID)
 
 	if err = s.VisionRepository.UpdateVisionStatus(
 		ctx,
@@ -180,10 +204,16 @@ func (s *Service) UpdateVisionStatus(ctx context.Context, req *UpdateVisionStatu
 
 // SetVisionVote atomically sets or changes the requestor's vote.
 func (s *Service) SetVisionVote(ctx context.Context, req *SetVisionVoteRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 	if !isValidVisionVote(req.Vote) {
@@ -200,7 +230,7 @@ func (s *Service) SetVisionVote(ctx context.Context, req *SetVisionVoteRequest) 
 		return nil, err
 	}
 	now := newUpdatedAt()
-	if err := s.VisionRepository.SetVisionVote(ctx, current.ID, strings.TrimSpace(req.UserID), req.Vote, now); err != nil {
+	if err := s.VisionRepository.SetVisionVote(ctx, current.ID, strings.TrimSpace(req.ActorID), req.Vote, now); err != nil {
 		return nil, err
 	}
 	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
@@ -208,17 +238,23 @@ func (s *Service) SetVisionVote(ctx context.Context, req *SetVisionVoteRequest) 
 
 // RemoveVisionVote removes the requestor from both vote buckets.
 func (s *Service) RemoveVisionVote(ctx context.Context, req *RemoveVisionVoteRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 	current, err := s.getVisionByNanoID(ctx, req.NanoID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.VisionRepository.RemoveVisionVote(ctx, current.ID, strings.TrimSpace(req.UserID), newUpdatedAt()); err != nil {
+	if err := s.VisionRepository.RemoveVisionVote(ctx, current.ID, strings.TrimSpace(req.ActorID), newUpdatedAt()); err != nil {
 		return nil, err
 	}
 	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
@@ -227,10 +263,16 @@ func (s *Service) RemoveVisionVote(ctx context.Context, req *RemoveVisionVoteReq
 // AddVisionComment appends a raw user comment. Mention tokens are stored
 // verbatim and are intentionally not resolved in the core package.
 func (s *Service) AddVisionComment(ctx context.Context, req *AddVisionCommentRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 	if strings.TrimSpace(req.Message) == "" {
@@ -245,7 +287,7 @@ func (s *Service) AddVisionComment(ctx context.Context, req *AddVisionCommentReq
 		return nil, ErrVisionCommentNotFound
 	}
 
-	comment := NewVisionComment(req.UserID, req.Message, parentCommentID)
+	comment := NewVisionComment(req.ActorID, req.Message, parentCommentID)
 	if err := s.VisionRepository.AddVisionComment(ctx, current.ID, comment); err != nil {
 		return nil, err
 	}
@@ -254,13 +296,19 @@ func (s *Service) AddVisionComment(ctx context.Context, req *AddVisionCommentReq
 
 // SetVisionCommentVote atomically sets or changes the requestor's vote on a comment.
 func (s *Service) SetVisionCommentVote(ctx context.Context, req *SetVisionCommentVoteRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
 	if strings.TrimSpace(req.CommentID) == "" {
 		return nil, ErrVisionCommentNotFound
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 	if !isValidVisionVote(req.Vote) {
@@ -281,7 +329,7 @@ func (s *Service) SetVisionCommentVote(ctx context.Context, req *SetVisionCommen
 		ctx,
 		current.ID,
 		strings.TrimSpace(req.CommentID),
-		strings.TrimSpace(req.UserID),
+		strings.TrimSpace(req.ActorID),
 		req.Vote,
 		newUpdatedAt(),
 	); err != nil {
@@ -292,13 +340,19 @@ func (s *Service) SetVisionCommentVote(ctx context.Context, req *SetVisionCommen
 
 // RemoveVisionCommentVote removes the requestor from both comment vote buckets.
 func (s *Service) RemoveVisionCommentVote(ctx context.Context, req *RemoveVisionCommentVoteRequest) (*VisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
 	if strings.TrimSpace(req.CommentID) == "" {
 		return nil, ErrVisionCommentNotFound
 	}
-	if strings.TrimSpace(req.UserID) == "" {
+	if strings.TrimSpace(req.ActorID) == "" {
 		return nil, ErrVisionUserIDIsRequired
 	}
 
@@ -313,7 +367,7 @@ func (s *Service) RemoveVisionCommentVote(ctx context.Context, req *RemoveVision
 		ctx,
 		current.ID,
 		strings.TrimSpace(req.CommentID),
-		strings.TrimSpace(req.UserID),
+		strings.TrimSpace(req.ActorID),
 		newUpdatedAt(),
 	); err != nil {
 		return nil, err
@@ -323,6 +377,12 @@ func (s *Service) RemoveVisionCommentVote(ctx context.Context, req *RemoveVision
 
 // DeleteVision deletes a vision addressed by public NanoID.
 func (s *Service) DeleteVision(ctx context.Context, req *DeleteVisionRequest) (*DeleteVisionResponse, error) {
+	if err := s.validateEntry(ctx, req); err != nil {
+		return nil, err
+	}
+	if !visionActorMatchesContext(ctx, req.ActorID) {
+		return nil, ErrVisionUserIDIsRequired
+	}
 	if req == nil || strings.TrimSpace(req.NanoID) == "" {
 		return nil, ErrVisionNanoIDIsRequired
 	}
@@ -344,14 +404,26 @@ func (s *Service) GetVisionConfig(context.Context) (*GetVisionConfigResponse, er
 	return &GetVisionConfigResponse{Config: s.Config.toCapabilities()}, nil
 }
 
-// getVisionByNanoID retrieves a vision and attaches this service's configuration.
+// getVisionByNanoID validates the selected record and detaches scalar state before
+// attaching configuration or applying edits. Nested values remain read-only here;
+// custom repositories must not mutate shared maps or slices returned to callers.
 func (s *Service) getVisionByNanoID(ctx context.Context, nanoID string) (*Vision, error) {
+	if err := s.validateEntry(ctx, nanoID); err != nil {
+		return nil, err
+	}
 	vision, err := s.VisionRepository.GetVisionByNanoID(ctx, strings.TrimSpace(nanoID))
 	if err != nil {
 		return nil, err
 	}
-	vision.SetConfig(s.Config)
-	return vision, nil
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if vision == nil || strings.TrimSpace(vision.ID) == "" || vision.NanoID != strings.TrimSpace(nanoID) {
+		return nil, ErrVisionUnavailable
+	}
+	result := *vision
+	result.SetConfig(s.Config)
+	return &result, nil
 }
 
 // newUpdatedAt returns the current UTC timestamp in the platform format.

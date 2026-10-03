@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 )
 
 type mockVisionHTTPService struct{}
@@ -50,26 +48,25 @@ func (*mockVisionHTTPService) GetVisionConfig(context.Context) (*GetVisionConfig
 }
 
 func TestHandlerCreateVision(t *testing.T) {
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/visions",
-		bytes.NewBufferString(`{"title":"Better search","type":"feedback"}`),
-	)
-	req = req.WithContext(accessmanagerhelpers.TransitWith(req.Context(), "user-1"))
-	rec := httptest.NewRecorder()
-
-	NewHandler(&mockVisionHTTPService{}, nil).CreateVision(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusCreated, rec.Body.String())
-	}
-}
-
-func TestHandlerRejectsInvalidPayload(t *testing.T) {
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/visions", bytes.NewBufferString(`{`))
-
-	NewHandler(&mockVisionHTTPService{}, nil).CreateVision(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	for _, tc := range []struct {
+		name, body    string
+		authenticated bool
+		status        int
+	}{
+		{"valid", `{"title":"Better search","type":"feedback"}`, true, http.StatusCreated},
+		{"invalid payload", `{`, true, http.StatusBadRequest},
+		{"missing authentication", `{"title":"Better search","type":"feedback"}`, false, http.StatusUnauthorized},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/visions", bytes.NewBufferString(tc.body))
+			if tc.authenticated {
+				req = req.WithContext(authenticatedActor(req.Context(), "user-1"))
+			}
+			rec := httptest.NewRecorder()
+			NewHandler(&mockVisionHTTPService{}, nil).CreateVision(rec, req)
+			if rec.Code != tc.status {
+				t.Fatalf("status=%d want=%d body=%s", rec.Code, tc.status, rec.Body.String())
+			}
+		})
 	}
 }

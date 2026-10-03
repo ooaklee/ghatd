@@ -77,6 +77,12 @@ for the exact source changes and error behavior.
 
 ## Transport binding
 
+Vision's nine mutation commands use `ActorID`, including deletion. Stored
+authorship and vote ownership remain distinct from request identity. Its lower
+service accepts trusted in-process calls but never derives permissions from an
+actor string; User Manager retains owner/administrator authorization. See the
+[Vision migration](../../external/vision/README.md#actorid-migration).
+
 Pricer's eight mutation commands also use `ActorID`. Its HTTP mappers require
 explicit authentication and reject full plan/feature replacement objects.
 Trusted in-process replacements must agree with the selected resource and retain

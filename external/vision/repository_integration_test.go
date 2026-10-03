@@ -2,62 +2,88 @@ package vision_test
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/benweissmann/memongo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	accesshelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/repository"
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
 	"github.com/ooaklee/ghatd/external/vision"
 )
 
+// This single stateful lifecycle deliberately stays sequential: later assertions
+// inspect votes, replies and roadmap changes applied to the same persisted record.
 func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
-	ctx := context.Background()
-	mongoServer, err := memongo.StartWithOptions(&memongo.Options{MongoVersion: "7.0.14"})
-	if err != nil {
-		t.Skipf("skipping integration test: unable to start memongo: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+	mongoURI := strings.TrimSpace(os.Getenv("GHATD_TEST_MONGO_URI"))
+	if mongoURI == "" {
+		mongoServer, err := memongo.StartWithOptions(&memongo.Options{MongoVersion: "7.0.14"})
+		if err != nil {
+			t.Skipf("no explicit Mongo URI and memongo unavailable: %v", err)
+		}
+		t.Cleanup(mongoServer.Stop)
+		mongoURI = mongoServer.URI()
 	}
-	t.Cleanup(mongoServer.Stop)
 
 	dbName := memongo.RandomDatabase()
-	mongoHandler, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(mongoServer.URI(), dbName))
+	mongoHandler, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(mongoURI, dbName))
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = mongoHandler.Close(ctx) })
+	t.Cleanup(func() {
+		cleanupCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		db, err := mongoHandler.GetDatabase(cleanupCtx, dbName)
+		if err == nil {
+			err = db.Drop(cleanupCtx)
+		}
+		assert.NoError(t, err)
+		assert.NoError(t, mongoHandler.Close(cleanupCtx))
+	})
 
 	store := repository.NewMongoDbRepositoryWithDefaults(mongoHandler, dbName)
 	service, err := vision.NewService(vision.NewRepository(store))
 	require.NoError(t, err)
 
 	created, err := service.CreateVision(ctx, &vision.CreateVisionRequest{
-		Title:           "Better search",
-		Type:            vision.VisionTypeFeedback,
-		Description:     "Search every record",
-		CreatedByUserID: "user-1",
+		Title:       "Better search",
+		Type:        vision.VisionTypeFeedback,
+		Description: "Search every record",
+		ActorID:     "user-1",
 	})
 	require.NoError(t, err)
 	assert.False(t, created.Vision.IsRoadmapItem())
+	verified := accesshelpers.TransitAuthenticatedWith(accesshelpers.TransitWith(ctx, "user-2"), true)
+	_, err = service.SetVisionVote(verified, &vision.SetVisionVoteRequest{NanoID: created.Vision.NanoID, ActorID: "forged", Vote: vision.VisionVoteUpvote})
+	require.ErrorIs(t, err, vision.ErrVisionUserIDIsRequired)
+	unchanged, err := service.GetVisionByNanoID(ctx, &vision.GetVisionByNanoIDRequest{NanoID: created.Vision.NanoID})
+	require.NoError(t, err)
+	assert.Empty(t, unchanged.Vision.Voters[vision.VisionVoteUpvote])
 
 	voted, err := service.SetVisionVote(ctx, &vision.SetVisionVoteRequest{
-		NanoID: created.Vision.NanoID, UserID: "user-2", Vote: vision.VisionVoteUpvote,
+		NanoID: created.Vision.NanoID, ActorID: "user-2", Vote: vision.VisionVoteUpvote,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"user-2"}, voted.Vision.Voters[vision.VisionVoteUpvote])
 
 	voted, err = service.SetVisionVote(ctx, &vision.SetVisionVoteRequest{
-		NanoID: created.Vision.NanoID, UserID: "user-2", Vote: vision.VisionVoteDownvote,
+		NanoID: created.Vision.NanoID, ActorID: "user-2", Vote: vision.VisionVoteDownvote,
 	})
 	require.NoError(t, err)
 	assert.Empty(t, voted.Vision.Voters[vision.VisionVoteUpvote])
 	assert.Equal(t, []string{"user-2"}, voted.Vision.Voters[vision.VisionVoteDownvote])
 
 	commented, err := service.AddVisionComment(ctx, &vision.AddVisionCommentRequest{
-		NanoID: created.Vision.NanoID, UserID: "user-3", Message: "Ask <@nano-user>",
+		NanoID: created.Vision.NanoID, ActorID: "user-3", Message: "Ask <@nano-user>",
 	})
 	require.NoError(t, err)
 	require.Len(t, commented.Vision.Comments, 1)
@@ -67,7 +93,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	commented, err = service.AddVisionComment(ctx, &vision.AddVisionCommentRequest{
 		NanoID:          created.Vision.NanoID,
 		ParentCommentID: rootCommentID,
-		UserID:          "user-4",
+		ActorID:         "user-4",
 		Message:         "I agree with <@nano-user>",
 	})
 	require.NoError(t, err)
@@ -78,7 +104,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	commented, err = service.SetVisionCommentVote(ctx, &vision.SetVisionCommentVoteRequest{
 		NanoID:    created.Vision.NanoID,
 		CommentID: rootCommentID,
-		UserID:    "user-5",
+		ActorID:   "user-5",
 		Vote:      vision.VisionVoteUpvote,
 	})
 	require.NoError(t, err)
@@ -87,7 +113,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	commented, err = service.SetVisionCommentVote(ctx, &vision.SetVisionCommentVoteRequest{
 		NanoID:    created.Vision.NanoID,
 		CommentID: rootCommentID,
-		UserID:    "user-5",
+		ActorID:   "user-5",
 		Vote:      vision.VisionVoteDownvote,
 	})
 	require.NoError(t, err)
@@ -95,7 +121,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	assert.Equal(t, []string{"user-5"}, commented.Vision.Comments[0].Voters[vision.VisionVoteDownvote])
 
 	roadmapped, err := service.UpdateVisionStatus(ctx, &vision.UpdateVisionStatusRequest{
-		NanoID: created.Vision.NanoID, Status: vision.VisionStatusUnderReview, UpdatedByUserID: "admin-1",
+		NanoID: created.Vision.NanoID, Status: vision.VisionStatusUnderReview, ActorID: "admin-1",
 	})
 	require.NoError(t, err)
 	assert.True(t, roadmapped.Vision.IsRoadmapItem())
@@ -108,7 +134,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	assert.Empty(t, list.Visions[0].Comments, "list projection should omit comments")
 	assert.Equal(t, 2, list.Visions[0].CommentCount)
 
-	deleted, err := service.DeleteVision(ctx, &vision.DeleteVisionRequest{NanoID: created.Vision.NanoID})
+	deleted, err := service.DeleteVision(ctx, &vision.DeleteVisionRequest{NanoID: created.Vision.NanoID, ActorID: "admin-1"})
 	require.NoError(t, err)
 	assert.True(t, deleted.Deleted)
 }

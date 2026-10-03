@@ -8,6 +8,7 @@ import (
 
 // VisionErrorMap maps vision failures to public API errors.
 var VisionErrorMap = reply.ErrorManifest{
+	ErrVisionUnavailable:             {Title: "Vision Unavailable", Detail: "Unable to complete the vision operation at this time.", StatusCode: http.StatusServiceUnavailable, Code: "VIS0-018"},
 	ErrVisionError:                   {Title: "Bad Request", Detail: "The vision request is invalid.", StatusCode: http.StatusBadRequest, Code: "VIS0-001"},
 	ErrVisionTitleIsRequired:         {Title: "Missing Vision Title", Detail: "Please provide a title.", StatusCode: http.StatusBadRequest, Code: "VIS0-002"},
 	ErrVisionInvalidType:             {Title: "Invalid Vision Type", Detail: "Please provide a supported vision type.", StatusCode: http.StatusBadRequest, Code: "VIS0-003"},

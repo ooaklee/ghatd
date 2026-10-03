@@ -115,10 +115,10 @@ func mustVisionService(t *testing.T, repo VisionRepository, config ...*VisionCon
 func createTestVision(t *testing.T, service *Service) *Vision {
 	t.Helper()
 	response, err := service.CreateVision(context.Background(), &CreateVisionRequest{
-		Title:           " Better search ",
-		Type:            VisionTypeFeedback,
-		Description:     "Search all records",
-		CreatedByUserID: "user-1",
+		Title:       " Better search ",
+		Type:        VisionTypeFeedback,
+		Description: "Search all records",
+		ActorID:     "user-1",
 	})
 	if err != nil {
 		t.Fatalf("CreateVision() error = %v", err)
@@ -149,9 +149,9 @@ func TestServiceStatusTransitionsPromoteToRoadmap(t *testing.T) {
 	item := createTestVision(t, service)
 
 	response, err := service.UpdateVisionStatus(context.Background(), &UpdateVisionStatusRequest{
-		NanoID:          item.NanoID,
-		Status:          VisionStatusUnderReview,
-		UpdatedByUserID: "admin-1",
+		NanoID:  item.NanoID,
+		Status:  VisionStatusUnderReview,
+		ActorID: "admin-1",
 	})
 	if err != nil {
 		t.Fatalf("UpdateVisionStatus() error = %v", err)
@@ -161,9 +161,9 @@ func TestServiceStatusTransitionsPromoteToRoadmap(t *testing.T) {
 	}
 
 	_, err = service.UpdateVisionStatus(context.Background(), &UpdateVisionStatusRequest{
-		NanoID:          item.NanoID,
-		Status:          VisionStatusInProgress,
-		UpdatedByUserID: "admin-1",
+		NanoID:  item.NanoID,
+		Status:  VisionStatusInProgress,
+		ActorID: "admin-1",
 	})
 	if !errors.Is(err, ErrVisionInvalidStatusTransition) {
 		t.Fatalf("invalid transition error = %v", err)
@@ -171,18 +171,19 @@ func TestServiceStatusTransitionsPromoteToRoadmap(t *testing.T) {
 }
 
 func TestServiceUpdateVisionChangesOnlyRequestedDescriptiveFields(t *testing.T) {
-	service := mustVisionService(t, &memoryVisionRepository{})
+	repo := &memoryVisionRepository{}
+	service := mustVisionService(t, repo)
 	item := createTestVision(t, service)
-	item.Description = "Original description"
-	item.Status = VisionStatusUnderReview
+	repo.item.Description = "Original description"
+	repo.item.Status = VisionStatusUnderReview
 	title := "  Updated title  "
 	description := ""
 
 	response, err := service.UpdateVision(context.Background(), &UpdateVisionRequest{
-		NanoID:          item.NanoID,
-		Title:           &title,
-		Description:     &description,
-		UpdatedByUserID: "user-1",
+		NanoID:      item.NanoID,
+		Title:       &title,
+		Description: &description,
+		ActorID:     "user-1",
 	})
 	if err != nil {
 		t.Fatalf("UpdateVision() error = %v", err)
@@ -204,9 +205,9 @@ func TestServiceUpdateVisionRejectsEmptyTitle(t *testing.T) {
 	title := "   "
 
 	_, err := service.UpdateVision(context.Background(), &UpdateVisionRequest{
-		NanoID:          item.NanoID,
-		Title:           &title,
-		UpdatedByUserID: "user-1",
+		NanoID:  item.NanoID,
+		Title:   &title,
+		ActorID: "user-1",
 	})
 	if !errors.Is(err, ErrVisionTitleIsRequired) {
 		t.Fatalf("UpdateVision() error = %v, want %v", err, ErrVisionTitleIsRequired)
@@ -220,14 +221,14 @@ func TestServiceVotingHonoursConfigAndMovesBuckets(t *testing.T) {
 	item := createTestVision(t, service)
 
 	_, err := service.SetVisionVote(context.Background(), &SetVisionVoteRequest{
-		NanoID: item.NanoID, UserID: "user-2", Vote: VisionVoteDownvote,
+		NanoID: item.NanoID, ActorID: "user-2", Vote: VisionVoteDownvote,
 	})
 	if !errors.Is(err, ErrVisionDownvotingDisabled) {
 		t.Fatalf("downvote error = %v", err)
 	}
 
 	response, err := service.SetVisionVote(context.Background(), &SetVisionVoteRequest{
-		NanoID: item.NanoID, UserID: "user-2", Vote: VisionVoteUpvote,
+		NanoID: item.NanoID, ActorID: "user-2", Vote: VisionVoteUpvote,
 	})
 	if err != nil {
 		t.Fatalf("upvote error = %v", err)
@@ -237,7 +238,7 @@ func TestServiceVotingHonoursConfigAndMovesBuckets(t *testing.T) {
 	}
 
 	commented, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
-		NanoID: item.NanoID, UserID: "user-3", Message: "same",
+		NanoID: item.NanoID, ActorID: "user-3", Message: "same",
 	})
 	if err != nil {
 		t.Fatalf("AddVisionComment() error = %v", err)
@@ -245,7 +246,7 @@ func TestServiceVotingHonoursConfigAndMovesBuckets(t *testing.T) {
 	_, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{
 		NanoID:    item.NanoID,
 		CommentID: commented.Vision.Comments[0].ID,
-		UserID:    "user-2",
+		ActorID:   "user-2",
 		Vote:      VisionVoteDownvote,
 	})
 	if !errors.Is(err, ErrVisionDownvotingDisabled) {
@@ -259,7 +260,7 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	message := "Please check with <@nano-user>"
 
 	root, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
-		NanoID: item.NanoID, UserID: "user-2", Message: message,
+		NanoID: item.NanoID, ActorID: "user-2", Message: message,
 	})
 	if err != nil {
 		t.Fatalf("AddVisionComment() error = %v", err)
@@ -275,7 +276,7 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	response, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
 		NanoID:          item.NanoID,
 		ParentCommentID: rootCommentID,
-		UserID:          "user-3",
+		ActorID:         "user-3",
 		Message:         "Agreed, <@nano-user>",
 	})
 	if err != nil {
@@ -292,7 +293,7 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	}
 
 	response, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{
-		NanoID: item.NanoID, CommentID: rootCommentID, UserID: "user-4", Vote: VisionVoteUpvote,
+		NanoID: item.NanoID, CommentID: rootCommentID, ActorID: "user-4", Vote: VisionVoteUpvote,
 	})
 	if err != nil {
 		t.Fatalf("SetVisionCommentVote() error = %v", err)
@@ -302,7 +303,7 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	}
 
 	_, err = service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
-		NanoID: item.NanoID, ParentCommentID: "missing", UserID: "user-3", Message: "orphan",
+		NanoID: item.NanoID, ParentCommentID: "missing", ActorID: "user-3", Message: "orphan",
 	})
 	if !errors.Is(err, ErrVisionCommentNotFound) {
 		t.Fatalf("missing parent error = %v", err)

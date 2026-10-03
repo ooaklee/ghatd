@@ -16,6 +16,50 @@ The package deliberately keeps user data at arm's length:
 Each Vision has an internal UUID for persistence and a public NanoID for API
 requests and shareable links. HTTP routes accept only the public NanoID.
 
+## ActorID migration
+
+All nine mutation commands now carry an explicit `ActorID`. For create, update,
+status, vote and comment commands it replaces request fields previously named
+`CreatedByUserID`, `UpdatedByUserID` or `UserID`. Deletion also requires `ActorID`.
+Update typed callers when adopting this breaking Go API change. Stored authorship,
+vote ownership and comment user IDs remain unchanged; no data migration is needed.
+
+HTTP mappers bind actors only from explicitly authenticated context. Anonymous
+bookkeeping IDs and ID-only context are insufficient. Actors have `json:"-"` and
+no query/path tag, while Vision NanoIDs and comment IDs remain route-owned.
+Authentication adapters must verify credentials before publishing context; see
+[request identity](../../docs/how-to/request-identity.md).
+
+The lower Vision service rejects missing actors and contradictory published
+identity, including mismatched cached users. Bare-context in-process calls are
+trusted integrations: callers must authenticate and authorize their workflow.
+An actor ID is not a permission. Existing administrator routes and User Manager's
+owner/administrator checks remain authoritative. User Manager update/delete
+requests must agree with the verified caller; descriptive edits copy the request
+before excluding internal metadata rather than modifying the caller's input.
+User Manager update/delete do not accept bare-context calls; use an authorized
+lower-domain workflow for trusted background operations. Identity comparisons are
+exact: padded actor IDs are rejected rather than normalized into another identity.
+
+Mutation entry guards reject nil requests/context, cancellation and missing
+dependencies. Invalid adapter receipts and missing/inconsistent selected-record
+results return `ErrVisionUnavailable` (`VIS0-018`, 503); native dependency errors
+retain their identity for shared reply maps and host overrides. Existing
+`VIS0-006` authentication failures and other wire codes are unchanged.
+
+Scalar records are copied before configuration or mutation, so a failed update
+cannot change an adapter's shared scalar snapshot. Nested metadata, voters and
+comments are not deep-cloned and remain read-only to the service; custom adapters
+must not mutate shared nested values. This does not add transactions, revision
+checks or matched-count write receipts. Concurrent owner/lifecycle changes and
+uncertain write outcomes still require separate persistence handling; do not
+automatically retry a write merely because its confirmation failed.
+
+For explicit Mongo integration verification, set `GHATD_TEST_MONGO_URI` to a
+disposable test server. The lifecycle test uses a unique database and drops only
+that database during cleanup. Without that setting it attempts an embedded Mongo
+process and may skip if one cannot start. A configured but unreachable URI fails.
+
 ## Model
 
 `Vision.Type` supports `bugs` and `feedback`. New items have an empty status.
