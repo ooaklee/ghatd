@@ -74,6 +74,8 @@ func TestVisionReadRoutesUseOptionalAuthAndWritesRemainStrict(t *testing.T) {
 			AttachRoutes(&AttachRoutesRequest{
 				Router:  r,
 				Handler: &mockUsermanagerVisionRouteHandler{called: &called},
+				// The complete registry must be valid, including unexercised groups.
+				ActiveValidApiTokenOrJWTMiddleware: func(next http.Handler) http.Handler { return next },
 				RateLimitOrActiveMiddleware: func(next http.Handler) http.Handler {
 					return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						access = "optional"
@@ -93,6 +95,9 @@ func TestVisionReadRoutesUseOptionalAuthAndWritesRemainStrict(t *testing.T) {
 					})
 				},
 			})
+			if err := r.ValidateRoutePolicies(); err != nil {
+				t.Fatalf("invalid route fixture: %v", err)
+			}
 
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(test.method, test.path, nil)

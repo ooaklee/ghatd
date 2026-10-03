@@ -22,13 +22,13 @@ type AttachRoutesRequest struct {
 	Handler policyHandler
 }
 
-// AttachRoutes attaches policy handler to corresponding
-// routes on router
+// AttachRoutes registers public policy documents in the shared inventory.
+// Public routes still participate in registry validation and any authorizer;
+// hosts must validate after all attachments and before serving.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	policyRoutes := httpRouter.PathPrefix("/api/v1/policies").Subrouter()
-	policyRoutes.HandleFunc("", request.Handler.GetPolicies).Methods(http.MethodGet, http.MethodOptions)
-	policyRoutes.HandleFunc("/{policyName}", request.Handler.GetPolicyByName).Methods(http.MethodGet, http.MethodOptions)
+	policyRoutes := request.Router.NewRouteGroup("/api/v1/policies", router.Public, nil)
+	policyRoutes.Handle(router.RouteDefinition{Path: "", Operation: "policy.GetPolicies", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPolicies)
+	policyRoutes.Handle(router.RouteDefinition{Path: "/{policyName}", Operation: "policy.GetPolicyByName", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPolicyByName)
 
 }

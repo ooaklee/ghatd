@@ -159,6 +159,18 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- Domain HTTP attachments now use the [shared route registry](external/router/README.md#coverage-and-explicit-raw-route-boundaries)
+  for billing, content, groups, policy documents, pricing, users, user workflows,
+  visions, the blueprint, SEO and communications. Paths, method order, middleware
+  selection and legacy OPTIONS precedence are preserved. The unreachable later
+  admin copy of the user-manager member lookup was removed, without changing the
+  earlier reachable route or its service-level membership checks.
+- **Compatibility:** migrated attachments require their authentication and
+  optional-auth/rate-limit adapters. Missing adapters invalidate the registry,
+  including public descriptors; hosts must reject startup on validation failure.
+  Starter v0 now returns registry validation errors. Custom compositions must
+  call validation after all attachments. SEO/communications expose explicit
+  administrator-session-or-API selection; their default remains admin session.
 - **Breaking:** credential-management and logout-other-sessions routes require
   the live active-session middleware. The mixed API-token/JWT route field is
   retained but ignored; missing session middleware returns 503. See the

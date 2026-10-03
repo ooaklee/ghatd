@@ -15,22 +15,33 @@ type AttachRoutesRequest struct {
 	// Handler valid contacter handler
 	Handler *Handler
 
-	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
+	// AdminOnlyMiddleware must authenticate and authorize an administrator.
+	// Missing middleware invalidates the registry instead of exposing statistics.
 	AdminOnlyMiddleware mux.MiddlewareFunc
+	// AdminAccess is AdminSession (also the empty default) or AdminSessionOrAPI.
+	// It must match the enforcing middleware. Other modes invalidate registration;
+	// declaring an access mode does not authenticate or authorize callers.
+	AdminAccess router.AccessMode
 }
 
-// AttachRoutes attaches contacter handler to corresponding routes on router
+// AttachRoutes registers public capability discovery and protected statistics.
+// Hosts must check ValidateRoutePolicies after all route attachment and before
+// serving; an invalid registry denies every descriptor-backed route.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
-
 	// Public capability discovery. This exposes labels and accepted values only;
 	// comms records and statistics remain protected below.
-	httpRouter.HandleFunc("/api/v1/comms/types", request.Handler.GetAvailableCommsTypes).Methods(http.MethodGet, http.MethodOptions)
+	public := request.Router.NewRouteGroup("/api/v1/comms", router.Public, nil)
+	public.Handle(router.RouteDefinition{Path: "/types", Operation: "contacter.GetAvailableCommsTypes", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetAvailableCommsTypes)
 
 	// Admin-only routes for comms management
-	commsAdminOnlyRoutes := httpRouter.PathPrefix("/api/v1/comms").Subrouter()
-	commsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
-	if request.AdminOnlyMiddleware != nil {
-		commsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
+	access := request.AdminAccess
+	switch access {
+	case "":
+		access = router.AdminSession
+	case router.AdminSession, router.AdminSessionOrAPI:
+	default:
+		access = "" // Unknown mode triggers the registry's closed backstop.
 	}
+	admin := request.Router.NewRouteGroup("/api/v1/comms", access, request.AdminOnlyMiddleware)
+	admin.Handle(router.RouteDefinition{Path: "/stats", Operation: "contacter.GetCommsStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetCommsStats)
 }

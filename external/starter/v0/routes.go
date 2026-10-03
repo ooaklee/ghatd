@@ -53,7 +53,9 @@ type AttachDefaultRoutesRequest struct {
 // using the handlers and middleware from Stack. It validates that the request,
 // router, stack, and handlers are non-nil. It also validates that every
 // non-skipped route group has a non-nil handler and that any middleware needed
-// by remaining groups is present.
+// by remaining groups is present. It returns registry validation failures,
+// including descriptors attached before this call. Hosts must validate again
+// after adding any further routes and refuse to serve an invalid registry.
 //
 // AttachDefaultRoutes only attaches API routes - it does not attach SPA
 // routes, auth verify/CORS middleware, or router bootstrap. Those remain
@@ -180,7 +182,7 @@ func AttachDefaultRoutes(r *AttachDefaultRoutesRequest) error {
 		})
 	}
 
-	return nil
+	return r.Router.ValidateRoutePolicies()
 }
 
 // newRouteGroupSkipSet deduplicates the skip list and validates each group is known.

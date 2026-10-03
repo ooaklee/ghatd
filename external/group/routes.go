@@ -55,64 +55,56 @@ type AttachRoutesRequest struct {
 	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
 	AdminOnlyMiddleware mux.MiddlewareFunc
 
-	// AuthenticatedMiddleware middleware used for authenticated users
+	// AuthenticatedMiddleware is retained for source compatibility; this
+	// attachment registers only administrator-session routes and does not use it.
 	AuthenticatedMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes attaches group handler to corresponding routes on router
+// AttachRoutes registers administrator-session group management routes.
+// AdminOnlyMiddleware is required; validate the registry before serving.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
 	// Admin-only routes for full group management
-	groupsAdminOnlyRoutes := httpRouter.PathPrefix(APIGroupsV1Prefix).Subrouter()
-	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("", request.Handler.GetGroups).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/users/{userID}", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetGroupsStats).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/configs", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/validate-name", request.Handler.ValidateGroupName).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/repairs/members", request.Handler.RepairInvalidMembers).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/invitations/{memberID}", request.Handler.GetGroupsAwaitingAnswerForInvitationsByMemberID).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.GetGroupByID).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/descendants", request.Handler.GetGroupDescendants).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/nano/{groupNanoID}", request.Handler.GetGroupByNanoID).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes := request.Router.NewRouteGroup(APIGroupsV1Prefix, router.AdminSession, request.AdminOnlyMiddleware)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "", Operation: "group.CreateGroup", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateGroup)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "", Operation: "group.GetGroups", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroups)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/users/{userID}", Operation: "group.GetGroupsByUserID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupsByUserID)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/stats", Operation: "group.GetGroupsStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupsStats)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/configs", Operation: "group.GetGroupsConfig", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupsConfig)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/validate-name", Operation: "group.ValidateGroupName", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ValidateGroupName)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/repairs/members", Operation: "group.RepairInvalidMembers", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RepairInvalidMembers)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/invitations/{memberID}", Operation: "group.GetGroupsAwaitingAnswerForInvitationsByMemberID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupsAwaitingAnswerForInvitationsByMemberID)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}", Operation: "group.GetGroupByID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupByID)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/lineage", Operation: "group.GetGroupLineage", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupLineage)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/descendants", Operation: "group.GetGroupDescendants", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupDescendants)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}", Operation: "group.UpdateGroup", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateGroup)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}", Operation: "group.DeleteGroup", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteGroup)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/nano/{groupNanoID}", Operation: "group.GetGroupByNanoID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupByNanoID)
 
 	// Group status operations
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/archive", request.Handler.ArchiveGroup).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/restore", request.Handler.RestoreGroup).Methods(http.MethodPost, http.MethodOptions)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/archive", Operation: "group.ArchiveGroup", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.ArchiveGroup)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/restore", Operation: "group.RestoreGroup", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RestoreGroup)
 
 	// Member management
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members", request.Handler.GetGroupMembers).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members", request.Handler.AddMember).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/invitations", request.Handler.InviteUser).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/invitations", request.Handler.UninviteUser).Methods(http.MethodDelete, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/invitations/accept", request.Handler.AcceptInvite).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/invitations/reject", request.Handler.RejectInvite).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members/{memberID}", request.Handler.RemoveMember).Methods(http.MethodDelete, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/members/{memberID}/role", request.Handler.UpdateMemberRole).Methods(http.MethodPut, http.MethodOptions)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/members", Operation: "group.GetGroupMembers", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupMembers)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/members", Operation: "group.AddMember", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.AddMember)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/invitations", Operation: "group.InviteUser", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.InviteUser)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/invitations", Operation: "group.UninviteUser", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.UninviteUser)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/invitations/accept", Operation: "group.AcceptInvite", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.AcceptInvite)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/invitations/reject", Operation: "group.RejectInvite", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RejectInvite)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/members/{memberID}", Operation: "group.RemoveMember", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.RemoveMember)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/members/{memberID}/role", Operation: "group.UpdateMemberRole", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateMemberRole)
 
 	// Ownership management
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/owner", request.Handler.UpdateOwner).Methods(http.MethodPut, http.MethodOptions)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/owner", Operation: "group.UpdateOwner", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateOwner)
 
 	// Auto-join/auto-invite configuration
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-join/enable", request.Handler.EnableGroupAutoJoinByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-join/disable", request.Handler.DisableGroupAutoJoinByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-invite/enable", request.Handler.EnableGroupAutoInviteByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/auto-invite/disable", request.Handler.DisableGroupAutoInviteByEmailDomain).Methods(http.MethodPost, http.MethodOptions)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/auto-join/enable", Operation: "group.EnableGroupAutoJoinByEmailDomain", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.EnableGroupAutoJoinByEmailDomain)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/auto-join/disable", Operation: "group.DisableGroupAutoJoinByEmailDomain", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.DisableGroupAutoJoinByEmailDomain)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/auto-invite/enable", Operation: "group.EnableGroupAutoInviteByEmailDomain", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.EnableGroupAutoInviteByEmailDomain)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/auto-invite/disable", Operation: "group.DisableGroupAutoInviteByEmailDomain", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.DisableGroupAutoInviteByEmailDomain)
 
 	// Statistics
-	groupsAdminOnlyRoutes.HandleFunc("/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{groupID}/stats", Operation: "group.GetGroupStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupStats)
 
-	if request.AdminOnlyMiddleware != nil {
-		groupsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
-	}
-
-	// Authenticated routes (if needed for self-service operations)
-	// Uncomment and customise as needed:
-	// groupsAuthenticatedRoutes := httpRouter.PathPrefix(APIGroupsV1Prefix).Subrouter()
-	// groupsAuthenticatedRoutes.HandleFunc("/my-groups", request.Handler.GetMyGroups).Methods(http.MethodGet, http.MethodOptions)
-	// groupsAuthenticatedRoutes.Use(request.AuthenticatedMiddleware)
 }

@@ -44,7 +44,8 @@ type AttachRoutesRequest struct {
 	// Handler valid billingmanager handler
 	Handler billingmanagerHandler
 
-	// MiddlewareAdminOnlyMiddleware middleware used to lock endpoints down to admin only
+	// MiddlewareAdminOnlyMiddleware is retained for source compatibility;
+	// this attachment does not consume it.
 	MiddlewareAdminOnlyMiddleware mux.MiddlewareFunc
 
 	// MiddlewareActiveValidApiTokenOrJWTMiddleware is middleware that is used to lock
@@ -52,30 +53,30 @@ type AttachRoutesRequest struct {
 	MiddlewareActiveValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes attaches billingmanager handler to corresponding
-// routes on router
+// AttachRoutes registers pricing, provider-proof and active-account endpoints.
+// Handlers own resource authorization and webhook proof checks. Hosts must
+// validate the registry before serving; a missing active adapter fails closed.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	billingmanagerPricingOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix + "/pricing").Subrouter()
-	billingmanagerPricingOpenRoutes.HandleFunc("/plans", request.Handler.GetPricingPlans).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerPricingOpenRoutes.HandleFunc("/plans/{slug}", request.Handler.GetPricePlanBySlug).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerPricingOpenRoutes.HandleFunc("/features", request.Handler.GetPricingFeatures).Methods(http.MethodGet, http.MethodOptions)
+	billingmanagerPricingOpenRoutes := request.Router.NewRouteGroup(APIBillingManagerV1Prefix+"/pricing", router.Public, nil)
+	billingmanagerPricingOpenRoutes.Handle(router.RouteDefinition{Path: "/plans", Operation: "billingmanager.GetPricingPlans", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPricingPlans)
+	billingmanagerPricingOpenRoutes.Handle(router.RouteDefinition{Path: "/plans/{slug}", Operation: "billingmanager.GetPricePlanBySlug", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPricePlanBySlug)
+	billingmanagerPricingOpenRoutes.Handle(router.RouteDefinition{Path: "/features", Operation: "billingmanager.GetPricingFeatures", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPricingFeatures)
 
-	billingmanagerOpenRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
-	billingmanagerOpenRoutes.HandleFunc("/billings/{providerName}/webhooks", request.Handler.ProcessBillingProviderWebhooks).Methods(http.MethodPost, http.MethodOptions)
+	// The provider handler, not route metadata or a user session, must verify
+	// the webhook signature before processing events.
+	billingmanagerOpenRoutes := request.Router.NewRouteGroup(APIBillingManagerV1Prefix, router.Public, nil)
+	billingmanagerOpenRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/webhooks", Operation: "billingmanager.ProcessBillingProviderWebhooks", Methods: []string{http.MethodPost, http.MethodOptions}, Access: router.HandlerVerified, Policy: router.RoutePolicy{Proof: "provider-webhook-signature"}}, request.Handler.ProcessBillingProviderWebhooks)
 
-	billingmanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIBillingManagerV1Prefix).Subrouter()
+	billingmanagerActiveOnlyRoutes := request.Router.NewRouteGroup(APIBillingManagerV1Prefix, router.ActiveSessionOrAPI, request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
 	if checkoutHandler, ok := request.Handler.(billingmanagerCheckoutHandler); ok {
-		billingmanagerActiveOnlyRoutes.HandleFunc("/billings/{providerName}/checkout", checkoutHandler.ProcessBillingProviderCheckout).Methods(http.MethodPost, http.MethodOptions)
+		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/checkout", Operation: "billingmanager.ProcessBillingProviderCheckout", Methods: []string{http.MethodPost, http.MethodOptions}}, checkoutHandler.ProcessBillingProviderCheckout)
 	}
 	if portalHandler, ok := request.Handler.(billingmanagerPortalHandler); ok {
-		billingmanagerActiveOnlyRoutes.HandleFunc("/billings/{providerName}/portal", portalHandler.ProcessBillingProviderPortal).Methods(http.MethodPost, http.MethodOptions)
+		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/portal", Operation: "billingmanager.ProcessBillingProviderPortal", Methods: []string{http.MethodPost, http.MethodOptions}}, portalHandler.ProcessBillingProviderPortal)
 	}
-	billingmanagerActiveOnlyRoutes.HandleFunc("/billings/users/{userId}/events", request.Handler.GetUserBillingEvents).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/subscription", request.Handler.GetUserSubscriptionStatus).Methods(http.MethodGet, http.MethodOptions)
-	billingmanagerActiveOnlyRoutes.HandleFunc("/users/{userId}/details/billing", request.Handler.GetUserBillingDetail).Methods(http.MethodGet, http.MethodOptions)
-	if request.MiddlewareActiveValidApiTokenOrJWTMiddleware != nil {
-		billingmanagerActiveOnlyRoutes.Use(request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
-	}
+	billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/users/{userId}/events", Operation: "billingmanager.GetUserBillingEvents", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserBillingEvents)
+	billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/users/{userId}/details/subscription", Operation: "billingmanager.GetUserSubscriptionStatus", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserSubscriptionStatus)
+	billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/users/{userId}/details/billing", Operation: "billingmanager.GetUserBillingDetail", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserBillingDetail)
+
 }

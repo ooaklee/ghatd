@@ -35,31 +35,28 @@ type AttachRoutesRequest struct {
 	// Handler valid pricer handler.
 	Handler PriceHandler
 
-	// AdminOnlyMiddleware middleware used to lock write endpoints down to admin only
+	// AdminOnlyMiddleware verifies an administrator session for every endpoint,
+	// including reads. A missing adapter invalidates the registry.
 	AdminOnlyMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes attaches pricer handler to corresponding routes on router.
+// AttachRoutes registers pricing administration, preserving UUID-before-slug
+// and OPTIONS matching order. Validate the registry before serving.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	groupsAdminOnlyRoutes := httpRouter.PathPrefix(APIPricesV1Prefix).Subrouter()
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}/publish", request.Handler.PublishPricePlan).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}/archive", request.Handler.ArchivePricePlan).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{id:[0-9a-fA-F-]{36}}", request.Handler.GetPricePlanByID).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{slug:[A-Za-z0-9][A-Za-z0-9_-]*}", request.Handler.GetPricePlanBySlug).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}", request.Handler.UpdatePricePlan).Methods(http.MethodPut, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans/{id}", request.Handler.DeletePricePlan).Methods(http.MethodDelete, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans", request.Handler.GetPricePlans).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/plans", request.Handler.CreatePricePlan).Methods(http.MethodPost, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/validate-slug", request.Handler.ValidatePriceSlug).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/features/{id}", request.Handler.UpdateFeature).Methods(http.MethodPut, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/features/{id}", request.Handler.DeleteFeature).Methods(http.MethodDelete, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/features", request.Handler.GetFeatures).Methods(http.MethodGet, http.MethodOptions)
-	groupsAdminOnlyRoutes.HandleFunc("/features", request.Handler.CreateFeature).Methods(http.MethodPost, http.MethodOptions)
-
-	if request.AdminOnlyMiddleware != nil {
-		groupsAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
-	}
+	groupsAdminOnlyRoutes := request.Router.NewRouteGroup(APIPricesV1Prefix, router.AdminSession, request.AdminOnlyMiddleware)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans/{id}/publish", Operation: "pricer.PublishPricePlan", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.PublishPricePlan)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans/{id}/archive", Operation: "pricer.ArchivePricePlan", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.ArchivePricePlan)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans/{id:[0-9a-fA-F-]{36}}", Operation: "pricer.GetPricePlanByID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPricePlanByID)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans/{slug:[A-Za-z0-9][A-Za-z0-9_-]*}", Operation: "pricer.GetPricePlanBySlug", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPricePlanBySlug)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans/{id}", Operation: "pricer.UpdatePricePlan", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdatePricePlan)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans/{id}", Operation: "pricer.DeletePricePlan", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeletePricePlan)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans", Operation: "pricer.GetPricePlans", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetPricePlans)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/plans", Operation: "pricer.CreatePricePlan", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreatePricePlan)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/validate-slug", Operation: "pricer.ValidatePriceSlug", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ValidatePriceSlug)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/features/{id}", Operation: "pricer.UpdateFeature", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateFeature)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/features/{id}", Operation: "pricer.DeleteFeature", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteFeature)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/features", Operation: "pricer.GetFeatures", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetFeatures)
+	groupsAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/features", Operation: "pricer.CreateFeature", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateFeature)
 
 }

@@ -49,36 +49,34 @@ type AttachRoutesRequest struct {
 	AdminOnlyMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes attaches user handler to corresponding routes on router
+// AttachRoutes registers administrator-session user management routes.
+// AdminOnlyMiddleware is required; validate the registry before serving.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
 	// Admin-only routes for full user management
-	usersAdminOnlyRoutes := httpRouter.PathPrefix(APIUsersV2Prefix).Subrouter()
-	usersAdminOnlyRoutes.HandleFunc("", request.Handler.CreateUser).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/stats", request.Handler.GetUserStats).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/configs", request.Handler.GetUserConfigs).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}", request.Handler.UpdateUser).Methods(http.MethodPatch, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}", request.Handler.DeleteUser).Methods(http.MethodDelete, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/nano/{nanoID}", request.Handler.GetUserByNanoID).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/email/{email}", request.Handler.GetUserByEmail).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/bulk/status", request.Handler.BulkUpdateUsersStatus).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/profile", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/micro", request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/status", request.Handler.UpdateUserStatus).Methods(http.MethodPatch, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/roles", request.Handler.AddUserRole).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/roles", request.Handler.RemoveUserRole).Methods(http.MethodDelete, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/verify/email", request.Handler.VerifyUserEmail).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/unverify/email", request.Handler.UnverifyUserEmail).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/verify/phone", request.Handler.VerifyUserPhone).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/recordings/login", request.Handler.RecordUserLogin).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/extensions", request.Handler.SetUserExtension).Methods(http.MethodPost, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/extensions/{extensionKey}", request.Handler.GetUserExtension).Methods(http.MethodGet, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/personal-info", request.Handler.UpdateUserPersonalInfo).Methods(http.MethodPatch, http.MethodOptions)
-	usersAdminOnlyRoutes.HandleFunc("/{userID}/validate", request.Handler.ValidateUser).Methods(http.MethodGet, http.MethodOptions)
-	if request.AdminOnlyMiddleware != nil {
-		usersAdminOnlyRoutes.Use(request.AdminOnlyMiddleware)
-	}
+	usersAdminOnlyRoutes := request.Router.NewRouteGroup(APIUsersV2Prefix, router.AdminSession, request.AdminOnlyMiddleware)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "", Operation: "user.CreateUser", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateUser)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "", Operation: "user.GetUsers", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUsers)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/stats", Operation: "user.GetUserStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserStats)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/configs", Operation: "user.GetUserConfigs", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserConfigs)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}", Operation: "user.GetUserByID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserByID)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}", Operation: "user.UpdateUser", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateUser)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}", Operation: "user.DeleteUser", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteUser)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/nano/{nanoID}", Operation: "user.GetUserByNanoID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserByNanoID)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/email/{email}", Operation: "user.GetUserByEmail", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserByEmail)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/bulk/status", Operation: "user.BulkUpdateUsersStatus", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.BulkUpdateUsersStatus)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/profile", Operation: "user.GetUserProfile", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserProfile)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/micro", Operation: "user.GetUserMicroProfile", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserMicroProfile)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/status", Operation: "user.UpdateUserStatus", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateUserStatus)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/roles", Operation: "user.AddUserRole", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.AddUserRole)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/roles", Operation: "user.RemoveUserRole", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.RemoveUserRole)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/verify/email", Operation: "user.VerifyUserEmail", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.VerifyUserEmail)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/unverify/email", Operation: "user.UnverifyUserEmail", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.UnverifyUserEmail)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/verify/phone", Operation: "user.VerifyUserPhone", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.VerifyUserPhone)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/recordings/login", Operation: "user.RecordUserLogin", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RecordUserLogin)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/extensions", Operation: "user.SetUserExtension", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.SetUserExtension)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/extensions/{extensionKey}", Operation: "user.GetUserExtension", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserExtension)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/personal-info", Operation: "user.UpdateUserPersonalInfo", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateUserPersonalInfo)
+	usersAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/{userID}/validate", Operation: "user.ValidateUser", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ValidateUser)
+
 }

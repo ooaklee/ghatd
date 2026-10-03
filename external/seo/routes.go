@@ -21,27 +21,41 @@ type sitemapHandler interface {
 
 // AttachRoutesRequest holds everything needed to attach SEO routes.
 type AttachRoutesRequest struct {
-	Router              *router.Router
-	Handler             sitemapHandler
+	// Router records the public sitemap and protected administration inventory.
+	Router *router.Router
+	// Handler owns sitemap operations; route metadata does not authorize storage.
+	Handler sitemapHandler
+	// AdminOnlyMiddleware must authenticate and authorize an administrator.
+	// Missing middleware invalidates the registry rather than exposing these routes.
 	AdminOnlyMiddleware mux.MiddlewareFunc
+	// AdminAccess declares the supplied middleware's credential boundary. Empty
+	// means AdminSession; AdminSessionOrAPI explicitly permits the host's admin
+	// API-token adapter. Any other value invalidates registration. This metadata
+	// never substitutes for enforcing middleware.
+	AdminAccess router.AccessMode
 }
 
-// AttachRoutes attaches sitemap handler routes to the router.
+// AttachRoutes preserves sitemap paths, methods and registration order while
+// registering their access modes. Hosts must check ValidateRoutePolicies after
+// attaching all routes and before serving; an invalid registry fails closed.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
+	public := request.Router.NewRouteGroup(PublicSitemapPath, router.Public, nil)
+	public.Handle(router.RouteDefinition{Path: "", Operation: "seo.GetSitemap", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetSitemap)
 
-	httpRouter.HandleFunc(PublicSitemapPath, request.Handler.GetSitemap).Methods(http.MethodGet, http.MethodOptions)
-
-	adminRoutes := httpRouter.PathPrefix(APISEOPrefix).Subrouter()
-	adminRoutes.HandleFunc("/sitemap-items", request.Handler.CreateSitemapItem).Methods(http.MethodPost, http.MethodOptions)
-	adminRoutes.HandleFunc("/sitemap-items", request.Handler.GetSitemapItems).Methods(http.MethodGet, http.MethodOptions)
-	adminRoutes.HandleFunc("/sitemap-items", request.Handler.UpdateSitemapItemByUri).Methods(http.MethodPatch, http.MethodOptions)
-	adminRoutes.HandleFunc("/sitemap-items", request.Handler.DeleteEntriesWithUriRegex).Methods(http.MethodDelete, http.MethodOptions)
-	adminRoutes.HandleFunc("/sitemap-items/batch", request.Handler.MassSitemapItemCreationByBatch).Methods(http.MethodPost, http.MethodOptions)
-	adminRoutes.HandleFunc("/sitemap.xml/generate", request.Handler.GenerateSitemap).Methods(http.MethodPost, http.MethodOptions)
-	adminRoutes.HandleFunc("/sitemap.xml/download", request.Handler.DownloadSitemapByPath).Methods(http.MethodGet, http.MethodOptions)
-
-	if request.AdminOnlyMiddleware != nil {
-		adminRoutes.Use(request.AdminOnlyMiddleware)
+	access := request.AdminAccess
+	switch access {
+	case "":
+		access = router.AdminSession
+	case router.AdminSession, router.AdminSessionOrAPI:
+	default:
+		access = "" // Unknown mode triggers the registry's closed backstop.
 	}
+	adminRoutes := request.Router.NewRouteGroup(APISEOPrefix, access, request.AdminOnlyMiddleware)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap-items", Operation: "seo.CreateSitemapItem", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateSitemapItem)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap-items", Operation: "seo.GetSitemapItems", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetSitemapItems)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap-items", Operation: "seo.UpdateSitemapItemByUri", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateSitemapItemByUri)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap-items", Operation: "seo.DeleteEntriesWithUriRegex", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteEntriesWithUriRegex)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap-items/batch", Operation: "seo.MassSitemapItemCreationByBatch", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.MassSitemapItemCreationByBatch)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap.xml/generate", Operation: "seo.GenerateSitemap", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.GenerateSitemap)
+	adminRoutes.Handle(router.RouteDefinition{Path: "/sitemap.xml/download", Operation: "seo.DownloadSitemapByPath", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.DownloadSitemapByPath)
 }

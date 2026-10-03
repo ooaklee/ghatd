@@ -15,6 +15,51 @@ import (
 	"github.com/ooaklee/ghatd/external/router"
 )
 
+func TestCommsAdminCredentialConfiguration(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		access  router.AccessMode
+		missing bool
+		want    router.AccessMode
+	}{
+		{"default session", "", false, router.AdminSession},
+		{"explicit session", router.AdminSession, false, router.AdminSession},
+		{"explicit API or session", router.AdminSessionOrAPI, false, router.AdminSessionOrAPI},
+		{"API mode still requires middleware", router.AdminSessionOrAPI, true, ""},
+		{"public downgrade", router.Public, false, ""},
+		{"proof downgrade", router.HandlerVerified, false, ""},
+		{"member downgrade", router.ActiveSessionOrAPI, false, ""},
+		{"unknown mode", "mistyped", false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := router.NewRouter(nil, nil)
+			var evaluated router.AccessMode
+			require.NoError(t, r.SetRouteAuthorizer(func(ctx context.Context, req *http.Request, def router.RouteDefinition) error {
+				evaluated = def.Access
+				return router.ErrRouteDenied // Stop before domain work; tests admission metadata.
+			}))
+			var admin mux.MiddlewareFunc = func(next http.Handler) http.Handler { return next }
+			if tc.missing {
+				admin = nil
+			}
+			contacter.AttachRoutes(&contacter.AttachRoutesRequest{Router: r, Handler: contacter.NewHandler(&routesMockContacterService{}, &routesMockValidator{}), AdminOnlyMiddleware: admin, AdminAccess: tc.access})
+			recorder := httptest.NewRecorder()
+			r.GetRouter().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/comms/stats", nil))
+			if tc.want == "" {
+				require.ErrorIs(t, r.ValidateRoutePolicies(), router.ErrRouteConfiguration)
+				require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+				require.Empty(t, evaluated)
+			} else {
+				require.NoError(t, r.ValidateRoutePolicies())
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Equal(t, tc.want, evaluated)
+			}
+		})
+	}
+}
+
 const (
 	testCommsStatsEndpoint = "/api/v1/comms/stats"
 	testCommsTypesEndpoint = "/api/v1/comms/types"
@@ -22,6 +67,7 @@ const (
 
 type routesMockContacterService struct {
 	getCommsStatsFunc func(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error)
+	typesCalled       bool
 }
 
 func (m *routesMockContacterService) CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error) {
@@ -44,6 +90,7 @@ func (m *routesMockContacterService) GetCommsStats(ctx context.Context, req *con
 }
 
 func (m *routesMockContacterService) GetAvailableCommsTypes(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
+	m.typesCalled = true
 	return &contacter.GetAvailableCommsTypesResponse{CommsTypes: contacter.DefaultCommsTypeMap()}, nil
 }
 
@@ -64,10 +111,36 @@ func TestAttachRoutes_CommsStatsRouteAndAdminMiddleware(t *testing.T) {
 	tests := []struct {
 		name                string
 		headerValue         string
+		method              string
+		missingMiddleware   bool
+		policyDenied        bool
 		serviceErr          error
 		expectStatus        int
 		expectServiceCalled bool
 	}{
+		{
+			name:              "Failure - missing middleware is not public",
+			missingMiddleware: true,
+			expectStatus:      http.StatusServiceUnavailable,
+		},
+		{
+			name:         "Failure - policy denies after admin middleware",
+			headerValue:  "true",
+			policyDenied: true,
+			expectStatus: http.StatusForbidden,
+		},
+		{
+			name:                "Success - OPTIONS retains admin protection and handler",
+			headerValue:         "true",
+			method:              http.MethodOptions,
+			expectStatus:        http.StatusOK,
+			expectServiceCalled: true,
+		},
+		{
+			name:         "Failure - OPTIONS cannot bypass admin middleware",
+			method:       http.MethodOptions,
+			expectStatus: http.StatusForbidden,
+		},
 		{
 			name:                "Success - admin request reaches handler",
 			headerValue:         "true",
@@ -107,9 +180,22 @@ func TestAttachRoutes_CommsStatsRouteAndAdminMiddleware(t *testing.T) {
 
 			h := contacter.NewHandler(svc, &routesMockValidator{})
 			r := router.NewRouter(nil, nil)
+			middlewareCalled, policyCalled := false, false
+			require.NoError(t, r.SetRouteAuthorizer(func(ctx context.Context, request *http.Request, definition router.RouteDefinition) error {
+				policyCalled = true
+				require.True(t, middlewareCalled)
+				require.Equal(t, testCommsStatsEndpoint, definition.Path)
+				require.Equal(t, "contacter.GetCommsStats", definition.Operation)
+				require.Equal(t, router.AdminSession, definition.Access)
+				if tt.policyDenied {
+					return router.ErrRouteDenied
+				}
+				return nil
+			}))
 
-			adminOnly := func(next http.Handler) http.Handler {
+			var adminOnly mux.MiddlewareFunc = func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					middlewareCalled = true
 					if r.Header.Get("X-Test-Admin") != "true" {
 						w.WriteHeader(http.StatusForbidden)
 						_, _ = w.Write([]byte("forbidden"))
@@ -118,6 +204,9 @@ func TestAttachRoutes_CommsStatsRouteAndAdminMiddleware(t *testing.T) {
 					next.ServeHTTP(w, r)
 				})
 			}
+			if tt.missingMiddleware {
+				adminOnly = nil
+			}
 
 			contacter.AttachRoutes(&contacter.AttachRoutesRequest{
 				Router:              r,
@@ -125,7 +214,16 @@ func TestAttachRoutes_CommsStatsRouteAndAdminMiddleware(t *testing.T) {
 				AdminOnlyMiddleware: mux.MiddlewareFunc(adminOnly),
 			})
 
-			req := httptest.NewRequest(http.MethodGet, testCommsStatsEndpoint, nil)
+			if tt.missingMiddleware {
+				require.ErrorIs(t, r.ValidateRoutePolicies(), router.ErrRouteConfiguration)
+			} else {
+				require.NoError(t, r.ValidateRoutePolicies())
+			}
+			method := tt.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			req := httptest.NewRequest(method, testCommsStatsEndpoint, nil)
 			if tt.headerValue != "" {
 				req.Header.Set("X-Test-Admin", tt.headerValue)
 			}
@@ -135,56 +233,87 @@ func TestAttachRoutes_CommsStatsRouteAndAdminMiddleware(t *testing.T) {
 
 			assert.Equal(t, tt.expectStatus, rec.Code)
 			assert.Equal(t, tt.expectServiceCalled, serviceCalled)
+			assert.Equal(t, !tt.missingMiddleware && tt.headerValue == "true", policyCalled)
+			assert.False(t, svc.typesCalled)
+			if tt.missingMiddleware {
+				require.Contains(t, rec.Body.String(), "ROUTE_CONFIGURATION")
+			}
 		})
 	}
 }
 
-func TestAttachRoutes_OnlyExpectedRouteRegistered(t *testing.T) {
+func TestAttachRoutes_PublicAndUnmatchedInputs(t *testing.T) {
 	t.Parallel()
-
-	svc := &routesMockContacterService{}
-	h := contacter.NewHandler(svc, &routesMockValidator{})
-	r := router.NewRouter(nil, nil)
-
-	contacter.AttachRoutes(&contacter.AttachRoutesRequest{
-		Router:  r,
-		Handler: h,
-		AdminOnlyMiddleware: func(next http.Handler) http.Handler {
-			return next
-		},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/comms/unknown", nil)
-	rec := httptest.NewRecorder()
-
-	r.GetRouter().ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusNotFound, rec.Code)
+	for _, tc := range []struct {
+		name, method, path string
+		missingMiddleware  bool
+		status             int
+		public             bool
+	}{
+		{"public types", http.MethodGet, testCommsTypesEndpoint, false, http.StatusOK, true},
+		{"public OPTIONS", http.MethodOptions, testCommsTypesEndpoint, false, http.StatusOK, true},
+		{"unknown path", http.MethodGet, "/api/v1/comms/unknown", false, http.StatusNotFound, false},
+		{"types suffix", http.MethodGet, testCommsTypesEndpoint + "/unknown", false, http.StatusNotFound, false},
+		{"unsupported public method", http.MethodPost, testCommsTypesEndpoint, false, 0, false},
+		{"unsupported admin method", http.MethodPost, testCommsStatsEndpoint, false, 0, false},
+		{"invalid registry closes public descriptors", http.MethodGet, testCommsTypesEndpoint, true, http.StatusServiceUnavailable, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := &routesMockContacterService{}
+			r := router.NewRouter(nil, nil)
+			middlewareCalled, policyCalled := false, false
+			require.NoError(t, r.SetRouteAuthorizer(func(ctx context.Context, req *http.Request, def router.RouteDefinition) error {
+				policyCalled = true
+				require.False(t, middlewareCalled)
+				require.Equal(t, router.Public, def.Access)
+				require.Equal(t, "contacter.GetAvailableCommsTypes", def.Operation)
+				require.Equal(t, testCommsTypesEndpoint, def.Path)
+				return nil
+			}))
+			var admin mux.MiddlewareFunc = func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+					middlewareCalled = true
+					w.WriteHeader(http.StatusForbidden)
+				})
+			}
+			if tc.missingMiddleware {
+				admin = nil
+			}
+			contacter.AttachRoutes(&contacter.AttachRoutesRequest{Router: r, Handler: contacter.NewHandler(svc, &routesMockValidator{}), AdminOnlyMiddleware: admin})
+			rec := httptest.NewRecorder()
+			r.GetRouter().ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+			if tc.status == 0 {
+				require.Contains(t, []int{http.StatusNotFound, http.StatusMethodNotAllowed}, rec.Code)
+			} else {
+				require.Equal(t, tc.status, rec.Code)
+			}
+			require.False(t, middlewareCalled)
+			require.Equal(t, tc.public, policyCalled)
+			require.Equal(t, tc.public, svc.typesCalled)
+		})
+	}
 }
 
-func TestAttachRoutes_CommsTypesRouteIsPublic(t *testing.T) {
+func TestAttachRoutes_Inventory(t *testing.T) {
 	t.Parallel()
-
-	svc := &routesMockContacterService{}
-	h := contacter.NewHandler(svc, &routesMockValidator{})
 	r := router.NewRouter(nil, nil)
-	adminMiddlewareCalled := false
-
-	contacter.AttachRoutes(&contacter.AttachRoutesRequest{
-		Router:  r,
-		Handler: h,
-		AdminOnlyMiddleware: func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				adminMiddlewareCalled = true
-				next.ServeHTTP(w, r)
-			})
-		},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, testCommsTypesEndpoint, nil)
-	rec := httptest.NewRecorder()
-	r.GetRouter().ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.False(t, adminMiddlewareCalled)
+	contacter.AttachRoutes(&contacter.AttachRoutesRequest{Router: r, Handler: contacter.NewHandler(&routesMockContacterService{}, &routesMockValidator{}), AdminOnlyMiddleware: func(next http.Handler) http.Handler { return next }})
+	require.NoError(t, r.ValidateRoutePolicies())
+	registry := r.RouteInventory()
+	require.Len(t, registry, 2)
+	for i, expected := range []struct {
+		path, operation string
+		access          router.AccessMode
+	}{
+		{testCommsTypesEndpoint, "contacter.GetAvailableCommsTypes", router.Public},
+		{testCommsStatsEndpoint, "contacter.GetCommsStats", router.AdminSession},
+	} {
+		t.Run(expected.operation, func(t *testing.T) {
+			require.Equal(t, expected.path, registry[i].Path)
+			require.Equal(t, expected.operation, registry[i].Operation)
+			require.Equal(t, expected.access, registry[i].Access)
+			require.Equal(t, []string{http.MethodGet, http.MethodOptions}, registry[i].Methods)
+		})
+	}
 }

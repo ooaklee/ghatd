@@ -45,38 +45,30 @@ type AttachRoutesRequest struct {
 	// RateLimitOrActiveMiddleware middleware used to open endpoints up (with rate limite) or active users only
 	RateLimitOrActiveMiddleware mux.MiddlewareFunc
 
-	// MiddlewareValidApiTokenOrJWTMiddleware middleware used to lock endpoints down to valid users only
+	// MiddlewareValidApiTokenOrJWTMiddleware is retained for source compatibility;
+	// no routes in this attachment consume it.
 	MiddlewareValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes handles attaching contentManager routes to router
+// AttachRoutes registers administrative writes and optional-active reads.
+// Both authentication adapters are required. Validate the registry before
+// serving; an absent adapter fails closed, including on public read branches.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	contentManagerAdminOnlyRoutes := httpRouter.PathPrefix("/api/v1/cms").Subrouter()
-	contentManagerAdminOnlyRoutes.HandleFunc("/posts", request.Handler.CreatePost).Methods(http.MethodPost, http.MethodOptions)
-	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}", request.Handler.UpdatePostById).Methods(http.MethodPatch, http.MethodOptions)
-	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}", request.Handler.DeletePostById).Methods(http.MethodDelete, http.MethodOptions)
-	contentManagerAdminOnlyRoutes.HandleFunc("/posts/{postId}/restore", request.Handler.RestorePostById).Methods(http.MethodPatch, http.MethodOptions)
-	contentManagerAdminOnlyRoutes.HandleFunc("/seo/posts/articles/sitemap-items", request.Handler.GetArticleSitemapItems).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
-	if request.MiddlewareAdminApiTokenOrJwtRequired != nil {
-		contentManagerAdminOnlyRoutes.Use(request.MiddlewareAdminApiTokenOrJwtRequired)
-	}
+	contentManagerAdminOnlyRoutes := request.Router.NewRouteGroup("/api/v1/cms", router.AdminSessionOrAPI, request.MiddlewareAdminApiTokenOrJwtRequired)
+	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/posts", Operation: "contentmanager.CreatePost", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreatePost)
+	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/posts/{postId}", Operation: "contentmanager.UpdatePostById", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdatePostById)
+	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/posts/{postId}", Operation: "contentmanager.DeletePostById", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeletePostById)
+	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/posts/{postId}/restore", Operation: "contentmanager.RestorePostById", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.RestorePostById)
+	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/seo/posts/articles/sitemap-items", Operation: "contentmanager.GetArticleSitemapItems", Methods: []string{http.MethodGet, http.MethodPost, http.MethodOptions}}, request.Handler.GetArticleSitemapItems)
 
-	contentManagerValidUserOnlyRoutes := httpRouter.PathPrefix("/api/v1/cms").Subrouter()
-	if request.MiddlewareValidApiTokenOrJWTMiddleware != nil {
-		contentManagerValidUserOnlyRoutes.Use(request.MiddlewareValidApiTokenOrJWTMiddleware)
-	}
+	contentManagerOpenRoutes := request.Router.NewRouteGroup("/api/v1/cms", router.OptionalActive, request.RateLimitOrActiveMiddleware)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/changelog", Operation: "contentmanager.GetChangelogItems", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetChangelogItems)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/changelog/{urlFriendlyId}", Operation: "contentmanager.GetChangelogItemByUrlFriendlyId", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetChangelogItemByUrlFriendlyId)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/glossary", Operation: "contentmanager.GetGlossaryItems", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGlossaryItems)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/faq", Operation: "contentmanager.GetFaqItems", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetFaqItems)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/articles", Operation: "contentmanager.GetArticles", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetArticles)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/articles/{urlFriendlyId}", Operation: "contentmanager.GetArticleItemByUrlFriendlyId", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetArticleItemByUrlFriendlyId)
+	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/latest", Operation: "contentmanager.GetLatestNotificationOverviews", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetLatestNotificationOverviews)
 
-	contentManagerOpenRoutes := httpRouter.PathPrefix("/api/v1/cms").Subrouter()
-	contentManagerOpenRoutes.HandleFunc("/changelog", request.Handler.GetChangelogItems).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/changelog/{urlFriendlyId}", request.Handler.GetChangelogItemByUrlFriendlyId).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/glossary", request.Handler.GetGlossaryItems).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/faq", request.Handler.GetFaqItems).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/articles", request.Handler.GetArticles).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/articles/{urlFriendlyId}", request.Handler.GetArticleItemByUrlFriendlyId).Methods(http.MethodGet, http.MethodOptions)
-	contentManagerOpenRoutes.HandleFunc("/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
-	if request.RateLimitOrActiveMiddleware != nil {
-		contentManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
-	}
 }

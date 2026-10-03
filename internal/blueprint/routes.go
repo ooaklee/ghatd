@@ -36,23 +36,16 @@ type AttachRoutesRequest struct {
 	AuthenticatedMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes attaches blueprint handler to corresponding
-// routes on router
+// AttachRoutes registers administrator writes and authenticated-session reads.
+// Both adapters are required; validate the registry before serving. Domain
+// ownership checks remain the handler/service's responsibility.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	blueprintAdminRoutes := httpRouter.PathPrefix(ApiBlueprintPrefix).Subrouter()
-	blueprintAdminRoutes.HandleFunc("", request.Handler.CreateBlueprint).Methods(http.MethodPost, http.MethodOptions)
+	blueprintAdminRoutes := request.Router.NewRouteGroup(ApiBlueprintPrefix, router.AdminSession, request.AdminOnlyMiddleware)
+	blueprintAdminRoutes.Handle(router.RouteDefinition{Path: "", Operation: "blueprint.CreateBlueprint", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateBlueprint)
 
-	if request.AdminOnlyMiddleware != nil {
-		blueprintAdminRoutes.Use(request.AdminOnlyMiddleware)
-	}
+	blueprintAuthenticatedRoutes := request.Router.NewRouteGroup(ApiBlueprintPrefix, router.Session, request.AuthenticatedMiddleware)
+	blueprintAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "", Operation: "blueprint.GetBlueprints", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetBlueprints)
+	blueprintAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/{blueprintId}", Operation: "blueprint.GetBlueprintByID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetBlueprintByID)
 
-	blueprintAuthenticatedRoutes := httpRouter.PathPrefix(ApiBlueprintPrefix).Subrouter()
-	blueprintAuthenticatedRoutes.HandleFunc("", request.Handler.GetBlueprints).Methods(http.MethodGet, http.MethodOptions)
-	blueprintAuthenticatedRoutes.HandleFunc("/{blueprintId}", request.Handler.GetBlueprintByID).Methods(http.MethodGet, http.MethodOptions)
-
-	if request.AuthenticatedMiddleware != nil {
-		blueprintAuthenticatedRoutes.Use(request.AuthenticatedMiddleware)
-	}
 }

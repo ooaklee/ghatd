@@ -11,7 +11,19 @@ is sorted and de-duplicated by absolute URL.
 The public sitemap route is `GET /sitemap.xml`. Administrative routes under
 `/api/v1/seo` support listing, creating, updating, deleting, batch ingestion,
 generation, and safe downloads. The host application supplies its existing
-admin-only middleware when attaching the routes.
+admin-only middleware when attaching the routes. `AdminAccess` defaults to
+`router.AdminSession`; set it to `router.AdminSessionOrAPI` when supplying the
+administrator API-token-or-session middleware. Only these two modes are valid;
+the declaration must match the actual enforcing adapter.
+
+Both public and administrative routes use the shared route registry. Configure
+any policy authorizer before attachment, then check `ValidateRoutePolicies()`
+after all routes are attached and refuse startup on error. Missing admin
+middleware or an invalid mode fails validation; the runtime backstop returns
+`ROUTE_CONFIGURATION` (503) for every descriptor in that router, including the
+public sitemap. Public does not mean exempt from configuration validation.
+Existing methods and first-match OPTIONS handling are preserved. See the
+[router contract](../router/README.md#declarative-route-policies).
 
 Generated files are restricted to safe relative paths below a configured
 writable root. An embedded static sitemap can be supplied as a read fallback.

@@ -17,16 +17,15 @@ HTTP methods, stable operation ID and optional additive requirements. Empty
 relative paths intentionally register the group prefix itself. Methods are exact:
 GET does not imply HEAD or OPTIONS.
 
-Configure a custom policy authorizer before creating **any** route group.
-Use `SetRouteAuthorizer` for request enforcement, or `ConfigureRoutePolicy` to
-also validate each descriptor against the adapter at startup. Supply trusted
-authentication middleware separately; no identity or policy adapter is installed
+Configure a policy authorizer before creating **any** route group. The
+[access-manager guard](../accessmanager/middleware/README.md#route-policy-guard)
+is an adapter for verified context and a live policy service. It is not installed
 automatically. Required scopes, permissions, types, revision checks, resource
 checks or usage budgets without an authorizer invalidate registration. Custom
 authorizers must enforce every declared restriction; metadata is not a grant.
 
 After attaching all routes, return `ValidateRoutePolicies()` and refuse to start
-on failure. Hosts must call it explicitly after all registrations.
+on failure. `starter/v0.AttachDefaultRoutes` returns these validation errors.
 All descriptor handlers also return a structured 503 when any registry error is
 present, as a runtime backstop; that is not a substitute for startup validation.
 
@@ -71,23 +70,37 @@ Original errors remain available to direct callers for internal cause inspection
 
 ### Coverage and explicit raw-route boundaries
 
-Existing framework domain attachments and arbitrary host routes do not become
-descriptors automatically. Migrate each attachment explicitly and test its real
-middleware and dispatch path. The registry validates only adopted routes.
+Billing, content, group, policy, pricing, user, user-manager, vision, blueprint,
+SEO and communications attachment functions register descriptors. Their public routes
+do not require an admin identity, but still participate in registry validation
+and a configured authorizer. For SEO and communications, `AdminAccess` defaults
+to `AdminSession`; explicitly select `AdminSessionOrAPI` when using that enforcing
+middleware. Neither package accepts a public or member-only admin mode.
 
-Examples of raw Mux surfaces **not** certified by `ValidateRoutePolicies()`:
+**Compatibility:** required authentication and optional-auth/rate-limit adapters
+must be supplied even if a caller only exercises the attachment's public routes.
+Missing adapters invalidate the entire registry. User Manager's custom `/me`
+adapter must enforce the `ProfileOptional` contract; when omitted it falls back
+to the standard `SessionOrAPI` adapter. Its admin-service adapter similarly falls
+back to `AdminSession`. Custom adapters are trusted code, not verified by metadata.
+The legacy duplicate admin declaration for `GET /api/v1/ums/users` was already
+shadowed by the earlier authenticated declaration; that reachable route and its
+service-level group-membership filtering are preserved.
 
+Some framework HTTP surfaces still use raw Mux routing and are deliberately
+**not** certified by `ValidateRoutePolicies()`:
 
 | Surface | Current boundary and host responsibility |
 | --- | --- |
+| Access Manager login, verification and OAuth endpoints | Credential-management routes have descriptors; remaining login/proof routes still use their existing middleware and handler checks. Their migration is separate. |
 | Constructor-supplied health handler | Host-owned response and any global middleware; no descriptor-specific access or method restriction. Do not expose private diagnostics. |
 | Default auth-verification redirect | Redirects to the configured login/email-verification endpoints; those endpoints must validate the proof. The redirect is not authentication. |
 | SPA/static fallback | Serves the configured filesystem and path rewrite. Mount after API routes; never put protected data or business commands in the fallback. |
 | Opt-in local email inbox | Its own loopback check unless `AllowRemote` is enabled; keep development-only. A loopback reverse proxy is not end-user authentication. Protect it explicitly or do not mount it. |
 | Browser trace intake | Separately mounted handler with its own origin, payload and rate bounds, intentionally outside application authentication and inside outer telemetry. |
 
-This is a non-exhaustive list, not a complete inventory of framework or host
-handlers. Audit raw middleware and custom
+This list describes the framework's built-in exceptions, not arbitrary host
+handlers or proof of complete host coverage. Audit raw middleware and custom
 mounts separately. An invalid descriptor registry does not disable these raw
 routes, which is another reason to reject startup rather than rely on the runtime
 503 backstop.
@@ -97,7 +110,7 @@ routes, which is another reason to reject startup rather than rely on the runtim
 A host can register endpoints that resolve a purpose-specific principal inside
 their handler, such as a scoped guest capability. Use `HandlerVerified` with a
 stable `Policy.Proof` name and register the actual enforcing handler through
-`RouteGroup.Handle`. Declaring that proof does not authenticate it or turn
+`RouteGroup.Handle`. The global access-manager guard deliberately does not turn
 such a principal into a member or API-token identity. The handler must validate
 the proof, its resource binding, and current authority before any side effect.
 The domain must recheck authority within the transaction, including replay.
@@ -123,7 +136,7 @@ framework admission, not just descriptor equality or a direct handler call.
 This extension reuses routing, inventory, startup validation and the explicit
 proof boundary. It does not add guest grant persistence, interpret application
 roles, apply user quotas to guests, or make custom identity restrictions part
-of an unrelated member/API-token authentication adapter.
+of the standard member/API-token guard.
 
 ### Shared strong-revision validation
 
@@ -134,10 +147,10 @@ wildcards, lists, duplicate headers and control characters. Required absence is
 absence is accepted, but an explicitly empty header is not absence. Errors never
 include the supplied revision value.
 
-The default policy uses a 256-byte limit, rejects outer whitespace and accepts
-HTTP obs-text bytes. Hosts can explicitly enable whitespace trimming, choose
-stricter ASCII-only validation, or retain another bounded size without copying
-the parser. `MaxBytes` includes quotes, defaults to 256, and must
+The standard access-manager route guard uses a 256-byte limit, trims surrounding
+whitespace and accepts HTTP obs-text bytes. Hosts can explicitly choose stricter
+ASCII-only validation, reject outer whitespace, or retain another bounded size
+without copying the parser. `MaxBytes` includes quotes, defaults to 256, and must
 be at least three. Configure these options on the server, not from a request.
 
 ```go

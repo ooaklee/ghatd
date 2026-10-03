@@ -95,16 +95,19 @@ type AttachRoutesRequest struct {
 	// Handler valid usermanager handler
 	Handler UsermanagerHandler
 
-	// AuthenticatedMiddleware middleware used to lock endpoints down to users that have been authenticated
+	// AuthenticatedMiddleware is retained for source compatibility; this
+	// attachment uses the session-or-API adapters instead.
 	AuthenticatedMiddleware mux.MiddlewareFunc
 
-	// ActiveOnlyMiddleware middleware used to lock endpoints down to active users only
+	// ActiveOnlyMiddleware is retained for source compatibility; this attachment
+	// uses ActiveValidApiTokenOrJWTMiddleware instead.
 	ActiveOnlyMiddleware mux.MiddlewareFunc
 
 	// AdminOnlyMiddleware middleware used to lock endpoints down to admin only
 	AdminOnlyMiddleware mux.MiddlewareFunc
 
 	// AdminApiTokenOrJWTMiddleware locks endpoints down to either admin API tokens or admin JWT users.
+	// When nil, admin-service routes fall back to AdminOnlyMiddleware and AdminSession.
 	AdminApiTokenOrJWTMiddleware mux.MiddlewareFunc
 
 	// ActiveValidApiTokenOrJWTMiddleware is middleware that is used to lock
@@ -118,136 +121,124 @@ type AttachRoutesRequest struct {
 	// RateLimitOrActiveMiddleware middleware used to open endpoints up (with rate limite) or active users only
 	RateLimitOrActiveMiddleware mux.MiddlewareFunc
 
-	// CustomMeEndpointValidApiTokenOrJWTMiddleware is middleware exclusively
-	// for the /me endpoint. Initially this exception was created  to stop the
-	// return of soft-4XX (401) status, which was stopping Google from indexing
-	// pages on their search engine
+	// CustomMeEndpointValidApiTokenOrJWTMiddleware must implement ProfileOptional
+	// for GET /me: permit anonymous profile discovery while verifying supplied
+	// credentials. When nil, ValidApiTokenOrJWTMiddleware and SessionOrAPI apply.
 	CustomMeEndpointValidApiTokenOrJWTMiddleware mux.MiddlewareFunc
 }
 
-// AttachRoutes attaches usermanager handler to corresponding
-// routes on router
+// AttachRoutes registers user workflows with their existing credential modes.
+// Optional adapters retain their documented stricter fallbacks. Every required
+// adapter must be present; check Router.ValidateRoutePolicies before serving.
 func AttachRoutes(request *AttachRoutesRequest) {
-	httpRouter := request.Router.GetRouter()
 
-	userManagerOpenRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	userManagerOpenRoutes.HandleFunc("/comms", request.Handler.CreateComms).Methods(http.MethodPost, http.MethodOptions)
-	userManagerOpenRoutes.HandleFunc("/comms/types", request.Handler.GetAvailableCommsTypes).Methods(http.MethodGet, http.MethodOptions)
-	userManagerOpenRoutes.HandleFunc("/visions", request.Handler.GetVisions).Methods(http.MethodGet, http.MethodOptions)
-	userManagerOpenRoutes.HandleFunc("/visions/config", request.Handler.GetVisionConfig).Methods(http.MethodGet, http.MethodOptions)
-	userManagerOpenRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.GetVisionByNanoID).Methods(http.MethodGet, http.MethodOptions)
-	if request.RateLimitOrActiveMiddleware != nil {
-		userManagerOpenRoutes.Use(request.RateLimitOrActiveMiddleware)
-	}
+	userManagerOpenRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.OptionalActive, request.RateLimitOrActiveMiddleware)
+	userManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/comms", Operation: "usermanager.CreateComms", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateComms)
+	userManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/comms/types", Operation: "usermanager.GetAvailableCommsTypes", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetAvailableCommsTypes)
+	userManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/visions", Operation: "usermanager.GetVisions", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetVisions)
+	userManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/visions/config", Operation: "usermanager.GetVisionConfig", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetVisionConfig)
+	userManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}", Operation: "usermanager.GetVisionByNanoID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetVisionByNanoID)
 
-	usermanagerActiveOnlyRoutesPre := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	usermanagerActiveOnlyRoutesPre.HandleFunc("/groups/config", request.Handler.GetGroupsConfig).Methods(http.MethodGet, http.MethodOptions)
-	if request.ActiveValidApiTokenOrJWTMiddleware != nil {
-		usermanagerActiveOnlyRoutesPre.Use(request.ActiveValidApiTokenOrJWTMiddleware)
-	}
+	usermanagerActiveOnlyRoutesPre := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.ActiveSessionOrAPI, request.ActiveValidApiTokenOrJWTMiddleware)
+	usermanagerActiveOnlyRoutesPre.Handle(router.RouteDefinition{Path: "/groups/config", Operation: "usermanager.GetGroupsConfig", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupsConfig)
 
 	// Special case route for /me endpoint to allow user to handle situations such
 	// as avoiding 401s being returned to Google when it tries to index the page
 	// without credentials
-	userMeEndpointRoute := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	userMeEndpointRoute.HandleFunc("/me", request.Handler.GetUserProfile).Methods(http.MethodGet, http.MethodOptions)
-	if request.CustomMeEndpointValidApiTokenOrJWTMiddleware != nil {
-		userMeEndpointRoute.Use(request.CustomMeEndpointValidApiTokenOrJWTMiddleware)
-	} else if request.ValidApiTokenOrJWTMiddleware != nil {
-		userMeEndpointRoute.Use(request.ValidApiTokenOrJWTMiddleware)
+	userMeEndpointRouteMiddleware := request.CustomMeEndpointValidApiTokenOrJWTMiddleware
+	userMeEndpointRouteAccess := router.ProfileOptional
+	if userMeEndpointRouteMiddleware == nil {
+		userMeEndpointRouteMiddleware = request.ValidApiTokenOrJWTMiddleware
+		userMeEndpointRouteAccess = router.SessionOrAPI
 	}
+	userMeEndpointRoute := request.Router.NewRouteGroup(APIUserManagerV1Prefix, userMeEndpointRouteAccess, userMeEndpointRouteMiddleware)
+	userMeEndpointRoute.Handle(router.RouteDefinition{Path: "/me", Operation: "usermanager.GetUserProfile", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserProfile)
 
-	usermanagerAuthenticatedRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	usermanagerAuthenticatedRoutes.HandleFunc("/me", request.Handler.DeleteUserPermanently).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/micro", request.Handler.GetUserMicroProfile).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/enriched", request.Handler.GetEnrichedUserProfile).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/memberships", request.Handler.GetUserGroupMembershipsRequest).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/groups", request.Handler.GetUserGroups).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations", request.Handler.GetMyGroupInvitations).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations/{groupID}/accept", request.Handler.AcceptMyGroupInvitation).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/invitations/{groupID}/reject", request.Handler.RejectMyGroupInvitation).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders", request.Handler.ListReminders).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders", request.Handler.CreateReminder).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.GetReminderByID).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.UpdateReminderByID).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}", request.Handler.DeleteReminderByID).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/reminders/{reminderID}/disable", request.Handler.DisableReminderByID).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks", request.Handler.ListStreaks).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/record", request.Handler.RecordStreak).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/current", request.Handler.GetCurrentStreak).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/longest", request.Handler.GetLongestStreak).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/streaks/count", request.Handler.GetNumberOfStreaks).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/config", request.Handler.GetNotifierConfig).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses", request.Handler.ListNotificationAddresses).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses", request.Handler.RegisterNotificationAddress).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/addresses/{addressID}", request.Handler.DeleteNotificationAddress).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/preferences", request.Handler.GetNotificationPreferences).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/me/notifications/preferences", request.Handler.UpdateNotificationPreferences).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}", request.Handler.GetUserByID).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/users/{userId}/groups", request.Handler.GetGroupsByUserID).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/groups/validate-name", request.Handler.ValidateGroupName).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}", request.Handler.GetGroupDetail).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/lineage", request.Handler.GetGroupLineage).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/stats", request.Handler.GetGroupStats).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/groups/{groupID}/descendants", request.Handler.GetGroupDescendants).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions", request.Handler.CreateVision).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.UpdateVision).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}", request.Handler.DeleteVision).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/votes", request.Handler.SetVisionVote).Methods(http.MethodPut, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/votes", request.Handler.RemoveVisionVote).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/comments", request.Handler.AddVisionComment).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/comments/{commentID}/votes", request.Handler.SetVisionCommentVote).Methods(http.MethodPut, http.MethodOptions)
-	usermanagerAuthenticatedRoutes.HandleFunc("/visions/{visionNanoID}/comments/{commentID}/votes", request.Handler.RemoveVisionCommentVote).Methods(http.MethodDelete, http.MethodOptions)
-	if request.ValidApiTokenOrJWTMiddleware != nil {
-		usermanagerAuthenticatedRoutes.Use(request.ValidApiTokenOrJWTMiddleware)
-	}
+	usermanagerAuthenticatedRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.SessionOrAPI, request.ValidApiTokenOrJWTMiddleware)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me", Operation: "usermanager.DeleteUserPermanently", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteUserPermanently)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/micro", Operation: "usermanager.GetUserMicroProfile", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserMicroProfile)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/enriched", Operation: "usermanager.GetEnrichedUserProfile", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetEnrichedUserProfile)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/memberships", Operation: "usermanager.GetUserGroupMembershipsRequest", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserGroupMembershipsRequest)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/groups", Operation: "usermanager.GetUserGroups", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserGroups)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/invitations", Operation: "usermanager.GetMyGroupInvitations", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetMyGroupInvitations)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/invitations/{groupID}/accept", Operation: "usermanager.AcceptMyGroupInvitation", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.AcceptMyGroupInvitation)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/invitations/{groupID}/reject", Operation: "usermanager.RejectMyGroupInvitation", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RejectMyGroupInvitation)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/reminders", Operation: "usermanager.ListReminders", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ListReminders)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/reminders", Operation: "usermanager.CreateReminder", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateReminder)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/reminders/{reminderID}", Operation: "usermanager.GetReminderByID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetReminderByID)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/reminders/{reminderID}", Operation: "usermanager.UpdateReminderByID", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateReminderByID)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/reminders/{reminderID}", Operation: "usermanager.DeleteReminderByID", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteReminderByID)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/reminders/{reminderID}/disable", Operation: "usermanager.DisableReminderByID", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.DisableReminderByID)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/streaks", Operation: "usermanager.ListStreaks", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ListStreaks)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/streaks/record", Operation: "usermanager.RecordStreak", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RecordStreak)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/streaks/current", Operation: "usermanager.GetCurrentStreak", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetCurrentStreak)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/streaks/longest", Operation: "usermanager.GetLongestStreak", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetLongestStreak)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/streaks/count", Operation: "usermanager.GetNumberOfStreaks", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetNumberOfStreaks)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/latest", Operation: "usermanager.GetLatestNotificationOverviews", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetLatestNotificationOverviews)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/config", Operation: "usermanager.GetNotifierConfig", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetNotifierConfig)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/addresses", Operation: "usermanager.ListNotificationAddresses", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ListNotificationAddresses)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/addresses", Operation: "usermanager.RegisterNotificationAddress", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RegisterNotificationAddress)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/addresses/{addressID}", Operation: "usermanager.DeleteNotificationAddress", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteNotificationAddress)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/preferences", Operation: "usermanager.GetNotificationPreferences", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetNotificationPreferences)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/me/notifications/preferences", Operation: "usermanager.UpdateNotificationPreferences", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateNotificationPreferences)
+	// Preserve the reachable member lookup. The service filters non-admins by
+	// group membership; the former later admin declaration was fully shadowed.
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/users", Operation: "usermanager.GetUsers", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUsers)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/users/{userId}", Operation: "usermanager.GetUserByID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetUserByID)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/users/{userId}/groups", Operation: "usermanager.GetGroupsByUserID", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupsByUserID)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/groups/validate-name", Operation: "usermanager.ValidateGroupName", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ValidateGroupName)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}", Operation: "usermanager.GetGroupDetail", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupDetail)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/lineage", Operation: "usermanager.GetGroupLineage", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupLineage)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/stats", Operation: "usermanager.GetGroupStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupStats)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/descendants", Operation: "usermanager.GetGroupDescendants", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetGroupDescendants)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions", Operation: "usermanager.CreateVision", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateVision)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}", Operation: "usermanager.UpdateVision", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateVision)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}", Operation: "usermanager.DeleteVision", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteVision)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/votes", Operation: "usermanager.SetVisionVote", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.SetVisionVote)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/votes", Operation: "usermanager.RemoveVisionVote", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.RemoveVisionVote)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/comments", Operation: "usermanager.AddVisionComment", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.AddVisionComment)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/comments/{commentID}/votes", Operation: "usermanager.SetVisionCommentVote", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.SetVisionCommentVote)
+	usermanagerAuthenticatedRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/comments/{commentID}/votes", Operation: "usermanager.RemoveVisionCommentVote", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.RemoveVisionCommentVote)
 
-	usermanagerAdminRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	usermanagerAdminRoutes.HandleFunc("/comms", request.Handler.GetComms).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/comms/stats", request.Handler.GetCommsStats).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/comms/{id}", request.Handler.UpdateComms).Methods(http.MethodPut, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/config", request.Handler.GetNotifierConfig).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/latest", request.Handler.GetLatestNotificationOverviews).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/addresses", request.Handler.ListNotificationAddresses).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/addresses", request.Handler.RegisterNotificationAddress).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/addresses/{addressID}", request.Handler.DeleteNotificationAddress).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/preferences", request.Handler.GetNotificationPreferences).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/notifications/{userId}/preferences", request.Handler.UpdateNotificationPreferences).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/users", request.Handler.GetUsers).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminRoutes.HandleFunc("/visions/{visionNanoID}/status", request.Handler.UpdateVisionStatus).Methods(http.MethodPatch, http.MethodOptions)
-	if request.AdminOnlyMiddleware != nil {
-		usermanagerAdminRoutes.Use(request.AdminOnlyMiddleware)
-	}
+	usermanagerAdminRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.AdminSession, request.AdminOnlyMiddleware)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms", Operation: "usermanager.GetComms", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetComms)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms/stats", Operation: "usermanager.GetCommsStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetCommsStats)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms/{id}", Operation: "usermanager.UpdateComms", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateComms)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/config", Operation: "usermanager.GetNotifierConfig", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetNotifierConfig)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/latest", Operation: "usermanager.GetLatestNotificationOverviews", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetLatestNotificationOverviews)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/{userId}/latest", Operation: "usermanager.GetLatestNotificationOverviews", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetLatestNotificationOverviews)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/addresses", Operation: "usermanager.ListNotificationAddresses", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ListNotificationAddresses)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/addresses", Operation: "usermanager.RegisterNotificationAddress", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.RegisterNotificationAddress)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/{userId}/addresses/{addressID}", Operation: "usermanager.DeleteNotificationAddress", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteNotificationAddress)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/{userId}/preferences", Operation: "usermanager.GetNotificationPreferences", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetNotificationPreferences)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/notifications/{userId}/preferences", Operation: "usermanager.UpdateNotificationPreferences", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateNotificationPreferences)
+	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/visions/{visionNanoID}/status", Operation: "usermanager.UpdateVisionStatus", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateVisionStatus)
 
-	usermanagerAdminServiceRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	usermanagerAdminServiceRoutes.HandleFunc("/users/{userId}/notifications", request.Handler.NotifyUser).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/notifications", request.Handler.NotifyUsers).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/reminders", request.Handler.ListReminders).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/reminders/stats", request.Handler.GetReminderStats).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/reminders/due", request.Handler.GetDueReminders).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/streaks", request.Handler.ListStreaks).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/streaks/current", request.Handler.GetCurrentStreak).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/streaks/longest", request.Handler.GetLongestStreak).Methods(http.MethodGet, http.MethodOptions)
-	usermanagerAdminServiceRoutes.HandleFunc("/streaks/count", request.Handler.GetNumberOfStreaks).Methods(http.MethodGet, http.MethodOptions)
-	if request.AdminApiTokenOrJWTMiddleware != nil {
-		usermanagerAdminServiceRoutes.Use(request.AdminApiTokenOrJWTMiddleware)
-	} else if request.AdminOnlyMiddleware != nil {
-		usermanagerAdminServiceRoutes.Use(request.AdminOnlyMiddleware)
+	usermanagerAdminServiceRoutesMiddleware := request.AdminApiTokenOrJWTMiddleware
+	usermanagerAdminServiceRoutesAccess := router.AdminSessionOrAPI
+	if usermanagerAdminServiceRoutesMiddleware == nil {
+		usermanagerAdminServiceRoutesMiddleware = request.AdminOnlyMiddleware
+		usermanagerAdminServiceRoutesAccess = router.AdminSession
 	}
+	usermanagerAdminServiceRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, usermanagerAdminServiceRoutesAccess, usermanagerAdminServiceRoutesMiddleware)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/users/{userId}/notifications", Operation: "usermanager.NotifyUser", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.NotifyUser)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/notifications", Operation: "usermanager.NotifyUsers", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.NotifyUsers)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/reminders", Operation: "usermanager.ListReminders", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ListReminders)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/reminders/stats", Operation: "usermanager.GetReminderStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetReminderStats)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/reminders/due", Operation: "usermanager.GetDueReminders", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetDueReminders)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/streaks", Operation: "usermanager.ListStreaks", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.ListStreaks)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/streaks/current", Operation: "usermanager.GetCurrentStreak", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetCurrentStreak)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/streaks/longest", Operation: "usermanager.GetLongestStreak", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetLongestStreak)
+	usermanagerAdminServiceRoutes.Handle(router.RouteDefinition{Path: "/streaks/count", Operation: "usermanager.GetNumberOfStreaks", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetNumberOfStreaks)
 
-	usermanagerActiveOnlyRoutes := httpRouter.PathPrefix(APIUserManagerV1Prefix).Subrouter()
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups", request.Handler.CreateGroup).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}", request.Handler.UpdateGroup).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}", request.Handler.DeleteGroup).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/owner", request.Handler.UpdateGroupOwner).Methods(http.MethodPut, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members", request.Handler.AddGroupMember).Methods(http.MethodPost, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members/{memberID}", request.Handler.RemoveGroupMember).Methods(http.MethodDelete, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/groups/{groupID}/members/{memberID}", request.Handler.UpdateGroupMember).Methods(http.MethodPatch, http.MethodOptions)
-	usermanagerActiveOnlyRoutes.HandleFunc("/me", request.Handler.UpdateUserProfile).Methods(http.MethodPatch, http.MethodOptions)
-	if request.ActiveValidApiTokenOrJWTMiddleware != nil {
-		usermanagerActiveOnlyRoutes.Use(request.ActiveValidApiTokenOrJWTMiddleware)
-	}
+	usermanagerActiveOnlyRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.ActiveSessionOrAPI, request.ActiveValidApiTokenOrJWTMiddleware)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups", Operation: "usermanager.CreateGroup", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.CreateGroup)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}", Operation: "usermanager.UpdateGroup", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateGroup)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}", Operation: "usermanager.DeleteGroup", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeleteGroup)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/owner", Operation: "usermanager.UpdateGroupOwner", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateGroupOwner)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/members", Operation: "usermanager.AddGroupMember", Methods: []string{http.MethodPost, http.MethodOptions}}, request.Handler.AddGroupMember)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/members/{memberID}", Operation: "usermanager.RemoveGroupMember", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.RemoveGroupMember)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/groups/{groupID}/members/{memberID}", Operation: "usermanager.UpdateGroupMember", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateGroupMember)
+	usermanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/me", Operation: "usermanager.UpdateUserProfile", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.UpdateUserProfile)
+
 }
