@@ -381,6 +381,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- **Breaking for custom adapters:** [Legacy user updates](external/user/v2/README.md#legacy-broad-updates)
+  now require acknowledged Mongo post-images through the shared repository helper,
+  and configured clock/string utilities. Native validation and persistence errors
+  retain their error trees; invalid receipts fail with 503. URL targets cannot be
+  overwritten by body IDs, conflicting in-process selectors are rejected, and
+  caller-owned models are isolated before mutation. The existing snapshot conflict
+  has a domain-level 409 mapping; replies carry context and are no-store.
+  Broad snapshot writes remain broad: general field CAS and narrow login/activation
+  workflows are still separate migrations, not guarantees of this change.
 - **Breaking for custom adapters:** [Self-service profile names](external/usermanager/README.md#self-service-profile-names)
   now require the narrow user-domain/profile repository capability instead of a
   broad user snapshot write. Managers require verified session or API context,

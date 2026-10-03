@@ -16,7 +16,11 @@ type CreateUserRequest struct {
 	GenerateNanoID bool                   `json:"generate_nano_id,omitempty"`
 }
 
-// UpdateUserRequest holds data for updating an existing user
+// UpdateUserRequest is a legacy broad update for an independently authorized
+// target. Empty scalar fields retain existing values. User is an in-process
+// replacement snapshot, never decoded from HTTP. If ID and User.ID are both
+// supplied they must agree; nested extension values are read-only during a call.
+// Prefer operation-specific domain commands for concurrent/security workflows.
 type UpdateUserRequest struct {
 	ID         string                 `json:"id"`
 	Email      string                 `json:"email,omitempty"`

@@ -3,7 +3,9 @@ package user
 import (
 	"context"
 	"errors"
+	"maps"
 	"regexp"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -315,22 +317,36 @@ func (s *Service) FindUserByEmail(ctx context.Context, req *GetUserByEmailReques
 	return &GetUserByEmailResponse{User: user}, nil
 }
 
-// UpdateUser updates an existing user
+// UpdateUser applies a trusted legacy broad update to a detached account model.
+// A manager/route must authorize its target and editable fields before calling.
+// Empty scalar fields retain their values; User supplies a replacement snapshot.
+// Native failures retain their error tree for reply mapping. This is not a
+// field-level CAS: stale replacement snapshots can overwrite unrelated changes.
 func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*UpdateUserResponse, error) {
 	if req == nil {
 		return nil, ErrInvalidUserBody
 	}
 	if s == nil || ctx == nil || nilUserDependency(s.UserRepository) {
-		return nil, ErrDatabaseError
+		return nil, ErrUserUpdateUnavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "update-user"))
+	input := *req
+	input.Extensions = maps.Clone(req.Extensions)
+	input.User = copyUserForUpdate(req.User)
+	req = &input
 
 	targetUserId := req.ID
 	if req.User != nil && req.User.ID != "" {
+		if targetUserId != "" && targetUserId != req.User.ID {
+			return nil, ErrInvalidUserID
+		}
 		targetUserId = req.User.ID
+	}
+	if strings.TrimSpace(targetUserId) == "" || req.User != nil && req.User.ID == "" {
+		return nil, ErrInvalidUserID
 	}
 
 	// Get existing user
@@ -339,7 +355,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		return nil, err
 	}
 	if user == nil || user.ID != targetUserId {
-		return nil, ErrUserNotFound
+		return nil, ErrUserUpdateUnavailable
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -347,6 +363,10 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 	if (req.User != nil && req.User.Email != user.Email) || (req.Email != "" && req.Email != user.Email) {
 		return nil, ErrEmailChangeRequired
 	}
+	if nilUserDependency(s.StringUtils) || nilUserDependency(s.TimeProvider) {
+		return nil, ErrUserUpdateUnavailable
+	}
+	user = copyUserForUpdate(user)
 
 	if req.User != nil {
 		userWithProvidedData := req.User
@@ -357,7 +377,6 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 		config, err := s.resolveRequestedConfig(requestedType)
 		if err != nil {
-			logger.Error("invalid-user-config-type", zap.String("config-type", requestedType), zap.Error(err))
 			return nil, err
 		}
 
@@ -379,7 +398,6 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		if req.Type != "" && req.Type != user.Type {
 			config, err := s.resolveRequestedConfig(req.Type)
 			if err != nil {
-				logger.Error("invalid-user-config-type", zap.String("config-type", req.Type), zap.Error(err))
 				return nil, err
 			}
 
@@ -420,7 +438,6 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 		if req.Status != "" && req.Status != user.Status {
 			_, err := user.UpdateStatus(req.Status)
 			if err != nil {
-				logger.Error("failed-to-update-user-status", zap.Error(err))
 				return nil, err
 			}
 			hasChanges = true
@@ -443,24 +460,34 @@ func (s *Service) UpdateUser(ctx context.Context, req *UpdateUserRequest) (*Upda
 
 	// Validate user
 	if err := user.Validate(); err != nil {
-		logger.Error("user-validation-failed", zap.Error(err))
-		return nil, ErrValidationFailed
+		return nil, err
 	}
 
 	// Ensure version is set to 2 for migrated users
 	user.EnsureVersion()
 
 	user.Standardise()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	// Snapshot expected receipt identity before exposing a pointer to an adapter.
+	id, email, revision, accountType, status := user.ID, user.Email, user.EmailRevision, user.Type, user.Status
 
 	// Update in repository
 	updatedUser, err := s.UserRepository.UpdateUser(ctx, user)
 	if err != nil {
-		logger.Error("failed-to-update-user", zap.Error(err))
-		return nil, ErrDatabaseError
+		logger.Error("user-update-failed")
+		return nil, err
 	}
+	if updatedUser == nil || updatedUser.ID != id || updatedUser.Email != email || updatedUser.EmailRevision != revision || updatedUser.Type != accountType || updatedUser.Status != status {
+		return nil, ErrUserUpdateUnavailable
+	}
+	// The repository result, not the submitted snapshot, is authoritative. A
+	// late cancellation must not invent a rollback of an acknowledged write.
+	updatedUser = s.setUserDependencies(copyUserForUpdate(updatedUser))
 
 	// Audit log
-	if s.AuditService != nil {
+	if !nilUserDependency(s.AuditService) {
 		_ = s.AuditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 			Action:     "user.updated",
 			TargetId:   updatedUser.ID,

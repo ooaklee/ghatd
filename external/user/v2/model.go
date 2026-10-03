@@ -441,23 +441,21 @@ func (u *UniversalUser) SetCustomTimestamp(key string) *UniversalUser {
 
 // Status Management
 
-// UpdateStatus updates user status with validation
+// UpdateStatus validates the configured transition without printing account
+// values. It mutates this model, not storage; callers own persistence/authority.
 func (u *UniversalUser) UpdateStatus(desiredStatus string) (*UniversalUser, error) {
 	if u.config == nil {
-		fmt.Println("user-configuration-not-set")
 		return u, ErrUserConfigNotSet
 	}
 
 	// Check if transition is valid
 	validSources, exists := u.config.StatusTransitions[desiredStatus]
 	if !exists {
-		fmt.Printf("invalid-target-status: %s\n", desiredStatus)
 		return u, ErrUserInvalidTargetStatus
 	}
 
 	// Check if current status allows transition
 	if u.stringUtils != nil && !u.stringUtils.InSlice(u.Status, validSources) {
-		fmt.Printf("cannot-transition-from-%s-to-%s\n", u.Status, desiredStatus)
 		return u, ErrUserInvalidStatusTransition
 	}
 

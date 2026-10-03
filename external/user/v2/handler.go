@@ -141,22 +141,31 @@ func (h *Handler) GetUserByEmail(w http.ResponseWriter, r *http.Request) {
 
 // UpdateUser handles user updates
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	logger := logger.AcquireOperationFrom(r.Context(), "external/user/v2", "handle-update-user")
 	request, err := MapRequestToUpdateUserRequest(r, h.Validator)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
+	if nilUserDependency(h.Service) {
+		h.NewHTTPErrorResponse(w, ErrUserUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
 	response, err := h.Service.UpdateUser(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
-		h.NewHTTPErrorResponse(w, err)
+		h.NewHTTPErrorResponse(w, err, reply.WithContext(r.Context()))
 		return
 	}
 
-	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User)
+	if response == nil || response.User == nil || response.User.ID != request.ID {
+		h.NewHTTPErrorResponse(w, ErrUserUpdateUnavailable, reply.WithContext(r.Context()))
+		return
+	}
+	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.User, reply.WithContext(r.Context()))
 }
 
 // DeleteUser handles user deletion

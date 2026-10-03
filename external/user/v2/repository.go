@@ -209,11 +209,26 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string, logError 
 	return &result, nil
 }
 
-// UpdateUser updates an existing user
+// UpdateUser retains the legacy broad $set contract, but returns the actual
+// acknowledged post-image through the shared repository helper. Protected email,
+// handle and provider fields are never written. The email/revision filter is not
+// a general snapshot version; later broad writes can overwrite unrelated data.
+// Native failures remain unchanged and no write is retried or upserted.
 func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*UniversalUser, error) {
-	if user == nil || user.ID == "" {
+	if r == nil || ctx == nil || nilUserDependency(r.Store) {
+		return nil, ErrUserUpdateUnavailable
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if user == nil || strings.TrimSpace(user.ID) == "" || user.EmailRevision < 0 {
 		return nil, ErrInvalidUserBody
 	}
+	store, ok := r.Store.(atomicUserMongoStore)
+	if !ok {
+		return nil, ErrUserUpdateUnavailable
+	}
+	user = copyUserForUpdate(user)
 	collection, err := r.GetUserCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -253,14 +268,18 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 	delete(fields, "_id")
 	update := bson.M{"$set": fields}
 
-	result, err := collection.UpdateOne(ctx, queryFilter, update)
+	var result UniversalUser
+	err = store.ExecuteFindOneAndUpdateCommandDecodeResult(ctx, collection, queryFilter, update, &result, options.FindOneAndUpdate().SetReturnDocument(options.After).SetCollation(&options.Collation{Locale: "simple"}))
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrOAuthConnectionConflict
+		}
 		return nil, err
 	}
-	if result.MatchedCount != 1 {
-		return nil, ErrOAuthConnectionConflict
+	if result.ID != user.ID || result.Email != user.Email || result.EmailRevision != user.EmailRevision {
+		return nil, ErrUserUpdateUnavailable
 	}
-	return user, nil
+	return &result, nil
 }
 
 // DeleteUserByID deletes a user by ID

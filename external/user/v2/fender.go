@@ -80,19 +80,25 @@ func MapRequestToGetUserByEmailRequest(request *http.Request, validator UserVali
 
 // MapRequestToUpdateUserRequest maps incoming UpdateUser request to correct struct
 func MapRequestToUpdateUserRequest(request *http.Request, validator UserValidator) (*UpdateUserRequest, error) {
-	var err error
+	if request == nil || nilUserDependency(request.Body) || nilUserDependency(validator) {
+		return nil, ErrInvalidUserBody
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
 	parsedRequest := &UpdateUserRequest{}
 
-	// get user id from uri
-	parsedRequest.ID, err = toolbox.GetVariableValueFromUri(request, UserURIVariableID)
+	// Resolve the selected target separately; body fields cannot retarget it.
+	id, err := toolbox.GetVariableValueFromUri(request, UserURIVariableID)
 	if err != nil {
 		return nil, ErrInvalidUserID
 	}
 
-	err = toolbox.DecodeRequestBody(request, parsedRequest)
-	if err != nil {
+	err = toolbox.DecodeRequestBody(request, &parsedRequest)
+	if err != nil || parsedRequest == nil {
 		return nil, ErrInvalidUserBody
 	}
+	parsedRequest.ID = id
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		return nil, ErrInvalidUserBody

@@ -103,6 +103,46 @@ with actor, target and revision, not handle text. Audit delivery is not atomic
 with the update. Unknown storage errors must pass through the shared safe
 response/error-manifest path; never return or log raw driver payloads.
 
+## Legacy broad updates
+
+`Service.UpdateUser` remains a trusted lower-domain operation, not an
+authorization check. Route policy or a manager must authorize both the selected
+account and editable fields. Prefer the narrow commands below for self-service
+workflows. The HTTP mapper binds the URL target after decoding; a body `id` cannot
+retarget the operation. In-process requests may select `ID` or `User.ID`, but
+nonempty selectors must agree. Replacement `User` still requires its stored email.
+
+**Breaking for custom adapters:** the built-in repository now requires the shared
+atomic post-image capability. It returns the actual acknowledged document rather
+than echoing its input, including protected fields and fields omitted by BSON
+`omitempty`. It never falls back to `UpdateOne`, upserts or retries a write.
+Email/revision filters use binary comparison, including legacy absent revision
+zero. Empty stored emails match only the exact empty string, not arbitrary or
+missing emails; required account fields belong to domain configuration.
+The existing `ErrOAuthConnectionConflict` now has a domain-level 409 map;
+its historical name does not mean every conflict is provider-related.
+
+The service copies model structs, owned slices and top-level maps before applying
+changes. Arbitrary nested extension values remain read-only by contract, not
+deep-cloned. Configuration/utility dependencies are shared startup-only values.
+Configure non-nil `StringUtils` and `TimeProvider`; incomplete wiring, nil or
+invalid receipts return `ErrUserUpdateUnavailable` (503). Native validation and
+storage errors retain their identity and original error tree instead of being
+collapsed into generic validation/database sentinels. Unknown errors stay opaque
+under the shared reply policy; explicit host mappings can override native errors.
+Model status changes no longer print raw account values. HTTP replies include
+request context and `Cache-Control: no-store` while retaining the 200 user shape.
+
+The repository still performs a **broad `$set`**, not a field-level comparison.
+Email, email revision, provider identity and handle fields are excluded, but
+other stale snapshot fields can overwrite newer data. This batch does not make
+login metadata, activation, role changes or other legacy writers race-safe.
+Migrate each workflow to its own narrow conditional command. No client ETag,
+general snapshot revision or ABA protection is implied. Decode/network and
+unacknowledged failures may have committed: inspect state, do not automatically
+retry or infer rollback. A valid acknowledged post-image remains success despite
+late cancellation. Optional legacy audit remains best-effort, not transactional.
+
 ## Conditional profile names
 
 `Service.UpdateProfileNames` is a narrow, reusable domain command for given and
