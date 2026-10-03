@@ -163,7 +163,8 @@ type UniversalUser struct {
 	ID     string `json:"id" bson:"_id" db:"id"`
 	Email  string `json:"email" bson:"email" db:"email"`
 	Status string `json:"status" bson:"status" db:"status"`
-	Type   string `json:"type,omitempty" bson:"type,omitempty" db:"type"`
+	// Type is the persisted account-configuration type, not a role or token purpose.
+	Type string `json:"type,omitempty" bson:"type,omitempty" db:"type"`
 
 	// Version field for tracking model version (stored internally only)
 	Version int `json:"-" bson:"version" db:"version"`
@@ -297,6 +298,16 @@ func (u *UniversalUser) SetDependencies(
 // GetType handles return the resource type
 func (u *UniversalUser) GetType() string {
 	return "USER"
+}
+
+// GetUserType returns the stored account-configuration type for signed identity
+// context. An absent legacy value stays absent; it is not inferred from roles,
+// request input, or the generic USER resource kind returned by GetType.
+func (u *UniversalUser) GetUserType() string {
+	if u == nil {
+		return ""
+	}
+	return u.Type
 }
 
 // Standardise handles common user tasks like making sure email is lowercase

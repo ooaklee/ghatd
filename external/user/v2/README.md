@@ -4,6 +4,14 @@
 
 The Universal User Model is designed for reuse across different projects. It features dependency injection for testability, configurable status transitions, optional fields, and extension points for project-specific data.
 
+`Service.GetUserByID` and `GetUserByNanoID` restore model dependencies on a
+successful read. They preserve repository errors and cancellation instead of
+reporting all failures as `ErrUserNotFound`. Expected absence (including an empty
+successful repository result) remains not-found; missing service/repository
+configuration fails closed. Custom repositories must distinguish absence from
+outages. HTTP callers should resolve configured error manifests and never return
+raw driver diagnostics to clients.
+
 ## Table of Contents
 
 - [Key Features](#key-features)

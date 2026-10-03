@@ -2,7 +2,7 @@
 // services. It provides functionality for creating and validating access tokens,
 // refresh tokens, and email verification tokens.
 //
-// The package supports standard JWT operations with HMAC signing and includes
+// The package supports standard JWT operations with HS256 signing and includes
 // user context extraction and validation.
 package auth
 
@@ -23,8 +23,11 @@ import (
 
 // UserModel holds the methods of a valid user model
 type UserModel interface {
+	// GetUserId returns the immutable stored identity, never a mutable handle.
 	GetUserId() string
+	// IsAdmin supplies an issuance-time role snapshot, not live authorization.
 	IsAdmin() bool
+	// GetUserStatus supplies the issuance-time account state.
 	GetUserStatus() string
 }
 
@@ -34,7 +37,9 @@ type UserModel interface {
 type Service struct {
 	accessTokenSecret  string
 	refreshTokenSecret string
-	signingMethod      *jwt.SigningMethodHMAC
+	// issuer and audience are immutable trusted configuration copied at construction.
+	issuer   string
+	audience []string
 }
 
 // NewServiceRequest contains configuration for creating a new auth service.
@@ -42,18 +47,29 @@ type Service struct {
 // Both access and refresh token secrets should be cryptographically secure
 // random strings of at least 32 bytes.
 type NewServiceRequest struct {
-	AccessTokenSecret  string
+	// AccessTokenSecret signs access, initial-login and email-verification tokens.
+	AccessTokenSecret string
+	// RefreshTokenSecret signs rotation credentials and should be a separate key.
 	RefreshTokenSecret string
+	// Issuer is signed and required on verification when non-empty. Enabling it
+	// rejects older unbound credentials; plan a session rollover before rollout.
+	Issuer string
+	// Audience lists accepted recipients and is signed into new credentials.
+	// Verification requires at least one exact match (JWT audience semantics).
+	// Use separate services for narrower recipients; hosts may require exact sets.
+	Audience []string
 }
 
 // NewService creates a new authentication service with the provided secrets.
 //
-// The service uses HS256 (HMAC with SHA-256) for token signing by default.
+// The service signs and verifies only HS256. The request must be non-nil; the
+// caller owns secret provisioning. Audience values are copied at construction.
 func NewService(request *NewServiceRequest) *Service {
 	return &Service{
 		accessTokenSecret:  request.AccessTokenSecret,
 		refreshTokenSecret: request.RefreshTokenSecret,
-		signingMethod:      jwt.SigningMethodHS256,
+		issuer:             request.Issuer,
+		audience:           append([]string(nil), request.Audience...),
 	}
 }
 
@@ -69,16 +85,11 @@ func (s *Service) CreateInitalToken(ctx context.Context, user UserModel) (*Token
 	td.EtTTL = getTokenTimeToLive(td.EtExpires)
 	td.GenerateEphemeralUUID()
 
-	et := generateHS256Tokens(map[string]interface{}{
-		tokenClaimKeyAuthorized: true,
-		tokenClaimKeySub:        user.GetUserId(),
-		"email_revision":        userEmailRevision(user),
-		tokenClaimKeyAccessUUID: td.EphemeralUUID,
-		tokenClaimKeyAdmin:      user.IsAdmin(),
-		tokenClaimKeyExp:        td.EtExpires,
-	})
-
-	var err error
+	claims, err := s.newClaims(user, td.EphemeralUUID, TokenUseLogin, td.EtExpires, time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	et := generateTokenWithSigningMethodHS256(AccessClaims{Claims: claims, AccessUUID: td.EphemeralUUID, IsAdmin: user.IsAdmin(), IsAuthorized: true})
 	td.EphemeralToken, err = et.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
 		logger.Error("auth-initial-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
@@ -101,16 +112,11 @@ func (s *Service) CreateEmailVerificationToken(ctx context.Context, user UserMod
 	td.EvTTL = getTokenTimeToLive(td.EvExpires)
 	td.GenerateEmailVerificationUUID()
 
-	evt := generateHS256Tokens(map[string]interface{}{
-		tokenClaimKeyAuthorized: false,
-		tokenClaimKeySub:        user.GetUserId(),
-		"email_revision":        userEmailRevision(user),
-		tokenClaimKeyAccessUUID: td.EmailVerificationUUID,
-		tokenClaimKeyAdmin:      user.IsAdmin(),
-		tokenClaimKeyExp:        td.EvExpires,
-	})
-
-	var err error
+	claims, err := s.newClaims(user, td.EmailVerificationUUID, TokenUseEmailVerification, td.EvExpires, time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	evt := generateTokenWithSigningMethodHS256(AccessClaims{Claims: claims, AccessUUID: td.EmailVerificationUUID, IsAdmin: user.IsAdmin()})
 	td.EmailVerificationToken, err = evt.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
 		logger.Error("auth-email-verification-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
@@ -147,20 +153,11 @@ func (s *Service) CreateTokenWithAuthenticationTime(ctx context.Context, user Us
 	td.GenerateRefreshUUID().GenerateAccessUUID()
 
 	// Create Access Token
-	accessClaims := mapAccessTokenClaims(&mapAccessTokenClaimsRequest{
-		UserStatus:            user.GetUserStatus(),
-		AccessTokenUUID:       td.AccessUUID,
-		UserID:                user.GetUserId(),
-		IsAdmin:               user.IsAdmin(),
-		AccessTokenTTLSeconds: td.AtExpires,
-	})
-	accessClaims["email_revision"] = userEmailRevision(user)
-	if !authenticatedAt.IsZero() {
-		accessClaims["auth_time"] = authenticatedAt.Unix()
+	accessClaims, err := s.newClaims(user, td.AccessUUID, TokenUseAccess, td.AtExpires, authenticatedAt)
+	if err != nil {
+		return nil, err
 	}
-	at := generateHS256Tokens(accessClaims)
-
-	var err error
+	at := generateTokenWithSigningMethodHS256(AccessClaims{Claims: accessClaims, AccessUUID: td.AccessUUID, IsAdmin: user.IsAdmin(), IsAuthorized: user.GetUserStatus() == userStatusKeyForAuthorisation})
 	td.AccessToken, err = at.SignedString([]byte(s.accessTokenSecret))
 	if err != nil {
 		logger.Error("auth-access-token-signing-failed", zap.String("user-id", userID), zap.Error(err))
@@ -168,16 +165,11 @@ func (s *Service) CreateTokenWithAuthenticationTime(ctx context.Context, user Us
 	}
 
 	// Create Refresh Token
-	refreshClaims := map[string]interface{}{
-		tokenClaimKeyRefreshUUID: td.RefreshUUID,
-		tokenClaimKeySub:         user.GetUserId(),
-		"email_revision":         userEmailRevision(user),
-		tokenClaimKeyExp:         td.RtExpires,
+	refreshClaims, err := s.newClaims(user, td.RefreshUUID, TokenUseRefresh, td.RtExpires, authenticatedAt)
+	if err != nil {
+		return nil, err
 	}
-	if !authenticatedAt.IsZero() {
-		refreshClaims["auth_time"] = authenticatedAt.Unix()
-	}
-	rt := generateHS256Tokens(refreshClaims)
+	rt := generateTokenWithSigningMethodHS256(RefreshClaims{Claims: refreshClaims, RefreshUUID: td.RefreshUUID})
 
 	td.RefreshToken, err = rt.SignedString([]byte(s.refreshTokenSecret))
 	if err != nil {
@@ -232,19 +224,20 @@ func (s *Service) VerifyToken(ctx context.Context, r *http.Request) (*jwt.Token,
 
 // ParseAccessTokenFromString parses and validates a JWT token string.
 //
-// It ensures the token uses HMAC signing and returns detailed errors for
-// expiration, malformed tokens, and other validation failures.
+// It pins HS256, requires expiry and applies configured issuer/audience checks.
+// Signature validity alone does not establish session purpose or live authority;
+// callers need the extraction and current-session checks for that decision.
 func (s *Service) ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "parse-access-token")
 	unexpectedAlgorithm := ""
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if token.Method != jwt.SigningMethodHS256 {
 			unexpectedAlgorithm = token.Method.Alg()
 			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.accessTokenSecret), nil
-	})
+	}, s.parserOptions()...)
 
 	if err != nil {
 		switch {
@@ -278,12 +271,12 @@ func (s *Service) ParseRefreshTokenFromString(ctx context.Context, tokenAsString
 	unexpectedAlgorithm := ""
 
 	token, err := jwt.Parse(tokenAsString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if token.Method != jwt.SigningMethodHS256 {
 			unexpectedAlgorithm = token.Method.Alg()
 			return nil, ErrUnauthorizedTokenUnexpectedSigningMethod
 		}
 		return []byte(s.refreshTokenSecret), nil
-	})
+	}, s.parserOptions()...)
 
 	if err != nil {
 		switch {
@@ -381,21 +374,26 @@ func (s *Service) ExtractAccessTokenMetadataByString(ctx context.Context, tokenA
 	return details, nil
 }
 
-// CheckAccessTokenValidityGetDetails return details of a valid acess token
-// TODO: Create tests
+// CheckAccessTokenValidityGetDetails extracts typed metadata from a token already
+// verified by this service. It rejects malformed identity claims but does not
+// verify a fabricated jwt.Token or consult live sessions/accounts. Prefer the
+// string extraction API when receiving an untrusted credential.
 func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token *jwt.Token) (*TokenAccessDetails, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-access-token-validity-get-details")
+	if token == nil || token.Method == nil {
+		return nil, ErrUnauthorized
+	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
 		accessUUID, ok := claims[tokenClaimKeyAccessUUID].(string)
-		if !ok {
+		if !ok || accessUUID == "" {
 			logger.Warn("auth-access-token-missing-access-uuid")
 			return nil, ErrUnauthorizedNoTokenUUID
 		}
 
 		userID, ok := claims[tokenClaimKeySub].(string)
-		if !ok {
+		if !ok || userID == "" {
 			logger.Warn("auth-access-token-missing-user-id")
 			return nil, ErrUnauthorizedNoUserIDFound
 		}
@@ -422,7 +420,24 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 		if err != nil {
 			return nil, err
 		}
+		audience, err := tokenAudience(claims)
+		if err != nil {
+			return nil, ErrUnauthorized
+		}
+		userType, purpose, err := tokenIdentityContext(claims, accessUUID)
+		if err != nil || purpose == TokenUseRefresh {
+			return nil, ErrUnauthorized
+		}
+		issuer, err := claims.GetIssuer()
+		if err != nil {
+			return nil, ErrUnauthorized
+		}
 		return &TokenAccessDetails{
+			UserType:           userType,
+			TokenUse:           purpose,
+			Issuer:             issuer,
+			Audience:           append([]string(nil), audience...),
+			SigningAlgorithm:   token.Method.Alg(),
 			EmailRevision:      revision,
 			AuthenticationTime: authenticatedAt,
 			AccessUUID:         accessUUID,
@@ -436,9 +451,23 @@ func (s *Service) CheckAccessTokenValidityGetDetails(ctx context.Context, token 
 
 }
 
-// VerifyRefreshToken makes sure that the refresh token is correctly signed. Make sure that
-// the token method conform to "SigningMethodHMAC"
-// TODO: Create tests
+// tokenAudience rejects malformed present audience claims rather than allowing
+// a JWT library's optional-claim handling to treat them as an absent audience.
+// Absence stays valid for legacy sessions; hosts decide which audiences to accept.
+func tokenAudience(claims jwt.MapClaims) ([]string, error) {
+	if value, exists := claims["aud"]; exists {
+		switch value.(type) {
+		case string, []string, []interface{}:
+		default:
+			return nil, ErrUnauthorized
+		}
+	}
+	return claims.GetAudience()
+}
+
+// VerifyRefreshToken validates the signature and configured JWT constraints.
+// For compatibility this wrapper reports all parser failures as refresh expiry;
+// use ParseRefreshTokenFromString when the specific classification is needed.
 func (s *Service) VerifyRefreshToken(ctx context.Context, t string) (*jwt.Token, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "verify-refresh-token")
 	token, err := s.ParseRefreshTokenFromString(ctx, t)
@@ -449,9 +478,8 @@ func (s *Service) VerifyRefreshToken(ctx context.Context, t string) (*jwt.Token,
 	return token, nil
 }
 
-// CheckRefreshTokenIsValid confirms if the refresh token has not expired and is still
-// usable
-// TODO: Create tests
+// CheckRefreshTokenIsValid is the compatibility signature-validation wrapper.
+// It does not check rotation records, account status or resource permissions.
 func (s *Service) CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.Token, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "check-refresh-token-is-valid")
 	token, err := s.VerifyRefreshToken(ctx, t)
@@ -466,13 +494,16 @@ func (s *Service) CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.
 	return token, nil
 }
 
-// GetRefreshTokenUUID grabs the UUID for refresh token
-// Only if the token is valid i.e. the token claims should conform to
-// TODO: Create tests
+// GetRefreshTokenUUID extracts rotation metadata from an already verified token.
+// Present purpose claims must identify refresh credentials; legacy absent claims
+// remain absent. This does not check live rotation records or account authority.
 func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*TokenRefreshDetails, error) {
 	logger := logger.AcquireOperationFrom(ctx, "external/auth", "get-refresh-token-uuid")
 
 	var refreshDetails TokenRefreshDetails
+	if token == nil || !token.Valid {
+		return nil, ErrUnauthorized
+	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if ok && token.Valid {
@@ -486,31 +517,26 @@ func (s *Service) GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*T
 			return nil, err
 		}
 		refreshDetails.RefreshUUID, ok = claims[tokenClaimKeyRefreshUUID].(string)
-		if !ok {
+		if !ok || refreshDetails.RefreshUUID == "" {
 			logger.Warn("refresh-token-missing-refresh-uuid")
 			return nil, ErrUnauthorizedNoTokenUUID
 		}
 		refreshDetails.UserID, ok = claims[tokenClaimKeySub].(string)
-		if !ok {
+		if !ok || refreshDetails.UserID == "" {
 			logger.Warn("refresh-token-missing-user-id")
 			return nil, ErrUnauthorizedNoUserIDFound
 		}
+		refreshDetails.UserType, refreshDetails.TokenUse, err = tokenIdentityContext(claims, refreshDetails.RefreshUUID)
+		if err != nil || (refreshDetails.TokenUse != "" && refreshDetails.TokenUse != TokenUseRefresh) {
+			return nil, ErrUnauthorized
+		}
 		logger.Debug("refresh-token-uuid-extracted", zap.String("user-id", refreshDetails.UserID))
+	} else {
+		return nil, ErrUnauthorized
 	}
 
 	return &refreshDetails, nil
 
-}
-
-// generateHS256Tokens returns HS256 signed equivalent of passed claims
-func generateHS256Tokens(claims map[string]interface{}) *jwt.Token {
-	tokenClaims := jwt.MapClaims{}
-
-	for key, value := range claims {
-		tokenClaims[key] = value
-	}
-
-	return generateTokenWithSigningMethodHS256(tokenClaims)
 }
 
 // getTokenTimeToLive returns the remaining amount of time of before the

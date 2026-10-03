@@ -79,6 +79,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Typed JWT identity context](external/auth/README.md) carrying stored account
+  type, credential purpose, registered claims and optional issuer/audience
+  binding. Legacy absent context remains explicit; type is classification, not
+  authority. This does not automatically add middleware or route enforcement.
 - Manager-owned dependency error inventories with copied maps and last-wins host
   overrides. Access, User, Content and Billing handlers include their collaborators
   by default; existing bundle injection remains supported. See the
@@ -114,6 +118,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** JWT verification is pinned to HS256, requires expiry and rejects
+  future issuance times; metadata extraction rejects empty subjects and record
+  IDs. Review custom issuers and plan session rollover before enabling optional
+  issuer/audience constraints. See [rollout guidance](external/auth/README.md#compatibility-and-rollout).
+- User ID/nano-ID lookups preserve repository failures and cancellation instead
+  of reporting every failure as not-found. Custom adapters must distinguish
+  absence from outages; [HTTP boundaries](external/user/v2/README.md) must keep
+  raw diagnostics private.
 - **Breaking:** Access Manager's handler error writer requires one unambiguous
   domain cause; custom service adapters returning joined failures now receive a
   generic 500, even when every joined cause is mapped. Classify those failures
@@ -137,6 +149,8 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Reject invalid UTF-8 account types before signing so JSON encoding cannot
+  silently change identity context.
 - Domain and blueprint handlers use the shared manifest writer for wrapped
   failures and all-mapped validation joins; unknown independent causes return a
   generic server failure. Access Manager uses strict single-cause resolution.

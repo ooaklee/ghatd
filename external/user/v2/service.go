@@ -184,17 +184,28 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	return &CreateUserResponse{User: createdUser}, nil
 }
 
-// GetUserByID retrieves a user by ID
+// GetUserByID loads the current account by its persistent ID and restores model
+// dependencies. Expected absence remains ErrUserNotFound; repository failures
+// and cancellations are preserved rather than reported as missing accounts.
 func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*GetUserByIDResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "create-user"))
-
-	if req.ID == "" {
+	if req == nil || req.ID == "" {
 		return nil, ErrInvalidUserID
+	}
+	if s == nil || s.UserRepository == nil || ctx == nil {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	user, err := s.UserRepository.GetUserByID(ctx, req.ID)
 	if err != nil {
-		logger.Error("failed to get user by ID", zap.Error(err), zap.String("id", req.ID))
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if user == nil {
 		return nil, ErrUserNotFound
 	}
 
@@ -204,17 +215,27 @@ func (s *Service) GetUserByID(ctx context.Context, req *GetUserByIDRequest) (*Ge
 	return &GetUserByIDResponse{User: user}, nil
 }
 
-// GetUserByNanoID retrieves a user by nano ID
+// GetUserByNanoID loads the current account by its public identifier. It has the
+// same absence, dependency and cancellation contract as GetUserByID.
 func (s *Service) GetUserByNanoID(ctx context.Context, req *GetUserByNanoIDRequest) (*GetUserByNanoIDResponse, error) {
-	logger := logger.AcquirePackageFrom(ctx, "external/user/v2").With(zap.String("operation", "create-user"))
-
-	if req.NanoID == "" {
+	if req == nil || req.NanoID == "" {
 		return nil, ErrInvalidNanoID
+	}
+	if s == nil || s.UserRepository == nil || ctx == nil {
+		return nil, ErrDatabaseError
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	user, err := s.UserRepository.GetUserByNanoID(ctx, req.NanoID)
 	if err != nil {
-		logger.Error("failed to get user by nano ID", zap.Error(err), zap.String("nano-id", req.NanoID))
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if user == nil {
 		return nil, ErrUserNotFound
 	}
 

@@ -99,12 +99,27 @@ func (t *TokenDetails) GetTokenRefreshTimeToLive() time.Duration {
 // TokenAccessDetails holds information relating to
 // token and its owner
 type TokenAccessDetails struct {
+	// UserType is the signed account-configuration type, not a role or resource kind.
+	UserType string
+	// TokenUse distinguishes session access from login/email-verification proofs.
+	TokenUse string
+	// Issuer is the signed issuer; trust requires an explicitly configured policy.
+	Issuer string
+	// Audience contains only the signed JWT audience values. Hosts must apply
+	// their own exact audience policy; missing audiences remain empty.
+	Audience []string
+	// SigningAlgorithm identifies the verified JWT algorithm, never a client header.
+	SigningAlgorithm string
+	// EmailRevision snapshots the account's security-sensitive email revision.
 	EmailRevision int64
 	// AuthenticationTime is signed session freshness; zero for legacy sessions.
 	AuthenticationTime time.Time
-	AccessUUID         string
-	UserID             string
-	IsAdmin            bool
+	// AccessUUID identifies the live-store record; it is not the raw credential.
+	AccessUUID string
+	// UserID is the immutable signed subject.
+	UserID string
+	// IsAdmin is the issuance-time role snapshot, not a current permission check.
+	IsAdmin bool
 
 	// IsAuthorized is true if user account is active
 	// during time of token generation
@@ -134,11 +149,18 @@ func (t *TokenAccessDetails) IsUserAuthorized() bool {
 // TokenRefreshDetails holds information relating to
 // refresh token and its owner
 type TokenRefreshDetails struct {
+	// UserType preserves the signed account type for the live pre-rotation check.
+	UserType string
+	// TokenUse is refresh for new tokens; empty means an untyped legacy credential.
+	TokenUse string
+	// EmailRevision is compared with the current account before rotation.
 	EmailRevision int64
 	// AuthenticationTime preserves the initial login time through refresh.
 	AuthenticationTime time.Time
-	RefreshUUID        string
-	UserID             string
+	// RefreshUUID identifies the single-use rotation record.
+	RefreshUUID string
+	// UserID is the immutable signed subject, not a mutable account handle.
+	UserID string
 }
 
 // TokenEmailVerificationDetails holds information relating to
