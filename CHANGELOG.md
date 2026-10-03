@@ -173,6 +173,9 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking template change:** [Blueprint Mongo adapters](internal/blueprint/README.md#mongo-result-contract)
+  now use result-returning update/delete helpers. Custom adapters and mocks must
+  preserve acknowledgement and write counts instead of returning only an error.
 - **Breaking template change:** [Blueprint](internal/blueprint/README.md#actorid-migration)
   uses `ActorID` for create, get-by-ID, update and delete requests. Actor-bearing
   HTTP mappers require explicit authenticated context; stored attribution and
@@ -296,6 +299,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Blueprint validates insert, update and delete receipts, accepts matched no-op
+  updates and reports missing targets separately from uncertain writes. Native
+  read/setup failures retain their response mappings; operational failures are
+  not collapsed into record-not-found. Repository entry/cancellation checks,
+  query snapshots, cursor cleanup and overflow checks guard shared-helper calls,
+  while setup logs exclude private dependency diagnostics.
 - Blueprint services reject contradictory caller identity, invalid entry state
   and mismatched dependency results. Updates preserve fetched scalar state, list
   and count receive separate query copies, and native failures retain shared

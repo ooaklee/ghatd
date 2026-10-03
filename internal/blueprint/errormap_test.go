@@ -27,6 +27,7 @@ func TestBlueprintErrorResponses(t *testing.T) {
 		{name: "SUCCESS - registration key missing", err: ErrBlueprintRegistrationKeyMissing, wantStatus: http.StatusBadRequest, wantCode: "BLP0-010"},
 		{name: "SUCCESS - registration conflict", err: ErrBlueprintRegistrationConflict, wantStatus: http.StatusConflict, wantCode: "BLP0-011"},
 		{name: "SUCCESS - registration not found", err: ErrBlueprintRegistrationNotFound, wantStatus: http.StatusNotFound, wantCode: "BLP0-012"},
+		{name: "SUCCESS - unavailable dependency result", err: ErrBlueprintUnavailable, wantStatus: http.StatusServiceUnavailable, wantCode: "BLP0-013"},
 	}
 
 	for _, tt := range tests {
@@ -34,7 +35,7 @@ func TestBlueprintErrorResponses(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			handler := NewHandler(nil, nil)
 
-			if err := handler.getBaseResponseHandler().NewHTTPErrorResponse(recorder, tt.err); err != nil {
+			if err := handler.NewHTTPErrorResponse(recorder, tt.err); err != nil {
 				t.Fatalf("NewHTTPErrorResponse() error = %v", err)
 			}
 
