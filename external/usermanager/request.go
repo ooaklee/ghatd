@@ -92,10 +92,12 @@ type UpdateUserProfileRequest struct {
 // DeleteUserPermanentlyRequest holds all the data needed to delete user and resources
 type DeleteUserPermanentlyRequest struct {
 
-	// UserId the Id of the user requesting the deletion
+	// UserId identifies the trusted actor; callers must not decode it from input.
 	UserId string
 
-	// ID is the ID of the user to be deleted
+	// ID selects the account to delete. The HTTP /me mapper always binds it to
+	// UserId. Trusted in-process admin workflows may select a different account;
+	// the service checks that actor's administrative authority.
 	ID string `path:"userID"`
 
 	// Reason optionally captures why account deletion was requested.
@@ -136,7 +138,8 @@ type GetCommsRequest struct {
 // the request to update a comms
 type UpdateCommsRequest struct {
 
-	// UserId is the id of the user making the request
+	// UserId is the verified actor supplied by the HTTP mapper. Admin authority
+	// is enforced by route middleware, not by the contact persistence service.
 	UserId string
 
 	// UpdateCommsRequest carries the underlying comms update payload.
@@ -337,10 +340,11 @@ type RejectMyGroupInvitationRequest struct {
 // UpdateGroupRequest holds the data needed to update a group
 type UpdateGroupRequest struct {
 
-	// UserId is the ID of the user making the request
+	// UserId is the trusted actor used for group authorization, not a body field.
 	UserId string
 
-	// UpdateGroupRequest carries the underlying group update payload.
+	// UpdateGroupRequest carries the underlying update. HTTP accepts editable
+	// fields only and binds ID from the URL; Group is reserved for trusted code.
 	*group.UpdateGroupRequest
 }
 
@@ -357,7 +361,8 @@ type ValidateGroupNameRequest struct {
 // CreateGroupRequest holds the data needed for a user to create a new group
 type CreateGroupRequest struct {
 
-	// UserID is the ID of the user making the request
+	// UserID is the trusted actor used for authorization and default ownership.
+	// The HTTP mapper binds it independently of the group creation payload.
 	UserID string
 
 	// CreateGroupRequest carries the underlying group creation payload.
@@ -430,7 +435,7 @@ type GetGroupDescendantsRequest struct {
 // AddGroupMemberRequest holds the data needed to add a user to a group
 type AddGroupMemberRequest struct {
 
-	// UserID is the ID of the user making the request
+	// UserID is the trusted actor, distinct from the member selected in the body.
 	UserID string
 
 	// AddMemberRequest carries the underlying member-addition payload.
@@ -450,7 +455,7 @@ type RemoveGroupMemberRequest struct {
 // UpdateGroupMemberRequest holds the data needed to update a user's role in a group
 type UpdateGroupMemberRequest struct {
 
-	// UserID is the ID of the user making the request
+	// UserID is the trusted actor, distinct from the URL-selected member.
 	UserID string
 
 	// UpdateMemberRoleRequest carries the underlying member-role update payload.
@@ -619,7 +624,7 @@ type GetNumberOfStreaksRequest struct {
 // UpdateGroupOwnerRequest holds the data needed to update group ownership
 type UpdateGroupOwnerRequest struct {
 
-	// UserID is the ID of the making the request
+	// UserID is the trusted actor, distinct from the proposed new owner.
 	UserID string
 
 	// UpdateOwnerRequest carries the underlying group-owner update payload.

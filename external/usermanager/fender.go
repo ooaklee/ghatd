@@ -265,11 +265,12 @@ func MapRequestToGetUserProfileRequest(r *http.Request, validator UsermanagerVal
 	return &parsedRequest, nil
 }
 
-// MapRequestToDeleteUserPermanentlyRequest maps incoming DeleteUserPermanently request to correct
-// struct.
+// MapRequestToDeleteUserPermanentlyRequest accepts a deletion reason and binds
+// both actor and target to the authenticated caller. DELETE /me cannot select
+// another account, even when called by an administrator.
 func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator UsermanagerValidator) (*DeleteUserPermanentlyRequest, error) {
 	var parsedRequest DeleteUserPermanentlyRequest
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	if parsedRequest.UserId == "" {
@@ -279,11 +280,16 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 
 	parsedRequest.ID = parsedRequest.UserId
 
-	err := toolbox.DecodeRequestBody(r, &parsedRequest)
+	var payload struct {
+		// Reason explains the deletion without granting authority over its target.
+		Reason string `json:"reason"`
+	}
+	err := toolbox.DecodeRequestBody(r, &payload)
 	if err != nil {
 		logger.Error("unable-decode-request-body", zap.Error(err))
 		return nil, ErrRequestFailedValidation
 	}
+	parsedRequest.Reason = payload.Reason
 
 	if err := validateParsedRequest(&parsedRequest, validator); err != nil {
 		logger.Error("delete-user-permanently-request-validation-failed", zap.Error(err))
@@ -293,7 +299,8 @@ func MapRequestToDeleteUserPermanentlyRequest(r *http.Request, validator Userman
 	return &parsedRequest, nil
 }
 
-// MapRequestToCreateCommsRequest maps the request to a CreateCommsRequest
+// MapRequestToCreateCommsRequest binds attribution after decoding the message.
+// Anonymous submissions remain valid and cannot claim another user's identity.
 func MapRequestToCreateCommsRequest(r *http.Request, validator UsermanagerValidator) (*CreateCommsRequest, error) {
 
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
@@ -304,12 +311,11 @@ func MapRequestToCreateCommsRequest(r *http.Request, validator UsermanagerValida
 
 	baseRequest := contacter.CreateCommsRequest{}
 
-	baseRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
-
 	err := toolbox.DecodeRequestBody(r, &baseRequest)
 	if err != nil {
 		return nil, contacter.ErrInvalidCommsPayload
 	}
+	baseRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 
 	parsedRequest.CreateCommsRequest = &baseRequest
 
@@ -378,11 +384,16 @@ func validateParsedRequest(request interface{}, validator UsermanagerValidator) 
 	return validator.Validate(request)
 }
 
-// MapRequestToUpdateCommsRequest maps the request to an UpdateCommsRequest
+// MapRequestToUpdateCommsRequest binds the verified caller and route-selected
+// contact record. Route middleware remains responsible for requiring an admin.
 func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValidator) (*UpdateCommsRequest, error) {
 
 	var parsedRequest UpdateCommsRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
+	if parsedRequest.UserId == "" {
+		return nil, ErrUnableToIdentifyUser
+	}
 
 	// Extract comms ID from URL path
 	commsId, err := toolbox.GetVariableValueFromUri(r, "id")
@@ -391,14 +402,13 @@ func MapRequestToUpdateCommsRequest(r *http.Request, validator UsermanagerValida
 		return nil, ErrRequestFailedValidation
 	}
 
-	baseRequest := contacter.UpdateCommsRequest{
-		CommsId: commsId,
-	}
+	baseRequest := contacter.UpdateCommsRequest{}
 
 	err = toolbox.DecodeRequestBody(r, &baseRequest)
 	if err != nil {
 		return nil, contacter.ErrInvalidCommsPayload
 	}
+	baseRequest.CommsId = commsId
 
 	parsedRequest.UpdateCommsRequest = &baseRequest
 
@@ -878,14 +888,15 @@ func MapRequestToGetGroupStatsRequest(r *http.Request, validator UsermanagerVali
 	return &parsedRequest, nil
 }
 
-// MapRequestToCreateGroupRequest maps incoming CreateGroup request to correct struct
+// MapRequestToCreateGroupRequest decodes group data separately from the verified
+// actor. Owner and parent selections remain inputs for service authorization.
 func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValidator) (*CreateGroupRequest, error) {
 	var parsedRequest CreateGroupRequest
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
 	baseRequest := group.CreateGroupRequest{}
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -893,7 +904,7 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 
 	parsedRequest.CreateGroupRequest = &baseRequest
 
-	err := toolbox.DecodeRequestBody(r, &parsedRequest)
+	err := toolbox.DecodeRequestBody(r, &baseRequest)
 	if err != nil {
 		return nil, ErrRequestFailedValidation
 	}
@@ -905,14 +916,16 @@ func MapRequestToCreateGroupRequest(r *http.Request, validator UsermanagerValida
 	return &parsedRequest, nil
 }
 
-// MapRequestToUpdateGroupRequest maps incoming UpdateGroup request to correct struct
+// MapRequestToUpdateGroupRequest accepts editable fields, not a replacement
+// group record. The authenticated caller and URL determine authorization and
+// target identity; internal full-record updates are not part of this HTTP API.
 func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValidator) (*UpdateGroupRequest, error) {
 	var parsedRequest UpdateGroupRequest = UpdateGroupRequest{
 		UpdateGroupRequest: &group.UpdateGroupRequest{},
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserId = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserId = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if parsedRequest.UserId == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -923,10 +936,14 @@ func MapRequestToUpdateGroupRequest(r *http.Request, validator UsermanagerValida
 		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
-	parsedRequest.UpdateGroupRequest.ID = groupID
-
-	if err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateGroupRequest); err != nil {
+	var payload groupUpdatePayload
+	if err := toolbox.DecodeRequestBody(r, &payload); err != nil {
 		return nil, ErrRequestFailedValidation
+	}
+	parsedRequest.UpdateGroupRequest = &group.UpdateGroupRequest{
+		ID: groupID, Name: payload.Name, Description: payload.Description,
+		Email: payload.Email, Icon: payload.Icon, Visibility: payload.Visibility,
+		Status: payload.Status, Extensions: payload.Extensions,
 	}
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
@@ -971,14 +988,15 @@ func MapRequestToDeleteGroupRequest(r *http.Request, validator UsermanagerValida
 	return &parsedRequest, nil
 }
 
-// MapRequestToAddGroupMemberRequest maps an add-member request to the correct struct
+// MapRequestToAddGroupMemberRequest preserves the requested new member while
+// binding the actor to verified context and the group to the URL after decoding.
 func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*AddGroupMemberRequest, error) {
 	var parsedRequest AddGroupMemberRequest = AddGroupMemberRequest{
 		AddMemberRequest: &group.AddMemberRequest{},
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -989,11 +1007,10 @@ func MapRequestToAddGroupMemberRequest(r *http.Request, validator UsermanagerVal
 		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
-	parsedRequest.GroupID = groupID
-
-	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
+	if err := toolbox.DecodeRequestBody(r, parsedRequest.AddMemberRequest); err != nil {
 		return nil, ErrRequestFailedValidation
 	}
+	parsedRequest.GroupID = groupID
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		logger.Error("add-group-member-request-validation-failed", zap.Error(err))
@@ -1042,14 +1059,15 @@ func MapRequestToRemoveGroupMemberRequest(r *http.Request, validator Usermanager
 	return &parsedRequest, nil
 }
 
-// MapRequestToUpdateGroupMemberRequest maps an update-member request to the correct struct
+// MapRequestToUpdateGroupMemberRequest binds the verified actor and both URL
+// identifiers independently of the requested role in the body.
 func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator UsermanagerValidator) (*UpdateGroupMemberRequest, error) {
 	var parsedRequest UpdateGroupMemberRequest = UpdateGroupMemberRequest{
 		UpdateMemberRoleRequest: &group.UpdateMemberRoleRequest{},
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1060,18 +1078,16 @@ func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator Usermanager
 		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
-	parsedRequest.GroupID = groupID
-
 	memberID, err := toolbox.GetVariableValueFromUri(r, UserManagerURIVariableMemberID)
 	if err != nil {
 		logger.Error("unable-get-member-id-from-uri")
 		return nil, ErrInvalidMemberID
 	}
-	parsedRequest.MemberID = memberID
-
-	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
+	if err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateMemberRoleRequest); err != nil {
 		return nil, ErrRequestFailedValidation
 	}
+	parsedRequest.GroupID = groupID
+	parsedRequest.MemberID = memberID
 
 	if err := validateParsedRequest(parsedRequest, validator); err != nil {
 		logger.Error("update-group-member-request-validation-failed", zap.Error(err))
@@ -1081,14 +1097,15 @@ func MapRequestToUpdateGroupMemberRequest(r *http.Request, validator Usermanager
 	return &parsedRequest, nil
 }
 
-// MapRequestToUpdateGroupOwnerRequest maps an update-ownership request to the correct struct
+// MapRequestToUpdateGroupOwnerRequest accepts the proposed owner, but binds the
+// acting user and group independently. The service authorizes the transfer.
 func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerValidator) (*UpdateGroupOwnerRequest, error) {
 	var parsedRequest UpdateGroupOwnerRequest = UpdateGroupOwnerRequest{
 		UpdateOwnerRequest: &group.UpdateOwnerRequest{},
 	}
 	logger := logger.AcquirePackageFrom(r.Context(), "external/usermanager")
 
-	parsedRequest.UserID = accessmanagerhelpers.AcquireFrom(r.Context())
+	parsedRequest.UserID = accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(r.Context())
 	if parsedRequest.UserID == "" {
 		logger.Error("unable-get-user-id")
 		return nil, ErrUnableToIdentifyUser
@@ -1099,11 +1116,10 @@ func MapRequestToUpdateGroupOwnerRequest(r *http.Request, validator UsermanagerV
 		logger.Error("unable-get-group-id-from-uri")
 		return nil, ErrRequestFailedValidation
 	}
-	parsedRequest.GroupID = groupID
-
-	if err := toolbox.DecodeRequestBody(r, &parsedRequest); err != nil {
+	if err := toolbox.DecodeRequestBody(r, parsedRequest.UpdateOwnerRequest); err != nil {
 		return nil, ErrRequestFailedValidation
 	}
+	parsedRequest.GroupID = groupID
 
 	return &parsedRequest, nil
 }

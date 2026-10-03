@@ -268,6 +268,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Security
 
+- [User Manager mutation boundaries](external/usermanager/README.md#mutation-identity-boundaries)
+  bind caller identity independently of JSON and preserve URL-selected group,
+  member and contact targets. Self-deletion always selects the verified caller;
+  anonymous contact submissions cannot forge user attribution. **Breaking:**
+  protected mutation mappers require an authenticated context flag as well as an
+  ID; custom middleware must publish a trusted verification result. HTTP group
+  updates no longer accept full nested group records; use editable fields and
+  dedicated ownership/membership endpoints. Trusted Go service calls retain
+  their existing request types and authorization responsibilities.
 - [Email-proof admission](external/accessmanager/README.md#proof-admission-and-upgrade-compatibility)
   checks exact stored ownership, current account identity, signed type/revision
   and permitted purpose before atomically consuming the proof and issuing a

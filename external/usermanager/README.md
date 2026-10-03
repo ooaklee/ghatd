@@ -16,6 +16,43 @@ The package follows a standard layered architecture, consistent with other servi
 
 Unlike other packages, the `usermanager` doesn't have its own repository or database collection — it exclusively orchestrates data from other services.
 
+## Mutation identity boundaries
+
+Account deletion, contact creation/update, group creation/update, member addition,
+member-role updates and ownership transfers separate trusted identity from editable
+HTTP payloads:
+
+- `DELETE /me` accepts a `reason`; both the actor and deleted account come from
+  verified context. An administrator also deletes **their own** account here.
+- Contact submissions derive attribution from verified context after decoding.
+  Anonymous submissions have no user ID, including when their body supplies one.
+  Contact updates bind the record ID from the URL and require a verified actor;
+  the existing admin middleware remains mandatory.
+- Group mutations obtain the actor from verified context and bind URL-selected
+  group/member IDs after decoding. Body-selected `member_id` on member addition,
+  `owner_id` on ownership transfer/creation, and `parent_group_id` on creation
+  remain supported. The manager still checks admin or group access as applicable.
+- Group updates accept `name`, `description`, `email`, `icon`, `visibility`,
+  `status` and `extensions`. A body-supplied full `group` record is ignored; it
+  cannot redirect an update through a nested ID. Use the dedicated membership
+  and ownership endpoints for those changes.
+
+**Compatibility:** these protected mutation mappers require both an authenticated
+flag and nonempty caller ID. A context ID alone (including an anonymous placeholder)
+is insufficient. GHATD authentication middleware publishes both; custom adapters
+must publish a trusted authentication result through
+[`ContextWithAuthentication`](../accessmanager/middleware/context.go) only after
+credential verification. Do not populate authentication state from body/query data.
+Unknown fields retain the existing ignore behavior; client-supplied actor IDs and
+target overrides do not grant authority. HTTP clients that previously sent full
+group records must switch to the editable fields above.
+
+Exported manager request fields retain their existing names for Go compatibility.
+Direct service calls are trusted in-process commands, not HTTP authentication
+boundaries: their callers must establish the actor and authorize privileged
+workflows. Services retain their domain authorization; this change does not add
+HTTP-context requirements to them or certify every other manager endpoint.
+
 ## Key Features
 
 The `usermanager` is designed to streamline complex user-related workflows into single API calls.

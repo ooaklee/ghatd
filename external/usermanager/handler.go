@@ -210,8 +210,8 @@ func (h *Handler) GetGroupsConfig(w http.ResponseWriter, r *http.Request) {
 	h.GetBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Config)
 }
 
-// DeleteUserPermanently returns response for request to get user's
-// profile
+// DeleteUserPermanently deletes the authenticated caller's account through the
+// manager service and clears authentication cookies on both success and failure.
 func (h *Handler) DeleteUserPermanently(w http.ResponseWriter, r *http.Request) {
 	logger := logger.AcquireOperationFrom(r.Context(), "external/usermanager", "handle-delete-user-permanently")
 	request, err := MapRequestToDeleteUserPermanentlyRequest(r, h.Validator)
