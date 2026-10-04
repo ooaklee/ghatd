@@ -79,6 +79,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- A [Bird transactional email provider](external/emailprovider/README.md#bird-transactional-email)
+  with regional Bearer authentication, inline HTML/text and Reply-To mapping,
+  bounded requests/responses, redirect suppression and host HTTP/telemetry
+  injection. Receipts distinguish API acceptance from delivery; sends are not
+  automatically retried. Existing SparkPost and local capture providers are
+  unchanged. Sender readiness and live delivery require separate host validation.
 - [Private contact conversations](external/contacter/README.md#conversations-and-email-integration-hooks)
   support attributed, append-only administrator notes and recorded replies,
   bounded keyset history and atomic request/provider-message deduplication.
