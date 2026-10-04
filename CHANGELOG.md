@@ -79,6 +79,19 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- An opt-in [prerelease waitlist](external/waitlist/README.md) with framework-owned
+  deterministic signup identities, explicit consent, private CSV export and one
+  previewed announcement. Host branding is independent of identity; durable
+  claims prevent automatic retries of uncertain sends. Local capture remains
+  explicit, and provider acceptance is not delivery confirmation.
+- Optional [conversation ownership and voting](external/contacter/conversation/README.md)
+  adapters preserve native session/live-authority checks while rejecting stale
+  account mutations. Private actor-specific votes remain separate from immutable
+  history; the paging index requires an explicit host migration.
+- An opt-in [browser token-allowance approval bridge](external/accesspolicy/adminaccess/README.md)
+  binds exact-origin cookie sessions to one reviewed, email-confirmed policy
+  update. Proofs are short-lived and consumed before dispatch; the bearer-only
+  API remains unchanged. This does not grant general permissions or provide MFA.
 - A [Bird transactional email provider](external/emailprovider/README.md#bird-transactional-email)
   with regional Bearer authentication, inline HTML/text and Reply-To mapping,
   bounded requests/responses, redirect suppression and host HTTP/telemetry

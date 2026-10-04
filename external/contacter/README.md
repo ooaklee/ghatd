@@ -3,6 +3,11 @@
 `contacter` manages communication records, configured communication types and
 aggregate statistics. Its handler uses the package error manifest for failures.
 
+Optional [conversation ownership and voting](conversation/README.md) adapters
+add private session-bound feedback without changing immutable history. The
+[waitlist integration](../waitlist/README.md) adds prerelease consent/enrollment
+while keeping ordinary contact behavior intact.
+
 ## HTTP routes
 
 `AttachRoutes` registers these exact routes through the shared route registry:

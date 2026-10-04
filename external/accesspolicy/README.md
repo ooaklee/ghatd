@@ -8,6 +8,11 @@ Installing this package alone does not protect endpoints or replace credential
 creation rules. Do not delete legacy thresholds until host adoption and migration
 have been verified.
 
+The optional [browser token-allowance bridge](adminaccess/README.md) provides
+exact-origin cookie verification and one reviewed email-confirmed update through
+the existing policy manager. It does not grant general permissions or replace
+the bearer-only management API.
+
 The package separates verified identity from current, system-specific grants.
 `Subject` uses a server-configured system plus an immutable user ID or independent
 API-token ID. Identity names are bounded, valid UTF-8 and byte-exact: the package
