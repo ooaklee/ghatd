@@ -1,4 +1,4 @@
-package commsconversation_test
+package usermanager_test
 
 import (
 	"context"
@@ -19,7 +19,6 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager/middleware"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/contacter"
-	"github.com/ooaklee/ghatd/external/contacter/conversation"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/repository"
@@ -30,6 +29,7 @@ import (
 	"github.com/ooaklee/ghatd/external/user/v2/migrations"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/ghatd/external/validator"
+	"github.com/ooaklee/ghatd/external/voter"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -82,8 +82,8 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 	other, err := service.CreateComms(ctx, &contacter.CreateCommsRequest{FullName: "Other sender", Email: "other@example.test", Type: contacter.CommsTypeGeneralInquiry, Message: "Other"})
 	require.NoError(t, err)
 	require.NoError(t, contacter.EnsureCommsConversationIndexes(ctx, db))
-	require.NoError(t, commsconversation.EnsureVotingIndexes(ctx, db))
-	manager := (&usermanager.Service{UserService: users, ContacterService: service}).WithAdministratorAuthorizer(authority)
+	require.NoError(t, voter.EnsureIndexes(ctx, db))
+	manager := (&usermanager.Service{UserService: users, ContacterService: service}).WithAdministratorAuthorizer(authority).WithCommsVotingService(service.WithVoterService(voter.NewService(voter.NewRepository(store))))
 	native := usermanager.NewHandler(&usermanager.NewHandlerRequest{Service: manager, Validator: validator.NewValidator()})
 	suite, err := middleware.NewSuite(&middleware.NewSuiteRequest{Service: authority, EphemeralStore: runtime.Store, Environment: "production", CookiePrefixAuthToken: "access", CookiePrefixRefreshToken: "refresh"})
 	require.NoError(t, err)
@@ -96,12 +96,14 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 		}
 		return nil
 	}))
-	require.NoError(t, commsconversation.AttachVoting(routes, &commsconversation.Voting{Database: db, Contacts: contacts, Users: users, Authority: authority}, suite.AdminOnly))
-	group := routes.NewRouteGroup("/api/v1/ums", router.AdminSession, suite.AdminOnly)
-	group.Handle(router.RouteDefinition{Path: "/comms/{id}/conversation", Operation: "usermanager.GetCommsConversation", Methods: []string{http.MethodGet, http.MethodOptions}}, native.GetCommsConversation)
-	group.Handle(router.RouteDefinition{Path: "/comms/{id}/conversation", Operation: "usermanager.AppendCommsConversationEntry", Methods: []string{http.MethodPost, http.MethodOptions}}, native.AppendCommsConversationEntry)
-	group.Handle(router.RouteDefinition{Path: "/comms/{id}", Operation: "usermanager.UpdateComms", Methods: []string{http.MethodPut, http.MethodOptions}}, native.UpdateComms)
-	require.NoError(t, commsconversation.RequireRoutes(routes))
+	usermanager.AttachRoutes(&usermanager.AttachRoutesRequest{
+		Router: routes, Handler: native, EnableCommsVoting: true,
+		AdminOnlyMiddleware:                suite.AdminOnly,
+		ActiveValidApiTokenOrJWTMiddleware: suite.ActiveValidApiTokenOrJWT,
+		ValidApiTokenOrJWTMiddleware:       suite.ActiveValidApiTokenOrAuthenticated,
+		RateLimitOrActiveMiddleware:        suite.RateLimitOrActive,
+	})
+	require.NoError(t, usermanager.RequireCommsConversationRoutes(routes))
 	require.NoError(t, routes.ValidateRoutePolicies())
 	for _, def := range routes.RouteInventory() {
 		if strings.HasPrefix(def.Operation, "commsconversation.") {
@@ -117,7 +119,7 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if expected != "" {
-			req.Header.Set(commsconversation.OwnerHeader, expected)
+			req.Header.Set(usermanager.CommsOwnerHeader, expected)
 		}
 		if tokens != nil {
 			req.AddCookie(&http.Cookie{Name: "access", Value: tokens.AccessToken})
@@ -151,7 +153,7 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 	entryID := receipt.Data.Entry.ID
 	entryPath := root + "/conversation/" + entryID + "/vote"
 	readPath := root + "/conversation/votes?entry_id=" + entryID
-	check := func(method, path, body string, tokens *auth.TokenDetails, expected string, want int) commsconversation.VotePage {
+	check := func(method, path, body string, tokens *auth.TokenDetails, expected string, want int) usermanager.CommsVotePage {
 		t.Helper()
 		status, raw, headers, err := call(method, path, body, tokens, expected)
 		require.NoError(t, err)
@@ -159,12 +161,12 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 		if want == 200 {
 			require.Equal(t, "no-store", headers.Get("Cache-Control"))
 			var response struct {
-				Data commsconversation.VotePage `json:"data"`
+				Data usermanager.CommsVotePage `json:"data"`
 			}
 			require.NoError(t, json.Unmarshal(raw, &response))
 			return response.Data
 		}
-		return commsconversation.VotePage{}
+		return usermanager.CommsVotePage{}
 	}
 	t.Run("authoritative zero counts and bounded participants", func(t *testing.T) {
 		page := check(http.MethodGet, readPath, "", ownerTokens, "", 200)
@@ -216,7 +218,7 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 		} {
 			t.Run(test.name, func(t *testing.T) { check(test.method, test.path, test.body, test.tokens, test.expected, test.status) })
 		}
-		count, err := db.Collection(commsconversation.VotesCollection).CountDocuments(ctx, bson.M{})
+		count, err := db.Collection(voter.Collection).CountDocuments(ctx, bson.M{})
 		require.NoError(t, err)
 		require.Zero(t, count)
 	})
@@ -262,7 +264,7 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 		for failure := range failures {
 			t.Error(failure)
 		}
-		count, err := db.Collection(commsconversation.VotesCollection).CountDocuments(ctx, bson.M{"comms_id": created.Comms.Id, "entry_id": entryID})
+		count, err := db.Collection(voter.Collection).CountDocuments(ctx, bson.M{"domain": "contacter", "resource_id": created.Comms.Id, "child_id": entryID})
 		require.NoError(t, err)
 		require.Equal(t, int64(2), count)
 		page := check(http.MethodGet, readPath, "", ownerTokens, "", 200)
@@ -275,10 +277,10 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 		require.Equal(t, 1, *otherView.ByEntry[entryID].ViewerVote)
 	})
 	t.Run("missing stored vote stays unknown instead of becoming downvote", func(t *testing.T) {
-		_, err := db.Collection(commsconversation.VotesCollection).InsertOne(ctx, bson.M{"_id": "malformed", "comms_id": created.Comms.Id, "entry_id": ""})
+		_, err := db.Collection(voter.Collection).InsertOne(ctx, bson.M{"_id": "malformed", "scope": "", "domain": "contacter", "resource_id": created.Comms.Id, "child_id": "", "actor_id": "malformed-actor"})
 		require.NoError(t, err)
 		check(http.MethodGet, readPath, "", ownerTokens, "", 503)
-		_, err = db.Collection(commsconversation.VotesCollection).DeleteOne(ctx, bson.M{"_id": "malformed"})
+		_, err = db.Collection(voter.Collection).DeleteOne(ctx, bson.M{"_id": "malformed"})
 		require.NoError(t, err)
 	})
 	t.Run("live demotion between admission and handler cannot vote", func(t *testing.T) {
@@ -288,7 +290,7 @@ func TestPrivateConversationVotingWithActualSessionAndPersistence(t *testing.T) 
 			demoteNext.Store(true)
 			check(method, entryPath, `{"vote":1}`, ownerTokens, owner.ID, 401)
 			require.False(t, demoteNext.Load())
-			count, err := db.Collection(commsconversation.VotesCollection).CountDocuments(ctx, bson.M{"actor_id": owner.ID})
+			count, err := db.Collection(voter.Collection).CountDocuments(ctx, bson.M{"actor_id": owner.ID})
 			require.NoError(t, err)
 			require.Zero(t, count)
 		}

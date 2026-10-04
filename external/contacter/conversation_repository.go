@@ -2,12 +2,59 @@ package contacter
 
 import (
 	"context"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/repository"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
+
+// FindCommsEntries resolves at most 100 immutable entries within one contact.
+// Missing/cross-contact IDs fail the entire read. Only identities and authors
+// are projected for private vote views, never message contents.
+func (r *Repository) FindCommsEntries(ctx context.Context, commsID string, ids []string) ([]CommsEntry, error) {
+	if !boundedIdentifier(commsID, 128) || len(ids) == 0 || len(ids) > 100 {
+		return nil, ErrCommsEntryInvalid
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !validEntryID(id) || seen[id] {
+			return nil, ErrCommsEntryInvalid
+		}
+		seen[id] = true
+	}
+	c, _, err := r.conversationCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cur, err := r.Store.ExecuteFindCommand(ctx, c, bson.M{"comms_id": commsID, "_id": bson.M{"$in": append([]string(nil), ids...)}}, options.Find().SetProjection(bson.M{"_id": 1, "comms_id": 1, "actor_id": 1}).SetLimit(int64(len(ids))))
+	if err != nil {
+		return nil, err
+	}
+	if cur == nil {
+		return nil, ErrCommsConversationUnavailable
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = cur.Close(cleanup)
+	}()
+	var entries []CommsEntry
+	if err := cur.All(ctx, &entries); err != nil {
+		return nil, err
+	}
+	if len(entries) != len(ids) {
+		return nil, ErrCommsNotFound
+	}
+	for _, entry := range entries {
+		if !seen[entry.ID] || entry.CommsID != commsID {
+			return nil, ErrCommsConversationUnavailable
+		}
+		delete(seen, entry.ID)
+	}
+	return entries, nil
+}
 
 // CommsEntriesCollection stores one immutable document per note/reply/email.
 // MongoDB's built-in unique _id index enforces both deduplication namespaces.

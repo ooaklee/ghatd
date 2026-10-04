@@ -1,7 +1,4 @@
-// Package commsconversation provides optional conversation ownership and voting
-// adapters. Authentication, live authority and immutable history stay with their
-// existing managers; hosts opt in at composition time before serving requests.
-package commsconversation
+package usermanager
 
 import (
 	"errors"
@@ -15,17 +12,16 @@ import (
 	"github.com/ooaklee/ghatd/external/contacter"
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/router"
-	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/reply/v2"
 )
 
 const (
-	// OwnerHeader binds browser mutations to the account which opened the editor.
-	OwnerHeader = "X-Comms-Expected-Owner"
-	// OwnerChangedCode is a stable compatibility code; it is not an auth credential.
-	OwnerChangedCode = "HOST_COMMS_OWNER_CHANGED"
-	conversationPath = "/api/v1/ums/comms/{id}/conversation"
-	appendOperation  = "usermanager.AppendCommsConversationEntry"
+	// CommsOwnerHeader binds browser mutations to the account which opened the editor.
+	CommsOwnerHeader = "X-Comms-Expected-Owner"
+	// CommsOwnerChangedCode is a stable compatibility code; it is not an auth credential.
+	CommsOwnerChangedCode = "HOST_COMMS_OWNER_CHANGED"
+	conversationPath      = "/api/v1/ums/comms/{id}/conversation"
+	appendOperation       = "usermanager.AppendCommsConversationEntry"
 )
 
 var (
@@ -35,20 +31,23 @@ var (
 	errSessionRequired = errors.New("commsconversation/session-required")
 )
 
+// ownerErrors retains the established owner-precondition wire contracts. These
+// scoped mappings are not alternate authentication or administrator policies.
 func ownerErrors() reply.ErrorManifest {
 	return reply.ErrorManifest{
 		errOwnerRequired:   {Title: "A conversation owner is required.", StatusCode: http.StatusPreconditionRequired, Code: "HOST_COMMS_OWNER_REQUIRED"},
 		errOwnerInvalid:    {Title: "Provide one valid conversation owner.", StatusCode: http.StatusBadRequest, Code: "HOST_COMMS_OWNER_INVALID"},
-		errOwnerChanged:    {Title: "The signed-in account changed.", StatusCode: http.StatusPreconditionFailed, Code: OwnerChangedCode},
+		errOwnerChanged:    {Title: "The signed-in account changed.", StatusCode: http.StatusPreconditionFailed, Code: CommsOwnerChangedCode},
 		errSessionRequired: {Title: "A verified session is required.", StatusCode: http.StatusUnauthorized, Code: "HOST_COMMS_OWNER_SESSION_REQUIRED"},
 	}
 }
 
-// RequireRoutes verifies the current framework's native conversation routes and
-// attaches the owner guard. Missing capabilities fail startup rather than exposing
-// a composer backed by an absent or unprotected append operation.
-func RequireRoutes(r *router.Router) error {
-	count, err := Attach(r)
+// RequireCommsConversationRoutes verifies the current framework's native conversation routes and
+// attaches the owner guard. Missing route contracts fail startup rather than
+// exposing an absent or unprotected append operation. This validates route shape,
+// not datastore availability. Host manifests extend the native collision checks.
+func RequireCommsConversationRoutes(r *router.Router, manifests ...reply.ErrorManifest) error {
+	count, err := AttachCommsConversationOwner(r, manifests...)
 	if err != nil {
 		return err
 	}
@@ -75,17 +74,19 @@ func RequireRoutes(r *router.Router) error {
 	return attachContextOwner(r)
 }
 
-// Attach adds the owner precondition to the existing protected POST leaf before
+// AttachCommsConversationOwner adds the owner precondition to the existing protected POST leaf before
 // serving. It never creates routes or replaces authentication/policy handling.
-func Attach(r *router.Router) (int, error) {
+// Optional manifests extend collision checks to host-specific error maps.
+func AttachCommsConversationOwner(r *router.Router, manifests ...reply.ErrorManifest) (int, error) {
 	if r == nil || r.GetRouter() == nil {
 		return 0, errors.New("conversation owner guard requires a router")
 	}
 	if err := r.ValidateRoutePolicies(); err != nil {
 		return 0, fmt.Errorf("conversation owner guard requires valid route policies: %w", err)
 	}
-	sharedErrors := append(usermanager.DependencyErrorMaps(), usermanager.UsermanagerErrorMap, contacter.ContacterErrorMap, accessmanager.AccessmanagerErrorMap)
+	sharedErrors := append([]reply.ErrorManifest{UsermanagerErrorMap, contacter.ContacterErrorMap, accessmanager.AccessmanagerErrorMap}, manifests...)
 	sharedErrors = append(sharedErrors, accessmanager.DependencyErrorMaps()...)
+	sharedErrors = append(sharedErrors, DependencyErrorMaps()...)
 	if err := uniqueOwnerCodes(sharedErrors...); err != nil {
 		return 0, err
 	}
@@ -178,6 +179,7 @@ func validConversationMethods(methods []string) bool {
 	return len(methods) > 0 && (!get || !post)
 }
 
+// uniqueOwnerCodes rejects accidental reuse of reserved owner wire codes.
 func uniqueOwnerCodes(shared ...reply.ErrorManifest) error {
 	for _, host := range ownerErrors() {
 		for _, manifest := range shared {
@@ -191,10 +193,12 @@ func uniqueOwnerCodes(shared ...reply.ErrorManifest) error {
 	return nil
 }
 
+// expectedOwner accepts one bounded ASCII account ID without normalizing it.
+// Header parsing never establishes a caller's identity or authority.
 func expectedOwner(header http.Header) (string, error) {
 	var values []string
 	for name, candidates := range header {
-		if strings.EqualFold(name, OwnerHeader) {
+		if strings.EqualFold(name, CommsOwnerHeader) {
 			values = append(values, candidates...)
 		}
 	}
@@ -212,12 +216,18 @@ func expectedOwner(header http.Header) (string, error) {
 	return values[0], nil
 }
 
+// requireOwner wraps once so repeated startup composition remains idempotent.
 func requireOwner(next http.Handler) http.Handler {
 	if _, wrapped := next.(*ownerGuard); wrapped {
 		return next
 	}
 	return &ownerGuard{next: next}
 }
+
+// RequireCommsOwner binds a mutation to the session which opened its editor. This
+// transport precondition does not authenticate: native manager routes must still
+// enforce their session middleware, policy and live administrator verification.
+func RequireCommsOwner(next http.Handler) http.Handler { return requireOwner(next) }
 
 // ownerGuard is a typed wrapper so repeated composition is idempotent. It is
 // installed only before serving; requests never mutate the route or inventory.

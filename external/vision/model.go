@@ -5,21 +5,25 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/toolbox"
+	"github.com/ooaklee/ghatd/external/voter"
 )
 
 // Vision represents feedback or a bug report. A non-empty Status makes the
 // item part of the roadmap.
 type Vision struct {
-	ID           string                  `json:"id" bson:"_id"`
-	NanoID       string                  `json:"nano_id" bson:"_nano_id"`
-	Title        string                  `json:"title" bson:"title"`
-	Type         VisionType              `json:"type" bson:"type"`
-	Description  string                  `json:"description,omitempty" bson:"description,omitempty"`
-	Status       VisionStatus            `json:"status,omitempty" bson:"status,omitempty"`
-	Voters       map[VisionVote][]string `json:"voters" bson:"voters"`
-	Comments     []VisionComment         `json:"comments,omitempty" bson:"comments,omitempty"`
-	CommentCount int                     `json:"comment_count" bson:"comment_count"`
-	Metadata     map[string]interface{}  `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	ID          string       `json:"id" bson:"_id"`
+	NanoID      string       `json:"nano_id" bson:"_nano_id"`
+	Title       string       `json:"title" bson:"title"`
+	Type        VisionType   `json:"type" bson:"type"`
+	Description string       `json:"description,omitempty" bson:"description,omitempty"`
+	Status      VisionStatus `json:"status,omitempty" bson:"status,omitempty"`
+	// VoteSummary is hydrated from shared storage, never persisted on the vision.
+	VoteSummary voter.Summary `json:"votes" bson:"-"`
+	// VoteViewerID binds this transient summary to its viewer; never returned publicly.
+	VoteViewerID string                 `json:"-" bson:"-"`
+	Comments     []VisionComment        `json:"comments,omitempty" bson:"comments,omitempty"`
+	CommentCount int                    `json:"comment_count" bson:"comment_count"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty" bson:"metadata,omitempty"`
 
 	CreatedAt       string `json:"created_at" bson:"created_at"`
 	CreatedByUserID string `json:"created_by_user_id" bson:"created_by_user_id"`
@@ -32,18 +36,20 @@ type Vision struct {
 // VisionComment is a comment stored directly on a vision item. Message is
 // persisted verbatim, including optional <@USER_NANO_ID> mention tokens.
 type VisionComment struct {
-	ID              string                  `json:"id" bson:"id"`
-	ParentCommentID string                  `json:"parent_comment_id,omitempty" bson:"parent_comment_id,omitempty"`
-	UserID          string                  `json:"user_id" bson:"user_id"`
-	Message         string                  `json:"message" bson:"message"`
-	Voters          map[VisionVote][]string `json:"voters" bson:"voters"`
-	CreatedAt       string                  `json:"created_at" bson:"created_at"`
+	ID              string `json:"id" bson:"id"`
+	ParentCommentID string `json:"parent_comment_id,omitempty" bson:"parent_comment_id,omitempty"`
+	UserID          string `json:"user_id" bson:"user_id"`
+	Message         string `json:"message" bson:"message"`
+	// VoteSummary is hydrated from shared storage, never persisted on the vision.
+	VoteSummary voter.Summary `json:"votes" bson:"-"`
+	// VoteViewerID binds this transient summary to its viewer; never returned publicly.
+	VoteViewerID string `json:"-" bson:"-"`
+	CreatedAt    string `json:"created_at" bson:"created_at"`
 }
 
-// NewVision returns a normalised vision with empty vote buckets.
+// NewVision returns a normalised vision with an empty vote summary.
 func NewVision(req *CreateVisionRequest, config *VisionConfig) *Vision {
 	vision := &Vision{
-		Voters:       newVisionVoteBuckets(),
 		Comments:     []VisionComment{},
 		CommentCount: 0,
 		config:       config,
@@ -127,16 +133,7 @@ func NewVisionComment(userID, message, parentCommentID string) *VisionComment {
 		ParentCommentID: strings.TrimSpace(parentCommentID),
 		UserID:          strings.TrimSpace(userID),
 		Message:         strings.TrimSpace(message),
-		Voters:          newVisionVoteBuckets(),
 		CreatedAt:       toolbox.TimeNowUTC(),
-	}
-}
-
-// newVisionVoteBuckets returns initialised, empty vote buckets.
-func newVisionVoteBuckets() map[VisionVote][]string {
-	return map[VisionVote][]string{
-		VisionVoteDownvote: {},
-		VisionVoteUpvote:   {},
 	}
 }
 

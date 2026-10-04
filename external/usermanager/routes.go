@@ -89,6 +89,10 @@ const (
 // AttachRoutesRequest holds everything needed to attach usermanager
 // routes to router
 type AttachRoutesRequest struct {
+	// EnableCommsVoting registers optional private voting after its explicit
+	// index migration. Routes always require AdminOnlyMiddleware and live manager
+	// authorization; they never fall back to administrator API-token admission.
+	EnableCommsVoting bool
 	// EnableHandles registers the optional self-handle API after its explicit
 	// storage migration. It requires ActiveOnlyMiddleware and a route evaluator.
 	EnableHandles bool
@@ -208,6 +212,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 
 	usermanagerAdminRoutes := request.Router.NewRouteGroup(APIUserManagerV1Prefix, router.AdminSession, request.AdminOnlyMiddleware)
 	attachCommsConversationRoutes(usermanagerAdminRoutes, request.Handler)
+	if request.EnableCommsVoting {
+		attachCommsVoteRoutes(usermanagerAdminRoutes, request.Handler)
+	}
 	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms", Operation: "usermanager.GetComms", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetComms)
 	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms/stats", Operation: "usermanager.GetCommsStats", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetCommsStats)
 	usermanagerAdminRoutes.Handle(router.RouteDefinition{Path: "/comms/{id}", Operation: "usermanager.UpdateComms", Methods: []string{http.MethodPut, http.MethodOptions}}, request.Handler.UpdateComms)

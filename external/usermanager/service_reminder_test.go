@@ -33,6 +33,10 @@ func (m *mockReminderUserService) GetUserByID(ctx context.Context, r *userv2.Get
 	return &userv2.GetUserByIDResponse{User: user}, nil
 }
 
+func (m *mockReminderUserService) GetUsersByIDs(context.Context, *userv2.GetUsersByIDsRequest) (*userv2.GetUsersByIDsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (m *mockReminderUserService) GetUsers(ctx context.Context, r *userv2.GetUsersRequest) (*userv2.GetUsersResponse, error) {
 	return nil, errors.New("not implemented")
 }

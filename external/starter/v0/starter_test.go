@@ -20,6 +20,7 @@ import (
 	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/streaker"
 	"github.com/ooaklee/ghatd/external/toolbox"
+	"github.com/ooaklee/ghatd/external/voter"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -201,6 +202,7 @@ func TestNewRepositories(t *testing.T) {
 	overrideAudit := audit.NewRepository(core)
 	overrideReminder := reminder.NewRepository(core)
 	overrideStreaker := streaker.NewRepository(core)
+	overrideVoter := voter.NewRepository(core)
 
 	tests := []struct {
 		name    string
@@ -231,7 +233,7 @@ func TestNewRepositories(t *testing.T) {
 				if got.APIToken == nil || got.Audit == nil || got.Billing == nil ||
 					got.Contacter == nil || got.Group == nil || got.Notifier == nil ||
 					got.Post == nil || got.Pricer == nil || got.Reminder == nil ||
-					got.Streaker == nil || got.User == nil {
+					got.Streaker == nil || got.User == nil || got.Voter == nil {
 					t.Fatalf("expected all repositories to be populated: %#v", got)
 				}
 			},
@@ -243,6 +245,7 @@ func TestNewRepositories(t *testing.T) {
 				Audit:    overrideAudit,
 				Reminder: overrideReminder,
 				Streaker: overrideStreaker,
+				Voter:    overrideVoter,
 			},
 			assert: func(t *testing.T, got *Repositories) {
 				t.Helper()
@@ -254,6 +257,9 @@ func TestNewRepositories(t *testing.T) {
 				}
 				if got.Streaker != overrideStreaker {
 					t.Fatalf("expected streaker override to be preserved")
+				}
+				if got.Voter != overrideVoter {
+					t.Fatalf("expected voter override to be preserved")
 				}
 			},
 		},
@@ -302,6 +308,15 @@ func TestNewServices(t *testing.T) {
 			request: func(t *testing.T) *NewServicesRequest {
 				req := validServicesRequest(t)
 				req.Repositories = nil
+				return req
+			},
+			wantErr: ErrNilRepositories,
+		},
+		{
+			name: "Failure - missing shared voter repository",
+			request: func(t *testing.T) *NewServicesRequest {
+				req := validServicesRequest(t)
+				req.Repositories.Voter = nil
 				return req
 			},
 			wantErr: ErrNilRepositories,
@@ -682,6 +697,13 @@ func TestNewServices(t *testing.T) {
 			}
 			if got == nil {
 				t.Fatal("expected services")
+			}
+			if got.Voter == nil || got.Vision.VoterService != got.Voter {
+				t.Fatal("expected vision and host composition to share the same voter service")
+			}
+			votes, ok := got.UserManager.CommsVotingService.(*contacter.Service)
+			if !ok || votes == nil || votes != got.Contacter {
+				t.Fatal("expected user manager to receive conversation voting backed by the same shared voter")
 			}
 			if tt.assert != nil {
 				tt.assert(t, got)
@@ -1327,6 +1349,11 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 			mutate:  func(r *Repositories) { r.Vision = nil },
 			wantErr: ErrNilRepositories,
 		},
+		{
+			name:    "FAILURE - nil Voter",
+			mutate:  func(r *Repositories) { r.Voter = nil },
+			wantErr: ErrNilRepositories,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1345,6 +1372,7 @@ func TestValidateRepositoriesForServices(t *testing.T) {
 				Streaker:  fullRepos.Streaker,
 				User:      fullRepos.User,
 				Vision:    fullRepos.Vision,
+				Voter:     fullRepos.Voter,
 			}
 			if tt.name == "FAILURE - nil repositories" {
 				err := validateRepositoriesForServices(nil)

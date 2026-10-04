@@ -27,6 +27,7 @@ values and injected configuration remain read-only shared values.
 
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [Batch user lookup](#batch-user-lookup)
 - [MongoDB Setup](#mongodb-setup)
 - [Display handles](#display-handles)
 - [Conditional email changes](#conditional-email-changes)
@@ -35,6 +36,67 @@ values and injected configuration remain read-only shared values.
 - [API Endpoints](#api-endpoints)
 - [Configuration Examples](#configuration-examples)
 - [Testing](#testing)
+
+## Batch user lookup
+
+`Service.GetUsersByIDs` is a trusted, in-process method for resolving user
+references. Reuse it through a narrow consumer port rather than duplicating
+lookup loops in each manager:
+
+```go
+type UserLookup interface {
+    GetUsersByIDs(context.Context, *user.GetUsersByIDsRequest) (*user.GetUsersByIDsResponse, error)
+}
+```
+
+Pass `GetUsersByIDsRequest{IDs: ids}` after authorizing the owning operation.
+The user service trims selectors, removes empty/duplicate IDs, sorts them and
+queries sequential batches of at most 100. Callers bound their total input and
+deadline. Persisted identity references must be validated before normalization;
+trimming is a selector convenience, not identity verification. Empty input never
+queries all users. Returned IDs must match their requested batch exactly;
+unrequested or padded stored identities are ignored.
+
+The service uses the existing `UserRepository.GetUsers` method with explicit
+ID filters and limits. The repository still owns datastore queries and shared
+Mongo helpers. No total-count query, new repository port, cache, HTTP endpoint,
+fender, index or configuration is added. The paginated `GetUsers` API is unchanged.
+
+`GetUsersByIDsResponse.Users` is an initialized map keyed by ID, including when
+the method returns an error. Successful batches are retained; failed batches
+contribute native errors through `errors.Join`. Use `errors.Is`/`errors.As`, not
+exact equality. Cancellation stops later queries, excludes the canceled batch
+and preserves earlier successes and failures. Missing records are omitted
+without an error, but absence alongside an error does **not** confirm deletion.
+Consumers choose whether partial results are acceptable. Never use optional
+enrichment as authentication or authorization, and never expose raw diagnostics.
+The lookup service does not add diagnostic logging; repository logging remains
+the adapter's responsibility.
+
+Models are detached before dependency hydration. Arbitrary nested extension
+values and startup dependencies remain read-only shared values, as with email
+lookups. The response map is excluded from JSON: it is **not** a universal user
+projection. Public feedback summaries, private conversation names, group member
+details and notification owners retain their own explicit field selection.
+Do not serialize the full map or substitute email addresses for missing names.
+
+**Custom User Manager adapters:** `usermanager.UserService` now requires this
+method. Delegate to the user domain or implement the same batching, exact-ID,
+partial-error and detached-model contract; do not return a single paginated
+`GetUsers` page as a complete lookup. Standard starter wiring already supplies
+`*user.Service`. See [consumer composition](../../usermanager/README.md#shared-user-reference-lookup).
+
+Validation commands:
+
+```sh
+go test -race ./external/user/v2 ./external/usermanager ./external/starter/v0 -count=1
+```
+
+Set `GHATD_TEST_MONGO_URI` to an isolated test server for `TestUserLookupMongo`.
+It creates and removes only its own databases; skipped cases do not verify
+persistence. `service.lookup_test.go` covers selectors, batch boundaries,
+native errors, cancellation, detachment and count-free access using named
+tables. `lookup_integration_test.go` uses named Mongo boundary cases.
 
 ## Conditional account roles
 

@@ -11,6 +11,7 @@ import (
 	"github.com/ooaklee/ghatd/external/toolbox"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/vision"
+	"github.com/ooaklee/ghatd/external/voter"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -23,6 +24,6 @@ func DependencyErrorMaps() []reply.ErrorManifest {
 	return errormanifest.CloneManifests(
 		user.UserErrorMap, contacter.ContacterErrorMap, toolbox.ToolboxErrorMap,
 		group.GroupErrorMap, notifier.NotifierErrorMap, reminder.ReminderErrorMap,
-		streaker.StreakErrorMap, vision.VisionErrorMap, router.PolicyErrorManifest(),
+		streaker.StreakErrorMap, vision.VisionErrorMap, voter.ErrorMap, router.PolicyErrorManifest(),
 	)
 }

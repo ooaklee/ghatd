@@ -3,8 +3,9 @@ package vision
 import (
 	"context"
 	"errors"
-	"slices"
 	"testing"
+
+	"github.com/ooaklee/ghatd/external/voter"
 )
 
 type memoryVisionRepository struct {
@@ -47,65 +48,19 @@ func (m *memoryVisionRepository) UpdateVisionStatus(_ context.Context, _ string,
 	m.item.UpdatedAt = updatedAt
 	return nil
 }
-func (m *memoryVisionRepository) SetVisionVote(_ context.Context, _ string, userID string, vote VisionVote, _ string) error {
-	other := VisionVoteUpvote
-	if vote == VisionVoteUpvote {
-		other = VisionVoteDownvote
-	}
-	m.item.Voters[other] = slices.DeleteFunc(m.item.Voters[other], func(id string) bool { return id == userID })
-	if !slices.Contains(m.item.Voters[vote], userID) {
-		m.item.Voters[vote] = append(m.item.Voters[vote], userID)
-	}
-	return nil
-}
-func (m *memoryVisionRepository) RemoveVisionVote(_ context.Context, _, userID, _ string) error {
-	for vote := range m.item.Voters {
-		m.item.Voters[vote] = slices.DeleteFunc(m.item.Voters[vote], func(id string) bool { return id == userID })
-	}
-	return nil
-}
 func (m *memoryVisionRepository) AddVisionComment(_ context.Context, _ string, comment *VisionComment) error {
 	m.item.Comments = append(m.item.Comments, *comment)
 	m.item.CommentCount++
 	return nil
 }
-func (m *memoryVisionRepository) SetVisionCommentVote(_ context.Context, _, commentID, userID string, vote VisionVote, _ string) error {
-	for i := range m.item.Comments {
-		if m.item.Comments[i].ID != commentID {
-			continue
-		}
-		other := VisionVoteUpvote
-		if vote == VisionVoteUpvote {
-			other = VisionVoteDownvote
-		}
-		m.item.Comments[i].Voters[other] = slices.DeleteFunc(
-			m.item.Comments[i].Voters[other],
-			func(id string) bool { return id == userID },
-		)
-		if !slices.Contains(m.item.Comments[i].Voters[vote], userID) {
-			m.item.Comments[i].Voters[vote] = append(m.item.Comments[i].Voters[vote], userID)
-		}
-	}
-	return nil
-}
-func (m *memoryVisionRepository) RemoveVisionCommentVote(_ context.Context, _, commentID, userID, _ string) error {
-	for i := range m.item.Comments {
-		if m.item.Comments[i].ID != commentID {
-			continue
-		}
-		for vote := range m.item.Comments[i].Voters {
-			m.item.Comments[i].Voters[vote] = slices.DeleteFunc(
-				m.item.Comments[i].Voters[vote],
-				func(id string) bool { return id == userID },
-			)
-		}
-	}
-	return nil
-}
 
 func mustVisionService(t *testing.T, repo VisionRepository, config ...*VisionConfig) *Service {
 	t.Helper()
-	service, err := NewService(repo, config...)
+	votes := &memoryVoteRepository{values: map[voteKey]voter.Value{}}
+	if recorded, ok := repo.(*actorVisionStore); ok {
+		votes.onWrite = recorded.record
+	}
+	service, err := NewService(repo, voter.NewService(votes), config...)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -136,8 +91,8 @@ func TestServiceCreateVisionInitialisesFeedback(t *testing.T) {
 	if item.ID == "" || item.NanoID == "" || item.CreatedAt == "" {
 		t.Fatalf("generated fields missing: %+v", item)
 	}
-	if item.Voters[VisionVoteUpvote] == nil || item.Voters[VisionVoteDownvote] == nil {
-		t.Fatalf("vote buckets not initialised: %#v", item.Voters)
+	if item.VoteSummary.Up != 0 || item.VoteSummary.Down != 0 || item.VoteSummary.ViewerVote != nil {
+		t.Fatalf("initial summary = %#v", item.VoteSummary)
 	}
 	if item.CommentCount != 0 {
 		t.Fatalf("CommentCount = %d, want 0", item.CommentCount)
@@ -214,45 +169,52 @@ func TestServiceUpdateVisionRejectsEmptyTitle(t *testing.T) {
 	}
 }
 
-func TestServiceVotingHonoursConfigAndMovesBuckets(t *testing.T) {
-	repo := &memoryVisionRepository{}
-	config := DefaultVisionConfig().WithDownvoting(false)
-	service := mustVisionService(t, repo, config)
-	item := createTestVision(t, service)
-
-	_, err := service.SetVisionVote(context.Background(), &SetVisionVoteRequest{
-		NanoID: item.NanoID, ActorID: "user-2", Vote: VisionVoteDownvote,
-	})
-	if !errors.Is(err, ErrVisionDownvotingDisabled) {
-		t.Fatalf("downvote error = %v", err)
-	}
-
-	response, err := service.SetVisionVote(context.Background(), &SetVisionVoteRequest{
-		NanoID: item.NanoID, ActorID: "user-2", Vote: VisionVoteUpvote,
-	})
-	if err != nil {
-		t.Fatalf("upvote error = %v", err)
-	}
-	if !slices.Contains(response.Vision.Voters[VisionVoteUpvote], "user-2") {
-		t.Fatalf("upvote bucket = %#v", response.Vision.Voters)
-	}
-
-	commented, err := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
-		NanoID: item.NanoID, ActorID: "user-3", Message: "same",
-	})
-	if err != nil {
-		t.Fatalf("AddVisionComment() error = %v", err)
-	}
-	_, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{
-		NanoID:    item.NanoID,
-		CommentID: commented.Vision.Comments[0].ID,
-		ActorID:   "user-2",
-		Vote:      VisionVoteDownvote,
-	})
-	if !errors.Is(err, ErrVisionDownvotingDisabled) {
-		t.Fatalf("comment downvote error = %v", err)
+func TestServiceVotingHonoursConfigAndSharedSummary(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		child, downEnabled bool
+		vote               VisionVote
+		want               error
+	}{
+		{"parent up", false, false, VisionVoteUpvote, nil},
+		{"parent down enabled", false, true, VisionVoteDownvote, nil},
+		{"parent down disabled", false, false, VisionVoteDownvote, ErrVisionDownvotingDisabled},
+		{"comment up", true, false, VisionVoteUpvote, nil},
+		{"comment down enabled", true, true, VisionVoteDownvote, nil},
+		{"comment down disabled", true, false, VisionVoteDownvote, ErrVisionDownvotingDisabled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := mustVisionService(t, &memoryVisionRepository{}, DefaultVisionConfig().WithDownvoting(tc.downEnabled))
+			item := createTestVision(t, service)
+			var response *VisionResponse
+			var err error
+			if tc.child {
+				commented, addErr := service.AddVisionComment(context.Background(), &AddVisionCommentRequest{NanoID: item.NanoID, ActorID: "author", Message: "same"})
+				if addErr != nil {
+					t.Fatal(addErr)
+				}
+				response, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{NanoID: item.NanoID, ActorID: "voter", CommentID: commented.Vision.Comments[0].ID, Vote: tc.vote})
+			} else {
+				response, err = service.SetVisionVote(context.Background(), &SetVisionVoteRequest{NanoID: item.NanoID, ActorID: "voter", Vote: tc.vote})
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("vote error = %v, want %v", err, tc.want)
+			}
+			if tc.want != nil {
+				return
+			}
+			summary, viewer := response.Vision.VoteSummary, response.Vision.VoteViewerID
+			if tc.child {
+				summary, viewer = response.Vision.Comments[0].VoteSummary, response.Vision.Comments[0].VoteViewerID
+			}
+			if summary.Up+summary.Down != 1 || summary.ViewerVote == nil || VisionVote(*summary.ViewerVote) != tc.vote || viewer != "voter" {
+				t.Fatalf("summary=%+v viewer=%q", summary, viewer)
+			}
+		})
 	}
 }
+
+// This ordered reply/mention/vote lifecycle asserts changes to one discussion.
 
 func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	service := mustVisionService(t, &memoryVisionRepository{})
@@ -288,8 +250,8 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	if response.Vision.CommentCount != 2 {
 		t.Fatalf("CommentCount = %d, want 2", response.Vision.CommentCount)
 	}
-	if response.Vision.Comments[1].Voters[VisionVoteUpvote] == nil {
-		t.Fatalf("reply vote buckets = %#v", response.Vision.Comments[1].Voters)
+	if response.Vision.Comments[1].VoteSummary.Up != 0 {
+		t.Fatalf("reply summary = %#v", response.Vision.Comments[1].VoteSummary)
 	}
 
 	response, err = service.SetVisionCommentVote(context.Background(), &SetVisionCommentVoteRequest{
@@ -298,8 +260,8 @@ func TestServiceCommentStoresRepliesMentionsAndVotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetVisionCommentVote() error = %v", err)
 	}
-	if !slices.Contains(response.Vision.Comments[0].Voters[VisionVoteUpvote], "user-4") {
-		t.Fatalf("comment voters = %#v", response.Vision.Comments[0].Voters)
+	if response.Vision.Comments[0].VoteSummary.Up != 1 || response.Vision.Comments[0].VoteViewerID != "user-4" {
+		t.Fatalf("comment summary = %#v", response.Vision.Comments[0].VoteSummary)
 	}
 
 	_, err = service.AddVisionComment(context.Background(), &AddVisionCommentRequest{
@@ -314,7 +276,7 @@ func TestVisionConfigValidation(t *testing.T) {
 	invalid := NewCustomVisionConfig().
 		WithValidTypes(VisionTypeFeedback).
 		WithStatusTransition(VisionStatusPlanned, VisionStatus("UNKNOWN"))
-	if _, err := NewService(&memoryVisionRepository{}, invalid); !errors.Is(err, ErrVisionConfigInvalid) {
+	if _, err := NewService(&memoryVisionRepository{}, nil, invalid); !errors.Is(err, ErrVisionConfigInvalid) {
 		t.Fatalf("NewService() error = %v, want ErrVisionConfigInvalid", err)
 	}
 }

@@ -1,4 +1,4 @@
-package commsconversation_test
+package usermanager_test
 
 import (
 	"context"
@@ -18,7 +18,6 @@ import (
 	"github.com/ooaklee/ghatd/external/accessmanager/middleware"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/contacter"
-	"github.com/ooaklee/ghatd/external/contacter/conversation"
 	"github.com/ooaklee/ghatd/external/ephemeral"
 	"github.com/ooaklee/ghatd/external/oauth"
 	"github.com/ooaklee/ghatd/external/repository"
@@ -97,7 +96,7 @@ func TestActualSignedSessionOwnerBindingBeforeConversationPersistence(t *testing
 	group.Handle(router.RouteDefinition{Path: "/me", Operation: "usermanager.GetUserProfile", Methods: []string{http.MethodGet}}, h.GetUserProfile)
 	group.Handle(router.RouteDefinition{Path: "/comms/{id}", Operation: "usermanager.UpdateComms", Methods: []string{http.MethodPut, http.MethodOptions}}, h.UpdateComms)
 	before := routes.RouteInventory()
-	require.NoError(t, commsconversation.RequireRoutes(routes))
+	require.NoError(t, usermanager.RequireCommsConversationRoutes(routes))
 	require.True(t, reflect.DeepEqual(before, routes.RouteInventory()))
 	require.NoError(t, routes.ValidateRoutePolicies())
 	server := httptest.NewServer(routes.GetRouter())
@@ -108,7 +107,7 @@ func TestActualSignedSessionOwnerBindingBeforeConversationPersistence(t *testing
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 		for _, value := range owners {
-			req.Header.Add(commsconversation.OwnerHeader, value)
+			req.Header.Add(usermanager.CommsOwnerHeader, value)
 		}
 		if tokens != nil {
 			req.AddCookie(&http.Cookie{Name: "access", Value: tokens.AccessToken})
@@ -148,7 +147,7 @@ func TestActualSignedSessionOwnerBindingBeforeConversationPersistence(t *testing
 	status, raw, headers := call(http.MethodPost, path, command, anotherTokens, []string{owner.ID}, false)
 	require.Equal(t, 412, status, string(raw))
 	require.Equal(t, "no-store", headers.Get("Cache-Control"))
-	require.Contains(t, string(raw), commsconversation.OwnerChangedCode)
+	require.Contains(t, string(raw), usermanager.CommsOwnerChangedCode)
 	require.Equal(t, int64(0), entries())
 	status, raw, _ = call(http.MethodPut, strings.TrimSuffix(path, "/conversation"), `{"reached_out":true,"linked_comms_ids":[]}`, anotherTokens, []string{owner.ID}, false)
 	require.Equal(t, 412, status, string(raw))

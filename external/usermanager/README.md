@@ -482,3 +482,169 @@ existing public contact-creation response is unchanged.
 
 See the canonical [contacter conversation guide](../contacter/README.md#conversations-and-email-integration-hooks)
 for payloads, pagination, replay rules, storage migration and trusted email hooks.
+
+### Private conversation voting
+
+User Manager also owns the optional `/api/v1/ums` voting HTTP surface. Inject
+`CommsVotingService` with `WithCommsVotingService`, configure
+`WithAdministratorAuthorizer`, then set `EnableCommsVoting: true` on the existing
+`AttachRoutesRequest`. The standard starter wires the service; its route request
+has the same opt-in flag. Install the shared voter indexes explicitly first.
+
+- `GET /comms/{id}/conversation/votes` reads original/selected-entry summaries.
+- `POST|DELETE /comms/{id}/vote` sets/removes the viewer's original-contact vote.
+- `POST|DELETE /comms/{id}/conversation/{entryId}/vote` sets/removes an entry vote.
+
+These paths are relative to `/api/v1/ums`. All require administrator sessions;
+API-token admission is not substituted. Mutations additionally require
+`X-Comms-Expected-Owner`, protecting an editor opened under a different account.
+Handlers bind the actor from verified context, never body/query parameters.
+`GetCommsVotes`, `SetCommsVote` and `RemoveCommsVote` recheck live administrator
+authority, delegate to the injected lower service, and validate result ownership.
+The lower `contacter.Service` validates contact membership;
+`voter.Service` and its repository own shared voting operations and persistence.
+No datastore queries belong in the UMS handler or service.
+
+Use the native route opt-in as the single attachment point. Optional voting
+manager/handler capabilities let custom implementations omit this feature;
+when enabled without those capabilities, routes return a protected 503 rather
+than bypassing checks. Errors use the `HOST_COMMS_VOTE_*` response codes.
+
+```go
+contactService := contacter.NewService(contactRepository).
+    WithVoterService(voterService)
+userManager.WithAdministratorAuthorizer(accessManager)
+userManager.WithCommsVotingService(contactService)
+```
+
+Use the same shared `voter.Service` as other voting consumers. Run
+`voter.EnsureIndexes(ctx, database)` from an explicit host migration. The standard
+starter supplies `Services.Voter` and injects `Services.Contacter` into the
+manager; it does not create a second contact-voting service.
+
+POST accepts `{"vote":1}` (positive) or `{"vote":0}` (negative). GET accepts up to
+100 distinct `entry_id` query values, returning those summaries plus the original
+contact summary. A missing viewer vote is null, not a fabricated negative vote.
+Invalid or cross-contact entries fail the whole request. The registered policy
+operation keys are `commsconversation.ReadVotes`, `commsconversation.SetVote` and
+`commsconversation.RemoveVote`. These are wire identifiers owned by User Manager,
+not Go package paths.
+
+### Shared user reference lookup
+
+User lookup mechanics belong to `user/v2.Service.GetUsersByIDs`, not User Manager.
+UMS's `UserService` port now requires that method; custom adapters and test
+doubles must implement it. Standard starter composition already injects the
+user service. No extra setter or datastore dependency is needed. See the
+[lookup contract](../user/v2/README.md#batch-user-lookup) for partial results,
+native errors, cancellation and exact-identity rules.
+
+UMS only decides whether optional enrichment may degrade on failure and which
+fields to expose. Its conversation, public Vision, group and notification
+projections remain separate; no shared wire DTO expands one consumer's access
+to another consumer's fields. These lookups never establish authority.
+The thin enrichment wrapper logs one payload-free fallback event for an
+incomplete lookup and retains successful batches, without exposing errors.
+
+#### Participant enrichment
+
+Only successful reads receive best-effort participant labels: the verified viewer
+and authors of the requested, validated entries. They are not a list of voters,
+all administrators or the original sender. The lower result supplies bounded
+internal author references; UMS validates the receipt before querying
+`UserService.GetUsersByIDs` through its enrichment wrapper. No extra contact query is
+performed. Labels are sorted and deduplicated, with only `id`, `nano_id` and
+`full_name`. ID/short-ID limits are 128 bytes; oversized names (over 256 bytes)
+are omitted rather than truncated. Names fall back to first/last name, never
+email. Render them as plain text.
+
+Lookups use batches of at most 100 IDs (at most two per conversation read).
+Missing users and failed batches omit labels without changing valid vote counts.
+Malformed padded author references are not normalized into another account;
+returned user IDs must match exactly. Failures log only safe event metadata,
+not dependency diagnostic text. The same lookup mechanics serve groups, Vision
+and notifications, but each retains its own privacy-specific projection.
+
+Mutation responses retain `participants: []` and perform no enrichment.
+Authentication or receipt failures remain fatal; optional lookup failure never
+weakens live-authority checks. Cancellation remains an operation failure.
+
+### Conversation owner preconditions
+
+After attaching native routes and installing the route policy authorizer, call:
+
+```go
+if err := usermanager.RequireCommsConversationRoutes(routes); err != nil {
+    return err
+}
+```
+
+This requires exactly one native admin-session history read, append and metadata
+update with their expected paths and operations. It wraps the existing POST/PUT
+leaves, rather than registering competing handlers. Changed/missing route
+contracts fail startup; the check does not verify datastore availability.
+Repeated wrapping is idempotent. `AttachCommsConversationOwner` is the lower-level
+variant that permits absent conversation routes. Optional host error manifests
+extend reserved-code collision checks. Voting mutations receive their owner
+guard from native UMS route composition independently of this startup check.
+
+Mutations send `CommsOwnerHeader` (`X-Comms-Expected-Owner`) with the account ID
+captured when the editor opened. This is a precondition, **not authentication**.
+Missing, repeated, comma-combined, oversized and malformed values are rejected
+before body decoding; a switched signed-in account cannot submit a stale editor.
+Session middleware, route policy and live administrator verification remain in
+place. Private responses use `no-store` and safe, mapped errors.
+
+| Stable wire code | Status |
+| --- | --- |
+| `HOST_COMMS_OWNER_REQUIRED` | 428 |
+| `HOST_COMMS_OWNER_INVALID` | 400 |
+| `HOST_COMMS_OWNER_CHANGED` | 412 |
+| `HOST_COMMS_OWNER_SESSION_REQUIRED` | 401 |
+| `HOST_COMMS_VOTE_INVALID` | 400 |
+| `HOST_COMMS_VOTE_UNAVAILABLE` | 503 |
+
+### Conversation service contracts
+
+Composition follows the domain boundaries below. Managers own HTTP admission
+and response projections; lower services own domain rules; repositories own
+datastore operations.
+
+| Responsibility | Current API |
+| --- | --- |
+| Generic vote commands and storage | `voter.Service` and `voter.VoteRepository` |
+| Contact/entry validation | `contacter.Service.WithVoterService`; `GetCommsVotes`, `SetCommsVote`, `RemoveCommsVote` |
+| Contact requests and results | `contacter.GetCommsVotesRequest`, `ChangeCommsVoteRequest`, `CommsVoteResult`, `CommsVoteSummary` |
+| Live authority and transport | `usermanager.Service.WithAdministratorAuthorizer`, `Service.WithCommsVotingService`, `AttachRoutesRequest.EnableCommsVoting` |
+| User reference resolution | `user/v2.Service.GetUsersByIDs` through UMS's `UserService` port |
+| Private response projection | `usermanager.CommsVotePage`, `CommsParticipant` |
+| History/metadata owner checks | `usermanager.RequireCommsConversationRoutes`, `AttachCommsConversationOwner` |
+| Mutation owner precondition | `usermanager.RequireCommsOwner`, `CommsOwnerHeader`, `CommsOwnerChangedCode` |
+
+Custom `CommsVotingService` adapters return `EntryAuthors` keyed by exactly the
+requested entry IDs on reads; write results leave it empty. Do not return
+pre-enriched participants. UMS validates the result before resolving users and
+owns the scoped vote error map; generic voter errors retain their own mappings
+elsewhere. Apply the [shared voter index migration](../voter/README.md#composition)
+and the [conversation paging index](../contacter/README.md#storage-and-migration)
+explicitly; enabling routes does not migrate storage.
+
+### Conversation verification
+
+```sh
+go test -race ./external/contacter ./external/usermanager ./external/voter ./external/starter/v0 -count=1
+```
+
+Set `GHATD_TEST_MONGO_URI` and `GHATD_TEST_REDIS_ADDR` to isolated test services
+for real signed-session/persistence checks. Tests create unique databases and
+clean up only their own databases and session/account keys. They do not contact
+live email providers. Skipped integrations are not persistence verification.
+
+Test-style audit: `comms_votes_test.go`, `comms_participants_test.go`,
+`comms_owner_test.go` and `comms_compatibility_test.go` use named boundary tables
+and focused composition assertions. The starter's `routes_comms_votes_test.go`
+covers disabled/enabled/skipped-manager composition. The
+`comms_owner_integration_test.go` and `comms_votes_integration_test.go` retain
+ordered account-switch/replay/demotion and voting/concurrency lifecycles; their
+stateful exceptions preserve the history being asserted. Lower-domain voting
+tables live in `contacter/service.voting_test.go`.

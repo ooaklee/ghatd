@@ -15,6 +15,9 @@ evidence that a feature has been deployed.
   effect on users rather than copying commit messages.
 - Keep plans and unimplemented features in the project tracker. State limitations
   of partial or opt-in implementations and link to their canonical package guides.
+- Describe the final change from the merge target. Omit discarded branch-only
+  packages and intermediate migration steps; name the current package instead.
+  Keep genuine compatibility and storage migrations from the target branch.
 - Mark incompatible changes with **Breaking:** and include the required migration
   action. Use public issue, PR or documentation links where useful; never include
   private project details, credentials or machine-specific paths.
@@ -79,15 +82,26 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- A [user-domain batch lookup](external/user/v2/README.md#batch-user-lookup)
+  resolves references in bounded, count-free repository queries, with exact
+  returned identities, detached models, cancellation and native partial errors.
+  Consumers retain their own authorization and field-level projections.
+- A reusable lower-domain [voter service and repository](external/voter/README.md)
+  stores atomic actor-target votes with shared Mongo helpers, explicit unique
+  indexes and bounded count/viewer projections. Consumers retain permissions
+  and target validation; no generic voting HTTP surface is added.
 - An opt-in [prerelease waitlist](external/waitlist/README.md) with framework-owned
   deterministic signup identities, explicit consent, private CSV export and one
   previewed announcement. Host branding is independent of identity; durable
   claims prevent automatic retries of uncertain sends. Local capture remains
   explicit, and provider acceptance is not delivery confirmation.
-- Optional [conversation ownership and voting](external/contacter/conversation/README.md)
-  adapters preserve native session/live-authority checks while rejecting stale
-  account mutations. Private actor-specific votes remain separate from immutable
-  history; the paging index requires an explicit host migration.
+- User Manager provides optional [conversation ownership and voting](external/usermanager/README.md#private-conversation-voting)
+  through native admin-session routes, with live-authority
+  checks and owner preconditions rejecting stale-account mutations. The contact
+  service validates targets and delegates to the shared voter; UMS resolves
+  user references and exposes a private email/role-free participant projection.
+  Writes return an empty participant array. Hosts explicitly enable voting
+  routes and apply the shared vote and conversation paging indexes.
 - An opt-in [browser token-allowance approval bridge](external/accesspolicy/adminaccess/README.md)
   binds exact-origin cookie sessions to one reviewed, email-confirmed policy
   update. Proofs are short-lived and consumed before dispatch; the bearer-only
@@ -122,9 +136,8 @@ when the release version has been selected, and remove unused subsections.
   write, so callers must reconcile outcomes before retrying.
 - [Native route error manifests](external/router/README.md#native-policy-error-manifests)
   extend router defaults with copied startup maps and ordered host overrides.
-  Mapped native errors no longer need conversion to router sentinels; supplied
+  Mapped native errors do not need conversion to router sentinels; supplied
   responses must be 4xx/5xx. Joined or unknown policy failures remain opaque 503s.
-  This extends the earlier sentinel-only route response contract.
 - Configurable [session-probe responses](external/accessmanager/middleware/README.md#session-probe-response-policy)
   through middleware and starter composition. Preserve the default `/me` 202
   error envelope, or explicitly select an empty 202 or structured 401 for a
@@ -137,8 +150,10 @@ when the release version has been selected, and remove unused subsections.
   verification, rejects incomplete or mixed credential results and clears
   inherited identity on failure while preserving diagnostic causes. Context
   publication also clears stale bearer-only transport markers. Verified
-  claim metadata is reusable without a second JWT parse; account/resource policy
-  remains explicit, and the helper performs no refresh or cookie changes.
+  claim metadata and separate session/API-credential context helpers are reusable
+  without a second JWT parse or exposing raw credentials. Custom transports use
+  `AuthenticateSession` and `ContextWithAuthentication`; account/resource policy
+  remains explicit, and these helpers perform no refresh or cookie changes.
 - Opt-in [request-local proof admission](external/accessproof/README.md) for
   exact alternative identity, assurance, capability, resource-binding and expiry
   requirements. Policies are immutable and default-deny; hosts supply freshly
@@ -184,9 +199,6 @@ when the release version has been selected, and remove unused subsections.
   type remains classification, not a permission or replacement for the stable
   user ID. See [authenticated context](docs/how-to/authenticated-session-context.md)
   for the separate middleware integration.
-- Shared verified session and API-credential context helpers, plus explicit
-  `AuthenticateSession` and `ContextWithAuthentication` entry points for custom
-  transport adapters. Context does not contain the raw credential.
 - Declarative route definitions, startup validation, defensive route inventories
   and structured policy errors. The opt-in
   [route-policy guard](external/accessmanager/middleware/README.md#route-policy-guard)
@@ -209,6 +221,20 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- **Breaking:** Feedback voting uses [shared vote storage](external/voter/README.md#upgrading-existing-vision-voting).
+  Inject the voter service into `vision.NewService` and register its explicit
+  index migration; custom Vision repositories no longer implement vote methods.
+  Raw Vision models expose summaries instead of voter arrays; UMS feedback
+  vote-count and viewer-vote response shapes remain unchanged. No embedded-vote
+  backfill/fallback is provided. Votes no longer update parent edit metadata,
+  and parent deletion does not cascade vote erasure.
+- **Breaking Go API:** `usermanager.UserService` now requires `GetUsersByIDs`.
+  Custom adapters must implement the [lookup contract](external/user/v2/README.md#batch-user-lookup)
+  rather than a single listing page. Standard starter composition is already
+  wired; existing Vision, group and notification response shapes remain
+  unchanged, and conversation participants use a dedicated private projection.
+  User Manager delegates batching and avoids listing counts for optional
+  enrichment.
 - **Breaking template change:** [Blueprint Mongo adapters](internal/blueprint/README.md#mongo-result-contract)
   now use result-returning update/delete helpers. Custom adapters and mocks must
   preserve acknowledgement and write counts instead of returning only an error.

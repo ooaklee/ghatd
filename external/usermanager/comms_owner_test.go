@@ -1,4 +1,4 @@
-package commsconversation
+package usermanager
 
 import (
 	"context"
@@ -32,19 +32,19 @@ func TestOwnerGuardRejectsBeforeReadingBodyOrCallingHandler(t *testing.T) {
 		status int
 	}{
 		{"missing", nil, ownerContext("owner"), 428},
-		{"empty", http.Header{OwnerHeader: {""}}, ownerContext("owner"), 400},
-		{"duplicate", http.Header{OwnerHeader: {"owner", "owner"}}, ownerContext("owner"), 400},
-		{"different header casing", http.Header{OwnerHeader: {"owner"}, strings.ToLower(OwnerHeader): {"owner"}}, ownerContext("owner"), 400},
-		{"comma", http.Header{OwnerHeader: {"owner,owner"}}, ownerContext("owner"), 400},
-		{"space", http.Header{OwnerHeader: {" owner"}}, ownerContext("owner"), 400},
-		{"control", http.Header{OwnerHeader: {"owner\t"}}, ownerContext("owner"), 400},
-		{"non ASCII", http.Header{OwnerHeader: {"ownér"}}, ownerContext("owner"), 400},
-		{"oversize", http.Header{OwnerHeader: {strings.Repeat("x", 129)}}, ownerContext("owner"), 400},
-		{"anonymous", http.Header{OwnerHeader: {"owner"}}, context.Background(), 401},
-		{"authenticated ID without session", http.Header{OwnerHeader: {"owner"}}, helpers.TransitAuthenticatedWith(helpers.TransitWith(context.Background(), "owner"), true), 401},
-		{"session without access UUID", http.Header{OwnerHeader: {"owner"}}, helpers.TransitSessionWith(ownerContext("owner"), &auth.TokenAccessDetails{UserID: "owner", TokenUse: auth.TokenUseAccess}), 401},
-		{"different session owner", http.Header{OwnerHeader: {"owner"}}, ownerContext("another-owner"), 412},
-		{"inconsistent snapshot", http.Header{OwnerHeader: {"owner"}}, helpers.TransitWith(ownerContext("owner"), "another-owner"), 401},
+		{"empty", http.Header{CommsOwnerHeader: {""}}, ownerContext("owner"), 400},
+		{"duplicate", http.Header{CommsOwnerHeader: {"owner", "owner"}}, ownerContext("owner"), 400},
+		{"different header casing", http.Header{CommsOwnerHeader: {"owner"}, strings.ToLower(CommsOwnerHeader): {"owner"}}, ownerContext("owner"), 400},
+		{"comma", http.Header{CommsOwnerHeader: {"owner,owner"}}, ownerContext("owner"), 400},
+		{"space", http.Header{CommsOwnerHeader: {" owner"}}, ownerContext("owner"), 400},
+		{"control", http.Header{CommsOwnerHeader: {"owner\t"}}, ownerContext("owner"), 400},
+		{"non ASCII", http.Header{CommsOwnerHeader: {"ownér"}}, ownerContext("owner"), 400},
+		{"oversize", http.Header{CommsOwnerHeader: {strings.Repeat("x", 129)}}, ownerContext("owner"), 400},
+		{"anonymous", http.Header{CommsOwnerHeader: {"owner"}}, context.Background(), 401},
+		{"authenticated ID without session", http.Header{CommsOwnerHeader: {"owner"}}, helpers.TransitAuthenticatedWith(helpers.TransitWith(context.Background(), "owner"), true), 401},
+		{"session without access UUID", http.Header{CommsOwnerHeader: {"owner"}}, helpers.TransitSessionWith(ownerContext("owner"), &auth.TokenAccessDetails{UserID: "owner", TokenUse: auth.TokenUseAccess}), 401},
+		{"different session owner", http.Header{CommsOwnerHeader: {"owner"}}, ownerContext("another-owner"), 412},
+		{"inconsistent snapshot", http.Header{CommsOwnerHeader: {"owner"}}, helpers.TransitWith(ownerContext("owner"), "another-owner"), 401},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", nil).WithContext(test.ctx)
@@ -61,7 +61,7 @@ func TestOwnerGuardRejectsBeforeReadingBodyOrCallingHandler(t *testing.T) {
 			if strings.Contains(w.Body.String(), "another-owner") || strings.Contains(w.Body.String(), "test-session") {
 				t.Fatal("private identity leaked")
 			}
-			if test.status == 412 && !strings.Contains(w.Body.String(), OwnerChangedCode) {
+			if test.status == 412 && !strings.Contains(w.Body.String(), CommsOwnerChangedCode) {
 				t.Fatal("missing exact owner-change code")
 			}
 		})
@@ -104,9 +104,9 @@ func TestAttachPreservesAuthenticationPolicyBodyAndInventory(t *testing.T) {
 		w.WriteHeader(204)
 	})
 	before := r.RouteInventory()
-	count, err := Attach(r)
+	count, err := AttachCommsConversationOwner(r)
 	if err != nil || count != 1 {
-		t.Fatalf("Attach = %d, %v", count, err)
+		t.Fatalf("AttachCommsConversationOwner = %d, %v", count, err)
 	}
 	if !reflect.DeepEqual(before, r.RouteInventory()) {
 		t.Fatal("guard changed policy inventory")
@@ -115,7 +115,7 @@ func TestAttachPreservesAuthenticationPolicyBodyAndInventory(t *testing.T) {
 		events = nil
 		req := httptest.NewRequest(method, "/api/v1/ums/comms/contact/conversation", strings.NewReader("original body"))
 		if method == http.MethodPost {
-			req.Header.Set(OwnerHeader, "owner")
+			req.Header.Set(CommsOwnerHeader, "owner")
 		}
 		w := httptest.NewRecorder()
 		r.GetRouter().ServeHTTP(w, req)
@@ -125,7 +125,7 @@ func TestAttachPreservesAuthenticationPolicyBodyAndInventory(t *testing.T) {
 	}
 	events = nil
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ums/comms/contact/conversation", nil)
-	req.Header.Set(OwnerHeader, "another-owner")
+	req.Header.Set(CommsOwnerHeader, "another-owner")
 	w := httptest.NewRecorder()
 	r.GetRouter().ServeHTTP(w, req)
 	if w.Code != 412 || !reflect.DeepEqual(events, []string{"authentication"}) {
@@ -144,11 +144,11 @@ func TestOwnerGuardStillDelegatesPolicyDenial(t *testing.T) {
 		})
 	})
 	g.Handle(router.RouteDefinition{Path: "/comms/{id}/conversation", Methods: []string{http.MethodPost}, Operation: appendOperation}, func(http.ResponseWriter, *http.Request) { t.Fatal("policy denial reached handler") })
-	if _, err := Attach(r); err != nil {
+	if _, err := AttachCommsConversationOwner(r); err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/ums/comms/contact/conversation", nil)
-	req.Header.Set(OwnerHeader, "owner")
+	req.Header.Set(CommsOwnerHeader, "owner")
 	w := httptest.NewRecorder()
 	r.GetRouter().ServeHTTP(w, req)
 	if w.Code != 403 {
@@ -159,9 +159,9 @@ func TestOwnerGuardStillDelegatesPolicyDenial(t *testing.T) {
 func TestAttachAllowsPublishedBaselineWithoutAddingRoutes(t *testing.T) {
 	r := router.NewRouter(nil, nil)
 	r.GetRouter().HandleFunc("/public", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(202) }).Methods(http.MethodGet)
-	count, err := Attach(r)
+	count, err := AttachCommsConversationOwner(r)
 	if err != nil || count != 0 {
-		t.Fatalf("Attach = %d, %v", count, err)
+		t.Fatalf("AttachCommsConversationOwner = %d, %v", count, err)
 	}
 	w := httptest.NewRecorder()
 	r.GetRouter().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public", nil))
@@ -202,7 +202,7 @@ func TestAttachRejectsChangedOrUntrackedConversationRegistration(t *testing.T) {
 				}
 				r.NewRouteGroup("/api/v1/ums", mode, func(next http.Handler) http.Handler { return next }).Handle(router.RouteDefinition{Path: target, Operation: operation, Methods: methods}, func(http.ResponseWriter, *http.Request) {})
 			}
-			if _, err := Attach(r); err == nil {
+			if _, err := AttachCommsConversationOwner(r); err == nil {
 				t.Fatal("unsafe registration accepted")
 			}
 		})
@@ -210,7 +210,7 @@ func TestAttachRejectsChangedOrUntrackedConversationRegistration(t *testing.T) {
 }
 
 func TestOwnerErrorCodeCollisionIsRejected(t *testing.T) {
-	if err := uniqueOwnerCodes(reply.ErrorManifest{errors.New("shared"): {StatusCode: 412, Code: OwnerChangedCode}}); err == nil {
+	if err := uniqueOwnerCodes(reply.ErrorManifest{errors.New("shared"): {StatusCode: 412, Code: CommsOwnerChangedCode}}); err == nil {
 		t.Fatal("shared error-code collision accepted")
 	}
 }
@@ -244,8 +244,8 @@ func TestRequireRoutesRejectsMissingOrMisdeclaredConversationAPI(t *testing.T) {
 			if test.post {
 				group.Handle(router.RouteDefinition{Path: "/comms/{id}/conversation", Operation: appendOperation, Methods: []string{http.MethodPost, http.MethodOptions}}, noop)
 			}
-			if err := RequireRoutes(r); (err != nil) != test.wantErr {
-				t.Fatalf("RequireRoutes error=%v, wantErr=%v", err, test.wantErr)
+			if err := RequireCommsConversationRoutes(r); (err != nil) != test.wantErr {
+				t.Fatalf("RequireCommsConversationRoutes error=%v, wantErr=%v", err, test.wantErr)
 			}
 		})
 	}

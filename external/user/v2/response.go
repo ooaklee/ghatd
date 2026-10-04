@@ -32,6 +32,16 @@ type GetUserByEmailResponse struct {
 	User *UniversalUser `json:"user"`
 }
 
+// GetUsersByIDsResponse is internal lookup data, not a universal user projection.
+// It is returned even on error so optional enrichment can retain partial success.
+type GetUsersByIDsResponse struct {
+	// Users is always initialized by Service.GetUsersByIDs and keyed by exact
+	// requested ID. Missing or failed lookups have no entry. A non-nil error means
+	// absence cannot be interpreted as confirmed nonexistence. Consumers own
+	// field-level privacy and must not serialize these full models directly.
+	Users map[string]*UniversalUser `json:"-"`
+}
+
 // GetUsersResponse holds the response for retrieving users with pagination
 type GetUsersResponse struct {
 	Users []UniversalUser     `json:"users"`

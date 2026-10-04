@@ -58,6 +58,15 @@ type DeleteUserRequest struct {
 	ID string
 }
 
+// GetUsersByIDsRequest selects references for a trusted, in-process lookup. It
+// is not an HTTP request or an authorization decision.
+type GetUsersByIDsRequest struct {
+	// IDs are trimmed, deduplicated and sorted without changing caller memory.
+	// Callers resolving persisted identities must first reject malformed/padded
+	// references instead of treating normalization as identity verification.
+	IDs []string `json:"-" query:"-" form:"-"`
+}
+
 // GetUsersRequest holds filters and pagination for retrieving users
 type GetUsersRequest struct {
 	// Pagination

@@ -25,6 +25,9 @@ type UserService interface {
 	GetUserProfile(ctx context.Context, r *userv2.GetUserProfileRequest) (*userv2.GetUserProfileResponse, error)
 	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
 	GetUsers(ctx context.Context, r *userv2.GetUsersRequest) (*userv2.GetUsersResponse, error)
+	// GetUsersByIDs supplies shared lookup mechanics; UMS owns its projections
+	// and may retain successful batches only for optional response enrichment.
+	GetUsersByIDs(ctx context.Context, r *userv2.GetUsersByIDsRequest) (*userv2.GetUsersByIDsResponse, error)
 	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
 	UpdateUser(ctx context.Context, r *userv2.UpdateUserRequest) (*userv2.UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, r *userv2.DeleteUserRequest) error
@@ -143,6 +146,8 @@ type Service struct {
 	ReminderService         ReminderService
 	StreakService           StreakService
 	VisionService           VisionService
+	// CommsVotingService delegates contact membership and shared vote mechanics.
+	CommsVotingService CommsVotingService
 }
 
 // NewServiceRequest holds all expected dependencies for an usermanager service
