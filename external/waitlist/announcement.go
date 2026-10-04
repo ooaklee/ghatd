@@ -31,6 +31,8 @@ var (
 // Announcement is a single prerelease notice, not an ongoing marketing campaign.
 // Copy is supplied by the administrator when prerelease is actually ready.
 type Announcement struct {
+	// Data is bounded host-specific copy frozen with the preview, not executable template source.
+	Data map[string]string `bson:"data,omitempty" json:"data,omitempty"`
 	// ID is a random preview handle, not the fixed campaign identity.
 	ID string `bson:"_id" json:"id"`
 	// Subject is a bounded single line; control characters are rejected.
@@ -94,6 +96,8 @@ type AnnouncementRepository interface {
 // AnnouncementService handles one bounded prerelease campaign, not a marketing
 // platform. Construct it once with trusted host dependencies before serving.
 type AnnouncementService struct {
+	// Content optionally supplies validated host-owned variants and recipient rendering.
+	Content AnnouncementContent
 	// BrandName is escaped display text. Empty uses the neutral "Early access".
 	BrandName string
 	// Store owns durable consent, previews and send claims.
@@ -113,6 +117,8 @@ type AnnouncementService struct {
 
 // AnnouncementPreview contains escaped email HTML and an explicit delivery mode.
 type AnnouncementPreview struct {
+	// Variants expose host-specific previews without adding product fields to the API.
+	Variants []AnnouncementVariant `json:"variants,omitempty"`
 	Announcement
 	// HTML is a preview with a non-functional unsubscribe placeholder.
 	HTML string `json:"html"`
@@ -170,7 +176,8 @@ func (s *AnnouncementService) mode() string {
 // Prepare validates and saves a new preview without sending. A campaign which
 // already started must be resumed instead; its copy cannot be replaced.
 func (s *AnnouncementService) Prepare(ctx context.Context, a Announcement) (AnnouncementPreview, error) {
-	if err := a.validate(); err != nil {
+	a = cloneAnnouncement(a)
+	if err := s.validateContent(a); err != nil {
 		return AnnouncementPreview{}, err
 	}
 	if active, err := s.Store.Started(ctx); err != nil {
@@ -185,14 +192,22 @@ func (s *AnnouncementService) Prepare(ctx context.Context, a Announcement) (Anno
 	a.ID = randomToken()
 	a.PreparedAt = s.now()
 	a.RecipientCount = len(entries)
-	if err := s.Store.SavePreview(ctx, a); err != nil {
+	preview, err := s.preview(a, entries)
+	if err != nil {
 		return AnnouncementPreview{}, err
 	}
-	return s.preview(a), nil
+	if err := s.Store.SavePreview(ctx, cloneAnnouncement(a)); err != nil {
+		return AnnouncementPreview{}, err
+	}
+	return preview, nil
 }
 
-func (s *AnnouncementService) preview(a Announcement) AnnouncementPreview {
-	return AnnouncementPreview{Announcement: a, HTML: s.renderAnnouncement(a, "#unsubscribe-preview"), Mode: s.mode()}
+func (s *AnnouncementService) preview(a Announcement, entries []Entry) (AnnouncementPreview, error) {
+	presentation, err := s.presentation(a, entries)
+	if err != nil {
+		return AnnouncementPreview{}, err
+	}
+	return AnnouncementPreview{Announcement: cloneAnnouncement(a), HTML: presentation.HTML, Variants: presentation.Variants, Mode: s.mode()}, nil
 }
 
 // Current reads the frozen campaign with current audience size, or nil if absent.
@@ -205,8 +220,12 @@ func (s *AnnouncementService) Current(ctx context.Context) (*AnnouncementPreview
 	if err != nil {
 		return nil, err
 	}
-	a.RecipientCount = len(entries)
-	p := s.preview(*a)
+	copy := cloneAnnouncement(*a)
+	copy.RecipientCount = len(entries)
+	p, err := s.preview(copy, entries)
+	if err != nil {
+		return nil, err
+	}
 	return &p, nil
 }
 
@@ -228,7 +247,11 @@ func (s *AnnouncementService) Dispatch(ctx context.Context, id string) (Dispatch
 	if active == nil && s.now().Sub(a.PreparedAt) > time.Hour {
 		return DispatchSummary{}, ErrPreviewExpired
 	}
-	if err := s.Store.Start(ctx, a); err != nil {
+	a = cloneAnnouncement(a)
+	if err := s.validateContent(a); err != nil {
+		return DispatchSummary{}, err
+	}
+	if err := s.Store.Start(ctx, cloneAnnouncement(a)); err != nil {
 		return DispatchSummary{}, err
 	}
 	entries, err := s.Store.Export(ctx)
@@ -248,6 +271,11 @@ func (s *AnnouncementService) Dispatch(ctx context.Context, id string) (Dispatch
 			break
 		}
 		token := randomToken()
+		unsubscribe := strings.TrimRight(s.FrontendURL, "/") + "/waitlist/unsubscribe#" + token
+		body, err := s.renderRecipient(a, e, unsubscribe)
+		if err != nil {
+			return DispatchSummary{}, err
+		}
 		claimed, err := s.Store.Claim(ctx, e, a.ID, tokenHash(token))
 		if err != nil {
 			return DispatchSummary{}, err
@@ -256,8 +284,6 @@ func (s *AnnouncementService) Dispatch(ctx context.Context, id string) (Dispatch
 			continue
 		}
 		n++
-		unsubscribe := strings.TrimRight(s.FrontendURL, "/") + "/waitlist/unsubscribe#" + token
-		body := s.renderAnnouncement(a, unsubscribe)
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		result, sendErr := s.Provider.Send(sendCtx, &emailprovider.Email{To: e.Email, From: s.From, Subject: a.Subject, HTMLBody: body})
 		cancel()

@@ -2,6 +2,7 @@ package waitlist
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
@@ -64,15 +65,34 @@ func (s *commsSignupStore) Join(ctx context.Context, email string) error {
 // NewCommsService extends the existing contact integration. All ordinary comms
 // keep their existing behavior; waitlist comms also enroll in the prerelease
 // audience, retaining its unsubscribe and delivery records.
+// Dependencies must be non-nil; invalid dependencies are a programming error.
 func NewCommsService(repository *contacter.Repository, audience Store) *contacter.Service {
+	service, err := NewCommsServiceWithConfig(repository, audience, CommsConfig{})
+	if err != nil {
+		panic(err)
+	}
+	return service
+}
+
+// NewCommsServiceWithConfig binds consent metadata for new contacts without
+// changing canonical identity or overwriting existing records and annotations.
+func NewCommsServiceWithConfig(repository *contacter.Repository, audience Store, config CommsConfig) (*contacter.Service, error) {
+	version, err := consentVersion(config.ConsentVersion)
+	if err != nil {
+		return nil, err
+	}
+	if repository == nil || audience == nil {
+		return nil, errors.New("waitlist contacts require repository and audience")
+	}
 	types := contacter.DefaultCommsTypeMap()
 	types[CommsType] = "Waitlist"
-	return contacter.NewService(&commsRepository{Repository: repository, audience: audience}, types)
+	return contacter.NewService(&commsRepository{Repository: repository, audience: audience, consent: version}, types), nil
 }
 
 type commsRepository struct {
 	*contacter.Repository
 	audience Store
+	consent  string
 }
 
 func (r *commsRepository) CreateComms(ctx context.Context, comm *contacter.Comms) (*contacter.Comms, error) {
@@ -86,12 +106,12 @@ func (r *commsRepository) CreateComms(ctx context.Context, comm *contacter.Comms
 	if err != nil {
 		return nil, err
 	}
-	return saveWaitlistComms(ctx, collection, r.audience, comm)
+	return saveWaitlistCommsWithConsent(ctx, collection, r.audience, comm, r.consent)
 }
 
-// saveWaitlistComms writes the immutable initial contact before audience consent;
+// saveWaitlistCommsWithConsent writes the initial contact before audience consent;
 // a retry repairs partial enrollment without replacing administrator content.
-func saveWaitlistComms(ctx context.Context, collection *mongo.Collection, audience Store, comm *contacter.Comms) (*contacter.Comms, error) {
+func saveWaitlistCommsWithConsent(ctx context.Context, collection *mongo.Collection, audience Store, comm *contacter.Comms, version string) (*contacter.Comms, error) {
 	email, valid := canonicalEmail(comm.Email)
 	if !valid || strings.TrimSpace(comm.Message) == "" {
 		return nil, contacter.ErrInvalidCommsPayload
@@ -104,7 +124,7 @@ func saveWaitlistComms(ctx context.Context, collection *mongo.Collection, audien
 	record.GenerateNanoId().SetCreatedAtTimeToNow()
 	record.Meta = map[string]interface{}{
 		"displayed_as": "Waitlist", "subject": "Prerelease early access",
-		"campaign": CampaignID, "consent_version": ConsentVersion,
+		"campaign": CampaignID, "consent_version": version,
 	}
 	collection = collection.Clone(options.Collection().SetWriteConcern(writeconcern.Majority()))
 	_, err := collection.UpdateOne(ctx, bson.M{"_id": record.Id}, bson.M{"$setOnInsert": record}, options.UpdateOne().SetUpsert(true))

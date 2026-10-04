@@ -82,6 +82,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Waitlist host extensions](external/waitlist/README.md#host-policy-and-presentation)
+  for configured consent, optional transactional enrollment sequences, CSV
+  projections and persisted custom announcement data with recipient-specific
+  rendering and preview variants. Sequenced signup requires a Mongo replica set
+  or transaction-capable deployment; existing rows are not backfilled. Signup
+  preflight now returns public 204 without invoking JSON decoding or rate limiting.
+
 - A [user-domain batch lookup](external/user/v2/README.md#batch-user-lookup)
   resolves references in bounded, count-free repository queries, with exact
   returned identities, detached models, cancellation and native partial errors.

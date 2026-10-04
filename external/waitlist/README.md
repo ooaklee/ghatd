@@ -32,6 +32,22 @@ and guards are existing host dependencies. The package does not open or close
 clients, install permissive guards, or enable itself through environment variables.
 Use the returned contact service wherever the host previously composed its contact
 service, including the user manager. Ordinary contact types retain their behavior.
+If the host replaces a contact service already composed by `starter/v0`, bind
+both user-manager ports to the replacement before constructing handlers:
+
+```go
+contacts.WithVoterService(services.Voter)
+services.Contacter = contacts
+services.UserManager.ContacterService = contacts
+services.UserManager.WithCommsVotingService(contacts)
+```
+
+`NewCommsService` and `NewCommsServiceWithConfig` construct a fresh contact
+service; they do not copy the previous instance's optional voter dependency.
+Voting also requires the explicit shared-vote index migration, the existing live
+administrator authorizer and `EnableCommsVoting: true` when attaching routes.
+Follow the [native User Manager voting composition](../usermanager/README.md#private-conversation-voting)
+and [voter index setup](../voter/README.md) when enabling that capability.
 Both public signup paths must display the same prerelease consent before submission;
 `CommsType` is a trusted enrollment choice, not permission for arbitrary marketing.
 
@@ -60,13 +76,16 @@ the public receipt never exposes them. A different canonical email is a differen
 signup; no account-email migration or automatic consent transfer is performed.
 Host database separation provides application isolation, not the UUID prefix.
 
-`CampaignID` and `ConsentVersion` remain `prerelease-v1`. This package assumes the
+`CampaignID` remains `prerelease-v1`; the default `ConsentVersion` is
+`prerelease-v1`. Trusted host configuration may select a different consent
+version for newly inserted contacts and audience records. This package assumes the
 new shared ID scheme: it does not silently convert, backfill or delete differently
 keyed prototype contact records. Review existing data before adopting it elsewhere.
 
 | Collection | Purpose |
 | --- | --- |
-| `waitlist_signups` | Canonical address, original join time, consent and source |
+| `waitlist_signups` | Canonical address, original join time, consent, source and optional enrollment sequence |
+| `waitlist_counters` | Optional transactional enrollment counter; never an embedded audience |
 | `waitlist_announcement_previews` | Immutable prepared copy |
 | `waitlist_announcement` | The single started campaign, frozen on first dispatch |
 | `waitlist_deliveries` | Durable claim, acceptance/uncertain state and suppression |
@@ -90,7 +109,10 @@ return the same minimal receipt, never an existing private contact snapshot.
 | `POST /api/v1/waitlist/announcement/send` | Admin session | Dispatch up to ten unclaimed recipients |
 | `POST /api/v1/waitlist/unsubscribe` | Public + rate limiter | Opaque token, idempotent 204; no membership disclosure |
 
-Existing `waitlist.*` operation IDs and response shapes remain unchanged. Private
+Existing `waitlist.*` operation IDs remain unchanged. Signup `OPTIONS` uses a
+dedicated public `waitlist.Preflight` operation returning 204 without JSON
+decoding or rate-limit consumption. Optional custom announcement fields and
+variants are additive; neutral responses omit them. Private
 responses use `Cache-Control: no-store`. A GET link never changes unsubscribe
 state: the host frontend receives a token in the URL fragment and explicitly
 submits it by POST. Only its hash is stored. Never log the token or fragment.
@@ -130,3 +152,88 @@ CSV projection invariant; `announcement_test.go` combines mode/error tables with
 documented stateful dispatch/consent/concurrency lifecycles; `store_test.go` and
 `comms_test.go` retain ordered persistence/retry lifecycles with isolated fixtures;
 `config_test.go` uses named tables for copy, fixed identity, filenames and escaping.
+
+## Host policy and presentation
+
+Hosts can use shared storage and delivery while owning eligibility, copy and
+presentation. No cohort limit, discount, commercial offer or application palette
+is built into the framework.
+
+```go
+audience, err := waitlist.NewMongoStoreWithConfig(database, waitlist.StoreConfig{
+    ConsentVersion: "example-consent-v2",
+    SequenceEnrollment: true,
+})
+// Handle err; then call audience.Initialize(ctx) before serving.
+contacts, err := waitlist.NewCommsServiceWithConfig(contactRepository, audience,
+    waitlist.CommsConfig{ConsentVersion: "example-consent-v2"})
+// Handle err and install contacts in the host's contact composition.
+```
+
+Both constructors validate consent identifiers (1–64 ASCII letters, digits,
+periods, underscores or hyphens, beginning with a letter/digit). Empty selects
+the neutral default. Configure both with the same promise; neither rewrites an
+existing consent, changes communication identity, or treats configuration as
+renewed consent.
+
+Sequenced enrollment is optional and requires Mongo transactions. `Initialize`
+creates the unsubscribe lookup and unique partial `waitlist_signup_sequence`
+index, then validates/initializes the `waitlist_counters` campaign counter inside
+a transaction. A missing counter is initialized to zero only when no positive
+sequences exist. A counter inconsistent with the highest assigned sequence fails
+closed; it is never repaired automatically. Keep signups and the counter together
+in backups and restore them consistently. Do not delete enrollment rows or reset
+the counter to reclaim positions.
+
+Each new signup increments the counter and inserts its `waitlist_signups` row in
+one transaction. Concurrent retries allocate one position per canonical address;
+a failed insert rolls back the increment. Existing rows retain their consent,
+time and sequence, including after unsubscribe. Rows without a sequence remain
+zero and are not retroactively enrolled. Hosts interpret a positive sequence;
+GHATD does not assign eligibility. Initialization and new enrollment fail on an
+unsupported standalone Mongo deployment. The default unsequenced store keeps its
+existing standalone-compatible behavior. No legacy cohort collection is read,
+migrated or deleted.
+
+`RouteConfig.Columns` supplies optional `CSVColumn{Header, Value}` projections.
+Nil retains the six standard columns; an empty/invalid list fails before any
+routes are registered. Columns are bounded to 32, headers use the same safe
+identifier grammar, callbacks are mandatory, and headers must be unique. The
+writer applies formula-prefix escaping to every emitted cell, including formulas
+preceded by whitespace. Configure callbacks
+once; they must be safe for concurrent use and should perform no I/O.
+
+`Announcement.Data` is optional immutable custom copy. Keys use the same safe
+identifier grammar; at most 16 fields, 4,000 bytes per value and 8,000 total key/value
+bytes are allowed. Control characters are forbidden except LF in values. The HTTP
+request also retains its 10,000-byte total limit. Default presentation rejects
+nonempty custom data rather than silently discarding it.
+
+An optional `AnnouncementService.Content` implements `AnnouncementContent`:
+
+- `Validate` applies the host's additional copy rules.
+- `Preview` produces default HTML and up to 16 named variants/counts.
+- `Render` chooses HTML for one stored recipient and its unsubscribe URL.
+
+Hooks are trusted host code, must escape administrator text, and must perform no
+I/O or mutate shared application state. Maps and slices passed to hooks are
+independent copies. Preview content is validated before persistence, custom data
+is stored with the frozen campaign, and caller/response edits cannot change that
+command. Variant keys must be unique safe identifiers, labels are bounded plain
+text, counts must be between zero and the current audience size, and each HTML
+body must be nonblank and at most 1 MiB. Variants may overlap; hosts own their
+segmentation semantics. The shared service owns total recipient counts.
+
+Recipient rendering happens before the durable send claim. Failure does not
+spend that recipient's claim or call the provider, and never falls back to another
+template. A campaign may already be frozen, and earlier recipients in the batch
+may already have been accepted: an error is not a rollback. Existing no-resend,
+suppression and uncertain-provider rules remain in force. Custom payloads are
+revalidated after loading; a changed host renderer must remain compatible with
+its saved commands or require a separately reviewed transition.
+
+Additional test-style audit: `extensions_test.go` uses tables for malformed data,
+configuration and rendering failures, plus one documented stateful mutation-isolation
+scenario. `sequence_test.go` uses configuration/counter tables and documented concurrent
+initialization and enrollment/rollback/restart scenarios. Existing `http_test.go` updates its preflight
+expectation; the other existing test dispositions remain unchanged.
