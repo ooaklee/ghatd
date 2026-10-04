@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -24,6 +25,8 @@ const (
 // Entry is a persisted canonical address plus admin-only delivery projections.
 // Export excludes unsubscribed addresses without erasing their original consent.
 type Entry struct {
+	// Sequence is a stable positive enrollment ordinal when enabled; zero means unassigned.
+	Sequence int64 `bson:"sequence,omitempty"`
 	// ID is the lowercase SHA-256 of Email and remains stable across retries.
 	ID string `bson:"_id"`
 	// Email is the validated lowercase address; never exposed by public signup.
@@ -52,22 +55,46 @@ type Store interface {
 // MongoStore uses the host's managed database without owning its client lifecycle.
 // Collection names and majority-write semantics are stable migration contracts.
 type MongoStore struct {
-	signups    *mongo.Collection
-	previews   *mongo.Collection
-	dispatch   *mongo.Collection
-	deliveries *mongo.Collection
+	config        StoreConfig
+	counters      *mongo.Collection
+	sequenceReady atomic.Bool
+	signups       *mongo.Collection
+	previews      *mongo.Collection
+	dispatch      *mongo.Collection
+	deliveries    *mongo.Collection
 }
 
 // NewMongoStore binds the four existing collections on a non-nil database. It
 // performs no I/O; call Initialize explicitly before serving unsubscribe traffic.
+// As with the original constructor, passing a nil database is a programming error.
 func NewMongoStore(db *mongo.Database) *MongoStore {
+	store, err := NewMongoStoreWithConfig(db, StoreConfig{})
+	if err != nil {
+		panic(err)
+	}
+	return store
+}
+
+// NewMongoStoreWithConfig validates trusted settings without I/O. Initialize must
+// succeed before sequenced enrollment; the host retains the database lifecycle.
+func NewMongoStoreWithConfig(db *mongo.Database, config StoreConfig) (*MongoStore, error) {
+	if db == nil {
+		return nil, errors.New("waitlist requires a database")
+	}
+	version, err := consentVersion(config.ConsentVersion)
+	if err != nil {
+		return nil, err
+	}
+	config.ConsentVersion = version
 	opts := options.Collection().SetWriteConcern(writeconcern.Majority())
 	return &MongoStore{
+		config:     config,
+		counters:   db.Collection("waitlist_counters", opts),
 		signups:    db.Collection("waitlist_signups", opts),
 		previews:   db.Collection("waitlist_announcement_previews", opts),
 		dispatch:   db.Collection("waitlist_announcement", opts),
 		deliveries: db.Collection("waitlist_deliveries", opts),
-	}
+	}, nil
 }
 
 // Initialize bounds the public unsubscribe lookup as the audience grows.
@@ -76,7 +103,13 @@ func (s *MongoStore) Initialize(ctx context.Context) error {
 		Keys:    bson.D{{Key: "unsubscribeHash", Value: 1}},
 		Options: options.Index().SetName("waitlist_unsubscribe_hash"),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if s.config.SequenceEnrollment {
+		return s.initializeSequence(ctx)
+	}
+	return nil
 }
 
 // Join records each canonical address once. Duplicate requests preserve consent
@@ -87,7 +120,10 @@ func (s *MongoStore) Join(ctx context.Context, email string) error {
 		return errors.New("invalid waitlist email")
 	}
 	digest := sha256.Sum256([]byte(address))
-	entry := Entry{ID: hex.EncodeToString(digest[:]), Email: address, JoinedAt: time.Now().UTC(), ConsentVersion: ConsentVersion, Source: "landing"}
+	entry := Entry{ID: hex.EncodeToString(digest[:]), Email: address, JoinedAt: time.Now().UTC(), ConsentVersion: s.config.ConsentVersion, Source: "landing"}
+	if s.config.SequenceEnrollment {
+		return s.joinSequenced(ctx, entry)
+	}
 	result, err := s.signups.UpdateOne(ctx, bson.M{"_id": entry.ID}, bson.M{"$setOnInsert": entry}, options.UpdateOne().SetUpsert(true))
 	if mongo.IsDuplicateKeyError(err) {
 		return s.signups.FindOne(ctx, bson.M{"_id": entry.ID}).Err()

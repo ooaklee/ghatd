@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/mail"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"errors"
 	"github.com/gorilla/mux"
@@ -19,9 +21,18 @@ import (
 
 // RouteConfig supplies display-only host configuration for public/admin routes.
 type RouteConfig struct {
+	// Columns overrides the CSV projection; nil retains the standard six columns.
+	Columns []CSVColumn
 	// ExportFilename is a plain ASCII .csv basename, not a path or header value.
 	// Empty uses "prerelease-waitlist.csv". Invalid names fail route registration.
 	ExportFilename string
+}
+
+// CSVColumn projects one administrative value. The shared writer escapes formula
+// prefixes for every header/value, including values produced by host callbacks.
+type CSVColumn struct {
+	Header string
+	Value  func(Entry) string
 }
 
 var exportFilename = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,120}\.csv$`)
@@ -32,8 +43,8 @@ func AttachRoutes(router *grouter.Router, store Store, rateLimit, adminOnly mux.
 	return AttachRoutesWithConfig(router, store, rateLimit, adminOnly, RouteConfig{})
 }
 
-// AttachRoutesWithConfig preserves the fixed API contract while allowing a host
-// export filename. Both guards are mandatory; no route is added on invalid input.
+// AttachRoutesWithConfig preserves signup admission while allowing a host
+// CSV filename and projection. Both guards are mandatory; no route is added on invalid input.
 func AttachRoutesWithConfig(router *grouter.Router, store Store, rateLimit, adminOnly mux.MiddlewareFunc, config RouteConfig) error {
 	if router == nil || store == nil || rateLimit == nil || adminOnly == nil {
 		return errors.New("waitlist routes require storage, rate limiting and admin authentication")
@@ -44,15 +55,30 @@ func AttachRoutesWithConfig(router *grouter.Router, store Store, rateLimit, admi
 	if !exportFilename.MatchString(config.ExportFilename) {
 		return errors.New("waitlist export requires a plain CSV filename")
 	}
-	h := &handler{store: store, exportFilename: config.ExportFilename}
+	if config.Columns != nil {
+		if len(config.Columns) == 0 || len(config.Columns) > 32 {
+			return errors.New("invalid waitlist CSV columns")
+		}
+		seen := map[string]bool{}
+		for _, column := range config.Columns {
+			if !configIdentifier.MatchString(column.Header) || column.Value == nil || seen[column.Header] {
+				return errors.New("invalid waitlist CSV column")
+			}
+			seen[column.Header] = true
+		}
+	}
+	h := &handler{store: store, exportFilename: config.ExportFilename, columns: slices.Clone(config.Columns)}
 	public := router.NewRouteGroup("/api/v1/waitlist", grouter.OptionalActive, rateLimit)
-	public.Handle(grouter.RouteDefinition{Path: "", Operation: "waitlist.Join", Methods: []string{http.MethodPost, http.MethodOptions}}, h.join)
+	public.Handle(grouter.RouteDefinition{Path: "", Operation: "waitlist.Join", Methods: []string{http.MethodPost}}, h.join)
+	preflight := router.NewRouteGroup("/api/v1/waitlist", grouter.Public, nil)
+	preflight.Handle(grouter.RouteDefinition{Path: "", Operation: "waitlist.Preflight", Methods: []string{http.MethodOptions}}, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	admin := router.NewRouteGroup("/api/v1/waitlist", grouter.AdminSession, adminOnly)
 	admin.Handle(grouter.RouteDefinition{Path: "/export", Operation: "waitlist.Export", Methods: []string{http.MethodGet, http.MethodOptions}}, h.export)
 	return nil
 }
 
 type handler struct {
+	columns        []CSVColumn
 	store          Store
 	exportFilename string
 }
@@ -141,9 +167,30 @@ func (h *handler) export(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	writer := csv.NewWriter(w)
-	_ = writer.Write([]string{"email", "joined_at", "consent_version", "source", "announcement_status", "provider_message_id"})
+	columns := h.columns
+	if columns == nil {
+		columns = []CSVColumn{
+			{"email", func(e Entry) string { return e.Email }},
+			{"joined_at", func(e Entry) string { return e.JoinedAt.Format(time.RFC3339) }},
+			{"consent_version", func(e Entry) string { return e.ConsentVersion }},
+			{"source", func(e Entry) string { return e.Source }},
+			{"announcement_status", func(e Entry) string { return e.AnnouncementState }},
+			{"provider_message_id", func(e Entry) string { return e.ProviderMessageID }},
+		}
+	}
+	headers := make([]string, len(columns))
+	for i, column := range columns {
+		headers[i] = csvCell(column.Header)
+	}
+	if err := writer.Write(headers); err != nil {
+		return
+	}
 	for _, entry := range entries {
-		if err := writer.Write([]string{csvCell(entry.Email), entry.JoinedAt.Format(time.RFC3339), entry.ConsentVersion, entry.Source, csvCell(entry.AnnouncementState), csvCell(entry.ProviderMessageID)}); err != nil {
+		row := make([]string, len(columns))
+		for i, column := range columns {
+			row[i] = csvCell(column.Value(entry))
+		}
+		if err := writer.Write(row); err != nil {
 			return
 		}
 	}
@@ -151,7 +198,8 @@ func (h *handler) export(w http.ResponseWriter, r *http.Request) {
 }
 
 func csvCell(value string) string {
-	if strings.ContainsAny(value[:min(1, len(value))], "=+-@\t\r\n") {
+	trimmed := strings.TrimLeftFunc(value, unicode.IsSpace)
+	if strings.ContainsAny(value[:min(1, len(value))], "\t\r\n") || strings.ContainsAny(trimmed[:min(1, len(trimmed))], "=+-@") {
 		return "'" + value
 	}
 	return value

@@ -71,16 +71,17 @@ func (h *announcementHandler) current(w http.ResponseWriter, r *http.Request) {
 
 func (h *announcementHandler) preview(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Subject string `json:"subject"`
-		Message string `json:"message"`
-		URL     string `json:"url"`
+		Data    map[string]string `json:"data"`
+		Subject string            `json:"subject"`
+		Message string            `json:"message"`
+		URL     string            `json:"url"`
 	}
 	if !decodeAnnouncement(w, r, &input) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	preview, err := h.service.Prepare(ctx, Announcement{Subject: input.Subject, Message: input.Message, URL: input.URL})
+	preview, err := h.service.Prepare(ctx, Announcement{Subject: input.Subject, Message: input.Message, URL: input.URL, Data: input.Data})
 	if err != nil {
 		announcementError(w, err)
 		return

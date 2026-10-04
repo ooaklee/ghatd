@@ -98,7 +98,7 @@ func TestRoutesGuardExportAndRateLimitSignup(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/v1/waitlist", 429},
 		{http.MethodGet, "/api/v1/waitlist/export", 401},
-		{http.MethodOptions, "/api/v1/waitlist", 429},
+		{http.MethodOptions, "/api/v1/waitlist", 204},
 		{http.MethodGet, "/api/v1/waitlist", 404},
 	} {
 		w := httptest.NewRecorder()
