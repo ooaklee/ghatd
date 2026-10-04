@@ -44,6 +44,9 @@ const (
 // attach every standard GHATD API route group. Groups listed in Skip are
 // omitted; their handler may be nil.
 type AttachDefaultRoutesRequest struct {
+	// EnableCommsVoting opts into User Manager's private voting routes after
+	// the shared vote index migration. The owner precondition is always installed.
+	EnableCommsVoting bool
 	// EnableUserHandles opts into the session-only handle API after the host has
 	// installed its unique index and configured a route-policy evaluator.
 	EnableUserHandles bool
@@ -144,6 +147,7 @@ func AttachDefaultRoutes(r *AttachDefaultRoutesRequest) error {
 
 	if !skip[RouteGroupUserManager] {
 		usermanager.AttachRoutes(&usermanager.AttachRoutesRequest{
+			EnableCommsVoting:                            r.EnableCommsVoting,
 			EnableHandles:                                r.EnableUserHandles,
 			Router:                                       r.Router,
 			Handler:                                      r.Stack.Handlers.UserManager,

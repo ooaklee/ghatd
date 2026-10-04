@@ -7,6 +7,7 @@ import (
 
 	accessmanagerhelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/vision"
+	"github.com/ooaklee/ghatd/external/voter"
 )
 
 // CreateVision stores authenticated feedback or a bug report, then enriches it.
@@ -303,8 +304,8 @@ func projectVision(
 		Type:         item.Type,
 		Description:  item.Description,
 		Status:       item.Status,
-		Votes:        summariseVisionVotes(item.Voters),
-		ViewerVote:   findViewerVote(item.Voters, viewerID),
+		Votes:        summariseVisionVotes(item.VoteSummary),
+		ViewerVote:   findViewerVote(item.VoteSummary, item.VoteViewerID, viewerID),
 		CommentCount: item.CommentCount,
 		CreatedAt:    item.CreatedAt,
 		UpdatedAt:    item.UpdatedAt,
@@ -326,8 +327,8 @@ func projectVision(
 				ID:              comment.ID,
 				ParentCommentID: comment.ParentCommentID,
 				Message:         comment.Message,
-				Votes:           summariseVisionVotes(comment.Voters),
-				ViewerVote:      findViewerVote(comment.Voters, viewerID),
+				Votes:           summariseVisionVotes(comment.VoteSummary),
+				ViewerVote:      findViewerVote(comment.VoteSummary, comment.VoteViewerID, viewerID),
 				CreatedAt:       comment.CreatedAt,
 			}
 			if user, ok := usersByID[comment.UserID]; ok {
@@ -363,9 +364,9 @@ func visionViewerCanManage(ctx context.Context, item *vision.Vision) bool {
 }
 
 // summariseVisionVotes counts upvotes and downvotes and calculates their net score.
-func summariseVisionVotes(voters map[vision.VisionVote][]string) VisionVoteSummary {
-	upvotes := len(voters[vision.VisionVoteUpvote])
-	downvotes := len(voters[vision.VisionVoteDownvote])
+func summariseVisionVotes(summary voter.Summary) VisionVoteSummary {
+	upvotes := summary.Up
+	downvotes := summary.Down
 	return VisionVoteSummary{
 		Upvotes:   upvotes,
 		Downvotes: downvotes,
@@ -373,19 +374,11 @@ func summariseVisionVotes(voters map[vision.VisionVote][]string) VisionVoteSumma
 	}
 }
 
-// findViewerVote returns the current viewer's vote, if present.
-func findViewerVote(voters map[vision.VisionVote][]string, viewerID string) *vision.VisionVote {
-	viewerID = strings.TrimSpace(viewerID)
-	if viewerID == "" {
+// findViewerVote only exposes a summary prepared for this authenticated viewer.
+func findViewerVote(summary voter.Summary, summaryViewerID, viewerID string) *vision.VisionVote {
+	if viewerID == "" || viewerID != summaryViewerID || summary.ViewerVote == nil || !summary.ViewerVote.Valid() {
 		return nil
 	}
-	for _, vote := range []vision.VisionVote{vision.VisionVoteDownvote, vision.VisionVoteUpvote} {
-		for _, voterID := range voters[vote] {
-			if voterID == viewerID {
-				result := vote
-				return &result
-			}
-		}
-	}
-	return nil
+	value := vision.VisionVote(*summary.ViewerVote)
+	return &value
 }

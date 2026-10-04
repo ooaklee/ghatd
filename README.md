@@ -42,13 +42,17 @@ and the [OAuth package guide](./external/oauth/README.md).
   - `accessmanager/helpers` - Context-transmission utilities and unique code generation
   - `auth` - JWT creation, validation, and metadata extraction
   - `apitoken` - API token lifecycle management
+- **[Access Policy](./external/accesspolicy/README.md)** - System-scoped grants, usage counters and transactional token allowances
+- **[Access Policy Manager](./external/accesspolicymanager/README.md)** - Live-authorized token-policy preview and revision-checked management
+- **[Browser Approval Bridge](./external/accesspolicy/adminaccess/README.md)** - Opt-in email-confirmed browser approval for token-allowance changes
+- **[Access Proof](./external/accessproof/README.md)** - Request-local admission for explicitly verified capabilities and resource-bound evidence
 
 ### Email System
 A complete email solution split into three composable packages for maximum flexibility and testability.
 
 - **[Email Manager](./external/emailmanager/README.md)** - Complete email system with templating, sending, and audit logging
   - `emailtemplater` - Generate HTML email templates with variable substitution
-  - `emailprovider` - Abstract email sending across providers (SparkPost, logging, custom)
+  - `emailprovider` - Abstract email sending across providers (Bird, SparkPost, local capture, custom)
   - `emailmanager` - High-level orchestration with audit integration
 
 ### Billing System
@@ -64,6 +68,9 @@ A complete billing solution split into three composable packages for maximum fle
 ### Additional Packages
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging
 - **[Content Manager](./external/contentmanager/README.md)** - HTTP orchestration for CMS-style content
+- **[Contacter](./external/contacter/README.md)** - Contact records, private conversations, email integration hooks and domain-specific voting
+- **[Encryption](./external/encryption/README.md)** - Reusable AES-256-GCM payload encryption with explicit keys and associated data
+- **[Ephemeral](./external/ephemeral/README.md)** - Redis session storage and opt-in process-local transactional snapshots
 - **[Group](./external/group/README.md)** - User groups, memberships, and hierarchical organisations
 - **[Logger](./external/logger/README.md)** - Structured request logs, trace correlation, original-path policies, and handler duration
 - **[MongoDB Migrator](./external/migrator/mongo/README.md)** - Shared migration command with host-owned registrations and templates
@@ -81,7 +88,10 @@ A complete billing solution split into three composable packages for maximum fle
 - **[User v2](./external/user/v2/README.md)** - Configurable universal user model and persistence
 - **[User Manager](./external/usermanager/README.md)** - User-facing orchestration across user, group, reminder, and related services
 - **[Vision](./external/vision/README.md)** - Feedback and roadmap management
-- **[Error Manifest](./external/errormanifest/)** - Cross-package error mapping and bundle composition
+- **[Voter](./external/voter/README.md)** - Shared actor-target voting with domain-owned authorization and projections
+- **[Waitlist](./external/waitlist/README.md)** - Opt-in prerelease signup, consent and previewed announcement workflows
+- **[Error Manifest](./external/errormanifest/README.md)** - Cross-package error mapping and bundle composition
+
 **Note on Core Packages:** This is a curated overview rather than an exhaustive package inventory. Each documented package keeps its canonical README alongside the package code.
 
 ## Dual-Channel Verification

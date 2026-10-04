@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
+	"github.com/ooaklee/ghatd/external/voter"
 	"github.com/ooaklee/reply/v2"
 )
 
@@ -223,7 +224,7 @@ func (h *Handler) getBaseResponseHandler() *reply.Replier {
 // responseManifests keeps success factories and error writers on the same
 // domain base and last-wins caller override layers.
 func (h *Handler) responseManifests() []reply.ErrorManifest {
-	return errormanifest.NewComposer().Add(VisionErrorMap).AddOverrides(h.errorMaps...).Build()
+	return errormanifest.NewComposer().Add(VisionErrorMap).Add(voter.ErrorMap).AddOverrides(h.errorMaps...).Build()
 }
 
 // NewHTTPErrorResponse preserves mapped wrappers and validation collections.

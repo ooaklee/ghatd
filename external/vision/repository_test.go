@@ -116,46 +116,6 @@ func TestRepositoryGetVisionByNanoIDUsesNanoIDOnly(t *testing.T) {
 	}
 }
 
-func TestRepositorySetVisionVoteUsesAtomicBuckets(t *testing.T) {
-	store := &mockMongoStore{}
-	repo := NewRepository(store)
-
-	if err := repo.SetVisionVote(context.Background(), "vision-1", "user-1", VisionVoteDownvote, "now"); err != nil {
-		t.Fatalf("SetVisionVote() error = %v", err)
-	}
-	update := store.lastUpdate.(bson.M)
-	add := update["$addToSet"].(bson.M)
-	pull := update["$pull"].(bson.M)
-	if add["voters.0"] != "user-1" || pull["voters.1"] != "user-1" {
-		t.Fatalf("atomic vote update = %#v", update)
-	}
-}
-
-func TestRepositorySetVisionCommentVoteUsesAtomicPositionalBuckets(t *testing.T) {
-	store := &mockMongoStore{}
-	repo := NewRepository(store)
-
-	if err := repo.SetVisionCommentVote(
-		context.Background(),
-		"vision-1",
-		"comment-1",
-		"user-1",
-		VisionVoteUpvote,
-		"now",
-	); err != nil {
-		t.Fatalf("SetVisionCommentVote() error = %v", err)
-	}
-	if !reflect.DeepEqual(store.lastFilter, bson.M{"_id": "vision-1", "comments.id": "comment-1"}) {
-		t.Fatalf("comment vote filter = %#v", store.lastFilter)
-	}
-	update := store.lastUpdate.(bson.M)
-	add := update["$addToSet"].(bson.M)
-	pull := update["$pull"].(bson.M)
-	if add["comments.$.voters.1"] != "user-1" || pull["comments.$.voters.0"] != "user-1" {
-		t.Fatalf("atomic comment vote update = %#v", update)
-	}
-}
-
 func TestRepositoryAddVisionCommentAtomicallyIncrementsCount(t *testing.T) {
 	store := &mockMongoStore{}
 	repo := NewRepository(store)

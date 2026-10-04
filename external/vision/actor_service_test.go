@@ -23,7 +23,7 @@ type actorVisionStore struct {
 }
 
 func newActorVisionStore() *actorVisionStore {
-	return &actorVisionStore{memoryVisionRepository: &memoryVisionRepository{item: &Vision{ID: "record-id", NanoID: "vision-1", Title: "Original", Type: VisionTypeFeedback, CreatedByUserID: "owner", CreatedAt: "original-created", Voters: newVisionVoteBuckets(), Comments: []VisionComment{{ID: "comment-1", Voters: newVisionVoteBuckets()}}}}}
+	return &actorVisionStore{memoryVisionRepository: &memoryVisionRepository{item: &Vision{ID: "record-id", NanoID: "vision-1", Title: "Original", Type: VisionTypeFeedback, CreatedByUserID: "owner", CreatedAt: "original-created", Comments: []VisionComment{{ID: "comment-1"}}}}}
 }
 func (m *actorVisionStore) GetVisionByNanoID(context.Context, string) (*Vision, error) {
 	m.reads++
@@ -52,20 +52,8 @@ func (m *actorVisionStore) UpdateVisionStatus(_ context.Context, id string, _ Vi
 func (m *actorVisionStore) DeleteVisionByID(_ context.Context, id string) error {
 	return m.record(id, "")
 }
-func (m *actorVisionStore) SetVisionVote(_ context.Context, id, actor string, _ VisionVote, _ string) error {
-	return m.record(id, actor)
-}
-func (m *actorVisionStore) RemoveVisionVote(_ context.Context, id, actor, _ string) error {
-	return m.record(id, actor)
-}
 func (m *actorVisionStore) AddVisionComment(_ context.Context, id string, c *VisionComment) error {
 	return m.record(id, c.UserID)
-}
-func (m *actorVisionStore) SetVisionCommentVote(_ context.Context, id, _, actor string, _ VisionVote, _ string) error {
-	return m.record(id, actor)
-}
-func (m *actorVisionStore) RemoveVisionCommentVote(_ context.Context, id, _, actor, _ string) error {
-	return m.record(id, actor)
 }
 
 var visionMutationNames = []string{"create", "update", "status", "vote", "remove vote", "comment", "comment vote", "remove comment vote", "delete"}

@@ -1,4 +1,4 @@
-package commsconversation
+package usermanager
 
 import (
 	"net/http"
@@ -17,7 +17,7 @@ func TestOwnerWrappingIsIdempotent(t *testing.T) {
 			twice := requireOwner(once)
 			require.Same(t, once, twice)
 			r := httptest.NewRequest(method, "/", nil).WithContext(ownerContext("owner"))
-			r.Header.Set(OwnerHeader, "owner")
+			r.Header.Set(CommsOwnerHeader, "owner")
 			w := httptest.NewRecorder()
 			twice.ServeHTTP(w, r)
 			require.Equal(t, 204, w.Code)
@@ -43,7 +43,7 @@ func TestStableWireErrorCodes(t *testing.T) {
 					require.Equal(t, tc.status, def.StatusCode)
 				}
 			}
-			for _, def := range voteErrors() {
+			for _, def := range commsVoteErrorMap() {
 				if def.Code == tc.code {
 					matches++
 					require.Equal(t, tc.status, def.StatusCode)

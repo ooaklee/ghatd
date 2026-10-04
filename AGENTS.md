@@ -8,6 +8,10 @@
 - Write user-facing entries under the current unreleased section. Mark breaking
   changes and explain the migration; link canonical public package documentation.
   Do not list planned work as implemented or imply an unreleased feature shipped.
+- Describe the final branch against its merge target, not intermediate branch
+  iterations. Omit packages/APIs introduced and then removed within the same
+  unreleased work; document the current owner and name instead. Retain migration
+  guidance for interfaces or storage that actually exist on the target branch.
 - If a change needs no entry (for example, a typo or internal-only cleanup), state
   the reason in the PR. The PR checklist applies to humans and agents alike.
 - Keep versions/dates factual, omit empty categories, and preserve published
@@ -44,6 +48,11 @@
 - Follow `docs/adr/adr017-colocate-package-documentation.md`. Package READMEs
   are canonical; `doc.go` is a concise API summary; cross-package how-to guides
   and ADRs belong under `docs/`.
+- Keep guides, indexes, examples and unreleased notes aligned with packages
+  that exist in the final tree. Remove links and migration narratives for
+  discarded branch-only packages; verify target-branch history before deciding
+  whether a removal is a real upgrade concern. Live wire identifiers are API
+  contracts, not package paths, and must still be documented accurately.
 - Document functions, methods, structs and fields with useful purpose,
   constraints, ownership and failure semantics rather than restating names.
 - When the task identifies a project tracking document, reconcile its current
@@ -59,6 +68,16 @@
 - Keep public documentation, examples and commit messages free of credentials,
   private project details and machine-specific paths. Use generic examples and
   review the exact staged changes before publishing.
+- Keep consumer handoffs current alongside shared changes. When the user has
+  authorized coordination, notify the relevant host/client sessions with the
+  exact repository, branch and verified remotely reachable commit, compatibility
+  changes, required migrations, canonical docs and validation scope/limitations.
+  Separate local implementation, published dependency, consumer adoption and
+  runtime/deployment status. Never describe uncommitted or local-only code as
+  pullable. Send a preparation notice for unpublished changes, then a ready-to-
+  adopt notice after authorized publication and remote verification; include
+  the consumer's resulting pin and test evidence when adoption is confirmed.
+  Coordination does not authorize a push, merge, deployment or forced update.
 
 ## Request identity
 

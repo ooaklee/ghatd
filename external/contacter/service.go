@@ -26,6 +26,8 @@ type contacterRepository interface {
 type Service struct {
 	contacterRepository contacterRepository
 	commsTypes          CommsTypeMap
+	// voterService is optional; configure it before serving private vote requests.
+	voterService VoterService
 }
 
 // NewService returns a new instance of the contacter service

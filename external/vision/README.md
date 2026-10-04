@@ -5,7 +5,8 @@ into roadmap work by assigning a status.
 
 The package deliberately keeps user data at arm's length:
 
-- vision records, voters, and comment authors store raw user UUIDs
+- vision records and comment authors store raw user UUIDs; voter identities
+  remain private to the shared vote repository
 - comment messages are stored verbatim and may contain tokens such as
   `<@USER_NANO_ID>`
 - replies use an optional `parent_comment_id` that must refer to a comment on
@@ -22,7 +23,8 @@ All nine mutation commands now carry an explicit `ActorID`. For create, update,
 status, vote and comment commands it replaces request fields previously named
 `CreatedByUserID`, `UpdatedByUserID` or `UserID`. Deletion also requires `ActorID`.
 Update typed callers when adopting this breaking Go API change. Stored authorship,
-vote ownership and comment user IDs remain unchanged; no data migration is needed.
+comment user IDs remain unchanged by ActorID naming. The separate shared-vote
+storage change below requires new composition and an index migration.
 
 HTTP mappers bind actors only from explicitly authenticated context. Anonymous
 bookkeeping IDs and ID-only context are insufficient. Actors have `json:"-"` and
@@ -48,9 +50,10 @@ retain their identity for shared reply maps and host overrides. Existing
 `VIS0-006` authentication failures and other wire codes are unchanged.
 
 Scalar records are copied before configuration or mutation, so a failed update
-cannot change an adapter's shared scalar snapshot. Nested metadata, voters and
-comments are not deep-cloned and remain read-only to the service; custom adapters
-must not mutate shared nested values. This does not add transactions, revision
+cannot change an adapter's shared scalar snapshot. Summary enrichment copies
+list records and comment slices before attaching viewer-specific state. Nested
+metadata remains read-only; custom adapters must not mutate shared nested values.
+This does not add transactions, revision
 checks or matched-count write receipts. Concurrent owner/lifecycle changes and
 uncertain write outcomes still require separate persistence handling; do not
 automatically retry a write merely because its confirmation failed.
@@ -73,18 +76,19 @@ feedback/bug -> UNDER_REVIEW -> PLANNING -> PLANNED -> IN_PROGRESS -> COMPLETE
 
 Host applications can replace this workflow with `VisionConfig`.
 
-Votes use two numeric buckets:
+Vote values remain `VisionVoteDownvote` (0) and `VisionVoteUpvote` (1).
+Setting a vote atomically replaces the actor's direction through the shared
+[Voter service](../voter/README.md). Downvoting can be disabled through Vision
+configuration; comment votes use the same mechanics. Vision validates target
+existence and comment membership before calling the lower service.
 
-```go
-map[vision.VisionVote][]string{
-	vision.VisionVoteDownvote: {"<user-uuid>"},
-	vision.VisionVoteUpvote:   {"<user-uuid>"},
-}
-```
-
-Setting a vote atomically moves the requestor between buckets. Downvoting can
-be disabled through configuration. Comments use the same two vote buckets, so
-users can agree or disagree without adding a reply.
+**Breaking composition:** use `vision.NewService(visionRepository, voterService,
+visionConfig)`. `starter/v0` supplies that shared service automatically. Custom
+Vision repositories no longer implement vote methods. `Vision.Voters` and
+`VisionComment.Voters` are replaced by transient `VoteSummary` fields; raw Vision
+JSON now has count/viewer summaries in `votes`, not user-ID arrays in `voters`.
+`VoteViewerID` is never serialized and protects UMS projections from reusing a
+different viewer's summary. User Manager's existing HTTP projections are unchanged.
 
 ## Routes
 
@@ -125,12 +129,23 @@ requests. Internal UUIDs are not accepted by HTTP routes.
 
 ## Persistence
 
-Votes, comments, replies, and comment votes are embedded in the vision
-document. Vote changes use MongoDB `$addToSet` and `$pull` operations so one
-UUID cannot appear twice in a bucket and changing direction is atomic. List
-queries exclude comment bodies; the detail endpoint returns the full
-discussion. The internal UUID is stored as `_id`; the public NanoID is stored
-as `_nano_id`.
+Comments and replies remain embedded in the Vision document. All parent/comment
+votes now live in the shared `votes` collection using domain `vision`, the internal
+Vision UUID and an optional comment ID. Summaries are attached after reads in
+batches of at most 200 targets and are never written into parent documents.
+List queries exclude comment bodies; the detail endpoint returns the full
+discussion. The internal UUID is `_id`; the public NanoID is `_nano_id`.
+
+Apply `voter.EnsureIndexes(ctx, database)` in an explicit migration before using
+the new vote store. There is no compatibility fallback, data backfill or automatic
+deletion of old voter fields; this upgrade targets installations with no existing
+votes. See [adoption and lifecycle boundaries](../voter/README.md).
+
+Vote writes no longer update the parent's descriptive timestamps or editor ID.
+Authorization/target checks, the vote mutation and summary reads are not one
+transaction. Deleting a Vision denies subsequent domain access but does not
+cascade-delete vote rows; do not reuse resource IDs. Retention/erasure workflows
+must coordinate cleanup separately, including concurrent writers.
 
 Host applications should register `migrations.InitVisionIndexesUp` and
 `migrations.InitVisionIndexesDown` from their `migrations/mongo` package, then

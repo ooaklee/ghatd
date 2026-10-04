@@ -14,6 +14,7 @@ import (
 	"github.com/ooaklee/ghatd/external/streaker"
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/vision"
+	"github.com/ooaklee/ghatd/external/voter"
 )
 
 // Repositories groups the standard GHATD Mongo-backed repositories.
@@ -31,6 +32,8 @@ type Repositories struct {
 	Streaker  *streaker.Repository
 	User      *userv2.Repository
 	Vision    *vision.Repository
+	// Voter stores generic actor-target votes shared by consuming domains.
+	Voter *voter.Repository
 }
 
 // NewRepositoriesRequest holds the dependencies and optional overrides for
@@ -50,6 +53,8 @@ type NewRepositoriesRequest struct {
 	Streaker  *streaker.Repository
 	User      *userv2.Repository
 	Vision    *vision.Repository
+	// Voter stores generic actor-target votes shared by consuming domains.
+	Voter *voter.Repository
 }
 
 // NewRepositories creates the standard repository container. Core is required;
@@ -76,8 +81,12 @@ func NewRepositories(r *NewRepositoriesRequest) (*Repositories, error) {
 		Streaker:  r.Streaker,
 		User:      r.User,
 		Vision:    r.Vision,
+		Voter:     r.Voter,
 	}
 
+	if repos.Voter == nil {
+		repos.Voter = voter.NewRepository(r.Core)
+	}
 	if repos.APIToken == nil {
 		repos.APIToken = apitoken.NewRepository(r.Core)
 	}
@@ -132,7 +141,8 @@ func validateRepositoriesForServices(repos *Repositories) error {
 		repos.Post == nil ||
 		repos.Pricer == nil ||
 		repos.User == nil ||
-		repos.Vision == nil {
+		repos.Vision == nil ||
+		repos.Voter == nil {
 		return ErrNilRepositories
 	}
 

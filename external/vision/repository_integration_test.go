@@ -15,6 +15,8 @@ import (
 	"github.com/ooaklee/ghatd/external/repository"
 	repositoryhelpers "github.com/ooaklee/ghatd/external/repository/helpers"
 	"github.com/ooaklee/ghatd/external/vision"
+	"github.com/ooaklee/ghatd/external/voter"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // This single stateful lifecycle deliberately stays sequential: later assertions
@@ -51,7 +53,10 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	})
 
 	store := repository.NewMongoDbRepositoryWithDefaults(mongoHandler, dbName)
-	service, err := vision.NewService(vision.NewRepository(store))
+	db, err := store.GetDatabase(ctx, "")
+	require.NoError(t, err)
+	require.NoError(t, voter.EnsureIndexes(ctx, db))
+	service, err := vision.NewService(vision.NewRepository(store), voter.NewService(voter.NewRepository(store)))
 	require.NoError(t, err)
 
 	created, err := service.CreateVision(ctx, &vision.CreateVisionRequest{
@@ -67,20 +72,20 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 	require.ErrorIs(t, err, vision.ErrVisionUserIDIsRequired)
 	unchanged, err := service.GetVisionByNanoID(ctx, &vision.GetVisionByNanoIDRequest{NanoID: created.Vision.NanoID})
 	require.NoError(t, err)
-	assert.Empty(t, unchanged.Vision.Voters[vision.VisionVoteUpvote])
+	assert.Empty(t, unchanged.Vision.VoteSummary.Up)
 
 	voted, err := service.SetVisionVote(ctx, &vision.SetVisionVoteRequest{
 		NanoID: created.Vision.NanoID, ActorID: "user-2", Vote: vision.VisionVoteUpvote,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"user-2"}, voted.Vision.Voters[vision.VisionVoteUpvote])
+	assert.Equal(t, 1, voted.Vision.VoteSummary.Up)
 
 	voted, err = service.SetVisionVote(ctx, &vision.SetVisionVoteRequest{
 		NanoID: created.Vision.NanoID, ActorID: "user-2", Vote: vision.VisionVoteDownvote,
 	})
 	require.NoError(t, err)
-	assert.Empty(t, voted.Vision.Voters[vision.VisionVoteUpvote])
-	assert.Equal(t, []string{"user-2"}, voted.Vision.Voters[vision.VisionVoteDownvote])
+	assert.Empty(t, voted.Vision.VoteSummary.Up)
+	assert.Equal(t, 1, voted.Vision.VoteSummary.Down)
 
 	commented, err := service.AddVisionComment(ctx, &vision.AddVisionCommentRequest{
 		NanoID: created.Vision.NanoID, ActorID: "user-3", Message: "Ask <@nano-user>",
@@ -108,7 +113,7 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 		Vote:      vision.VisionVoteUpvote,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []string{"user-5"}, commented.Vision.Comments[0].Voters[vision.VisionVoteUpvote])
+	assert.Equal(t, 1, commented.Vision.Comments[0].VoteSummary.Up)
 
 	commented, err = service.SetVisionCommentVote(ctx, &vision.SetVisionCommentVoteRequest{
 		NanoID:    created.Vision.NanoID,
@@ -117,8 +122,24 @@ func TestIntegration_VisionService_FullLifecycle(t *testing.T) {
 		Vote:      vision.VisionVoteDownvote,
 	})
 	require.NoError(t, err)
-	assert.Empty(t, commented.Vision.Comments[0].Voters[vision.VisionVoteUpvote])
-	assert.Equal(t, []string{"user-5"}, commented.Vision.Comments[0].Voters[vision.VisionVoteDownvote])
+	assert.Empty(t, commented.Vision.Comments[0].VoteSummary.Up)
+	assert.Equal(t, 1, commented.Vision.Comments[0].VoteSummary.Down)
+	// Both parent and comment votes must live only in the shared collection.
+	count, err := db.Collection(voter.Collection).CountDocuments(ctx, bson.M{"domain": "vision", "resource_id": created.Vision.ID})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, count)
+	var stored bson.M
+	require.NoError(t, db.Collection(vision.VisionCollection).FindOne(ctx, bson.M{"_id": created.Vision.ID}).Decode(&stored))
+	assert.NotContains(t, stored, "voters")
+	assert.NotContains(t, stored, "votes")
+	for _, comment := range stored["comments"].(bson.A) {
+		encoded, err := bson.Marshal(comment)
+		require.NoError(t, err)
+		var child bson.M
+		require.NoError(t, bson.Unmarshal(encoded, &child))
+		assert.NotContains(t, child, "voters")
+		assert.NotContains(t, child, "votes")
+	}
 
 	roadmapped, err := service.UpdateVisionStatus(ctx, &vision.UpdateVisionStatusRequest{
 		NanoID: created.Vision.NanoID, Status: vision.VisionStatusUnderReview, ActorID: "admin-1",

@@ -4,8 +4,9 @@ import (
 	"context"
 	"strings"
 
+	accesshelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/logger"
-	"github.com/ooaklee/ghatd/external/toolbox"
+	"github.com/ooaklee/ghatd/external/voter"
 )
 
 // VisionRepository defines the persistence surface used by Service.
@@ -17,21 +18,20 @@ type VisionRepository interface {
 	GetTotalVisions(ctx context.Context, req *GetVisionsRequest) (int64, error)
 	UpdateVision(ctx context.Context, vision *Vision) error
 	UpdateVisionStatus(ctx context.Context, id string, status VisionStatus, updatedByUserID, updatedAt string) error
-	SetVisionVote(ctx context.Context, id, userID string, vote VisionVote, updatedAt string) error
-	RemoveVisionVote(ctx context.Context, id, userID, updatedAt string) error
 	AddVisionComment(ctx context.Context, id string, comment *VisionComment) error
-	SetVisionCommentVote(ctx context.Context, id, commentID, userID string, vote VisionVote, updatedAt string) error
-	RemoveVisionCommentVote(ctx context.Context, id, commentID, userID, updatedAt string) error
 }
 
 // Service holds vision business logic.
 type Service struct {
 	VisionRepository VisionRepository
 	Config           *VisionConfig
+	// VoterService owns shared vote mechanics and storage, not vision permissions.
+	VoterService VoterService
 }
 
-// NewService creates a configured vision service.
-func NewService(visionRepository VisionRepository, configs ...*VisionConfig) (*Service, error) {
+// NewService creates a configured vision service with a required shared voting
+// port. Missing ports fail closed on use; configuration is checked immediately.
+func NewService(visionRepository VisionRepository, votes VoterService, configs ...*VisionConfig) (*Service, error) {
 	config := DefaultVisionConfig()
 	if len(configs) > 0 && configs[0] != nil {
 		config = configs[0]
@@ -42,6 +42,7 @@ func NewService(visionRepository VisionRepository, configs ...*VisionConfig) (*S
 
 	return &Service{
 		VisionRepository: visionRepository,
+		VoterService:     votes,
 		Config:           config,
 	}, nil
 }
@@ -94,11 +95,15 @@ func (s *Service) GetVisionByNanoID(ctx context.Context, req *GetVisionByNanoIDR
 	if err != nil {
 		return nil, err
 	}
-	return &VisionResponse{Vision: vision}, nil
+	return s.projectVotes(ctx, vision, accesshelpers.AcquireAuthenticatedUserIDFrom(ctx))
 }
 
 // GetVisions retrieves a filtered page of vision summaries.
 func (s *Service) GetVisions(ctx context.Context, req *GetVisionsRequest) (*GetVisionsResponse, error) {
+	// A nil query retains the existing default-page behavior.
+	if err := s.validateEntry(ctx, struct{}{}); err != nil {
+		return nil, err
+	}
 	if req != nil {
 		if req.Type != "" && !s.Config.IsValidType(req.Type) {
 			return nil, ErrVisionInvalidType
@@ -112,12 +117,22 @@ func (s *Service) GetVisions(ctx context.Context, req *GetVisionsRequest) (*GetV
 	if err != nil {
 		return nil, err
 	}
+	// Custom repositories may share their returned snapshots between callers.
+	// Enrichment must not attach this viewer's state to those shared records.
+	visions = append([]Vision{}, visions...)
 	total, err := s.VisionRepository.GetTotalVisions(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	for i := range visions {
 		visions[i].SetConfig(s.Config)
+	}
+	refs := make([]*Vision, len(visions))
+	for i := range visions {
+		refs[i] = &visions[i]
+	}
+	if err := s.hydrateVotes(ctx, refs, accesshelpers.AcquireAuthenticatedUserIDFrom(ctx)); err != nil {
+		return nil, err
 	}
 	return &GetVisionsResponse{Visions: visions, Total: total}, nil
 }
@@ -163,7 +178,7 @@ func (s *Service) UpdateVision(ctx context.Context, req *UpdateVisionRequest) (*
 	if err = s.VisionRepository.UpdateVision(ctx, current); err != nil {
 		return nil, err
 	}
-	return &VisionResponse{Vision: current}, nil
+	return s.projectVotes(ctx, current, req.ActorID)
 }
 
 // UpdateVisionStatus validates and persists a roadmap transition.
@@ -199,7 +214,7 @@ func (s *Service) UpdateVisionStatus(ctx context.Context, req *UpdateVisionStatu
 	); err != nil {
 		return nil, err
 	}
-	return &VisionResponse{Vision: current}, nil
+	return s.projectVotes(ctx, current, req.ActorID)
 }
 
 // SetVisionVote atomically sets or changes the requestor's vote.
@@ -229,14 +244,16 @@ func (s *Service) SetVisionVote(ctx context.Context, req *SetVisionVoteRequest) 
 	if err != nil {
 		return nil, err
 	}
-	now := newUpdatedAt()
-	if err := s.VisionRepository.SetVisionVote(ctx, current.ID, strings.TrimSpace(req.ActorID), req.Vote, now); err != nil {
+	if nilVisionDependency(s.VoterService) {
+		return nil, ErrVisionUnavailable
+	}
+	if err := s.VoterService.SetVote(ctx, &voter.SetVoteRequest{ActorID: req.ActorID, Target: visionVoteTarget(current.ID, ""), Vote: voter.Value(req.Vote)}); err != nil {
 		return nil, err
 	}
-	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+	return s.getVoteResponse(ctx, req.NanoID, req.ActorID)
 }
 
-// RemoveVisionVote removes the requestor from both vote buckets.
+// RemoveVisionVote removes only the requestor's shared vote on the vision.
 func (s *Service) RemoveVisionVote(ctx context.Context, req *RemoveVisionVoteRequest) (*VisionResponse, error) {
 	if err := s.validateEntry(ctx, req); err != nil {
 		return nil, err
@@ -254,10 +271,13 @@ func (s *Service) RemoveVisionVote(ctx context.Context, req *RemoveVisionVoteReq
 	if err != nil {
 		return nil, err
 	}
-	if err := s.VisionRepository.RemoveVisionVote(ctx, current.ID, strings.TrimSpace(req.ActorID), newUpdatedAt()); err != nil {
+	if nilVisionDependency(s.VoterService) {
+		return nil, ErrVisionUnavailable
+	}
+	if err := s.VoterService.RemoveVote(ctx, &voter.RemoveVoteRequest{ActorID: req.ActorID, Target: visionVoteTarget(current.ID, "")}); err != nil {
 		return nil, err
 	}
-	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+	return s.getVoteResponse(ctx, req.NanoID, req.ActorID)
 }
 
 // AddVisionComment appends a raw user comment. Mention tokens are stored
@@ -291,7 +311,7 @@ func (s *Service) AddVisionComment(ctx context.Context, req *AddVisionCommentReq
 	if err := s.VisionRepository.AddVisionComment(ctx, current.ID, comment); err != nil {
 		return nil, err
 	}
-	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+	return s.getVoteResponse(ctx, req.NanoID, req.ActorID)
 }
 
 // SetVisionCommentVote atomically sets or changes the requestor's vote on a comment.
@@ -325,20 +345,16 @@ func (s *Service) SetVisionCommentVote(ctx context.Context, req *SetVisionCommen
 	if !visionHasComment(current, req.CommentID) {
 		return nil, ErrVisionCommentNotFound
 	}
-	if err = s.VisionRepository.SetVisionCommentVote(
-		ctx,
-		current.ID,
-		strings.TrimSpace(req.CommentID),
-		strings.TrimSpace(req.ActorID),
-		req.Vote,
-		newUpdatedAt(),
-	); err != nil {
+	if nilVisionDependency(s.VoterService) {
+		return nil, ErrVisionUnavailable
+	}
+	if err = s.VoterService.SetVote(ctx, &voter.SetVoteRequest{ActorID: req.ActorID, Target: visionVoteTarget(current.ID, strings.TrimSpace(req.CommentID)), Vote: voter.Value(req.Vote)}); err != nil {
 		return nil, err
 	}
-	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+	return s.getVoteResponse(ctx, req.NanoID, req.ActorID)
 }
 
-// RemoveVisionCommentVote removes the requestor from both comment vote buckets.
+// RemoveVisionCommentVote removes only the requestor's shared comment vote.
 func (s *Service) RemoveVisionCommentVote(ctx context.Context, req *RemoveVisionCommentVoteRequest) (*VisionResponse, error) {
 	if err := s.validateEntry(ctx, req); err != nil {
 		return nil, err
@@ -363,16 +379,13 @@ func (s *Service) RemoveVisionCommentVote(ctx context.Context, req *RemoveVision
 	if !visionHasComment(current, req.CommentID) {
 		return nil, ErrVisionCommentNotFound
 	}
-	if err = s.VisionRepository.RemoveVisionCommentVote(
-		ctx,
-		current.ID,
-		strings.TrimSpace(req.CommentID),
-		strings.TrimSpace(req.ActorID),
-		newUpdatedAt(),
-	); err != nil {
+	if nilVisionDependency(s.VoterService) {
+		return nil, ErrVisionUnavailable
+	}
+	if err = s.VoterService.RemoveVote(ctx, &voter.RemoveVoteRequest{ActorID: req.ActorID, Target: visionVoteTarget(current.ID, strings.TrimSpace(req.CommentID))}); err != nil {
 		return nil, err
 	}
-	return s.GetVisionByNanoID(ctx, &GetVisionByNanoIDRequest{NanoID: req.NanoID})
+	return s.getVoteResponse(ctx, req.NanoID, req.ActorID)
 }
 
 // DeleteVision deletes a vision addressed by public NanoID.
@@ -424,11 +437,6 @@ func (s *Service) getVisionByNanoID(ctx context.Context, nanoID string) (*Vision
 	result := *vision
 	result.SetConfig(s.Config)
 	return &result, nil
-}
-
-// newUpdatedAt returns the current UTC timestamp in the platform format.
-func newUpdatedAt() string {
-	return toolbox.TimeNowUTC()
 }
 
 // visionHasComment reports whether a vision contains the supplied comment ID.

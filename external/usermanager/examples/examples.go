@@ -211,6 +211,28 @@ func setupService() *usermanager.Service {
 
 type MockUserService struct{}
 
+// mockLookupRepository feeds the example's fixtures into the real domain
+// lookup; batching and identity validation are not reimplemented by the host.
+type mockLookupRepository struct {
+	user.UserRepository
+	service *MockUserService
+}
+
+// GetUsers supplies fixture records; unused repository methods are not invoked.
+func (r *mockLookupRepository) GetUsers(ctx context.Context, req *user.GetUsersRequest) ([]user.UniversalUser, error) {
+	response, err := r.service.GetUsers(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response.Users, nil
+}
+
+// GetUsersByIDs demonstrates delegation to the user domain. Production wiring
+// supplies *user.Service directly instead of this fixture-backed mock.
+func (m *MockUserService) GetUsersByIDs(ctx context.Context, req *user.GetUsersByIDsRequest) (*user.GetUsersByIDsResponse, error) {
+	return user.NewService(&mockLookupRepository{service: m}, nil, nil, nil, nil, nil, "").GetUsersByIDs(ctx, req)
+}
+
 func (m *MockUserService) GetUserMicroProfile(ctx context.Context, r *user.GetUserMicroProfileRequest) (*user.GetUserMicroProfileResponse, error) {
 	return &user.GetUserMicroProfileResponse{
 		MicroProfile: &user.UserMicroProfile{

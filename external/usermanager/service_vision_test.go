@@ -14,6 +14,7 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/ghatd/external/vision"
+	"github.com/ooaklee/ghatd/external/voter"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -23,6 +24,25 @@ type mockVisionUserService struct {
 	users         map[string]userv2.UniversalUser
 	getUsersError error
 	getUsersCalls [][]string
+}
+
+// visionLookupRepository exercises the actual user-domain lookup beneath the
+// public projection. A count call would panic through the unused embedded port.
+type visionLookupRepository struct {
+	userv2.UserRepository
+	users *mockVisionUserService
+}
+
+func (p *visionLookupRepository) GetUsers(ctx context.Context, req *userv2.GetUsersRequest) ([]userv2.UniversalUser, error) {
+	response, err := p.users.GetUsers(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return response.Users, nil
+}
+
+func (m *mockVisionUserService) GetUsersByIDs(ctx context.Context, req *userv2.GetUsersByIDsRequest) (*userv2.GetUsersByIDsResponse, error) {
+	return userv2.NewService(&visionLookupRepository{users: m}, nil, nil, nil, nil, nil, "").GetUsersByIDs(ctx, req)
 }
 
 func (*mockVisionUserService) GetUserMicroProfile(context.Context, *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error) {
@@ -116,14 +136,10 @@ func TestVisionProjectionUsesNanoIDsAndHidesRawUserIDs(t *testing.T) {
 		NanoID:          "vision-nano",
 		Title:           "Privacy-safe feedback",
 		CreatedByUserID: "user-1",
-		Voters: map[vision.VisionVote][]string{
-			vision.VisionVoteUpvote: {"user-2"},
-		},
+		VoteSummary:     voter.Summary{Up: 1},
 		Comments: []vision.VisionComment{{
 			ID: "comment-1", UserID: "user-3", Message: "Ask <@nano-2>",
-			Voters: map[vision.VisionVote][]string{
-				vision.VisionVoteUpvote: {"user-4"},
-			},
+			VoteSummary: voter.Summary{Up: 1},
 		}},
 		CommentCount: 1,
 	}
@@ -160,28 +176,40 @@ func TestVisionProjectionUsesNanoIDsAndHidesRawUserIDs(t *testing.T) {
 }
 
 func TestVisionProjectionIncludesOnlyAuthenticatedViewerVote(t *testing.T) {
-	item := &vision.Vision{
-		ID:     "vision-1",
-		NanoID: "vision-nano",
-		Voters: map[vision.VisionVote][]string{
-			vision.VisionVoteDownvote: {},
-			vision.VisionVoteUpvote:   {"viewer-user"},
-		},
+	for _, tc := range []struct {
+		name, actor        string
+		authenticated, own bool
+	}{
+		{"anonymous", "", false, false},
+		{"ID alone is not authenticated", "viewer-user", false, false},
+		{"selected viewer", "viewer-user", true, true},
+		{"different viewer", "other-user", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			up := voter.Up
+			item := &vision.Vision{ID: "vision-1", NanoID: "vision-nano", VoteSummary: voter.Summary{Up: 1, ViewerVote: &up}, VoteViewerID: "viewer-user",
+				Comments: []vision.VisionComment{{ID: "comment-1", VoteSummary: voter.Summary{Up: 1, ViewerVote: &up}, VoteViewerID: "viewer-user"}},
+			}
+			service := usermanager.NewService(&usermanager.NewServiceRequest{UserService: &mockVisionUserService{}}).WithVisionService(&mockVisionService{item: item})
+			ctx := context.Background()
+			if tc.actor != "" {
+				ctx = accessmanagerhelpers.TransitWith(ctx, tc.actor)
+			}
+			if tc.authenticated {
+				ctx = accessmanagerhelpers.TransitAuthenticatedWith(ctx, true)
+			}
+			response, err := service.GetVisionByNanoID(ctx, &vision.GetVisionByNanoIDRequest{NanoID: item.NanoID})
+			require.NoError(t, err)
+			for _, vote := range []*vision.VisionVote{response.Vision.ViewerVote, response.Vision.Comments[0].ViewerVote} {
+				if tc.own {
+					require.NotNil(t, vote)
+					assert.Equal(t, vision.VisionVoteUpvote, *vote)
+				} else {
+					assert.Nil(t, vote)
+				}
+			}
+		})
 	}
-	service := usermanager.NewService(&usermanager.NewServiceRequest{
-		UserService: &mockVisionUserService{},
-	}).WithVisionService(&mockVisionService{item: item})
-
-	publicResponse, err := service.GetVisionByNanoID(context.Background(), &vision.GetVisionByNanoIDRequest{NanoID: item.NanoID})
-	require.NoError(t, err)
-	assert.Nil(t, publicResponse.Vision.ViewerVote)
-
-	ctx := accessmanagerhelpers.TransitWith(context.Background(), "viewer-user")
-	ctx = accessmanagerhelpers.TransitAuthenticatedWith(ctx, true)
-	authenticatedResponse, err := service.GetVisionByNanoID(ctx, &vision.GetVisionByNanoIDRequest{NanoID: item.NanoID})
-	require.NoError(t, err)
-	require.NotNil(t, authenticatedResponse.Vision.ViewerVote)
-	assert.Equal(t, vision.VisionVoteUpvote, *authenticatedResponse.Vision.ViewerVote)
 }
 
 func TestVisionProjectionIdentifiesViewerAndEditCapability(t *testing.T) {
@@ -353,7 +381,7 @@ func TestVisionReadReturnsCoreResponseWhenUserEnrichmentFails(t *testing.T) {
 	assert.Equal(t, item.NanoID, response.Vision.NanoID)
 	assert.Empty(t, response.Users)
 	assert.Len(t, userService.getUsersCalls, 1)
-	assert.Equal(t, 1, logs.FilterMessage("user-enrichment-batch-unavailable").Len())
+	assert.Equal(t, 1, logs.FilterMessage("user-enrichment-unavailable").Len())
 }
 
 func TestVisionMutationReturnsStoredResultWhenUserEnrichmentFails(t *testing.T) {
@@ -374,7 +402,7 @@ func TestVisionMutationReturnsStoredResultWhenUserEnrichmentFails(t *testing.T) 
 	require.NotNil(t, response)
 	require.NotNil(t, response.Vision)
 	assert.Equal(t, item.NanoID, response.Vision.NanoID)
-	assert.Equal(t, 1, logs.FilterMessage("user-enrichment-batch-unavailable").Len())
+	assert.Equal(t, 1, logs.FilterMessage("user-enrichment-unavailable").Len())
 }
 
 func TestVisionAdminOperationsReturnSafeConfigAndEnrichedProjection(t *testing.T) {

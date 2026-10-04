@@ -18,7 +18,11 @@ type StoreConfig struct {
 
 // CommsConfig records the host's signup promise on newly created contacts only.
 // Use the same consent version in StoreConfig; neither setting changes identity.
-type CommsConfig struct{ ConsentVersion string }
+type CommsConfig struct {
+	// ConsentVersion records the displayed promise on new contacts; empty selects
+	// the neutral default and must match the audience's StoreConfig value.
+	ConsentVersion string
+}
 
 func consentVersion(value string) (string, error) {
 	if value == "" {

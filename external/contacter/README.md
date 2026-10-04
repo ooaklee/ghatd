@@ -3,7 +3,7 @@
 `contacter` manages communication records, configured communication types and
 aggregate statistics. Its handler uses the package error manifest for failures.
 
-Optional [conversation ownership and voting](conversation/README.md) adapters
+Optional [conversation ownership and voting](../usermanager/README.md#private-conversation-voting)
 add private session-bound feedback without changing immutable history. The
 [waitlist integration](../waitlist/README.md) adds prerelease consent/enrollment
 while keeping ordinary contact behavior intact.
@@ -161,3 +161,50 @@ Validate with `go test -race ./external/contacter ./external/usermanager`. Set
 tables; each case creates and removes its own uniquely named database. Without
 that variable those integration cases explicitly skip. Unit tables cover native
 errors and ambiguous acknowledgements separately from real concurrency tests.
+
+## Contact voting
+
+`Service` owns contact/entry admission and delegates generic vote operations to
+the injected [voter service](../voter/README.md). There is no contact-specific
+vote store or user lookup in this layer:
+
+```go
+contactService := contacter.NewService(contactRepository).
+    WithVoterService(voterService)
+userManager.WithCommsVotingService(contactService)
+```
+
+Configure dependencies before serving. `NewService` remains usable for ordinary
+contact CRUD without a voter. Voting requires the optional `VotingRepository`
+capability (`FindCommsEntry` and bounded `FindCommsEntries`) on that same contact
+repository; absent/typed-nil capabilities fail closed when voting is called.
+The standard repository implements both. No automatic fallback or index
+migration occurs.
+
+`GetCommsVotes`, `SetCommsVote` and `RemoveCommsVote` take explicit manager-supplied
+`ActorID` values. These IDs are not credentials: the manager must authorize the
+operation first. Contradictory verified context remains rejected. Parent
+existence and every requested entry's membership are checked before shared voting;
+unknown targets never turn into authoritative zero counts.
+
+`CommsVoteResult` contains aggregate counts and the viewer's own vote, never the
+voter inventory. Read results additionally contain `EntryAuthors`, with exactly
+one reference per requested validated entry (at most 100). Empty stored authors
+remain empty; the original sender is not added. This trusted service metadata is
+excluded from JSON and is not independent proof of authorship. Mutations return
+no author references. User Manager alone resolves users and builds the private
+participant response; it does not query the contact repository again.
+
+Votes use the `contacter` domain discriminator and shared `votes`
+collection. Contact admission, voting writes and result reads are not one
+transaction; a failed post-write read does not prove rollback. Run the explicit
+voter index migration before enabling the feature.
+
+Custom lower-domain adapters use `GetCommsVotesRequest`,
+`ChangeCommsVoteRequest` and `CommsVoteResult`; they do not resolve users or
+construct HTTP participants. HTTP composition, owner guards and participant
+models are documented in [User Manager's service contracts](../usermanager/README.md#conversation-service-contracts).
+
+Voting test-style audit: `service.voting_test.go` uses named delegation,
+capability, membership and receipt tables with driver-free probes. Signed-session
+and persistence lifecycles live in User Manager's integration tests.

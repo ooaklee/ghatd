@@ -224,66 +224,6 @@ func (r *Repository) UpdateVisionStatus(
 	)
 }
 
-// SetVisionVote atomically moves a user into the selected vote bucket.
-func (r *Repository) SetVisionVote(
-	ctx context.Context,
-	id string,
-	userID string,
-	vote VisionVote,
-	updatedAt string,
-) error {
-	collection, err := r.GetVisionCollection(ctx)
-	if err != nil {
-		return err
-	}
-
-	targetBucket := "voters.1"
-	otherBucket := "voters.0"
-	if vote == VisionVoteDownvote {
-		targetBucket, otherBucket = otherBucket, targetBucket
-	}
-
-	return r.Store.ExecuteUpdateOneCommand(
-		ctx,
-		collection,
-		bson.M{"_id": id},
-		bson.M{
-			"$addToSet": bson.M{targetBucket: userID},
-			"$pull":     bson.M{otherBucket: userID},
-			"$set": bson.M{
-				"updated_at":         updatedAt,
-				"updated_by_user_id": userID,
-			},
-		},
-		"vision",
-	)
-}
-
-// RemoveVisionVote atomically removes a user from both vote buckets.
-func (r *Repository) RemoveVisionVote(ctx context.Context, id, userID, updatedAt string) error {
-	collection, err := r.GetVisionCollection(ctx)
-	if err != nil {
-		return err
-	}
-
-	return r.Store.ExecuteUpdateOneCommand(
-		ctx,
-		collection,
-		bson.M{"_id": id},
-		bson.M{
-			"$pull": bson.M{
-				"voters.0": userID,
-				"voters.1": userID,
-			},
-			"$set": bson.M{
-				"updated_at":         updatedAt,
-				"updated_by_user_id": userID,
-			},
-		},
-		"vision",
-	)
-}
-
 // AddVisionComment atomically appends a comment.
 func (r *Repository) AddVisionComment(ctx context.Context, id string, comment *VisionComment) error {
 	collection, err := r.GetVisionCollection(ctx)
@@ -304,75 +244,6 @@ func (r *Repository) AddVisionComment(ctx context.Context, id string, comment *V
 			},
 		},
 		"vision",
-	)
-}
-
-// SetVisionCommentVote atomically moves a user between a comment's vote buckets.
-func (r *Repository) SetVisionCommentVote(
-	ctx context.Context,
-	id, commentID, userID string,
-	vote VisionVote,
-	updatedAt string,
-) error {
-	collection, err := r.GetVisionCollection(ctx)
-	if err != nil {
-		return err
-	}
-
-	otherVote := VisionVoteUpvote
-	if vote == VisionVoteUpvote {
-		otherVote = VisionVoteDownvote
-	}
-	targetPath := fmt.Sprintf("comments.$.voters.%d", vote)
-	otherPath := fmt.Sprintf("comments.$.voters.%d", otherVote)
-
-	return r.Store.ExecuteUpdateOneCommand(
-		ctx,
-		collection,
-		bson.M{
-			"_id":         strings.TrimSpace(id),
-			"comments.id": strings.TrimSpace(commentID),
-		},
-		bson.M{
-			"$addToSet": bson.M{targetPath: strings.TrimSpace(userID)},
-			"$pull":     bson.M{otherPath: strings.TrimSpace(userID)},
-			"$set": bson.M{
-				"updated_at":         updatedAt,
-				"updated_by_user_id": strings.TrimSpace(userID),
-			},
-		},
-		"vision comment",
-	)
-}
-
-// RemoveVisionCommentVote removes a user from both vote buckets atomically.
-func (r *Repository) RemoveVisionCommentVote(
-	ctx context.Context,
-	id, commentID, userID, updatedAt string,
-) error {
-	collection, err := r.GetVisionCollection(ctx)
-	if err != nil {
-		return err
-	}
-
-	return r.Store.ExecuteUpdateOneCommand(
-		ctx,
-		collection,
-		bson.M{
-			"_id":         strings.TrimSpace(id),
-			"comments.id": strings.TrimSpace(commentID),
-		},
-		bson.M{
-			"$pull": bson.M{
-				"comments.$.voters.0": strings.TrimSpace(userID),
-				"comments.$.voters.1": strings.TrimSpace(userID),
-			},
-			"$set": bson.M{
-				"updated_at":         updatedAt,
-				"updated_by_user_id": strings.TrimSpace(userID),
-			},
-		},
-		"vision comment",
 	)
 }
 
@@ -434,25 +305,7 @@ func normalisePagination(req *GetVisionsRequest) (int64, int64) {
 // normaliseStoredVision ensures collection fields are ready for callers after
 // persistence reads without changing stored counters.
 func normaliseStoredVision(vision *Vision) {
-	normaliseVoteBuckets(&vision.Voters)
 	if vision.Comments == nil {
 		vision.Comments = []VisionComment{}
-	}
-	for i := range vision.Comments {
-		normaliseVoteBuckets(&vision.Comments[i].Voters)
-	}
-}
-
-// normaliseVoteBuckets ensures both supported vote buckets are initialised.
-func normaliseVoteBuckets(voters *map[VisionVote][]string) {
-	if *voters == nil {
-		*voters = newVisionVoteBuckets()
-		return
-	}
-	if (*voters)[VisionVoteDownvote] == nil {
-		(*voters)[VisionVoteDownvote] = []string{}
-	}
-	if (*voters)[VisionVoteUpvote] == nil {
-		(*voters)[VisionVoteUpvote] = []string{}
 	}
 }

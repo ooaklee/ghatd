@@ -32,6 +32,22 @@ and guards are existing host dependencies. The package does not open or close
 clients, install permissive guards, or enable itself through environment variables.
 Use the returned contact service wherever the host previously composed its contact
 service, including the user manager. Ordinary contact types retain their behavior.
+If the host replaces a contact service already composed by `starter/v0`, bind
+both user-manager ports to the replacement before constructing handlers:
+
+```go
+contacts.WithVoterService(services.Voter)
+services.Contacter = contacts
+services.UserManager.ContacterService = contacts
+services.UserManager.WithCommsVotingService(contacts)
+```
+
+`NewCommsService` and `NewCommsServiceWithConfig` construct a fresh contact
+service; they do not copy the previous instance's optional voter dependency.
+Voting also requires the explicit shared-vote index migration, the existing live
+administrator authorizer and `EnableCommsVoting: true` when attaching routes.
+Follow the [native User Manager voting composition](../usermanager/README.md#private-conversation-voting)
+and [voter index setup](../voter/README.md) when enabling that capability.
 Both public signup paths must display the same prerelease consent before submission;
 `CommsType` is a trusted enrollment choice, not permission for arbitrary marketing.
 

@@ -223,6 +223,28 @@ use the UMS streak endpoints for authenticated user-scoped access.
 
 ## Usage
 
+### Shared voting services
+
+`NewRepositories` creates `Repositories.Voter` using the managed Mongo
+repository (or a supplied override). `NewServices` requires that repository and
+constructs one `Services.Voter`, shared by Vision and the conversation voting
+service injected into `Services.UserManager`. Custom/ejected compositions must
+provide the equivalent service wiring; no database client belongs in a voting
+handler or manager.
+
+Before either consumer writes votes, register and run
+`voter.EnsureIndexes(ctx, database)` through the host's explicit migration path
+against that same database. Starter does not run the migration automatically.
+Shared storage replaces embedded Vision voter arrays and supplies the contact
+voting store; it provides no legacy backfill or dual-write fallback. Review
+the [Vision voting upgrade guide](../../voter/README.md#upgrading-existing-vision-voting)
+before changing a dependency pin, especially if existing votes must be retained.
+
+Constructing the service does not expose private HTTP endpoints. See the
+[conversation route opt-in](#optional-private-conversation-voting) below.
+
+### Basic composition
+
 ```go
 package main
 
@@ -343,6 +365,39 @@ Per-type `UserConfig.GenerateHandle` is independent of route exposure and is
 also false by default. Starter neither applies the migration nor backfills
 existing accounts. See the [User Manager contract](../../usermanager/README.md#self-service-display-handles)
 for payloads, ETags, error codes and compatibility requirements.
+
+### Optional private conversation voting
+
+Set `AttachDefaultRoutesRequest.EnableCommsVoting` to true only after applying
+the shared voter index migration:
+
+```go
+err := starter.AttachDefaultRoutes(&starter.AttachDefaultRoutesRequest{
+    Router: httpRouter,
+    Stack: stack,
+    EnableCommsVoting: true,
+})
+if err != nil {
+    return err
+}
+```
+
+The flag defaults to false. Skipping `RouteGroupUserManager` also omits these
+five voting route definitions. They are owned by User Manager and require its
+administrator-session middleware plus a live administrator recheck on every
+read/set/remove. Mutation routes always apply `X-Comms-Expected-Owner`; API-token
+admission is not substituted. Missing custom capabilities fail closed.
+
+For custom composition use `WithCommsVotingService` and
+`WithAdministratorAuthorizer` on User Manager. History/metadata owner wrapping
+via `usermanager.RequireCommsConversationRoutes` is a separate composition step.
+The starter injects its existing `Services.Contacter`, configured with the shared
+voter service, into User Manager. User lookup delegates to
+`user/v2.Service.GetUsersByIDs`; UMS retains its private participant projection.
+Use native UMS route attachment as the single handler registration for these
+paths. The [UMS service contracts](../../usermanager/README.md#conversation-service-contracts)
+describe composition, and the [voting guide](../../usermanager/README.md#private-conversation-voting)
+defines routes, policy operation keys, response codes and payloads.
 
 ### RouteGroup constants
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ooaklee/ghatd/external/group"
 	ghatdlogger "github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/notifier"
@@ -20,6 +22,29 @@ type enrichmentUserServiceStub struct {
 	getUsersCalls [][]string
 	failCalls     map[int]error
 	getByIDCalls  []string
+}
+
+// enrichmentLookupRepository bridges existing fixtures to the real user-domain
+// lookup, so consumer tests cannot accidentally reimplement its batching.
+type enrichmentLookupRepository struct {
+	userv2.UserRepository
+	list func(context.Context, *userv2.GetUsersRequest) (*userv2.GetUsersResponse, error)
+}
+
+func (p *enrichmentLookupRepository) GetUsers(ctx context.Context, req *userv2.GetUsersRequest) ([]userv2.UniversalUser, error) {
+	response, err := p.list(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if response == nil {
+		return nil, userv2.ErrDatabaseError
+	}
+	return response.Users, nil
+}
+
+func (s *enrichmentUserServiceStub) GetUsersByIDs(ctx context.Context, req *userv2.GetUsersByIDsRequest) (*userv2.GetUsersByIDsResponse, error) {
+	service := userv2.NewService(&enrichmentLookupRepository{list: s.GetUsers}, nil, nil, nil, nil, nil, "")
+	return service.GetUsersByIDs(ctx, req)
 }
 
 func (*enrichmentUserServiceStub) GetUserMicroProfile(context.Context, *userv2.GetUserMicroProfileRequest) (*userv2.GetUserMicroProfileResponse, error) {
@@ -72,65 +97,52 @@ func observedEnrichmentContext() (context.Context, *observer.ObservedLogs) {
 	return ghatdlogger.TransitWith(context.Background(), zap.New(core)), logs
 }
 
-func TestNormaliseUserEnrichmentIDsDeduplicatesTrimsAndSorts(t *testing.T) {
-	got := normaliseUserEnrichmentIDs([]string{" user-b ", "", "user-a", "user-b"})
-	want := []string{"user-a", "user-b"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("normaliseUserEnrichmentIDs() = %v, want %v", got, want)
-	}
-}
-
-func TestLoadUsersForEnrichmentBatchesAndRetainsPartialSuccess(t *testing.T) {
-	users := make(map[string]userv2.UniversalUser)
-	ids := make([]string, 0, userEnrichmentBatchSize*2+1)
-	for i := 0; i < userEnrichmentBatchSize*2+1; i++ {
-		userID := fmt.Sprintf("user-%03d", i)
-		ids = append(ids, userID)
-		users[userID] = userv2.UniversalUser{ID: userID}
-	}
-	userService := &enrichmentUserServiceStub{
-		users:     users,
-		failCalls: map[int]error{1: errors.New("database unavailable")},
-	}
-	service := &Service{UserService: userService}
-	ctx, logs := observedEnrichmentContext()
-
-	got := service.loadUsersForEnrichment(ctx, ids, "test-user-enrichment")
-
-	if len(userService.getUsersCalls) != 3 {
-		t.Fatalf("GetUsers calls = %d, want 3", len(userService.getUsersCalls))
-	}
-	if len(userService.getUsersCalls[0]) != 100 || len(userService.getUsersCalls[1]) != 100 || len(userService.getUsersCalls[2]) != 1 {
-		t.Fatalf("GetUsers batch sizes = [%d %d %d], want [100 100 1]", len(userService.getUsersCalls[0]), len(userService.getUsersCalls[1]), len(userService.getUsersCalls[2]))
-	}
-	if len(got) != 101 {
-		t.Fatalf("resolved users = %d, want 101 partial successes", len(got))
-	}
-	if got["user-000"] == nil || got["user-200"] == nil || got["user-100"] != nil {
-		t.Fatalf("unexpected partial result keys: first=%v failed-batch=%v final=%v", got["user-000"], got["user-100"], got["user-200"])
-	}
-	if logs.FilterMessage("user-enrichment-batch-unavailable").Len() != 1 {
-		t.Fatalf("fallback DEBUG events = %d, want 1", logs.FilterMessage("user-enrichment-batch-unavailable").Len())
-	}
-}
-
-func TestLoadUsersForEnrichmentTreatsMissingUsersAsExpected(t *testing.T) {
-	userService := &enrichmentUserServiceStub{
-		users: map[string]userv2.UniversalUser{"user-a": {ID: "user-a"}},
-	}
-	service := &Service{UserService: userService}
-	ctx, logs := observedEnrichmentContext()
-
-	got := service.loadUsersForEnrichment(ctx, []string{"user-b", "user-a", "user-b"}, "test-user-enrichment")
-
-	if len(userService.getUsersCalls) != 1 || fmt.Sprint(userService.getUsersCalls[0]) != fmt.Sprint([]string{"user-a", "user-b"}) {
-		t.Fatalf("GetUsers calls = %v, want one sorted deduplicated batch", userService.getUsersCalls)
-	}
-	if len(got) != 1 || got["user-a"] == nil || got["user-b"] != nil {
-		t.Fatalf("resolved users = %v, want only user-a", got)
-	}
-	if logs.Len() != 0 {
-		t.Fatalf("missing-user logs = %d, want none", logs.Len())
+// TestLoadUsersForEnrichment verifies UMS's fallback policy over the real domain
+// lookup. Lower-domain tests own the detailed batching/error contract.
+func TestLoadUsersForEnrichment(t *testing.T) {
+	for _, tc := range []struct {
+		name                           string
+		count                          int
+		missing                        bool
+		failures                       map[int]error
+		wantUsers, wantCalls, wantLogs int
+	}{
+		{"empty", 0, false, nil, 0, 0, 0},
+		{"missing is expected", 1, true, nil, 1, 1, 0},
+		{"multiple batches", 201, false, nil, 201, 3, 0},
+		{"partial successes", 201, false, map[int]error{1: errors.New("private diagnostic")}, 101, 3, 1},
+		{"one fallback for multiple failures", 201, false, map[int]error{0: errors.New("private diagnostic"), 1: errors.New("private diagnostic")}, 1, 3, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			port := &enrichmentUserServiceStub{users: map[string]userv2.UniversalUser{}, failCalls: tc.failures}
+			ids := make([]string, tc.count)
+			for i := range ids {
+				ids[i] = fmt.Sprintf("user-%03d", i)
+				port.users[ids[i]] = userv2.UniversalUser{ID: ids[i]}
+			}
+			if tc.missing {
+				ids = append(ids, "missing", ids[0])
+			}
+			ctx, logs := observedEnrichmentContext()
+			got := (&Service{UserService: port}).loadUsersForEnrichment(ctx, ids, "test-user-enrichment")
+			require.Len(t, got, tc.wantUsers)
+			require.Len(t, port.getUsersCalls, tc.wantCalls)
+			require.Equal(t, tc.wantLogs, logs.FilterMessage("user-enrichment-unavailable").Len())
+			require.NotContains(t, got, "missing")
+			for batchIndex, batch := range port.getUsersCalls {
+				require.LessOrEqual(t, len(batch), 100)
+				for _, id := range batch {
+					if id == "missing" {
+						continue
+					}
+					_, found := got[id]
+					require.Equal(t, tc.failures[batchIndex] == nil, found)
+				}
+			}
+			for _, event := range logs.All() {
+				require.NotContains(t, fmt.Sprint(event.ContextMap()), "private diagnostic")
+			}
+		})
 	}
 }
 

@@ -23,28 +23,31 @@ import (
 	userv2 "github.com/ooaklee/ghatd/external/user/v2"
 	"github.com/ooaklee/ghatd/external/usermanager"
 	"github.com/ooaklee/ghatd/external/vision"
+	"github.com/ooaklee/ghatd/external/voter"
 )
 
 // Services groups the standard GHATD business services and manager services.
 type Services struct {
-	AccessManager           *accessmanager.Service
-	APIToken                *apitoken.Service
-	Audit                   *audit.Service
-	Auth                    *auth.Service
-	Billing                 *billing.Service
-	BillingManager          *billingmanager.Service
-	Contacter               *contacter.Service
-	ContentManager          *contentmanager.Service
-	Group                   *group.Service
-	Notifier                *notifier.Service
-	Policy                  *policy.Service
-	Post                    *post.Service
-	Pricer                  *pricer.Service
-	Reminder                *reminder.Service
-	Streaker                *streaker.Service
-	User                    *userv2.Service
-	UserManager             *usermanager.Service
-	Vision                  *vision.Service
+	AccessManager  *accessmanager.Service
+	APIToken       *apitoken.Service
+	Audit          *audit.Service
+	Auth           *auth.Service
+	Billing        *billing.Service
+	BillingManager *billingmanager.Service
+	Contacter      *contacter.Service
+	ContentManager *contentmanager.Service
+	Group          *group.Service
+	Notifier       *notifier.Service
+	Policy         *policy.Service
+	Post           *post.Service
+	Pricer         *pricer.Service
+	Reminder       *reminder.Service
+	Streaker       *streaker.Service
+	User           *userv2.Service
+	UserManager    *usermanager.Service
+	Vision         *vision.Service
+	// Voter is shared by domain services; it does not expose routes.
+	Voter                   *voter.Service
 	EphemeralStore          accessmanager.EphemeralStore
 	EmailManager            accessmanager.EmailManager
 	PaymentProviderRegistry billingmanager.ProviderRegistry
@@ -190,7 +193,8 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	if err != nil {
 		return nil, fmt.Errorf("starter/group-service: %w", err)
 	}
-	visionService, err := vision.NewService(r.Repositories.Vision, r.VisionConfig)
+	voterService := voter.NewService(r.Repositories.Voter)
+	visionService, err := vision.NewService(r.Repositories.Vision, voterService, r.VisionConfig)
 	if err != nil {
 		return nil, fmt.Errorf("starter/vision-service: %w", err)
 	}
@@ -204,6 +208,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		WithGroupService(groupService).
 		WithNotifierService(notifierService).
 		WithVisionService(visionService)
+	userManagerService.WithCommsVotingService(contacterService.WithVoterService(voterService))
 	if reminderService != nil {
 		userManagerService.WithReminderService(reminderService)
 	}
@@ -253,6 +258,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 		User:                    userService,
 		UserManager:             userManagerService,
 		Vision:                  visionService,
+		Voter:                   voterService,
 		EphemeralStore:          r.EphemeralStore,
 		EmailManager:            r.EmailManager,
 		PaymentProviderRegistry: paymentProviderRegistry,

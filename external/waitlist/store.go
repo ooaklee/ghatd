@@ -64,7 +64,7 @@ type MongoStore struct {
 	deliveries    *mongo.Collection
 }
 
-// NewMongoStore binds the four existing collections on a non-nil database. It
+// NewMongoStore binds audience and delivery collections on a non-nil database. It
 // performs no I/O; call Initialize explicitly before serving unsubscribe traffic.
 // As with the original constructor, passing a nil database is a programming error.
 func NewMongoStore(db *mongo.Database) *MongoStore {
