@@ -149,6 +149,11 @@ func newProviderRouter(cfg *RoutingConfig) (*providerRouter, error) {
 	return r, nil
 }
 func (r *providerRouter) selectProvider(purpose emailprovider.MailType, campaign bool) (registeredProvider, error) {
+	return r.providerFor(purpose, campaign, true)
+}
+
+// providerFor can inspect readiness without consuming a selection turn.
+func (r *providerRouter) providerFor(purpose emailprovider.MailType, campaign, advance bool) (registeredProvider, error) {
 	if !purpose.Valid() {
 		return registeredProvider{}, ErrPurposeRequired
 	}
@@ -192,7 +197,9 @@ func (r *providerRouter) selectProvider(purpose emailprovider.MailType, campaign
 	r.mu.Lock()
 	key := routingTurn{purpose: purpose, campaign: campaign}
 	turn := r.turns[key]
-	r.turns[key]++
+	if advance {
+		r.turns[key]++
+	}
 	r.mu.Unlock()
 	return candidates[turn%uint64(len(candidates))], nil
 }
@@ -259,7 +266,7 @@ func (m *EmailManager) sendResult(ctx context.Context, email *emailprovider.Emai
 		}
 		return receipt, ErrEmailMailerSendFailed
 	}
-	if result == nil || !result.Success || result.Error != nil {
+	if result == nil || !result.Success || result.Error != nil || (result.State != "" && result.State != emailprovider.Accepted && !(local && result.State == emailprovider.Captured)) {
 		receipt.State = emailprovider.Uncertain
 		if result != nil && result.State == emailprovider.Failed {
 			receipt.State = emailprovider.Failed
@@ -313,7 +320,7 @@ func (m *EmailManager) SubmitCampaign(ctx context.Context, req *emailprovider.Ca
 	}
 	copy := *req
 	result, err := p.Campaign.SubmitCampaign(ctx, &copy)
-	if err != nil || result == nil || !result.Success || result.Error != nil {
+	if err != nil || result == nil || !result.Success || result.Error != nil || (result.State != "" && result.State != emailprovider.Accepted) {
 		receipt.State = emailprovider.Uncertain
 		if result != nil && result.State == emailprovider.Failed {
 			receipt.State = emailprovider.Failed

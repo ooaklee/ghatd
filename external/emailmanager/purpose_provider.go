@@ -25,15 +25,14 @@ func (p *purposeProvider) IsHealthy(ctx context.Context) bool {
 	if p.manager.router == nil {
 		return !nilInterface(p.manager.provider) && p.manager.provider.IsHealthy(ctx)
 	}
-	for _, route := range p.manager.router.providers {
-		if contains(route.supported, p.purpose) {
-			if id, ok := p.manager.router.routes[p.purpose]; ok && id != route.ID {
-				continue
-			}
-			return true
-		}
+	selected, err := p.manager.router.providerFor(p.purpose, false, false)
+	if err != nil {
+		return false
 	}
-	return false
+	if p.manager.router.local != nil {
+		return p.manager.router.local.IsHealthy(ctx)
+	}
+	return selected.Provider.IsHealthy(ctx)
 }
 func (p *purposeProvider) IsLocalOutputProvider() bool {
 	return p.manager != nil && ((p.manager.router != nil && p.manager.router.local != nil) || isLocalOutputProvider(p.manager.provider))

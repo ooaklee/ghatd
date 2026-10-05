@@ -291,6 +291,7 @@ func TestSubmissionReceiptAudit(t *testing.T) {
 		state, want                     emailprovider.SendState
 		unsuccessful, enabled, campaign bool
 	}{
+		{"inline contradictory success", emailprovider.Failed, emailprovider.Failed, false, true, false},
 		{"inline known rejected without error", emailprovider.Failed, emailprovider.Failed, true, true, false},
 		{"inline ambiguous failure without error", "", emailprovider.Uncertain, true, true, false},
 		{"inline accepted", "", emailprovider.Accepted, false, true, false},
@@ -314,7 +315,7 @@ func TestSubmissionReceiptAudit(t *testing.T) {
 				receipt, err = m.SendEmailWithResult(context.Background(), routingEmail(emailprovider.Transactional))
 			}
 			require.Equal(t, tc.want, receipt.State)
-			if tc.unsuccessful {
+			if tc.want == emailprovider.Failed || tc.want == emailprovider.Uncertain {
 				require.ErrorIs(t, err, ErrEmailMailerSendFailed)
 			} else {
 				require.NoError(t, err)
@@ -388,6 +389,39 @@ func TestInvalidWrappedProvider(t *testing.T) {
 			}
 			_, err := newProviderRouter(&RoutingConfig{Providers: []ProviderRegistration{{ID: "a", Provider: p}}})
 			require.ErrorIs(t, err, ErrRoutingInvalid)
+		})
+	}
+}
+
+type unhealthyRoutingFake struct{ routingFake }
+
+func (*unhealthyRoutingFake) IsHealthy(context.Context) bool { return false }
+
+func TestPurposeBridgeSelectedReadiness(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		local bool
+	}{{"selected provider unhealthy", false}, {"local interception healthy", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad, good := &unhealthyRoutingFake{}, &routingFake{}
+			cfg := &RoutingConfig{Providers: []ProviderRegistration{{ID: "bad", Provider: bad}, {ID: "good", Provider: good}}}
+			if tc.local {
+				cfg.LocalCapture = emailprovider.NewLoggingEmailProvider(nil)
+			}
+			m, err := NewStandardEmailManager(standardRoutingRequest(cfg))
+			require.NoError(t, err)
+			bridge := m.ProviderForMailType(emailprovider.Transactional)
+			require.Equal(t, tc.local, bridge.IsHealthy(context.Background()))
+			require.Equal(t, tc.local, bridge.IsHealthy(context.Background()))
+			receipt, err := m.SendEmailWithResult(context.Background(), routingEmail(emailprovider.Transactional))
+			require.Equal(t, "bad", receipt.ProviderID)
+			if tc.local {
+				require.NoError(t, err)
+				require.Equal(t, emailprovider.Captured, receipt.State)
+			} else {
+				require.ErrorIs(t, err, ErrEmailMailerProviderUnavailable)
+			}
+			require.Zero(t, good.calls.Load())
 		})
 	}
 }

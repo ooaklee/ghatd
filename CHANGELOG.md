@@ -88,6 +88,8 @@ when the release version has been selected, and remove unused subsections.
   skipped/captured/accepted/failed/uncertain submission receipts. Legacy single-
   provider constructors and error-only methods remain supported; routed generic
   sends require an explicit trusted purpose. No failure triggers provider failover.
+  Provider compatibility adapters check the selected account readiness without
+  advancing selection turns.
 - A bounded [Postmark inline adapter](external/emailprovider/README.md#postmark-inline-email)
   for transactional and explicitly configured broadcast streams, preserving host
   instrumentation, HTML/plain text and Reply-To without automatic retries.
