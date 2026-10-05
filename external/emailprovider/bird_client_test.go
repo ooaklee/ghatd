@@ -145,7 +145,7 @@ func TestBirdSendMapping(t *testing.T) {
 			require.NoError(t, err)
 			result, err := NewBirdEmailProvider(client).Send(context.Background(), email)
 			require.NoError(t, err)
-			require.Equal(t, &SendResult{Provider: "BIRD", MessageID: "em_testreceipt", Success: true}, result)
+			require.Equal(t, &SendResult{State: Accepted, Provider: "BIRD", MessageID: "em_testreceipt", Success: true}, result)
 			require.Equal(t, 1, calls)
 			require.Equal(t, original, *email)
 		})

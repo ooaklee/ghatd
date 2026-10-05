@@ -51,16 +51,11 @@ func (p *SparkPostEmailProvider) Send(ctx context.Context, email *Email) (*SendR
 	}
 
 	// Create SparkPost transmission
-	//
-	// NOTE (known behaviour, preserved for compatibility): validation accepts a
-	// text-only email (TextBody without HTMLBody), but the transmission
-	// currently sets only the HTML part, so a text-only email may be sent
-	// without any body content. Fixing this would change behaviour for existing
-	// callers and is therefore left to a separate, deliberate change.
 	transmission := &sp.Transmission{
 		Recipients: []string{email.To},
 		Content: sp.Content{
 			HTML:    email.HTMLBody,
+			Text:    email.TextBody,
 			From:    email.From,
 			ReplyTo: email.ReplyTo,
 			Subject: email.Subject,
@@ -114,6 +109,9 @@ func (p *SparkPostEmailProvider) IsHealthy(ctx context.Context) bool {
 
 // validateEmail validates that an email has all required fields
 func validateEmail(email *Email) error {
+	if email == nil {
+		return ErrEmailProviderInvalidEmail
+	}
 	if email.To == "" {
 		return ErrEmailProviderMissingRecipient
 	}

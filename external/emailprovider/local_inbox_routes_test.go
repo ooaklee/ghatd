@@ -147,3 +147,31 @@ func TestAttachLocalInboxRoutesRejectsRemoteByDefault(t *testing.T) {
 		t.Fatalf("localhost status = %d, want %d", response.Code, http.StatusOK)
 	}
 }
+
+// List/API/details are parallel views of the same attribution contract.
+func TestLocalInboxProviderAttribution(t *testing.T) {
+	for _, tc := range []struct{ name, path, content string }{{"list", "", "POSTMARK"}, {"API", "/api/emails", `"providerId":"postmark-primary"`}, {"details", "/detail", "marketing"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := NewLoggingEmailProvider(nil)
+			result, err := provider.Send(context.Background(), &Email{To: "to@example.test", From: "from@example.test", Subject: "Test", TextBody: "Test", MailType: Marketing, ProviderID: "postmark-primary", ProviderName: "POSTMARK"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			routes := router.NewRouter(nil, nil)
+			if err := AttachLocalInboxRoutes(&AttachLocalInboxRoutesRequest{Router: routes, Provider: provider}); err != nil {
+				t.Fatal(err)
+			}
+			path := DefaultLocalInboxRoutePrefix + tc.path
+			if tc.path == "/detail" {
+				path = DefaultLocalInboxRoutePrefix + "/" + result.MessageID
+			}
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			request.RemoteAddr = "127.0.0.1:4321"
+			routes.GetRouter().ServeHTTP(response, request)
+			if response.Code != 200 || !strings.Contains(response.Body.String(), tc.content) {
+				t.Fatalf("attribution missing: status=%d body=%s", response.Code, response.Body.String())
+			}
+		})
+	}
+}

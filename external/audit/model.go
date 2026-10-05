@@ -32,6 +32,11 @@ func (a *AuditLogEntry) GenerateNewUuid() *AuditLogEntry {
 // UserEmailOutboundEventDetails holds the extra details
 // we care about when logging User Email Outbound Events
 type UserEmailOutboundEventDetails struct {
+	// MailType and configured instance distinguish trusted purpose from vendor identity.
+	MailType   string `json:"-" bson:"mail_type,omitempty"`
+	ProviderID string `json:"-" bson:"provider_id,omitempty"`
+	// SendState records captured/skipped/accepted evidence, never recipient delivery.
+	SendState     string `json:"-" bson:"send_state,omitempty"`
 	To            string `json:"to" bson:"to,omitempty"`
 	From          string `json:"from" bson:"from,omitempty"`
 	Subject       string `json:"subject" bson:"subject,omitempty"`

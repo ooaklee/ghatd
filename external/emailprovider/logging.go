@@ -73,15 +73,26 @@ func (p *LoggingEmailProvider) Send(ctx context.Context, email *Email) (*SendRes
 	logger := logger.AcquirePackageFrom(ctx, "external/emailprovider")
 
 	messageID := p.nextMessageID()
+	captured := *email
+	if captured.ProviderName == "" {
+		captured.ProviderName = p.Name()
+	}
+	if captured.MailType == "" {
+		captured.MailType = Transactional
+	}
+	email = &captured
 	p.store.Add(LocalEmail{
-		MessageID: messageID,
-		To:        email.To,
-		From:      email.From,
-		ReplyTo:   email.ReplyTo,
-		Subject:   email.Subject,
-		HTMLBody:  email.HTMLBody,
-		TextBody:  email.TextBody,
-		CreatedAt: p.now(),
+		MessageID:  messageID,
+		ProviderID: email.ProviderID,
+		Provider:   email.ProviderName,
+		MailType:   email.MailType,
+		To:         email.To,
+		From:       email.From,
+		ReplyTo:    email.ReplyTo,
+		Subject:    email.Subject,
+		HTMLBody:   email.HTMLBody,
+		TextBody:   email.TextBody,
+		CreatedAt:  p.now(),
 	})
 
 	logFields := append(emailLogFields(p.Name(), email),
@@ -94,6 +105,7 @@ func (p *LoggingEmailProvider) Send(ctx context.Context, email *Email) (*SendRes
 	)
 
 	return &SendResult{
+		State:     Captured,
 		MessageID: messageID,
 		Provider:  p.Name(),
 		Success:   true,

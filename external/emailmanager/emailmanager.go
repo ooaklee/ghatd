@@ -29,6 +29,7 @@ type EmailManager struct {
 	provider     emailprovider.EmailProvider
 	auditService AuditService
 	config       *Config
+	router       *providerRouter
 }
 
 // Config holds configuration for the email manager
@@ -63,16 +64,26 @@ func NewEmailManager(templater emailTemplater, provider emailprovider.EmailProvi
 		config = DefaultConfig()
 	}
 
+	configCopy := *config
 	return &EmailManager{
 		templater:    templater,
 		provider:     provider,
 		auditService: auditService,
-		config:       config,
+		config:       &configCopy,
 	}
 }
 
 // SendVerificationEmail sends a verification email
 func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerificationEmailRequest) error {
+	_, err := m.SendVerificationEmailWithResult(ctx, req)
+	return err
+}
+
+// SendVerificationEmailWithResult always selects the transactional route.
+func (m *EmailManager) SendVerificationEmailWithResult(ctx context.Context, req *SendVerificationEmailRequest) (*SendReceipt, error) {
+	if ctx == nil || req == nil {
+		return nil, ErrEmailMailerTemplateGenerationFailed
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-verification-email")
 	logger.Debug("handling-send-verification-email-request")
 
@@ -89,7 +100,7 @@ func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerif
 
 	rendered, err := m.templater.GenerateVerificationEmail(ctx, templateReq)
 	if err != nil {
-		return ErrEmailMailerTemplateGenerationFailed
+		return nil, ErrEmailMailerTemplateGenerationFailed
 	}
 
 	// Send email
@@ -97,16 +108,25 @@ func (m *EmailManager) SendVerificationEmail(ctx context.Context, req *SendVerif
 		To:            rendered.To,
 		From:          rendered.From,
 		Subject:       rendered.Subject,
-		EmailProvider: m.provider.Name(),
+		EmailProvider: "",
 		UserId:        req.UserId,
 		RecipientType: string(audit.User),
 	}
 
-	return m.sendEmail(ctx, rendered, emailInfo)
+	return m.sendEmailResult(ctx, rendered, emailInfo, emailprovider.Transactional, "")
 }
 
 // SendLoginEmail sends a login email
 func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRequest) error {
+	_, err := m.SendLoginEmailWithResult(ctx, req)
+	return err
+}
+
+// SendLoginEmailWithResult always selects the transactional route.
+func (m *EmailManager) SendLoginEmailWithResult(ctx context.Context, req *SendLoginEmailRequest) (*SendReceipt, error) {
+	if ctx == nil || req == nil {
+		return nil, ErrEmailMailerTemplateGenerationFailed
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-login-email")
 	logger.Debug("handling-send-login-email-request")
 
@@ -121,7 +141,7 @@ func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRe
 
 	rendered, err := m.templater.GenerateLoginEmail(ctx, templateReq)
 	if err != nil {
-		return ErrEmailMailerTemplateGenerationFailed
+		return nil, ErrEmailMailerTemplateGenerationFailed
 	}
 
 	// Send email
@@ -129,16 +149,25 @@ func (m *EmailManager) SendLoginEmail(ctx context.Context, req *SendLoginEmailRe
 		To:            rendered.To,
 		From:          rendered.From,
 		Subject:       rendered.Subject,
-		EmailProvider: m.provider.Name(),
+		EmailProvider: "",
 		UserId:        req.UserId,
 		RecipientType: string(audit.User),
 	}
 
-	return m.sendEmail(ctx, rendered, emailInfo)
+	return m.sendEmailResult(ctx, rendered, emailInfo, emailprovider.Transactional, "")
 }
 
 // SendCustomEmail sends a custom email from the base template
 func (m *EmailManager) SendCustomEmail(ctx context.Context, req *SendCustomEmailRequest) error {
+	_, err := m.SendCustomEmailWithResult(ctx, req)
+	return err
+}
+
+// SendCustomEmailWithResult requires trusted purpose in routed mode.
+func (m *EmailManager) SendCustomEmailWithResult(ctx context.Context, req *SendCustomEmailRequest) (*SendReceipt, error) {
+	if ctx == nil || req == nil {
+		return nil, ErrEmailMailerTemplateGenerationFailed
+	}
 	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-custom-email")
 	logger.Debug("handling-send-custom-email-request")
 
@@ -155,7 +184,7 @@ func (m *EmailManager) SendCustomEmail(ctx context.Context, req *SendCustomEmail
 
 	rendered, err := m.templater.GenerateFromBaseTemplate(ctx, templateReq)
 	if err != nil {
-		return ErrEmailMailerTemplateGenerationFailed
+		return nil, ErrEmailMailerTemplateGenerationFailed
 	}
 
 	// Send email
@@ -163,165 +192,43 @@ func (m *EmailManager) SendCustomEmail(ctx context.Context, req *SendCustomEmail
 		To:            rendered.To,
 		From:          rendered.From,
 		Subject:       rendered.Subject,
-		EmailProvider: m.provider.Name(),
+		EmailProvider: "",
 		UserId:        req.UserId,
 		RecipientType: req.RecipientType,
 	}
 
-	return m.sendEmail(ctx, rendered, emailInfo)
+	return m.sendEmailResult(ctx, rendered, emailInfo, req.MailType, req.TextBody)
 }
 
-// SendEmail sends a pre-rendered email
+// SendEmail preserves the legacy error-only contract.
 func (m *EmailManager) SendEmail(ctx context.Context, req *SendEmailRequest) error {
-	logger := logger.AcquireOperationFrom(ctx, "external/emailmanager", "send-email")
-	logger.Debug("handling-send-email-request")
-
-	// Create email from request
-	email := &emailprovider.Email{
-		To:       req.To,
-		From:     req.From,
-		ReplyTo:  req.ReplyTo,
-		Subject:  req.Subject,
-		HTMLBody: req.HTMLBody,
-	}
-	emailInfo := &EmailInfo{
-		To:            req.To,
-		From:          req.From,
-		Subject:       req.Subject,
-		EmailProvider: m.provider.Name(),
-		UserId:        req.UserId,
-		RecipientType: req.RecipientType,
-	}
-
-	if !m.config.ShouldSendEmail {
-		messageID := ""
-		outputtedLocally := false
-		if isLocalOutputProvider(m.provider) {
-			result, err := m.provider.Send(ctx, email)
-			if err != nil {
-				logger.Error("failed-to-output-local-email", append(outboundEmailLogFields(m.provider.Name(), "", req.To, req.From, req.Subject), zap.Error(err))...)
-				return ErrEmailMailerSendFailed
-			}
-			messageID = result.MessageID
-			emailInfo.EmailProvider = result.Provider
-			outputtedLocally = true
-		}
-
-		logDisabledEmail(logger, emailInfo.EmailProvider, messageID, req.To, req.From, req.Subject, outputtedLocally)
-
-		if m.config.EnableAuditLogging && m.auditService != nil {
-			m.logAuditEvent(ctx, emailInfo)
-		}
-
-		return nil
-	}
-
-	if !m.provider.IsHealthy(ctx) {
-		logger.Error("email-provider-is-not-healthy",
-			zap.String("provider", m.provider.Name()),
-		)
-		return ErrEmailMailerProviderUnavailable
-	}
-
-	// Send via provider
-	result, err := m.provider.Send(ctx, email)
-	if err != nil {
-		logger.Error("failed-to-send-email", append(outboundEmailLogFields(m.provider.Name(), "", req.To, req.From, req.Subject), zap.Error(err))...)
-		return ErrEmailMailerSendFailed
-	}
-	emailInfo.EmailProvider = result.Provider
-
-	logger.Info("email-sent-successfully",
-		outboundEmailLogFields(result.Provider, result.MessageID, req.To, req.From, req.Subject)...,
-	)
-
-	if m.config.EnableAuditLogging && m.auditService != nil {
-		m.logAuditEvent(ctx, emailInfo)
-	}
-
-	return nil
+	_, err := m.SendEmailWithResult(ctx, req)
+	return err
 }
 
-// sendEmail is the internal method that handles sending and audit logging
-func (m *EmailManager) sendEmail(ctx context.Context, rendered *emailtemplater.RenderedEmail, emailInfo *EmailInfo) error {
-	logger := logger.AcquirePackageFrom(ctx, "external/emailmanager")
-
-	email := &emailprovider.Email{
-		To:       rendered.To,
-		From:     rendered.From,
-		ReplyTo:  rendered.ReplyTo,
-		Subject:  rendered.Subject,
-		HTMLBody: rendered.HTMLBody,
+// SendEmailWithResult sends an immutable pre-rendered snapshot and retains the receipt.
+func (m *EmailManager) SendEmailWithResult(ctx context.Context, req *SendEmailRequest) (*SendReceipt, error) {
+	if req == nil {
+		return nil, ErrEmailMailerSendFailed
 	}
-
-	// Check if we should actually send or just log
-	if !m.config.ShouldSendEmail {
-		messageID := ""
-		providerName := emailInfo.EmailProvider
-		outputtedLocally := false
-		if isLocalOutputProvider(m.provider) {
-			result, err := m.provider.Send(ctx, email)
-			if err != nil {
-				logger.Error("failed-to-output-local-email", append(outboundEmailLogFields(providerName, "", rendered.To, rendered.From, rendered.Subject), zap.Error(err))...)
-				return ErrEmailMailerSendFailed
-			}
-			messageID = result.MessageID
-			providerName = result.Provider
-			outputtedLocally = true
-		}
-
-		logDisabledEmail(logger, providerName, messageID, rendered.To, rendered.From, rendered.Subject, outputtedLocally)
-
-		// Still log audit event even if not sending
-		if m.config.EnableAuditLogging && m.auditService != nil {
-			m.logAuditEvent(ctx, emailInfo)
-		}
-
-		return nil
-	}
-
-	// Check if provider is healthy
-	if !m.provider.IsHealthy(ctx) {
-		logger.Error("email-provider-is-not-healthy",
-			zap.String("provider", m.provider.Name()),
-		)
-		return ErrEmailMailerProviderUnavailable
-	}
-
-	// Send via provider
-	result, err := m.provider.Send(ctx, email)
-	if err != nil {
-		logger.Error("failed-to-send-email", append(outboundEmailLogFields(m.provider.Name(), "", rendered.To, rendered.From, rendered.Subject), zap.Error(err))...)
-		return ErrEmailMailerSendFailed
-	}
-
-	logger.Info("email-sent-successfully",
-		outboundEmailLogFields(result.Provider, result.MessageID, rendered.To, rendered.From, rendered.Subject)...,
-	)
-
-	// Log audit event if enabled
-	if m.config.EnableAuditLogging && m.auditService != nil {
-		m.logAuditEvent(ctx, emailInfo)
-	}
-
-	return nil
+	return m.sendResult(ctx, &emailprovider.Email{To: req.To, From: req.From, ReplyTo: req.ReplyTo, Subject: req.Subject, HTMLBody: req.HTMLBody, TextBody: req.TextBody, MailType: req.MailType}, &EmailInfo{To: req.To, From: req.From, Subject: req.Subject, UserId: req.UserId, RecipientType: req.RecipientType})
+}
+func (m *EmailManager) sendEmailResult(ctx context.Context, rendered *emailtemplater.RenderedEmail, info *EmailInfo, purpose emailprovider.MailType, text string) (*SendReceipt, error) {
+	return m.sendResult(ctx, &emailprovider.Email{To: rendered.To, From: rendered.From, ReplyTo: rendered.ReplyTo, Subject: rendered.Subject, HTMLBody: rendered.HTMLBody, TextBody: text, MailType: purpose}, info)
 }
 
-func logDisabledEmail(logger *zap.Logger, providerName, messageID, to, from, subject string, outputtedLocally bool) {
-	eventName := "email-not-sent-disabled-by-config"
-	if outputtedLocally {
-		eventName = "email-outputted-locally-not-sent-disabled-by-config"
-	}
-
-	logger.Info(eventName,
-		outboundEmailLogFields(providerName, messageID, to, from, subject)...,
-	)
-}
-
-// logAuditEvent logs an audit event for the sent email
+// logAuditEvent records submission evidence; only accepted/captured outcomes have SentAt.
 func (m *EmailManager) logAuditEvent(ctx context.Context, emailInfo *EmailInfo) {
 	logger := logger.AcquirePackageFrom(ctx, "external/emailmanager")
 
+	emailType := audit.Security
+	if emailInfo.MailType == string(emailprovider.Marketing) {
+		emailType = audit.Other
+	}
+	sentAt := ""
+	if emailInfo.State == string(emailprovider.Accepted) || emailInfo.State == string(emailprovider.Captured) {
+		sentAt = toolbox.TimeNowUTC()
+	}
 	err := m.auditService.LogAuditEvent(ctx, &audit.LogAuditEventRequest{
 		ActorId:    audit.AuditActorIdSystem,
 		Action:     audit.UserEmailOutbound,
@@ -332,9 +239,10 @@ func (m *EmailManager) logAuditEvent(ctx context.Context, emailInfo *EmailInfo) 
 			To:            emailInfo.To,
 			From:          emailInfo.From,
 			Subject:       emailInfo.Subject,
-			SentAt:        toolbox.TimeNowUTC(),
+			SentAt:        sentAt,
 			EmailProvider: emailInfo.EmailProvider,
-			EmailType:     audit.Security,
+			EmailType:     emailType,
+			MailType:      emailInfo.MailType, ProviderID: emailInfo.ProviderID, SendState: emailInfo.State,
 		},
 	})
 

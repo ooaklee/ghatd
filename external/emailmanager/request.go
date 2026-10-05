@@ -1,7 +1,13 @@
 package emailmanager
 
+import "github.com/ooaklee/ghatd/external/emailprovider"
+
 // SendEmailRequest holds all information needed to send an email
 type SendEmailRequest struct {
+	// MailType must be explicitly assigned by trusted application code in routed mode.
+	MailType emailprovider.MailType
+	// TextBody preserves the caller-rendered plain-text alternative.
+	TextBody string
 	// To is the recipient email address
 	To string
 
@@ -74,6 +80,10 @@ type SendLoginEmailRequest struct {
 
 // SendCustomEmailRequest holds information for sending a custom email from base template
 type SendCustomEmailRequest struct {
+	// MailType must be explicitly assigned by trusted application code in routed mode.
+	MailType emailprovider.MailType
+	// TextBody preserves the caller-rendered plain-text alternative.
+	TextBody string
 	// EmailSubject is the email subject
 	EmailSubject string
 

@@ -10,6 +10,7 @@ import (
 	accesshelpers "github.com/ooaklee/ghatd/external/accessmanager/helpers"
 	"github.com/ooaklee/ghatd/external/audit"
 	"github.com/ooaklee/ghatd/external/emailmanager"
+	"github.com/ooaklee/ghatd/external/emailprovider"
 	"github.com/ooaklee/ghatd/external/logger"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
@@ -136,7 +137,7 @@ func (s *Service) UpdateUserEmail(ctx context.Context, req *UpdateUserEmailReque
 	if ctx.Err() == nil {
 		// The template is HTML; even authenticated input is not trusted markup.
 		body := fmt.Sprintf(UpdateUserEmailOldEmailNotificationBodyTmpl, html.EscapeString(before.Email), html.EscapeString(account.Email), html.EscapeString(r.TargetUserID))
-		result.PreviousAddressNotified = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{EmailSubject: "Account email changed", EmailPreview: "Your account email address has changed", EmailTo: before.Email, EmailBody: body, WithFooter: true, UserId: r.TargetUserID, RecipientType: string(audit.User)}) == nil
+		result.PreviousAddressNotified = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{MailType: emailprovider.Transactional, EmailSubject: "Account email changed", EmailPreview: "Your account email address has changed", EmailTo: before.Email, EmailBody: body, WithFooter: true, UserId: r.TargetUserID, RecipientType: string(audit.User)}) == nil
 	}
 	if !result.PreviousAddressNotified {
 		log.Warn("email-change-previous-address-notification-incomplete")

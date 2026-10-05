@@ -35,12 +35,33 @@ func (p *BirdEmailProvider) IsHealthy(ctx context.Context) bool {
 // verification links, provider responses or private transport diagnostics.
 func (p *BirdEmailProvider) Send(ctx context.Context, email *Email) (*SendResult, error) {
 	result := &SendResult{Provider: "BIRD"}
+	if email != nil && email.MailType != "" && email.MailType != Transactional {
+		result.State = Failed
+		result.Error = ErrEmailProviderInvalidEmail
+		return result, result.Error
+	}
 	if p == nil || p.client == nil {
+		result.State = Failed
 		result.Error = ErrEmailProviderUnavailable
 		return result, result.Error
 	}
+	if ctx == nil || ctx.Err() != nil {
+		result.State = Failed
+		result.Error = ErrEmailProviderSendFailed
+		return result, result.Error
+	}
+	if err := validateBirdEmail(email); err != nil {
+		result.State = Failed
+		result.Error = err
+		return result, err
+	}
 	id, err := p.client.SendContext(ctx, email)
 	result.MessageID, result.Error, result.Success = id, err, err == nil
+	if err == nil {
+		result.State = Accepted
+	} else {
+		result.State = Uncertain
+	}
 	if ctx != nil {
 		log := logger.AcquireOperationFrom(ctx, "external/emailprovider", "bird-send")
 		if err != nil {

@@ -25,6 +25,7 @@ import (
 	"github.com/ooaklee/ghatd/external/accesspolicymanager"
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/emailmanager"
+	"github.com/ooaklee/ghatd/external/emailprovider"
 	"github.com/ooaklee/ghatd/external/errormanifest"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/router"
@@ -338,7 +339,7 @@ func (b *Bridge) challenge(w http.ResponseWriter, r *http.Request) {
 	}
 	b.record(r.Context(), "code_requested", rv)
 	body := fmt.Sprintf(`<p>Confirm one token-allowance change in %s (%s) for user %s.</p><p>Permanent: %d; ephemeral: %d; TTL: %d–%d seconds; increment: %d seconds; reviewed revision: %d.</p><p>Code: <strong>%s</strong></p><p>Enter this code only in the Admin Access page where you started. It expires with your review, within five minutes. It does not sign you in, change your email or grant an administrator role. If you did not request this, ignore the email.</p>`, html.EscapeString(b.config.System), html.EscapeString(b.config.Environment), html.EscapeString(rv.Target), rv.Limits.Permanent, rv.Limits.Ephemeral, rv.Limits.MinimumTTL, rv.Limits.MaximumTTL, rv.Limits.TTLIncrement, rv.Revision, code)
-	err = b.config.Email.SendCustomEmail(r.Context(), &emailmanager.SendCustomEmailRequest{EmailSubject: "Confirm token allowance change", EmailPreview: "One reviewed administrator action", EmailBody: body, EmailTo: account.Email, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
+	err = b.config.Email.SendCustomEmail(r.Context(), &emailmanager.SendCustomEmailRequest{MailType: emailprovider.Transactional, EmailSubject: "Confirm token allowance change", EmailPreview: "One reviewed administrator action", EmailBody: body, EmailTo: account.Email, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
 	if err != nil {
 		_, _ = b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "cancel", rv.ID, "", "", 0)
 		b.fail(w, ErrUnavailable)

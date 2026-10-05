@@ -13,6 +13,10 @@ type AuditService interface {
 
 // EmailInfo holds information about an email for audit logging
 type EmailInfo struct {
+	// MailType, ProviderID and State preserve trusted route/outcome attribution in the audit.
+	MailType   string
+	ProviderID string
+	State      string
 	// To is the recipient email address
 	To string
 
