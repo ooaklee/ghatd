@@ -154,6 +154,14 @@ The response means only that a provider session exists. The client should show
 a pending state after completion and read Billing Manager's billing projection
 until a signed webhook confirms access.
 
+Catalogue publication only exposes an offer for selection; it does not grant
+paid access. Finish Pricer's
+[bind, save and publish workflow](../pricer/README.md#bind-save-and-publish-a-stripe-catalogue)
+before Checkout. A successful provider session or browser completion is still
+not fulfilment: confirm access through the signed-webhook-derived billing read
+model. See [checkout ownership](#checkout-ownership-and-fulfilment) and the
+[provider/operator verification boundary](../paymentprovider/helpers/README.md#catalogue-and-operator-verification).
+
 ### 3. Create a Customer Portal Session
 
 An authenticated user with a server-owned recurring subscription can request

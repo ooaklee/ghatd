@@ -67,6 +67,28 @@ selects the built-in checkout and portal paths;
 explicit `StripeConfiguration` when your frontend routes differ. Helper
 construction also validates the provider's checkout and portal configuration.
 
+## Catalogue and operator verification
+
+Successful settings validation does not provision Stripe objects or prove that
+a Product/Price belongs to the intended account and mode. Retrieve and verify
+objects with that environment's credentials before saving their references.
+Keep account/mode-specific IDs out of shared template defaults and never treat
+fake fixture IDs as real Stripe test-mode objects.
+
+When Billing Manager calls Stripe Checkout with trusted catalogue expectations,
+the adapter rechecks the exact Price ID, active state, amount, currency,
+one-time/recurring type and recurring interval/count. It does **not** compare
+the Price's Product ID, tax behaviour, lookup key or provisioning metadata with
+the catalogue. Those remain operator checks; the shared publish validator also
+does not enforce Product-to-Price correspondence. An existing Product ref is
+not evidence that those checks passed.
+
+Follow [Pricer's catalogue workflow](../../pricer/README.md#bind-save-and-publish-a-stripe-catalogue)
+and [Billing Manager checkout ownership](../../billingmanager/README.md#checkout-ownership-and-fulfilment).
+Saving refs, publishing a plan, creating a Checkout session and confirming
+webhook-derived paid access are separate outcomes. This guidance does not
+change provider validation or perform provider mutations.
+
 ## Telemetry and ownership
 
 Start the [observability runtime](../../observability/README.md#bootstrap)

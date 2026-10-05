@@ -23,7 +23,8 @@ the service rejects an explicit actor that contradicts supplied identity context
 Public Billing Manager catalogue projections are unaffected.
 
 Full `PricePlan` and `Feature` replacements are in-process capabilities. HTTP
-updates reject non-null replacement objects; use the declared editable fields.
+updates reject non-null replacement objects; use the declared editable fields
+in the [HTTP update contract](#http-update-contract).
 For a trusted replacement, `ID`, when supplied, must equal the replacement's ID;
 an omitted `ID` selects the nonempty replacement ID. Stored nano-ID, creation,
 publication and deletion history override replacement values. Update attribution
@@ -111,6 +112,7 @@ A monetary cost for a plan, with billing cadence and optional trial/setup fees.
 
 | Field | Type | Description |
 |---|---|---|
+| `id` | `string` | Stable cost UUID; assigned on create when missing and retained when editing that cost |
 | `amount` | `int64` | Cost in lowest currency unit (e.g. cents) |
 | `currency` | `string` | ISO 4217 three-letter code (e.g. `USD`) |
 | `billing_cadence` | `string` | See [Billing Cadences](#billing-cadences) |
@@ -243,6 +245,138 @@ A price plan moves through three lifecycle states:
 
 Features do not have a formal lifecycle — they are always available once created, and are removed via soft delete.
 
+### Bind, save and publish a Stripe catalogue
+
+Drafts allow incomplete provider configuration so an operator can save work in
+progress. A provider-neutral draft cannot publish until it has a valid cost
+and provider association. The shared publish validator accepts valid
+associations with supported providers; a plan-level Stripe reference alone
+does not make a plan compatible with Stripe Checkout.
+
+For a Stripe offer:
+
+1. Create a **draft** and record its returned plan and cost UUIDs.
+2. Provision and independently retrieve-verify the Product and each Price in
+   the intended Stripe account and test/live mode. Match the approved amount,
+   currency and cadence. IDs from another account or mode are not portable.
+3. Record the verified Product on the plan's Stripe reference and a distinct
+   Price on each purchasable Stripe cost's reference, preserving its cost UUID.
+   A plan-level Product is useful for catalogue correlation, but GHATD does
+   not enforce Product-to-Price correspondence. Checkout selects **cost-level**
+   Price references, not a plan-level Price ID.
+4. Save with the [editable-field HTTP contract](#http-update-contract), wait
+   for success, then verify the complete stored draft through a fresh admin
+   `GET /api/v1/pricing/plans/{id}` with `include_features=true`,
+   `include_costs=true` and `include_providers=true`. Stop if Save fails:
+   Publish reads persisted state, not unsaved form edits.
+5. Use `POST /api/v1/pricing/plans/{id}/publish`, then verify the returned
+   publication state and a fresh public
+   `GET /api/v1/bms/pricing/plans/{slug}` through the configured Billing Manager.
+   Scheduled publication is not public until its effective time.
+6. Verify Checkout and the signed-webhook-derived billing read model. Catalogue
+   publication is not evidence of a successful payment or granted access; see
+   [Billing Manager fulfilment](../billingmanager/README.md#checkout-ownership-and-fulfilment).
+
+Stripe publication rejects missing or duplicate cost-level Price IDs,
+nonpositive Stripe costs, setup fees, one-time trials, recurring trials over
+730 days, discounts and custom payment terms. The Price must resolve to exactly
+one eligible published cost across the catalogue for Checkout. Operator checks
+and [live provider verification](../paymentprovider/helpers/README.md#catalogue-and-operator-verification)
+are separate from this local publication validation.
+
+Saving a changed provider reference on an **already-published** plan changes
+the live mapping when the save succeeds; there is no later staging/Publish gate.
+Coordinate edits, retain the previous active Price and mapping for rollback,
+and verify fresh admin/public reads before using the replacement. Pricer does
+not add revision preconditions or atomic concurrent-edit protection.
+
+## HTTP update contract
+
+All admin writes retain the configured authentication, administrator middleware
+and route policy. `PUT` uses top-level editable fields, not a GET response
+wrapped in `price_plan` or `feature`:
+
+| Endpoint | Ordinary editable fields |
+| --- | --- |
+| `PUT /api/v1/pricing/plans/{id}` | `slug`, `name`, `description`, `features`, `costs`, `discounts`, `payment_terms`, `provider_refs`, `metadata`, `display_order` |
+| `PUT /api/v1/pricing/features/{id}` | `slug`, `name`, `description`, `type`, `unit`, `sort_order`, `metadata` |
+
+The plan request also accepts `status`, but prefer the dedicated `/publish` and
+`/archive` actions for explicit lifecycle intent. Creating a draft with
+`POST /api/v1/pricing/plans` is a different request and may include
+`status: "draft"` and `publish_now: false`.
+
+Send changed fields or an allowlisted editable projection. Do not copy
+top-level identity, nano-ID, actor IDs, timestamps or attribution/publication
+history from GET: the selected ID belongs to the route, the actor comes from
+verified context, and stored history belongs to the service. Nested cost IDs
+are editable-model references, not top-level audit fields, and must be retained
+for existing costs.
+
+For example, binding an existing single-cost draft uses this shape; replace all
+placeholders with verified values and use the offer's actual reviewed terms:
+
+```http
+PUT /api/v1/pricing/plans/{id}
+Content-Type: application/json
+```
+
+```json
+{
+  "provider_refs": [
+    {
+      "provider": "stripe",
+      "provider_product_id": "prod_<verified product>"
+    }
+  ],
+  "costs": [
+    {
+      "id": "<existing cost UUID>",
+      "amount": 2900,
+      "currency": "USD",
+      "billing_cadence": "month",
+      "trial_period_days": 0,
+      "setup_fee_amount": 0,
+      "provider_refs": [
+        {
+          "provider": "stripe",
+          "provider_product_id": "prod_<verified product>",
+          "provider_price_id": "price_<verified price>"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Feature edits have the same top-level shape, for example
+`{ "name": "Updated feature name", "sort_order": 0 }`, not a `feature` wrapper.
+
+- Omitted fields leave their stored values unchanged. Preserve intentional
+  zero/false values when building the editable projection.
+- Sending an array replaces it, rather than merging entries. For `costs`, send
+  **every** cost that must remain, with its stable ID, terms, metadata and
+  existing provider refs; the single-cost example is not a multi-cost patch.
+- Explicit `[]` clears `features`, `costs`, `discounts` or `provider_refs`.
+  Confirm removals with a fresh GET; a published plan must remain valid.
+- `payment_terms: null` currently does **not** clear existing terms: the updater
+  treats it as absent. Do not assume a successful response removed them. Resolve
+  this limitation before publishing a Stripe plan that already has terms;
+  trusted in-process replacement is not an HTTP escape hatch.
+
+### Update and publication errors
+
+These are the default public mappings; hosts may compose explicit overrides.
+Payload errors have several possible causes, not just replacement wrappers.
+
+| Code | Meaning | Action |
+| --- | --- | --- |
+| `PRC0-01` (400) | Invalid plan payload, including a non-null `price_plan` wrapper | Check the plan editable fields and retry Save before Publish |
+| `PRC0-02` (400) | Invalid feature payload, including a non-null `feature` wrapper | Send the feature editable fields, not its complete read response |
+| `PRC0-18` (400) | Publication has no cost | Save a valid reviewed cost and verify the stored draft |
+| `PRC0-19` (400) | Publication has no valid provider association | Save verified provider refs and verify the stored draft |
+| `PRC0-25` (400) | Stripe terms or references cannot be represented by shared Checkout | Correct cost-level Price refs and unsupported terms; a plan-only Stripe ref is insufficient |
+
 ## BMS Read Endpoints for Client integration
 
 The billing manager service exposes **read-only** pricing endpoints designed for frontend and other client applications. These endpoints require no authentication.
@@ -354,7 +488,9 @@ GET /api/v1/bms/pricing/plans?with_status=published&include_costs=true&include_f
 
 #### Example Meta Response (with `meta=true`)
 
-```json
+The `data` array is abbreviated below; `[...]` is not literal response JSON.
+
+```text
 {
     "data": [...],
     "meta": {
@@ -573,13 +709,21 @@ feature, err := pricerService.CreateFeature(ctx, &pricer.CreateFeatureRequest{
 })
 ```
 
+Check `err` before accessing `feature.Feature` in the next step.
+
 ### 4. Create a Price Plan
 
+Create a provider-neutral draft first. The example terms are illustrative;
+choose the approved offer before provisioning provider objects. The service
+assigns missing cost UUIDs and returns them with the saved plan.
+
 ```go
+displayOrder := 2
 plan, err := pricerService.CreatePricePlan(ctx, &pricer.CreatePricePlanRequest{
     ActorID:     verifiedAdministratorID,
     Name:        "Pro",
     Description: "For growing teams",
+    Status:      pricer.PricePlanStatusDraft,
     Features: []pricer.PlanFeatureRef{
         {
             FeatureID: feature.Feature.ID,
@@ -595,27 +739,17 @@ plan, err := pricerService.CreatePricePlan(ctx, &pricer.CreatePricePlanRequest{
             BillingCadence: pricer.PriceBillingCadenceMonthly,
         },
     },
-    Discounts: []pricer.PriceDiscount{
-        {
-            Type:       pricer.PriceDiscountTypePercent,
-            PercentBps: 2000, // 20% off
-        },
-    },
-    PaymentTerms: &pricer.PricePaymentTerms{
-        Label:            "Net 30",
-        DueDays:          30,
-        CollectionMethod: pricer.PricePaymentCollectionMethodInvoice,
-    },
-    ProviderRefs: []pricer.PriceProviderRef{
-        {
-            Provider:         pricer.PriceProviderStripe,
-            ProviderPriceID:  "price_stripe_pro_monthly",
-        },
-    },
-    DisplayOrder: intPtr(2),
-    PublishNow:   true,
+    DisplayOrder: &displayOrder,
+    PublishNow:   false,
 })
 ```
+
+Check `err` before using `plan.PricePlan` or continuing to the next step. Bind
+verified provider references, save and publish using the
+[catalogue workflow](#bind-save-and-publish-a-stripe-catalogue); publishing this
+unbound draft immediately would fail provider validation. Do not add discounts
+or custom payment terms to a plan intended for the current shared Stripe
+Checkout flow.
 
 ### 5. Expose via BMS for Client integration
 
@@ -783,9 +917,11 @@ plan so clients do not have to distinguish two identical cadence labels:
 
 Every cost has a deterministic ID and a globally unique placeholder Stripe
 Price ID. Monthly is stored first on recurring plans so clients that display a
-single primary cost have a stable default. Replace all placeholder Product and
-Price references with environment-specific provider objects before using a
-fixture as the basis of a real checkout catalogue.
+single primary cost have a stable default. These placeholders belong only to
+the fake-provider fixtures. Do not register the fake fixture seed in a process
+using a real Stripe provider, including Stripe test mode. Author a separate,
+reviewed host catalogue with verified provider objects, starting as drafts through
+the [catalogue workflow](#bind-save-and-publish-a-stripe-catalogue) instead.
 
 ## Local E2E Testing
 

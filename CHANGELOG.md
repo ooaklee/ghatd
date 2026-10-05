@@ -258,6 +258,12 @@ when the release version has been selected, and remove unused subsections.
   authenticated context and reject full plan/feature replacements. Trusted
   in-process replacements must agree with the selected resource and retain stored
   audit history; caller authorization remains the integrating workflow's duty.
+  Follow the [HTTP update contract](external/pricer/README.md#http-update-contract)
+  for editable fields, stable cost IDs, array replacement and the existing
+  payment-terms clearing limitation. The corrected draft example and
+  [publication workflow](external/pricer/README.md#bind-save-and-publish-a-stripe-catalogue)
+  distinguish provider binding, public catalogue state and webhook-derived
+  paid access; these documentation clarifications do not change runtime behaviour.
 - **Breaking:** [Post Mongo adapters](external/post/README.md#failure-and-snapshot-contracts)
   require result-bearing update/delete helpers so missing targets cannot produce
   false success. Custom stores must supply acknowledgement flags and real counts;
