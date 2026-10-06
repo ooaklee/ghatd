@@ -395,7 +395,8 @@ when the release version has been selected, and remove unused subsections.
   preserves custom data, deduplicates registration tokens, and splits requests
   at Firebase's 500-token limit. Permanently unregistered tokens are disabled;
   other delivery and cleanup failures remain observable without returning raw
-  provider messages that can expose registration tokens.
+  provider messages that can expose registration tokens. Web Push payloads bind
+  `recipient_id` to the address owner for client account-change checks.
 
 - The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before

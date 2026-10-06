@@ -152,3 +152,22 @@ func TestFCMMessageData(t *testing.T) {
 		})
 	}
 }
+
+func TestWebPushMessageRecipient(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		data map[string]interface{}
+	}{
+		{"empty data", nil}, {"reserved field cannot override owner", map[string]interface{}{"recipient_id": "other", "url": "/inbox"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := webPushMessageData("owner", tt.data)
+			if actual["recipient_id"] != "owner" {
+				t.Fatal("payload recipient was not bound")
+			}
+			if tt.data != nil && tt.data["recipient_id"] != "other" {
+				t.Fatal("caller data mutated")
+			}
+		})
+	}
+}

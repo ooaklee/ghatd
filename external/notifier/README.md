@@ -215,6 +215,10 @@ response, err := service.NotifyUser(ctx, &notifier.NotifyUserRequest{
    `ResolveCredentialsFileWithCleanup` directly only when custom sender wiring
    needs lower-level control.
 
+Web Push data includes a reserved `recipient_id` bound to the address owner.
+Clients should compare it with their active account before displaying delayed
+notifications after an account change. Caller data cannot override this field.
+
 ## FCM delivery lifecycle
 
 The standard FCM sender uses the Firebase HTTP v1 API. It carries notification

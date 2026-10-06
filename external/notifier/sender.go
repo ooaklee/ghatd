@@ -272,9 +272,7 @@ func (s *WebPushSender) sendOne(ctx context.Context, subject, message string, ad
 	if s.httpClient != nil {
 		ctx = notifywebpush.WithOptions(ctx, notifywebpush.Options{HTTPClient: s.httpClient})
 	}
-	if len(data) > 0 {
-		ctx = notifywebpush.WithData(ctx, data)
-	}
+	ctx = notifywebpush.WithData(ctx, webPushMessageData(address.UserID, data))
 
 	return notify.NewWithServices(webPushService).Send(ctx, subject, message)
 }
@@ -540,4 +538,15 @@ func fcmMessageData(data map[string]interface{}) (map[string]string, error) {
 		result[key] = string(encoded)
 	}
 	return result, nil
+}
+
+// webPushMessageData binds the payload to its actual recipient without mutating
+// caller data. Clients can reject delayed pushes after an account change.
+func webPushMessageData(userID string, data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{}, len(data)+1)
+	for key, value := range data {
+		result[key] = value
+	}
+	result["recipient_id"] = userID
+	return result
 }
