@@ -2,11 +2,11 @@ package notifier
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
-	"strings"
 
 	"firebase.google.com/go/v4/messaging"
 	webpush "github.com/SherClockHolmes/webpush-go"
@@ -272,9 +272,7 @@ func (s *WebPushSender) sendOne(ctx context.Context, subject, message string, ad
 	if s.httpClient != nil {
 		ctx = notifywebpush.WithOptions(ctx, notifywebpush.Options{HTTPClient: s.httpClient})
 	}
-	if len(data) > 0 {
-		ctx = notifywebpush.WithData(ctx, data)
-	}
+	ctx = notifywebpush.WithData(ctx, webPushMessageData(address.UserID, data))
 
 	return notify.NewWithServices(webPushService).Send(ctx, subject, message)
 }
@@ -343,9 +341,8 @@ type FCMSenderConfig struct {
 // If Enabled is false or no credentials are provided, the sender
 // reports as unavailable and the service skips FCM delivery.
 //
-// An invalidAddressHandler field and SetInvalidAddressHandler setter
-// are included for future FCM token invalidation support but are not
-// wired in v1.
+// Permanently unregistered tokens are disabled through the repository callback.
+// Other failures remain retryable and never disable a destination.
 type FCMSender struct {
 	config                FCMSenderConfig
 	httpClient            *http.Client
@@ -423,16 +420,25 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 	}
 
 	tokens := make([]string, 0, len(addresses))
+	byToken := make(map[string][]NotificationAddress)
 	for _, address := range addresses {
 		if address.Channel != NotificationChannelFCM || address.FCM == nil || address.FCM.Token == "" {
 			continue
 		}
-		tokens = append(tokens, address.FCM.Token)
+		token := address.FCM.Token
+		if _, exists := byToken[token]; !exists {
+			tokens = append(tokens, token)
+		}
+		byToken[token] = append(byToken[token], address)
 	}
-
 	if len(tokens) == 0 {
 		logger.Warn("fcm-send-no-valid-tokens", zap.Int("attempted-addresses", len(addresses)), zap.Error(ErrNotificationNoActiveAddresses))
 		return report, ErrNotificationNoActiveAddresses
+	}
+
+	payload, err := fcmMessageData(data)
+	if err != nil {
+		return report, err
 	}
 
 	logger.Info("fcm-send-started", zap.Int("attempted-addresses", len(addresses)), zap.Int("valid-tokens", len(tokens)), zap.Strings("data-keys", notificationDataKeysForLog(data)))
@@ -459,73 +465,88 @@ func (s *FCMSender) SendWithReport(ctx context.Context, subject, message string,
 		return report, err
 	}
 
-	var batchResponse *messaging.BatchResponse
-	if len(tokens) == 1 {
-		msg := &messaging.Message{
-			Token: tokens[0],
-			Notification: &messaging.Notification{
-				Title: subject,
-				Body:  message,
-			},
+	var failures []error
+	// Firebase accepts no more than 500 tokens in one multicast request.
+	for offset := 0; offset < len(tokens); offset += 500 {
+		if err := ctx.Err(); err != nil {
+			failures = append(failures, err)
+			break
 		}
-		batchResponse, err = fcmClient.Send(ctx, msg)
-		if err != nil {
-			logger.Error("fcm-single-send-failed", zap.Int("valid-tokens", len(tokens)), zap.Error(err))
-			return report, err
-		}
-	} else {
-		msg := &messaging.MulticastMessage{
-			Tokens: tokens,
-			Notification: &messaging.Notification{
-				Title: subject,
-				Body:  message,
-			},
-		}
-		batchResponse, err = fcmClient.SendMulticast(ctx, msg)
-		if err != nil {
-			logger.Error("fcm-multicast-send-failed", zap.Int("valid-tokens", len(tokens)), zap.Error(err))
-			return report, err
-		}
-	}
-
-	if batchResponse == nil {
-		logger.Error("fcm-send-nil-batch-response", zap.Int("valid-tokens", len(tokens)))
-		return report, errors.New("fcm delivery failed: nil batch response")
-	}
-
-	report.Delivered = batchResponse.SuccessCount
-	if batchResponse.FailureCount > 0 {
-		err := fcmBatchResponseError(batchResponse)
-		logger.Error(
-			"fcm-send-partial-failure",
-			zap.Int("valid-tokens", len(tokens)),
-			zap.Int("delivered", report.Delivered),
-			zap.Int("failed-tokens", batchResponse.FailureCount),
-			zap.Error(err),
-		)
-		return report, err
-	}
-
-	logger.Info("fcm-send-completed", zap.Int("valid-tokens", len(tokens)), zap.Int("delivered", report.Delivered))
-	return report, nil
-}
-
-func fcmBatchResponseError(response *messaging.BatchResponse) error {
-	if response == nil || response.FailureCount == 0 {
-		return nil
-	}
-
-	failures := make([]string, 0, response.FailureCount)
-	for index, sendResponse := range response.Responses {
-		if sendResponse == nil || sendResponse.Success || sendResponse.Error == nil {
+		end := min(offset+500, len(tokens))
+		batchTokens := tokens[offset:end]
+		response, sendErr := fcmClient.SendMulticast(ctx, &messaging.MulticastMessage{
+			Tokens:       batchTokens,
+			Notification: &messaging.Notification{Title: subject, Body: message},
+			Data:         payload,
+		})
+		if sendErr != nil || response == nil || len(response.Responses) != len(batchTokens) {
+			// Provider errors can contain registration tokens. Return only a safe category.
+			failures = append(failures, errors.New("fcm batch delivery failed"))
 			continue
 		}
-		failures = append(failures, fmt.Sprintf("token[%d]: %v", index, sendResponse.Error))
+		for index, result := range response.Responses {
+			if result != nil && result.Success {
+				report.Delivered++
+				continue
+			}
+			if result != nil && messaging.IsRegistrationTokenNotRegistered(result.Error) && s.invalidAddressHandler != nil {
+				seenHashes := make(map[string]bool)
+				for _, address := range byToken[batchTokens[index]] {
+					hash := address.AddressHash
+					if hash == "" {
+						hash = hashAddress(NotificationChannelFCM, batchTokens[index])
+					}
+					if seenHashes[hash] {
+						continue
+					}
+					seenHashes[hash] = true
+					if err := s.invalidAddressHandler(ctx, hash); err != nil {
+						failures = append(failures, errors.New("fcm invalid-address cleanup failed"))
+					} else {
+						report.Cleaned++
+					}
+				}
+				continue
+			}
+			failures = append(failures, fmt.Errorf("fcm delivery failed for token[%d]", offset+index))
+		}
 	}
-
-	if len(failures) == 0 {
-		return fmt.Errorf("fcm delivery failed for %d token(s)", response.FailureCount)
+	if len(failures) > 0 {
+		logger.Warn("fcm-send-failed", zap.Int("delivered", report.Delivered), zap.Int("cleaned", report.Cleaned), zap.Int("failures", len(failures)))
+	} else {
+		logger.Info("fcm-send-completed", zap.Int("delivered", report.Delivered), zap.Int("cleaned", report.Cleaned))
 	}
+	return report, errors.Join(failures...)
+}
 
-	return fmt.Errorf("fcm delivery failed for %d token(s): %s", response.FailureCount, strings.Join(failures, "; "))
+// fcmMessageData preserves strings and JSON-encodes other values for FCM's
+// string-only data map. Invalid values fail before any delivery is attempted.
+func fcmMessageData(data map[string]interface{}) (map[string]string, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]string, len(data))
+	for key, value := range data {
+		if text, ok := value.(string); ok {
+			result[key] = text
+			continue
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, errors.New("fcm notification data is not JSON serializable")
+		}
+		result[key] = string(encoded)
+	}
+	return result, nil
+}
+
+// webPushMessageData binds the payload to its actual recipient without mutating
+// caller data. Clients can reject delayed pushes after an account change.
+func webPushMessageData(userID string, data map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{}, len(data)+1)
+	for key, value := range data {
+		result[key] = value
+	}
+	result["recipient_id"] = userID
+	return result
 }
