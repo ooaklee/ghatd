@@ -1,7 +1,7 @@
 # Email Provider
 
-This package provides a provider-neutral email abstraction with SparkPost and
-Bird implementations, a local capture provider for development, and helpers host
+This package provides a provider-neutral email abstraction with SparkPost, Bird
+and Postmark implementations, a local capture provider for development, and helpers host
 applications can reuse without writing their own per-app adapters.
 
 ## Bird transactional email
@@ -180,12 +180,10 @@ addresses, subjects and message bodies are not surfaced in errors or logs.
 Existing metadata such as sender/recipient domains, presence flags, subject
 length and the successful provider message ID remains available.
 
-## SparkPost: known behaviour note for text-only emails
+## SparkPost plain-text support
 
-Validation accepts an email with `TextBody` but no `HTMLBody`, but the
-SparkPost transmission currently sets only the HTML part, so a text-only
-email may be sent without body content. This is preserved for compatibility
-with existing callers; changing it is left to a deliberate follow-up change.
+SparkPost transmits both HTMLBody and TextBody, including text-only messages.
+Reply-To and caller context remain preserved.
 
 ## Running the tests
 
@@ -200,3 +198,68 @@ failure, cancellation and concurrency cases; `bird_telemetry_test.go` — sequen
 table-driven trace/metric/log privacy cases with isolated OTel providers.
 The observability suite also exercises actual OTLP serialization to a local test
 receiver; it does not establish production Collector/backend delivery.
+
+## Postmark inline email
+
+`NewPostmarkClient` and `NewPostmarkEmailProvider` implement the documented
+[Postmark email API](https://postmarkapp.com/developer/api/email-api). The client
+accepts a server token, a transactional stream (default `outbound`) and an
+optional broadcast `MarketingStream`. The operator must verify the actual stream
+types and sender signature. A configured stream name is not live proof.
+Broadcast sending retains Postmark suppression/unsubscribe handling; it is
+single-message sending, not an audience/campaign API.
+
+```go
+client, err := emailprovider.NewPostmarkClient(
+    (&emailprovider.NewPostmarkClientRequest{
+        ServerToken: serverToken,
+        TransactionalStream: "outbound",
+        MarketingStream: "broadcasts",
+    }).WithHTTPClient(observability.NewHTTPClient(http.DefaultTransport, 10*time.Second)),
+)
+if err != nil { return err }
+provider := emailprovider.NewPostmarkEmailProvider(client).
+    WithMailTypePreference([]emailprovider.MailType{
+        emailprovider.Marketing, emailprovider.Transactional,
+    })
+```
+
+`MailType` on `Email` selects the configured stream. An empty type retains legacy
+transactional behavior. Missing marketing configuration or an unknown purpose
+fails before submission. From, To, ReplyTo, HTMLBody and TextBody are preserved;
+tracking is disabled. The endpoint is fixed to `https://api.postmarkapp.com/email`.
+The host's transport is borrowed, while the HTTP client policy is copied with
+cookies/redirects disabled and a maximum 30-second timeout. The encoded request
+is capped at 1 MiB and the response at 64 KiB. One call submits once, with no
+replayable body, invented idempotency header or automatic retries. Transports
+supplied by the host must not retry sends.
+
+A documented success requires HTTP 200, `ErrorCode: 0` and a valid message ID.
+Known API/client rejection is failed. Network failures, server errors, redirects,
+malformed/oversized receipts and unconfirmed responses remain uncertain. Returned
+errors omit raw vendor/transport diagnostics, tokens, bodies and addresses.
+Acceptance never proves delivery. Webhooks, lookup, templates, attachments,
+batches and audience operations are deliberately not implemented by this adapter.
+
+The `mrz1836/postmark` v1.9.2 SDK was evaluated. It supports context/client injection,
+but its send path exposes replayable bodies and reads response bodies without a
+limit. This bounded adapter uses the documented wire contract directly rather
+than importing a broader SDK or weakening shared submission guarantees.
+
+## Provider preferences and local attribution
+
+Bird, SparkPost, Postmark and Logging providers expose
+`WithMailTypePreference([]MailType{Transactional, Marketing})`. The fluent method
+returns an independent decoration; it neither mutates nor copies the underlying
+client/inbox synchronization state. Input and returned preference slices are
+copied. `SupportedMailTypes` is the capability set, separate from the ordered
+preference list. Constructor-time validation and selection belong to
+[EmailManager](../emailmanager/README.md#purpose-routing-and-submission-receipts).
+Bird cannot acquire marketing capability through preference. Postmark marketing
+requires its explicit broadcast stream. An empty list participates in
+round-robin among equally eligible providers.
+
+Local inbox entries retain `providerId`, vendor `provider` and `mailType`, and
+show them on the list and detail pages. Those fields attribute a locally captured
+message to its selected route; they do not imply an external vendor was called.
+All routes can share one bounded `LocalEmailStore`.

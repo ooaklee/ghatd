@@ -4,6 +4,12 @@ import "context"
 
 // Email represents an email message to be sent
 type Email struct {
+	// MailType is supplied by trusted orchestration. Empty preserves legacy transactional use.
+	MailType MailType
+	// ProviderID and ProviderName attribute local capture to the configured route.
+	// Vendor adapters must not send these fields as vendor metadata.
+	ProviderID   string
+	ProviderName string
 	// To is the recipient email address
 	To string
 
@@ -25,6 +31,9 @@ type Email struct {
 
 // SendResult contains information about a sent email
 type SendResult struct {
+	// State distinguishes local capture, skipped work and provider acceptance.
+	// Empty is allowed for legacy providers and is normalized by EmailManager.
+	State SendState
 	// MessageID is the unique identifier for the sent message (provider-specific)
 	MessageID string
 

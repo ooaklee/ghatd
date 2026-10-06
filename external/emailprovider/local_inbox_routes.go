@@ -100,6 +100,9 @@ type localInboxDetailView struct {
 }
 
 type localInboxEmailSummary struct {
+	ProviderID string   `json:"providerId,omitempty"`
+	Provider   string   `json:"provider,omitempty"`
+	MailType   MailType `json:"mailType,omitempty"`
 	MessageID  string   `json:"messageId"`
 	To         string   `json:"to"`
 	From       string   `json:"from"`
@@ -231,6 +234,9 @@ func (h *localInboxHandlers) emailSummaries() []localInboxEmailSummary {
 	for _, email := range emails {
 		summaries = append(summaries, localInboxEmailSummary{
 			MessageID:  email.MessageID,
+			ProviderID: email.ProviderID,
+			Provider:   email.Provider,
+			MailType:   email.MailType,
 			To:         email.To,
 			From:       email.From,
 			Subject:    email.Subject,
@@ -395,13 +401,14 @@ var localInboxIndexTemplate = template.Must(template.New("local-email-inbox-inde
     </header>
     {{if .Emails}}
     <table>
-      <thead><tr><th>Sent</th><th>Subject</th><th>Recipient</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Sent</th><th>Subject</th><th>Recipient</th><th>Provider</th><th>Actions</th></tr></thead>
       <tbody>
       {{range .Emails}}
         <tr>
           <td class="muted">{{.CreatedAt}}</td>
           <td><div class="subject">{{.Subject}}</div><div class="muted">{{.From}}</div></td>
           <td>{{.To}}</td>
+          <td>{{.Provider}}<div class="muted">{{.ProviderID}} · {{.MailType}} · captured locally</div></td>
           <td>
             <a class="button" href="{{.DetailPath}}">Open</a>
             {{if .Links}}<div class="links">{{range .Links}}<a class="button" href="{{.}}" target="_blank" rel="noreferrer">Link</a>{{end}}</div>{{end}}
@@ -450,6 +457,7 @@ var localInboxDetailTemplate = template.Must(template.New("local-email-inbox-det
       <dt>From</dt><dd>{{.Email.From}}</dd>
       <dt>Reply To</dt><dd>{{.Email.ReplyTo}}</dd>
       <dt>Sent</dt><dd>{{.CreatedAt}}</dd>
+      <dt>Provider</dt><dd>{{.Email.Provider}} · {{.Email.ProviderID}} · {{.Email.MailType}} · captured locally</dd>
       <dt>Message ID</dt><dd>{{.Email.MessageID}}</dd>
     </dl>
     <div class="actions">

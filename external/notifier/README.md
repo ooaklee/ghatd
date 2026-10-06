@@ -214,3 +214,27 @@ response, err := service.NotifyUser(ctx, &notifier.NotifyUserRequest{
    credentials into a temp file and returns the cleanup function. Use
    `ResolveCredentialsFileWithCleanup` directly only when custom sender wiring
    needs lower-level control.
+
+Web Push data includes a reserved `recipient_id` bound to the address owner.
+Clients should compare it with their active account before displaying delayed
+notifications after an account change. Caller data cannot override this field.
+
+## FCM delivery lifecycle
+
+The standard FCM sender uses the Firebase HTTP v1 API. It carries notification
+`data` alongside the title and body so native clients can resolve their own
+deep links. String values are preserved; other JSON-compatible values are
+encoded as JSON strings for Firebase's string-only data map. Unsupported values
+fail before delivery. Consumers must validate navigation destinations.
+
+A send deduplicates identical registration tokens and processes at most 500
+tokens per multicast request. A token explicitly rejected as `UNREGISTERED`
+is disabled through the notifier repository callback. Invalid payloads, sender
+project mismatches, authentication failures, and temporary provider failures
+do not disable tokens. Cleanup failures are returned so the caller can retry.
+Provider error bodies are not returned because they can contain device tokens.
+
+The report separates accepted deliveries from cleaned-up destinations. Provider
+acceptance does not prove that a device displayed a notification. Verify actual
+foreground, background, tap navigation, permission denial, logout, account
+switching, and token refresh behavior on each supported client platform.

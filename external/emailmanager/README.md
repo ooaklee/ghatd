@@ -367,3 +367,110 @@ Here's a list of areas for improvement in future iterations of `emailmanager`, `
 - [ ] Provider failover
 - [ ] Send rate tracking
 - [ ] Error rate monitoring
+
+## Purpose routing and submission receipts
+
+`NewStandardEmailManagerRequest.Routing` opts into named provider instances.
+Legacy `Provider`-only constructors and error-only methods remain supported.
+Legacy generic sends default to transactional; routed generic/custom sends must
+set a trusted `MailType`. Login and verification helpers always select
+transactional. Purpose is never inferred from subject, recipient, request headers
+or template content. Marketing consent remains the host's responsibility.
+
+```go
+bird := emailprovider.NewBirdEmailProvider(birdClient).
+    WithMailTypePreference([]emailprovider.MailType{emailprovider.Transactional})
+postmark := emailprovider.NewPostmarkEmailProvider(postmarkClient).
+    WithMailTypePreference([]emailprovider.MailType{
+        emailprovider.Marketing, emailprovider.Transactional,
+    })
+request.Routing = &emailmanager.RoutingConfig{
+    Providers: []emailmanager.ProviderRegistration{
+        {ID: "bird-primary", Provider: bird},
+        {ID: "postmark-primary", Provider: postmark},
+    },
+}
+manager, err := emailmanager.NewStandardEmailManager(request)
+if err != nil { return err }
+receipt, err := manager.SendCustomEmailWithResult(ctx,
+    &emailmanager.SendCustomEmailRequest{
+        MailType: emailprovider.Transactional,
+        EmailTo: "recipient@example.test",
+        EmailSubject: "Your confirmation",
+        EmailBody: "<p>Your confirmation is ready.</p>",
+        TextBody: "Your confirmation is ready.",
+    })
+```
+
+The Postmark client in that example must configure a broadcast `MarketingStream`.
+Preference never grants a capability. Bird supports transactional only. A custom
+legacy provider without `MailTypeProvider` is treated as transactional-only in
+routed mode. Decorate it with an explicit capability implementation to opt in
+additional purposes. Configured instance IDs distinguish two accounts of the
+same vendor; `Name()` is a vendor label, not an account identifier.
+
+Selection first filters by supported purpose and operation. An explicit
+`Routes[purpose]` selects exactly that configured instance. Otherwise the lowest
+position of the requested purpose in each provider's preference list wins.
+Capability-only providers (including those with empty preferences) rank after
+providers explicitly preferring the purpose. Ties use round-robin in registration
+order, with separate counters per purpose and operation. Every selection consumes
+one turn, including a failed attempt; it never resubmits or changes provider
+within that operation. If no candidate supports the purpose/operation, selection
+fails. Duplicate/unknown preferences, unsupported preferred purposes, duplicate
+IDs and invalid explicit routes fail construction.
+
+`DefaultProviderID` is a transactional-only default when no explicit route or
+matching ranked preference exists. Marketing does not silently reuse that
+default. No failure, cancellation, invalid configured route or uncertain timeout
+causes fallback to another account. Configuration and input slices/maps are
+snapshotted at construction; provider/client objects must remain immutable.
+
+`SendEmailWithResult`, `SendCustomEmailWithResult`, `SendLoginEmailWithResult` and
+`SendVerificationEmailWithResult` expose a `SendReceipt`:
+
+| State | Meaning |
+| --- | --- |
+| `skipped` | Global sending is disabled; no external submission occurred. |
+| `captured` | Stored in the local inbox; MessageID is a local capture ID. |
+| `accepted` | The selected provider acknowledged submission, not recipient delivery. |
+| `failed` | Preflight or a known rejection prevented confirmed acceptance. |
+| `uncertain` | Submission may have occurred; reconcile without blindly resending. |
+
+An error-only method returning nil may mean captured or skipped. Use receipts
+when durable delivery state needs that distinction. Legacy adapters with no
+explicit state classify errors conservatively as uncertain. No adapter or
+manager claims remote idempotency from an in-memory selection or local job key.
+Lookup, authenticated delivery callbacks and durable outbox orchestration remain
+separate concerns.
+
+For local development set `Routing.LocalCapture` to the same
+`LoggingEmailProvider` whose store is attached to `/_ghatd/local/emails`. It
+intercepts every selected route before any external call, even if
+`ShouldSendEmail` is true. With global sending disabled and no local capture,
+external operations are skipped. Captures retain selected instance, vendor and
+purpose on the inbox list, details and JSON API. This tests routing and template
+behavior, not vendor authentication or delivery.
+
+`ProviderRegistration.Campaign` is a separate optional `CampaignProvider` port.
+`SubmitCampaign` selects marketing-capable audience operations rather than
+calling `EmailProvider.Send`. Inline marketing capability does not imply a
+campaign API. Disabled/local campaign operations never create remote audiences
+or campaigns; capable operations are skipped. The host must validate consent and
+audience eligibility before submission. This port has no campaign scheduler or
+provider administration surface.
+
+The selected instance ID is recorded only for configured registrations. Legacy
+single-provider receipts leave `ProviderID` empty. When audit logging is enabled,
+all submission outcomes record purpose, vendor, instance and state. `SentAt` is
+populated only for accepted/captured submissions; it does not prove delivery.
+
+Use `manager.ProviderForMailType(emailprovider.Marketing)` when composing an
+existing consumer that takes an `EmailProvider` directly. The adapter binds a
+trusted startup purpose and routes through the same manager and local inbox;
+caller-supplied message purpose cannot override it.
+
+An explicit marketing route may support inline messages without audience
+operations. `SubmitCampaign` then returns `ErrCapabilityUnavailable` and does
+not select another account. Invalid requests return the send-failure sentinel.
+None of the built-in inline adapters implements a campaign port.

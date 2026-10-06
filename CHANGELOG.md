@@ -82,6 +82,21 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Purpose-aware email routing](external/emailmanager/README.md#purpose-routing-and-submission-receipts)
+  with named provider accounts, ordered mail-type preferences, round-robin ties,
+  explicit transactional defaults, separate campaign capability and truthful
+  skipped/captured/accepted/failed/uncertain submission receipts. Legacy single-
+  provider constructors and error-only methods remain supported; routed generic
+  sends require an explicit trusted purpose. No failure triggers provider failover.
+  Provider compatibility adapters check the selected account readiness without
+  advancing selection turns.
+- A bounded [Postmark inline adapter](external/emailprovider/README.md#postmark-inline-email)
+  for transactional and explicitly configured broadcast streams, preserving host
+  instrumentation, HTML/plain text and Reply-To without automatic retries.
+- Provider instance, vendor and purpose attribution on local inbox list/API/detail
+  views. Local capture can intercept all routed providers into the same inbox.
+  SparkPost now preserves plain-text bodies as well as HTML.
+
 - [Waitlist host extensions](external/waitlist/README.md#host-policy-and-presentation)
   for configured consent, optional transactional enrollment sequences, CSV
   projections and persisted custom announcement data with recipient-specific
@@ -381,6 +396,13 @@ when the release version has been selected, and remove unused subsections.
   and email-verification proofs require token_use.
 
 ### Fixed
+
+- [FCM notification delivery](external/notifier/README.md#fcm-delivery-lifecycle)
+  preserves custom data, deduplicates registration tokens, and splits requests
+  at Firebase's 500-token limit. Permanently unregistered tokens are disabled;
+  other delivery and cleanup failures remain observable without returning raw
+  provider messages that can expose registration tokens. Web Push payloads bind
+  `recipient_id` to the address owner for client account-change checks.
 
 - The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before

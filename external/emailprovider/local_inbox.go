@@ -10,14 +10,17 @@ const defaultLocalEmailStoreLimit = 50
 
 // LocalEmail is a captured email intended for local development previews.
 type LocalEmail struct {
-	MessageID string    `json:"messageId"`
-	To        string    `json:"to"`
-	From      string    `json:"from"`
-	ReplyTo   string    `json:"replyTo,omitempty"`
-	Subject   string    `json:"subject"`
-	HTMLBody  string    `json:"htmlBody"`
-	TextBody  string    `json:"textBody,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	ProviderID string    `json:"providerId,omitempty"`
+	Provider   string    `json:"provider,omitempty"`
+	MailType   MailType  `json:"mailType,omitempty"`
+	MessageID  string    `json:"messageId"`
+	To         string    `json:"to"`
+	From       string    `json:"from"`
+	ReplyTo    string    `json:"replyTo,omitempty"`
+	Subject    string    `json:"subject"`
+	HTMLBody   string    `json:"htmlBody"`
+	TextBody   string    `json:"textBody,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 // LocalEmailStore keeps a bounded in-memory list of captured local emails.

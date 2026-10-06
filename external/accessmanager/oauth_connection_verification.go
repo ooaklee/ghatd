@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/ooaklee/ghatd/external/emailmanager"
+	"github.com/ooaklee/ghatd/external/emailprovider"
 	"github.com/ooaklee/ghatd/external/oauth"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
@@ -133,7 +134,7 @@ func (s *Service) startOAuthConnectionVerification(ctx context.Context, provider
 		label = "Apple"
 	}
 	body := fmt.Sprintf(`<p>Verify your current sign-in email before connecting %s to your account.</p><p><a href="%s">Review email verification</a></p><p>Or enter this 8-character code in the app where you started:</p><p><strong>%s</strong></p><p>This request expires in 10 minutes. Opening the link does not change your account. Confirm in the same app session, then continue to %s to connect it. You remain signed in. If you did not request this, ignore this email.</p>`, label, html.EscapeString(link), code, label)
-	if err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{EmailSubject: "Verify email before connecting " + label, EmailPreview: "Confirm it is you without signing out", EmailBody: body, EmailTo: account.Email, WithFooter: true, UserId: account.ID, RecipientType: "USER"}); err != nil {
+	if err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{MailType: emailprovider.Transactional, EmailSubject: "Verify email before connecting " + label, EmailPreview: "Confirm it is you without signing out", EmailBody: body, EmailTo: account.Email, WithFooter: true, UserId: account.ID, RecipientType: "USER"}); err != nil {
 		return nil, ErrOAuthDisconnectDelivery
 	}
 	if err = s.connectionVerificationStore().Save(ctx, challenge); err != nil {

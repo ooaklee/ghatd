@@ -13,6 +13,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/auth"
 	"github.com/ooaklee/ghatd/external/emailmanager"
+	"github.com/ooaklee/ghatd/external/emailprovider"
 	"github.com/ooaklee/ghatd/external/oauth"
 	user "github.com/ooaklee/ghatd/external/user/v2"
 )
@@ -386,7 +387,7 @@ func (s *Service) dispatchDisconnectChallenge(ctx context.Context, account *user
 		body = strings.ReplaceAll(body, "browser where you started", "app where you started")
 		body = strings.ReplaceAll(body, "same browser session", "same app session")
 	}
-	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{EmailSubject: subject, EmailPreview: "Keep access to your account with email sign-in", EmailBody: body, EmailTo: recipient, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
+	err = s.EmailManager.SendCustomEmail(ctx, &emailmanager.SendCustomEmailRequest{MailType: emailprovider.Transactional, EmailSubject: subject, EmailPreview: "Keep access to your account with email sign-in", EmailBody: body, EmailTo: recipient, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
 	if err != nil {
 		return nil, ErrOAuthDisconnectDelivery
 	}

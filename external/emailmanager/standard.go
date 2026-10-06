@@ -11,7 +11,9 @@ import (
 
 // NewStandardEmailManagerRequest holds the common GHATD email manager setup inputs.
 type NewStandardEmailManagerRequest struct {
-	Provider     emailprovider.EmailProvider
+	Provider emailprovider.EmailProvider
+	// Routing opts into purpose-based named instance selection. Provider is used only when Routing is absent.
+	Routing      *RoutingConfig
 	AuditService AuditService
 
 	FrontendBaseURL               string
@@ -36,7 +38,7 @@ func NewStandardEmailManager(request *NewStandardEmailManagerRequest) (*EmailMan
 	if request == nil {
 		return nil, fmt.Errorf("emailmanager/standard-nil-request")
 	}
-	if request.Provider == nil {
+	if request.Provider == nil && request.Routing == nil {
 		return nil, fmt.Errorf("emailmanager/standard-missing-provider")
 	}
 
@@ -71,10 +73,18 @@ func NewStandardEmailManager(request *NewStandardEmailManagerRequest) (*EmailMan
 		return nil, fmt.Errorf("emailmanager/standard-templater: %w", err)
 	}
 
-	return NewEmailManager(
+	manager := NewEmailManager(
 		emailTemplater,
 		request.Provider,
 		request.AuditService,
 		request.Config,
-	), nil
+	)
+	if request.Routing != nil {
+		router, err := newProviderRouter(request.Routing)
+		if err != nil {
+			return nil, err
+		}
+		manager.router = router
+	}
+	return manager, nil
 }
