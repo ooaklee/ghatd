@@ -23,6 +23,17 @@ code together. Retired codes remain reserved. Signup correction appends history
 and advances the customer head conditionally. Economic payment bindings are
 immutable and globally unique within the program.
 
+`WithLinkTransaction` uses the same partner guard as issuance and retirement.
+Its bound adapter commits the original retirement/audit, globally reserved new
+code, replacement/audit, active head and immutable `partner_referral_link_rotation`
+receipt together. The storage transaction may touch the global code index while
+its serialization guard remains partner-scoped; unique record identity also
+rejects competing partners reserving one code. Nested guards and receipt writes
+outside the bound transaction are rejected. Receipts explicitly retain the
+verified actor in their encrypted envelope, have no expiry, and replay their
+frozen result rather than whichever link is currently active. They use the
+existing record indexes and require no backfill of prior links.
+
 `ReferralRepository.WithAttributionTransaction` uses the same customer guard as
 correction CAS. Its callback reads and writes through a bound store, including
 historical payment selection and original-binding replay. Nested owning

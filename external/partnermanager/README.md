@@ -100,6 +100,18 @@ changes; current scoped permission is rechecked before returning them.
 Claim mutations require positive expected revisions; the owning financial
 service preserves immutable receipts, reservations and settlement rules.
 
+`RotateLink(ctx, actor, referral.RotateLinkRequest)` binds actor and partner
+through current owning identity and permission. Callers supply the observed
+original code, reason and a stable request key; they cannot select a different
+owner. The [referral owner](../referral/README.md#share-links-and-evidence) commits
+one atomic replacement and immutable receipt. New acquisition pauses preserve
+original-key recovery. Permission is checked immediately before the owning call
+and again before disclosing its result. If the latter check fails after a commit,
+the manager returns `referral.ErrUncertain` with no link: the committed receipt
+must be reconciled using the original key once current permission allows it.
+These permission reads and the referral write remain separate owner boundaries;
+a late revocation does not undo an already committed rotation.
+
 `Statement` resolves the currently authorized customer's owning partner;
 `AdminStatement` requires the separate reporting capability scoped to an
 explicit target partner. Both validate the returned owner and configured

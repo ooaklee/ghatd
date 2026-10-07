@@ -91,7 +91,7 @@ type ReferralService interface {
 	LookupSignup(context.Context, string, string, referral.Evidence, time.Time) (referral.Referral, error)
 	BindPayment(context.Context, string, string, time.Time) (referral.PaymentAttribution, error)
 	IssueLink(context.Context, referral.PartnerState) (referral.Link, error)
-	RetireLink(context.Context, string, string, string) error
+	RotateLink(context.Context, referral.RotateLinkRequest) (referral.Link, error)
 	GetLinkByCode(context.Context, string) (referral.Link, error)
 	ObserveClick(context.Context, string, string) (referral.Click, error)
 	ObserveVisit(context.Context, referral.VisitRequest) (referral.VisitObservation, error)
@@ -290,22 +290,32 @@ func (m *Manager) GetOrCreateLink(ctx context.Context, actor string) (referral.L
 	}
 	return m.deps.Referral.IssueLink(ctx, referralState(p))
 }
-func (m *Manager) RotateLink(ctx context.Context, actor, reason string) (referral.Link, error) {
+
+// RotateLink binds current identity and permission on every attempt, including
+// receipt replay. Acquisition pauses prevent new rotations but preserve recovery
+// of the original committed actor/key request through the owning service.
+func (m *Manager) RotateLink(ctx context.Context, actor string, req referral.RotateLinkRequest) (referral.Link, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
 		return referral.Link{}, err
 	}
-	if !m.deps.Controls.Attribution {
-		return referral.Link{}, ErrDenied
+	req.ActorID = actor
+	req.Partner = referralState(p)
+	req.Partner.CanAcquireReferrals = req.Partner.CanAcquireReferrals && m.deps.Controls.Attribution
+	if err := m.authorize(ctx, actor, CapabilitySelf, actor); err != nil {
+		return referral.Link{}, err
 	}
-	l, err := m.deps.Referral.IssueLink(ctx, referralState(p))
+	l, err := m.deps.Referral.RotateLink(ctx, req)
 	if err != nil {
 		return referral.Link{}, err
 	}
-	if err := m.deps.Referral.RetireLink(ctx, l.ID, reason, actor); err != nil {
-		return referral.Link{}, err
+	if err := m.authorize(ctx, actor, CapabilitySelf, actor); err != nil {
+		// The receipt is already committed; a late revocation cannot undo it.
+		// Withhold the result and preserve explicit original-key recovery instead
+		// of implying the write failed and encouraging a new rotation key.
+		return referral.Link{}, fmt.Errorf("%w: %w", referral.ErrUncertain, err)
 	}
-	return m.deps.Referral.IssueLink(ctx, referralState(p))
+	return l, nil
 }
 
 // ConsumeSignup resolves immutable owning identity facts rather than trusting

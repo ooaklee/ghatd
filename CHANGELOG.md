@@ -588,6 +588,12 @@ when the release version has been selected, and remove unused subsections.
   provider messages that can expose registration tokens. Web Push payloads bind
   `recipient_id` to the address owner for client account-change checks.
 
+- [Partner share-link rotation](external/referral/README.md#share-links-and-evidence)
+  atomically replaces the selected original link and retains its actor/key
+  receipt. Retries recover the originally issued result after uncertainty,
+  later rotations or acquisition pauses, without invalidating a newer link.
+  Current permission is still checked before every attempt and result disclosure.
+
 - The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before
   decoding. An uncertain write is no longer misreported as a confirmed missing

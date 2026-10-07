@@ -15,6 +15,19 @@ whitespace. The repository enforces one active link per partner and global code
 uniqueness including retired links. Retirement records an actor and reason and
 does not free the old code for reuse.
 
+`RotateLink` requires the selected original code, a non-empty reason and one
+stable request key, plus verified actor and partner input from the manager.
+The optional `LinkRotationRepository` capability must retire that exact original,
+issue its replacement and commit the private actor/key receipt in one partner
+transaction. There is no separate retire/issue fallback. A changed payload under
+the same actor/partner/key returns `ErrStaleWrite`. An identical request returns
+its originally issued link even after a later rotation retires that result or
+new acquisition is paused. Hosts must preserve the original key and payload
+after `ErrUncertain`, then refresh the current link after recovering the result.
+Current identity and permission remain required on every attempt. Receipt
+integrity failures return `ErrUnavailable`; receipt contents are never customer
+response fields. See [storage guarantees](../partnerstore/README.md).
+
 `EvidenceSigner` requires an explicit program, active signing-key ID and a
 keyring with keys of at least 32 bytes. The token is HMAC authenticated and bound
 to program, signup audience, link/code, issued time, expiry and an optional
