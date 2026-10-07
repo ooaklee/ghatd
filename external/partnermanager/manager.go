@@ -142,6 +142,8 @@ type Dependencies struct {
 	Evidence  *referral.EvidenceSigner
 	Clock     Clock
 	Controls  Controls
+	// Claims sets explicit admission for new withdrawals; receipts recover first.
+	Claims ClaimsConfig
 	// WorkReporting is optional. Missing wiring disables only the backlog read.
 	WorkReporting WorkBacklogService
 }
@@ -155,6 +157,9 @@ type Manager struct {
 func NewManager(deps Dependencies) (*Manager, error) {
 	if nilManagerDependency(deps.Program) || nilManagerDependency(deps.Referral) || nilManagerDependency(deps.Earnings) || nilManagerDependency(deps.Identity) || nilManagerDependency(deps.Authority) || nilManagerDependency(deps.Groups) || nilManagerDependency(deps.Revenue) || nilManagerDependency(deps.Evidence) || nilManagerDependency(deps.Clock) {
 		return nil, ErrUnavailable
+	}
+	if deps.Claims.MinimumMinor < 0 {
+		return nil, ErrInvalid
 	}
 	return &Manager{deps: deps}, nil
 }
@@ -447,45 +452,6 @@ func (m *Manager) UpdateDestination(ctx context.Context, actor, email string, ex
 		return partnerprogram.Destination{}, err
 	}
 	return m.deps.Program.UpdatePayoutDestination(ctx, partnerprogram.DestinationRequest{CustomerID: actor, Method: "paypal", PayPalEmail: email, ExpectedVersion: expected})
-}
-func (m *Manager) RequestClaim(ctx context.Context, actor string, amount int64, key string) (partnerearnings.Claim, error) {
-	p, err := m.self(ctx, actor, CapabilityClaims)
-	if err != nil {
-		return partnerearnings.Claim{}, err
-	}
-	if amount <= 0 || !validWorkText(key, 256) {
-		return partnerearnings.Claim{}, ErrInvalid
-	}
-	claim, err := m.deps.Earnings.FindClaimRequest(ctx, actor, p.ID, key)
-	if err == nil {
-		if claim.PartnerID != p.ID || claim.RequestedBy != actor || claim.AmountMinor != amount || claim.Currency != m.deps.Program.Config().Currency {
-			return partnerearnings.Claim{}, partnerearnings.ErrConflict
-		}
-		if err := m.authorize(ctx, actor, CapabilityClaims, actor); err != nil {
-			return partnerearnings.Claim{}, err
-		}
-		return claim, nil
-	}
-	if !singleManagerAbsence(err, partnerearnings.ErrNotFound) {
-		return partnerearnings.Claim{}, err
-	}
-	if !m.deps.Controls.Claims {
-		return partnerearnings.Claim{}, ErrDenied
-	}
-	if !p.CanRequestPayouts {
-		return partnerearnings.Claim{}, ErrDenied
-	}
-	d, err := m.deps.Program.GetPayoutDestination(ctx, actor)
-	if err != nil {
-		return partnerearnings.Claim{}, err
-	}
-	if d.CustomerID != actor || d.ID == "" || d.Version < 1 {
-		return partnerearnings.Claim{}, ErrUnavailable
-	}
-	if err := m.authorize(ctx, actor, CapabilityClaims, actor); err != nil {
-		return partnerearnings.Claim{}, err
-	}
-	return m.deps.Earnings.RequestClaim(ctx, partnerearnings.ClaimRequest{ActorID: actor, PartnerID: p.ID, AmountMinor: amount, Currency: m.deps.Program.Config().Currency, DestinationID: d.ID, DestinationSnapshot: map[string]string{"destination_id": d.ID, "method": d.Method, "email": d.Email, "version": fmt.Sprint(d.Version)}, IdempotencyKey: key})
 }
 
 // CancelClaim is owner-scoped and cannot assert confirmed-unsent authority for

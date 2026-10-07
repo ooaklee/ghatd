@@ -13,6 +13,38 @@ customer or claim. Transport must bind it from authenticated context, enforce
 origin/CSRF/rate policy and project only permitted response data. An ordinary
 administrator role does not grant payout processing or recording authority.
 
+## Withdrawal admission and recovery
+
+`Dependencies.Claims.MinimumMinor` supplies an explicit host-approved minimum
+in the program currency's minor units. Negative values reject construction;
+zero preserves the existing positive-amount contract and implies no commercial
+approval. The minimum applies to new self-service and on-behalf requests.
+
+Interactive hosts use `RequestClaimWithDestination` with `SelfClaimRequest`:
+amount, expected positive destination version and an intent's original
+idempotency key. Actor identity remains a separate verified argument. The manager
+selects the address from the owning destination; an unseen version returns
+`partnerearnings.ErrStaleWrite`. Reusing an admitted key with a changed amount or
+destination version returns `partnerearnings.ErrConflict`.
+
+Original receipt recovery precedes new-admission pauses, a raised minimum and
+mutable destination reads, with current scoped authority rechecked before
+return. A later destination edit does not change the original snapshot. The
+compatible `RequestClaim` API retains current-destination selection and also
+uses the minimum for new admission; it does not bind the caller's observed
+revision. These are sequential owner checks, not an atomic transaction spanning
+destination and financial stores. Existing financial receipt and reservation
+transactions remain authoritative; no new schema or ledger algorithm is added.
+
+`AdminPaymentClaim` reads one selected obligation under the exact
+`partner.admin.payments.record` capability before and after the owning read.
+Reporting and claim-processing privileges cannot substitute. Hosts can prepare
+a full manual attestation from its fixed amount and currency without accepting
+those fields from a browser or borrowing another owner. The read preserves
+existing obligations during a manual-recording pause; `AdminRecordPayment`
+still separately enforces recording admission, current permission and revision.
+This private domain result needs an explicit host DTO and proves no transfer.
+
 ## Worker backlog reporting
 
 `AdminWorkerBacklog` uses the separate `partner.admin.operations` capability,

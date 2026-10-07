@@ -82,6 +82,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Withdrawal admission](external/partnermanager/README.md#withdrawal-admission-and-recovery)
+  supports explicit minimums and customer-selected destination revisions while
+  preserving authorized original-receipt recovery after admission or destination
+  changes. Payment preparation reads use the separate recording capability;
+  financial settlement and transfer execution remain separate responsibilities.
 - An optional [active direct group membership read](external/group/README.md#active-direct-membership-capability)
   excludes pending invitations, inactive groups and inherited administrator
   access. Bounded native reference probes refuse truncation and retain failures;
