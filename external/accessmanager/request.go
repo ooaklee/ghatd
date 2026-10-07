@@ -23,6 +23,9 @@ type RefreshTokenRequest struct {
 
 // CreateUserRequest holds everything needed to create user on platform
 type CreateUserRequest struct {
+	// AttributionEvidence comes only from the configured server cookie reader.
+	// The owning signup consumer verifies its signature and expiry separately.
+	AttributionEvidence string `json:"-" query:"-" form:"-"`
 	// FirstName user's first name
 	FirstName string `json:"first_name" validate:"min=2"`
 

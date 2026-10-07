@@ -1149,6 +1149,38 @@ For issues or questions:
 - See the default implementations in [utils.go](utils.go).
 
 
+## Optional immutable signup attribution
+
+`Service.WithSignupAttribution` opts new account creation into a private durable
+evidence feed. Configure an explicit program ID and the owning identity account
+types eligible as individuals; the repository must implement
+`SignupEvidenceRepository`, and an injected non-nil clock is required. Existing
+accounts are not backfilled. Without this configuration, account creation ignores
+supplied attribution evidence and preserves its existing behavior.
+
+Password and verified OAuth account creation commit bounded private browser
+evidence, the owning account ID, account type eligibility and exact server
+creation time in the same insert as the new user. Public JSON/query/form payloads
+cannot supply `AttributionEvidence`, and user responses omit the stored context.
+Legacy broad profile updates preserve it. Competing OAuth creators retain the
+winning account's evidence; a later sign-in cannot replace the original context.
+Mongo's millisecond date precision is supplemented with canonical UTC text for
+exact event-time signature validation.
+
+Hosts register `migrations.InitUsersSignupAttributionIndexesUp` before starting
+their consumer. `GetSignupAttribution` and bounded
+`PendingSignupAttributions` are in-process owning-service capabilities, with no
+public HTTP routes. The consumer verifies the signature and referral eligibility,
+commits its durable owning decision, then calls `ConsumeSignupAttribution` with
+the decision receipt, outcome and worker actor. The recorded time is server-bound.
+Exact acknowledgement replay succeeds; a changed actor/decision/outcome conflicts.
+Expected historical absence is distinct from an outage or corrupt creation time.
+There is no global cursor that can skip unresolved or late-created accounts.
+
+The host owns consent, cookie issuance, stable signing keys, individual account
+policy and worker scheduling. Configuring capture alone does not grant attribution
+or commission and does not establish whether a subscription was paid.
+
 ## Provider identity persistence
 
 `*Service` exposes optional `GetUserByOAuthIdentity`, `CreateOAuthUser`,
@@ -1177,3 +1209,10 @@ Names are optional only when trusted private provider identity metadata is
 present. Email signup keeps its configured required fields. Configuration
 registries should be established during service construction, before requests;
 request-time lookups no longer lazily mutate shared service state.
+
+`PendingSignupAttributionsAfter` is an optional bounded discovery capability.
+Its lexical customer position is independent of `ConsumeSignupAttribution`;
+reading a later page does not consume earlier failures. Workers can persist
+page positions with durable queued work and reset at the end of a sweep, making
+late lower IDs visible next time. Legacy repositories without the optional
+paging port return unavailable rather than silently limiting discovery.

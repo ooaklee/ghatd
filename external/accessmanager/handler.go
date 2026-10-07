@@ -454,6 +454,13 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
+	if h.Service == nil {
+		h.NewHTTPErrorResponse(w, ErrSessionVerificationUnavailable)
+		return
+	}
+	if capture, ok := h.Service.(interface{ readSignupEvidence([]*http.Cookie) string }); ok {
+		request.AttributionEvidence = capture.readSignupEvidence(r.Cookies())
+	}
 
 	response, err := h.Service.CreateUser(r.Context(), request)
 	if err != nil {

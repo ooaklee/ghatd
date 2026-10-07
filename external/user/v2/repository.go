@@ -267,6 +267,7 @@ func (r *Repository) UpdateUser(ctx context.Context, user *UniversalUser) (*Univ
 	if err = bson.Unmarshal(encoded, &fields); err != nil {
 		return nil, err
 	}
+	delete(fields, "signup_attribution")
 	delete(fields, "oauth_identities")
 	delete(fields, "oauth_identity_keys")
 	delete(fields, "had_oauth_identity")

@@ -155,6 +155,9 @@ type OauthLoginResponse struct {
 // OauthCallbackResponse hold the data returned when handling a
 // oauth provider callback
 type OauthCallbackResponse struct {
+	// AttributionEvidence is private browser context captured only after the
+	// provider transaction is verified. It is not portable to native exchanges.
+	AttributionEvidence string `json:"-"`
 	// Mobile completion never exposes these server-side values in API responses.
 	Mobile      *oauth.MobileFlowContext
 	MobileGrant *mobileOAuthGrant

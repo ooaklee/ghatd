@@ -736,6 +736,26 @@ logic, reject browser Origin headers, and bind email proof to the exact native
 return address. They renew cookies through the existing secure mobile cookie
 jar. See the adoption guide for code/link review and platform registration.
 
+## Optional browser signup evidence
+
+`Service.WithSignupEvidenceCookie(name)` installs an explicit startup-only
+browser cookie reader. There is no default cookie. The host owns consent and
+issuing a signed, bounded HttpOnly/SameSite cookie; accessmanager only transports
+its value into the identity owning service's atomic account creation context.
+Configure `user/v2.Service.WithSignupAttribution` and its additive feed migration
+separately. The cookie reader only transports evidence; an identity service
+without signup capture configured ignores it without rejecting account creation.
+Public signup JSON/query/form fields cannot supply this private value, and OAuth
+responses exclude it.
+
+Password signup reads the configured cookie at the handler boundary. Browser
+OAuth reads it only after the secure provider transaction is verified. Existing
+sign-ins do not overwrite signup evidence, and native app exchanges do not
+inherit browser evidence. Missing, empty, oversized or duplicate same-name
+cookies leave the account unattributed without blocking account creation. The
+owning referral consumer still verifies signature, audience, program and expiry
+at the immutable server creation time; cookie possession is not entitlement.
+
 ## Logout command boundaries
 
 **Breaking:** `Service.LogoutUser` now accepts `*LogoutUserRequest`, not an HTTP

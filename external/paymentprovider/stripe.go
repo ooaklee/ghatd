@@ -50,6 +50,21 @@ func NewStripeProvider(config *Config) (*StripeProvider, error) {
 		return nil, ErrPaymentProviderInvalidConfigWebhookSecret
 	}
 
+	if config.Revenue != nil {
+		if !validStripeRevenueConfig(config.Revenue) || strings.TrimSpace(config.APIKey) == "" {
+			return nil, ErrPaymentProviderInvalidConfiguration
+		}
+		copyConfig := *config
+		copyRevenue := *config.Revenue
+		copyRevenue.ConnectedAccountIDs = append([]string(nil), config.Revenue.ConnectedAccountIDs...)
+		copyRevenue.CurrencyExponents = make(map[string]int, len(config.Revenue.CurrencyExponents))
+		for code, exponent := range config.Revenue.CurrencyExponents {
+			copyRevenue.CurrencyExponents[code] = exponent
+		}
+		copyConfig.Revenue = &copyRevenue
+		config = &copyConfig
+	}
+
 	client := config.HTTPClient
 	if client == nil {
 		client = observability.NewHTTPClient(http.DefaultTransport, 10*time.Second)
@@ -722,9 +737,21 @@ func (s *StripeProvider) CreateCheckoutSession(ctx context.Context, input *Check
 		return nil, fmt.Errorf("%w: status %d", ErrPaymentProviderAPIRequestFailed, response.StatusCode)
 	}
 
-	var session CheckoutSession
-	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&session); err != nil {
+	var receipt struct {
+		CheckoutSession
+		Object            string            `json:"object"`
+		LiveMode          *bool             `json:"livemode"`
+		ClientReferenceID string            `json:"client_reference_id"`
+		Metadata          map[string]string `json:"metadata"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&receipt); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPaymentProviderAPIResponseInvalid, err)
+	}
+	session := receipt.CheckoutSession
+	if input.Metadata["checkout_intent_id"] != "" {
+		if s.config.Revenue == nil || receipt.Object != "checkout.session" || receipt.LiveMode == nil || *receipt.LiveMode != s.config.Revenue.LiveMode || receipt.ClientReferenceID != userReference || receipt.Metadata["checkout_intent_id"] != input.Metadata["checkout_intent_id"] {
+			return nil, ErrPaymentProviderAPIResponseInvalid
+		}
 	}
 	if strings.TrimSpace(session.ID) == "" || strings.TrimSpace(session.ClientSecret) == "" {
 		return nil, ErrPaymentProviderAPIResponseInvalid
@@ -968,6 +995,7 @@ func (s *StripeProvider) validateCheckoutPrice(ctx context.Context, input *Check
 	}
 
 	var price struct {
+		LiveMode   *bool  `json:"livemode"`
 		ID         string `json:"id"`
 		Active     bool   `json:"active"`
 		Currency   string `json:"currency"`
@@ -982,6 +1010,11 @@ func (s *StripeProvider) validateCheckoutPrice(ctx context.Context, input *Check
 		return fmt.Errorf("%w: %v", ErrPaymentProviderAPIResponseInvalid, err)
 	}
 
+	if input.Metadata["checkout_intent_id"] != "" {
+		if s.config.Revenue == nil || price.LiveMode == nil || *price.LiveMode != s.config.Revenue.LiveMode {
+			return ErrPaymentProviderPriceMismatch
+		}
+	}
 	expectedCurrency := strings.ToLower(strings.TrimSpace(input.ExpectedCurrency))
 	expectedCadence := strings.ToLower(strings.TrimSpace(input.ExpectedBillingCadence))
 	if price.ID != input.PriceID || !price.Active || price.UnitAmount == nil || *price.UnitAmount != input.ExpectedAmount ||

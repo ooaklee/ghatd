@@ -89,6 +89,13 @@ type PricerService interface {
 // Service orchestrates webhook processing and billing operations
 // It uses paymentprovider for webhook verification and billingstore for persistence
 type Service struct {
+	subscriptionStatusAuthority            SubscriptionStatusAuthority
+	revenueAuthority                       RevenueReconciliationAuthority
+	revenueRegistry                        RevenueProviderRegistry
+	revenueFeed                            RevenueFeedService
+	revenueAssociation                     RevenueAssociationService
+	checkoutRevenueCapture                 CheckoutRevenueCapture
+	checkoutPayerAuthority                 CheckoutPayerAuthority
 	ProviderRegistry                       ProviderRegistry
 	CheckoutProviderRegistry               CheckoutProviderRegistry
 	CustomerPortalProviderRegistry         CustomerPortalProviderRegistry
@@ -206,9 +213,16 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 		return ErrInvalidBillingManagerRequestPayload
 	}
 	var subscriptionID string
+	revenueAccepted, revenueErr := s.acceptRevenueWebhook(ctx, req.ProviderName, req.Request)
+	if revenueErr != nil {
+		return revenueErr
+	}
 
 	payload, err := s.ProviderRegistry.VerifyAndParseWebhookPayload(ctx, req.ProviderName, req.Request)
 	if err != nil {
+		if revenueAccepted && errors.Is(err, paymentprovider.ErrPaymentProviderInvalidEventType) {
+			return nil
+		}
 		logger.Error("failed-to-verify-and-parse-webhook-payload", zap.String("provider", req.ProviderName), zap.Error(err))
 		return err
 	}

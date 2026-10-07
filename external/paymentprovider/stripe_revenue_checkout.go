@@ -1,0 +1,124 @@
+package paymentprovider
+
+import (
+	"context"
+	"encoding/json"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// CheckoutRevenueScope verifies the configured merchant with the authenticated
+// API. Live/test remains explicit and is subsequently checked on every session
+// and price; it is never inferred from environment or secret-key prefixes.
+func (s *StripeProvider) CheckoutRevenueScope(ctx context.Context) (RevenueScope, error) {
+	if s == nil || s.config == nil || s.config.Revenue == nil {
+		return RevenueScope{}, ErrRevenueNotEnabled
+	}
+	scope, err := s.revenueScope(s.config.Revenue.AccountID, s.config.Revenue.LiveMode)
+	if err != nil {
+		return RevenueScope{}, err
+	}
+	if err := s.verifyCheckoutMerchant(ctx, scope); err != nil {
+		return RevenueScope{}, err
+	}
+	return scope, nil
+}
+func (s *StripeProvider) verifyCheckoutMerchant(ctx context.Context, scope RevenueScope) error {
+	account, err := s.revenueGet(ctx, scope, "/v1/account")
+	if err != nil {
+		return err
+	}
+	if rawStripeID(account["id"]) != scope.AccountID {
+		return ErrRevenueUnassessable
+	}
+	return nil
+}
+
+// LookupRevenueCheckout uses Stripe's documented subscription session filter and
+// complete pagination. Multiple sessions, missing intent pointers, mismatched
+// scope or incomplete original line evidence are never guessed from metadata.
+func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope RevenueScope, subscription string) (RevenueCheckoutEvidence, error) {
+	if !stripeRevenueObjectID.MatchString(subscription) || !strings.HasPrefix(subscription, "sub_") {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	if err := s.verifyCheckoutMerchant(ctx, scope); err != nil {
+		return RevenueCheckoutEvidence{}, err
+	}
+	sessions, err := s.revenueList(ctx, scope, "/v1/checkout/sessions?"+url.Values{"subscription": {subscription}}.Encode())
+	if err != nil {
+		return RevenueCheckoutEvidence{}, err
+	}
+	if len(sessions) != 1 {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	session := sessions[0]
+	id := rawStripeID(session["id"])
+	if rawStripeString(session["object"]) != "checkout.session" || !strings.HasPrefix(id, "cs_") || !rawStripeMode(session, scope) || rawStripeID(session["subscription"]) != subscription || rawStripeString(session["mode"]) != CheckoutModeSubscription || rawStripeString(session["status"]) != "complete" {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	var metadata map[string]string
+	if json.Unmarshal(session["metadata"], &metadata) != nil || strings.TrimSpace(metadata["checkout_intent_id"]) == "" {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	created, known := rawStripeInt(session["created"])
+	customer := rawStripeID(session["customer"])
+	reference := rawStripeString(session["client_reference_id"])
+	currency := strings.ToUpper(rawStripeString(session["currency"]))
+	if !known || created <= 0 || !stripeRevenueObjectID.MatchString(customer) || !strings.HasPrefix(customer, "cus_") || reference == "" || len(currency) != 3 {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	lines, err := s.revenueList(ctx, scope, "/v1/checkout/sessions/"+url.PathEscape(id)+"/line_items")
+	if err != nil {
+		return RevenueCheckoutEvidence{}, err
+	}
+	if len(lines) != 1 {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	line := lines[0]
+	quantity, known := rawStripeInt(line["quantity"])
+	var price map[string]json.RawMessage
+	if !known || quantity != 1 || json.Unmarshal(line["price"], &price) != nil || rawStripeString(price["object"]) != "price" || !rawStripeMode(price, scope) || rawStripeString(price["type"]) != "recurring" || strings.ToUpper(rawStripeString(price["currency"])) != currency || strings.ToUpper(rawStripeString(line["currency"])) != currency {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	amount, amountKnown := rawStripeInt(price["unit_amount"])
+	var recurring map[string]json.RawMessage
+	if !amountKnown || amount <= 0 || json.Unmarshal(price["recurring"], &recurring) != nil {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	count, countKnown := rawStripeInt(recurring["interval_count"])
+	cadence := rawStripeString(recurring["interval"])
+	if !countKnown || count != 1 || (cadence != "week" && cadence != "month" && cadence != "year") {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	priceID := rawStripeID(price["id"])
+	if !stripeRevenueObjectID.MatchString(priceID) || !strings.HasPrefix(priceID, "price_") {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	return RevenueCheckoutEvidence{Scope: scope, SessionID: id, IntentID: metadata["checkout_intent_id"], ClientReferenceID: reference, CustomerID: customer, SubscriptionID: subscription, PriceID: priceID, Currency: currency, Mode: CheckoutModeSubscription, Status: "complete", CreatedAt: time.Unix(created, 0).UTC(), UnitAmountMinor: amount, IntervalCount: count, BillingCadence: cadence}, nil
+}
+
+// RetrieveRevenueCheckoutSession recovers an acknowledged session without a
+// second POST, including after provider idempotency retention has elapsed.
+func (s *StripeProvider) RetrieveRevenueCheckoutSession(ctx context.Context, scope RevenueScope, id string) (*CheckoutSession, error) {
+	if !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") {
+		return nil, ErrRevenueUnassessable
+	}
+	if err := s.verifyCheckoutMerchant(ctx, scope); err != nil {
+		return nil, err
+	}
+	object, err := s.revenueGet(ctx, scope, "/v1/checkout/sessions/"+url.PathEscape(id))
+	if err != nil {
+		return nil, err
+	}
+	if rawStripeString(object["object"]) != "checkout.session" || rawStripeID(object["id"]) != id || !rawStripeMode(object, scope) {
+		return nil, ErrRevenueUnassessable
+	}
+	session := &CheckoutSession{ID: id, ClientSecret: rawStripeString(object["client_secret"]), URL: rawStripeString(object["url"]), PublishableKey: strings.TrimSpace(s.config.PublishableKey)}
+	if session.ClientSecret == "" && session.URL == "" {
+		return nil, ErrPaymentProviderAPIResponseInvalid
+	}
+	return session, nil
+}
+
+var _ RevenueCheckoutProvider = (*StripeProvider)(nil)

@@ -82,6 +82,154 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [paid-referral evidence](external/partnermanager/README.md#paid-referral-source-and-status-evidence)
+  joins complete confirmed billing history and immutable attribution into safe
+  visible-page customer/admin summaries and complete partner paid metrics from
+  one owning relationship/binding snapshot, independently of list pagination.
+  Distinct eligible paid and net-positive
+  relationships remain separate from renewal allocation rows, commission and
+  current funds. Fresh current status deduplicates scoped subscriptions, keeps
+  trialing separate and withholds exact active totals when status is unknown.
+  Complete source budgets, correction checks and independent revisions prevent
+  partial reports and false delivery-completeness claims. Optional retained
+  status reads are bounded; deferred candidates remain explicitly unknown.
+  Original-payment cohorts never become signup/visit conversion denominators.
+  Host adoption and durable refresh remain explicit integration work.
+- Optional [original-cohort paid conversions](external/partnermanager/README.md#original-cohort-paid-conversions)
+  join one complete traffic/ownership/binding snapshot and accepted billing
+  history. Original signup and visit dates stay separate from payment dates;
+  measured/unmeasured signups, manual initial acquisitions and correction events
+  have matching denominators. Renewals and shared visit origins deduplicate;
+  refunds preserve historical conversion with separate net-positive counts.
+  Global totals precede link/administrator plan pages, private overlapping plan
+  rows stay out of customer JSON, and missing origins withhold visit rates.
+  Combined evidence and current authority are rechecked; provider delivery
+  completeness and host UI adoption remain explicit limitations.
+- Optional [scoped subscription lifecycle evidence](external/billing/README.md#scoped-current-subscription-status)
+  uses authenticated provider reads, immutable billing payer binding and atomic
+  encrypted head/receipt revision checks. Current scoped permission, original
+  uncertain-save recovery and explicit freshness avoid false inactive results.
+  Active status creates no financial entitlement; durable host refresh
+  scheduling remains integration work.
+- Optional [worker backlog reporting](external/partnermanager/README.md#worker-backlog-reporting)
+  separates ready, unattempted delayed, attempted backoff and leased discovered jobs with attempted and
+  decision subsets under dedicated program-scoped operations permission.
+  Complete pending snapshots have explicit combined capacity and privacy
+  boundaries; an empty queue does not certify source or maturity completeness.
+- Optional [durable maturity work](external/partnermanager/README.md#owning-signup-revenue-and-maturity-worker)
+  preserves original accrual deadlines across discovery, restarts and leases.
+  Dedicated current maturity authority and the same scoped earnings owner
+  recover actual financial receipts after lost acknowledgements; an old queue
+  decision cannot manufacture acceptance. Hosts own scheduling and readiness.
+- Opt-in [consented visit measurement](external/referral/README.md#consented-visit-measurement)
+  uses separate purpose-bound signed cookies, keyed link-scoped digests and
+  atomic first-visit deduplication. Optional analytics failures preserve signup
+  evidence. Explicit approved retention expires raw observations/receipts through
+  the prepared [record store](external/repository/recordstore/README.md#explicit-ephemeral-record-expiration),
+  while financial/signup/ownership records remain persistent.
+- [Referral analytics](external/referral/README.md#referral-analytics) derive
+  distinct measured-visit conversions, independent signup periods and retained
+  relationship counts from one complete bounded owning snapshot. Link pages
+  preserve global totals. Anonymous UTC-day counts and signed original visit times
+  preserve historical reporting after raw cleanup; incomplete sub-day boundaries
+  return a granularity error. Checked counts, missing origins and capacity remain
+  explicit.
+
+- Required private [maturity source evidence](external/partnerearnings/README.md#durable-maturity-source-evidence)
+  commits with accrual and maturity, retaining original deadlines and accepted
+  journal receipts without expiry. Bounded scoped discovery verifies owning
+  financial snapshots and supports lost-acknowledgement recovery. Host worker
+  scheduling and source reconciliation remain explicit integration requirements.
+
+- Opt-in [financial metrics](external/partnerearnings/README.md#financial-metrics)
+  separate current original-payment cohorts, economic-date commission movements
+  and unfiltered balances/claim exposure and overdue maturity. Due ledger rows
+  include zero/refunded credit; net pending and overlapping holds remain separate
+  from claim availability. Frozen billing-plan provenance supports
+  bounded breakdown pages with complete selected totals. Authorized customer
+  summaries omit billing identifiers/revenue; source/subscription completeness
+  remains a separate owning integration.
+
+- Opt-in grouped retained-referral commission summaries with exact original
+  payout/return portions, independent snapshot revisions, safe page-scoped
+  customer projections and explicit missing-acceptance/coverage states. See
+  [partner reporting](external/partnermanager/README.md) for authorization and
+  cross-domain snapshot limits.
+
+- [Payment cohort reports](external/partnerearnings/README.md#payment-cohort-reports)
+  attribute split manual payouts, returned backing and subsequent reclaims to
+  immutable original payment/referral portions. Bounded pages retain complete
+  cohort totals and separate current global balances. Scoped manager reads
+  recheck permission; hosts still project safe customer/admin reporting views.
+
+- [Retained partner relationships](external/referral/README.md#retained-partner-relationships)
+  preserve former owners' referral visibility through prospective correction
+  and reacquisition. Atomic lifetime membership and snapshot history reads
+  support bounded pagination; customer manager projections omit private
+  customer, replacement-owner and acquisition identifiers. Returned payout
+  backing uses durable typed operation links and validates conserved portions,
+  independently of display notes. Host reporting integration remains explicit.
+
+- [Partner statements](external/partnerearnings/README.md#statements) provide
+  bounded, filtered journal pages with running matured amounts and current
+  balances from one owning snapshot. Revisions include claim changes, and paid
+  rows present retained manual-record amendments without another debit.
+  Customer and operator manager reads recheck current scoped permission;
+  hosts must project permitted fields. Snapshot reads still grow with history.
+
+- [Partner claims](external/partnermanager/README.md) support separately scoped,
+  reasoned administrator creation on behalf of an eligible owner, using the
+  owner's versioned destination. Immutable
+  [financial request receipts](external/partnerearnings/README.md) recover an
+  existing claim before new-admission pauses or mutable destination lookup.
+
+- [Referral payment binding](external/referral/README.md) selects and freezes
+  ownership in the same customer-scoped transaction boundary as attribution
+  correction. Historical bindings remain immutable, and recorded cutover time
+  cannot precede the previous ownership revision. Scoped operator previews and
+  prospective corrections use reviewed source/snapshot preconditions and
+  immutable actor/customer/key receipts. Lost-response recovery preserves the
+  original terms through later policy/owner changes and admission pauses;
+  existing bindings and paid earnings remain unchanged. Recurring windows stay
+  anchored to signup and retain earlier frozen ends. Host routes/UI and
+  historical compensation are separate from this owning workflow.
+
+- An optional [durable partner worker](external/partnermanager/README.md)
+  consumes owning signup, verified revenue and quarantined source feeds with
+  atomic discovery pages, fenced leases and independent retry schedules. It
+  records durable decisions before owning acknowledgements and recovers lost
+  replies under current scoped authority. Only conclusive owning evidence can
+  establish no entitlement; outages and unresolved evidence remain pending.
+  Hosts must explicitly supply approved composition, authority and scheduling.
+
+- Optional [immutable checkout billing identity](external/billing/README.md)
+  saves authorized request parameters before submission, atomically binds
+  authenticated session/subscription history, and preserves payer/plan/cost for
+  renewals. [Billing manager](external/billingmanager/README.md) requires current
+  owning-account authority on captured checkout retries and retrieves known
+  sessions instead of repeating POSTs after provider key retention. Legacy and
+  unmapped portal changes remain unresolved pending reviewed history recovery.
+
+- [Partner earnings](external/partnerearnings/README.md) now records dispute
+  hold/won/lost evidence, nonsettling partial/unknown/mismatched manual payment
+  observations and capped returned-transfer adjustments with original backing.
+  Revision-bound receipts, assigned-operator recording, strict unavailable-vs-
+  absent handling and canonical destination snapshots guard financial replay.
+  The package remains opt-in and is not automatically wired into host startup.
+
+
+- A [partner-manager identity adapter](external/partnermanager/README.md) for
+  current owning account eligibility and private immutable new-signup capture,
+  with explicit account-type/status/region rules and typed-nil capability checks.
+  Hosts must still install durable handoff workers and scoped transport.
+- Optional [verified-revenue sweep paging](external/billing/revenuestore/README.md)
+  reaches later pending facts and quarantined sources without acknowledging or
+  resolving earlier failures; host attempt scheduling remains explicit.
+
+
+- Add opt-in authenticated Stripe paid-invoice, cumulative refund and dispute-reference evidence, with explicit merchant/mode/currency configuration and complete fiscal allocation checks. Ambiguous shapes remain quarantined; provider outages remain retryable. No provider charge, refund or payout is submitted.
+- Add optional billing-manager financial reception through owning historical association and verified-feed ports, plus scoped authenticated source reconciliation retaining immutable quarantine history and committing recovered facts/resolution atomically. Host composition, workers and deployment remain separate adoption work.
+
 - [Purpose-aware email routing](external/emailmanager/README.md#purpose-routing-and-submission-receipts)
   with named provider accounts, ordered mail-type preferences, round-robin ties,
   explicit transactional defaults, separate campaign capability and truthful
@@ -240,6 +388,32 @@ when the release version has been selected, and remove unused subsections.
   preserve mapped wrappers and validation joins while rejecting unknown independent
   causes. A separate strict resolver supports single-cause authentication
   boundaries. Handler adoption and dependency-map wiring remain explicit.
+- A [partner-earnings ledger](external/partnerearnings/README.md) owning the
+  single financial ledger for a partner program: commission accrual and maturity,
+  cumulative refund reversals, payout claims with oldest-first reservation,
+  operator claim decisions and the sole privileged manual-payment debit, each
+  guarded by an actor/use-case idempotency receipt. The service computes all
+  rules itself and never converts currencies; it exposes a driver-free
+  `Repository` port and requires host-owned write-guard wiring and index
+  migrations. It is not yet wired into host startup or partner-manager routes.
+- Explicit [partner program](external/partnerprogram/README.md) enrollment,
+  immutable policy publication and versioned destinations, plus
+  [referral](external/referral/README.md) share links, signed signup evidence and
+  frozen economic-payment ownership. Opt-in
+  [encrypted persistence adapters](external/partnerstore/README.md) require a
+  transaction-capable store, additive index preparation and stable keys; host
+  composition, authority and commercial launch approval remain explicit.
+- An owning billing verified-revenue contract and
+  [durable encrypted feed](external/billing/revenuestore/README.md) with economic
+  deduplication, atomic delivery acceptance and independent consumer receipts.
+  Provider allocation evidence and host workers remain separate; invoice totals
+  and access grants are not accepted as revenue facts.
+- Optional [immutable signup creation evidence](external/user/v2/README.md#optional-immutable-signup-attribution)
+  and [browser cookie transport](external/accessmanager/README.md#optional-browser-signup-evidence).
+  Evidence commits with the new account, survives profile edits and exposes an
+  owning-service pending feed. The host opts in with explicit account types,
+  cookie configuration, signing policy and an additive feed index; no historical
+  attribution backfill or automatic commission entitlement is supplied.
 
 ### Changed
 
@@ -511,6 +685,10 @@ when the release version has been selected, and remove unused subsections.
   usage methods to avoid stale authority overwrites.
 
 ### Security
+
+- [Partner manager reads](external/partnermanager/README.md) validate selected
+  ownership and currency, discard private partial results on failure, and
+  recheck scoped customer/operator permission before returning data.
 
 - [Initial sign-in email delivery](external/accessmanager/README.md#initial-email-delivery)
   now validates adapter receipts and wiring, preserves request context and uses

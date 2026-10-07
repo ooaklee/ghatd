@@ -960,3 +960,90 @@ Here's a list of areas for improvement in future iterations of `billingmanager`,
 - [ ] Data export/import tools
 - [ ] Subscription reconciliation tools
 - [ ] Webhook replay functionality
+
+## Optional verified-revenue orchestration
+
+`WithRevenueServices` supplies an optional `RevenueProviderRegistry`, owning
+`RevenueFeedService` and `RevenueAssociationService`. Supply all capabilities
+before serving requests. Opt-in financial acceptance executes before legacy
+access/billing-event projection; a later projection failure may leave committed
+financial evidence, which a webhook retry deduplicates. Webhook-only providers
+and managers without the feature preserve their existing behaviour.
+
+For providers implementing `RevenueDeliveryVerifier`, every replay first
+authenticates the delivery signature, scope, envelope and canonical source
+digest. A matching owning reception receipt can be acknowledged without another
+financial API call. A changed snapshot conflicts; joined absence/outage errors
+remain retryable. Replaying a quarantined reception does not resolve it or create
+facts. The explicit reconciliation path remains responsible for that obligation.
+
+The association port must resolve the historical paying principal and immutable
+provider-price/plan/cost mapping for the verified account, mode, customer,
+subscription and paid time. Current access, email matching, organization seats,
+browser metadata and current catalogue prices must not substitute for that
+source. Existing accepted payment facts preserve their original mapping during
+replay, refunds and disputes. Missing or ambiguous source evidence becomes a
+durable source quarantine; dependency outages remain retryable.
+
+`WithRevenueReconciliationAuthority` supplies current scoped authority for every
+`ReconcileRevenueSource` call and receipt replay. Recovery checks the original
+fingerprint and canonical signed-source digest, reads a committed resolution
+before a provider call, then uses the optional authenticated provider event
+lookup. Still-unresolved evidence remains pending. Recovered facts and a reasoned
+resolution are committed by the owning billing service in one transaction. No
+handler directly owns financial persistence, commission calculation or manual
+payout execution.
+
+### Capturing checkout authorization for verified revenue
+
+`WithCheckoutRevenueCapture(capture, authority)` opts checkout into immutable
+owning authorization. `billing.CheckoutService` implements the capture and
+historical association ports. `CheckoutPayerAuthority` must verify the current
+caller is the paying owning account on every attempt, including saved-session
+recovery. Authority is checked again before returning browser credentials after
+provider submission/retrieval; an in-flight revocation withholds the secret while
+retaining the acknowledged provider session. `NewUserCheckoutPayerAuthority` offers a `user/v2` adapter with explicit
+owning account-type/status lists and required current email verification. It
+rejects organization seats, revoked accounts and mismatched owning identities;
+no assumed type/status names or email joins are provided.
+
+The named checkout provider must implement `RevenueCheckoutProvider`. Stripe
+verifies the configured merchant through its authenticated API; mode is checked
+on returned sessions and prices. Before POST, the manager freezes the validated
+catalogue selection and complete request in owning storage. Existing intents
+recover their original parameters despite later profile/catalogue changes.
+Known sessions are retrieved, rather than submitted again. Uncertain intents
+outside the safe idempotency window require reconciliation.
+
+This capability is optional and does not alter legacy checkout when absent.
+Supply it together with `WithRevenueServices` before enabling financial
+reception. Legacy subscriptions and portal price changes without immutable
+reviewed mappings remain quarantined. No transport handler writes these records
+directly, and provider metadata alone cannot authorize a historical payer.
+
+### Current subscription status
+
+`WithSubscriptionStatusAuthority` requires the configured revenue feed to also
+implement `SubscriptionStatusService`; a second independent billing owner is
+not accepted. The dedicated `billing.subscription-status.refresh` and
+`billing.subscription-status.read` actions are separate from access and revenue
+reconciliation. `SubscriptionStatusAuthority` checks the verified current actor
+first at program scope, then against the owning fact's principal, merchant/mode
+and subscription. Empty targets mean the initial program check, never a grant
+to read all payer data. The host supplies explicit scoped authorization.
+
+Private `PrepareSubscriptionStatus`, `LookupSubscriptionStatus` and
+`CaptureSubscriptionStatus` stages freeze the revision before authenticated
+provider I/O, allow durable host retention of preparation/evidence before save,
+and recover uncertain saves without another provider lookup. A currently
+authorized replacement operator can recover the original receipt while its
+preparing author remains unchanged. Stored authorship is not permission.
+Permission is rechecked after provider lookup and after capture/read; revocation
+withholds the response but does not undo already committed lifecycle truth.
+
+`GetSubscriptionStatusForFact` reads retained evidence without a provider call.
+Its freshness budget is trusted host configuration, never customer input. No
+HTTP endpoint, durable refresh queue, scheduler, active-paid reporting join or
+customer/admin projection is enabled by adding this capability. Active status
+alone creates no access, commission or payout entitlement. See the
+[owning lifecycle contract](../billing/README.md#scoped-current-subscription-status).

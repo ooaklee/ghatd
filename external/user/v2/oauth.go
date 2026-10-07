@@ -59,6 +59,7 @@ func CanonicalOAuthIdentity(identity *OAuthIdentity) (*OAuthIdentity, error) {
 
 // CreateOAuthUserRequest accepts only trusted identity and optional profile data.
 type CreateOAuthUserRequest struct {
+	AttributionEvidence                        string `json:"-" query:"-" form:"-"`
 	Identity                                   OAuthIdentity
 	Email, FirstName, LastName, FullName, Type string
 }
@@ -332,6 +333,9 @@ func (s *Service) CreateOAuthUser(ctx context.Context, req *CreateOAuthUserReque
 	user.Standardise()
 	if user.Validate() != nil {
 		return nil, ErrValidationFailed
+	}
+	if err := s.captureSignup(user, req.AttributionEvidence); err != nil {
+		return nil, err
 	}
 	response, err := createWithHandle(ctx, s, config, user, func() (*CreateOAuthUserResponse, error) { return repo.CreateOAuthUser(ctx, user) })
 	if err == nil {

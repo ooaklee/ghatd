@@ -51,6 +51,10 @@ type Config struct {
 	// ignore it; it must never come from browser input.
 	CustomerPortalConfigurationID string
 
+	// Revenue optionally enables authenticated net-paid economic evidence.
+	// Nil preserves existing webhook/access behaviour without a revenue feed.
+	Revenue *RevenueConfig
+
 	// HTTPClient allows applications to configure transport policy and test provider calls.
 	HTTPClient *http.Client
 

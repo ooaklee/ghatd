@@ -821,3 +821,167 @@ For issues or questions:
 - Check repository implementation in `external/billing/repository.go`
 - See migration files in `external/billing/migrations/`
 - Refer to examples in `external/billing/examples/examples.go`
+
+## Verified revenue feed
+
+`RevenueService` owns financial fact validation, provider/account/mode economic
+identity, immutable fingerprints and durable transaction acceptance. Its
+`RevenueRepository` atomically appends facts and delivery observations before
+webhook acknowledgement. The additive encrypted implementation is
+[`revenuestore`](revenuestore/README.md), using shared transaction-capable
+repository helpers. There is no nontransactional or in-memory feed fallback.
+
+`PaidMinor` is verified net paid line revenue after discounts and credits,
+excluding tax; it is independent from the existing subscription access model,
+individual billing-event gross amounts and catalogue commercial terms. Provider
+price/customer references and the historical principal/plan/cost association
+remain attached to accepted economic facts. Different webhook envelopes may
+refer to one economic allocation; they add observations rather than duplicate
+money. A changed payload under an existing economic identity conflicts.
+
+Consumers read bounded pending facts and acknowledge only with a durable owning
+acceptance or explicit no-entitlement/quarantine decision. A global cursor must
+not skip earlier unresolved facts. `GetRevenueAcknowledgement` reads the
+consumer's immutable owning receipt after a lost reply; its historical actor
+never supplies current permission. An adapter without the optional receipt-read
+capability returns unavailable. Quarantined delivery observations containing
+no facts have a separate source-reconciliation contract; they cannot be cleared
+with a fact acknowledgement. `ResolveQuarantinedRevenue` requires the original
+fingerprint, authenticated recovered facts (or a reasoned no-revenue outcome)
+and a server-bound actor. Facts and the immutable resolution commit together;
+the original quarantine remains available. Lost acknowledgement is recovered by
+reading/replaying the immutable resolution. Source digests and actor identity
+are private JSON fields, retained explicitly in encrypted persistence.
+
+This owning service does not authenticate HTTP callers or query a provider.
+The billing manager supplies those boundaries and the provider evidence.
+Applications must supply current scoped worker/operator authority, complete
+historical payer/plan resolution, migrations and bounded reconciliation workers
+before exposing or scheduling the feature.
+
+Optional `RevenuePagingRepository` supports bounded full sweeps through pending
+facts and source quarantines. `PendingRevenueFactsAfter` uses acceptance sequence;
+`UnresolvedRevenueObservationsAfter` uses retained source ID. Advancing either
+read position does not acknowledge or resolve anything. Earlier failures remain
+pending and must be revisited on subsequent sweeps. The capability is explicit;
+adapters without it return unavailable rather than silently truncating work.
+
+### Immutable checkout and historical payer identity
+
+`CheckoutService` stores the exact server-authorized provider request before a
+checkout POST. The intent retains the paying account, plan/cost/provider price,
+amount, currency, cadence, trial terms, return URL and request key. Personal
+request fields are excluded from public JSON and explicitly retained in an
+encrypted repository envelope. Use `revenuestore.Repository` after preparing
+and probing the shared transaction-capable store.
+
+`FindCheckoutIntent` recovers frozen parameters before consulting a mutable
+catalogue or profile. `PrepareCheckout` conflicts when an existing key is reused
+with different parameters. `AcknowledgeCheckout` atomically reserves a provider
+session for one intent within provider/account/live scope. A lost POST response
+leaves the intent unresolved; it is not evidence that submission failed.
+
+`ResolveRevenueAssociation` first reads immutable subscription/price history.
+For new history, it requires authenticated complete checkout-session/line-item
+evidence and a matching pre-existing intent. Provider metadata supplies only the
+opaque intent pointer; principal and plan/cost come from the owning record.
+Session, customer, subscription, original price amount/cadence, currency, mode,
+client reference and creation time must agree. Acknowledgement, session owner,
+subscription principal and price association commit together. Renewals recover
+this history without calling the provider or current catalogue again.
+
+`CanSubmitCheckout` refuses acknowledged sessions and unresolved intents older
+than 23 hours. Stripe may prune idempotency keys after 24 hours; an old ambiguous
+attempt must be reconciled, rather than resubmitted under a possibly expired
+key. Managers retrieve an acknowledged session instead of creating it again.
+See [Stripe idempotency](https://docs.stripe.com/api/idempotent_requests),
+[subscription-filtered sessions](https://docs.stripe.com/api/checkout/sessions/list)
+and [complete original line items](https://docs.stripe.com/api/checkout/sessions/line_items).
+
+Legacy subscriptions lacking a saved authorization, portal changes to an
+unmapped provider price and contradictory evidence remain unassessable. There
+is no automatic legacy backfill, amount-based mapping or operator override in
+this service. Applications must provide an explicitly reviewed history recovery
+workflow before claiming these cases supported. This service supplies billing
+identity only; it neither determines partner entitlement nor issues payouts.
+
+### Scoped current subscription status
+
+`RevenueService` optionally uses `SubscriptionStatusRepository` on its **same**
+revenue repository. `PrepareSubscriptionStatus` verifies an immutable accepted
+payment fact, freezes its merchant/mode, paying principal, provider customer and
+subscription, and reads the current head revision/fingerprint before provider
+I/O. Missing historical customer identity is unassessable. Refund/dispute facts
+cannot establish this binding; another payment cannot reassign an existing
+subscription to a different principal or provider customer.
+
+The billing manager authenticates the exact provider subscription and supplies
+`VerifiedSubscriptionStatusEvidence` to `CaptureVerifiedSubscriptionStatus`.
+Capture atomically retains an immutable receipt and replaces the head only at
+the prepared revision/fingerprint. Late responses conflict instead of replacing
+newer evidence. Current is defined by accepted revision, not provider timestamps.
+The owning clock bounds request/observation times and rejects rollback for a new
+capture. No raw response or browser-supplied evidence is retained.
+
+An uncertain commit must replay the **same preparation and evidence**. The
+original receipt is checked before later head changes or the current clock;
+changed evidence conflicts. A known advanced-head conflict instead requires
+fresh preparation and a fresh provider lookup. The trusted host must persist
+the preparation and lookup evidence before capture for crash recovery; these
+methods do not supply a durable refresh scheduler.
+
+`GetSubscriptionStatusForFact` joins the head with its immutable receipt in one
+snapshot and verifies the original billing provenance. Explicit host-approved
+freshness is bounded to 1 second–24 hours, conservatively measured from request
+start. Missing, corrupt and stale evidence never becomes an inactive zero;
+`ErrSubscriptionStatusStale` identifies expired coverage. Reads perform no
+provider I/O. Status input, receipts and internal scope exclude public JSON.
+
+The eight recognized states remain distinct, including `trialing`, `paused`
+and `incomplete_expired`; scheduled cancellation remains separate from status.
+Unknown states fail closed. **Active status is not paid revenue or entitlement.**
+Original payment facts remain immutable while refunds/disputes are separate
+facts. Reporting must join those owning adjustments and retained relationships
+to establish its paid cohort; subtracting the original payment's refund field,
+counting allocations as people or using legacy access flags is insufficient.
+The optional [partner reporting join](../partnermanager/README.md#paid-referral-source-and-status-evidence)
+uses those owners explicitly. Refresh scheduling, coverage alerts and host
+customer/admin experiences remain integration work.
+
+### Confirmed payment revenue history
+
+`RevenueService.GetPaymentRevenueHistory` uses the optional
+`RevenueHistoryRepository` on its same configured revenue repository. Trusted
+queries select 1–10 explicit provider/account/mode scopes and 1–10,000 owning payer
+principals. They are private service inputs, not customer transport fields.
+The repository reads the global sequence head, facts and original/resolution
+receptions in one snapshot. The service validates canonical IDs/fingerprints,
+contiguous acceptance sequences and every fact's original reception before
+filtering. Missing, contradictory or future-accepted evidence fails; clock
+rollback cannot certify facts accepted after the current owning clock.
+
+The complete global budget is **10,000 facts plus reception/resolution receipts**,
+independent of filters. Capacity returns `ErrRevenueHistoryTooLarge`, never a
+truncated report. Persistent history eventually needs a reviewed budget or an
+indexed projection with equivalent completeness proof. No new projection or
+storage migration is introduced by this read capability.
+
+Original PAYMENT rows remain immutable. Refund is the maximum verified
+cumulative refunded amount across separate REFUND facts, not the sum of snapshot
+values or adjustment `PaidMinor`. Identical cumulative evidence under distinct
+delivery identities does not debit twice. Adjustments must resolve the exact
+original scope, payer, customer, subscription, plan, currency and allocation.
+Confirmed full-allocation dispute loss consumes the exposure remaining after
+refunds. Temporary hold overlaps net revenue; it is not another debit. Terminal
+won/lost evidence supersedes a hold for the same dispute identity; contradictory
+terminals fail. Each result validates nonnegative, conserved current economics.
+These calculations do not apply commission rates or create entitlement.
+
+The private result carries confirmed original allocations, an owning classification
+`AsOf`, source revision and acceptance sequence. `AsOf` is sampled after the
+snapshot, not a database commit timestamp. It does not establish an atomic view
+with attribution, commission or lifecycle owners, nor prove that every provider
+delivery arrived. Quarantines lacking historical payer association cannot be
+assigned to a relationship; their private scoped count belongs to operations.
+All history/query/economic fields exclude public JSON. Reads perform no provider
+I/O, revenue acceptance or attribution mutation.

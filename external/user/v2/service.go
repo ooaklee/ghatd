@@ -32,6 +32,7 @@ type UserRepository interface {
 
 // Service holds and manages user business logic
 type Service struct {
+	signupAttribution *SignupAttributionConfig
 	// handleGenerator is optional startup-only candidate generation, not entropy
 	// for credentials. Nil uses the standard adjective/animal generator.
 	handleGenerator            func() string
@@ -176,6 +177,10 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Crea
 	if err := user.Validate(); err != nil {
 		logger.Error("user-validation-failed", zap.Error(err))
 		return nil, ErrValidationFailed
+	}
+
+	if err := s.captureSignup(user, req.AttributionEvidence); err != nil {
+		return nil, err
 	}
 
 	// Create user in repository

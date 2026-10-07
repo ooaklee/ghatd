@@ -1,0 +1,145 @@
+package revenuestore
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/paymentprovider"
+	"github.com/ooaklee/ghatd/external/repository/recordstore"
+)
+
+const (
+	kindCheckoutIntent      = "billing_checkout_intent"
+	kindCheckoutAck         = "billing_checkout_acknowledgement"
+	kindCheckoutSession     = "billing_checkout_session"
+	kindCheckoutAssociation = "billing_checkout_association"
+	kindCheckoutPrincipal   = "billing_checkout_principal"
+	checkoutPartition       = "billing-checkout-history-v1"
+)
+
+type checkoutBound struct {
+	tx    recordstore.Tx
+	scope *billing.RevenueScope
+}
+type persistedCheckout struct {
+	Intent      billing.CheckoutIntent
+	Request     paymentprovider.CheckoutSessionRequest
+	Fingerprint string
+}
+type checkoutAcknowledgement struct{ IntentID, SessionID string }
+
+func checkoutScopeKey(s billing.RevenueScope) string { b, _ := json.Marshal(s); return key(string(b)) }
+func associationKey(s billing.RevenueScope, sub, price string) string {
+	return key(checkoutScopeKey(s), sub, price)
+}
+func (r *Repository) WithCheckoutTransaction(ctx context.Context, scope billing.RevenueScope, fn func(billing.CheckoutTx) error) error {
+	if ctx == nil || fn == nil {
+		return billing.ErrRevenueInvalid
+	}
+	return mapped(r.store.Transact(ctx, checkoutPartition+":"+checkoutScopeKey(scope), func(tx recordstore.Tx) error { return fn(&checkoutBound{tx, &scope}) }))
+}
+func (r *Repository) ReadCheckout(ctx context.Context, fn func(billing.CheckoutTx) error) error {
+	if ctx == nil || fn == nil {
+		return billing.ErrRevenueInvalid
+	}
+	return mapped(r.store.Read(ctx, func(tx recordstore.Tx) error { return fn(&checkoutBound{tx, nil}) }))
+}
+func (b *checkoutBound) checkScope(scope billing.RevenueScope) error {
+	if b.scope != nil && *b.scope != scope {
+		return billing.ErrRevenueConflict
+	}
+	return nil
+}
+func (b *checkoutBound) GetCheckoutIntent(ctx context.Context, id string) (billing.CheckoutIntent, error) {
+	stored, _, err := get[persistedCheckout](ctx, b.tx, kindCheckoutIntent, id, checkoutPartition)
+	if err != nil {
+		return billing.CheckoutIntent{}, err
+	}
+	v := stored.Intent
+	v.Request = stored.Request
+	v.Fingerprint = stored.Fingerprint
+	if v.ID != id || v.Fingerprint == "" || v.CreatedAt.IsZero() || v.SessionID != "" {
+		return billing.CheckoutIntent{}, billing.ErrRevenueUnavailable
+	}
+	if err := b.checkScope(v.Scope); err != nil {
+		return billing.CheckoutIntent{}, err
+	}
+	return v, nil
+}
+func (b *checkoutBound) InsertCheckoutIntent(ctx context.Context, v billing.CheckoutIntent) error {
+	if err := b.checkScope(v.Scope); err != nil {
+		return err
+	}
+	if v.SessionID != "" {
+		return billing.ErrRevenueInvalid
+	}
+	return insert(ctx, b.tx, kindCheckoutIntent, v.ID, checkoutPartition, persistedCheckout{v, v.Request, v.Fingerprint})
+}
+func (b *checkoutBound) GetCheckoutAcknowledgement(ctx context.Context, id string) (string, error) {
+	v, _, err := get[checkoutAcknowledgement](ctx, b.tx, kindCheckoutAck, id, checkoutPartition)
+	if err != nil {
+		return "", err
+	}
+	if v.IntentID != id || v.SessionID == "" {
+		return "", billing.ErrRevenueUnavailable
+	}
+	return v.SessionID, nil
+}
+func (b *checkoutBound) InsertCheckoutAcknowledgement(ctx context.Context, id, session string) error {
+	intent, err := b.GetCheckoutIntent(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := b.checkScope(intent.Scope); err != nil {
+		return err
+	}
+	sessionKey := associationKey(intent.Scope, session, "")
+	owner, _, err := get[checkoutAcknowledgement](ctx, b.tx, kindCheckoutSession, sessionKey, checkoutPartition)
+	if err == nil {
+		if owner.IntentID != id || owner.SessionID != session {
+			return billing.ErrRevenueConflict
+		}
+	} else if singleCause(err, billing.ErrRevenueNotFound) {
+		if err := insert(ctx, b.tx, kindCheckoutSession, sessionKey, checkoutPartition, checkoutAcknowledgement{id, session}); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+	return insert(ctx, b.tx, kindCheckoutAck, id, checkoutPartition, checkoutAcknowledgement{id, session})
+}
+func (b *checkoutBound) GetCheckoutAssociation(ctx context.Context, scope billing.RevenueScope, sub, price string) (billing.CheckoutAssociation, error) {
+	if err := b.checkScope(scope); err != nil {
+		return billing.CheckoutAssociation{}, err
+	}
+	v, _, err := get[billing.CheckoutAssociation](ctx, b.tx, kindCheckoutAssociation, associationKey(scope, sub, price), checkoutPartition)
+	if err != nil {
+		return v, err
+	}
+	if v.Scope != scope || v.SubscriptionID != sub || v.ProviderPriceID != price || v.LinkedAt.IsZero() {
+		return billing.CheckoutAssociation{}, billing.ErrRevenueUnavailable
+	}
+	return v, nil
+}
+func (b *checkoutBound) InsertCheckoutAssociation(ctx context.Context, v billing.CheckoutAssociation) error {
+	if err := b.checkScope(v.Scope); err != nil {
+		return err
+	}
+	principalID := associationKey(v.Scope, v.SubscriptionID, "")
+	prior, _, err := get[billing.CheckoutAssociation](ctx, b.tx, kindCheckoutPrincipal, principalID, checkoutPartition)
+	if err == nil {
+		if prior.Scope != v.Scope || prior.SubscriptionID != v.SubscriptionID || prior.PrincipalID != v.PrincipalID || prior.CustomerID != v.CustomerID {
+			return billing.ErrRevenueConflict
+		}
+	} else if singleCause(err, billing.ErrRevenueNotFound) {
+		if err := insert(ctx, b.tx, kindCheckoutPrincipal, principalID, checkoutPartition, v); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+	return insert(ctx, b.tx, kindCheckoutAssociation, associationKey(v.Scope, v.SubscriptionID, v.ProviderPriceID), checkoutPartition, v)
+}
+
+var _ billing.CheckoutRepository = (*Repository)(nil)

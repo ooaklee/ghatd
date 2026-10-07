@@ -205,6 +205,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		}
 		return response, nil
 	}
+	response.AttributionEvidence = s.readSignupEvidence(r.RequestCookies)
 	return s.finalizeOAuthIdentity(ctx, r.Provider, info, result.Transaction.Options.Link, response)
 }
 
@@ -250,7 +251,7 @@ func (s *Service) finalizeOAuthIdentity(ctx context.Context, provider string, in
 		if info.GetUserEmail() == "" || !info.IsUserEmailVerifiedByProvider() {
 			return response, oauth.ErrSecureIDTokenUnverified
 		}
-		created, createErr := repository.CreateOAuthUser(ctx, &user.CreateOAuthUserRequest{Identity: *identity, Email: info.GetUserEmail(), FirstName: info.GetUserFirstName(), LastName: info.GetUserLastName()})
+		created, createErr := repository.CreateOAuthUser(ctx, &user.CreateOAuthUserRequest{Identity: *identity, Email: info.GetUserEmail(), FirstName: info.GetUserFirstName(), LastName: info.GetUserLastName(), AttributionEvidence: response.AttributionEvidence})
 		if createErr != nil {
 			return response, createErr
 		}

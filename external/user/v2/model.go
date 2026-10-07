@@ -157,6 +157,8 @@ func (c *UserConfig) GetType(fallback *UserConfig) string {
 
 // UniversalUser represents a flexible user model
 type UniversalUser struct {
+	// SignupAttribution is immutable private account-creation evidence; only owning signup operations write it.
+	SignupAttribution *SignupAttribution `json:"-" bson:"signup_attribution,omitempty"`
 	// Handle is a mutable, canonical display identifier, never an authority claim.
 	Handle string `json:"handle,omitempty" bson:"handle,omitempty"`
 	// HandleMetadata is private lifecycle state written only by handle operations.

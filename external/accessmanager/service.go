@@ -138,6 +138,7 @@ type Service struct {
 	// during explicit migration. A configured policy never falls back to roles.
 	tokenPolicy           TokenCreationPolicy
 	oauthConnections      *OAuthConnectionsConfig
+	signupEvidenceCookie  string
 	EphemeralStore        EphemeralStore
 	AuditService          AuditService
 	EmailManager          EmailManager
@@ -1294,11 +1295,12 @@ func (s *Service) CreateUser(ctx context.Context, r *CreateUserRequest) (*Create
 	response := &CreateUserResponse{}
 
 	newUser, err := s.UserService.CreateUser(ctx, &userv2.CreateUserRequest{
-		FirstName:      r.FirstName,
-		LastName:       r.LastName,
-		Email:          r.Email,
-		GenerateUUID:   true,
-		GenerateNanoID: true,
+		FirstName:           r.FirstName,
+		LastName:            r.LastName,
+		Email:               r.Email,
+		GenerateUUID:        true,
+		GenerateNanoID:      true,
+		AttributionEvidence: r.AttributionEvidence,
 	})
 	if err != nil {
 		return nil, err
