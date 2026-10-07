@@ -74,6 +74,10 @@ jobs:
           ./external/billing ./external/billing/revenuestore
           ./external/billingmanager ./external/paymentprovider
           ./external/repository/recordstore ./external/user/v2 ./external/accessmanager
+      - name: Check current direct group membership contracts
+        run: go test -race -count=1 -short -timeout=10m ./external/group
+      - name: Vet owning group membership
+        run: go vet ./external/group
       - name: Remove the isolated MongoDB
         if: always()
         run: docker rm --force ghatd-partner-contract-mongo

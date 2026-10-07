@@ -386,6 +386,37 @@ func (r *Repository) GetGroupsByStatus(ctx context.Context, status string, page,
 
 // GetGroupsByReferencedUserID retrieves groups where user is either owner or a member.
 func (r *Repository) GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error) {
+	return r.groupsByReferencedUserID(ctx, userID, 0)
+}
+
+// GetGroupsByReferencedUserIDBounded uses the same owning reference selector,
+// with a native limit+1 probe. The service decides eligibility and capacity;
+// the adapter does not treat this bounded result as a complete truncated page.
+// Any caller selecting a smaller limit must reject len(result) > limit itself.
+func (r *Repository) GetGroupsByReferencedUserIDBounded(ctx context.Context, userID string, limit int) ([]UniversalGroup, error) {
+	if ctx == nil || !directMembershipID(userID) || limit < 1 || limit > DirectMembershipCapacity {
+		return nil, ErrInvalidQueryParam
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r == nil || directMembershipNil(r.Store) {
+		return nil, ErrDirectMembershipUnavailable
+	}
+	rows, err := r.groupsByReferencedUserID(ctx, userID, int64(limit+1))
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		rows = []UniversalGroup{}
+	}
+	return rows, nil
+}
+
+func (r *Repository) groupsByReferencedUserID(ctx context.Context, userID string, probeLimit int64) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -405,9 +436,12 @@ func (r *Repository) GetGroupsByReferencedUserID(ctx context.Context, userID str
 		"metadata.deleted_at": bson.M{"$exists": false},
 	}
 
-	options := options.Find().SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
+	find := options.Find().SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
+	if probeLimit > 0 {
+		find.SetLimit(probeLimit).SetSort(bson.D{{Key: "metadata.created_at", Value: -1}, {Key: "_id", Value: 1}})
+	}
 
-	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options)
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, find)
 	if err != nil {
 		return nil, err
 	}

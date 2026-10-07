@@ -82,6 +82,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- An optional [active direct group membership read](external/group/README.md#active-direct-membership-capability)
+  excludes pending invitations, inactive groups and inherited administrator
+  access. Bounded native reference probes refuse truncation and retain failures;
+  existing unbounded reads remain compatible. Membership alone confers no
+  financial cohort or rate approval; hosts enforce that separately.
 - Opt-in [paid-referral evidence](external/partnermanager/README.md#paid-referral-source-and-status-evidence)
   joins complete confirmed billing history and immutable attribution into safe
   visible-page customer/admin summaries and complete partner paid metrics from
