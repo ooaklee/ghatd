@@ -24,3 +24,12 @@ type RevenueCheckoutProvider interface {
 	LookupRevenueCheckout(context.Context, RevenueScope, string) (RevenueCheckoutEvidence, error)
 	RetrieveRevenueCheckoutSession(context.Context, RevenueScope, string) (*CheckoutSession, error)
 }
+
+// RevenueCheckoutSessionEvidenceProvider reads complete subscription checkout
+// evidence by an already retained session ID, including before the first charge.
+// The billing owner must match its frozen intent before establishing association;
+// completed checkout and original price evidence never establish paid revenue.
+// This optional capability leaves existing checkout providers unchanged.
+type RevenueCheckoutSessionEvidenceProvider interface {
+	LookupRevenueCheckoutSessionEvidence(context.Context, RevenueScope, string) (RevenueCheckoutEvidence, error)
+}

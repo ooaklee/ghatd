@@ -52,9 +52,31 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 	if len(sessions) != 1 {
 		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
 	}
-	session := sessions[0]
+	return s.checkoutSessionEvidence(ctx, scope, sessions[0], "", subscription)
+}
+
+// LookupRevenueCheckoutSessionEvidence retrieves the exact retained checkout
+// session and all original line items without requiring an already known
+// subscription or payment. It makes authenticated GETs only; the billing owner
+// must still bind the returned evidence to its original server authorization.
+func (s *StripeProvider) LookupRevenueCheckoutSessionEvidence(ctx context.Context, scope RevenueScope, id string) (RevenueCheckoutEvidence, error) {
+	if !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") {
+		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+	}
+	if err := s.verifyCheckoutMerchant(ctx, scope); err != nil {
+		return RevenueCheckoutEvidence{}, err
+	}
+	session, err := s.revenueGet(ctx, scope, "/v1/checkout/sessions/"+url.PathEscape(id))
+	if err != nil {
+		return RevenueCheckoutEvidence{}, err
+	}
+	return s.checkoutSessionEvidence(ctx, scope, session, id, "")
+}
+
+func (s *StripeProvider) checkoutSessionEvidence(ctx context.Context, scope RevenueScope, session map[string]json.RawMessage, expectedSession, expectedSubscription string) (RevenueCheckoutEvidence, error) {
 	id := rawStripeID(session["id"])
-	if rawStripeString(session["object"]) != "checkout.session" || !strings.HasPrefix(id, "cs_") || !rawStripeMode(session, scope) || rawStripeID(session["subscription"]) != subscription || rawStripeString(session["mode"]) != CheckoutModeSubscription || rawStripeString(session["status"]) != "complete" {
+	subscription := rawStripeID(session["subscription"])
+	if rawStripeString(session["object"]) != "checkout.session" || !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") || (expectedSession != "" && id != expectedSession) || !stripeRevenueObjectID.MatchString(subscription) || !strings.HasPrefix(subscription, "sub_") || (expectedSubscription != "" && subscription != expectedSubscription) || !rawStripeMode(session, scope) || rawStripeString(session["mode"]) != CheckoutModeSubscription || rawStripeString(session["status"]) != "complete" {
 		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
 	}
 	var metadata map[string]string
@@ -65,7 +87,7 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 	customer := rawStripeID(session["customer"])
 	reference := rawStripeString(session["client_reference_id"])
 	currency := strings.ToUpper(rawStripeString(session["currency"]))
-	if !known || created <= 0 || !stripeRevenueObjectID.MatchString(customer) || !strings.HasPrefix(customer, "cus_") || reference == "" || len(currency) != 3 {
+	if !known || created <= 0 || !stripeRevenueObjectID.MatchString(customer) || !strings.HasPrefix(customer, "cus_") || reference == "" || !validCheckoutEvidenceCurrency(currency) {
 		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
 	}
 	lines, err := s.revenueList(ctx, scope, "/v1/checkout/sessions/"+url.PathEscape(id)+"/line_items")
@@ -98,6 +120,18 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 	return RevenueCheckoutEvidence{Scope: scope, SessionID: id, IntentID: metadata["checkout_intent_id"], ClientReferenceID: reference, CustomerID: customer, SubscriptionID: subscription, PriceID: priceID, Currency: currency, Mode: CheckoutModeSubscription, Status: "complete", CreatedAt: time.Unix(created, 0).UTC(), UnitAmountMinor: amount, IntervalCount: count, BillingCadence: cadence}, nil
 }
 
+func validCheckoutEvidenceCurrency(currency string) bool {
+	if len(currency) != 3 {
+		return false
+	}
+	for _, character := range currency {
+		if character < 'A' || character > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
 // RetrieveRevenueCheckoutSession recovers an acknowledged session without a
 // second POST, including after provider idempotency retention has elapsed.
 func (s *StripeProvider) RetrieveRevenueCheckoutSession(ctx context.Context, scope RevenueScope, id string) (*CheckoutSession, error) {
@@ -122,3 +156,4 @@ func (s *StripeProvider) RetrieveRevenueCheckoutSession(ctx context.Context, sco
 }
 
 var _ RevenueCheckoutProvider = (*StripeProvider)(nil)
+var _ RevenueCheckoutSessionEvidenceProvider = (*StripeProvider)(nil)

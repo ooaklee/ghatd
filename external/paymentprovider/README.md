@@ -84,6 +84,16 @@ amount/cadence/currency and client reference are retained for owning comparison.
 Missing, multiple or contradictory evidence is unassessable; API/pagination
 outages remain errors. No current catalogue, email or entitlement lookup occurs.
 
+The separate optional `RevenueCheckoutSessionEvidenceProvider` retrieves that
+same complete evidence using an already retained checkout session ID, before a
+subscription payment is required. Stripe uses authenticated
+[session retrieval](https://docs.stripe.com/api/checkout/sessions/retrieve) and
+[complete line-item pagination](https://docs.stripe.com/api/checkout/sessions/line_items).
+An owning billing integration must match the original frozen intent before
+using this evidence for a lifecycle association. A completed unpaid or trial
+checkout and its original recurring price do not establish paid revenue or
+commission. This capability supplies no association write or status collector.
+
 An opaque `checkout_intent_id` metadata pointer is useful only with an already
 persisted billing authorization. The owning billing service supplies payer and
 plan/cost from that record; provider metadata does not establish them. New

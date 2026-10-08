@@ -19,6 +19,7 @@ const (
 // Head and capture retain the same evidence; only the head storage revision
 // advances. No raw provider response, customer email or TTL is retained.
 type persistedSubscriptionStatus struct {
+	Source, CheckoutIntentID, CheckoutFingerprint   string
 	CaptureID, FactID, FactFingerprint, ActorID     string
 	Scope                                           billing.RevenueScope
 	PrincipalID, ProviderCustomerID, SubscriptionID string
@@ -34,10 +35,10 @@ type persistedSubscriptionStatus struct {
 
 func persistSubscriptionStatus(v billing.SubscriptionStatus) persistedSubscriptionStatus {
 	p := v.Preparation
-	return persistedSubscriptionStatus{p.CaptureID, p.FactID, p.FactFingerprint, p.ActorID, p.Scope, p.PrincipalID, p.ProviderCustomerID, p.SubscriptionID, p.ExpectedRevision, p.ExpectedFingerprint, p.RequestedAt, v.Status, v.CancellationScheduled, v.ObservedAt, v.Revision, v.Fingerprint}
+	return persistedSubscriptionStatus{p.Source, p.CheckoutIntentID, p.CheckoutFingerprint, p.CaptureID, p.FactID, p.FactFingerprint, p.ActorID, p.Scope, p.PrincipalID, p.ProviderCustomerID, p.SubscriptionID, p.ExpectedRevision, p.ExpectedFingerprint, p.RequestedAt, v.Status, v.CancellationScheduled, v.ObservedAt, v.Revision, v.Fingerprint}
 }
 func (p persistedSubscriptionStatus) domain() billing.SubscriptionStatus {
-	return billing.SubscriptionStatus{Preparation: billing.SubscriptionStatusPreparation{CaptureID: p.CaptureID, FactID: p.FactID, FactFingerprint: p.FactFingerprint, ActorID: p.ActorID, Scope: p.Scope, PrincipalID: p.PrincipalID, ProviderCustomerID: p.ProviderCustomerID, SubscriptionID: p.SubscriptionID, ExpectedRevision: p.ExpectedRevision, ExpectedFingerprint: p.ExpectedFingerprint, RequestedAt: p.RequestedAt}, Status: p.Status, CancellationScheduled: p.CancellationScheduled, ObservedAt: p.ObservedAt, Revision: p.Revision, Fingerprint: p.Fingerprint}
+	return billing.SubscriptionStatus{Preparation: billing.SubscriptionStatusPreparation{Source: p.Source, CheckoutIntentID: p.CheckoutIntentID, CheckoutFingerprint: p.CheckoutFingerprint, CaptureID: p.CaptureID, FactID: p.FactID, FactFingerprint: p.FactFingerprint, ActorID: p.ActorID, Scope: p.Scope, PrincipalID: p.PrincipalID, ProviderCustomerID: p.ProviderCustomerID, SubscriptionID: p.SubscriptionID, ExpectedRevision: p.ExpectedRevision, ExpectedFingerprint: p.ExpectedFingerprint, RequestedAt: p.RequestedAt}, Status: p.Status, CancellationScheduled: p.CancellationScheduled, ObservedAt: p.ObservedAt, Revision: p.Revision, Fingerprint: p.Fingerprint}
 }
 func statusScopeValid(scope billing.RevenueScope, sub string) bool {
 	for _, id := range []string{scope.Provider, scope.AccountID, sub} {

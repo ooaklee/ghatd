@@ -15,10 +15,16 @@ import (
 // a known inactive subscription. Missing/stale status must not become zero.
 var ErrSubscriptionStatusStale = errors.New("billing/subscription-status-stale")
 
+// SubscriptionStatusCheckoutSource separates pre-payment lifecycle provenance
+// from the original payment-only receipt representation. Empty Source preserves
+// that original representation; no explicit payment alias is accepted.
+const SubscriptionStatusCheckoutSource = "checkout-lifecycle-v1"
+
 // SubscriptionStatusPreparation freezes owning payer/scope and the head revision
 // BEFORE provider I/O. It is private in-process input, never HTTP-decoded or an
 // authorization token. Capture identity supports original lost-ack replay.
 type SubscriptionStatusPreparation struct {
+	Source, CheckoutIntentID, CheckoutFingerprint   string       `json:"-"`
 	CaptureID, FactID, FactFingerprint, ActorID     string       `json:"-"`
 	Scope                                           RevenueScope `json:"-"`
 	PrincipalID, ProviderCustomerID, SubscriptionID string       `json:"-"`
@@ -104,13 +110,20 @@ func validStatus(status string) bool {
 	}
 }
 func preparationBody(p SubscriptionStatusPreparation) any {
-	return struct {
+	legacy := struct {
 		Fact, Fingerprint, Actor, Provider, Account, Principal, Customer, Subscription string
 		Live                                                                           bool
 		ExpectedRevision                                                               int64
 		ExpectedFingerprint                                                            string
 		RequestedAt                                                                    string
 	}{p.FactID, p.FactFingerprint, p.ActorID, p.Scope.Provider, p.Scope.AccountID, p.PrincipalID, p.ProviderCustomerID, p.SubscriptionID, p.Scope.LiveMode, p.ExpectedRevision, p.ExpectedFingerprint, p.RequestedAt.UTC().Format(time.RFC3339Nano)}
+	if p.Source == SubscriptionStatusCheckoutSource {
+		return struct {
+			Source, Intent, Fingerprint string
+			Preparation                 any
+		}{p.Source, p.CheckoutIntentID, p.CheckoutFingerprint, legacy}
+	}
+	return legacy
 }
 
 // Validate checks canonical preparation identity and revision/clock bounds;
@@ -119,7 +132,21 @@ func (p SubscriptionStatusPreparation) Validate() error {
 	if !validRevenueScope(p.Scope) || p.ExpectedRevision < 0 || p.ExpectedRevision == math.MaxInt64 || p.RequestedAt.IsZero() {
 		return ErrRevenueInvalid
 	}
-	for _, value := range []string{p.FactID, p.FactFingerprint, p.ActorID, p.Scope.Provider, p.Scope.AccountID, p.PrincipalID, p.ProviderCustomerID, p.SubscriptionID} {
+	sourceIDs := []string{p.FactID, p.FactFingerprint}
+	switch p.Source {
+	case "":
+		if p.CheckoutIntentID != "" || p.CheckoutFingerprint != "" {
+			return ErrRevenueInvalid
+		}
+	case SubscriptionStatusCheckoutSource:
+		if p.FactID != "" || p.FactFingerprint != "" {
+			return ErrRevenueInvalid
+		}
+		sourceIDs = []string{p.CheckoutIntentID, p.CheckoutFingerprint}
+	default:
+		return ErrRevenueInvalid
+	}
+	for _, value := range append(sourceIDs, p.ActorID, p.Scope.Provider, p.Scope.AccountID, p.PrincipalID, p.ProviderCustomerID, p.SubscriptionID) {
 		if !cleanStatusID(value) {
 			return ErrRevenueInvalid
 		}
@@ -137,7 +164,7 @@ func statusFingerprint(p SubscriptionStatusPreparation, status string, scheduled
 }
 
 // Validate checks retained receipt consistency, accepted revision and owning
-// chronology. The owning service separately verifies the original billing fact.
+// chronology. The owning service separately verifies original payment or checkout provenance.
 func (s SubscriptionStatus) Validate() error {
 	if s.Preparation.Validate() != nil || !validStatus(s.Status) || s.Revision != s.Preparation.ExpectedRevision+1 || s.ObservedAt.IsZero() || s.ObservedAt.Before(s.Preparation.RequestedAt) || s.Fingerprint != statusFingerprint(s.Preparation, s.Status, s.CancellationScheduled) {
 		return ErrRevenueConflict
@@ -170,10 +197,13 @@ func (s *RevenueService) statusFact(ctx context.Context, id string) (RevenueFact
 	if err != nil || canonical.ID != f.ID || canonical.Fingerprint != f.Fingerprint || f.ID != id || f.Kind != RevenuePayment || f.Sequence < 1 || f.AcceptedAt.IsZero() || !cleanStatusID(f.PrincipalID) || !cleanStatusID(f.ProviderCustomerID) || !cleanStatusID(f.SubscriptionID) {
 		return RevenueFact{}, ErrRevenueUnassessable
 	}
+	if err := s.validatePaidCheckoutOwner(ctx, f); err != nil {
+		return RevenueFact{}, err
+	}
 	return f, nil
 }
 func matchesStatusFact(p SubscriptionStatusPreparation, f RevenueFact) bool {
-	return p.FactID == f.ID && p.FactFingerprint == f.Fingerprint && p.Scope == f.Scope && p.PrincipalID == f.PrincipalID && p.ProviderCustomerID == f.ProviderCustomerID && p.SubscriptionID == f.SubscriptionID && !p.RequestedAt.Before(f.AcceptedAt)
+	return p.Source == "" && p.FactID == f.ID && p.FactFingerprint == f.Fingerprint && p.Scope == f.Scope && p.PrincipalID == f.PrincipalID && p.ProviderCustomerID == f.ProviderCustomerID && p.SubscriptionID == f.SubscriptionID && !p.RequestedAt.Before(f.AcceptedAt)
 }
 
 // ValidateSubscriptionStatusPreparation rechecks immutable billing provenance
@@ -186,12 +216,8 @@ func (s *RevenueService) ValidateSubscriptionStatusPreparation(ctx context.Conte
 	if err := p.Validate(); err != nil {
 		return err
 	}
-	f, err := s.statusFact(ctx, p.FactID)
-	if err != nil {
+	if err := s.validateStatusProvenance(ctx, p); err != nil {
 		return err
-	}
-	if !matchesStatusFact(p, f) {
-		return ErrRevenueConflict
 	}
 	return ctx.Err()
 }
@@ -200,14 +226,7 @@ func (s *RevenueService) verifyStatus(ctx context.Context, snapshot Subscription
 	if v.Validate() != nil || snapshot.Receipt.Validate() != nil || !sameSubscriptionStatus(v, snapshot.Receipt) {
 		return ErrRevenueConflict
 	}
-	f, err := s.statusFact(ctx, v.Preparation.FactID)
-	if err != nil {
-		return err
-	}
-	if !matchesStatusFact(v.Preparation, f) {
-		return ErrRevenueConflict
-	}
-	return nil
+	return s.validateStatusProvenance(ctx, v.Preparation)
 }
 
 // PrepareSubscriptionStatus must precede provider lookup. Current status is
@@ -226,31 +245,7 @@ func (s *RevenueService) PrepareSubscriptionStatus(ctx context.Context, actor, f
 		return SubscriptionStatusPreparation{}, err
 	}
 	p := SubscriptionStatusPreparation{FactID: f.ID, FactFingerprint: f.Fingerprint, ActorID: actor, Scope: f.Scope, PrincipalID: f.PrincipalID, ProviderCustomerID: f.ProviderCustomerID, SubscriptionID: f.SubscriptionID}
-	current, err := repo.ReadSubscriptionStatus(ctx, f.Scope, f.SubscriptionID)
-	if err == nil {
-		if err := s.verifyStatus(ctx, current); err != nil {
-			return SubscriptionStatusPreparation{}, err
-		}
-		if current.Current.Preparation.Scope != f.Scope || current.Current.Preparation.SubscriptionID != f.SubscriptionID || current.Current.Preparation.PrincipalID != f.PrincipalID || current.Current.Preparation.ProviderCustomerID != f.ProviderCustomerID {
-			return SubscriptionStatusPreparation{}, ErrRevenueConflict
-		}
-		p.ExpectedRevision = current.Current.Revision
-		p.ExpectedFingerprint = current.Current.Fingerprint
-	} else if !singleRevenueCause(err, ErrRevenueNotFound) {
-		return SubscriptionStatusPreparation{}, err
-	}
-	p.RequestedAt = s.clock.Now().UTC()
-	if p.RequestedAt.IsZero() || p.RequestedAt.Before(f.AcceptedAt) || (err == nil && p.RequestedAt.Before(current.Current.ObservedAt)) {
-		return SubscriptionStatusPreparation{}, ErrRevenueInvalid
-	}
-	p.CaptureID = "subscription_capture_" + subscriptionDigest(preparationBody(p))
-	if err := p.Validate(); err != nil {
-		return SubscriptionStatusPreparation{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return SubscriptionStatusPreparation{}, err
-	}
-	return p, nil
+	return s.prepareStatus(ctx, repo, p, f.AcceptedAt)
 }
 
 // CaptureVerifiedSubscriptionStatus is private authenticated-provider input.
@@ -264,12 +259,8 @@ func (s *RevenueService) CaptureVerifiedSubscriptionStatus(ctx context.Context, 
 	if e.Validate(p) != nil {
 		return SubscriptionStatus{}, ErrRevenueConflict
 	}
-	f, err := s.statusFact(ctx, p.FactID)
-	if err != nil {
+	if err := s.validateStatusProvenance(ctx, p); err != nil {
 		return SubscriptionStatus{}, err
-	}
-	if !matchesStatusFact(p, f) {
-		return SubscriptionStatus{}, ErrRevenueConflict
 	}
 	fp := statusFingerprint(p, e.Status, e.CancellationScheduled)
 	var out SubscriptionStatus
@@ -344,7 +335,39 @@ func (s *RevenueService) GetSubscriptionStatusForFact(ctx context.Context, factI
 	if err != nil {
 		return SubscriptionStatus{}, err
 	}
-	snapshot, err := repo.ReadSubscriptionStatus(ctx, f.Scope, f.SubscriptionID)
+	return s.readStatusForIdentity(ctx, repo, f.Scope, f.SubscriptionID, f.PrincipalID, f.ProviderCustomerID, maxAge)
+}
+
+func (s *RevenueService) prepareStatus(ctx context.Context, repo SubscriptionStatusRepository, p SubscriptionStatusPreparation, sourceAt time.Time) (SubscriptionStatusPreparation, error) {
+	current, err := repo.ReadSubscriptionStatus(ctx, p.Scope, p.SubscriptionID)
+	if err == nil {
+		if err := s.verifyStatus(ctx, current); err != nil {
+			return SubscriptionStatusPreparation{}, err
+		}
+		if current.Current.Preparation.Scope != p.Scope || current.Current.Preparation.SubscriptionID != p.SubscriptionID || current.Current.Preparation.PrincipalID != p.PrincipalID || current.Current.Preparation.ProviderCustomerID != p.ProviderCustomerID {
+			return SubscriptionStatusPreparation{}, ErrRevenueConflict
+		}
+		p.ExpectedRevision = current.Current.Revision
+		p.ExpectedFingerprint = current.Current.Fingerprint
+	} else if !singleRevenueCause(err, ErrRevenueNotFound) {
+		return SubscriptionStatusPreparation{}, err
+	}
+	p.RequestedAt = s.clock.Now().UTC()
+	if p.RequestedAt.IsZero() || p.RequestedAt.Before(sourceAt) || (err == nil && p.RequestedAt.Before(current.Current.ObservedAt)) {
+		return SubscriptionStatusPreparation{}, ErrRevenueInvalid
+	}
+	p.CaptureID = "subscription_capture_" + subscriptionDigest(preparationBody(p))
+	if err := p.Validate(); err != nil {
+		return SubscriptionStatusPreparation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return SubscriptionStatusPreparation{}, err
+	}
+	return p, nil
+}
+
+func (s *RevenueService) readStatusForIdentity(ctx context.Context, repo SubscriptionStatusRepository, scope RevenueScope, subscription, principal, customer string, maxAge time.Duration) (SubscriptionStatus, error) {
+	snapshot, err := repo.ReadSubscriptionStatus(ctx, scope, subscription)
 	if err != nil {
 		return SubscriptionStatus{}, err
 	}
@@ -352,7 +375,7 @@ func (s *RevenueService) GetSubscriptionStatusForFact(ctx context.Context, factI
 		return SubscriptionStatus{}, err
 	}
 	p := snapshot.Current.Preparation
-	if p.Scope != f.Scope || p.SubscriptionID != f.SubscriptionID || p.PrincipalID != f.PrincipalID || p.ProviderCustomerID != f.ProviderCustomerID {
+	if p.Scope != scope || p.SubscriptionID != subscription || p.PrincipalID != principal || p.ProviderCustomerID != customer {
 		return SubscriptionStatus{}, ErrRevenueConflict
 	}
 	at := s.clock.Now().UTC()

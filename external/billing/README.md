@@ -905,7 +905,59 @@ this service. Applications must provide an explicitly reviewed history recovery
 workflow before claiming these cases supported. This service supplies billing
 identity only; it neither determines partner entitlement nor issues payouts.
 
+### Pre-payment checkout lifecycle ownership
+
+For an acknowledged subscription checkout, `LookupCheckoutLifecycleEvidence`
+uses the optional provider session-evidence capability to read the exact retained
+session outside transactions. It checks the stored authorization, payer, original
+price/amount/currency/cadence, mode and complete session evidence. Hosts enforce
+current owning authority and durably retain this original evidence before calling
+`CaptureCheckoutLifecycleEvidence`; recovery reuses those inputs, not a new lookup.
+Missing acknowledgement or contradictory evidence cannot establish an anchor.
+
+The optional `CheckoutLifecycleTx` stores an immutable per-intent receipt and the
+first scope/subscription anchor. Exact capture retries return the original receipt
+and timestamp. Later checkouts may retain separate receipts for the same payer
+and provider customer but never replace the first anchor. Conflicting lifecycle
+and paid checkout owners are rejected under the same checkout scope transaction.
+`FindCheckoutLifecycleAnchor` verifies the first anchor, receipt and frozen intent.
+Legacy repositories without this optional extension remain compatible and report
+unavailable when the new capture/read capability is requested.
+
+All anchor fields are private JSON and explicitly encrypted by `revenuestore`.
+Restore requires both anchor and receipt records with their original intents and
+acknowledgements; no TTL or history rewrite is introduced. If a referenced intent,
+anchor or receipt is missing, joined recovery fails with `ErrRevenueUnavailable`.
+Restore the complete original owning records from a verified backup; do not delete
+receipts, re-submit checkout, fabricate replacement history or label the result
+inactive. Ordinary absence of any anchor remains `ErrRevenueNotFound`.
+These additions use the
+existing prepared record-store indexes. A completed checkout is neither a payment
+nor fresh subscription status: this workflow creates no revenue fact, paid
+conversion, commission or first-payment economic terms lock. The status workflow
+below can use these anchors. Bounded discovery, durable host scheduling and trial
+journey reporting still require separate integration.
+
 ### Scoped current subscription status
+
+`PrepareSubscriptionStatusForCheckout` selects an immutable joined checkout
+anchor before the first payment. `GetSubscriptionStatusForCheckout` reads the same
+subscription head used by paid reporting. Checkout preparations use explicit
+`checkout-lifecycle-v1` provenance and contain no fact ID. Payment preparations
+retain their original canonical format and receipt IDs with empty source; old
+persistence records lacking the new fields still decode unchanged. Mixed or
+unknown source shapes are rejected. The private persistence codec retains the
+new provenance fields in encrypted head/receipt envelopes with existing indexes.
+
+Both sources must agree on provider/account/mode, subscription, paying principal
+and provider customer. Paid status preparation also checks an existing checkout
+anchor before the first status head, refusing contradictory payer proof. A later
+valid payment can advance a checkout-backed head; the old original receipt remains
+recoverable. Reading a checkout-backed active or trialing state never establishes
+paid conversion or commission. Current authority, original-input retention and
+freshness requirements below apply equally to both sources. Restores must retain
+the corresponding immutable payment fact or complete checkout provenance; do not
+rewrite old receipt identities or repair missing history with fresh observations.
 
 `RevenueService` optionally uses `SubscriptionStatusRepository` on its **same**
 revenue repository. `PrepareSubscriptionStatus` verifies an immutable accepted

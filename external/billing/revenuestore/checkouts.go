@@ -126,6 +126,21 @@ func (b *checkoutBound) InsertCheckoutAssociation(ctx context.Context, v billing
 	if err := b.checkScope(v.Scope); err != nil {
 		return err
 	}
+	anchor, err := b.GetCheckoutLifecycleAnchor(ctx, v.Scope, v.SubscriptionID)
+	if err == nil {
+		receipt, err := b.GetCheckoutLifecycleReceipt(ctx, anchor.IntentID)
+		if err != nil {
+			if singleCause(err, billing.ErrRevenueNotFound) {
+				return billing.ErrRevenueUnavailable
+			}
+			return err
+		}
+		if receipt.Fingerprint != anchor.Fingerprint || !receipt.AnchoredAt.Equal(anchor.AnchoredAt) || anchor.PrincipalID != v.PrincipalID || anchor.Evidence.CustomerID != v.CustomerID {
+			return billing.ErrRevenueConflict
+		}
+	} else if !singleCause(err, billing.ErrRevenueNotFound) {
+		return err
+	}
 	principalID := associationKey(v.Scope, v.SubscriptionID, "")
 	prior, _, err := get[billing.CheckoutAssociation](ctx, b.tx, kindCheckoutPrincipal, principalID, checkoutPartition)
 	if err == nil {

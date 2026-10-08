@@ -1023,6 +1023,16 @@ directly, and provider metadata alone cannot authorize a historical payer.
 
 ### Current subscription status
 
+The same configured revenue owner may optionally implement
+`CheckoutSubscriptionStatusService`. `PrepareSubscriptionStatusForCheckout`
+and `GetSubscriptionStatusForCheckout` use the existing refresh/read permissions:
+program authority precedes discovery, then selected owning permission is checked
+before disclosure. Existing lookup/capture stages validate checkout provenance
+and recheck current authority before provider I/O, commit and result disclosure.
+The selected scope/subscription is a trusted host source selector, never browser
+payer proof. Paid-only owners remain compatible; missing checkout capability
+returns unavailable. This does not install a collector or enable host trial UI.
+
 `WithSubscriptionStatusAuthority` requires the configured revenue feed to also
 implement `SubscriptionStatusService`; a second independent billing owner is
 not accepted. The dedicated `billing.subscription-status.refresh` and
