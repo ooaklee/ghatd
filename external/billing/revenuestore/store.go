@@ -213,6 +213,18 @@ func (b *bound) AppendFact(ctx context.Context, v billing.RevenueFact) (billing.
 	if err := b.tx.Insert(ctx, fact); err != nil {
 		return billing.RevenueFact{}, mapped(err)
 	}
+	// Legacy verified facts without provider customer evidence remain valid
+	// financial records, but cannot become authenticated lifecycle candidates.
+	if v.Kind == billing.RevenuePayment && v.ProviderCustomerID != "" {
+		if err := retainLifecycleSubscription(ctx, b.tx, lifecycleSubscriptionSource{Scope: v.Scope, SubscriptionID: v.SubscriptionID, PrincipalID: v.PrincipalID, CustomerID: v.ProviderCustomerID, FactID: v.ID, FactFingerprint: v.Fingerprint}); err != nil {
+			return billing.RevenueFact{}, err
+		}
+	}
+	if v.Kind == billing.RevenuePayment {
+		if err := touchLifecycleSourceEpoch(ctx, b.tx, v.Scope); err != nil {
+			return billing.RevenueFact{}, err
+		}
+	}
 	return v, nil
 }
 func (r *Repository) GetRevenueFact(ctx context.Context, id string) (billing.RevenueFact, error) {

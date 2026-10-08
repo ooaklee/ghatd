@@ -146,10 +146,10 @@ func TestMongoSubscriptionStatusCrossSourceRace(t *testing.T) {
 	cases := []struct {
 		name       string
 		otherPayer bool
-	}{{"same_payer_one_first_revision", false}, {"different_payer_cannot_share_head", true}}
+	}{{"same_payer_one_first_revision", false}, {"different_payer_rejected_before_status_head", true}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r, _, _, ctx := revenueFixture(t)
+			r, _, db, ctx := revenueFixture(t)
 			provider := &lifecycleEvidenceFixture{}
 			checkout := lifecycleService(t, r, provider, time.Unix(1700000000, 0).UTC())
 			i := lifecycleIntent(t, checkout, ctx)
@@ -162,17 +162,29 @@ func TestMongoSubscriptionStatusCrossSourceRace(t *testing.T) {
 			fact := billing.RevenueFact{Scope: i.Scope, Kind: billing.RevenuePayment, PaymentID: "pi_first", InvoiceID: "in_first", AllocationID: "il_first", PrincipalID: i.Request.UserID, ProviderCustomerID: e.CustomerID, SubscriptionID: e.SubscriptionID, PlanID: i.Request.PlanID, CostID: i.Request.CostID, Currency: "GBP", CurrencyExponent: 2, PaidMinor: 1000, EffectiveAt: clock.at}
 			if tc.otherPayer {
 				fact.PrincipalID = "other_payer"
+				// Native source ownership now rejects this contradiction at
+				// financial acceptance, before a wrong-payer status is possible.
+				rejected, err := owner.AcceptVerified(ctx, billing.VerifiedRevenueRequest{Scope: fact.Scope, EnvelopeID: "payment_first", Facts: []billing.RevenueFact{fact}})
+				require.ErrorIs(t, err, billing.ErrRevenueConflict)
+				require.Zero(t, rejected)
+				for _, kind := range []string{kindFact, kindObservation, kindHead, kindSubscriptionStatusHead} {
+					n, err := db.Collection("ghatd_owned_records").CountDocuments(ctx, bson.M{"kind": kind})
+					require.NoError(t, err)
+					require.Zero(t, n)
+				}
+				trial, err := owner.PrepareSubscriptionStatusForCheckout(ctx, "trial_worker", i.Scope, e.SubscriptionID)
+				require.NoError(t, err)
+				_, err = owner.CaptureVerifiedSubscriptionStatus(ctx, trial, nativeStatusEvidence(trial, "trialing"))
+				require.NoError(t, err)
+				status, err := owner.GetSubscriptionStatusForCheckout(ctx, i.Scope, e.SubscriptionID, time.Minute)
+				require.NoError(t, err)
+				require.Equal(t, "trialing", status.Status)
+				return
 			}
 			o := accept(t, owner, ctx, "payment_first", fact)
 			trial, err := owner.PrepareSubscriptionStatusForCheckout(ctx, "trial_worker", i.Scope, e.SubscriptionID)
 			require.NoError(t, err)
 			paid, err := owner.PrepareSubscriptionStatus(ctx, "paid_worker", o.FactIDs[0])
-			if tc.otherPayer {
-				require.ErrorIs(t, err, billing.ErrRevenueConflict, "paid provenance cannot replace the acknowledged checkout owner before a head exists")
-				_, err = owner.CaptureVerifiedSubscriptionStatus(ctx, trial, nativeStatusEvidence(trial, "trialing"))
-				require.NoError(t, err)
-				return
-			}
 			require.NoError(t, err)
 			var wg sync.WaitGroup
 			errs := make(chan error, 2)
@@ -195,18 +207,11 @@ func TestMongoSubscriptionStatusCrossSourceRace(t *testing.T) {
 				}
 			}
 			require.Equal(t, 1, wins)
-			if tc.otherPayer {
-				// Whichever owning source won, the other payer cannot read that head.
-				_, trialErr := owner.GetSubscriptionStatusForCheckout(ctx, i.Scope, e.SubscriptionID, time.Minute)
-				_, paidErr := owner.GetSubscriptionStatusForFact(ctx, o.FactIDs[0], time.Minute)
-				require.NotEqual(t, trialErr == nil, paidErr == nil)
-			} else {
-				a, err := owner.GetSubscriptionStatusForCheckout(ctx, i.Scope, e.SubscriptionID, time.Minute)
-				require.NoError(t, err)
-				b, err := owner.GetSubscriptionStatusForFact(ctx, o.FactIDs[0], time.Minute)
-				require.NoError(t, err)
-				require.Equal(t, a, b)
-			}
+			a, err := owner.GetSubscriptionStatusForCheckout(ctx, i.Scope, e.SubscriptionID, time.Minute)
+			require.NoError(t, err)
+			b, err := owner.GetSubscriptionStatusForFact(ctx, o.FactIDs[0], time.Minute)
+			require.NoError(t, err)
+			require.Equal(t, a, b)
 		})
 	}
 }

@@ -66,6 +66,9 @@ func (b *checkoutBound) InsertCheckoutLifecycleAnchor(ctx context.Context, a bil
 	if err := b.checkScope(scope); err != nil {
 		return err
 	}
+	if err := retainLifecycleSubscription(ctx, b.tx, lifecycleSubscriptionSource{Scope: scope, SubscriptionID: a.Evidence.SubscriptionID, PrincipalID: a.PrincipalID, CustomerID: a.Evidence.CustomerID, AnchorIntentID: a.IntentID, AnchorFingerprint: a.Fingerprint}); err != nil {
+		return err
+	}
 	principalKey := associationKey(scope, a.Evidence.SubscriptionID, "")
 	paid, _, err := get[billing.CheckoutAssociation](ctx, b.tx, kindCheckoutPrincipal, principalKey, checkoutPartition)
 	if err == nil {
@@ -94,7 +97,10 @@ func (b *checkoutBound) InsertCheckoutLifecycleAnchor(ctx context.Context, a bil
 	} else {
 		return err
 	}
-	return insert(ctx, b.tx, kindCheckoutLifecycleReceipt, a.IntentID, checkoutPartition, persistLifecycle(a))
+	if err := insert(ctx, b.tx, kindCheckoutLifecycleReceipt, a.IntentID, checkoutPartition, persistLifecycle(a)); err != nil {
+		return err
+	}
+	return touchLifecycleSourceEpoch(ctx, b.tx, scope)
 }
 
 var _ billing.CheckoutLifecycleTx = (*checkoutBound)(nil)

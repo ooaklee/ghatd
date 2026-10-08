@@ -101,3 +101,77 @@ these records and their encryption keys in backup, restore and rollback.
 Each refresh retains an immutable capture. Hosts must budget for that growth
 and explicitly review retention/privacy policy; raw-analytics TTL is not applied
 to lifecycle receipts automatically.
+
+## Native lifecycle source records
+
+New subscription checkout acknowledgements atomically retain an encrypted
+source record under an opaque scope partition. Payment-mode and unacknowledged
+intents do not create subscription candidates. The original intent fingerprint
+and acknowledged session stay private.
+
+New accepted subscription payments with authenticated customer evidence,
+checkout associations and pre-payment lifecycle anchors share a native
+subscription owner record. Financial and checkout transaction guards touch the
+same record identity, so uniqueness and revision CAS prevent contradictory
+payer/customer ownership from committing across those guards. Renewals and
+later same-owner checkouts preserve the first payment and lifecycle pointers;
+adding the other source type advances only the projection revision. Source
+records do not allocate revenue, create a status observation or reset freshness.
+
+Legacy payment facts without provider customer evidence remain financial
+records and do not become authenticated lifecycle candidates. Existing retained
+checkout ownership is still checked while adding a projection. These additive
+records support the gated owning discovery read and explicit bounded preparation
+described below. They do not install a collector or recurring refresh scheduling.
+Older original receipts are not rewritten or silently reconstructed on replay.
+Owning preparation must explicitly establish native history coverage before
+discovery; hosts must not query these adapter records directly or treat an empty
+projection as no subscriptions.
+
+### Gated indexed source reads
+
+`ReadLifecycleDiscovery` implements the optional billing-owned discovery port.
+One `recordstore.Query` selects the source kind and opaque scope partition,
+sorts by ID, and limits input to 1–200 rows using the existing partition index.
+It never substitutes `ReadRevenueHistory` or `FindAll` for this bounded scan.
+Original source pointers and joined receipt/intent/payment evidence, including
+any paid checkout owner's original acknowledgement/session reservation, are
+read in one snapshot; native billing validates their business provenance. Repeated
+read callbacks reset both their page position and result, while late errors
+return no partially joined page.
+
+The read requires an immutable versioned scope-preparation record before
+querying projections. Absence is `ErrLifecycleDiscoveryUnprepared`; invalid
+metadata, authenticated decoding failure or missing joins is unavailable with
+diagnostic causes retained. No read creates or repairs preparation. Normal read
+fixtures now invoke owning preparation; dedicated replica-set cases restore
+original native codecs without projections and verify reconstruction, resumable
+progress, rollback, uncertain replies and concurrent completion fences. These
+controlled native checks do not certify a host deployment or backup migration.
+
+### Owning preparation transaction
+
+`WithLifecyclePreparation` lends a narrow typed transaction to the billing
+service. Each call reads one bounded original-source or projection-validation
+page. Original global partitions require a bounded upgrade sweep; this is never
+substituted for ordinary indexed scope discovery. Canonical business validation
+belongs to billing, while this adapter owns encrypted codecs, original joins,
+projection persistence, progress CAS and readiness admission.
+
+Current native source writes also CAS an opaque per-scope source epoch in their
+original transaction, across financial and checkout guards. Completion writes
+that same epoch, progress and the immutable schema-1 preparation record together.
+A concurrent source therefore conflicts or makes the next call reset its sweep;
+a read of the epoch followed only by a separate marker write would not suffice.
+Projection reconstruction alone does not advance the source epoch. The shared
+epoch adds per-scope write contention; native transaction retries/failures remain
+explicit, without treating a conclusive conflict as an uncertain commit.
+
+Drain older writer instances before preparation, and exclude direct database
+writes. Older software does not update this fence. Continuous current writes may
+require a controlled quiet period to complete a sweep. Missing/corrupt original
+records and owner conflicts must be remediated explicitly; preparation never
+skips such evidence or rewrites original financial records. Host orchestration,
+authority, upgrade/restore qualification and recurring collection remain required.
+See [billing preparation](../README.md#explicit-bounded-preparation) for the owning
+operation and the meaning of its private progress counts.

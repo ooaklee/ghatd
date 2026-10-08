@@ -1037,3 +1037,87 @@ delivery arrived. Quarantines lacking historical payer association cannot be
 assigned to a relationship; their private scoped count belongs to operations.
 All history/query/economic fields exclude public JSON. Reads perform no provider
 I/O, revenue acceptance or attribution mutation.
+
+## Bounded lifecycle source discovery
+
+The owning `RevenueService.DiscoverLifecycleSources` optional capability reads
+acknowledged subscription checkouts or immutable scoped subscription sources
+through the same configured repository. Queries select one provider/account/mode
+scope and one source kind, with a limit of 1–200. Continuation cursors are bound
+to both selections; they are read positions, not authorization credentials.
+
+The adapter reads one indexed bounded page and joins original records in the
+same snapshot. Billing validates canonical accepted payments, frozen checkout
+intent/acknowledgement/session reservations, first lifecycle anchor and receipt,
+and any paid checkout owner with its original acknowledged intent before
+returning the whole page. Missing joins,
+contradictions, malformed ordering, cancellation and late failure withhold all
+items. A binding without paid or anchored lifecycle evidence is not refreshable,
+but still contributes to cursor progress so it cannot block later sources.
+Returned candidates and pages are private in-process data, excluded from JSON.
+`LifecycleDiscoveryPage.Validate` keeps canonical provenance and page-contract
+checks in billing for composing managers. Continuation may advance past the last
+visible candidate because binding-only rows count toward the raw cursor.
+
+Discovery requires an owning schema-preparation record. Missing preparation
+returns `ErrLifecycleDiscoveryUnprepared`, including when projections are empty.
+The optional owning preparation operation described below establishes native
+history coverage. This gated read does not enable a collector, expose a route or
+establish current caller permission. The optional
+[billing manager discovery boundary](../billingmanager/README.md#private-lifecycle-source-discovery)
+checks current scope permission before lookup, selected payer/source permission
+for each result and scope permission again before disclosure. Hosts still supply
+the current instance-bound authority and collector orchestration.
+
+`ReachedEnd` means the prepared projection's current page ended, not that all
+provider subscriptions/events are known. Repeat full sweeps to reach hashed
+identities inserted behind a saved position, and retain durable handoff before
+advancing a cursor. Discovery performs no provider I/O, financial or status
+writes, freshness reset, paid conversion or commission calculation.
+
+### Explicit bounded preparation
+
+`RevenueService.PrepareLifecycleDiscovery(ctx, scope, limit)` advances one
+bounded native-history page per call through the same optional owning repository.
+The limit is 1–200. Durable encrypted progress retains revision, phase, cursor,
+source epoch and sweep counts across restarts. Phases scan acknowledged checkouts,
+accepted payments, first lifecycle anchors and paid principal bindings, then
+validate both resulting projection sets against original evidence. Continue
+until `State.Phase == LifecyclePreparationComplete`; an intermediate result is
+not readiness. `Scanned` includes all legacy partition and validation rows;
+`Selected` counts selected original source rows, not distinct subscriptions or
+payments. `CustomerlessPayments` counts selected canonical legacy payments that
+remain financial-only. These private counts are not customer reporting metrics.
+
+Preparation reconstructs only additive source projections. Original checkout
+requests and payments are validated before scope/mode filtering; corrupt global
+history cannot hide selected sources by changing those fields, and may block a
+selected scope until remediated. Billing validates
+frozen intent/session reservations, canonical payments and immutable checkout
+ownership in the same transaction as each handoff and progress advance. It does
+not rewrite original receipts, economic sequences or financial history, create
+status/freshness, enroll customers, backfill attribution or accrue commissions.
+Contradictory owners, malformed evidence and missing joins prevent readiness;
+operators must investigate the original history rather than skip it silently.
+Lost commit replies return uncertainty; the next call reads committed durable
+progress before advancing, avoiding duplicate page counts. Completed retries
+return the original prepared state without rewriting its marker.
+
+**Upgrade precondition:** drain application instances running older source
+writers before preparation. Current native acknowledgements, payment facts
+(including customer-less payments), paid associations and lifecycle anchors
+atomically advance the selected scope's source epoch. Completion deliberately
+CAS-writes that same epoch with progress and the immutable schema marker, closing
+write skew with a concurrent current writer. An epoch change during a sweep
+resets its cursor/counts, preserves safe projections and returns `Restarted`;
+continue a new sweep. Continuous writes can require repeated sweeps, so an
+operator may need a controlled quiet period. The fence cannot observe writes
+from older binaries or direct database modifications; neither is safe during
+preparation. This prerequisite requires host deployment orchestration and is not
+a framework-enforced drain.
+
+Preparation scans the legacy global partitions through bounded indexed pages
+once per explicit upgrade sweep; ordinary discovery queries only the scope's
+prepared projection. Repeat discovery sweeps still remain necessary for later
+current writes behind a cursor. Host migration orchestration, manager authority,
+collector scheduling and deployment/restore qualification remain separate work.

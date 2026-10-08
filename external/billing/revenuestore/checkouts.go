@@ -107,7 +107,16 @@ func (b *checkoutBound) InsertCheckoutAcknowledgement(ctx context.Context, id, s
 	} else {
 		return err
 	}
-	return insert(ctx, b.tx, kindCheckoutAck, id, checkoutPartition, checkoutAcknowledgement{id, session})
+	if err := insert(ctx, b.tx, kindCheckoutAck, id, checkoutPartition, checkoutAcknowledgement{id, session}); err != nil {
+		return err
+	}
+	if err := retainLifecycleCheckout(ctx, b.tx, intent, session); err != nil {
+		return err
+	}
+	if intent.Request.Mode == paymentprovider.CheckoutModeSubscription {
+		return touchLifecycleSourceEpoch(ctx, b.tx, intent.Scope)
+	}
+	return nil
 }
 func (b *checkoutBound) GetCheckoutAssociation(ctx context.Context, scope billing.RevenueScope, sub, price string) (billing.CheckoutAssociation, error) {
 	if err := b.checkScope(scope); err != nil {
@@ -141,6 +150,9 @@ func (b *checkoutBound) InsertCheckoutAssociation(ctx context.Context, v billing
 	} else if !singleCause(err, billing.ErrRevenueNotFound) {
 		return err
 	}
+	if err := retainLifecycleSubscription(ctx, b.tx, lifecycleSubscriptionSource{Scope: v.Scope, SubscriptionID: v.SubscriptionID, PrincipalID: v.PrincipalID, CustomerID: v.CustomerID}); err != nil {
+		return err
+	}
 	principalID := associationKey(v.Scope, v.SubscriptionID, "")
 	prior, _, err := get[billing.CheckoutAssociation](ctx, b.tx, kindCheckoutPrincipal, principalID, checkoutPartition)
 	if err == nil {
@@ -154,7 +166,10 @@ func (b *checkoutBound) InsertCheckoutAssociation(ctx context.Context, v billing
 	} else {
 		return err
 	}
-	return insert(ctx, b.tx, kindCheckoutAssociation, associationKey(v.Scope, v.SubscriptionID, v.ProviderPriceID), checkoutPartition, v)
+	if err := insert(ctx, b.tx, kindCheckoutAssociation, associationKey(v.Scope, v.SubscriptionID, v.ProviderPriceID), checkoutPartition, v); err != nil {
+		return err
+	}
+	return touchLifecycleSourceEpoch(ctx, b.tx, v.Scope)
 }
 
 var _ billing.CheckoutRepository = (*Repository)(nil)

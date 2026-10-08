@@ -89,6 +89,7 @@ type PricerService interface {
 // Service orchestrates webhook processing and billing operations
 // It uses paymentprovider for webhook verification and billingstore for persistence
 type Service struct {
+	lifecycleDiscoveryAuthority            LifecycleDiscoveryAuthority
 	subscriptionStatusAuthority            SubscriptionStatusAuthority
 	revenueAuthority                       RevenueReconciliationAuthority
 	revenueRegistry                        RevenueProviderRegistry

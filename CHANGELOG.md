@@ -82,6 +82,36 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [private lifecycle discovery authority](external/billingmanager/README.md#private-lifecycle-source-discovery)
+  derives sources from the same billing owner, checks current scope and selected
+  payer/source permission, and withholds whole pages and cursors after denial or
+  cancellation. Empty/error results also recheck scope authority. Billing owns
+  canonical page validation; host service identity/grants, migration orchestration
+  and recurring collection remain explicit integration work.
+
+- Optional [bounded lifecycle preparation](external/billing/README.md#explicit-bounded-preparation)
+  reconstructs source projections from original billing history with durable
+  page progress, canonical evidence validation and atomic scope readiness.
+  Current source writes fence completion; changed history restarts the sweep.
+  Older writer instances must be drained first. Original financial history and
+  customer-less legacy payments stay unchanged; host upgrade orchestration,
+  collector adoption and deployment qualification remain separate work.
+
+- Gated [bounded lifecycle discovery reads](external/billing/README.md#bounded-lifecycle-source-discovery)
+  join acknowledged checkouts and scoped payment/lifecycle sources in one native
+  snapshot, validate original provenance and withhold partial pages on failure.
+  Scope-bound cursors do not grant permission or certify provider coverage.
+  Explicit owning preparation remains required; manager/collector adoption is
+  separate integration work. Missing preparation is unavailable rather than empty.
+
+- [Native lifecycle source records](external/billing/revenuestore/README.md#native-lifecycle-source-records)
+  atomically retain acknowledged subscription checkouts and immutable scoped
+  payer/customer ownership across paid and pre-payment sources. Renewals preserve
+  original source pointers; legacy facts without customer evidence stay financial
+  only. Native history coverage requires explicit preparation; host upgrade
+  orchestration and recurring collection remain integration work. These records
+  create no status or commission.
+
 - [Checkout-backed subscription status](external/billing/README.md#scoped-current-subscription-status)
   records pre-payment trial/lifecycle evidence under immutable checkout ownership
   and the same subscription revision used by paid status. Existing payment receipt

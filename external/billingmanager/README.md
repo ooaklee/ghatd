@@ -1026,7 +1026,7 @@ directly, and provider metadata alone cannot authorize a historical payer.
 The same configured revenue owner may optionally implement
 `CheckoutSubscriptionStatusService`. `PrepareSubscriptionStatusForCheckout`
 and `GetSubscriptionStatusForCheckout` use the existing refresh/read permissions:
-program authority precedes discovery, then selected owning permission is checked
+program authority precedes source lookup, then selected owning permission is checked
 before disclosure. Existing lookup/capture stages validate checkout provenance
 and recheck current authority before provider I/O, commit and result disclosure.
 The selected scope/subscription is a trusted host source selector, never browser
@@ -1057,3 +1057,38 @@ HTTP endpoint, durable refresh queue, scheduler, active-paid reporting join or
 customer/admin projection is enabled by adding this capability. Active status
 alone creates no access, commission or payout entitlement. See the
 [owning lifecycle contract](../billing/README.md#scoped-current-subscription-status).
+
+### Private lifecycle source discovery
+
+`WithLifecycleDiscoveryAuthority` installs a dedicated current authority for the
+optional `DiscoverLifecycleSources` capability on the SAME configured revenue
+feed. No second billing owner, concrete repository or provider fallback is
+accepted. Discovery does not require status read/refresh permission or perform a
+provider-registry lookup. The distinct action is
+`billing.subscription-status.discover`; installing an authority creates no grant.
+
+Queries select one native provider/account/mode scope, source kind and bounded
+cursor. `LifecycleDiscoveryTarget` carries that scope/kind before lookup, then
+the original selected principal with either acknowledged `IntentID` or owning
+`SubscriptionID` for each candidate. The verified current actor is independent
+of those targets. Current scope permission is checked again before disclosure,
+including empty pages and owning error results such as unprepared schema. A
+revocation, cancellation or later candidate denial withholds the entire page
+and its cursor. Hosts must check their current instance-bound service identity
+and exact scoped grant; stored preparing authorship, a cursor and a human role
+are not authorization credentials.
+
+Billing's `LifecycleDiscoveryPage.Validate` retains canonical provenance and
+page validation in its owning domain. The manager calls it before authorizing
+selected results. A short or empty visible page can still carry continuation:
+binding-only native rows advance the raw position without becoming refreshable
+sources. The cursor can therefore exceed the last visible candidate, and its
+end flag covers this native projection snapshot rather than provider delivery
+completeness. Durable handoff and repeated full sweeps remain required.
+
+These queries/candidates/targets remain private in-process data, excluded from
+JSON. This capability performs no source preparation, status/financial write,
+freshness reset, provider request or public HTTP routing. It does not expose the
+global legacy upgrade scan or install host authority, the collector, a recurring
+refresh schedule or trial reporting. See [owning discovery and preparation](../billing/README.md#bounded-lifecycle-source-discovery)
+for readiness admission and upgrade prerequisites.
