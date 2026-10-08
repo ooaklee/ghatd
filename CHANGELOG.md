@@ -364,6 +364,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- [Private checkout lifecycle stages](external/billingmanager/README.md#private-acknowledged-checkout-completion-stages)
+  preserve an observed uncertain owning result through later permission failure
+  or cancellation while withholding all output. Recovery still requires the
+  exact retained original input and current caller authority.
+
 - Pre-payment checkout lifecycle lookup now stops after snapshot cancellation
   and withholds evidence after provider-read cancellation. Confirmed capture
   receipt recovery semantics remain unchanged.

@@ -1127,8 +1127,11 @@ permission. The host must enforce its active API-service identity, instance-boun
 invocation and exact provider/account/mode grant. Current permission is checked
 before owning I/O and after its outcome, including absence, errors and malformed
 results. Lookup/capture additionally reauthorize after original validation and
-before provider I/O/commit. Cancellation or denial withholds all output; joined
-errors retain their causes. These are current checks, not cross-domain locks.
+before provider I/O/commit. Cancellation or denial withholds all output. An observed uncertain owning
+outcome remains joined with a later authority failure or cancellation, so
+private callers can still recognize that the operation may have committed.
+Known outcomes do not become uncertain solely because a later check fails.
+These are current checks, not cross-domain locks.
 
 Use the separate stages in an explicitly durable host workflow:
 

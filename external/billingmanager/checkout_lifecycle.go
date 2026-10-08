@@ -2,6 +2,7 @@ package billingmanager
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/billing"
@@ -77,6 +78,9 @@ func (s *Service) checkoutLifecycleBegin(ctx context.Context, actor string, i bi
 }
 func (s *Service) checkoutLifecycleFinish(ctx context.Context, actor string, i billing.CheckoutIntent, operationErr error) error {
 	if err := s.checkoutLifecycleAuthorize(ctx, actor, i); err != nil {
+		if errors.Is(operationErr, billing.ErrRevenueUncertain) {
+			return errors.Join(err, operationErr)
+		}
 		return err
 	}
 	return operationErr
