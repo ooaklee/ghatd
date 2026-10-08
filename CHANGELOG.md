@@ -82,6 +82,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Explicit [capability administration](external/accesspolicy/README.md#explicit-capability-administration)
+  reviews disabled or expired user policies and replaces named scopes,
+  permissions, activation and expiry under current management authority and
+  audited revision checks. Existing token allowances and usage budgets remain
+  unchanged; first provisioning grants neither. Separately opted-in manager
+  routes require an explicit live administrator session, a selected stored user,
+  bounded fields and a reviewed ETag. Host attachment and operational approval
+  remain separate integration work.
+
 - Optional [private retained status resolution](external/billing/README.md#private-original-status-resolution)
   distinguishes an exact captured receipt, pending original and conclusively
   uncaptured superseded preparation from one native snapshot. Current global

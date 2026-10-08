@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 20
     env:
       GHATD_TEST_MONGO_URI: 'mongodb://127.0.0.1:27017/?replicaSet=ghatd-test&directConnection=true'
+      GHATD_TEST_REDIS_ADDR: '127.0.0.1:6379'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,6 +57,19 @@ jobs:
           done
           docker logs ghatd-partner-contract-mongo
           exit 1
+      - name: Start an isolated session store
+        shell: bash
+        run: |
+          docker run --detach --name ghatd-partner-contract-redis \
+            --publish 127.0.0.1:6379:6379 redis:7-alpine
+          for attempt in {1..30}; do
+            if test "$(docker exec ghatd-partner-contract-redis redis-cli ping)" = PONG; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs ghatd-partner-contract-redis
+          exit 1
       - name: Check all package interfaces compile
         run: go test ./... -run '^$'
       - name: Check partner, billing and identity contracts with the race detector
@@ -66,6 +80,7 @@ jobs:
           ./external/billing ./external/billing/revenuestore
           ./external/billingmanager ./external/paymentprovider
           ./external/repository/recordstore ./external/user/v2 ./external/accessmanager
+          ./external/accesspolicy ./external/accesspolicymanager
       - name: Vet partner, billing and identity packages
         run: >-
           go vet
@@ -74,6 +89,7 @@ jobs:
           ./external/billing ./external/billing/revenuestore
           ./external/billingmanager ./external/paymentprovider
           ./external/repository/recordstore ./external/user/v2 ./external/accessmanager
+          ./external/accesspolicy ./external/accesspolicymanager
       - name: Check current direct group membership contracts
         run: go test -race -count=1 -short -timeout=10m ./external/group
       - name: Vet owning group membership
@@ -81,3 +97,6 @@ jobs:
       - name: Remove the isolated MongoDB
         if: always()
         run: docker rm --force ghatd-partner-contract-mongo
+      - name: Remove the isolated session store
+        if: always()
+        run: docker rm --force ghatd-partner-contract-redis

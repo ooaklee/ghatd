@@ -36,6 +36,30 @@ dispatch. Read-only resolution rechecks cancellation after custom storage return
 Stores must still honor context and transaction guarantees after dispatch; an
 error cannot establish whether an earlier or uncertain transaction committed.
 
+## Explicit capability administration
+
+`ReviewGrant` provides a live-management-authorized, detached stored snapshot,
+including disabled or expired policies. A nil snapshot means known absence;
+joined lookup failures never establish absence or permit first provisioning.
+Review is read-only and is not a transferable approval or enforcement decision.
+
+`ApplyCapabilities` takes an explicit user subject, reviewed revision and
+`Capabilities` replacement: enabled state, expiry, exact scopes and permissions.
+It preserves existing token allowances and usage budgets. Revision zero creates
+only a missing user grant, with no token or budget entitlement. Replacements use
+the same transactional compare-and-swap and administrative audit as other grant
+writes; stale revisions fail even when requested fields happen to match.
+Current management authority is checked again before writing. An error supplies
+no success receipt and does not establish rollback after an uncertain commit.
+
+The caller must verify the selected stored user through the owning identity
+service and bind the system from trusted configuration. API-token targets are
+excluded. These in-process methods do not install an HTTP administration route,
+authenticate an operator, seed default grants or infer permissions from roles.
+The [optional manager transport](../accesspolicymanager/README.md#optional-capability-management)
+supplies explicit bearer administrator routes; host attachment and operational
+approval remain required.
+
 ## Error responses
 
 `AccessPolicyErrorMap` supplies safe default reply entries. Compose it with the
