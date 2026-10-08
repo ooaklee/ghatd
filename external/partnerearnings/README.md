@@ -191,6 +191,17 @@ database.
 
 ## Financial evidence and recovery
 
+`CancelRequestedClaim(ctx, CancelClaimRequest)` is the retry-safe customer
+cancellation operation. The manager binds the current actor and partner; callers
+retain the observed claim revision, reason and original request key. Only a
+`requested` claim may be newly cancelled. The same financial guard commits the
+allocation release, terminal claim revision/audit and cancellation receipt.
+An identical retry recovers that terminal result before checking today's claim
+revision, including after a lost commit acknowledgement or later refund.
+Changed intent under the same key conflicts. A new key cannot cancel an already
+cancelled claim or release an in-flight reservation. Missing or inconsistent
+receipt linkage fails closed, and a missing receipt never implies success.
+
 Positive expected claim revisions are mandatory for decisions, manual recording,
 amendments and returned transfers. Payment/amendment receipts bind the original
 revision and full canonical payload; exact stale-revision replay reads its

@@ -314,7 +314,7 @@ func (r *EarningsRepository) GetReceipt(ctx context.Context, k partnerearnings.R
 		if err := row.Decode(&out); err != nil {
 			return err
 		}
-		if out.ProgramID != k.ProgramID || out.PartnerID != k.PartnerID || out.Currency != k.Currency || out.ActorID != k.ActorID || out.UseCase != k.UseCase || out.Key != k.Key || row.Partition != ledgerPartition(k.ProgramID, k.PartnerID, k.Currency) {
+		if row.Kind != kindReceipt || row.ID != receiptID(k) || row.Revision != 1 || row.Sequence != 0 || row.State != "" || row.ExpiresAt != nil || out.ProgramID != k.ProgramID || out.PartnerID != k.PartnerID || out.Currency != k.Currency || out.ActorID != k.ActorID || out.UseCase != k.UseCase || out.Key != k.Key || row.Partition != ledgerPartition(k.ProgramID, k.PartnerID, k.Currency) {
 			return partnerearnings.ErrUnavailable
 		}
 		return nil

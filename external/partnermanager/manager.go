@@ -120,6 +120,7 @@ type EarningsService interface {
 	GetFinancialMetrics(context.Context, string, partnerearnings.FinancialMetricsQuery) (partnerearnings.FinancialMetrics, error)
 	RequestClaim(context.Context, partnerearnings.ClaimRequest) (partnerearnings.Claim, error)
 	FindClaimRequest(context.Context, string, string, string) (partnerearnings.Claim, error)
+	CancelRequestedClaim(context.Context, partnerearnings.CancelClaimRequest) (partnerearnings.Claim, error)
 	GetClaim(context.Context, string) (partnerearnings.Claim, error)
 	ListClaims(context.Context, string, []string, int, string) ([]partnerearnings.Claim, error)
 	DecideClaim(context.Context, partnerearnings.ClaimDecision) (partnerearnings.Claim, error)

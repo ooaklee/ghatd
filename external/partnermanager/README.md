@@ -100,6 +100,18 @@ changes; current scoped permission is rechecked before returning them.
 Claim mutations require positive expected revisions; the owning financial
 service preserves immutable receipts, reservations and settlement rules.
 
+`CancelClaimWithReceipt(ctx, actor, SelfCancellationRequest)` resolves the
+currently authorized owner and selected claim, then passes the immutable claim
+revision, reason and request key to the financial owner. Pausing new withdrawals
+does not prevent requested-only cancellation or original-key recovery. Current
+permission is checked immediately before the owning operation and before
+returning its result. A late postcommit revocation returns
+`partnerearnings.ErrUncertain` without a claim; the committed receipt remains
+recoverable under the original key once current authority permits it. Permission
+reads and the financial transaction are separate owner boundaries.
+The earlier `CancelClaim` API performs a conditional one-shot decision; clients
+requiring lost-response recovery should use `CancelClaimWithReceipt`.
+
 `RotateLink(ctx, actor, referral.RotateLinkRequest)` binds actor and partner
 through current owning identity and permission. Callers supply the observed
 original code, reason and a stable request key; they cannot select a different

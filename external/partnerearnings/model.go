@@ -52,6 +52,7 @@ const (
 // Receipt use cases.
 const (
 	UseCaseClaim     = "claim"
+	UseCaseCancel    = "cancel"
 	UseCasePayment   = "payment"
 	UseCaseAmendment = "amendment"
 	UseCaseReturn    = "return"

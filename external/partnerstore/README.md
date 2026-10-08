@@ -66,6 +66,13 @@ same transaction. Complete financial history is read through bounded pages;
 public pagination limits must never silently truncate balance inputs. Result
 accumulators reset on transaction retries.
 
+Customer cancellation uses the existing encrypted `partner_earnings_receipt`
+kind and ledger guard. Its release, claim head, immutable audit and original-key
+receipt commit or roll back together; no new index or backfill is required.
+All financial receipt reads require the canonical kind/ID/partition, immutable
+revision 1, and no sequence, state or expiry metadata. Financial receipts are
+retained evidence and must not enter ephemeral-record cleanup.
+
 The required earnings maturity port retains one encrypted source in a global
 program/currency partition for bounded pending-state discovery. Source insert
 and completion use the same transaction and partner-ledger guard as their

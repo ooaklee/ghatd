@@ -594,6 +594,13 @@ when the release version has been selected, and remove unused subsections.
   later rotations or acquisition pauses, without invalidating a newer link.
   Current permission is still checked before every attempt and result disclosure.
 
+- [Partner customer cancellation](external/partnerearnings/README.md#financial-evidence-and-recovery)
+  retains an original-key receipt with the requested-only reservation release
+  and terminal claim audit. Lost-response retries recover the completed result;
+  changed intent and in-flight claims cannot release funds again. The manager
+  rechecks current owner permission before mutation and result disclosure, while
+  financial receipt reads reject mutable or expiring storage metadata.
+
 - The [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
   rejects unacknowledged receipts with `ErrUnacknowledgedMongoWrite` before
   decoding. An uncertain write is no longer misreported as a confirmed missing
