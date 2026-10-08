@@ -66,12 +66,12 @@ func TestCheckoutSubscriptionStatusManagerStages(t *testing.T) {
 		{name: "owning_scope_permission_precedes_preparation_return", denyAt: 2, phase: "prepare", want: denied},
 		{name: "lookup_program_permission_precedes_source_validation", denyAt: 3, phase: "lookup", want: denied},
 		{name: "scoped_permission_precedes_provider_io", denyAt: 4, phase: "lookup", want: denied},
-		{name: "revocation_during_lookup_withholds_evidence", denyAt: 5, phase: "lookup", want: denied},
-		{name: "capture_program_permission_precedes_replay", denyAt: 6, phase: "capture", want: denied},
-		{name: "capture_scoped_permission_precedes_mutation", denyAt: 7, phase: "capture", want: denied},
-		{name: "post_commit_revocation_withholds_response_retains_truth", denyAt: 8, phase: "capture", want: denied},
-		{name: "read_program_permission_precedes_status_lookup", denyAt: 9, phase: "read", want: denied},
-		{name: "read_scoped_permission_withholds_status", denyAt: 10, phase: "read", want: denied},
+		{name: "revocation_during_lookup_withholds_evidence", denyAt: 6, phase: "lookup", want: denied},
+		{name: "capture_program_permission_precedes_replay", denyAt: 7, phase: "capture", want: denied},
+		{name: "capture_scoped_permission_precedes_mutation", denyAt: 8, phase: "capture", want: denied},
+		{name: "post_commit_revocation_withholds_response_retains_truth", denyAt: 10, phase: "capture", want: denied},
+		{name: "read_program_permission_precedes_status_lookup", denyAt: 11, phase: "read", want: denied},
+		{name: "read_scoped_permission_withholds_status", denyAt: 12, phase: "read", want: denied},
 		{name: "provider_customer_cannot_change", wrongCustomer: true, phase: "lookup", want: billing.ErrRevenueConflict},
 		{name: "provider_account_cannot_change", wrongAccount: true, phase: "lookup", want: billing.ErrRevenueConflict},
 		{name: "provider_mode_cannot_change", wrongMode: true, phase: "lookup", want: billing.ErrRevenueConflict},
@@ -133,7 +133,7 @@ func TestCheckoutSubscriptionStatusManagerStages(t *testing.T) {
 				require.ErrorIs(t, err, tc.want)
 				require.Zero(t, v)
 				stored, err := owner.GetSubscriptionStatusForCheckout(ctx, scope, "sub_original", time.Minute)
-				if tc.denyAt == 8 {
+				if tc.denyAt == 10 {
 					require.NoError(t, err)
 					require.Equal(t, "active", stored.Status)
 				} else {

@@ -1023,12 +1023,16 @@ directly, and provider metadata alone cannot authorize a historical payer.
 
 ### Current subscription status
 
-The same configured revenue owner may optionally implement
+The same configured revenue feed may optionally implement
 `CheckoutSubscriptionStatusService`. `PrepareSubscriptionStatusForCheckout`
 and `GetSubscriptionStatusForCheckout` use the existing refresh/read permissions:
 program authority precedes source lookup, then selected owning permission is checked
-before disclosure. Existing lookup/capture stages validate checkout provenance
-and recheck current authority before provider I/O, commit and result disclosure.
+before disclosure. Checkout preparation requires immutable native checkout
+provenance without a paid fact. Checkout reads use the shared current head, whose
+own provenance may be checkout or payment after a later charge; they do not
+require a checkout-only head or manufacture payment evidence. Errors, missing or
+stale status and malformed owning output also recheck current program authority
+before returning an error, with no partial result.
 The selected scope/subscription is a trusted host source selector, never browser
 payer proof. Paid-only owners remain compatible; missing checkout capability
 returns unavailable. This does not install a collector or enable host trial UI.
@@ -1038,7 +1042,7 @@ implement `SubscriptionStatusService`; a second independent billing owner is
 not accepted. The dedicated `billing.subscription-status.refresh` and
 `billing.subscription-status.read` actions are separate from access and revenue
 reconciliation. `SubscriptionStatusAuthority` checks the verified current actor
-first at program scope, then against the owning fact's principal, merchant/mode
+first at program scope, then against the owning principal, merchant/mode
 and subscription. Empty targets mean the initial program check, never a grant
 to read all payer data. The host supplies explicit scoped authorization.
 
@@ -1050,6 +1054,20 @@ authorized replacement operator can recover the original receipt while its
 preparing author remains unchanged. Stored authorship is not permission.
 Permission is rechecked after provider lookup and after capture/read; revocation
 withholds the response but does not undo already committed lifecycle truth.
+
+`ValidateSubscriptionStatusPreparation` independently rechecks a retained
+original under the current actor, who may differ from its preparing author. Its
+canonical shape is checked before I/O. Both program and selected refresh
+permission precede owning provenance validation, and selected permission is
+checked again after every outcome. Lookup and capture reuse this boundary before
+provider I/O or mutation. Provider/registry errors, invalid evidence and failed
+capture also require the final current selected check. Cancellation stops work
+between adapters. An observed unknown commit remains in the private error tree
+alongside a later authority failure or cancellation; every capture error requires
+recovery using the retained original inputs, never an assumed rollback or a new
+lookup replacing uncertain evidence. This validation performs no fresh
+preparation, provider call or write and does not change the original capture ID,
+authorship or lookup start time.
 
 `GetSubscriptionStatusForFact` reads retained evidence without a provider call.
 Its freshness budget is trusted host configuration, never customer input. No

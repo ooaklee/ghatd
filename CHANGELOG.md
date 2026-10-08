@@ -82,6 +82,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Private [retained status preparation validation](external/billingmanager/README.md#current-subscription-status)
+  rechecks the current actor independently of the original author for payment
+  and checkout provenance. Selected permission precedes owning validation and
+  applies after errors; uncertain commits retain their recovery cause after
+  denial or cancellation. Existing checkout preparation/read and payment-only
+  adapters remain supported. Durable host collection remains integration work.
+
 - Optional [private checkout lifecycle completion stages](external/billingmanager/README.md#private-acknowledged-checkout-completion-stages)
   reuse the same configured association owner and require current selected
   refresh authority before lookup, capture, replay and disclosure, including
