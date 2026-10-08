@@ -41,8 +41,18 @@ transactions remain authoritative; no new schema or ledger algorithm is added.
 Reporting and claim-processing privileges cannot substitute. Hosts can prepare
 a full manual attestation from its fixed amount and currency without accepting
 those fields from a browser or borrowing another owner. The read preserves
-existing obligations during a manual-recording pause; `AdminRecordPayment`
-still separately enforces recording admission, current permission and revision.
+existing obligations during a manual-handling pause. `Controls.ManualRecording`
+admits new or resumed handling through `AdminDecideClaim` entering `processing`.
+When false, that transition is denied; review and confirmed-unsent cancellation
+remain available under their own authority. `AdminRecordPayment` still records
+a transfer already attempted, including original-receipt recovery, with current
+selected permission and the native assigned-actor/state/revision checks. It never
+sends money. Amendments and returned-transfer recording remain independently
+authorized. A pause never silently releases potentially paid reservations.
+`ManualHandlingAdmitted` supplies display guidance, not permission or proof that
+a transfer occurred. Hosts must communicate the pause and keep command checks
+authoritative against stale browser state. Roll out a pause to all running
+instances before relying on it; these controls are constructor configuration.
 This private domain result needs an explicit host DTO and proves no transfer.
 
 `AdminClaimForAction` also permits a selected-claim read under exactly one of

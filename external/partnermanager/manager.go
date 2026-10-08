@@ -71,8 +71,10 @@ type Groups interface {
 }
 type Clock interface{ Now() time.Time }
 
-// Controls are independent host switches; pause preserves reads and recovery
-// of existing obligations when record/payment processing remains enabled.
+// Controls are independent host admission switches. ManualRecording admits new
+// manual payment handling (entering processing), never attestation or recovery
+// of an external transfer already attempted. Pauses preserve current-authority
+// reads, financial receipts and existing obligations.
 type Controls struct{ Enrollment, Attribution, Accrual, Claims, ManualRecording bool }
 type ProgramService interface {
 	Config() partnerprogram.Config
@@ -505,12 +507,23 @@ func (m *Manager) AdminDecideClaim(ctx context.Context, req partnerearnings.Clai
 	if req.ExpectedRevision < 1 {
 		return partnerearnings.Claim{}, ErrInvalid
 	}
-	return m.deps.Earnings.DecideClaim(ctx, req)
-}
-func (m *Manager) AdminRecordPayment(ctx context.Context, req partnerearnings.RecordPaymentRequest) (partnerearnings.Claim, error) {
-	if !m.deps.Controls.ManualRecording {
+	if req.NewState == partnerearnings.ClaimProcessing && !m.deps.Controls.ManualRecording {
 		return partnerearnings.Claim{}, ErrDenied
 	}
+	return m.deps.Earnings.DecideClaim(ctx, req)
+}
+
+// ManualHandlingAdmitted reports host admission of new or resumed external
+// payment handling. It grants no permission and proves no transfer; hosts use
+// it only as guidance alongside an authorized selected-claim read. Commands
+// enforce their own current authority and native financial preconditions.
+func (m *Manager) ManualHandlingAdmitted() bool { return m.deps.Controls.ManualRecording }
+
+// AdminRecordPayment records an already-attempted external transfer under
+// current selected permission, even while new handling is paused. It never
+// sends money. The earnings owner enforces assigned actor, state, revision and
+// exact original receipt recovery without another debit or reservation release.
+func (m *Manager) AdminRecordPayment(ctx context.Context, req partnerearnings.RecordPaymentRequest) (partnerearnings.Claim, error) {
 	if err := m.authorize(ctx, req.ActorID, CapabilityRecordPayment, req.ClaimID); err != nil {
 		return partnerearnings.Claim{}, err
 	}

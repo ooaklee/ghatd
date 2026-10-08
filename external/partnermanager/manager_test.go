@@ -326,7 +326,7 @@ func TestManualRecordingChecksCurrentAuthority(t *testing.T) {
 	}{
 		{"allowed operator", false, false, nil},
 		{"revoked operator replay denied", true, false, ErrDenied},
-		{"manual recording paused", false, true, ErrDenied},
+		{"paused handling preserves already attempted recording", false, true, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

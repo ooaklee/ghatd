@@ -120,7 +120,13 @@ commission, using overflow-safe integer math.
   different claim; a changed payment payload conflicts. Metadata is bounded,
   plain, and the paid date is not in the future. Only `RecordPayment` may
   transition a claim to `paid`. `ExpectedRevision` is a precondition on the fresh
-  write.
+  write. Unknown, partial or mismatched evidence appends a zero-debit
+  `payment-observed` entry and preserves the claim's review hold. A later
+  observation requires a new key and the current revision; its opaque
+  fingerprint distinguishes its journal source from earlier observations.
+  Original keys retain their unchanged receipts and recover the current claim.
+  Existing observations with an empty source reference remain readable; this
+  does not rewrite financial history or require an index migration.
 - `AmendPayment`: corrects a paid claim's method, reference or date with a
   required reason. It appends an amendment and never creates a second debit.
   `ExpectedRevision` is a precondition.

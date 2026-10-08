@@ -592,6 +592,18 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- [Partner manual-payment handling](external/partnermanager/README.md#withdrawal-admission-and-recovery)
+  pauses new or resumed claim processing while preserving authorized recording
+  and original-receipt recovery of transfers already attempted. The existing
+  `Controls.ManualRecording` switch now gates entering `processing`; it does not
+  suppress financial attestation, review, amendments or returned transfers.
+  Hosts must refresh their pause guidance; native assignment, revision and
+  record-once settlement checks remain in force.
+- [Partner payment observations](external/partnerearnings/README.md#commands)
+  retain later partial or mismatched evidence after an unknown attempt without
+  colliding with the earlier journal source. Original receipts and review-held
+  funds remain intact; existing financial history is not rewritten.
+
 - [FCM notification delivery](external/notifier/README.md#fcm-delivery-lifecycle)
   preserves custom data, deduplicates registration tokens, and splits requests
   at Firebase's 500-token limit. Permanently unregistered tokens are disabled;

@@ -136,7 +136,7 @@ type Entry struct {
 	Kind          string    `json:"kind" bson:"kind"`
 	SourceEventID string    `json:"source_event_id" bson:"source_event_id"` // payment/refund/claim id
 	DisputeID     string    `json:"dispute_id,omitempty" bson:"dispute_id,omitempty"`
-	SourceRef     string    `json:"source_ref,omitempty" bson:"source_ref,omitempty"` // payment id for reversals/allocations
+	SourceRef     string    `json:"source_ref,omitempty" bson:"source_ref,omitempty"` // payment id for reversals/allocations; fingerprint for payment observations
 	AmountMinor   int64     `json:"amount_minor" bson:"amount_minor"`
 	Currency      string    `json:"currency" bson:"currency"`
 	Note          string    `json:"note,omitempty" bson:"note,omitempty"`

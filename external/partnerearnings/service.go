@@ -845,9 +845,10 @@ func (s *Service) RecordPayment(ctx context.Context, req RecordPaymentRequest) (
 			}
 		} else {
 			// Durable evidence of a non-settling attempt: no debit, reservation
-			// preserved, claim routed to review.
+			// preserved, claim routed to review. Distinct accepted revisions need
+			// distinct journal sources; original retries recover their receipt.
 			observed := Entry{
-				Kind: EntryPaymentObserved, SourceEventID: claim.ID,
+				Kind: EntryPaymentObserved, SourceEventID: claim.ID, SourceRef: fp,
 				AmountMinor: 0, Currency: s.currency,
 				OccurredAt: req.PaidAt, CreatedAt: now, ActorID: req.ActorID,
 				Fingerprint: fp, Note: paymentReviewReason(observedState),
