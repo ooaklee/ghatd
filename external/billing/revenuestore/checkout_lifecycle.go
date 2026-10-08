@@ -13,6 +13,35 @@ const (
 	kindCheckoutLifecycleReceipt = "billing_checkout_lifecycle_receipt"
 )
 
+// ValidateCheckoutAcknowledgement checks the original authorization and both
+// acknowledgement directions through this same owning snapshot, without writes.
+func (b *checkoutBound) ValidateCheckoutAcknowledgement(ctx context.Context, intent billing.CheckoutIntent) error {
+	original, err := b.GetCheckoutIntent(ctx, intent.ID)
+	if err != nil {
+		return discoveryJoinedError(err)
+	}
+	if original.Scope != intent.Scope || original.Fingerprint != intent.Fingerprint || !original.CreatedAt.Equal(intent.CreatedAt) {
+		return billing.ErrRevenueConflict
+	}
+	session, err := b.GetCheckoutAcknowledgement(ctx, intent.ID)
+	if err != nil {
+		return discoveryJoinedError(err)
+	}
+	if session != intent.SessionID {
+		return billing.ErrRevenueConflict
+	}
+	reverse, _, err := get[checkoutAcknowledgement](ctx, b.tx, kindCheckoutSession, associationKey(intent.Scope, session, ""), checkoutPartition)
+	if err != nil {
+		return discoveryJoinedError(err)
+	}
+	if reverse.IntentID != intent.ID || reverse.SessionID != session {
+		return billing.ErrRevenueConflict
+	}
+	return ctx.Err()
+}
+
+var _ billing.CheckoutAcknowledgementTx = (*checkoutBound)(nil)
+
 // Explicit private persistence codec preserves fields omitted from public JSON.
 type persistedCheckoutLifecycle struct {
 	IntentID, IntentFingerprint, PrincipalID, PlanID, CostID, Fingerprint string

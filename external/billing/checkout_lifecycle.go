@@ -85,6 +85,11 @@ func validateLifecycleStored(ctx context.Context, tx CheckoutTx, a CheckoutLifec
 	if intent.Fingerprint != a.IntentFingerprint || intent.Request.UserID != a.PrincipalID || intent.Request.PlanID != a.PlanID || intent.Request.CostID != a.CostID || !matchesLifecycleIntent(intent, a.Evidence) {
 		return ErrRevenueConflict
 	}
+	if join, ok := tx.(CheckoutAcknowledgementTx); ok && !revenueNil(join) {
+		if err := join.ValidateCheckoutAcknowledgement(ctx, intent); err != nil {
+			return lifecycleJoinedError(err)
+		}
+	}
 	return nil
 }
 
@@ -102,7 +107,7 @@ func (s *CheckoutService) LookupCheckoutLifecycleEvidence(ctx context.Context, i
 	var original CheckoutIntent
 	err := s.repo.ReadCheckout(ctx, func(tx CheckoutTx) error {
 		var err error
-		original, err = readCheckoutIntent(ctx, tx, intent.ID)
+		original, err = readAcknowledgedLifecycleIntent(ctx, tx, intent, false)
 		return err
 	})
 	if err != nil {
@@ -111,11 +116,17 @@ func (s *CheckoutService) LookupCheckoutLifecycleEvidence(ctx context.Context, i
 	if original.Fingerprint != intent.Fingerprint || original.SessionID != intent.SessionID {
 		return paymentprovider.RevenueCheckoutEvidence{}, ErrRevenueConflict
 	}
+	if err := ctx.Err(); err != nil {
+		return paymentprovider.RevenueCheckoutEvidence{}, err
+	}
 	provider, ok := s.provider.(paymentprovider.RevenueCheckoutSessionEvidenceProvider)
 	if !ok || revenueNil(provider) {
 		return paymentprovider.RevenueCheckoutEvidence{}, ErrRevenueUnavailable
 	}
 	e, err := provider.LookupRevenueCheckoutSessionEvidence(ctx, paymentprovider.RevenueScope{Provider: intent.Scope.Provider, AccountID: intent.Scope.AccountID, LiveMode: intent.Scope.LiveMode}, intent.SessionID)
+	if canceled := ctx.Err(); canceled != nil {
+		return paymentprovider.RevenueCheckoutEvidence{}, canceled
+	}
 	if err != nil {
 		if singleRevenueCause(err, paymentprovider.ErrRevenueUnassessable) {
 			return paymentprovider.RevenueCheckoutEvidence{}, ErrRevenueUnassessable
@@ -150,7 +161,7 @@ func (s *CheckoutService) CaptureCheckoutLifecycleEvidence(ctx context.Context, 
 		if !ok || revenueNil(lifecycle) {
 			return ErrRevenueUnavailable
 		}
-		original, err := readCheckoutIntent(ctx, tx, intent.ID)
+		original, err := readAcknowledgedLifecycleIntent(ctx, tx, intent, false)
 		if err != nil {
 			return lifecycleJoinedError(err)
 		}

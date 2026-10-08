@@ -82,6 +82,20 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [private checkout lifecycle completion stages](external/billingmanager/README.md#private-acknowledged-checkout-completion-stages)
+  reuse the same configured association owner and require current selected
+  refresh authority before lookup, capture, replay and disclosure, including
+  errors and absence. Separate stages support retaining original inputs between
+  operations; paid-capture configuration is independent. Durable host recovery
+  and recurring collection remain explicit integration work.
+
+- Private [acknowledged-checkout preparation and receipt recovery](external/billing/README.md#private-acknowledged-checkout-preparation-and-receipt-recovery)
+  joins original intent, acknowledgement and reverse-session ownership before
+  provider lookup, and retains original first-anchor dependencies on receipt
+  recovery. Missing provenance is unavailable rather than a fresh authorization;
+  existing receipt formats remain compatible. Current manager authority and
+  durable host original-evidence recovery remain integration work.
+
 - Optional [private lifecycle discovery authority](external/billingmanager/README.md#private-lifecycle-source-discovery)
   derives sources from the same billing owner, checks current scope and selected
   payer/source permission, and withholds whole pages and cursors after denial or
@@ -342,6 +356,10 @@ when the release version has been selected, and remove unused subsections.
   attribution backfill or automatic commission entitlement is supplied.
 
 ### Fixed
+
+- Pre-payment checkout lifecycle lookup now stops after snapshot cancellation
+  and withholds evidence after provider-read cancellation. Confirmed capture
+  receipt recovery semantics remain unchanged.
 
 - [Partner manual-payment handling](external/partnermanager/README.md#withdrawal-admission-and-recovery)
   pauses new or resumed claim processing while preserving authorized recording

@@ -1121,3 +1121,33 @@ once per explicit upgrade sweep; ordinary discovery queries only the scope's
 prepared projection. Repeat discovery sweeps still remain necessary for later
 current writes behind a cursor. Host migration orchestration, manager authority,
 collector scheduling and deployment/restore qualification remain separate work.
+
+
+### Private acknowledged-checkout preparation and receipt recovery
+
+`CheckoutService.PrepareCheckoutLifecycle` validates the original frozen
+subscription intent and both acknowledgement directions in one owning snapshot.
+It returns a detached original input without provider I/O or writes. Retain it
+durably before lookup. New preparation requires the optional
+`CheckoutAcknowledgementTx` join; unsupported custom adapters return unavailable.
+`CheckoutIntent.ValidateAcknowledgedSubscription` checks shape only, never
+authority or current storage provenance.
+
+`FindCheckoutLifecycleReceipt` reads the per-intent receipt, first immutable
+anchor and original acknowledgements together. Only a missing receipt after
+valid original joins is conclusive absence. Missing joined records are
+unavailable; contradictory ownership or changed original input conflicts.
+Later same-owner receipts still depend on the first anchor and its receipt.
+Preparation/recovery does not reset original creation or anchoring times when
+the current clock changes. Native lookup, capture and retained-anchor validation
+also check the optional reverse-session join when the adapter supports it;
+existing legacy ports remain compatible. Receipt formats and fingerprints stay
+unchanged.
+
+These are private owning stages, not an automatic lookup-and-capture operation.
+Current manager/service-account authority, an encrypted host outbox retaining
+original lookup evidence before capture, and exact-input uncertain-commit
+recovery remain integration requirements. A native intent/acknowledgement alone
+does not retain the provider response or a host job's uncertain disposition.
+No financial fact, current status, commission or trial entitlement is created by
+preparation or receipt reads.

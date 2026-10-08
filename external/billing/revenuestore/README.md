@@ -175,3 +175,18 @@ skips such evidence or rewrites original financial records. Host orchestration,
 authority, upgrade/restore qualification and recurring collection remain required.
 See [billing preparation](../README.md#explicit-bounded-preparation) for the owning
 operation and the meaning of its private progress counts.
+
+
+#### Acknowledged-checkout preparation joins
+
+The native checkout transaction implements `CheckoutAcknowledgementTx`.
+`ValidateCheckoutAcknowledgement` joins the retained original intent, forward
+acknowledgement and scope/session reverse owner in the same owning snapshot.
+Missing joined records are unavailable, and contradictory owner/session or
+changed original creation/fingerprint conflicts. This join performs no writes.
+New lifecycle preparation and per-intent receipt recovery require it; native
+lookup/capture and anchor validation also use it. Receipt recovery joins the
+first anchor and its original receipt rather than treating a later receipt as
+an independent replacement. Existing encrypted receipt codecs/hashes remain
+compatible. These joins do not prepare source-discovery coverage or install a
+manager, host worker, recovery outbox or refresh schedule.

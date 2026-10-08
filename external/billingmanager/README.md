@@ -1092,3 +1092,44 @@ freshness reset, provider request or public HTTP routing. It does not expose the
 global legacy upgrade scan or install host authority, the collector, a recurring
 refresh schedule or trial reporting. See [owning discovery and preparation](../billing/README.md#bounded-lifecycle-source-discovery)
 for readiness admission and upgrade prerequisites.
+
+
+### Private acknowledged-checkout completion stages
+
+`WithCheckoutLifecycleAuthority` enables the optional `CheckoutLifecycleService`
+capability derived ONLY from the same `revenueAssociation` configured through
+`WithRevenueServices`. Paid checkout-capture wiring, payer admission and a second
+checkout owner are not substitutes. Configure the authority before serving work;
+no grant, HTTP endpoint or worker is installed by this option.
+
+The private `CheckoutLifecycleTarget` carries the original scope, paying
+principal and intent, independently of the verified current actor. Every stage
+requires `billing.subscription-status.refresh`, never discovery or read
+permission. The host must enforce its active API-service identity, instance-bound
+invocation and exact provider/account/mode grant. Current permission is checked
+before owning I/O and after its outcome, including absence, errors and malformed
+results. Lookup/capture additionally reauthorize after original validation and
+before provider I/O/commit. Cancellation or denial withholds all output; joined
+errors retain their causes. These are current checks, not cross-domain locks.
+
+Use the separate stages in an explicitly durable host workflow:
+
+1. `PrepareCheckoutLifecycle` returns the detached native original, joining
+   intent, acknowledgement and reverse-session ownership. Retain that input
+   before lookup. `ValidateCheckoutLifecycle` revalidates a retained input for a
+   currently authorized replacement worker.
+2. `FindCheckoutLifecycleReceipt` recovers an existing original receipt without
+   provider I/O. Only conclusive receipt absence after valid original joins
+   permits a new lookup; joined failures are not absence.
+3. `LookupCheckoutLifecycleEvidence` performs the native authenticated lookup
+   after revalidation. Durably retain this original evidence before capture.
+4. `CaptureCheckoutLifecycleEvidence` submits that exact retained intent/evidence.
+   Replay recovers the same receipt without another provider call. Unknown commit
+   or post-commit revocation can withhold output despite retained truth; preserve
+   and replay original inputs rather than fetching replacement evidence.
+
+Billing owns canonical input/evidence/receipt validation. These stages neither
+combine lookup with capture nor create a host recovery outbox, refresh schedule,
+financial fact, current subscription status, commission or trial entitlement.
+The host collector, migration/drain qualification and full platform verification
+remain integration requirements. See [owning preparation and recovery](../billing/README.md#private-acknowledged-checkout-preparation-and-receipt-recovery).
