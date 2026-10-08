@@ -78,7 +78,31 @@ func (m *Manager) AdminRequestClaim(ctx context.Context, req ClaimOnBehalfReques
 // borrowing reporting/processing authority or accepting those fields in a body.
 // The returned domain view needs an explicit permission-appropriate host DTO.
 func (m *Manager) AdminPaymentClaim(ctx context.Context, actor, claimID string) (partnerearnings.Claim, error) {
-	if err := m.authorize(ctx, actor, CapabilityRecordPayment, claimID); err != nil {
+	return m.adminActionClaim(ctx, actor, CapabilityRecordPayment, claimID)
+}
+
+// AdminClaimForAction reads one selected obligation under its own processing,
+// recording, amendment or return capability. A capability argument selects an
+// allowed action; it supplies no permission and cannot grant queue/reporting
+// access. Hosts must bind the actor from verified context and project only the
+// action's permitted fields. Admission pauses preserve authorized reads; every
+// command still checks its own current authority, revision and admission.
+func (m *Manager) AdminClaimForAction(ctx context.Context, actor, capability, claimID string) (partnerearnings.Claim, error) {
+	switch capability {
+	case CapabilityProcessing, CapabilityRecordPayment, CapabilityAmendPayment, CapabilityReturnPayment:
+	default:
+		return partnerearnings.Claim{}, ErrInvalid
+	}
+	if !validWorkText(claimID, 256) {
+		return partnerearnings.Claim{}, ErrInvalid
+	}
+	return m.adminActionClaim(ctx, actor, capability, claimID)
+}
+
+// Keep the compatible recording-only entry point's validation/error ordering.
+// Both entry points use the same owning invariants and current authorization.
+func (m *Manager) adminActionClaim(ctx context.Context, actor, capability, claimID string) (partnerearnings.Claim, error) {
+	if err := m.authorize(ctx, actor, capability, claimID); err != nil {
 		return partnerearnings.Claim{}, err
 	}
 	if !validWorkText(claimID, 256) {
@@ -91,7 +115,7 @@ func (m *Manager) AdminPaymentClaim(ctx context.Context, actor, claimID string) 
 	if claim.ID != claimID || claim.ProgramID != partnerprogram.ProgramID || !validWorkText(claim.PartnerID, 256) || claim.AmountMinor <= 0 || claim.Revision < 1 || claim.Currency != m.deps.Program.Config().Currency {
 		return partnerearnings.Claim{}, ErrUnavailable
 	}
-	if err := m.authorize(ctx, actor, CapabilityRecordPayment, claimID); err != nil {
+	if err := m.authorize(ctx, actor, capability, claimID); err != nil {
 		return partnerearnings.Claim{}, err
 	}
 	return claim, nil

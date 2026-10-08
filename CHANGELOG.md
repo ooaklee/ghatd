@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Selected [operator preparation reads](external/partnermanager/README.md#withdrawal-admission-and-recovery)
+  provide status revisions under partner policy authority, current withdrawal
+  admission/destination/funds under on-behalf claim authority, and individual
+  policy history with its publication revision under customer policy authority.
+  Current permissions remain separate for each selected target; pauses preserve
+  reads and original financial retries remain independent of preparation.
 - [Withdrawal admission](external/partnermanager/README.md#withdrawal-admission-and-recovery)
   supports explicit minimums and customer-selected destination revisions while
   preserving authorized original-receipt recovery after admission or destination
@@ -413,6 +419,11 @@ when the release version has been selected, and remove unused subsections.
   [encrypted persistence adapters](external/partnerstore/README.md) require a
   transaction-capable store, additive index preparation and stable keys; host
   composition, authority and commercial launch approval remain explicit.
+- [Selected operator claim reads](external/partnermanager/README.md#withdrawal-admission-and-recovery)
+  use the same explicit processing, recording, amendment or return permission as
+  the selected action, without requiring queue or unrelated recording authority.
+  Hosts still bind current identity and project permitted fields; these reads
+  perform no financial write and grant no broader access.
 - An owning billing verified-revenue contract and
   [durable encrypted feed](external/billing/revenuestore/README.md) with economic
   deduplication, atomic delivery acceptance and independent consumer receipts.

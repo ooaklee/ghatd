@@ -45,6 +45,49 @@ existing obligations during a manual-recording pause; `AdminRecordPayment`
 still separately enforces recording admission, current permission and revision.
 This private domain result needs an explicit host DTO and proves no transfer.
 
+`AdminClaimForAction` also permits a selected-claim read under exactly one of
+processing, payment recording, payment amendment or returned-payment authority.
+It rejects other actions and empty list targets before consulting authority.
+The caller-selected action grants nothing: current authority must admit that
+exact action and ClaimID before and after the successful owning read. It cannot
+borrow recording authority for an amendment, grant queue/reporting access or
+write a reservation or payment. The recording-only `AdminPaymentClaim` keeps
+its existing contract. Hosts must bind the verified actor, apply a closed action
+selection, suppress caching and enumerate only the action's permitted DTO fields;
+serializing the private domain claim directly is inappropriate.
+
+`AdminPartnerStatus` reads the selected partner under policy authority at that
+PartnerID. An explicit host status DTO includes the current revision, status,
+reason, timestamps and three admission flags, omitting the domain record's
+customer identity, payout email, destination version and accepted terms. This
+grant cannot substitute for policy authority at the underlying CustomerID.
+
+`AdminClaimPreparation` requires on-behalf claim-creation authority at exactly
+the selected PartnerID. Its typed view supplies configured currency/exponent
+and minimum, claim/partner admission flags, current active/verified/individual
+eligibility, the current destination's ID/method/email/version or null, and only
+the selected financial owner's available amount. The full destination email is
+for explicit recipient review under this action, not general reporting. Only
+sole canonical destination absence becomes null; owner failure, identity
+absence and malformed owning output remain errors. Pauses are data and preserve
+the read. These are separate owner reads, not an atomic admission snapshot or
+proof of email ownership. The command still checks current admission, funds and
+the observed destination version. Existing original-key request recovery must
+remain independent of this preparation read.
+
+`AdminIndividualPolicyVersions` requires policy authority at exactly the
+selected CustomerID. It filters complete owning history to that program's
+individual stream, excluding global, group and other-customer records. The
+returned `IndividualPolicyHistory.Revision` is the maximum published scope
+revision, including future and expired versions; neither list ordering nor
+currently effective policy supplies the publication CAS head. Conclusive empty
+history returns an empty slice and revision 0. Mutable version fields are copied.
+Hosts enumerate permitted policy DTO fields without serializing owner audit IDs.
+
+All three reads validate the selected target and check its exact current action
+before and after successful owning reads. They grant no program-list access,
+perform no owning write, and require a verified actor and uncached host response.
+
 ## Worker backlog reporting
 
 `AdminWorkerBacklog` uses the separate `partner.admin.operations` capability,
