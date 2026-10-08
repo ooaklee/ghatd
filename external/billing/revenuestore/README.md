@@ -190,3 +190,15 @@ first anchor and its original receipt rather than treating a later receipt as
 an independent replacement. Existing encrypted receipt codecs/hashes remain
 compatible. These joins do not prepare source-discovery coverage or install a
 manager, host worker, recovery outbox or refresh schedule.
+
+
+### Original status resolution snapshot
+
+The optional `ReadSubscriptionStatusOriginal` capability reads the exact immutable
+capture first, then joins current head/receipt only if the capture is conclusively
+absent, in one encrypted `recordstore.Read`. It has no writes, provider calls or
+financial sequence effects. Existing captured originals do not depend on later
+head availability. Joined absence/outage and uncertain errors remain failures;
+missing linked current receipts are unavailable rather than first absence.
+The billing service validates provenance and decides pending/superseded; the
+repository does not clear host execution state or choose refresh policy.

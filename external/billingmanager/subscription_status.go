@@ -186,7 +186,8 @@ func (s *Service) LookupSubscriptionStatus(ctx context.Context, actor string, p 
 
 // CaptureSubscriptionStatus accepts the previously retained preparation and
 // evidence without another provider call. Uncertain commits replay EXACT inputs;
-// fresh preparation is appropriate only after a known revision conflict.
+// a generic revision conflict never permits discarding the original. Use the
+// optional native resolution before replacing an uncaptured superseded input.
 // Post-write revocation suppresses the response; it does not undo committed truth.
 func (s *Service) CaptureSubscriptionStatus(ctx context.Context, actor string, p billing.SubscriptionStatusPreparation, e billing.VerifiedSubscriptionStatusEvidence) (billing.SubscriptionStatus, error) {
 	owner, err := s.retainedStatusOwner(ctx, actor, p)

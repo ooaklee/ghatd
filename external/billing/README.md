@@ -977,8 +977,9 @@ capture. No raw response or browser-supplied evidence is retained.
 
 An uncertain commit must replay the **same preparation and evidence**. The
 original receipt is checked before later head changes or the current clock;
-changed evidence conflicts. A known advanced-head conflict instead requires
-fresh preparation and a fresh provider lookup. The trusted host must persist
+changed evidence conflicts. A generic advanced-head conflict does not establish
+that the original capture is absent. Use the optional original resolution below
+before replacing a superseded preparation and performing a fresh lookup. The trusted host must persist
 the preparation and lookup evidence before capture for crash recovery; these
 methods do not supply a durable refresh scheduler.
 
@@ -1151,3 +1152,38 @@ recovery remain integration requirements. A native intent/acknowledgement alone
 does not retain the provider response or a host job's uncertain disposition.
 No financial fact, current status, commission or trial entitlement is created by
 preparation or receipt reads.
+
+
+### Private original status resolution
+
+`RevenueService.ResolveSubscriptionStatus` optionally inspects one retained
+status preparation through the same repository's
+`SubscriptionStatusResolutionRepository`. Existing status repository ports and
+receipt identities are unchanged. Unsupported adapters return unavailable.
+
+The adapter reads the exact capture and, only on conclusive absence, the joined
+current head/immutable receipt in **one native snapshot**. The service validates
+original billing provenance and returns a private typed result:
+
+- `captured`: the exact immutable original receipt is available. It wins before
+  inspecting later heads, even if a later head is damaged. Complete the original
+  through its normal recovery path.
+- `pending`: the capture is absent and its expected head still matches, or both
+  are absent for a first preparation. It may still commit; retain the original.
+- `superseded`: the capture is conclusively absent and the validated head has a
+  strictly greater revision under the same scope, subscription, payer and
+  customer. Native monotonic revision CAS prevents that old preparation from
+  ever creating a new capture.
+
+Missing expected heads, missing joined receipts, wrong ownership, equal-revision
+fingerprint disagreement, regressions, corrupt evidence and joined outage/unknown
+causes are errors, never permission to replace an original. Resolution performs
+no provider lookup, capture write or financial mutation. Validating the current
+head includes its owning payment/checkout provenance, so a joined provenance
+failure also withholds resolution.
+
+This is an observation of native truth, not a host execution grant. Hosts must
+reconfirm under current authority and their exact live lease, atomically retain
+resolution history and clear/replace their own original pointer only after a
+confirmed superseded result. Do not treat a generic conflict or uncertain capture
+reply as supersession. Durable host adoption remains separate integration work.

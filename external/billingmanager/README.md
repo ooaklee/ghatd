@@ -1154,3 +1154,22 @@ combine lookup with capture nor create a host recovery outbox, refresh schedule,
 financial fact, current subscription status, commission or trial entitlement.
 The host collector, migration/drain qualification and full platform verification
 remain integration requirements. See [owning preparation and recovery](../billing/README.md#private-acknowledged-checkout-preparation-and-receipt-recovery).
+
+
+### Private retained status resolution
+
+`Service.ResolveSubscriptionStatus(ctx, actor, preparation)` derives the optional
+resolver from the **same configured status owner**, without widening existing
+status ports or installing a second ledger. It checks current global and selected
+refresh permission before native provenance validation, and both permissions
+again after owning outcomes, including errors and absence. Preparing authorship
+remains immutable and does not substitute for the current caller. Uncertainty
+remains available to private recovery callers after late denial/cancellation;
+failed calls return zero data.
+
+The native [original resolution](../billing/README.md#private-original-status-resolution)
+returns `captured`, `pending` or `superseded`. It makes no fresh preparation,
+provider lookup, capture or host-pointer change. The result is private and never
+HTTP-decoded. Hosts still own durable original retention, lease-fenced disposition,
+retry/inspection and runtime composition. A generic revision conflict alone is
+insufficient to discard an original.

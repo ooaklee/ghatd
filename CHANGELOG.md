@@ -82,6 +82,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [private retained status resolution](external/billing/README.md#private-original-status-resolution)
+  distinguishes an exact captured receipt, pending original and conclusively
+  uncaptured superseded preparation from one native snapshot. Current global
+  and selected manager permission applies to every outcome; joined failures
+  never authorize replacement. Existing ports/receipt identities remain
+  compatible. Durable host disposition and runtime adoption remain integration
+  work; resolution performs no provider lookup or financial mutation.
+
+
 - Private [retained status preparation validation](external/billingmanager/README.md#current-subscription-status)
   rechecks the current actor independently of the original author for payment
   and checkout provenance. Selected permission precedes owning validation and
