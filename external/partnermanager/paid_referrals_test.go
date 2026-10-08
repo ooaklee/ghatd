@@ -612,6 +612,17 @@ func TestPaidReferralMultiplePeopleAndCapacity(t *testing.T) {
 				raw.AllocationID = "il_second"
 				if tc.mode != "collision" {
 					raw.SubscriptionID = "sub_private_second"
+				} else {
+					// Current customer-bearing writes reject contradictory lifecycle
+					// ownership before financial history can be accepted. Preserve
+					// the report's independent defense for valid customer-less legacy
+					// payments, which intentionally do not create lifecycle sources.
+					before := maps.Clone(f.records.rows)
+					rejected, err := f.source.AcceptVerified(context.Background(), billing.VerifiedRevenueRequest{Scope: raw.Scope, EnvelopeID: "evt_second", Facts: []billing.RevenueFact{raw}})
+					require.ErrorIs(t, err, billing.ErrRevenueConflict)
+					require.Zero(t, rejected)
+					require.Equal(t, before, f.records.rows)
+					raw.ProviderCustomerID = ""
 				}
 				o, err := f.source.AcceptVerified(context.Background(), billing.VerifiedRevenueRequest{Scope: raw.Scope, EnvelopeID: "evt_second", Facts: []billing.RevenueFact{raw}})
 				require.NoError(t, err)
