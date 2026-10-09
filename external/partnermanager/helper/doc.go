@@ -1,6 +1,7 @@
-// Package partnermanagerhelper supplies optional host composition helpers for
-// anonymous referral consent routes. Hosts provide explicit origin, paths, cookie
-// names, rate admission and a branded page renderer. The owning Partners manager
-// retains all eligibility and attribution rules. See README.md for startup and
-// transport security requirements.
+// Package partnermanagerhelper composes optional referral, signup, selected-account
+// admission and billing/worker integration over existing Partners owning services.
+// Hosts supply cookie names, product policy, account checks and resource lifetime.
+// Financial decisions, signed evidence and private worker authority retain their
+// original owners. Construction never starts workers or provisions grants.
+// Canonical composition and failure contracts are documented in README.md.
 package partnermanagerhelper

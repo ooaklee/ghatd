@@ -108,7 +108,7 @@ func NewPartnersReferralHandler(cfg PartnersReferralConfig, deps ReferralDepende
 	if cfg.AttributionWindow < 0 || cfg.AttributionWindow > 180*24*time.Hour || cfg.VisitWindow < 0 || cfg.VisitWindow > 24*time.Hour || cfg.VisitWindow > 0 && cfg.VisitWindow < time.Second {
 		return nil, invalid
 	}
-	if !nilReferralPort(deps.Visits) && (nilReferralPort(deps.Clock) || deps.Admission == nil || cfg.AttributionWindow <= 0) {
+	if !nilHelperPort(deps.Visits) && (nilHelperPort(deps.Clock) || deps.Admission == nil || cfg.AttributionWindow <= 0) {
 		return nil, invalid
 	}
 	if len(cfg.TrustedProxyCIDRs) > 32 {
@@ -174,7 +174,7 @@ func validReferralPath(value string) bool {
 	return true
 }
 
-func nilReferralPort(port any) bool {
+func nilHelperPort(port any) bool {
 	if port == nil {
 		return true
 	}
@@ -191,7 +191,7 @@ func (h *PartnersReferralHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	h.headers(w)
 	code := mux.Vars(r)["code"]
 	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		available := !nilReferralPort(h.visits) && validPartnersReferralCode(code)
+		available := !nilHelperPort(h.visits) && validPartnersReferralCode(code)
 		status := http.StatusOK
 		if !available {
 			status = http.StatusServiceUnavailable
@@ -234,7 +234,7 @@ func (h *PartnersReferralHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 		h.signup(w, r)
 		return
 	}
-	if nilReferralPort(h.visits) || nilReferralPort(h.clock) || h.admission == nil || !validPartnersReferralCode(code) {
+	if nilHelperPort(h.visits) || nilHelperPort(h.clock) || h.admission == nil || !validPartnersReferralCode(code) {
 		h.page(w, r, http.StatusServiceUnavailable, false)
 		return
 	}

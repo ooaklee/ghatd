@@ -111,3 +111,26 @@ recovery stages. Selected payer and intent are independent of the current servic
 actor; both are required. Read/discovery permissions, a human session or another
 authority's invocation cannot complete a checkout. Installation on the owning
 billing manager and durable original-input retention remain runtime requirements.
+
+
+## Owning identity and explicit host admission
+
+`NewMemberSessionVerifier(authenticator, admission, activeStatus)` supplies the
+live session port from the owning `AuthenticateSession` operation. It requires
+current authentication, matching response/user actor IDs, the configured active
+status and verified email, then calls the explicit host `AccountAdmission` hook.
+Invalid credentials/actors, nil or ambiguous evidence and late cancellation fail
+closed. It creates no action permission; authority independently rereads live
+sessions around each current policy check, including receipt replay.
+
+`NewUserWorkerIdentity(users, admission, accountType, activeStatus)` supplies the
+current service identity port from user/v2. Hosts explicitly select the registered
+API-service account type and active status, and retain their durable account
+restrictions in `AccountAdmission`. Missing users/admission cannot become implicit
+unrestricted access. Neither constructor performs I/O or binds a worker context;
+only the existing instance-private `WorkerAuthority.Bind` does that.
+
+Callbacks preserve host denial/outage errors and must never erase historical
+financial evidence. Configuration is trusted startup input, never an HTTP actor,
+role or body. These adapters provide current identity, not grants, signatures or
+an atomic snapshot across identity and policy owners.

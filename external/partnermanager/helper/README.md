@@ -1,7 +1,8 @@
-# Partners referral route helpers
+# Partners integration helpers
 
-`partnermanagerhelper` is an optional transport layer around the owning
-`partnermanager.Manager.PrepareVisit` operation. It owns anonymous consent,
+`partnermanagerhelper` supplies optional referral, signup, identity and execution
+composition over existing owning services. Its referral transport wraps
+`partnermanager.Manager.PrepareVisit` and owns anonymous consent,
 bounded form parsing, rate-admission integration and secure browser cookies.
 The manager owns link eligibility, attribution, signed evidence and measurement.
 The core manager does not import this package.
@@ -82,8 +83,84 @@ err := partnermanagerhelper.AttachPartnersReferralRoutes(router,
 
 These variables are host-supplied owning services and presentation, not global
 defaults. Construction performs no provider/storage calls and starts no work.
-This helper supplies neither customer/admin JSON routes nor authentication,
-grant provisioning, signup service composition or worker scheduling.
+The referral helper supplies no customer/operator JSON routes, authentication
+or grants. The separate helpers below compose identity/signup/execution; the host
+still owns scheduling, shutdown and resource acquisition.
 
 See [runtime composition](../runtime/README.md) and
 [authority](../../partneraccess/README.md) for the separate owner boundaries.
+
+
+## Selected account admission and signup
+
+`NewAccountIdentity(owner, admission)` decorates the existing `Identity` port
+with an explicit [AccountAdmission](../../partneraccess/README.md) callback.
+Current selected-principal reads require matching owner IDs and successful host
+admission; errors and late cancellation withhold the projection. Immutable
+`GetSignupFact` recovery deliberately ignores current admission and delegates
+only to its owning capture service. Account restrictions cannot erase historical
+signup evidence. Neither port is optional and construction performs no I/O.
+
+`ConfigureSignupCapture(ctx, SignupConfig, users, access)` binds the same user/v2
+owner to password/browser OAuth capture. Supply `Enabled`, `EvidenceCookieName`
+and the owning `Capture` configuration explicitly. Cookie names must match the
+consented referral issuer, and capture types/program must match host eligibility.
+Missing/different user ownership, invalid cookie names and missing capture
+capabilities fail before enabling access. Cookie name validation precedes capture
+installation. Disabled capture requires no owners and observes cancellation.
+The helper issues no cookie, consent or attribution, retrofits no existing
+account and creates no grant. Native OAuth without a browser cookie captures
+empty evidence; the owning consumer independently verifies signed evidence.
+
+```go
+err := partnermanagerhelper.ConfigureSignupCapture(ctx,
+    partnermanagerhelper.SignupConfig{
+        Enabled: captureEnabled,
+        EvidenceCookieName: signupCookieName,
+        Capture: userv2.SignupAttributionConfig{
+            ProgramID: programID,
+            IndividualAccountTypes: individualAccountTypes,
+        },
+    }, users, access)
+```
+
+These are trusted host choices; they are not request/body fields. Signup evidence
+cookies and browser CSRF cookies have separate purposes. For CSRF, pass the host's
+configured guard and ordered member binding to [partnerhttp](../http/README.md).
+Use [partneraccess](../../partneraccess/README.md)'s current member/session and
+service-account adapters with the same explicit host admission hook.
+
+## Billing capture and explicit worker execution
+
+`NewExecution(ctx, ExecutionConfig, ExecutionDependencies)` composes an existing
+prepared [runtime](../runtime/README.md), owning billing manager, provider registry,
+user owner and explicit worker identity/current policy. Supply the payer's allowed
+account types/statuses, policy system, `RevenueCapture` and optional native worker
+configuration/cadence. Disabled capture plus no worker acquires nothing and returns
+nil. Capture without a worker still attaches billing capabilities and returns nil.
+An enabled worker returns `Execution`, with `RunOnce` and validated `Interval`.
+
+The helper creates a separate worker manager over the identical financial owners.
+It checks all three current signup/revenue/maturity worker grants before attaching
+capabilities. `RunOnce` binds the same instance-private worker authority afresh;
+human sessions cannot become worker invocations. It never replaces human manager
+authority, seeds a grant, prepares history, discovers work or starts a goroutine.
+Provider evidence dispatch uses the [billing helper](../../billingmanager/helper/README.md)
+and retains native scope/intent verification. Billing capture/reconciliation
+capabilities attach to the supplied billing manager during startup; complete this
+configuration before admitting handlers or starting any work.
+
+The host explicitly schedules sequential passes, applies cancellation/deadlines,
+logs only approved bounded report fields and drains borrowers before closing
+storage. Construction performs current identity/grant reads for an enabled
+worker; it does not contact remote providers. Lifecycle pipeline composition is
+separate in [billinglifecycle/helper](../../billinglifecycle/helper/README.md).
+
+## Verification boundary
+
+Named tables cover callback/owner refusal, identity mismatch, constructor limits,
+late cancellation and immutable capture independence. The signup test uses a real
+disconnected owner to prove installation requires no storage I/O. Provider dispatch
+has its own table suite. Native host integration checks prepared owners, scoped
+worker grants, startup/restart, revocation and retained financial recovery; these
+are separate from routing fixtures and do not establish production deployment.

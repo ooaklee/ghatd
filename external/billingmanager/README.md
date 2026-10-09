@@ -1241,3 +1241,10 @@ explicit nonnegative session total and reports zero-total completion as
 `no_payment_required`, only when the frozen intent authorizes a subscription
 trial. A positive total is required for `paid`; an unknown total fails closed.
 This completion read is not a refund-adjusted balance or a revenue receipt.
+
+
+## Optional evidence composition
+
+[Scoped checkout evidence helpers](helper/README.md) forward retained sessions
+to the explicit provider registry. Native checkout owns frozen-intent verification;
+the adapter creates no financial fact and supplies no subscription fallback.

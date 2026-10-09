@@ -53,6 +53,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [Partners integration helpers](external/partnermanager/helper/README.md)
+  compose explicit signup cookies, selected-account admission and worker execution
+  over existing owners. [Live identity adapters](external/partneraccess/README.md)
+  accept host admission, account type and status configuration. Separate
+  [billing evidence](external/billingmanager/helper/README.md) and
+  [lifecycle composition](external/billinglifecycle/helper/README.md) helpers retain
+  native scope/receipt contracts; hosts keep scheduling and resource lifetime.
+
 - Describe the new capability and any opt-in requirements.
 
 ### Changed

@@ -735,3 +735,11 @@ Run the native encrypted transaction suite with `GHATD_TEST_MONGO_URI` pointing
 to an isolated replica set. Each case creates and drops its own test database;
 never point fixture tools at a production database. Controlled provider responses
 and service identities do not certify authenticated provider or production flows.
+
+
+## Optional host composition
+
+[The helper package](helper/README.md) constructs the complete pipeline over
+explicitly prepared owners and current worker authority. Startup validates
+bounded owning discovery and grants without preparing history or starting work.
+Hosts retain scheduling, per-pass deadlines and resource lifetime.
