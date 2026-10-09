@@ -16,6 +16,10 @@ Here's an overview of the core packages:
 
 For a high-level overview of how this might fit into your project, please [**visit this section**](#high-level-overview).
 
+Resolved Bird/Postmark/local account construction is optionally available in
+[the composition helper](helper/README.md). Core routing and receipt ownership
+remain in this package; hosts retain configuration, consent and templates.
+
 ## Quick Start: Setup and Sending
 
 This section shows how to set up the `emailmanager` and send a verification email. This is the recommended way to use the system for standard operations. For more examples, [check out the reference examples above](#core-packages-overview).

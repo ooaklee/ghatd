@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [email-provider composition](external/emailmanager/helper/README.md)
+  accepts resolved accounts, route policy and a borrowed HTTP client without
+  environment reads or network construction. Local capture shares one inbox
+  and inert credentials; the owning manager retains final route validation,
+  selection and receipt semantics.
+
 - Stateless [teleprovider](external/teleprovider/README.md) registration, direct/group
   messages and reply-history reads through typed ports and an optional OpenWA
   adapter. Construction performs no network I/O; mutations make one attempt,
