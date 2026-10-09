@@ -96,6 +96,12 @@ replica set. They create uniquely named databases and drop only their own
 fixtures. Production migration, restore, provider evidence and host UI acceptance
 are separate from these repository tests.
 
+Native financial tests also overlap a claim request or processing assignment
+with a full refund of its backing payment. They verify coherent cancellation or
+retained in-flight reservation, one reversal and unchanged replay. Cumulative
+split-refund cases retain zero-debit receipt anchors and never reverse more than
+the original rounded commission.
+
 ## Complete relationship reporting snapshot
 
 `ReadRelationshipEvidence` reads every selected-partner lifetime membership,
