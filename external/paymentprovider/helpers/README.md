@@ -1,4 +1,4 @@
-# Shared Stripe settings
+# Stripe integration helpers
 
 `StripeSettings` lets a host share Stripe defaults, startup validation and
 provider construction while retaining ownership of credentials and frontend
@@ -102,3 +102,25 @@ Helper failures have stable `PPH0` error-manifest codes through
 `PaymentProviderHelperErrorMap`, included in GHATD's default error bundles.
 The helper is optional: existing low-level provider construction remains
 available. Never log the settings struct or commit loaded credentials.
+
+## Retained refund snapshot files
+
+`ReadRetainedStripeRefundSnapshotFile(path)` reads a nonempty regular file with
+no group/other permission bits and a maximum size of 2 MiB. It checks the
+`charge.refunded` event and `charge` object envelope, then returns the **exact
+original bytes** without re-encoding them. Hosts select the private path and
+retain the original snapshot/fingerprint through their owning recovery protocol.
+
+This screens input only: it authenticates neither webhook signatures nor economic
+facts. Current authority, provider/account scope, original fingerprint, quarantine
+state and retained financial evidence must still be verified by the owning
+manager/provider. Do not use the result to grant paid access or resolve a refund
+without those checks. The helper performs no network, grant or financial write.
+
+Shape, permission and size violations return `ErrStripeRetainedSnapshotInvalid`
+(`PPH0-012`, 400 in the optional manifest). Filesystem failures retain their
+original causes; close failure withholds bytes and joins all causes. Hosts may
+translate the sentinel into an owning command classification while preserving
+causes. Filesystem errors can contain private paths, so callers must redact
+operator/public output rather than printing raw errors. The helper imports no
+billing owner and does not choose financial failure or retry policy.

@@ -6,6 +6,7 @@ import "github.com/ooaklee/reply/v2"
 // stable, non-sensitive API responses. Starter's standard payment bundles add
 // this manifest automatically.
 var PaymentProviderHelperErrorMap = reply.ErrorManifest{
+	ErrStripeRetainedSnapshotInvalid:      {Title: "Bad Request", Detail: "Retained provider snapshot input is invalid", StatusCode: 400, Code: "PPH0-012"},
 	ErrStripeSettingsRequired:             {Title: "Internal Server Error", Detail: "Payment provider settings are unavailable", StatusCode: 500, Code: "PPH0-001"},
 	ErrStripeSettingsNotConfigured:        {Title: "Internal Server Error", Detail: "Payment provider settings were not configured", StatusCode: 500, Code: "PPH0-002"},
 	ErrStripeEnvironmentRequired:          {Title: "Internal Server Error", Detail: "Payment provider environment is unavailable", StatusCode: 500, Code: "PPH0-003"},

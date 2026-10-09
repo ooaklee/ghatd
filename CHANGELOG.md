@@ -53,14 +53,6 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
-- Optional [Partners integration helpers](external/partnermanager/helper/README.md)
-  compose explicit signup cookies, selected-account admission and worker execution
-  over existing owners. [Live identity adapters](external/partneraccess/README.md)
-  accept host admission, account type and status configuration. Separate
-  [billing evidence](external/billingmanager/helper/README.md) and
-  [lifecycle composition](external/billinglifecycle/helper/README.md) helpers retain
-  native scope/receipt contracts; hosts keep scheduling and resource lifetime.
-
 - Describe the new capability and any opt-in requirements.
 
 ### Changed
@@ -89,6 +81,20 @@ when the release version has been selected, and remove unused subsections.
 ## [0.5.0] - Unreleased
 
 ### Added
+
+- Optional [Partners integration helpers](external/partnermanager/helper/README.md)
+  compose explicit signup cookies, selected-account admission and worker execution
+  over existing owners. [Live identity adapters](external/partneraccess/README.md)
+  accept host admission, account type and status configuration. Separate
+  [billing evidence](external/billingmanager/helper/README.md) and
+  [lifecycle composition](external/billinglifecycle/helper/README.md) helpers retain
+  native scope/receipt contracts; hosts keep scheduling and resource lifetime.
+
+- Explicit [native lifecycle preparation](external/billinglifecycle/helper/README.md#explicit-native-preparation)
+  composes encrypted stores and a bounded owning sweep after current preparation
+  authority checks. [Retained Stripe snapshot input](external/paymentprovider/helpers/README.md#retained-refund-snapshot-files)
+  screens private bounded files without changing original bytes or replacing
+  owning financial proof. Neither helper starts workers or creates grants.
 
 - Optional [Partners HTTP transport](external/partnermanager/http/README.md) with
   independently mounted member/customer/operator routes, current scoped authority,

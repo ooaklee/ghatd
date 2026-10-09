@@ -3,6 +3,8 @@ package helpers
 import "errors"
 
 const (
+	// ErrKeyStripeRetainedSnapshotInvalid identifies invalid retained-file input, not failed financial proof.
+	ErrKeyStripeRetainedSnapshotInvalid = "PaymentProviderHelperStripeRetainedSnapshotInvalid"
 	// ErrKeyStripeSettingsRequired identifies a missing Stripe settings value.
 	ErrKeyStripeSettingsRequired = "PaymentProviderHelperStripeSettingsRequired"
 	// ErrKeyStripeSettingsNotConfigured identifies provider construction before settings validation.
@@ -28,6 +30,8 @@ const (
 )
 
 var (
+	// ErrStripeRetainedSnapshotInvalid rejects file shape, size or permission violations.
+	ErrStripeRetainedSnapshotInvalid = errors.New(ErrKeyStripeRetainedSnapshotInvalid)
 	// ErrStripeSettingsRequired is returned when Stripe settings are nil.
 	ErrStripeSettingsRequired = errors.New(ErrKeyStripeSettingsRequired)
 	// ErrStripeSettingsNotConfigured is returned when NewProvider is called before Configure.

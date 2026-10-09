@@ -51,3 +51,39 @@ and assert that invalid configuration never invokes authority. Native host
 integration separately checks preparation, startup/restart, current grants,
 service identity and no provider call for empty discovery. This is not deployment
 or authenticated live-provider evidence.
+
+## Explicit native preparation
+
+`PrepareNative(ctx, db, payloadKey, clock, authority, cfg)` is an explicit
+operator operation, separate from passive runtime construction. Pass the
+selected database, its stable 32-byte encryption key, owning clock, current
+`billinglifecycle.PreparationAuthority` and a context already bound by that
+trusted worker authority. The helper does not obtain credentials or bind
+browser/member sessions. Nil/typed-nil required ports fail closed.
+
+It copies/validates scopes and limits, bounds the entire operation by
+`cfg.Timeout`, and checks current preparation permission on **all** configured
+scopes before constructing the cipher or performing additive index/probe writes.
+It then constructs the native encrypted revenue owner and invokes one bounded
+owning sweep. Missing permissions, dependency errors or observed cancellation
+prevent those writes. Per-page and final current-authority checks remain with
+`billinglifecycle.Preparation`; ordinary recurring read/refresh grants do not
+substitute for preparation permission.
+
+The host owns explicit database selection, key loading, migration/backup and
+older-writer-drain prerequisites, live worker identity/admission, private binding,
+resource cleanup and safe output. Acknowledgements are not verification. Never
+invoke this operation as automatic startup or a retryable transaction callback;
+it creates no accounts/grants or financial facts and contacts no provider.
+
+The owning report/error is returned unchanged. `ErrPreparationBudget` includes
+authorized partial progress and a subsequent explicit call resumes native state,
+including committed lost replies. Other failures may withhold progress; that
+never establishes rollback. Do not delete history or fabricate preparation rows.
+See [the owning preparation contract](../README.md).
+
+Named rejection tables pin validation/current authority before storage. Isolated
+native fixtures check refusal before any collection/index creation and successful
+preparation, bounded progress, resume and repeated prepared invocation. Live
+policy, lost-reply and revocation integration remain owning/host-suite checks;
+these fixtures are not production admission or provider evidence.
