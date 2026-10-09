@@ -120,7 +120,7 @@ func (p PaymentRevenue) Validate() error {
 }
 
 func canonicalObservation(v RevenueObservation, facts map[string]RevenueFact, all map[string]RevenueObservation) (string, error) {
-	if !validRevenueScope(v.Scope) || !cleanStatusID(v.ID) || !cleanStatusID(v.EnvelopeID) || v.AcceptedAt.IsZero() || len(v.FactIDs) > 200 || (v.SourceFingerprint != "" && !cleanStatusID(v.SourceFingerprint)) {
+	if !validRevenueScope(v.Scope) || !cleanStatusID(v.ID) || !cleanStatusID(v.EnvelopeID) || v.AcceptedAt.IsZero() || len(v.FactIDs) > 200 || (v.SourceFingerprint != "" && !cleanStatusID(v.SourceFingerprint)) || (v.RecoveryFingerprint != "" && !validRevenueIdentity(v.RecoveryFingerprint)) {
 		return "", ErrRevenueUnassessable
 	}
 	values := make([]RevenueFact, 0, len(v.FactIDs))
@@ -138,7 +138,7 @@ func canonicalObservation(v RevenueObservation, facts map[string]RevenueFact, al
 		values = append(values, canonical)
 	}
 	if v.ResolutionOf == "" {
-		if v.ID != revenueID(v.Scope, "delivery", v.EnvelopeID, "", "", "") || v.ResolutionBy != "" || v.ResolutionReason != "" || (len(values) == 0 && v.QuarantineReason == "") || (len(values) > 0 && v.QuarantineReason != "") || len(v.QuarantineReason) > 128 {
+		if v.ID != revenueID(v.Scope, "delivery", v.EnvelopeID, "", "", "") || v.ResolutionBy != "" || v.ResolutionReason != "" || v.RecoveryFingerprint != "" || (len(values) == 0 && v.QuarantineReason == "") || (len(values) > 0 && v.QuarantineReason != "") || len(v.QuarantineReason) > 128 {
 			return "", ErrRevenueUnassessable
 		}
 		return subscriptionDigest(struct {
@@ -150,11 +150,16 @@ func canonicalObservation(v RevenueObservation, facts map[string]RevenueFact, al
 	if !ok || original.ResolutionOf != "" || original.QuarantineReason == "" || len(original.FactIDs) != 0 || original.Scope != v.Scope || original.EnvelopeID != v.EnvelopeID || original.SourceFingerprint != v.SourceFingerprint || v.AcceptedAt.Before(original.AcceptedAt) || v.QuarantineReason != "" || !cleanStatusID(v.ResolutionBy) || !cleanStatusID(v.ResolutionReason) || v.ID != revenueID(v.Scope, "resolution", original.ID, "", "", "") {
 		return "", ErrRevenueUnassessable
 	}
+	// Match ResolveQuarantinedRevenue's stored fingerprint exactly. Omitting
+	// an empty recovery identity preserves existing legacy resolution hashes.
 	return subscriptionDigest(struct {
-		Original, Fingerprint string
-		Facts                 []RevenueFact
-		Reason, Actor         string
-	}{original.ID, original.Fingerprint, values, v.ResolutionReason, v.ResolutionBy}), nil
+		Original            string
+		Fingerprint         string
+		Facts               []RevenueFact
+		Reason              string
+		Actor               string
+		RecoveryFingerprint string `json:",omitempty"`
+	}{Original: original.ID, Fingerprint: original.Fingerprint, Facts: values, Reason: v.ResolutionReason, Actor: v.ResolutionBy, RecoveryFingerprint: v.RecoveryFingerprint}), nil
 }
 
 func validateRevenueHistory(ctx context.Context, snapshot RevenueHistorySnapshot, at time.Time) (map[string]RevenueFact, map[string]RevenueObservation, error) {

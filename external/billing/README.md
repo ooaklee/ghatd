@@ -1021,6 +1021,13 @@ contiguous acceptance sequences and every fact's original reception before
 filtering. Missing, contradictory or future-accepted evidence fails; clock
 rollback cannot certify facts accepted after the current owning clock.
 
+Authenticated quarantine resolutions validate their private recovery identity
+with the same fingerprint format used at acceptance. Legacy resolutions without
+that identity keep their existing fingerprints. Reporting accepts valid recovered
+refund facts while rejecting altered recovery evidence; it never rewrites the
+original quarantine, resolution or financial journal. No storage migration is
+needed.
+
 The complete global budget is **10,000 facts plus reception/resolution receipts**,
 independent of filters. Capacity returns `ErrRevenueHistoryTooLarge`, never a
 truncated report. Persistent history eventually needs a reviewed budget or an

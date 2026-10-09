@@ -382,6 +382,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- [Confirmed payment revenue history](external/billing/README.md#confirmed-payment-revenue-history)
+  accepts authenticated quarantine resolutions with stable recovery fingerprints
+  while preserving legacy resolution hashes. Altered recovery evidence stays
+  rejected; original source receipts and financial history remain unchanged.
+
 - Optional [original checkout status recovery](external/billingmanager/README.md#original-checkout-status-recovery)
   verifies the authenticated caller's retained session and frozen terms through
   fresh provider reads. It distinguishes paid, trial/no-payment, pending, unpaid
