@@ -82,6 +82,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [Partners HTTP composition](external/partnermanager/helper/README.md#member-http-admission-and-observation)
+  borrows current member/native admission and the host's existing transport
+  binding/CSRF guard, with explicit cookie/audience and metric-name configuration.
+  Fresh admission and cancellation checks withhold uncertain principals;
+  observation retains finite routing metadata without financial payloads.
+  Invalid authentication-cookie names and empty/oversized native IDs are refused
+  at helper construction; native IDs follow the shared guard's 128-byte bound.
+
 - [Mongo topology configuration](external/repository/README.md) merges explicit
   replica-set/direct-connection choices while retaining existing URI options.
   [Civil-time resolution](external/timezonecoder/README.md) rejects DST gaps and

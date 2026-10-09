@@ -87,6 +87,53 @@ The referral helper supplies no customer/operator JSON routes, authentication
 or grants. The separate helpers below compose identity/signup/execution; the host
 still owns scheduling, shutdown and resource acquisition.
 
+## Member HTTP admission and observation
+
+`NewHTTPPrincipalResolver(HTTPPrincipalConfig)` borrows the current owning member
+authenticator, session/admission verifier and native token verifier. Supply an
+explicit authentication `CookieName`, copied `TrustedNativeClientIDs` (each
+nonempty and at most 128 bytes) and a `TransportIdentity` callback. An empty
+native allowlist disables native access. Construction performs no authentication,
+storage/provider call or grant creation; missing or typed-nil ports fail closed.
+
+Each resolve requires a live active member with verified email and matching
+owning actor IDs, then current durable account admission. Native requests require
+one bearer, no Cookie header (including empty/malformed values), matching token
+metadata actor, valid HS256 evidence and exactly one trusted audience. API tokens,
+ambiguous cookies, guest/draft-only sessions and credentials outside the printable
+ASCII/8 KiB bound are refused. Owning authentication and JWT validity/expiry remain
+with the borrowed ports. Session results are never cached. Cancellation observed
+after any port/binding callback withholds the principal and returns its cause.
+Admission's typed transport errors are preserved; other diagnostics are reduced
+to safe `PARTNERS_*` errors. The resolver never reads actor/account fields from
+request bodies or queries and creates no private worker context.
+
+The callback receives only the verified actor, credential and optional verified
+native audience. It must reproduce the same binding expected by
+`partnerhttp.Config.Security`. **Reuse the host's existing guard** to reuse its
+configured CSRF cookie; the authentication-cookie field does not create another
+CSRF cookie or key. Product accompanying-cookie names/values stay in the host
+callback. Guard admission still requires current owning authority on commands.
+
+`NewHTTPObserver(HTTPObserverConfig)` accepts required host `MeterName` and
+`MetricPrefix`, a borrowed meter provider and logger. Nil/typed-nil providers use
+the global meter provider; nil loggers use a no-op logger. It records
+`<prefix>.request.count` (`{request}`) and `<prefix>.request.duration` (`s`). Their
+only dimensions are `partners.operation`, `partners.route`, HTTP method and
+status. Existing spans additionally receive bounded stage/error-code attributes.
+Logs include those finite decisions, milliseconds and trace/span IDs; statuses
+400–499 warn and 500+ error. The trace-context carrier is Zap `SkipType` for
+intrinsic correlation and is not serialized by ordinary log cores.
+
+Only invoke the observer with the shared handler's finite `Observation` contract:
+never raw paths, query values, actors, credentials, resources or payloads. Duration
+is an integer `time.Duration`, so NaN/infinite floating input is impossible.
+Metric-construction failures propagate; these helpers own neither telemetry
+shutdown nor CORS, routes, cache exclusions, account-deletion policy or workers.
+The [admission tests](http_principal_test.go) cover fresh/refused/cancelled browser
+and native principals; [observation tests](http_observation_test.go) check actual
+SDK metrics, span attributes, log severity/correlation and serialized privacy.
+
 See [runtime composition](../runtime/README.md) and
 [authority](../../partneraccess/README.md) for the separate owner boundaries.
 
