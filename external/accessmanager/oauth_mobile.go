@@ -46,6 +46,21 @@ type MobileOAuthConfig struct {
 	Origin       string
 	RedirectURIs []string
 	Store        MobileOAuthStore
+	// ProviderCallbacks optionally checks declared provider URLs against the AMS
+	// HTTPS callback routes at Origin. Zero values preserve existing behavior;
+	// disabled native handoff ignores them. This is not provider evidence.
+	ProviderCallbacks MobileOAuthProviderCallbacks
+}
+
+// MobileOAuthProviderCallbacks contains optional configured Google/Apple HTTPS
+// return URLs. Supply the same values passed to the provider constructors. The
+// routing owner supports these two providers; adding another needs an AMS route.
+// Strings are copied with the configuration, never reread from caller state.
+type MobileOAuthProviderCallbacks struct {
+	// Google is the exact configured /ams/oauth/google/callback HTTPS URL.
+	Google string
+	// Apple is the exact configured /ams/oauth/apple/callback HTTPS URL.
+	Apple string
 }
 
 // ConfigureMobileOAuth validates and snapshots the native handoff configuration.
@@ -57,6 +72,19 @@ func (h *Handler) ConfigureMobileOAuth(config MobileOAuthConfig) error {
 	origin, err := url.Parse(config.Origin)
 	if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.User != nil || origin.Opaque != "" || origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" || config.Store == nil || origin.String() != config.Origin || origin.Hostname() == "localhost" || net.ParseIP(origin.Hostname()) != nil {
 		return oauth.ErrSecureProviderIncompleteConfig
+	}
+	for _, provider := range []struct{ name, callback string }{
+		{"google", config.ProviderCallbacks.Google}, {"apple", config.ProviderCallbacks.Apple},
+	} {
+		if provider.callback == "" {
+			continue
+		}
+		callback, err := url.Parse(provider.callback)
+		if err != nil || callback.Scheme != "https" || callback.User != nil || callback.Opaque != "" ||
+			callback.Scheme+"://"+callback.Host != config.Origin || callback.RawQuery != "" || callback.ForceQuery || callback.Fragment != "" ||
+			callback.RawPath != "" || callback.EscapedPath() != common.ApiV1UriPrefix+"/ams/oauth/"+provider.name+"/callback" {
+			return oauth.ErrSecureProviderIncompleteConfig
+		}
 	}
 	allowed := make([]string, 0, len(config.RedirectURIs))
 	seen := map[string]bool{}

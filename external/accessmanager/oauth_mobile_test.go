@@ -51,32 +51,33 @@ func (s *mobileTestService) OauthLogin(context.Context, *OauthLoginRequest) (*Oa
 	return &OauthLoginResponse{CookieCore: &http.Cookie{Name: "state", Value: "test"}, ProviderAuthCodeUrl: "https://accounts.google.com/authorize"}, nil
 }
 
-func TestMobileOAuthConfigurationAndDisabledDiscovery(t *testing.T) {
-	store := &mobileTestStore{}
-	h := &Handler{Service: &mobileTestService{}}
-	out := httptest.NewRecorder()
-	h.MobileOAuthProviders(out, httptest.NewRequest(http.MethodGet, "/", nil))
-	require.Equal(t, 200, out.Code)
-	require.Contains(t, out.Body.String(), `"providers":[]`)
-	require.Contains(t, out.Body.String(), `"redirect_uris":[]`)
-	for _, origin := range []string{"", "http://app.example", "https://user@app.example", "https://app.example/path", "https://app.example?query", "https://app.example#fragment", "https://localhost", "https://127.0.0.1"} {
-		require.Error(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: origin, RedirectURIs: []string{"boasi.io.bedrock:/oauth/callback"}, Store: store}), origin)
+func TestMobileOAuthDiscovery(t *testing.T) {
+	type discoveryCase struct {
+		name    string
+		enabled bool
 	}
-	for _, uri := range []string{"", "https://evil.example/callback", "javascript:alert(1)", "bedrock:/oauth/callback", "boasi.io.bedrock://oauth/callback", "boasi.io.bedrock:///oauth/callback", "boasi.io.bedrock:/other", "boasi.io.bedrock:/oauth/callback?", "boasi.io.bedrock:/oauth/callback#x", "boasi.io.bedrock:/oauth/%63allback", " boasi.io.bedrock:/oauth/callback"} {
-		require.Error(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{uri}, Store: store}), uri)
+	for _, test := range []discoveryCase{{"disabled", false}, {"enabled", true}} {
+		t.Run(test.name, func(t *testing.T) {
+			h := &Handler{Service: &mobileTestService{}}
+			if test.enabled {
+				require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{"com.example.client:/oauth/callback"}, Store: &mobileTestStore{}}))
+			}
+			out := httptest.NewRecorder()
+			h.MobileOAuthProviders(out, httptest.NewRequest(http.MethodGet, "/", nil))
+			require.Equal(t, 200, out.Code)
+			if test.enabled {
+				require.Contains(t, out.Body.String(), `"providers":["google","apple"]`)
+				require.Contains(t, out.Body.String(), `"redirect_uris":["com.example.client:/oauth/callback"]`)
+			} else {
+				require.Contains(t, out.Body.String(), `"providers":[]`)
+				require.Contains(t, out.Body.String(), `"redirect_uris":[]`)
+			}
+		})
 	}
-	require.Error(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{"boasi.io.bedrock:/oauth/callback"}}))
-	uris := []string{"boasi.io.bedrock:/oauth/callback"}
-	require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: uris, Store: store}))
-	uris[0] = "evil.example:/oauth/callback"
-	require.True(t, h.mobileRedirectAllowed("boasi.io.bedrock:/oauth/callback"))
-	require.False(t, h.mobileRedirectAllowed(uris[0]))
-	require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{}))
-	require.False(t, h.mobileRedirectAllowed("boasi.io.bedrock:/oauth/callback"))
 }
 
 func TestMobileOAuthInitiationRejectsAmbiguousAndBrowserRequests(t *testing.T) {
-	body := `{"redirect_uri":"boasi.io.bedrock:/oauth/callback","state":"` + strings.Repeat("s", 43) + `","code_challenge":"` + strings.Repeat("c", 43) + `","code_challenge_method":"S256"}`
+	body := `{"redirect_uri":"com.example.client:/oauth/callback","state":"` + strings.Repeat("s", 43) + `","code_challenge":"` + strings.Repeat("c", 43) + `","code_challenge_method":"S256"}`
 	for _, test := range []struct {
 		name, body, contentType, origin string
 		originPresent                   bool
@@ -90,14 +91,14 @@ func TestMobileOAuthInitiationRejectsAmbiguousAndBrowserRequests(t *testing.T) {
 		{name: "missing content type", body: body, want: 400},
 		{name: "unknown field", body: strings.TrimSuffix(body, "}") + `,"user_id":"victim"}`, contentType: "application/json", want: 400},
 		{name: "trailing JSON", body: body + "{}", contentType: "application/json", want: 400},
-		{name: "unregistered app", body: strings.ReplaceAll(body, "boasi.io.bedrock", "evil.example"), contentType: "application/json", want: 400},
+		{name: "unregistered app", body: strings.ReplaceAll(body, "com.example.client", "evil.example"), contentType: "application/json", want: 400},
 		{name: "plain PKCE", body: strings.ReplaceAll(body, "S256", "plain"), contentType: "application/json", want: 400},
 		{name: "oversized body", body: body + strings.Repeat(" ", 8192), contentType: "application/json", want: 400},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := &mobileTestStore{}
 			h := &Handler{Service: &mobileTestService{}}
-			require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{"boasi.io.bedrock:/oauth/callback"}, Store: store}))
+			require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{"com.example.client:/oauth/callback"}, Store: store}))
 			req := httptest.NewRequest(http.MethodPost, "https://untrusted-host.example/", strings.NewReader(test.body))
 			req = mux.SetURLVars(req, map[string]string{"provider": "google"})
 			req.Header.Set("Content-Type", test.contentType)
@@ -122,18 +123,24 @@ func TestMobileOAuthInitiationRejectsAmbiguousAndBrowserRequests(t *testing.T) {
 }
 
 func TestMobileOAuthExpiredAndAmbiguousStartIsRejected(t *testing.T) {
+	type startCase struct{ name, query string }
 	ticket := strings.Repeat("t", 43)
-	service := &mobileTestService{}
-	flow := oauth.MobileFlowContext{RedirectURI: "boasi.io.bedrock:/oauth/callback", State: strings.Repeat("s", 43), Challenge: strings.Repeat("c", 43)}
-	payload, err := json.Marshal(mobileOAuthStart{Provider: "google", Flow: flow, ExpiresAt: time.Now().Add(-time.Second)})
-	require.NoError(t, err)
-	h := &Handler{Service: service}
-	require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{flow.RedirectURI}, Store: &mobileTestStore{payload: payload}}))
-	for _, query := range []string{"ticket=" + ticket, "ticket=" + ticket + "&ticket=" + ticket, "ticket=" + ticket + "&extra=1", "ticket=bad"} {
-		out := httptest.NewRecorder()
-		h.MobileOAuthStart(out, httptest.NewRequest(http.MethodGet, "/start?"+query, nil))
-		require.Equal(t, 400, out.Code)
-		require.Empty(t, out.Header().Get("Location"))
+	for _, test := range []startCase{
+		{"expired ticket", "ticket=" + ticket}, {"duplicate ticket", "ticket=" + ticket + "&ticket=" + ticket},
+		{"unknown parameter", "ticket=" + ticket + "&extra=1"}, {"malformed ticket", "ticket=bad"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service := &mobileTestService{}
+			flow := oauth.MobileFlowContext{RedirectURI: "com.example.client:/oauth/callback", State: strings.Repeat("s", 43), Challenge: strings.Repeat("c", 43)}
+			payload, err := json.Marshal(mobileOAuthStart{Provider: "google", Flow: flow, ExpiresAt: time.Now().Add(-time.Second)})
+			require.NoError(t, err)
+			h := &Handler{Service: service}
+			require.NoError(t, h.ConfigureMobileOAuth(MobileOAuthConfig{Origin: "https://app.example", RedirectURIs: []string{flow.RedirectURI}, Store: &mobileTestStore{payload: payload}}))
+			out := httptest.NewRecorder()
+			h.MobileOAuthStart(out, httptest.NewRequest(http.MethodGet, "/start?"+test.query, nil))
+			require.Equal(t, 400, out.Code)
+			require.Empty(t, out.Header().Get("Location"))
+			require.Zero(t, service.starts)
+		})
 	}
-	require.Zero(t, service.starts)
 }

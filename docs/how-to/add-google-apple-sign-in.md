@@ -63,8 +63,8 @@ provider subjects.
 `oauth.NewAppleProviderRequest.PrivateKeyPEM` accepts the decoded PKCS#8 P-256
 PEM. Your host can load it from a narrowly mounted file or decode a standard-base64
 secret in memory. GHATD does not parse environment variables or create temporary
-key files. The [key-loading example](../../examples/oauth/apple_key.go) can be
-copied into a host adapter alongside the [environment placeholders](../../examples/oauth/.env.example).
+key files. The [optional key-loading helper](../../external/oauth/helper/README.md) accepts
+explicit encoded/file inputs alongside the [environment placeholders](../../examples/oauth/.env.example).
 
 For the optional `APPLE_OAUTH_PRIVATE_KEY_B64` convention, a non-empty value takes
 precedence over `APPLE_OAUTH_PRIVATE_KEY_PATH`. Use strict standard-base64 decoding
@@ -117,7 +117,8 @@ The [composition example](../../examples/oauth/setup.go) performs these steps:
    `oauth.NewRedisTransactionStore(client, "your-service:development")`.
 2. Construct `oauth.NewGoogleSecureProvider` and/or `oauth.NewAppleProvider`.
    Pass complete settings and the shared transaction store. Supply the Apple key
-   bytes from your secret-store adapter; GHATD does not read secret files or `.env`.
+   bytes from your secret-store adapter or the optional key-loading helper;
+   provider constructors do not read secret files or `.env`.
 3. Pass providers to `starter.NewServicesRequest.OAuthServices`, or directly to
    `accessmanager.NewServiceRequest.OauthServices`. Keep the normal `user/v2`,
    auth, email, ephemeral-store and audit dependencies.
@@ -126,7 +127,8 @@ The [composition example](../../examples/oauth/setup.go) performs these steps:
    Configure the usual access/refresh cookie names, domain and environment.
 5. For native support, call `handlers.AccessManager.ConfigureMobileOAuth` (or
    the directly constructed handler's method) **once, before serving**, with
-   `MobileOAuthConfig{Origin, RedirectURIs, Store}` and
+   `MobileOAuthConfig` with `Origin`, `RedirectURIs`, `Store` and optional
+   `ProviderCallbacks` containing the exact configured Google/Apple URLs, plus
    `accessmanager.NewRedisMobileOAuthStore(client, namespace)`. Check its error.
 6. Attach the normal Access Manager routes; starter's default route attachment
    includes the optional discovery, linking and mobile handlers.

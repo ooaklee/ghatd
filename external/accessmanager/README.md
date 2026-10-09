@@ -658,9 +658,21 @@ restricted user status is denied before session issuance.
 
 ## Native app handoff
 
+When supplying independently configured Google/Apple return URLs, set
+`MobileOAuthConfig.ProviderCallbacks` to `MobileOAuthProviderCallbacks{Google,
+Apple}` using those same constructor inputs. Non-empty URLs must match the exact
+HTTPS origin and `/api/v1/ams/oauth/<provider>/callback` path: no trailing slash,
+query, user information, opaque or encoded path, or fragment. These optional
+fields validate declared configuration only, not provider registrations or
+identity evidence. Empty fields retain existing consumers' behavior; a disabled
+native allowlist ignores all configuration. Configuration performs no store or
+provider I/O, copies the native allowlist and callback strings, and returns
+`oauth.ErrSecureProviderIncompleteConfig` on failure while clearing prior native
+configuration. Configure once before requests, not concurrently with serving.
+
 Native clients reuse the provider callbacks, identity resolution and normal
 session issuance above. Configure `Handler.ConfigureMobileOAuth` once at
-startup with `MobileOAuthConfig{Origin, RedirectURIs, Store}` and
+startup with `MobileOAuthConfig` (`Origin`, `RedirectURIs`, `Store`) and
 `NewRedisMobileOAuthStore(redisClient, namespace)`. An empty redirect allowlist
 disables native discovery and handoff. `Origin` must be the public HTTPS origin
 hosting the provider callbacks; register exact private app URIs such as

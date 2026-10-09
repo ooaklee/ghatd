@@ -15,7 +15,7 @@ host's secret store, outside source control. Apple uses the web Services ID as
 its client ID, with the associated team ID and Sign in with Apple key ID.
 `PrivateKeyPEM` accepts decoded PEM bytes. A host may decode an optional base64
 secret in memory rather than mounting a file; the
-[compile-checked adapter](../../examples/oauth/apple_key.go) demonstrates strict
+[optional key-loading helper](helper/README.md) implements strict
 precedence and redacted errors. The framework does not load environment
 variables, create key files or configure Kubernetes volumes.
 

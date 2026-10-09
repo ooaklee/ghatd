@@ -82,6 +82,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [OAuth signing-key helper](external/oauth/helper/README.md) resolves
+  explicit base64/file inputs with strict precedence and redacted errors.
+  **Breaking import migration:** `examples/oauth.LoadAppleSigningKey` moves to
+  `external/oauth/helper.LoadAppleSigningKey` (package `oauthhelper`); update
+  the import. Signature and byte/error behavior are unchanged; no forwarder remains.
+- Optional `accessmanager.MobileOAuthProviderCallbacks` validates declared
+  Google/Apple return URLs at the existing [native configuration boundary](external/accessmanager/README.md#native-app-handoff).
+  URLs use exact same-origin HTTPS AMS callbacks. Empty fields preserve existing
+  callers; disabled native handoff ignores them. This checks configuration only,
+  without provider or store calls.
+
 - Optional [Partners HTTP composition](external/partnermanager/helper/README.md#member-http-admission-and-observation)
   borrows current member/native admission and the host's existing transport
   binding/CSRF guard, with explicit cookie/audience and metric-name configuration.
