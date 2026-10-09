@@ -340,7 +340,7 @@ when the release version has been selected, and remove unused subsections.
   reaches later pending facts and quarantined sources without acknowledging or
   resolving earlier failures; host attempt scheduling remains explicit.
 
-- Add opt-in authenticated Stripe paid-invoice, cumulative refund and dispute-reference evidence, with explicit merchant/mode/currency configuration and complete fiscal allocation checks. Ambiguous shapes remain quarantined; provider outages remain retryable. No provider charge, refund or payout is submitted.
+- Add opt-in [authenticated Stripe paid-invoice, cumulative refund and dispute-reference evidence](external/paymentprovider/README.md#authenticated-paid-revenue-evidence), with explicit merchant/mode/currency configuration and complete fiscal allocation checks. Refund objects without a mode field remain bound to the authenticated original charge/payment; contradictory supplied modes are rejected. Ambiguous shapes remain quarantined; provider outages remain retryable. No provider charge, refund or payout is submitted.
 
 - Add optional billing-manager financial reception through owning historical association and verified-feed ports, plus scoped authenticated source reconciliation retaining immutable quarantine history and committing recovered facts/resolution atomically. Host composition, workers and deployment remain separate adoption work.
 

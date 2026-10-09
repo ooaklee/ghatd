@@ -46,6 +46,12 @@ principal and immutable plan/cost mapping.
 
 A `charge.refunded` delivery supplies an immutable signed cumulative snapshot.
 Full refunds reverse the original verified net, not its tax-inclusive gross.
+Stripe's [Refund objects](https://docs.stripe.com/api/refunds/object) omit
+`livemode`. Refund evidence instead requires an authenticated charge-scoped
+list, the parent charge's verified mode, and exact original charge/payment and
+currency references. A supplied contradictory or malformed refund mode is
+rejected. Invoices, charges, credit notes and credit-note lines still require
+their own matching mode fields.
 Partial refunds require complete successful refund references and matching
 credit-note line allocations whose net totals reconcile. Changed cumulative
 snapshots, refunds without exact line evidence, partial disputes without

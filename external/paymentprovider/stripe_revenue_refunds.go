@@ -37,7 +37,14 @@ func (s *StripeProvider) populateStripeRevenueRefunds(ctx context.Context, req R
 			continue
 		}
 		amount, known := rawStripeInt(refund["amount"])
-		if !known || amount <= 0 || rawStripeID(refund["charge"]) != chargeID || rawStripeID(refund["payment_intent"]) != invoice.PaymentID || !rawStripeMode(refund, req.Scope) || strings.ToUpper(rawStripeString(refund["currency"])) != invoice.Currency {
+		if !known || amount <= 0 || rawStripeID(refund["charge"]) != chargeID || rawStripeID(refund["payment_intent"]) != invoice.PaymentID || strings.ToUpper(rawStripeString(refund["currency"])) != invoice.Currency {
+			return ErrRevenueUnassessable
+		}
+		// Stripe Refund objects omit livemode. Their authenticated, charge-scoped
+		// list and exact original charge/payment links bind them to the parent
+		// mode verified above. Reject any contradictory or malformed extra field;
+		// absence is not permission to omit mode on invoices, charges or notes.
+		if _, supplied := refund["livemode"]; supplied && !rawStripeMode(refund, req.Scope) {
 			return ErrRevenueUnassessable
 		}
 		gross, err = revenueMath(gross, amount)
