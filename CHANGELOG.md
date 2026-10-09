@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Stateless [teleprovider](external/teleprovider/README.md) registration, direct/group
+  messages and reply-history reads through typed ports and an optional OpenWA
+  adapter. Construction performs no network I/O; mutations make one attempt,
+  uncertain outcomes require reconciliation and hosts retain consent, durable
+  delivery and reply checkpoints. Provider acceptance never implies delivery.
+
 - Reusable [internationalisation catalogues](external/internationalisationmanager/README.md)
   compose audited currency, telephone, timezone and sanitised flag owners over
   typed repository ports. Optional [native setup](external/internationalisationmanager/helper/README.md)
