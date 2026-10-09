@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Mongo topology configuration](external/repository/README.md) merges explicit
+  replica-set/direct-connection choices while retaining existing URI options.
+  [Civil-time resolution](external/timezonecoder/README.md) rejects DST gaps and
+  selects the earliest fold occurrence without catalogue or provider I/O. Hosts
+  retain environment selection, availability and scheduling policy.
+
 - Optional [email-provider composition](external/emailmanager/helper/README.md)
   accepts resolved accounts, route policy and a borrowed HTTP client without
   environment reads or network construction. Local capture shares one inbox

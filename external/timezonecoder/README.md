@@ -21,9 +21,14 @@ service. Description does not require current selectability, so historical
 records can retain their timezone context.
 
 An offset is date-dependent, including daylight-saving rules. Persist the named
-zone, not today's `GMT` label. This package describes instants; local due-date
-validation and ambiguous/nonexistent clock handling belong to
-the host's domain and delivery policy.
+zone, not today's `GMT` label. `ResolveLocalTime(date, timezone, clock)` accepts
+strict `YYYY-MM-DD` and `HH:MM` input, rejects nonexistent local times and chooses
+the earliest UTC occurrence of a repeated time. It rejects `Local` to avoid
+process-dependent persisted instants, and returns `catalogue.ErrInvalidPayload`
+for invalid input or a gap. It uses the timezone database without repository or
+provider calls; it does not check catalogue availability. Hosts retain due-date
+policy, selectability checks and domain error mapping. Persist both the chosen
+instant and original civil fields when later replay must remain stable.
 
 `NewMongoRepository` borrows the host database for `i18n_timezones`.
 `Migrate(ctx, db)` ensures indexes and seeds missing definitions;
@@ -33,5 +38,6 @@ administrator state, and host migrations own timestamped registration.
 Run `go test ./external/timezonecoder` from the repository root. The
 [tests](service_test.go) cover date-aware London/New York offsets, fractional
 offsets, accepted aliases, rejected fixed/unknown zones and identifier-based
-display names. Shared lifecycle and Mongo contracts are covered by the child
-catalogue and cataloguestore tests.
+display names. The [civil-time tests](civil_time_test.go) cover gaps/folds,
+fractional offsets, date boundaries and strict input. Shared lifecycle and Mongo
+contracts are covered by the child catalogue and cataloguestore tests.
