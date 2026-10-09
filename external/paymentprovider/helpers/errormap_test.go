@@ -6,9 +6,12 @@ import (
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 )
 
-// TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree verifies every helper error has a unique manifest entry.
+// This single manifest-wide uniqueness audit accumulates codes across named
+// cases; isolating the set per case would miss collisions between helper errors.
 func TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree(t *testing.T) {
 	errors := []error{
+		ErrStripePaidServicePeriodConfigInvalid,
+		ErrStripePaidServicePeriodInvalid,
 		ErrStripeSettingsRequired,
 		ErrStripeSettingsNotConfigured,
 		ErrStripeEnvironmentRequired,
@@ -34,7 +37,7 @@ func TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree(t *testing.T) {
 				t.Fatalf("PaymentProviderHelperErrorMap is missing %v", err)
 			}
 			wantStatus := 500
-			if err == ErrStripeRetainedSnapshotInvalid {
+			if err == ErrStripeRetainedSnapshotInvalid || err == ErrStripePaidServicePeriodInvalid {
 				wantStatus = 400
 			}
 			if item.StatusCode != wantStatus {

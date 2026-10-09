@@ -124,3 +124,31 @@ translate the sentinel into an owning command classification while preserving
 causes. Filesystem errors can contain private paths, so callers must redact
 operator/public output rather than printing raw errors. The helper imports no
 billing owner and does not choose financial failure or retry policy.
+
+## Paid subscription service periods
+
+`ParseStripePaidServicePeriod(raw, StripePaidServicePeriodConfig)` parses a
+complete single-line paid renewal invoice against explicit trusted expectations:
+native event, subscription/customer and Price IDs, currency, quantity and mode.
+It supports both `invoice.paid` and `invoice.payment_succeeded`, legacy and
+modern parent/pricing fields, and string/expanded identifiers. Non-empty legacy
+fields take precedence. Currency matching is case-insensitive; the returned
+`Currency` keeps the native payload spelling.
+
+Only `subscription_create` and `subscription_cycle` invoices qualify, with paid
+status, no explicit `paid: false`, no truncated/multiple lines and no line or
+parent proration. The line must match quantity/price and any declared parent
+subscription. Start is positive and end is later; results use UTC. The helper
+does not choose a cadence, quota, plan, grant identity or renewal policy.
+
+This is input parsing, **not** webhook signature verification or economic
+confirmation. Call only on persisted evidence from the owning verified webhook
+path, bind its IDs to the current owning subscription and catalogue, and apply
+current authority and entitlement policy separately. Browser checkout returns
+are not invoice evidence. Parsing performs no provider, grant or financial write.
+
+Incomplete expectations return `ErrStripePaidServicePeriodConfigInvalid`
+(`PPH0-013`, 500 in the optional manifest); malformed or non-qualifying payloads
+return `ErrStripePaidServicePeriodInvalid` (`PPH0-014`, 400). Both return a zero
+period and fixed diagnostics without payloads/IDs. Host projection may ignore
+non-qualifying invoices while keeping ledger/service failures distinct.

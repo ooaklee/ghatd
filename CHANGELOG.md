@@ -82,6 +82,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Stripe paid-service-period parsing](external/paymentprovider/helpers/README.md#paid-subscription-service-periods)
+  accepts complete non-prorated renewal invoices against explicit native
+  identity/mode/price expectations, supporting legacy and modern field layouts.
+  It performs no signature verification, provider I/O or financial write; hosts
+  retain cadence, quotas, authority and grant policy. Configuration/payload
+  refusals have distinct redacted `PPH0-013`/`PPH0-014` manifest codes.
+
 - Optional [response middleware helpers](external/middleware/helper/README.md)
   compose content type, explicit process-local LRU caching, gzip and HTML/SVG/JSON
   minification. Hosts supply cache settings/observer and retain private-route
