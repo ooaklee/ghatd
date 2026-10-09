@@ -82,6 +82,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add opt-in [Partners authority](external/partneraccess/README.md),
+  [billing lifecycle recovery](external/billinglifecycle/README.md),
+  [referral route helpers](external/partnermanager/helper/README.md) and
+  [native runtime composition](external/partnermanager/runtime/README.md).
+  Hosts supply their own identity/session admission, explicit configuration,
+  branded consent renderer and worker lifetime. Construction creates no grants
+  or workers; native index preparation and transaction readiness are explicit.
+
+
 - Explicit [capability administration](external/accesspolicy/README.md#explicit-capability-administration)
   reviews disabled or expired user policies and replaces named scopes,
   permissions, activation and expiry under current management authority and
@@ -381,6 +390,10 @@ when the release version has been selected, and remove unused subsections.
   attribution backfill or automatic commission entitlement is supplied.
 
 ### Fixed
+
+- Complete safe HTTP error mappings for bounded direct-membership reads and
+  immutable signup evidence, including unavailable, capacity and conflict outcomes.
+
 
 - [Confirmed payment revenue history](external/billing/README.md#confirmed-payment-revenue-history)
   accepts authenticated quarantine resolutions with stable recovery fingerprints
