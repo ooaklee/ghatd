@@ -82,6 +82,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Reusable [internationalisation catalogues](external/internationalisationmanager/README.md)
+  compose audited currency, telephone, timezone and sanitised flag owners over
+  typed repository ports. Optional [native setup](external/internationalisationmanager/helper/README.md)
+  creates indexes and inserts missing definitions without overwriting operator
+  state; hosts retain live security, migration registration and domain policy.
+  Collection names, seed definitions and the `/api/v1/i18n` wire contract remain
+  explicit and importing packages starts no migration, listener or provider call.
+
 - Optional [Partners integration helpers](external/partnermanager/helper/README.md)
   compose explicit signup cookies, selected-account admission and worker execution
   over existing owners. [Live identity adapters](external/partneraccess/README.md)

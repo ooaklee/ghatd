@@ -1,0 +1,4889 @@
+[
+  {
+    "code": "UTC",
+    "name": "Coordinated Universal Time",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Abidjan",
+    "name": "Abidjan",
+    "region_codes": [
+      "CI",
+      "BF",
+      "GH",
+      "GM",
+      "GN",
+      "IS",
+      "ML",
+      "MR",
+      "SH",
+      "SL",
+      "SN",
+      "TG"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Accra",
+    "name": "Accra",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Addis_Ababa",
+    "name": "Addis Ababa",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Algiers",
+    "name": "Algiers",
+    "region_codes": [
+      "DZ"
+    ],
+    "flag_id": "DZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Asmara",
+    "name": "Asmara",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Asmera",
+    "name": "Asmera",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Bamako",
+    "name": "Bamako",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Bangui",
+    "name": "Bangui",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Banjul",
+    "name": "Banjul",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Bissau",
+    "name": "Bissau",
+    "region_codes": [
+      "GW"
+    ],
+    "flag_id": "GW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Blantyre",
+    "name": "Blantyre",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Brazzaville",
+    "name": "Brazzaville",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Bujumbura",
+    "name": "Bujumbura",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Cairo",
+    "name": "Cairo",
+    "region_codes": [
+      "EG"
+    ],
+    "flag_id": "EG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Casablanca",
+    "name": "Casablanca",
+    "region_codes": [
+      "MA"
+    ],
+    "flag_id": "MA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Ceuta",
+    "name": "Ceuta",
+    "region_codes": [
+      "ES"
+    ],
+    "flag_id": "ES",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Conakry",
+    "name": "Conakry",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Dakar",
+    "name": "Dakar",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Dar_es_Salaam",
+    "name": "Dar es Salaam",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Djibouti",
+    "name": "Djibouti",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Douala",
+    "name": "Douala",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/El_Aaiun",
+    "name": "El Aaiun",
+    "region_codes": [
+      "EH"
+    ],
+    "flag_id": "EH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Freetown",
+    "name": "Freetown",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Gaborone",
+    "name": "Gaborone",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Harare",
+    "name": "Harare",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Johannesburg",
+    "name": "Johannesburg",
+    "region_codes": [
+      "ZA",
+      "LS",
+      "SZ"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Juba",
+    "name": "Juba",
+    "region_codes": [
+      "SS"
+    ],
+    "flag_id": "SS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Kampala",
+    "name": "Kampala",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Khartoum",
+    "name": "Khartoum",
+    "region_codes": [
+      "SD"
+    ],
+    "flag_id": "SD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Kigali",
+    "name": "Kigali",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Kinshasa",
+    "name": "Kinshasa",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Lagos",
+    "name": "Lagos",
+    "region_codes": [
+      "NG",
+      "AO",
+      "BJ",
+      "CD",
+      "CF",
+      "CG",
+      "CM",
+      "GA",
+      "GQ",
+      "NE"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Libreville",
+    "name": "Libreville",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Lome",
+    "name": "Lome",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Luanda",
+    "name": "Luanda",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Lubumbashi",
+    "name": "Lubumbashi",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Lusaka",
+    "name": "Lusaka",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Malabo",
+    "name": "Malabo",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Maputo",
+    "name": "Maputo",
+    "region_codes": [
+      "MZ",
+      "BI",
+      "BW",
+      "CD",
+      "MW",
+      "RW",
+      "ZM",
+      "ZW"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Maseru",
+    "name": "Maseru",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Mbabane",
+    "name": "Mbabane",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Mogadishu",
+    "name": "Mogadishu",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Monrovia",
+    "name": "Monrovia",
+    "region_codes": [
+      "LR"
+    ],
+    "flag_id": "LR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Nairobi",
+    "name": "Nairobi",
+    "region_codes": [
+      "KE",
+      "DJ",
+      "ER",
+      "ET",
+      "KM",
+      "MG",
+      "SO",
+      "TZ",
+      "UG",
+      "YT"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Ndjamena",
+    "name": "Ndjamena",
+    "region_codes": [
+      "TD"
+    ],
+    "flag_id": "TD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Niamey",
+    "name": "Niamey",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Nouakchott",
+    "name": "Nouakchott",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Ouagadougou",
+    "name": "Ouagadougou",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Porto-Novo",
+    "name": "Porto-Novo",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Sao_Tome",
+    "name": "Sao Tome",
+    "region_codes": [
+      "ST"
+    ],
+    "flag_id": "ST",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Timbuktu",
+    "name": "Timbuktu",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Tripoli",
+    "name": "Tripoli",
+    "region_codes": [
+      "LY"
+    ],
+    "flag_id": "LY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Tunis",
+    "name": "Tunis",
+    "region_codes": [
+      "TN"
+    ],
+    "flag_id": "TN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Africa/Windhoek",
+    "name": "Windhoek",
+    "region_codes": [
+      "NA"
+    ],
+    "flag_id": "NA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Adak",
+    "name": "Adak",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Anchorage",
+    "name": "Anchorage",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Anguilla",
+    "name": "Anguilla",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Antigua",
+    "name": "Antigua",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Araguaina",
+    "name": "Araguaina",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Buenos_Aires",
+    "name": "Buenos Aires",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Catamarca",
+    "name": "Catamarca",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/ComodRivadavia",
+    "name": "ComodRivadavia",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Cordoba",
+    "name": "Cordoba",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Jujuy",
+    "name": "Jujuy",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/La_Rioja",
+    "name": "La Rioja",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Mendoza",
+    "name": "Mendoza",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Rio_Gallegos",
+    "name": "Rio Gallegos",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Salta",
+    "name": "Salta",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/San_Juan",
+    "name": "San Juan",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/San_Luis",
+    "name": "San Luis",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Tucuman",
+    "name": "Tucuman",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Argentina/Ushuaia",
+    "name": "Ushuaia",
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Aruba",
+    "name": "Aruba",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Asuncion",
+    "name": "Asuncion",
+    "region_codes": [
+      "PY"
+    ],
+    "flag_id": "PY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Atikokan",
+    "name": "Atikokan",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Atka",
+    "name": "Atka",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Bahia",
+    "name": "Bahia",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Bahia_Banderas",
+    "name": "Bahia Banderas",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Barbados",
+    "name": "Barbados",
+    "region_codes": [
+      "BB"
+    ],
+    "flag_id": "BB",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Belem",
+    "name": "Belem",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Belize",
+    "name": "Belize",
+    "region_codes": [
+      "BZ"
+    ],
+    "flag_id": "BZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Blanc-Sablon",
+    "name": "Blanc-Sablon",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Boa_Vista",
+    "name": "Boa Vista",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Bogota",
+    "name": "Bogota",
+    "region_codes": [
+      "CO"
+    ],
+    "flag_id": "CO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Boise",
+    "name": "Boise",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Buenos_Aires",
+    "name": "Buenos Aires",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Cambridge_Bay",
+    "name": "Cambridge Bay",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Campo_Grande",
+    "name": "Campo Grande",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Cancun",
+    "name": "Cancun",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Caracas",
+    "name": "Caracas",
+    "region_codes": [
+      "VE"
+    ],
+    "flag_id": "VE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Catamarca",
+    "name": "Catamarca",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Cayenne",
+    "name": "Cayenne",
+    "region_codes": [
+      "GF"
+    ],
+    "flag_id": "GF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Cayman",
+    "name": "Cayman",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Chicago",
+    "name": "Chicago",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Chihuahua",
+    "name": "Chihuahua",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Ciudad_Juarez",
+    "name": "Ciudad Juarez",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Coral_Harbour",
+    "name": "Coral Harbour",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Cordoba",
+    "name": "Cordoba",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Costa_Rica",
+    "name": "Costa Rica",
+    "region_codes": [
+      "CR"
+    ],
+    "flag_id": "CR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Coyhaique",
+    "name": "Coyhaique",
+    "region_codes": [
+      "CL"
+    ],
+    "flag_id": "CL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Creston",
+    "name": "Creston",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Cuiaba",
+    "name": "Cuiaba",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Curacao",
+    "name": "Curacao",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Danmarkshavn",
+    "name": "Danmarkshavn",
+    "region_codes": [
+      "GL"
+    ],
+    "flag_id": "GL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Dawson",
+    "name": "Dawson",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Dawson_Creek",
+    "name": "Dawson Creek",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Denver",
+    "name": "Denver",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Detroit",
+    "name": "Detroit",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Dominica",
+    "name": "Dominica",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Edmonton",
+    "name": "Edmonton",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Eirunepe",
+    "name": "Eirunepe",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/El_Salvador",
+    "name": "El Salvador",
+    "region_codes": [
+      "SV"
+    ],
+    "flag_id": "SV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Ensenada",
+    "name": "Ensenada",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Fort_Nelson",
+    "name": "Fort Nelson",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Fort_Wayne",
+    "name": "Fort Wayne",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Fortaleza",
+    "name": "Fortaleza",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Glace_Bay",
+    "name": "Glace Bay",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Godthab",
+    "name": "Godthab",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Goose_Bay",
+    "name": "Goose Bay",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Grand_Turk",
+    "name": "Grand Turk",
+    "region_codes": [
+      "TC"
+    ],
+    "flag_id": "TC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Grenada",
+    "name": "Grenada",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Guadeloupe",
+    "name": "Guadeloupe",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Guatemala",
+    "name": "Guatemala",
+    "region_codes": [
+      "GT"
+    ],
+    "flag_id": "GT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Guayaquil",
+    "name": "Guayaquil",
+    "region_codes": [
+      "EC"
+    ],
+    "flag_id": "EC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Guyana",
+    "name": "Guyana",
+    "region_codes": [
+      "GY"
+    ],
+    "flag_id": "GY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Halifax",
+    "name": "Halifax",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Havana",
+    "name": "Havana",
+    "region_codes": [
+      "CU"
+    ],
+    "flag_id": "CU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Hermosillo",
+    "name": "Hermosillo",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Indianapolis",
+    "name": "Indianapolis",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Knox",
+    "name": "Knox",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Marengo",
+    "name": "Marengo",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Petersburg",
+    "name": "Petersburg",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Tell_City",
+    "name": "Tell City",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Vevay",
+    "name": "Vevay",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Vincennes",
+    "name": "Vincennes",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indiana/Winamac",
+    "name": "Winamac",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Indianapolis",
+    "name": "Indianapolis",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Inuvik",
+    "name": "Inuvik",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Iqaluit",
+    "name": "Iqaluit",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Jamaica",
+    "name": "Jamaica",
+    "region_codes": [
+      "JM"
+    ],
+    "flag_id": "JM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Jujuy",
+    "name": "Jujuy",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Juneau",
+    "name": "Juneau",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Kentucky/Louisville",
+    "name": "Louisville",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Kentucky/Monticello",
+    "name": "Monticello",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Knox_IN",
+    "name": "Knox IN",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Kralendijk",
+    "name": "Kralendijk",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/La_Paz",
+    "name": "La Paz",
+    "region_codes": [
+      "BO"
+    ],
+    "flag_id": "BO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Lima",
+    "name": "Lima",
+    "region_codes": [
+      "PE"
+    ],
+    "flag_id": "PE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Los_Angeles",
+    "name": "Los Angeles",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Louisville",
+    "name": "Louisville",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Lower_Princes",
+    "name": "Lower Princes",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Maceio",
+    "name": "Maceio",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Managua",
+    "name": "Managua",
+    "region_codes": [
+      "NI"
+    ],
+    "flag_id": "NI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Manaus",
+    "name": "Manaus",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Marigot",
+    "name": "Marigot",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Martinique",
+    "name": "Martinique",
+    "region_codes": [
+      "MQ"
+    ],
+    "flag_id": "MQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Matamoros",
+    "name": "Matamoros",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Mazatlan",
+    "name": "Mazatlan",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Mendoza",
+    "name": "Mendoza",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Menominee",
+    "name": "Menominee",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Merida",
+    "name": "Merida",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Metlakatla",
+    "name": "Metlakatla",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Mexico_City",
+    "name": "Mexico City",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Miquelon",
+    "name": "Miquelon",
+    "region_codes": [
+      "PM"
+    ],
+    "flag_id": "PM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Moncton",
+    "name": "Moncton",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Monterrey",
+    "name": "Monterrey",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Montevideo",
+    "name": "Montevideo",
+    "region_codes": [
+      "UY"
+    ],
+    "flag_id": "UY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Montreal",
+    "name": "Montreal",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Montserrat",
+    "name": "Montserrat",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Nassau",
+    "name": "Nassau",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/New_York",
+    "name": "New York",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Nipigon",
+    "name": "Nipigon",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Nome",
+    "name": "Nome",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Noronha",
+    "name": "Noronha",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/North_Dakota/Beulah",
+    "name": "Beulah",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/North_Dakota/Center",
+    "name": "Center",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/North_Dakota/New_Salem",
+    "name": "New Salem",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Nuuk",
+    "name": "Nuuk",
+    "region_codes": [
+      "GL"
+    ],
+    "flag_id": "GL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Ojinaga",
+    "name": "Ojinaga",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Panama",
+    "name": "Panama",
+    "region_codes": [
+      "PA",
+      "CA",
+      "KY"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Pangnirtung",
+    "name": "Pangnirtung",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Paramaribo",
+    "name": "Paramaribo",
+    "region_codes": [
+      "SR"
+    ],
+    "flag_id": "SR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Phoenix",
+    "name": "Phoenix",
+    "region_codes": [
+      "US",
+      "CA"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Port-au-Prince",
+    "name": "Port-au-Prince",
+    "region_codes": [
+      "HT"
+    ],
+    "flag_id": "HT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Port_of_Spain",
+    "name": "Port of Spain",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Porto_Acre",
+    "name": "Porto Acre",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Porto_Velho",
+    "name": "Porto Velho",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Puerto_Rico",
+    "name": "Puerto Rico",
+    "region_codes": [
+      "PR",
+      "AG",
+      "CA",
+      "AI",
+      "AW",
+      "BL",
+      "BQ",
+      "CW",
+      "DM",
+      "GD",
+      "GP",
+      "KN",
+      "LC",
+      "MF",
+      "MS",
+      "SX",
+      "TT",
+      "VC",
+      "VG",
+      "VI"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Punta_Arenas",
+    "name": "Punta Arenas",
+    "region_codes": [
+      "CL"
+    ],
+    "flag_id": "CL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Rainy_River",
+    "name": "Rainy River",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Rankin_Inlet",
+    "name": "Rankin Inlet",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Recife",
+    "name": "Recife",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Regina",
+    "name": "Regina",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Resolute",
+    "name": "Resolute",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Rio_Branco",
+    "name": "Rio Branco",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Rosario",
+    "name": "Rosario",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Santa_Isabel",
+    "name": "Santa Isabel",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Santarem",
+    "name": "Santarem",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Santiago",
+    "name": "Santiago",
+    "region_codes": [
+      "CL"
+    ],
+    "flag_id": "CL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Santo_Domingo",
+    "name": "Santo Domingo",
+    "region_codes": [
+      "DO"
+    ],
+    "flag_id": "DO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Sao_Paulo",
+    "name": "Sao Paulo",
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Scoresbysund",
+    "name": "Scoresbysund",
+    "region_codes": [
+      "GL"
+    ],
+    "flag_id": "GL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Shiprock",
+    "name": "Shiprock",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Sitka",
+    "name": "Sitka",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/St_Barthelemy",
+    "name": "St Barthelemy",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/St_Johns",
+    "name": "St Johns",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/St_Kitts",
+    "name": "St Kitts",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/St_Lucia",
+    "name": "St Lucia",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/St_Thomas",
+    "name": "St Thomas",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/St_Vincent",
+    "name": "St Vincent",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Swift_Current",
+    "name": "Swift Current",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Tegucigalpa",
+    "name": "Tegucigalpa",
+    "region_codes": [
+      "HN"
+    ],
+    "flag_id": "HN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Thule",
+    "name": "Thule",
+    "region_codes": [
+      "GL"
+    ],
+    "flag_id": "GL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Thunder_Bay",
+    "name": "Thunder Bay",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Tijuana",
+    "name": "Tijuana",
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Toronto",
+    "name": "Toronto",
+    "region_codes": [
+      "CA",
+      "BS"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Tortola",
+    "name": "Tortola",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Vancouver",
+    "name": "Vancouver",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Virgin",
+    "name": "Virgin",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Whitehorse",
+    "name": "Whitehorse",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Winnipeg",
+    "name": "Winnipeg",
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Yakutat",
+    "name": "Yakutat",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "America/Yellowknife",
+    "name": "Yellowknife",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Casey",
+    "name": "Casey",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Davis",
+    "name": "Davis",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/DumontDUrville",
+    "name": "DumontDUrville",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Macquarie",
+    "name": "Macquarie",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Mawson",
+    "name": "Mawson",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/McMurdo",
+    "name": "McMurdo",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Palmer",
+    "name": "Palmer",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Rothera",
+    "name": "Rothera",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/South_Pole",
+    "name": "South Pole",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Syowa",
+    "name": "Syowa",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Troll",
+    "name": "Troll",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Antarctica/Vostok",
+    "name": "Vostok",
+    "region_codes": [
+      "AQ"
+    ],
+    "flag_id": "AQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Arctic/Longyearbyen",
+    "name": "Longyearbyen",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Aden",
+    "name": "Aden",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Almaty",
+    "name": "Almaty",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Amman",
+    "name": "Amman",
+    "region_codes": [
+      "JO"
+    ],
+    "flag_id": "JO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Anadyr",
+    "name": "Anadyr",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Aqtau",
+    "name": "Aqtau",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Aqtobe",
+    "name": "Aqtobe",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ashgabat",
+    "name": "Ashgabat",
+    "region_codes": [
+      "TM"
+    ],
+    "flag_id": "TM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ashkhabad",
+    "name": "Ashkhabad",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Atyrau",
+    "name": "Atyrau",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Baghdad",
+    "name": "Baghdad",
+    "region_codes": [
+      "IQ"
+    ],
+    "flag_id": "IQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Bahrain",
+    "name": "Bahrain",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Baku",
+    "name": "Baku",
+    "region_codes": [
+      "AZ"
+    ],
+    "flag_id": "AZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Bangkok",
+    "name": "Bangkok",
+    "region_codes": [
+      "TH",
+      "CX",
+      "KH",
+      "LA",
+      "VN"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Barnaul",
+    "name": "Barnaul",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Beirut",
+    "name": "Beirut",
+    "region_codes": [
+      "LB"
+    ],
+    "flag_id": "LB",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Bishkek",
+    "name": "Bishkek",
+    "region_codes": [
+      "KG"
+    ],
+    "flag_id": "KG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Brunei",
+    "name": "Brunei",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Calcutta",
+    "name": "Calcutta",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Chita",
+    "name": "Chita",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Choibalsan",
+    "name": "Choibalsan",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Chongqing",
+    "name": "Chongqing",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Chungking",
+    "name": "Chungking",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Colombo",
+    "name": "Colombo",
+    "region_codes": [
+      "LK"
+    ],
+    "flag_id": "LK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Dacca",
+    "name": "Dacca",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Damascus",
+    "name": "Damascus",
+    "region_codes": [
+      "SY"
+    ],
+    "flag_id": "SY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Dhaka",
+    "name": "Dhaka",
+    "region_codes": [
+      "BD"
+    ],
+    "flag_id": "BD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Dili",
+    "name": "Dili",
+    "region_codes": [
+      "TL"
+    ],
+    "flag_id": "TL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Dubai",
+    "name": "Dubai",
+    "region_codes": [
+      "AE",
+      "OM",
+      "RE",
+      "SC",
+      "TF"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Dushanbe",
+    "name": "Dushanbe",
+    "region_codes": [
+      "TJ"
+    ],
+    "flag_id": "TJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Famagusta",
+    "name": "Famagusta",
+    "region_codes": [
+      "CY"
+    ],
+    "flag_id": "CY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Gaza",
+    "name": "Gaza",
+    "region_codes": [
+      "PS"
+    ],
+    "flag_id": "PS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Harbin",
+    "name": "Harbin",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Hebron",
+    "name": "Hebron",
+    "region_codes": [
+      "PS"
+    ],
+    "flag_id": "PS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ho_Chi_Minh",
+    "name": "Ho Chi Minh",
+    "region_codes": [
+      "VN"
+    ],
+    "flag_id": "VN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Hong_Kong",
+    "name": "Hong Kong",
+    "region_codes": [
+      "HK"
+    ],
+    "flag_id": "HK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Hovd",
+    "name": "Hovd",
+    "region_codes": [
+      "MN"
+    ],
+    "flag_id": "MN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Irkutsk",
+    "name": "Irkutsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Istanbul",
+    "name": "Istanbul",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Jakarta",
+    "name": "Jakarta",
+    "region_codes": [
+      "ID"
+    ],
+    "flag_id": "ID",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Jayapura",
+    "name": "Jayapura",
+    "region_codes": [
+      "ID"
+    ],
+    "flag_id": "ID",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Jerusalem",
+    "name": "Jerusalem",
+    "region_codes": [
+      "IL"
+    ],
+    "flag_id": "IL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kabul",
+    "name": "Kabul",
+    "region_codes": [
+      "AF"
+    ],
+    "flag_id": "AF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kamchatka",
+    "name": "Kamchatka",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Karachi",
+    "name": "Karachi",
+    "region_codes": [
+      "PK"
+    ],
+    "flag_id": "PK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kashgar",
+    "name": "Kashgar",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kathmandu",
+    "name": "Kathmandu",
+    "region_codes": [
+      "NP"
+    ],
+    "flag_id": "NP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Katmandu",
+    "name": "Katmandu",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Khandyga",
+    "name": "Khandyga",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kolkata",
+    "name": "Kolkata",
+    "region_codes": [
+      "IN"
+    ],
+    "flag_id": "IN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Krasnoyarsk",
+    "name": "Krasnoyarsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kuala_Lumpur",
+    "name": "Kuala Lumpur",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kuching",
+    "name": "Kuching",
+    "region_codes": [
+      "MY",
+      "BN"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Kuwait",
+    "name": "Kuwait",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Macao",
+    "name": "Macao",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Macau",
+    "name": "Macau",
+    "region_codes": [
+      "MO"
+    ],
+    "flag_id": "MO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Magadan",
+    "name": "Magadan",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Makassar",
+    "name": "Makassar",
+    "region_codes": [
+      "ID"
+    ],
+    "flag_id": "ID",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Manila",
+    "name": "Manila",
+    "region_codes": [
+      "PH"
+    ],
+    "flag_id": "PH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Muscat",
+    "name": "Muscat",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Nicosia",
+    "name": "Nicosia",
+    "region_codes": [
+      "CY"
+    ],
+    "flag_id": "CY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Novokuznetsk",
+    "name": "Novokuznetsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Novosibirsk",
+    "name": "Novosibirsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Omsk",
+    "name": "Omsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Oral",
+    "name": "Oral",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Phnom_Penh",
+    "name": "Phnom Penh",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Pontianak",
+    "name": "Pontianak",
+    "region_codes": [
+      "ID"
+    ],
+    "flag_id": "ID",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Pyongyang",
+    "name": "Pyongyang",
+    "region_codes": [
+      "KP"
+    ],
+    "flag_id": "KP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Qatar",
+    "name": "Qatar",
+    "region_codes": [
+      "QA",
+      "BH"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Qostanay",
+    "name": "Qostanay",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Qyzylorda",
+    "name": "Qyzylorda",
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Rangoon",
+    "name": "Rangoon",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Riyadh",
+    "name": "Riyadh",
+    "region_codes": [
+      "SA",
+      "AQ",
+      "KW",
+      "YE"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Saigon",
+    "name": "Saigon",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Sakhalin",
+    "name": "Sakhalin",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Samarkand",
+    "name": "Samarkand",
+    "region_codes": [
+      "UZ"
+    ],
+    "flag_id": "UZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Seoul",
+    "name": "Seoul",
+    "region_codes": [
+      "KR"
+    ],
+    "flag_id": "KR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Shanghai",
+    "name": "Shanghai",
+    "region_codes": [
+      "CN"
+    ],
+    "flag_id": "CN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Singapore",
+    "name": "Singapore",
+    "region_codes": [
+      "SG",
+      "AQ",
+      "MY"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Srednekolymsk",
+    "name": "Srednekolymsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Taipei",
+    "name": "Taipei",
+    "region_codes": [
+      "TW"
+    ],
+    "flag_id": "TW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Tashkent",
+    "name": "Tashkent",
+    "region_codes": [
+      "UZ"
+    ],
+    "flag_id": "UZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Tbilisi",
+    "name": "Tbilisi",
+    "region_codes": [
+      "GE"
+    ],
+    "flag_id": "GE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Tehran",
+    "name": "Tehran",
+    "region_codes": [
+      "IR"
+    ],
+    "flag_id": "IR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Tel_Aviv",
+    "name": "Tel Aviv",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Thimbu",
+    "name": "Thimbu",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Thimphu",
+    "name": "Thimphu",
+    "region_codes": [
+      "BT"
+    ],
+    "flag_id": "BT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Tokyo",
+    "name": "Tokyo",
+    "region_codes": [
+      "JP",
+      "AU"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Tomsk",
+    "name": "Tomsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ujung_Pandang",
+    "name": "Ujung Pandang",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ulaanbaatar",
+    "name": "Ulaanbaatar",
+    "region_codes": [
+      "MN"
+    ],
+    "flag_id": "MN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ulan_Bator",
+    "name": "Ulan Bator",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Urumqi",
+    "name": "Urumqi",
+    "region_codes": [
+      "CN"
+    ],
+    "flag_id": "CN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Ust-Nera",
+    "name": "Ust-Nera",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Vientiane",
+    "name": "Vientiane",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Vladivostok",
+    "name": "Vladivostok",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Yakutsk",
+    "name": "Yakutsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Yangon",
+    "name": "Yangon",
+    "region_codes": [
+      "MM",
+      "CC"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Yekaterinburg",
+    "name": "Yekaterinburg",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Asia/Yerevan",
+    "name": "Yerevan",
+    "region_codes": [
+      "AM"
+    ],
+    "flag_id": "AM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Azores",
+    "name": "Azores",
+    "region_codes": [
+      "PT"
+    ],
+    "flag_id": "PT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Bermuda",
+    "name": "Bermuda",
+    "region_codes": [
+      "BM"
+    ],
+    "flag_id": "BM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Canary",
+    "name": "Canary",
+    "region_codes": [
+      "ES"
+    ],
+    "flag_id": "ES",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Cape_Verde",
+    "name": "Cape Verde",
+    "region_codes": [
+      "CV"
+    ],
+    "flag_id": "CV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Faeroe",
+    "name": "Faeroe",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Faroe",
+    "name": "Faroe",
+    "region_codes": [
+      "FO"
+    ],
+    "flag_id": "FO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Jan_Mayen",
+    "name": "Jan Mayen",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Madeira",
+    "name": "Madeira",
+    "region_codes": [
+      "PT"
+    ],
+    "flag_id": "PT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Reykjavik",
+    "name": "Reykjavik",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/South_Georgia",
+    "name": "South Georgia",
+    "region_codes": [
+      "GS"
+    ],
+    "flag_id": "GS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/St_Helena",
+    "name": "St Helena",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Atlantic/Stanley",
+    "name": "Stanley",
+    "region_codes": [
+      "FK"
+    ],
+    "flag_id": "FK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/ACT",
+    "name": "ACT",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Adelaide",
+    "name": "Adelaide",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Brisbane",
+    "name": "Brisbane",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Broken_Hill",
+    "name": "Broken Hill",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Canberra",
+    "name": "Canberra",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Currie",
+    "name": "Currie",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Darwin",
+    "name": "Darwin",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Eucla",
+    "name": "Eucla",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Hobart",
+    "name": "Hobart",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/LHI",
+    "name": "LHI",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Lindeman",
+    "name": "Lindeman",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Lord_Howe",
+    "name": "Lord Howe",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Melbourne",
+    "name": "Melbourne",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/NSW",
+    "name": "NSW",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/North",
+    "name": "North",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Perth",
+    "name": "Perth",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Queensland",
+    "name": "Queensland",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/South",
+    "name": "South",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Sydney",
+    "name": "Sydney",
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Tasmania",
+    "name": "Tasmania",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Victoria",
+    "name": "Victoria",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/West",
+    "name": "West",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Australia/Yancowinna",
+    "name": "Yancowinna",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Brazil/Acre",
+    "name": "Acre",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Brazil/DeNoronha",
+    "name": "DeNoronha",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Brazil/East",
+    "name": "East",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Brazil/West",
+    "name": "West",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Atlantic",
+    "name": "Atlantic",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Central",
+    "name": "Central",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Eastern",
+    "name": "Eastern",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Mountain",
+    "name": "Mountain",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Newfoundland",
+    "name": "Newfoundland",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Pacific",
+    "name": "Pacific",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Saskatchewan",
+    "name": "Saskatchewan",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Canada/Yukon",
+    "name": "Yukon",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Chile/Continental",
+    "name": "Continental",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Chile/EasterIsland",
+    "name": "EasterIsland",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Amsterdam",
+    "name": "Amsterdam",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Andorra",
+    "name": "Andorra",
+    "region_codes": [
+      "AD"
+    ],
+    "flag_id": "AD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Astrakhan",
+    "name": "Astrakhan",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Athens",
+    "name": "Athens",
+    "region_codes": [
+      "GR"
+    ],
+    "flag_id": "GR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Belfast",
+    "name": "Belfast",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Belgrade",
+    "name": "Belgrade",
+    "region_codes": [
+      "RS",
+      "BA",
+      "HR",
+      "ME",
+      "MK",
+      "SI"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Berlin",
+    "name": "Berlin",
+    "region_codes": [
+      "DE",
+      "DK",
+      "NO",
+      "SE",
+      "SJ"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Bratislava",
+    "name": "Bratislava",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Brussels",
+    "name": "Brussels",
+    "region_codes": [
+      "BE",
+      "LU",
+      "NL"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Bucharest",
+    "name": "Bucharest",
+    "region_codes": [
+      "RO"
+    ],
+    "flag_id": "RO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Budapest",
+    "name": "Budapest",
+    "region_codes": [
+      "HU"
+    ],
+    "flag_id": "HU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Busingen",
+    "name": "Busingen",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Chisinau",
+    "name": "Chisinau",
+    "region_codes": [
+      "MD"
+    ],
+    "flag_id": "MD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Copenhagen",
+    "name": "Copenhagen",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Dublin",
+    "name": "Dublin",
+    "region_codes": [
+      "IE"
+    ],
+    "flag_id": "IE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Gibraltar",
+    "name": "Gibraltar",
+    "region_codes": [
+      "GI"
+    ],
+    "flag_id": "GI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Guernsey",
+    "name": "Guernsey",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Helsinki",
+    "name": "Helsinki",
+    "region_codes": [
+      "FI",
+      "AX"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Isle_of_Man",
+    "name": "Isle of Man",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Istanbul",
+    "name": "Istanbul",
+    "region_codes": [
+      "TR"
+    ],
+    "flag_id": "TR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Jersey",
+    "name": "Jersey",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Kaliningrad",
+    "name": "Kaliningrad",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Kiev",
+    "name": "Kiev",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Kirov",
+    "name": "Kirov",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Kyiv",
+    "name": "Kyiv",
+    "region_codes": [
+      "UA"
+    ],
+    "flag_id": "UA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Lisbon",
+    "name": "Lisbon",
+    "region_codes": [
+      "PT"
+    ],
+    "flag_id": "PT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Ljubljana",
+    "name": "Ljubljana",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/London",
+    "name": "London",
+    "region_codes": [
+      "GB",
+      "GG",
+      "IM",
+      "JE"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Luxembourg",
+    "name": "Luxembourg",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Madrid",
+    "name": "Madrid",
+    "region_codes": [
+      "ES"
+    ],
+    "flag_id": "ES",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Malta",
+    "name": "Malta",
+    "region_codes": [
+      "MT"
+    ],
+    "flag_id": "MT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Mariehamn",
+    "name": "Mariehamn",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Minsk",
+    "name": "Minsk",
+    "region_codes": [
+      "BY"
+    ],
+    "flag_id": "BY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Monaco",
+    "name": "Monaco",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Moscow",
+    "name": "Moscow",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Nicosia",
+    "name": "Nicosia",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Oslo",
+    "name": "Oslo",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Paris",
+    "name": "Paris",
+    "region_codes": [
+      "FR",
+      "MC"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Podgorica",
+    "name": "Podgorica",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Prague",
+    "name": "Prague",
+    "region_codes": [
+      "CZ",
+      "SK"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Riga",
+    "name": "Riga",
+    "region_codes": [
+      "LV"
+    ],
+    "flag_id": "LV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Rome",
+    "name": "Rome",
+    "region_codes": [
+      "IT",
+      "SM",
+      "VA"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Samara",
+    "name": "Samara",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/San_Marino",
+    "name": "San Marino",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Sarajevo",
+    "name": "Sarajevo",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Saratov",
+    "name": "Saratov",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Simferopol",
+    "name": "Simferopol",
+    "region_codes": [
+      "RU",
+      "UA"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Skopje",
+    "name": "Skopje",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Sofia",
+    "name": "Sofia",
+    "region_codes": [
+      "BG"
+    ],
+    "flag_id": "BG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Stockholm",
+    "name": "Stockholm",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Tallinn",
+    "name": "Tallinn",
+    "region_codes": [
+      "EE"
+    ],
+    "flag_id": "EE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Tirane",
+    "name": "Tirane",
+    "region_codes": [
+      "AL"
+    ],
+    "flag_id": "AL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Tiraspol",
+    "name": "Tiraspol",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Ulyanovsk",
+    "name": "Ulyanovsk",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Uzhgorod",
+    "name": "Uzhgorod",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Vaduz",
+    "name": "Vaduz",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Vatican",
+    "name": "Vatican",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Vienna",
+    "name": "Vienna",
+    "region_codes": [
+      "AT"
+    ],
+    "flag_id": "AT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Vilnius",
+    "name": "Vilnius",
+    "region_codes": [
+      "LT"
+    ],
+    "flag_id": "LT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Volgograd",
+    "name": "Volgograd",
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Warsaw",
+    "name": "Warsaw",
+    "region_codes": [
+      "PL"
+    ],
+    "flag_id": "PL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Zagreb",
+    "name": "Zagreb",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Zaporozhye",
+    "name": "Zaporozhye",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Europe/Zurich",
+    "name": "Zurich",
+    "region_codes": [
+      "CH",
+      "DE",
+      "LI"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Antananarivo",
+    "name": "Antananarivo",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Chagos",
+    "name": "Chagos",
+    "region_codes": [
+      "IO"
+    ],
+    "flag_id": "IO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Christmas",
+    "name": "Christmas",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Cocos",
+    "name": "Cocos",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Comoro",
+    "name": "Comoro",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Kerguelen",
+    "name": "Kerguelen",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Mahe",
+    "name": "Mahe",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Maldives",
+    "name": "Maldives",
+    "region_codes": [
+      "MV",
+      "TF"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Mauritius",
+    "name": "Mauritius",
+    "region_codes": [
+      "MU"
+    ],
+    "flag_id": "MU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Mayotte",
+    "name": "Mayotte",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Indian/Reunion",
+    "name": "Reunion",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Mexico/BajaNorte",
+    "name": "BajaNorte",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Mexico/BajaSur",
+    "name": "BajaSur",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Mexico/General",
+    "name": "General",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Apia",
+    "name": "Apia",
+    "region_codes": [
+      "WS"
+    ],
+    "flag_id": "WS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Auckland",
+    "name": "Auckland",
+    "region_codes": [
+      "NZ",
+      "AQ"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Bougainville",
+    "name": "Bougainville",
+    "region_codes": [
+      "PG"
+    ],
+    "flag_id": "PG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Chatham",
+    "name": "Chatham",
+    "region_codes": [
+      "NZ"
+    ],
+    "flag_id": "NZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Chuuk",
+    "name": "Chuuk",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Easter",
+    "name": "Easter",
+    "region_codes": [
+      "CL"
+    ],
+    "flag_id": "CL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Efate",
+    "name": "Efate",
+    "region_codes": [
+      "VU"
+    ],
+    "flag_id": "VU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Enderbury",
+    "name": "Enderbury",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Fakaofo",
+    "name": "Fakaofo",
+    "region_codes": [
+      "TK"
+    ],
+    "flag_id": "TK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Fiji",
+    "name": "Fiji",
+    "region_codes": [
+      "FJ"
+    ],
+    "flag_id": "FJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Funafuti",
+    "name": "Funafuti",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Galapagos",
+    "name": "Galapagos",
+    "region_codes": [
+      "EC"
+    ],
+    "flag_id": "EC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Gambier",
+    "name": "Gambier",
+    "region_codes": [
+      "PF"
+    ],
+    "flag_id": "PF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Guadalcanal",
+    "name": "Guadalcanal",
+    "region_codes": [
+      "SB",
+      "FM"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Guam",
+    "name": "Guam",
+    "region_codes": [
+      "GU",
+      "MP"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Honolulu",
+    "name": "Honolulu",
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Johnston",
+    "name": "Johnston",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Kanton",
+    "name": "Kanton",
+    "region_codes": [
+      "KI"
+    ],
+    "flag_id": "KI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Kiritimati",
+    "name": "Kiritimati",
+    "region_codes": [
+      "KI"
+    ],
+    "flag_id": "KI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Kosrae",
+    "name": "Kosrae",
+    "region_codes": [
+      "FM"
+    ],
+    "flag_id": "FM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Kwajalein",
+    "name": "Kwajalein",
+    "region_codes": [
+      "MH"
+    ],
+    "flag_id": "MH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Majuro",
+    "name": "Majuro",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Marquesas",
+    "name": "Marquesas",
+    "region_codes": [
+      "PF"
+    ],
+    "flag_id": "PF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Midway",
+    "name": "Midway",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Nauru",
+    "name": "Nauru",
+    "region_codes": [
+      "NR"
+    ],
+    "flag_id": "NR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Niue",
+    "name": "Niue",
+    "region_codes": [
+      "NU"
+    ],
+    "flag_id": "NU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Norfolk",
+    "name": "Norfolk",
+    "region_codes": [
+      "NF"
+    ],
+    "flag_id": "NF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Noumea",
+    "name": "Noumea",
+    "region_codes": [
+      "NC"
+    ],
+    "flag_id": "NC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Pago_Pago",
+    "name": "Pago Pago",
+    "region_codes": [
+      "AS",
+      "UM"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Palau",
+    "name": "Palau",
+    "region_codes": [
+      "PW"
+    ],
+    "flag_id": "PW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Pitcairn",
+    "name": "Pitcairn",
+    "region_codes": [
+      "PN"
+    ],
+    "flag_id": "PN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Pohnpei",
+    "name": "Pohnpei",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Ponape",
+    "name": "Ponape",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Port_Moresby",
+    "name": "Port Moresby",
+    "region_codes": [
+      "PG",
+      "AQ",
+      "FM"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Rarotonga",
+    "name": "Rarotonga",
+    "region_codes": [
+      "CK"
+    ],
+    "flag_id": "CK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Saipan",
+    "name": "Saipan",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Samoa",
+    "name": "Samoa",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Tahiti",
+    "name": "Tahiti",
+    "region_codes": [
+      "PF"
+    ],
+    "flag_id": "PF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Tarawa",
+    "name": "Tarawa",
+    "region_codes": [
+      "KI",
+      "MH",
+      "TV",
+      "UM",
+      "WF"
+    ],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Tongatapu",
+    "name": "Tongatapu",
+    "region_codes": [
+      "TO"
+    ],
+    "flag_id": "TO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Truk",
+    "name": "Truk",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Wake",
+    "name": "Wake",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Wallis",
+    "name": "Wallis",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "Pacific/Yap",
+    "name": "Yap",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Alaska",
+    "name": "Alaska",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Aleutian",
+    "name": "Aleutian",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Arizona",
+    "name": "Arizona",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Central",
+    "name": "Central",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/East-Indiana",
+    "name": "East-Indiana",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Eastern",
+    "name": "Eastern",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Hawaii",
+    "name": "Hawaii",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Indiana-Starke",
+    "name": "Indiana-Starke",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Michigan",
+    "name": "Michigan",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Mountain",
+    "name": "Mountain",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Pacific",
+    "name": "Pacific",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US/Samoa",
+    "name": "Samoa",
+    "region_codes": [],
+    "flag_id": "",
+    "enabled": true,
+    "hidden": false
+  }
+]

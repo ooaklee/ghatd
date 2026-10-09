@@ -1,0 +1,3433 @@
+[
+  {
+    "code": "AC",
+    "name": "Ascension Island",
+    "calling_code": "+247",
+    "dial_prefixes": [
+      "+247"
+    ],
+    "region_codes": [
+      "AC"
+    ],
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AD",
+    "name": "Andorra",
+    "calling_code": "+376",
+    "dial_prefixes": [
+      "+376"
+    ],
+    "region_codes": [
+      "AD"
+    ],
+    "flag_id": "AD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AE",
+    "name": "United Arab Emirates",
+    "calling_code": "+971",
+    "dial_prefixes": [
+      "+971"
+    ],
+    "region_codes": [
+      "AE"
+    ],
+    "flag_id": "AE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AF",
+    "name": "Afghanistan",
+    "calling_code": "+93",
+    "dial_prefixes": [
+      "+93"
+    ],
+    "region_codes": [
+      "AF"
+    ],
+    "flag_id": "AF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AG",
+    "name": "Antigua & Barbuda",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1268"
+    ],
+    "region_codes": [
+      "AG"
+    ],
+    "flag_id": "AG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AI",
+    "name": "Anguilla",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1264"
+    ],
+    "region_codes": [
+      "AI"
+    ],
+    "flag_id": "AI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AL",
+    "name": "Albania",
+    "calling_code": "+355",
+    "dial_prefixes": [
+      "+355"
+    ],
+    "region_codes": [
+      "AL"
+    ],
+    "flag_id": "AL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AM",
+    "name": "Armenia",
+    "calling_code": "+374",
+    "dial_prefixes": [
+      "+374"
+    ],
+    "region_codes": [
+      "AM"
+    ],
+    "flag_id": "AM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AO",
+    "name": "Angola",
+    "calling_code": "+244",
+    "dial_prefixes": [
+      "+244"
+    ],
+    "region_codes": [
+      "AO"
+    ],
+    "flag_id": "AO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AR",
+    "name": "Argentina",
+    "calling_code": "+54",
+    "dial_prefixes": [
+      "+54"
+    ],
+    "region_codes": [
+      "AR"
+    ],
+    "flag_id": "AR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AS",
+    "name": "American Samoa",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1684"
+    ],
+    "region_codes": [
+      "AS"
+    ],
+    "flag_id": "AS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AT",
+    "name": "Austria",
+    "calling_code": "+43",
+    "dial_prefixes": [
+      "+43"
+    ],
+    "region_codes": [
+      "AT"
+    ],
+    "flag_id": "AT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AU",
+    "name": "Australia",
+    "calling_code": "+61",
+    "dial_prefixes": [
+      "+61"
+    ],
+    "region_codes": [
+      "AU"
+    ],
+    "flag_id": "AU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AW",
+    "name": "Aruba",
+    "calling_code": "+297",
+    "dial_prefixes": [
+      "+297"
+    ],
+    "region_codes": [
+      "AW"
+    ],
+    "flag_id": "AW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AX",
+    "name": "Åland Islands",
+    "calling_code": "+358",
+    "dial_prefixes": [
+      "+35818"
+    ],
+    "region_codes": [
+      "AX"
+    ],
+    "flag_id": "AX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "AZ",
+    "name": "Azerbaijan",
+    "calling_code": "+994",
+    "dial_prefixes": [
+      "+994"
+    ],
+    "region_codes": [
+      "AZ"
+    ],
+    "flag_id": "AZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BA",
+    "name": "Bosnia & Herzegovina",
+    "calling_code": "+387",
+    "dial_prefixes": [
+      "+387"
+    ],
+    "region_codes": [
+      "BA"
+    ],
+    "flag_id": "BA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BB",
+    "name": "Barbados",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1246"
+    ],
+    "region_codes": [
+      "BB"
+    ],
+    "flag_id": "BB",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BD",
+    "name": "Bangladesh",
+    "calling_code": "+880",
+    "dial_prefixes": [
+      "+880"
+    ],
+    "region_codes": [
+      "BD"
+    ],
+    "flag_id": "BD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BE",
+    "name": "Belgium",
+    "calling_code": "+32",
+    "dial_prefixes": [
+      "+32"
+    ],
+    "region_codes": [
+      "BE"
+    ],
+    "flag_id": "BE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BF",
+    "name": "Burkina Faso",
+    "calling_code": "+226",
+    "dial_prefixes": [
+      "+226"
+    ],
+    "region_codes": [
+      "BF"
+    ],
+    "flag_id": "BF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BG",
+    "name": "Bulgaria",
+    "calling_code": "+359",
+    "dial_prefixes": [
+      "+359"
+    ],
+    "region_codes": [
+      "BG"
+    ],
+    "flag_id": "BG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BH",
+    "name": "Bahrain",
+    "calling_code": "+973",
+    "dial_prefixes": [
+      "+973"
+    ],
+    "region_codes": [
+      "BH"
+    ],
+    "flag_id": "BH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BI",
+    "name": "Burundi",
+    "calling_code": "+257",
+    "dial_prefixes": [
+      "+257"
+    ],
+    "region_codes": [
+      "BI"
+    ],
+    "flag_id": "BI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BJ",
+    "name": "Benin",
+    "calling_code": "+229",
+    "dial_prefixes": [
+      "+229"
+    ],
+    "region_codes": [
+      "BJ"
+    ],
+    "flag_id": "BJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BL",
+    "name": "St. Barthélemy",
+    "calling_code": "+590",
+    "dial_prefixes": [
+      "+590"
+    ],
+    "region_codes": [
+      "BL"
+    ],
+    "flag_id": "BL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BM",
+    "name": "Bermuda",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1441"
+    ],
+    "region_codes": [
+      "BM"
+    ],
+    "flag_id": "BM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BN",
+    "name": "Brunei",
+    "calling_code": "+673",
+    "dial_prefixes": [
+      "+673"
+    ],
+    "region_codes": [
+      "BN"
+    ],
+    "flag_id": "BN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BO",
+    "name": "Bolivia",
+    "calling_code": "+591",
+    "dial_prefixes": [
+      "+591"
+    ],
+    "region_codes": [
+      "BO"
+    ],
+    "flag_id": "BO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BQ",
+    "name": "Caribbean Netherlands",
+    "calling_code": "+599",
+    "dial_prefixes": [
+      "+599"
+    ],
+    "region_codes": [
+      "BQ"
+    ],
+    "flag_id": "BQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BR",
+    "name": "Brazil",
+    "calling_code": "+55",
+    "dial_prefixes": [
+      "+55"
+    ],
+    "region_codes": [
+      "BR"
+    ],
+    "flag_id": "BR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BS",
+    "name": "Bahamas",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1242"
+    ],
+    "region_codes": [
+      "BS"
+    ],
+    "flag_id": "BS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BT",
+    "name": "Bhutan",
+    "calling_code": "+975",
+    "dial_prefixes": [
+      "+975"
+    ],
+    "region_codes": [
+      "BT"
+    ],
+    "flag_id": "BT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BW",
+    "name": "Botswana",
+    "calling_code": "+267",
+    "dial_prefixes": [
+      "+267"
+    ],
+    "region_codes": [
+      "BW"
+    ],
+    "flag_id": "BW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BY",
+    "name": "Belarus",
+    "calling_code": "+375",
+    "dial_prefixes": [
+      "+375"
+    ],
+    "region_codes": [
+      "BY"
+    ],
+    "flag_id": "BY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "BZ",
+    "name": "Belize",
+    "calling_code": "+501",
+    "dial_prefixes": [
+      "+501"
+    ],
+    "region_codes": [
+      "BZ"
+    ],
+    "flag_id": "BZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CA",
+    "name": "Canada",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1"
+    ],
+    "region_codes": [
+      "CA"
+    ],
+    "flag_id": "CA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CC",
+    "name": "Cocos (Keeling) Islands",
+    "calling_code": "+61",
+    "dial_prefixes": [
+      "+61"
+    ],
+    "region_codes": [
+      "CC"
+    ],
+    "flag_id": "CC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CD",
+    "name": "Congo - Kinshasa",
+    "calling_code": "+243",
+    "dial_prefixes": [
+      "+243"
+    ],
+    "region_codes": [
+      "CD"
+    ],
+    "flag_id": "CD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CF",
+    "name": "Central African Republic",
+    "calling_code": "+236",
+    "dial_prefixes": [
+      "+236"
+    ],
+    "region_codes": [
+      "CF"
+    ],
+    "flag_id": "CF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CG",
+    "name": "Congo - Brazzaville",
+    "calling_code": "+242",
+    "dial_prefixes": [
+      "+242"
+    ],
+    "region_codes": [
+      "CG"
+    ],
+    "flag_id": "CG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CH",
+    "name": "Switzerland",
+    "calling_code": "+41",
+    "dial_prefixes": [
+      "+41"
+    ],
+    "region_codes": [
+      "CH"
+    ],
+    "flag_id": "CH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CI",
+    "name": "Côte d’Ivoire",
+    "calling_code": "+225",
+    "dial_prefixes": [
+      "+225"
+    ],
+    "region_codes": [
+      "CI"
+    ],
+    "flag_id": "CI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CK",
+    "name": "Cook Islands",
+    "calling_code": "+682",
+    "dial_prefixes": [
+      "+682"
+    ],
+    "region_codes": [
+      "CK"
+    ],
+    "flag_id": "CK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CL",
+    "name": "Chile",
+    "calling_code": "+56",
+    "dial_prefixes": [
+      "+56"
+    ],
+    "region_codes": [
+      "CL"
+    ],
+    "flag_id": "CL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CM",
+    "name": "Cameroon",
+    "calling_code": "+237",
+    "dial_prefixes": [
+      "+237"
+    ],
+    "region_codes": [
+      "CM"
+    ],
+    "flag_id": "CM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CN",
+    "name": "China",
+    "calling_code": "+86",
+    "dial_prefixes": [
+      "+86"
+    ],
+    "region_codes": [
+      "CN"
+    ],
+    "flag_id": "CN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CO",
+    "name": "Colombia",
+    "calling_code": "+57",
+    "dial_prefixes": [
+      "+57"
+    ],
+    "region_codes": [
+      "CO"
+    ],
+    "flag_id": "CO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CR",
+    "name": "Costa Rica",
+    "calling_code": "+506",
+    "dial_prefixes": [
+      "+506"
+    ],
+    "region_codes": [
+      "CR"
+    ],
+    "flag_id": "CR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CU",
+    "name": "Cuba",
+    "calling_code": "+53",
+    "dial_prefixes": [
+      "+53"
+    ],
+    "region_codes": [
+      "CU"
+    ],
+    "flag_id": "CU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CV",
+    "name": "Cape Verde",
+    "calling_code": "+238",
+    "dial_prefixes": [
+      "+238"
+    ],
+    "region_codes": [
+      "CV"
+    ],
+    "flag_id": "CV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CW",
+    "name": "Curaçao",
+    "calling_code": "+599",
+    "dial_prefixes": [
+      "+599"
+    ],
+    "region_codes": [
+      "CW"
+    ],
+    "flag_id": "CW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CX",
+    "name": "Christmas Island",
+    "calling_code": "+61",
+    "dial_prefixes": [
+      "+61"
+    ],
+    "region_codes": [
+      "CX"
+    ],
+    "flag_id": "CX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CY",
+    "name": "Cyprus",
+    "calling_code": "+357",
+    "dial_prefixes": [
+      "+357"
+    ],
+    "region_codes": [
+      "CY"
+    ],
+    "flag_id": "CY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "CZ",
+    "name": "Czechia",
+    "calling_code": "+420",
+    "dial_prefixes": [
+      "+420"
+    ],
+    "region_codes": [
+      "CZ"
+    ],
+    "flag_id": "CZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "DE",
+    "name": "Germany",
+    "calling_code": "+49",
+    "dial_prefixes": [
+      "+49"
+    ],
+    "region_codes": [
+      "DE"
+    ],
+    "flag_id": "DE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "DJ",
+    "name": "Djibouti",
+    "calling_code": "+253",
+    "dial_prefixes": [
+      "+253"
+    ],
+    "region_codes": [
+      "DJ"
+    ],
+    "flag_id": "DJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "DK",
+    "name": "Denmark",
+    "calling_code": "+45",
+    "dial_prefixes": [
+      "+45"
+    ],
+    "region_codes": [
+      "DK"
+    ],
+    "flag_id": "DK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "DM",
+    "name": "Dominica",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1767"
+    ],
+    "region_codes": [
+      "DM"
+    ],
+    "flag_id": "DM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "DO",
+    "name": "Dominican Republic",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1"
+    ],
+    "region_codes": [
+      "DO"
+    ],
+    "flag_id": "DO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "DZ",
+    "name": "Algeria",
+    "calling_code": "+213",
+    "dial_prefixes": [
+      "+213"
+    ],
+    "region_codes": [
+      "DZ"
+    ],
+    "flag_id": "DZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "EC",
+    "name": "Ecuador",
+    "calling_code": "+593",
+    "dial_prefixes": [
+      "+593"
+    ],
+    "region_codes": [
+      "EC"
+    ],
+    "flag_id": "EC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "EE",
+    "name": "Estonia",
+    "calling_code": "+372",
+    "dial_prefixes": [
+      "+372"
+    ],
+    "region_codes": [
+      "EE"
+    ],
+    "flag_id": "EE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "EG",
+    "name": "Egypt",
+    "calling_code": "+20",
+    "dial_prefixes": [
+      "+20"
+    ],
+    "region_codes": [
+      "EG"
+    ],
+    "flag_id": "EG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "EH",
+    "name": "Western Sahara",
+    "calling_code": "+212",
+    "dial_prefixes": [
+      "+212"
+    ],
+    "region_codes": [
+      "EH"
+    ],
+    "flag_id": "EH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ER",
+    "name": "Eritrea",
+    "calling_code": "+291",
+    "dial_prefixes": [
+      "+291"
+    ],
+    "region_codes": [
+      "ER"
+    ],
+    "flag_id": "ER",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ES",
+    "name": "Spain",
+    "calling_code": "+34",
+    "dial_prefixes": [
+      "+34"
+    ],
+    "region_codes": [
+      "ES"
+    ],
+    "flag_id": "ES",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ET",
+    "name": "Ethiopia",
+    "calling_code": "+251",
+    "dial_prefixes": [
+      "+251"
+    ],
+    "region_codes": [
+      "ET"
+    ],
+    "flag_id": "ET",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "FI",
+    "name": "Finland",
+    "calling_code": "+358",
+    "dial_prefixes": [
+      "+358"
+    ],
+    "region_codes": [
+      "FI"
+    ],
+    "flag_id": "FI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "FJ",
+    "name": "Fiji",
+    "calling_code": "+679",
+    "dial_prefixes": [
+      "+679"
+    ],
+    "region_codes": [
+      "FJ"
+    ],
+    "flag_id": "FJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "FK",
+    "name": "Falkland Islands",
+    "calling_code": "+500",
+    "dial_prefixes": [
+      "+500"
+    ],
+    "region_codes": [
+      "FK"
+    ],
+    "flag_id": "FK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "FM",
+    "name": "Micronesia",
+    "calling_code": "+691",
+    "dial_prefixes": [
+      "+691"
+    ],
+    "region_codes": [
+      "FM"
+    ],
+    "flag_id": "FM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "FO",
+    "name": "Faroe Islands",
+    "calling_code": "+298",
+    "dial_prefixes": [
+      "+298"
+    ],
+    "region_codes": [
+      "FO"
+    ],
+    "flag_id": "FO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "FR",
+    "name": "France",
+    "calling_code": "+33",
+    "dial_prefixes": [
+      "+33"
+    ],
+    "region_codes": [
+      "FR"
+    ],
+    "flag_id": "FR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GA",
+    "name": "Gabon",
+    "calling_code": "+241",
+    "dial_prefixes": [
+      "+241"
+    ],
+    "region_codes": [
+      "GA"
+    ],
+    "flag_id": "GA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GB",
+    "name": "United Kingdom",
+    "calling_code": "+44",
+    "dial_prefixes": [
+      "+44"
+    ],
+    "region_codes": [
+      "GB"
+    ],
+    "flag_id": "GB",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GD",
+    "name": "Grenada",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1473"
+    ],
+    "region_codes": [
+      "GD"
+    ],
+    "flag_id": "GD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GE",
+    "name": "Georgia",
+    "calling_code": "+995",
+    "dial_prefixes": [
+      "+995"
+    ],
+    "region_codes": [
+      "GE"
+    ],
+    "flag_id": "GE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GF",
+    "name": "French Guiana",
+    "calling_code": "+594",
+    "dial_prefixes": [
+      "+594"
+    ],
+    "region_codes": [
+      "GF"
+    ],
+    "flag_id": "GF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GG",
+    "name": "Guernsey",
+    "calling_code": "+44",
+    "dial_prefixes": [
+      "+44"
+    ],
+    "region_codes": [
+      "GG"
+    ],
+    "flag_id": "GG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GH",
+    "name": "Ghana",
+    "calling_code": "+233",
+    "dial_prefixes": [
+      "+233"
+    ],
+    "region_codes": [
+      "GH"
+    ],
+    "flag_id": "GH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GI",
+    "name": "Gibraltar",
+    "calling_code": "+350",
+    "dial_prefixes": [
+      "+350"
+    ],
+    "region_codes": [
+      "GI"
+    ],
+    "flag_id": "GI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GL",
+    "name": "Greenland",
+    "calling_code": "+299",
+    "dial_prefixes": [
+      "+299"
+    ],
+    "region_codes": [
+      "GL"
+    ],
+    "flag_id": "GL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GM",
+    "name": "Gambia",
+    "calling_code": "+220",
+    "dial_prefixes": [
+      "+220"
+    ],
+    "region_codes": [
+      "GM"
+    ],
+    "flag_id": "GM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GN",
+    "name": "Guinea",
+    "calling_code": "+224",
+    "dial_prefixes": [
+      "+224"
+    ],
+    "region_codes": [
+      "GN"
+    ],
+    "flag_id": "GN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GP",
+    "name": "Guadeloupe",
+    "calling_code": "+590",
+    "dial_prefixes": [
+      "+590"
+    ],
+    "region_codes": [
+      "GP"
+    ],
+    "flag_id": "GP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GQ",
+    "name": "Equatorial Guinea",
+    "calling_code": "+240",
+    "dial_prefixes": [
+      "+240"
+    ],
+    "region_codes": [
+      "GQ"
+    ],
+    "flag_id": "GQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GR",
+    "name": "Greece",
+    "calling_code": "+30",
+    "dial_prefixes": [
+      "+30"
+    ],
+    "region_codes": [
+      "GR"
+    ],
+    "flag_id": "GR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GT",
+    "name": "Guatemala",
+    "calling_code": "+502",
+    "dial_prefixes": [
+      "+502"
+    ],
+    "region_codes": [
+      "GT"
+    ],
+    "flag_id": "GT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GU",
+    "name": "Guam",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1671"
+    ],
+    "region_codes": [
+      "GU"
+    ],
+    "flag_id": "GU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GW",
+    "name": "Guinea-Bissau",
+    "calling_code": "+245",
+    "dial_prefixes": [
+      "+245"
+    ],
+    "region_codes": [
+      "GW"
+    ],
+    "flag_id": "GW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "GY",
+    "name": "Guyana",
+    "calling_code": "+592",
+    "dial_prefixes": [
+      "+592"
+    ],
+    "region_codes": [
+      "GY"
+    ],
+    "flag_id": "GY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "HK",
+    "name": "Hong Kong SAR China",
+    "calling_code": "+852",
+    "dial_prefixes": [
+      "+852"
+    ],
+    "region_codes": [
+      "HK"
+    ],
+    "flag_id": "HK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "HN",
+    "name": "Honduras",
+    "calling_code": "+504",
+    "dial_prefixes": [
+      "+504"
+    ],
+    "region_codes": [
+      "HN"
+    ],
+    "flag_id": "HN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "HR",
+    "name": "Croatia",
+    "calling_code": "+385",
+    "dial_prefixes": [
+      "+385"
+    ],
+    "region_codes": [
+      "HR"
+    ],
+    "flag_id": "HR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "HT",
+    "name": "Haiti",
+    "calling_code": "+509",
+    "dial_prefixes": [
+      "+509"
+    ],
+    "region_codes": [
+      "HT"
+    ],
+    "flag_id": "HT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "HU",
+    "name": "Hungary",
+    "calling_code": "+36",
+    "dial_prefixes": [
+      "+36"
+    ],
+    "region_codes": [
+      "HU"
+    ],
+    "flag_id": "HU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ID",
+    "name": "Indonesia",
+    "calling_code": "+62",
+    "dial_prefixes": [
+      "+62"
+    ],
+    "region_codes": [
+      "ID"
+    ],
+    "flag_id": "ID",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IE",
+    "name": "Ireland",
+    "calling_code": "+353",
+    "dial_prefixes": [
+      "+353"
+    ],
+    "region_codes": [
+      "IE"
+    ],
+    "flag_id": "IE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IL",
+    "name": "Israel",
+    "calling_code": "+972",
+    "dial_prefixes": [
+      "+972"
+    ],
+    "region_codes": [
+      "IL"
+    ],
+    "flag_id": "IL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IM",
+    "name": "Isle of Man",
+    "calling_code": "+44",
+    "dial_prefixes": [
+      "+44"
+    ],
+    "region_codes": [
+      "IM"
+    ],
+    "flag_id": "IM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IN",
+    "name": "India",
+    "calling_code": "+91",
+    "dial_prefixes": [
+      "+91"
+    ],
+    "region_codes": [
+      "IN"
+    ],
+    "flag_id": "IN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IO",
+    "name": "British Indian Ocean Territory",
+    "calling_code": "+246",
+    "dial_prefixes": [
+      "+246"
+    ],
+    "region_codes": [
+      "IO"
+    ],
+    "flag_id": "IO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IQ",
+    "name": "Iraq",
+    "calling_code": "+964",
+    "dial_prefixes": [
+      "+964"
+    ],
+    "region_codes": [
+      "IQ"
+    ],
+    "flag_id": "IQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IR",
+    "name": "Iran",
+    "calling_code": "+98",
+    "dial_prefixes": [
+      "+98"
+    ],
+    "region_codes": [
+      "IR"
+    ],
+    "flag_id": "IR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IS",
+    "name": "Iceland",
+    "calling_code": "+354",
+    "dial_prefixes": [
+      "+354"
+    ],
+    "region_codes": [
+      "IS"
+    ],
+    "flag_id": "IS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "IT",
+    "name": "Italy",
+    "calling_code": "+39",
+    "dial_prefixes": [
+      "+39"
+    ],
+    "region_codes": [
+      "IT"
+    ],
+    "flag_id": "IT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "JE",
+    "name": "Jersey",
+    "calling_code": "+44",
+    "dial_prefixes": [
+      "+44"
+    ],
+    "region_codes": [
+      "JE"
+    ],
+    "flag_id": "JE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "JM",
+    "name": "Jamaica",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1658",
+      "+1876"
+    ],
+    "region_codes": [
+      "JM"
+    ],
+    "flag_id": "JM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "JO",
+    "name": "Jordan",
+    "calling_code": "+962",
+    "dial_prefixes": [
+      "+962"
+    ],
+    "region_codes": [
+      "JO"
+    ],
+    "flag_id": "JO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "JP",
+    "name": "Japan",
+    "calling_code": "+81",
+    "dial_prefixes": [
+      "+81"
+    ],
+    "region_codes": [
+      "JP"
+    ],
+    "flag_id": "JP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KE",
+    "name": "Kenya",
+    "calling_code": "+254",
+    "dial_prefixes": [
+      "+254"
+    ],
+    "region_codes": [
+      "KE"
+    ],
+    "flag_id": "KE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KG",
+    "name": "Kyrgyzstan",
+    "calling_code": "+996",
+    "dial_prefixes": [
+      "+996"
+    ],
+    "region_codes": [
+      "KG"
+    ],
+    "flag_id": "KG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KH",
+    "name": "Cambodia",
+    "calling_code": "+855",
+    "dial_prefixes": [
+      "+855"
+    ],
+    "region_codes": [
+      "KH"
+    ],
+    "flag_id": "KH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KI",
+    "name": "Kiribati",
+    "calling_code": "+686",
+    "dial_prefixes": [
+      "+686"
+    ],
+    "region_codes": [
+      "KI"
+    ],
+    "flag_id": "KI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KM",
+    "name": "Comoros",
+    "calling_code": "+269",
+    "dial_prefixes": [
+      "+269"
+    ],
+    "region_codes": [
+      "KM"
+    ],
+    "flag_id": "KM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KN",
+    "name": "St. Kitts & Nevis",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1869"
+    ],
+    "region_codes": [
+      "KN"
+    ],
+    "flag_id": "KN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KP",
+    "name": "North Korea",
+    "calling_code": "+850",
+    "dial_prefixes": [
+      "+850"
+    ],
+    "region_codes": [
+      "KP"
+    ],
+    "flag_id": "KP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KR",
+    "name": "South Korea",
+    "calling_code": "+82",
+    "dial_prefixes": [
+      "+82"
+    ],
+    "region_codes": [
+      "KR"
+    ],
+    "flag_id": "KR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KW",
+    "name": "Kuwait",
+    "calling_code": "+965",
+    "dial_prefixes": [
+      "+965"
+    ],
+    "region_codes": [
+      "KW"
+    ],
+    "flag_id": "KW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KY",
+    "name": "Cayman Islands",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1345"
+    ],
+    "region_codes": [
+      "KY"
+    ],
+    "flag_id": "KY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "KZ",
+    "name": "Kazakhstan",
+    "calling_code": "+7",
+    "dial_prefixes": [
+      "+77"
+    ],
+    "region_codes": [
+      "KZ"
+    ],
+    "flag_id": "KZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LA",
+    "name": "Laos",
+    "calling_code": "+856",
+    "dial_prefixes": [
+      "+856"
+    ],
+    "region_codes": [
+      "LA"
+    ],
+    "flag_id": "LA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LB",
+    "name": "Lebanon",
+    "calling_code": "+961",
+    "dial_prefixes": [
+      "+961"
+    ],
+    "region_codes": [
+      "LB"
+    ],
+    "flag_id": "LB",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LC",
+    "name": "St. Lucia",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1758"
+    ],
+    "region_codes": [
+      "LC"
+    ],
+    "flag_id": "LC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LI",
+    "name": "Liechtenstein",
+    "calling_code": "+423",
+    "dial_prefixes": [
+      "+423"
+    ],
+    "region_codes": [
+      "LI"
+    ],
+    "flag_id": "LI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LK",
+    "name": "Sri Lanka",
+    "calling_code": "+94",
+    "dial_prefixes": [
+      "+94"
+    ],
+    "region_codes": [
+      "LK"
+    ],
+    "flag_id": "LK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LR",
+    "name": "Liberia",
+    "calling_code": "+231",
+    "dial_prefixes": [
+      "+231"
+    ],
+    "region_codes": [
+      "LR"
+    ],
+    "flag_id": "LR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LS",
+    "name": "Lesotho",
+    "calling_code": "+266",
+    "dial_prefixes": [
+      "+266"
+    ],
+    "region_codes": [
+      "LS"
+    ],
+    "flag_id": "LS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LT",
+    "name": "Lithuania",
+    "calling_code": "+370",
+    "dial_prefixes": [
+      "+370"
+    ],
+    "region_codes": [
+      "LT"
+    ],
+    "flag_id": "LT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LU",
+    "name": "Luxembourg",
+    "calling_code": "+352",
+    "dial_prefixes": [
+      "+352"
+    ],
+    "region_codes": [
+      "LU"
+    ],
+    "flag_id": "LU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LV",
+    "name": "Latvia",
+    "calling_code": "+371",
+    "dial_prefixes": [
+      "+371"
+    ],
+    "region_codes": [
+      "LV"
+    ],
+    "flag_id": "LV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "LY",
+    "name": "Libya",
+    "calling_code": "+218",
+    "dial_prefixes": [
+      "+218"
+    ],
+    "region_codes": [
+      "LY"
+    ],
+    "flag_id": "LY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MA",
+    "name": "Morocco",
+    "calling_code": "+212",
+    "dial_prefixes": [
+      "+212"
+    ],
+    "region_codes": [
+      "MA"
+    ],
+    "flag_id": "MA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MC",
+    "name": "Monaco",
+    "calling_code": "+377",
+    "dial_prefixes": [
+      "+377"
+    ],
+    "region_codes": [
+      "MC"
+    ],
+    "flag_id": "MC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MD",
+    "name": "Moldova",
+    "calling_code": "+373",
+    "dial_prefixes": [
+      "+373"
+    ],
+    "region_codes": [
+      "MD"
+    ],
+    "flag_id": "MD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ME",
+    "name": "Montenegro",
+    "calling_code": "+382",
+    "dial_prefixes": [
+      "+382"
+    ],
+    "region_codes": [
+      "ME"
+    ],
+    "flag_id": "ME",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MF",
+    "name": "St. Martin",
+    "calling_code": "+590",
+    "dial_prefixes": [
+      "+590"
+    ],
+    "region_codes": [
+      "MF"
+    ],
+    "flag_id": "MF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MG",
+    "name": "Madagascar",
+    "calling_code": "+261",
+    "dial_prefixes": [
+      "+261"
+    ],
+    "region_codes": [
+      "MG"
+    ],
+    "flag_id": "MG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MH",
+    "name": "Marshall Islands",
+    "calling_code": "+692",
+    "dial_prefixes": [
+      "+692"
+    ],
+    "region_codes": [
+      "MH"
+    ],
+    "flag_id": "MH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MK",
+    "name": "North Macedonia",
+    "calling_code": "+389",
+    "dial_prefixes": [
+      "+389"
+    ],
+    "region_codes": [
+      "MK"
+    ],
+    "flag_id": "MK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ML",
+    "name": "Mali",
+    "calling_code": "+223",
+    "dial_prefixes": [
+      "+223"
+    ],
+    "region_codes": [
+      "ML"
+    ],
+    "flag_id": "ML",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MM",
+    "name": "Myanmar (Burma)",
+    "calling_code": "+95",
+    "dial_prefixes": [
+      "+95"
+    ],
+    "region_codes": [
+      "MM"
+    ],
+    "flag_id": "MM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MN",
+    "name": "Mongolia",
+    "calling_code": "+976",
+    "dial_prefixes": [
+      "+976"
+    ],
+    "region_codes": [
+      "MN"
+    ],
+    "flag_id": "MN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MO",
+    "name": "Macao SAR China",
+    "calling_code": "+853",
+    "dial_prefixes": [
+      "+853"
+    ],
+    "region_codes": [
+      "MO"
+    ],
+    "flag_id": "MO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MP",
+    "name": "Northern Mariana Islands",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1670"
+    ],
+    "region_codes": [
+      "MP"
+    ],
+    "flag_id": "MP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MQ",
+    "name": "Martinique",
+    "calling_code": "+596",
+    "dial_prefixes": [
+      "+596"
+    ],
+    "region_codes": [
+      "MQ"
+    ],
+    "flag_id": "MQ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MR",
+    "name": "Mauritania",
+    "calling_code": "+222",
+    "dial_prefixes": [
+      "+222"
+    ],
+    "region_codes": [
+      "MR"
+    ],
+    "flag_id": "MR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MS",
+    "name": "Montserrat",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1664"
+    ],
+    "region_codes": [
+      "MS"
+    ],
+    "flag_id": "MS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MT",
+    "name": "Malta",
+    "calling_code": "+356",
+    "dial_prefixes": [
+      "+356"
+    ],
+    "region_codes": [
+      "MT"
+    ],
+    "flag_id": "MT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MU",
+    "name": "Mauritius",
+    "calling_code": "+230",
+    "dial_prefixes": [
+      "+230"
+    ],
+    "region_codes": [
+      "MU"
+    ],
+    "flag_id": "MU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MV",
+    "name": "Maldives",
+    "calling_code": "+960",
+    "dial_prefixes": [
+      "+960"
+    ],
+    "region_codes": [
+      "MV"
+    ],
+    "flag_id": "MV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MW",
+    "name": "Malawi",
+    "calling_code": "+265",
+    "dial_prefixes": [
+      "+265"
+    ],
+    "region_codes": [
+      "MW"
+    ],
+    "flag_id": "MW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MX",
+    "name": "Mexico",
+    "calling_code": "+52",
+    "dial_prefixes": [
+      "+52"
+    ],
+    "region_codes": [
+      "MX"
+    ],
+    "flag_id": "MX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MY",
+    "name": "Malaysia",
+    "calling_code": "+60",
+    "dial_prefixes": [
+      "+60"
+    ],
+    "region_codes": [
+      "MY"
+    ],
+    "flag_id": "MY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "MZ",
+    "name": "Mozambique",
+    "calling_code": "+258",
+    "dial_prefixes": [
+      "+258"
+    ],
+    "region_codes": [
+      "MZ"
+    ],
+    "flag_id": "MZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NA",
+    "name": "Namibia",
+    "calling_code": "+264",
+    "dial_prefixes": [
+      "+264"
+    ],
+    "region_codes": [
+      "NA"
+    ],
+    "flag_id": "NA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NC",
+    "name": "New Caledonia",
+    "calling_code": "+687",
+    "dial_prefixes": [
+      "+687"
+    ],
+    "region_codes": [
+      "NC"
+    ],
+    "flag_id": "NC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NE",
+    "name": "Niger",
+    "calling_code": "+227",
+    "dial_prefixes": [
+      "+227"
+    ],
+    "region_codes": [
+      "NE"
+    ],
+    "flag_id": "NE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NF",
+    "name": "Norfolk Island",
+    "calling_code": "+672",
+    "dial_prefixes": [
+      "+672"
+    ],
+    "region_codes": [
+      "NF"
+    ],
+    "flag_id": "NF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NG",
+    "name": "Nigeria",
+    "calling_code": "+234",
+    "dial_prefixes": [
+      "+234"
+    ],
+    "region_codes": [
+      "NG"
+    ],
+    "flag_id": "NG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NI",
+    "name": "Nicaragua",
+    "calling_code": "+505",
+    "dial_prefixes": [
+      "+505"
+    ],
+    "region_codes": [
+      "NI"
+    ],
+    "flag_id": "NI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NL",
+    "name": "Netherlands",
+    "calling_code": "+31",
+    "dial_prefixes": [
+      "+31"
+    ],
+    "region_codes": [
+      "NL"
+    ],
+    "flag_id": "NL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NO",
+    "name": "Norway",
+    "calling_code": "+47",
+    "dial_prefixes": [
+      "+47"
+    ],
+    "region_codes": [
+      "NO"
+    ],
+    "flag_id": "NO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NP",
+    "name": "Nepal",
+    "calling_code": "+977",
+    "dial_prefixes": [
+      "+977"
+    ],
+    "region_codes": [
+      "NP"
+    ],
+    "flag_id": "NP",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NR",
+    "name": "Nauru",
+    "calling_code": "+674",
+    "dial_prefixes": [
+      "+674"
+    ],
+    "region_codes": [
+      "NR"
+    ],
+    "flag_id": "NR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NU",
+    "name": "Niue",
+    "calling_code": "+683",
+    "dial_prefixes": [
+      "+683"
+    ],
+    "region_codes": [
+      "NU"
+    ],
+    "flag_id": "NU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "NZ",
+    "name": "New Zealand",
+    "calling_code": "+64",
+    "dial_prefixes": [
+      "+64"
+    ],
+    "region_codes": [
+      "NZ"
+    ],
+    "flag_id": "NZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "OM",
+    "name": "Oman",
+    "calling_code": "+968",
+    "dial_prefixes": [
+      "+968"
+    ],
+    "region_codes": [
+      "OM"
+    ],
+    "flag_id": "OM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PA",
+    "name": "Panama",
+    "calling_code": "+507",
+    "dial_prefixes": [
+      "+507"
+    ],
+    "region_codes": [
+      "PA"
+    ],
+    "flag_id": "PA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PE",
+    "name": "Peru",
+    "calling_code": "+51",
+    "dial_prefixes": [
+      "+51"
+    ],
+    "region_codes": [
+      "PE"
+    ],
+    "flag_id": "PE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PF",
+    "name": "French Polynesia",
+    "calling_code": "+689",
+    "dial_prefixes": [
+      "+689"
+    ],
+    "region_codes": [
+      "PF"
+    ],
+    "flag_id": "PF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PG",
+    "name": "Papua New Guinea",
+    "calling_code": "+675",
+    "dial_prefixes": [
+      "+675"
+    ],
+    "region_codes": [
+      "PG"
+    ],
+    "flag_id": "PG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PH",
+    "name": "Philippines",
+    "calling_code": "+63",
+    "dial_prefixes": [
+      "+63"
+    ],
+    "region_codes": [
+      "PH"
+    ],
+    "flag_id": "PH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PK",
+    "name": "Pakistan",
+    "calling_code": "+92",
+    "dial_prefixes": [
+      "+92"
+    ],
+    "region_codes": [
+      "PK"
+    ],
+    "flag_id": "PK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PL",
+    "name": "Poland",
+    "calling_code": "+48",
+    "dial_prefixes": [
+      "+48"
+    ],
+    "region_codes": [
+      "PL"
+    ],
+    "flag_id": "PL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PM",
+    "name": "St. Pierre & Miquelon",
+    "calling_code": "+508",
+    "dial_prefixes": [
+      "+508"
+    ],
+    "region_codes": [
+      "PM"
+    ],
+    "flag_id": "PM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PR",
+    "name": "Puerto Rico",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1787",
+      "+1939"
+    ],
+    "region_codes": [
+      "PR"
+    ],
+    "flag_id": "PR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PS",
+    "name": "Palestinian Territories",
+    "calling_code": "+970",
+    "dial_prefixes": [
+      "+970"
+    ],
+    "region_codes": [
+      "PS"
+    ],
+    "flag_id": "PS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PT",
+    "name": "Portugal",
+    "calling_code": "+351",
+    "dial_prefixes": [
+      "+351"
+    ],
+    "region_codes": [
+      "PT"
+    ],
+    "flag_id": "PT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PW",
+    "name": "Palau",
+    "calling_code": "+680",
+    "dial_prefixes": [
+      "+680"
+    ],
+    "region_codes": [
+      "PW"
+    ],
+    "flag_id": "PW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "PY",
+    "name": "Paraguay",
+    "calling_code": "+595",
+    "dial_prefixes": [
+      "+595"
+    ],
+    "region_codes": [
+      "PY"
+    ],
+    "flag_id": "PY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "QA",
+    "name": "Qatar",
+    "calling_code": "+974",
+    "dial_prefixes": [
+      "+974"
+    ],
+    "region_codes": [
+      "QA"
+    ],
+    "flag_id": "QA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "RE",
+    "name": "Réunion",
+    "calling_code": "+262",
+    "dial_prefixes": [
+      "+262"
+    ],
+    "region_codes": [
+      "RE"
+    ],
+    "flag_id": "RE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "RO",
+    "name": "Romania",
+    "calling_code": "+40",
+    "dial_prefixes": [
+      "+40"
+    ],
+    "region_codes": [
+      "RO"
+    ],
+    "flag_id": "RO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "RS",
+    "name": "Serbia",
+    "calling_code": "+381",
+    "dial_prefixes": [
+      "+381"
+    ],
+    "region_codes": [
+      "RS"
+    ],
+    "flag_id": "RS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "RU",
+    "name": "Russia",
+    "calling_code": "+7",
+    "dial_prefixes": [
+      "+7"
+    ],
+    "region_codes": [
+      "RU"
+    ],
+    "flag_id": "RU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "RW",
+    "name": "Rwanda",
+    "calling_code": "+250",
+    "dial_prefixes": [
+      "+250"
+    ],
+    "region_codes": [
+      "RW"
+    ],
+    "flag_id": "RW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SA",
+    "name": "Saudi Arabia",
+    "calling_code": "+966",
+    "dial_prefixes": [
+      "+966"
+    ],
+    "region_codes": [
+      "SA"
+    ],
+    "flag_id": "SA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SB",
+    "name": "Solomon Islands",
+    "calling_code": "+677",
+    "dial_prefixes": [
+      "+677"
+    ],
+    "region_codes": [
+      "SB"
+    ],
+    "flag_id": "SB",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SC",
+    "name": "Seychelles",
+    "calling_code": "+248",
+    "dial_prefixes": [
+      "+248"
+    ],
+    "region_codes": [
+      "SC"
+    ],
+    "flag_id": "SC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SD",
+    "name": "Sudan",
+    "calling_code": "+249",
+    "dial_prefixes": [
+      "+249"
+    ],
+    "region_codes": [
+      "SD"
+    ],
+    "flag_id": "SD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SE",
+    "name": "Sweden",
+    "calling_code": "+46",
+    "dial_prefixes": [
+      "+46"
+    ],
+    "region_codes": [
+      "SE"
+    ],
+    "flag_id": "SE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SG",
+    "name": "Singapore",
+    "calling_code": "+65",
+    "dial_prefixes": [
+      "+65"
+    ],
+    "region_codes": [
+      "SG"
+    ],
+    "flag_id": "SG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SH",
+    "name": "St. Helena, Ascension & Tristan da Cunha",
+    "calling_code": "+290",
+    "dial_prefixes": [
+      "+290"
+    ],
+    "region_codes": [
+      "SH"
+    ],
+    "flag_id": "SH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SI",
+    "name": "Slovenia",
+    "calling_code": "+386",
+    "dial_prefixes": [
+      "+386"
+    ],
+    "region_codes": [
+      "SI"
+    ],
+    "flag_id": "SI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SJ",
+    "name": "Svalbard & Jan Mayen",
+    "calling_code": "+47",
+    "dial_prefixes": [
+      "+4779"
+    ],
+    "region_codes": [
+      "SJ"
+    ],
+    "flag_id": "SJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SK",
+    "name": "Slovakia",
+    "calling_code": "+421",
+    "dial_prefixes": [
+      "+421"
+    ],
+    "region_codes": [
+      "SK"
+    ],
+    "flag_id": "SK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SL",
+    "name": "Sierra Leone",
+    "calling_code": "+232",
+    "dial_prefixes": [
+      "+232"
+    ],
+    "region_codes": [
+      "SL"
+    ],
+    "flag_id": "SL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SM",
+    "name": "San Marino",
+    "calling_code": "+378",
+    "dial_prefixes": [
+      "+378"
+    ],
+    "region_codes": [
+      "SM"
+    ],
+    "flag_id": "SM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SN",
+    "name": "Senegal",
+    "calling_code": "+221",
+    "dial_prefixes": [
+      "+221"
+    ],
+    "region_codes": [
+      "SN"
+    ],
+    "flag_id": "SN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SO",
+    "name": "Somalia",
+    "calling_code": "+252",
+    "dial_prefixes": [
+      "+252"
+    ],
+    "region_codes": [
+      "SO"
+    ],
+    "flag_id": "SO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SR",
+    "name": "Suriname",
+    "calling_code": "+597",
+    "dial_prefixes": [
+      "+597"
+    ],
+    "region_codes": [
+      "SR"
+    ],
+    "flag_id": "SR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SS",
+    "name": "South Sudan",
+    "calling_code": "+211",
+    "dial_prefixes": [
+      "+211"
+    ],
+    "region_codes": [
+      "SS"
+    ],
+    "flag_id": "SS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ST",
+    "name": "São Tomé & Príncipe",
+    "calling_code": "+239",
+    "dial_prefixes": [
+      "+239"
+    ],
+    "region_codes": [
+      "ST"
+    ],
+    "flag_id": "ST",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SV",
+    "name": "El Salvador",
+    "calling_code": "+503",
+    "dial_prefixes": [
+      "+503"
+    ],
+    "region_codes": [
+      "SV"
+    ],
+    "flag_id": "SV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SX",
+    "name": "Sint Maarten",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1721"
+    ],
+    "region_codes": [
+      "SX"
+    ],
+    "flag_id": "SX",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SY",
+    "name": "Syria",
+    "calling_code": "+963",
+    "dial_prefixes": [
+      "+963"
+    ],
+    "region_codes": [
+      "SY"
+    ],
+    "flag_id": "SY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "SZ",
+    "name": "Eswatini",
+    "calling_code": "+268",
+    "dial_prefixes": [
+      "+268"
+    ],
+    "region_codes": [
+      "SZ"
+    ],
+    "flag_id": "SZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TA",
+    "name": "Tristan da Cunha",
+    "calling_code": "+290",
+    "dial_prefixes": [
+      "+290"
+    ],
+    "region_codes": [
+      "TA"
+    ],
+    "flag_id": "SH-TA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TC",
+    "name": "Turks & Caicos Islands",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1649"
+    ],
+    "region_codes": [
+      "TC"
+    ],
+    "flag_id": "TC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TD",
+    "name": "Chad",
+    "calling_code": "+235",
+    "dial_prefixes": [
+      "+235"
+    ],
+    "region_codes": [
+      "TD"
+    ],
+    "flag_id": "TD",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TG",
+    "name": "Togo",
+    "calling_code": "+228",
+    "dial_prefixes": [
+      "+228"
+    ],
+    "region_codes": [
+      "TG"
+    ],
+    "flag_id": "TG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TH",
+    "name": "Thailand",
+    "calling_code": "+66",
+    "dial_prefixes": [
+      "+66"
+    ],
+    "region_codes": [
+      "TH"
+    ],
+    "flag_id": "TH",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TJ",
+    "name": "Tajikistan",
+    "calling_code": "+992",
+    "dial_prefixes": [
+      "+992"
+    ],
+    "region_codes": [
+      "TJ"
+    ],
+    "flag_id": "TJ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TK",
+    "name": "Tokelau",
+    "calling_code": "+690",
+    "dial_prefixes": [
+      "+690"
+    ],
+    "region_codes": [
+      "TK"
+    ],
+    "flag_id": "TK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TL",
+    "name": "Timor-Leste",
+    "calling_code": "+670",
+    "dial_prefixes": [
+      "+670"
+    ],
+    "region_codes": [
+      "TL"
+    ],
+    "flag_id": "TL",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TM",
+    "name": "Turkmenistan",
+    "calling_code": "+993",
+    "dial_prefixes": [
+      "+993"
+    ],
+    "region_codes": [
+      "TM"
+    ],
+    "flag_id": "TM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TN",
+    "name": "Tunisia",
+    "calling_code": "+216",
+    "dial_prefixes": [
+      "+216"
+    ],
+    "region_codes": [
+      "TN"
+    ],
+    "flag_id": "TN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TO",
+    "name": "Tonga",
+    "calling_code": "+676",
+    "dial_prefixes": [
+      "+676"
+    ],
+    "region_codes": [
+      "TO"
+    ],
+    "flag_id": "TO",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TR",
+    "name": "Türkiye",
+    "calling_code": "+90",
+    "dial_prefixes": [
+      "+90"
+    ],
+    "region_codes": [
+      "TR"
+    ],
+    "flag_id": "TR",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TT",
+    "name": "Trinidad & Tobago",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1868"
+    ],
+    "region_codes": [
+      "TT"
+    ],
+    "flag_id": "TT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TV",
+    "name": "Tuvalu",
+    "calling_code": "+688",
+    "dial_prefixes": [
+      "+688"
+    ],
+    "region_codes": [
+      "TV"
+    ],
+    "flag_id": "TV",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TW",
+    "name": "Taiwan",
+    "calling_code": "+886",
+    "dial_prefixes": [
+      "+886"
+    ],
+    "region_codes": [
+      "TW"
+    ],
+    "flag_id": "TW",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "TZ",
+    "name": "Tanzania",
+    "calling_code": "+255",
+    "dial_prefixes": [
+      "+255"
+    ],
+    "region_codes": [
+      "TZ"
+    ],
+    "flag_id": "TZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "UA",
+    "name": "Ukraine",
+    "calling_code": "+380",
+    "dial_prefixes": [
+      "+380"
+    ],
+    "region_codes": [
+      "UA"
+    ],
+    "flag_id": "UA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "UG",
+    "name": "Uganda",
+    "calling_code": "+256",
+    "dial_prefixes": [
+      "+256"
+    ],
+    "region_codes": [
+      "UG"
+    ],
+    "flag_id": "UG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "US",
+    "name": "United States",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1"
+    ],
+    "region_codes": [
+      "US"
+    ],
+    "flag_id": "US",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "UY",
+    "name": "Uruguay",
+    "calling_code": "+598",
+    "dial_prefixes": [
+      "+598"
+    ],
+    "region_codes": [
+      "UY"
+    ],
+    "flag_id": "UY",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "UZ",
+    "name": "Uzbekistan",
+    "calling_code": "+998",
+    "dial_prefixes": [
+      "+998"
+    ],
+    "region_codes": [
+      "UZ"
+    ],
+    "flag_id": "UZ",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VA",
+    "name": "Vatican City",
+    "calling_code": "+39",
+    "dial_prefixes": [
+      "+39"
+    ],
+    "region_codes": [
+      "VA"
+    ],
+    "flag_id": "VA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VC",
+    "name": "St. Vincent & Grenadines",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1784"
+    ],
+    "region_codes": [
+      "VC"
+    ],
+    "flag_id": "VC",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VE",
+    "name": "Venezuela",
+    "calling_code": "+58",
+    "dial_prefixes": [
+      "+58"
+    ],
+    "region_codes": [
+      "VE"
+    ],
+    "flag_id": "VE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VG",
+    "name": "British Virgin Islands",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1284"
+    ],
+    "region_codes": [
+      "VG"
+    ],
+    "flag_id": "VG",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VI",
+    "name": "U.S. Virgin Islands",
+    "calling_code": "+1",
+    "dial_prefixes": [
+      "+1340"
+    ],
+    "region_codes": [
+      "VI"
+    ],
+    "flag_id": "VI",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VN",
+    "name": "Vietnam",
+    "calling_code": "+84",
+    "dial_prefixes": [
+      "+84"
+    ],
+    "region_codes": [
+      "VN"
+    ],
+    "flag_id": "VN",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "VU",
+    "name": "Vanuatu",
+    "calling_code": "+678",
+    "dial_prefixes": [
+      "+678"
+    ],
+    "region_codes": [
+      "VU"
+    ],
+    "flag_id": "VU",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "WF",
+    "name": "Wallis & Futuna",
+    "calling_code": "+681",
+    "dial_prefixes": [
+      "+681"
+    ],
+    "region_codes": [
+      "WF"
+    ],
+    "flag_id": "WF",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "WS",
+    "name": "Samoa",
+    "calling_code": "+685",
+    "dial_prefixes": [
+      "+685"
+    ],
+    "region_codes": [
+      "WS"
+    ],
+    "flag_id": "WS",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "XK",
+    "name": "Kosovo",
+    "calling_code": "+383",
+    "dial_prefixes": [
+      "+383"
+    ],
+    "region_codes": [
+      "XK"
+    ],
+    "flag_id": "XK",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "YE",
+    "name": "Yemen",
+    "calling_code": "+967",
+    "dial_prefixes": [
+      "+967"
+    ],
+    "region_codes": [
+      "YE"
+    ],
+    "flag_id": "YE",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "YT",
+    "name": "Mayotte",
+    "calling_code": "+262",
+    "dial_prefixes": [
+      "+262"
+    ],
+    "region_codes": [
+      "YT"
+    ],
+    "flag_id": "YT",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ZA",
+    "name": "South Africa",
+    "calling_code": "+27",
+    "dial_prefixes": [
+      "+27"
+    ],
+    "region_codes": [
+      "ZA"
+    ],
+    "flag_id": "ZA",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ZM",
+    "name": "Zambia",
+    "calling_code": "+260",
+    "dial_prefixes": [
+      "+260"
+    ],
+    "region_codes": [
+      "ZM"
+    ],
+    "flag_id": "ZM",
+    "enabled": true,
+    "hidden": false
+  },
+  {
+    "code": "ZW",
+    "name": "Zimbabwe",
+    "calling_code": "+263",
+    "dial_prefixes": [
+      "+263"
+    ],
+    "region_codes": [
+      "ZW"
+    ],
+    "flag_id": "ZW",
+    "enabled": true,
+    "hidden": false
+  }
+]
