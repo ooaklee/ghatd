@@ -2,8 +2,12 @@ package billing
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,6 +25,9 @@ func TestRevenueQuarantineResolution(t *testing.T) {
 	}
 	cases := []testCase{
 		{name: "recovered_facts_and_resolution_are_one_acceptance"},
+		{name: "stable_recovery_identity_is_retained", mutate: func(r *ResolveRevenueRequest) { r.RecoveryFingerprint = "versioned-source-identity" }},
+		{name: "malformed_recovery_identity_is_invalid", mutate: func(r *ResolveRevenueRequest) { r.RecoveryFingerprint = " untrimmed" }, want: ErrRevenueInvalid},
+		{name: "oversized_recovery_identity_is_invalid", mutate: func(r *ResolveRevenueRequest) { r.RecoveryFingerprint = strings.Repeat("x", 257) }, want: ErrRevenueInvalid},
 		{name: "reasoned_no_revenue_is_a_durable_resolution", noFacts: true},
 		{name: "expected_source_fingerprint_is_mandatory", mutate: func(r *ResolveRevenueRequest) { r.ExpectedFingerprint = "" }, want: ErrRevenueInvalid},
 		{name: "changed_source_fingerprint_conflicts", mutate: func(r *ResolveRevenueRequest) { r.ExpectedFingerprint = "changed" }, want: ErrRevenueConflict},
@@ -65,6 +72,23 @@ func TestRevenueQuarantineResolution(t *testing.T) {
 			require.Equal(t, original.ID, replay.ResolutionOf)
 			require.Equal(t, req.ActorID, replay.ResolutionBy)
 			require.Equal(t, req.Reason, replay.ResolutionReason)
+			require.Equal(t, req.RecoveryFingerprint, replay.RecoveryFingerprint)
+			if req.RecoveryFingerprint == "" {
+				// Existing empty-field receipts must retain their pre-extension hash.
+				canonical := make([]RevenueFact, len(req.Facts))
+				for i, f := range req.Facts {
+					canonical[i], err = canonicalRevenueFact(f)
+					require.NoError(t, err)
+				}
+				encoded, err := json.Marshal(struct {
+					Original, Fingerprint string
+					Facts                 []RevenueFact
+					Reason, Actor         string
+				}{original.ID, original.Fingerprint, canonical, req.Reason, req.ActorID})
+				require.NoError(t, err)
+				hash := sha256.Sum256(encoded)
+				require.Equal(t, hex.EncodeToString(hash[:]), replay.Fingerprint)
+			}
 			require.Len(t, repo.observations, 2)
 			if tc.noFacts {
 				require.Empty(t, repo.facts)
@@ -73,6 +97,10 @@ func TestRevenueQuarantineResolution(t *testing.T) {
 			}
 			storedOriginal := repo.observations[original.ID]
 			require.Equal(t, original, storedOriginal)
+			changedRecovery := req
+			changedRecovery.RecoveryFingerprint = "different-recovery-identity"
+			_, err = svc.ResolveQuarantinedRevenue(context.Background(), changedRecovery)
+			require.ErrorIs(t, err, ErrRevenueConflict)
 			req.Reason = "different_resolution"
 			_, err = svc.ResolveQuarantinedRevenue(context.Background(), req)
 			require.ErrorIs(t, err, ErrRevenueConflict)

@@ -90,6 +90,9 @@ func (s *StripeProvider) ResolveRevenueWebhook(ctx context.Context, req *http.Re
 	return s.resolveStripeRevenueEvent(ctx, event)
 }
 
+// This field set is part of the retained legacy digest contract. Adding
+// envelope fields requires an explicit new digest version while preserving
+// the legacy encoding; do not silently change historical snapshot hashes.
 type stripeRevenueEvent struct {
 	ID       string `json:"id"`
 	Type     string `json:"type"`
@@ -113,7 +116,11 @@ func (s *StripeProvider) resolveStripeRevenueEvent(ctx context.Context, event st
 	if err != nil {
 		return nil, err
 	}
-	result := &RevenueEvidence{Scope: scope, EnvelopeID: event.ID, EffectiveAt: time.Unix(event.Created, 0).UTC(), SourceFingerprint: digest}
+	legacy, err := legacyStripeRevenueDigest(event)
+	if err != nil {
+		return nil, err
+	}
+	result := &RevenueEvidence{Scope: scope, EnvelopeID: event.ID, EffectiveAt: time.Unix(event.Created, 0).UTC(), SourceFingerprint: digest, LegacySourceFingerprint: legacy}
 
 	switch event.Type {
 	case "invoice.paid", "invoice.payment_succeeded":

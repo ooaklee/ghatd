@@ -95,7 +95,22 @@ func (s *Service) acceptRevenueWebhook(ctx context.Context, name string, req *ht
 		verified = &identity
 		original, err := s.revenueFeed.GetRevenueDelivery(ctx, billingRevenueScope(identity.Scope), identity.EnvelopeID)
 		if err == nil {
-			if original.Scope != billingRevenueScope(identity.Scope) || original.EnvelopeID != identity.EnvelopeID || original.SourceFingerprint != identity.SourceFingerprint {
+			if original.Scope != billingRevenueScope(identity.Scope) || original.EnvelopeID != identity.EnvelopeID {
+				return false, billing.ErrRevenueConflict
+			}
+			if original.SourceFingerprint == identity.SourceFingerprint || (identity.LegacySourceFingerprint != "" && original.SourceFingerprint == identity.LegacySourceFingerprint) {
+				return true, nil
+			}
+			// A changed legacy representation can replay only after native recovery
+			// retained a stable identity bound to this exact original quarantine.
+			resolution, err := s.revenueFeed.GetRevenueSourceResolution(ctx, original.ID)
+			if err != nil {
+				if singleRevenueAbsence(err) {
+					return false, billing.ErrRevenueConflict
+				}
+				return false, err
+			}
+			if !boundRevenueResolution(original, resolution) || resolution.RecoveryFingerprint == "" || resolution.RecoveryFingerprint != identity.SourceFingerprint {
 				return false, billing.ErrRevenueConflict
 			}
 			return true, nil
@@ -262,6 +277,10 @@ type ReconcileRevenueSourceRequest struct {
 	ExpectedFingerprint string
 	Reason              string
 	ActorID             string `json:"-"`
+	// OriginalSnapshot is optional private recovery input for legacy source
+	// hashes. It must reproduce the retained original hash; it is never stored
+	// or accepted as a substitute for authenticated provider event retrieval.
+	OriginalSnapshot []byte `json:"-"`
 }
 
 func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileRevenueSourceRequest) (billing.RevenueObservation, error) {
@@ -283,8 +302,21 @@ func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileReven
 	}
 	old, err := s.revenueFeed.GetRevenueSourceResolution(ctx, source.ID)
 	if err == nil {
-		if old.ResolutionBy != req.ActorID || old.ResolutionReason != req.Reason {
+		if !boundRevenueResolution(source, old) || old.ResolutionBy != req.ActorID || old.ResolutionReason != req.Reason {
 			return billing.RevenueObservation{}, billing.ErrRevenueConflict
+		}
+		if len(req.OriginalSnapshot) > 0 {
+			provider, err := s.revenueRegistry.GetRevenueProvider(source.Scope.Provider)
+			if err != nil {
+				return billing.RevenueObservation{}, err
+			}
+			identity, err := verifyRevenueOriginalSnapshot(ctx, provider, source, req.OriginalSnapshot)
+			if err != nil {
+				return billing.RevenueObservation{}, err
+			}
+			if old.RecoveryFingerprint != identity {
+				return billing.RevenueObservation{}, billing.ErrRevenueConflict
+			}
 		}
 		return old, nil
 	}
@@ -295,6 +327,13 @@ func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileReven
 	if err != nil {
 		return billing.RevenueObservation{}, err
 	}
+	expectedSource := source.SourceFingerprint
+	if len(req.OriginalSnapshot) > 0 {
+		expectedSource, err = verifyRevenueOriginalSnapshot(ctx, provider, source, req.OriginalSnapshot)
+		if err != nil {
+			return billing.RevenueObservation{}, err
+		}
+	}
 	reconciliation, ok := provider.(paymentprovider.RevenueReconciliationProvider)
 	if !ok || nilRevenueDependency(reconciliation) {
 		return billing.RevenueObservation{}, billing.ErrRevenueUnavailable
@@ -303,7 +342,10 @@ func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileReven
 	if err != nil {
 		return billing.RevenueObservation{}, err
 	}
-	if evidence == nil || billingRevenueScope(evidence.Scope) != source.Scope || evidence.EnvelopeID != source.EnvelopeID || (source.SourceFingerprint != "" && evidence.SourceFingerprint != source.SourceFingerprint) {
+	if evidence == nil || billingRevenueScope(evidence.Scope) != source.Scope || evidence.EnvelopeID != source.EnvelopeID {
+		return billing.RevenueObservation{}, billing.ErrRevenueInvalid
+	}
+	if expectedSource != "" && evidence.SourceFingerprint != expectedSource && !(len(req.OriginalSnapshot) == 0 && evidence.LegacySourceFingerprint != "" && evidence.LegacySourceFingerprint == expectedSource) {
 		return billing.RevenueObservation{}, billing.ErrRevenueInvalid
 	}
 	verified, err := s.revenueRequest(ctx, provider, evidence)
@@ -313,7 +355,29 @@ func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileReven
 	if verified.QuarantineReason != "" && verified.QuarantineReason != "no_subscription_revenue" {
 		return billing.RevenueObservation{}, billing.ErrRevenueUnassessable
 	}
-	return s.revenueFeed.ResolveQuarantinedRevenue(ctx, billing.ResolveRevenueRequest{ObservationID: source.ID, ExpectedFingerprint: source.Fingerprint, Facts: verified.Facts, Reason: req.Reason, ActorID: req.ActorID})
+	return s.revenueFeed.ResolveQuarantinedRevenue(ctx, billing.ResolveRevenueRequest{ObservationID: source.ID, ExpectedFingerprint: source.Fingerprint, RecoveryFingerprint: evidence.SourceFingerprint, Facts: verified.Facts, Reason: req.Reason, ActorID: req.ActorID})
+}
+
+// A recovery receipt must belong to the immutable original source. Provider
+// replay cannot use a receipt from another scope, envelope or quarantine.
+func boundRevenueResolution(source, resolution billing.RevenueObservation) bool {
+	return source.ID != "" && source.QuarantineReason != "" && source.ResolutionOf == "" && resolution.ID != "" && resolution.Fingerprint != "" && !resolution.AcceptedAt.IsZero() && resolution.ResolutionOf == source.ID && resolution.QuarantineReason == "" && resolution.Scope == source.Scope && resolution.EnvelopeID == source.EnvelopeID && resolution.SourceFingerprint == source.SourceFingerprint
+}
+
+func verifyRevenueOriginalSnapshot(ctx context.Context, provider paymentprovider.RevenueProvider, source billing.RevenueObservation, snapshot []byte) (string, error) {
+	verifier, ok := provider.(paymentprovider.RevenueSnapshotVerifier)
+	if !ok || nilRevenueDependency(verifier) {
+		return "", billing.ErrRevenueUnavailable
+	}
+	scope := paymentprovider.RevenueScope{Provider: source.Scope.Provider, AccountID: source.Scope.AccountID, LiveMode: source.Scope.LiveMode}
+	identity, err := verifier.VerifyRetainedRevenueSnapshot(ctx, paymentprovider.RevenueSnapshotRequest{Scope: scope, EnvelopeID: source.EnvelopeID, OriginalFingerprint: source.SourceFingerprint, OriginalSnapshot: snapshot})
+	if err != nil {
+		return "", err
+	}
+	if identity.Scope != scope || identity.EnvelopeID != source.EnvelopeID || identity.OriginalFingerprint != source.SourceFingerprint || identity.CanonicalFingerprint == "" {
+		return "", billing.ErrRevenueInvalid
+	}
+	return identity.CanonicalFingerprint, nil
 }
 func singleRevenueAbsence(err error) bool {
 	for i := 0; err != nil && i < 32; i++ {

@@ -69,7 +69,9 @@ func TestStripeRevenueDeliveryVerificationWithoutAPI(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, "evt_original", identity.EnvelopeID)
-				require.Len(t, identity.SourceFingerprint, 64)
+				require.True(t, strings.HasPrefix(identity.SourceFingerprint, stripeRevenueDigestV2))
+				require.Len(t, identity.SourceFingerprint, len(stripeRevenueDigestV2)+64)
+				require.Len(t, identity.LegacySourceFingerprint, 64)
 				account := "acct_primary"
 				if tc.connected {
 					account = "acct_connected"

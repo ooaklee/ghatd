@@ -853,6 +853,14 @@ the original quarantine remains available. Lost acknowledgement is recovered by
 reading/replaying the immutable resolution. Source digests and actor identity
 are private JSON fields, retained explicitly in encrypted persistence.
 
+An optional private `ResolveRevenueRequest.RecoveryFingerprint` binds the
+immutable resolution to the independently authenticated stable provider
+snapshot. It participates in changed-replay detection, while the original
+quarantine and source fingerprint remain untouched. An empty recovery
+fingerprint preserves the earlier resolution-hash contract. The storage field
+is additive and excluded from public JSON; it supplies no caller authority or
+provider authentication on its own.
+
 This owning service does not authenticate HTTP callers or query a provider.
 The billing manager supplies those boundaries and the provider evidence.
 Applications must supply current scoped worker/operator authority, complete

@@ -96,17 +96,20 @@ type VerifiedRevenueRequest struct {
 // RevenueObservation records acceptance of one delivery, including duplicates
 // and unresolved allocation evidence. It contains no raw payload or email.
 type RevenueObservation struct {
-	ID                string       `bson:"_id"`
-	SourceFingerprint string       `json:"-" bson:"source_fingerprint,omitempty"`
-	Scope             RevenueScope `bson:"scope"`
-	EnvelopeID        string       `bson:"envelope_id"`
-	FactIDs           []string     `bson:"fact_ids"`
-	Fingerprint       string       `bson:"fingerprint"`
-	QuarantineReason  string       `bson:"quarantine_reason,omitempty"`
-	ResolutionOf      string       `bson:"resolution_of,omitempty"`
-	ResolutionReason  string       `bson:"resolution_reason,omitempty"`
-	ResolutionBy      string       `json:"-" bson:"resolution_by,omitempty"`
-	AcceptedAt        time.Time    `bson:"accepted_at"`
+	ID                string `bson:"_id"`
+	SourceFingerprint string `json:"-" bson:"source_fingerprint,omitempty"`
+	// RecoveryFingerprint binds an authenticated resolution to a stable provider
+	// snapshot while leaving the original quarantine fingerprint unchanged.
+	RecoveryFingerprint string       `json:"-" bson:"recovery_fingerprint,omitempty"`
+	Scope               RevenueScope `bson:"scope"`
+	EnvelopeID          string       `bson:"envelope_id"`
+	FactIDs             []string     `bson:"fact_ids"`
+	Fingerprint         string       `bson:"fingerprint"`
+	QuarantineReason    string       `bson:"quarantine_reason,omitempty"`
+	ResolutionOf        string       `bson:"resolution_of,omitempty"`
+	ResolutionReason    string       `bson:"resolution_reason,omitempty"`
+	ResolutionBy        string       `json:"-" bson:"resolution_by,omitempty"`
+	AcceptedAt          time.Time    `bson:"accepted_at"`
 }
 
 // RevenueAcknowledgement advances one consumer only after its durable owning

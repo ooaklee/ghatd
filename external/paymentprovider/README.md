@@ -36,6 +36,37 @@ changed source evidence conflicts, and a quarantined receipt stays unresolved
 until explicit source reconciliation. New deliveries still require economic
 lookup and durable acceptance.
 
+### Versioned source fingerprints and retained snapshot recovery
+
+New Stripe revenue identities use `stripe-revenue-v2:` followed by a canonical
+SHA-256 digest. For a `charge.refunded` event whose snapshot object is a charge,
+only the top-level `data.object.receipt_url` is excluded. Stripe documents this
+as a URL to view the current [charge receipt](https://docs.stripe.com/api/charges/object#charge_object-receipt_url),
+rather than financial allocation evidence. Rendered receipt URLs can differ
+between an original delivery and authenticated event retrieval. Every other
+field retained by the existing snapshot contract remains bound, including
+amounts, currency, payment references, merchant/mode, event identity and time.
+Nested fields named `receipt_url`, other URLs, invoice and dispute snapshots
+are not excluded. Canonicalization does not modify the supplied snapshot.
+
+The verifier and financial resolver also return a private
+`LegacySourceFingerprint` for exact replay/reconciliation of an unchanged
+pre-versioned snapshot. A changed legacy hash is still a conflict; it is never
+silently converted or substituted for the original source.
+
+For a legacy quarantine whose authenticated event representation differs,
+`RevenueSnapshotVerifier.VerifyRetainedRevenueSnapshot` validates an explicitly
+retained original snapshot against the **exact original legacy hash**, selected
+scope and envelope. It derives the versioned hash locally, without provider
+requests or a fabricated signature. The billing manager separately retrieves
+the authenticated original event and requires its versioned hash to match that
+derived identity before resolving economics. Missing/mismatched original bytes
+cannot establish the bridge. This optional native recovery input is private,
+bounded by the webhook-body limit and excluded from JSON; the revenue feed does
+not retain the raw snapshot. Hosts must supply a trusted recovery procedure,
+not a customer/operator HTTP payload shortcut. Preserve the original source and
+use its owning immutable resolution for retry recovery.
+
 Supported paid-invoice evidence requires a fully paid invoice, one authenticated
 successful payment intent, matching customer/currency, explicit ex-tax line
 bases and complete discount/pretax-credit data reconciled to the invoice's

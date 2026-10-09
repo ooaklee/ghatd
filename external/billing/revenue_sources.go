@@ -64,6 +64,7 @@ func (s *RevenueService) FindPaymentRevenueFacts(ctx context.Context, scope Reve
 type ResolveRevenueRequest struct {
 	ObservationID       string
 	ExpectedFingerprint string
+	RecoveryFingerprint string `json:"-"`
 	Facts               []RevenueFact
 	Reason              string
 	ActorID             string `json:"-"`
@@ -76,7 +77,7 @@ func (s *RevenueService) ResolveQuarantinedRevenue(ctx context.Context, req Reso
 	if err := revenueContext(ctx); err != nil {
 		return RevenueObservation{}, err
 	}
-	if !validRevenueIdentity(req.ObservationID) || !validRevenueIdentity(req.ExpectedFingerprint) || !validRevenueIdentity(req.ActorID) || !validRevenueIdentity(req.Reason) || len(req.Facts) > 200 {
+	if !validRevenueIdentity(req.ObservationID) || !validRevenueIdentity(req.ExpectedFingerprint) || !validRevenueIdentity(req.ActorID) || !validRevenueIdentity(req.Reason) || (req.RecoveryFingerprint != "" && !validRevenueIdentity(req.RecoveryFingerprint)) || len(req.Facts) > 200 {
 		return RevenueObservation{}, ErrRevenueInvalid
 	}
 	var result RevenueObservation
@@ -107,17 +108,18 @@ func (s *RevenueService) ResolveQuarantinedRevenue(ctx context.Context, req Reso
 		}
 		sort.Slice(facts, func(i, j int) bool { return facts[i].ID < facts[j].ID })
 		encoded, err := json.Marshal(struct {
-			Original    string
-			Fingerprint string
-			Facts       []RevenueFact
-			Reason      string
-			Actor       string
-		}{original.ID, original.Fingerprint, facts, req.Reason, req.ActorID})
+			Original            string
+			Fingerprint         string
+			Facts               []RevenueFact
+			Reason              string
+			Actor               string
+			RecoveryFingerprint string `json:",omitempty"`
+		}{Original: original.ID, Fingerprint: original.Fingerprint, Facts: facts, Reason: req.Reason, Actor: req.ActorID, RecoveryFingerprint: req.RecoveryFingerprint})
 		if err != nil {
 			return ErrRevenueInvalid
 		}
 		hash := sha256.Sum256(encoded)
-		resolution := RevenueObservation{SourceFingerprint: original.SourceFingerprint, ID: revenueID(original.Scope, "resolution", original.ID, "", "", ""), Scope: original.Scope, EnvelopeID: original.EnvelopeID, Fingerprint: hex.EncodeToString(hash[:]), AcceptedAt: s.clock.Now().UTC(), FactIDs: []string{}, ResolutionOf: original.ID, ResolutionReason: req.Reason, ResolutionBy: req.ActorID}
+		resolution := RevenueObservation{SourceFingerprint: original.SourceFingerprint, RecoveryFingerprint: req.RecoveryFingerprint, ID: revenueID(original.Scope, "resolution", original.ID, "", "", ""), Scope: original.Scope, EnvelopeID: original.EnvelopeID, Fingerprint: hex.EncodeToString(hash[:]), AcceptedAt: s.clock.Now().UTC(), FactIDs: []string{}, ResolutionOf: original.ID, ResolutionReason: req.Reason, ResolutionBy: req.ActorID}
 		for _, f := range facts {
 			resolution.FactIDs = append(resolution.FactIDs, f.ID)
 		}

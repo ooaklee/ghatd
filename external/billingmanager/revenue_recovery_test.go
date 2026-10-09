@@ -56,7 +56,8 @@ func (f *recoveryRevenueFeed) GetRevenueSourceResolution(context.Context, string
 }
 func (f *recoveryRevenueFeed) ResolveQuarantinedRevenue(_ context.Context, r billing.ResolveRevenueRequest) (billing.RevenueObservation, error) {
 	f.resolved = append(f.resolved, r)
-	return billing.RevenueObservation{ID: "resolution", ResolutionOf: r.ObservationID, ResolutionBy: r.ActorID, ResolutionReason: r.Reason}, nil
+	f.resolution = billing.RevenueObservation{ID: "resolution", Fingerprint: "receipt-fingerprint", AcceptedAt: time.Now().UTC(), Scope: f.source.Scope, EnvelopeID: f.source.EnvelopeID, SourceFingerprint: f.source.SourceFingerprint, RecoveryFingerprint: r.RecoveryFingerprint, ResolutionOf: r.ObservationID, ResolutionBy: r.ActorID, ResolutionReason: r.Reason}
+	return f.resolution, nil
 }
 func TestRevenueSourceScopedRecovery(t *testing.T) {
 	revoked := errors.New("permission revoked")
@@ -98,7 +99,7 @@ func TestRevenueSourceScopedRecovery(t *testing.T) {
 				req.ExpectedFingerprint = "stale"
 			}
 			if tc.existing {
-				feed.resolution = billing.RevenueObservation{ID: "already-committed", ResolutionOf: "original", ResolutionBy: req.ActorID, ResolutionReason: req.Reason}
+				feed.resolution = billing.RevenueObservation{ID: "already-committed", Fingerprint: "receipt-fingerprint", AcceptedAt: at, Scope: feed.source.Scope, EnvelopeID: feed.source.EnvelopeID, ResolutionOf: "original", ResolutionBy: req.ActorID, ResolutionReason: req.Reason}
 			}
 			auth := &recoveryAuthority{err: tc.permission}
 			s, err := (&Service{}).WithRevenueServices(revenueBoundaryRegistry{p: p}, feed, &revenueBoundaryAssociation{err: tc.associationError})

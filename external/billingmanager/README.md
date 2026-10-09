@@ -994,6 +994,38 @@ resolution are committed by the owning billing service in one transaction. No
 handler directly owns financial persistence, commission calculation or manual
 payout execution.
 
+`ReconcileRevenueSourceRequest.OriginalSnapshot` is optional private input for
+an explicit legacy-quarantine repair. The provider's retained-snapshot verifier
+must reproduce the exact original source hash and derive a stable identity;
+authenticated provider retrieval must independently match that identity before
+any recovered facts are accepted. Raw snapshot bytes are neither public JSON
+nor revenue-feed storage. Normal versioned sources and unchanged legacy
+snapshots reconcile without this input. A supplied snapshot is checked even
+when replaying a committed resolution; a changed proof cannot hide behind an
+existing receipt. Receipt replay without a payload retains its outage-tolerant
+behaviour and current-authority check.
+
+Resolution replay is an exact original-request retry: the original verified
+actor and reason must match, as well as the source fingerprint. A different
+currently authorized operator does not inherit the earlier resolver's retry
+identity. Current authorization is still required for the original actor.
+
+The owning resolution retains a private `RecoveryFingerprint` while preserving
+the original quarantine and its `SourceFingerprint`. Freshly signed redelivery
+may match that stable fingerprint only through a resolution bound to the exact
+original scope, envelope and source. No matching resolution means a legacy
+representation change still conflicts. This replay path performs no new
+economic acceptance and does not clear unresolved work by itself. Hosts must
+keep retained-proof recovery behind trusted native provisioning/recovery code;
+no browser-supplied actor or provider scope is admitted by this capability.
+
+The retained-snapshot bridge is deliberately limited to legacy quarantines.
+Already accepted legacy deliveries replay only when the exact legacy hash
+matches; a changed representation without an owning validated bridge remains
+a conflict. Do not rewrite an accepted source hash to acknowledge it. New
+versioned deliveries avoid this receipt-URL difference on both initial
+acceptance and later signed replay.
+
 ### Capturing checkout authorization for verified revenue
 
 `WithCheckoutRevenueCapture(capture, authority)` opts checkout into immutable

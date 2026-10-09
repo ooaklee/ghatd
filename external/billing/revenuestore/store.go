@@ -13,6 +13,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
@@ -39,9 +40,10 @@ type persistedFact struct {
 	Fingerprint string              `json:"fingerprint"`
 }
 type persistedObservation struct {
-	Observation       billing.RevenueObservation `json:"observation"`
-	ResolutionBy      string                     `json:"resolution_by,omitempty"`
-	SourceFingerprint string                     `json:"source_fingerprint,omitempty"`
+	Observation         billing.RevenueObservation `json:"observation"`
+	ResolutionBy        string                     `json:"resolution_by,omitempty"`
+	SourceFingerprint   string                     `json:"source_fingerprint,omitempty"`
+	RecoveryFingerprint string                     `json:"recovery_fingerprint,omitempty"`
 }
 
 func decodeObservation(row recordstore.Record) (billing.RevenueObservation, error) {
@@ -52,7 +54,8 @@ func decodeObservation(row recordstore.Record) (billing.RevenueObservation, erro
 	v := stored.Observation
 	v.ResolutionBy = stored.ResolutionBy
 	v.SourceFingerprint = stored.SourceFingerprint
-	if v.ID != row.ID || row.Kind != kindObservation || row.Partition != partition || v.Fingerprint == "" || v.AcceptedAt.IsZero() {
+	v.RecoveryFingerprint = stored.RecoveryFingerprint
+	if v.ID != row.ID || row.Kind != kindObservation || row.Partition != partition || v.Fingerprint == "" || v.AcceptedAt.IsZero() || (v.RecoveryFingerprint != "" && (len(v.RecoveryFingerprint) > 256 || strings.TrimSpace(v.RecoveryFingerprint) != v.RecoveryFingerprint || v.ResolutionOf == "")) {
 		return billing.RevenueObservation{}, billing.ErrRevenueUnavailable
 	}
 	return v, nil
@@ -155,7 +158,7 @@ func (b *bound) GetObservation(ctx context.Context, id string) (billing.RevenueO
 	return decodeObservation(row)
 }
 func (b *bound) InsertObservation(ctx context.Context, v billing.RevenueObservation) error {
-	row, err := recordstore.NewRecord(kindObservation, v.ID, partition, 1, persistedObservation{Observation: v, ResolutionBy: v.ResolutionBy, SourceFingerprint: v.SourceFingerprint})
+	row, err := recordstore.NewRecord(kindObservation, v.ID, partition, 1, persistedObservation{Observation: v, ResolutionBy: v.ResolutionBy, SourceFingerprint: v.SourceFingerprint, RecoveryFingerprint: v.RecoveryFingerprint})
 	if err != nil {
 		return mapped(err)
 	}

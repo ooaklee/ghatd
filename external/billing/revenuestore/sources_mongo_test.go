@@ -18,8 +18,9 @@ func TestMongoRevenueSourceResolution(t *testing.T) {
 		noFacts   bool
 		uncertain bool
 		failAt    int
+		stable    bool
 	}
-	cases := []testCase{{name: "recovered_facts"}, {name: "reasoned_no_revenue", noFacts: true}, {name: "lost_resolution_acknowledgement", uncertain: true}, {name: "head_rollback", failAt: 1}, {name: "fact_rollback", failAt: 2}, {name: "resolution_rollback", failAt: 3}}
+	cases := []testCase{{name: "recovered_facts"}, {name: "recovered_legacy_snapshot_has_private_stable_identity", stable: true}, {name: "reasoned_no_revenue", noFacts: true}, {name: "lost_resolution_acknowledgement", uncertain: true, stable: true}, {name: "head_rollback", failAt: 1}, {name: "fact_rollback", failAt: 2}, {name: "resolution_rollback", failAt: 3}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, store, db, ctx := revenueFixture(t)
@@ -31,6 +32,9 @@ func TestMongoRevenueSourceResolution(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, []billing.RevenueObservation{original}, pending)
 			req := billing.ResolveRevenueRequest{ObservationID: original.ID, ExpectedFingerprint: original.Fingerprint, Reason: "authenticated_source_recovered", ActorID: "private-authorized-operator", Facts: []billing.RevenueFact{f}}
+			if tc.stable {
+				req.RecoveryFingerprint = "stable-private-recovery-digest"
+			}
 			if tc.noFacts {
 				req.Facts = nil
 				req.Reason = "no_subscription_revenue"
@@ -63,6 +67,7 @@ func TestMongoRevenueSourceResolution(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, req.ActorID, replay.ResolutionBy)
 			require.Equal(t, "private-native-source-digest", replay.SourceFingerprint)
+			require.Equal(t, req.RecoveryFingerprint, replay.RecoveryFingerprint)
 			read, err := recovered.GetRevenueObservation(ctx, replay.ID)
 			require.NoError(t, err)
 			require.Equal(t, replay, read)
@@ -86,6 +91,13 @@ func TestMongoRevenueSourceResolution(t *testing.T) {
 			require.NoError(t, err)
 			require.NotContains(t, string(encoded), req.ActorID)
 			require.NotContains(t, string(encoded), replay.SourceFingerprint)
+			if tc.stable {
+				require.NotContains(t, string(encoded), replay.RecoveryFingerprint)
+				changed := req
+				changed.RecoveryFingerprint = "different-stable-identity"
+				_, err := recovered.ResolveQuarantinedRevenue(ctx, changed)
+				require.ErrorIs(t, err, billing.ErrRevenueConflict)
+			}
 			var raw bson.M
 			require.NoError(t, db.Collection("ghatd_owned_records").FindOne(ctx, bson.M{"kind": kindObservation, "id": replay.ID}).Decode(&raw))
 			require.NotContains(t, raw, "resolution_by")
@@ -104,7 +116,7 @@ func TestMongoRevenueConcurrentResolution(t *testing.T) {
 	f := revenueFact()
 	original, err := svc.AcceptVerified(ctx, billing.VerifiedRevenueRequest{Scope: f.Scope, EnvelopeID: "source", QuarantineReason: "historical_payer_plan_pending", SourceFingerprint: "private-native-source-digest"})
 	require.NoError(t, err)
-	req := billing.ResolveRevenueRequest{ObservationID: original.ID, ExpectedFingerprint: original.Fingerprint, Reason: "authenticated_source_recovered", ActorID: "worker", Facts: []billing.RevenueFact{f}}
+	req := billing.ResolveRevenueRequest{ObservationID: original.ID, ExpectedFingerprint: original.Fingerprint, RecoveryFingerprint: "stable-concurrent-source", Reason: "authenticated_source_recovered", ActorID: "worker", Facts: []billing.RevenueFact{f}}
 	start := make(chan struct{})
 	results := make(chan error, 8)
 	var wg sync.WaitGroup

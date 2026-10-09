@@ -41,6 +41,13 @@ observations are separate from consumer fact acknowledgements. Original payment
 lookups collect complete owning history and isolate provider/account/mode;
 future indexed projections may optimize this without returning partial data.
 
+The encrypted observation envelope optionally retains the private
+`RecoveryFingerprint` alongside the original `SourceFingerprint`. Existing
+rows without this field continue to decode. A present recovery fingerprint is
+bounded, trimmed and belongs only to a resolution; it is excluded from public
+JSON and participates in the immutable owning resolution hash. No new index or
+rewrite of existing quarantine observations is required.
+
 `PendingRevenueFactsAfter` pages pending facts by durable acceptance sequence;
 `UnresolvedRevenueObservationsAfter` pages unresolved sources lexically by
 retained ID. These read positions are sweep positions, not acknowledgement or

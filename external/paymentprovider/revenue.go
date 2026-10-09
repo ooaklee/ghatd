@@ -22,6 +22,33 @@ type RevenueReconciliationProvider interface {
 	ReconcileRevenueEvent(context.Context, RevenueScope, string) (*RevenueEvidence, error)
 }
 
+// RevenueSnapshotVerifier locally checks a retained original snapshot against
+// its previously authenticated source fingerprint. It provides no new delivery
+// authentication and does not replace authenticated provider reconciliation.
+// Billing uses this optional native capability only after current authority.
+type RevenueSnapshotVerifier interface {
+	VerifyRetainedRevenueSnapshot(context.Context, RevenueSnapshotRequest) (RevenueSnapshotIdentity, error)
+}
+
+// RevenueSnapshotRequest binds private recovery material to one owning source.
+// Hosts must obtain the original snapshot through a trusted recovery procedure;
+// raw payloads must not be exposed through customer/operator HTTP contracts.
+type RevenueSnapshotRequest struct {
+	Scope               RevenueScope
+	EnvelopeID          string
+	OriginalFingerprint string `json:"-"`
+	OriginalSnapshot    []byte `json:"-"`
+}
+
+// RevenueSnapshotIdentity preserves the original hash and derives a stable
+// hash from that exact snapshot. Neither value is public financial reporting.
+type RevenueSnapshotIdentity struct {
+	Scope                RevenueScope
+	EnvelopeID           string
+	OriginalFingerprint  string `json:"-"`
+	CanonicalFingerprint string `json:"-"`
+}
+
 var (
 	ErrRevenueNotEnabled       = errors.New("paymentprovider/revenue-not-enabled")
 	ErrRevenueEventNotRelevant = errors.New("paymentprovider/revenue-event-not-relevant")
@@ -49,6 +76,7 @@ type RevenueScope struct {
 // decision, not a transport outage. No raw payload, email or API key is exposed.
 type RevenueEvidence struct {
 	SourceFingerprint            string `json:"-"`
+	LegacySourceFingerprint      string `json:"-"`
 	Scope                        RevenueScope
 	EnvelopeID                   string
 	Kind                         string

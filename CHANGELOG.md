@@ -387,6 +387,14 @@ when the release version has been selected, and remove unused subsections.
   or cancellation while withholding all output. Recovery still requires the
   exact retained original input and current caller authority.
 
+- [Stripe revenue recovery](external/paymentprovider/README.md#versioned-source-fingerprints-and-retained-snapshot-recovery)
+  uses versioned source fingerprints that exclude only a refunded charge's
+  rendered receipt URL. Unchanged legacy snapshots retain exact replay support;
+  differing legacy representations require explicitly validated original
+  snapshot evidence and matching authenticated event retrieval. Immutable
+  resolutions retain a private stable fingerprint without rewriting the
+  original quarantine, and verified redelivery cannot duplicate economics.
+
 - Pre-payment checkout lifecycle lookup now stops after snapshot cancellation
   and withholds evidence after provider-read cancellation. Confirmed capture
   receipt recovery semantics remain unchanged.
