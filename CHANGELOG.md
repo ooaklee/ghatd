@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [notification credential checks](external/notifier/helper/README.md)
+  validate VAPID pairs and an explicit PKCS8-RSA FCM service-account profile
+  over resolved inputs. Hosts retain secret loading and channel switches;
+  existing sender/SDK credential acceptance and enablement remain unchanged.
+  Checks perform no I/O and return fixed startup-only diagnostics.
+
 - [Stripe paid-service-period parsing](external/paymentprovider/helpers/README.md#paid-subscription-service-periods)
   accepts complete non-prorated renewal invoices against explicit native
   identity/mode/price expectations, supporting legacy and modern field layouts.
