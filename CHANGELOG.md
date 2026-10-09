@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [response middleware helpers](external/middleware/helper/README.md)
+  compose content type, explicit process-local LRU caching, gzip and HTML/SVG/JSON
+  minification. Hosts supply cache settings/observer and retain private-route
+  bypass, authentication, logging and serving lifetime. Construction is passive;
+  CSS/JavaScript formats and stored data remain unchanged.
+
 - Optional [OAuth signing-key helper](external/oauth/helper/README.md) resolves
   explicit base64/file inputs with strict precedence and redacted errors.
   **Breaking import migration:** `examples/oauth.LoadAppleSigningKey` moves to
