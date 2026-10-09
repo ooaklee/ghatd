@@ -1205,3 +1205,39 @@ provider lookup, capture or host-pointer change. The result is private and never
 HTTP-decoded. Hosts still own durable original retention, lease-fenced disposition,
 retry/inspection and runtime composition. A generic revision conflict alone is
 insufficient to discard an original.
+
+### Original checkout status recovery
+
+The optional authenticated read
+`GET /api/v1/bms/billings/{providerName}/checkout/status?session_id={sessionID}`
+checks one previously acknowledged checkout. Configure
+`WithCheckoutRevenueCapture` with the owning `billing.CheckoutService` and current
+`CheckoutPayerAuthority`; the named provider must also implement
+`CheckoutStatusProvider`. Existing handlers and providers remain compatible;
+missing optional capabilities return an unavailable result.
+
+The verified caller must still have paying-account authority and own the retained
+intent. The service validates the original forward and reverse session reservation
+in one owning snapshot, then matches fresh authenticated provider evidence against
+the frozen payer reference, merchant/live mode, price, currency, unit amount and
+cadence. Current catalogue values, existing access, email and browser-supplied
+actor or economic fields do not prove that this checkout was paid. Authority and
+cancellation are checked again before disclosure.
+
+The no-store response contains only `state`, `session_id`, `plan_id`, `cost_id` and
+`provider_price_id`. States are `paid`, `no_payment_required`, `pending`, `unpaid`
+and `expired`. A trial completion is never labelled paid. Missing, foreign or
+contradictory evidence and provider/storage failures return an unavailable error
+without a partial result. This read creates no session, captures no revenue,
+refreshes no persisted status and grants no access.
+
+A host can expose this read while an embedded checkout is uncertain, then use
+its existing bounded access refresh after the original returns `paid` or
+`no_payment_required`. Webhooks remain responsible for fulfilment; the host must
+distinguish verified original completion from delayed or unavailable access.
+
+Stripe may label a zero-total trial invoice `paid`. The status read requires an
+explicit nonnegative session total and reports zero-total completion as
+`no_payment_required`, only when the frozen intent authorizes a subscription
+trial. A positive total is required for `paid`; an unknown total fails closed.
+This completion read is not a refund-adjusted balance or a revenue receipt.

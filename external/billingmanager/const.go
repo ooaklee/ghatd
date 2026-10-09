@@ -112,4 +112,6 @@ const (
 
 	// ErrKeyBillingManagerPortalCustomerAmbiguous is returned when server-owned records identify more than one eligible provider customer.
 	ErrKeyBillingManagerPortalCustomerAmbiguous = "BillingManagerPortalCustomerAmbiguous"
+	// ErrKeyBillingManagerCheckoutStatusUnavailable withholds unverified outcomes.
+	ErrKeyBillingManagerCheckoutStatusUnavailable = "BillingManagerCheckoutStatusUnavailable"
 )

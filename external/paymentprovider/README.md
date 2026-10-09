@@ -137,3 +137,27 @@ plan/cost from that record; provider metadata does not establish them. New
 captured checkout submissions also check price/session live mode and returned
 intent/reference correlation. Managers retrieve known sessions via GET instead
 of recreating a POST after idempotency retention expires.
+
+## Optional original checkout status
+
+`CheckoutStatusProvider` supplies a fresh read for an already retained session;
+its `CheckoutStatusEvidence` is separate from persisted revenue and lifecycle
+evidence. Stripe authenticates the configured merchant and uses GET-only
+[session retrieval](https://docs.stripe.com/api/checkout/sessions/retrieve) and
+[complete line-item pagination](https://docs.stripe.com/api/checkout/sessions/line_items).
+It checks explicit live mode, original intent/reference, one quantity-one price,
+unit amount, currency, mode and cadence. The owning billing service must then
+match every field against the immutable original authorization.
+
+The session/payment status pair produces `paid`, `no_payment_required`, `pending`,
+`unpaid` or `expired`; unknown or contradictory pairs return no evidence. A
+completed trial is not a payment, and this read does not establish paid revenue
+or commission. No checkout submission, metadata update, access grant or revenue
+capture occurs. Controlled HTTP tests verify this contract; they do not replace
+qualification of the host's authenticated recovery flow and webhook fulfilment.
+
+Stripe may label a zero-total trial invoice `paid`. The status read requires an
+explicit nonnegative session total and reports zero-total completion as
+`no_payment_required`, only when the frozen intent authorizes a subscription
+trial. A positive total is required for `paid`; an unknown total fails closed.
+This completion read is not a refund-adjusted balance or a revenue receipt.

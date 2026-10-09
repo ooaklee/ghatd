@@ -382,6 +382,13 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Optional [original checkout status recovery](external/billingmanager/README.md#original-checkout-status-recovery)
+  verifies the authenticated caller's retained session and frozen terms through
+  fresh provider reads. It distinguishes paid, trial/no-payment, pending, unpaid
+  and expired outcomes without creating another checkout or using existing
+  access as proof of payment. Native encrypted ownership joins need no new index;
+  missing evidence, revocation and cancellation withhold all output.
+
 - [Private checkout lifecycle stages](external/billingmanager/README.md#private-acknowledged-checkout-completion-stages)
   preserve an observed uncertain owning result through later permission failure
   or cancellation while withholding all output. Recovery still requires the

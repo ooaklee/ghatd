@@ -40,4 +40,5 @@ var BillingManagerErrorMap reply.ErrorManifest = reply.ErrorManifest{
 	ErrBillingManagerPortalProviderRequestFailed:           {Title: "Bad Gateway", Detail: "The customer portal provider could not start a session", StatusCode: 502, Code: "BM00-030"},
 	ErrBillingManagerPortalSessionInvalid:                  {Title: "Bad Gateway", Detail: "The customer portal provider returned an invalid session", StatusCode: 502, Code: "BM00-031"},
 	ErrBillingManagerPortalCustomerAmbiguous:               {Title: "Conflict", Detail: "The customer portal billing identity is ambiguous", StatusCode: 409, Code: "BM00-032"},
+	ErrBillingManagerCheckoutStatusUnavailable:             {Title: "Service Unavailable", Detail: "The original checkout status could not be verified", StatusCode: 503, Code: "BM00-033"},
 }

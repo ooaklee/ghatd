@@ -209,3 +209,12 @@ head availability. Joined absence/outage and uncertain errors remain failures;
 missing linked current receipts are unavailable rather than first absence.
 The billing service validates provenance and decides pending/superseded; the
 repository does not clear host execution state or choose refresh policy.
+
+### Original session status reads
+
+The native checkout transaction implements optional `billing.CheckoutSessionTx`
+using the existing encrypted reverse-session reservation. The owning service
+validates its joined intent and original forward acknowledgement before returning
+a result. This read adds no document kind, migration or index, and does not write
+checkout, revenue or lifecycle records. Missing or inconsistent joins fail closed.
+See [original checkout status](../README.md#original-acknowledged-checkout-status).

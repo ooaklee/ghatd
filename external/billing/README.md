@@ -1195,3 +1195,18 @@ reconfirm under current authority and their exact live lease, atomically retain
 resolution history and clear/replace their own original pointer only after a
 confirmed superseded result. Do not treat a generic conflict or uncertain capture
 reply as supersession. Durable host adoption remains separate integration work.
+
+### Original acknowledged checkout status
+
+`CheckoutService.FindAcknowledgedCheckout` resolves a retained session through
+optional `CheckoutSessionTx`, reads its immutable intent, and validates the native
+forward and reverse acknowledgements in the same read snapshot. It returns zero
+data on missing joins, cancellation or failure. The caller must authorize the
+current payer and withhold another account's intent.
+
+`CheckoutIntent.ValidateCheckoutStatusEvidence` compares a fresh
+`paymentprovider.CheckoutStatusEvidence` with the frozen authorization for either
+subscription or one-time checkout. This evidence is separate from persisted
+revenue and lifecycle evidence: existing hashes and subscription validators are
+unchanged. Neither method creates an acknowledgement, payment fact, status record
+or entitlement. See [authenticated status recovery](../billingmanager/README.md#original-checkout-status-recovery).

@@ -24,6 +24,11 @@ type billingmanagerCheckoutHandler interface {
 	ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.Request)
 }
 
+// billingmanagerCheckoutStatusHandler keeps legacy custom handlers compatible.
+type billingmanagerCheckoutStatusHandler interface {
+	GetBillingProviderCheckoutStatus(http.ResponseWriter, *http.Request)
+}
+
 // billingmanagerPortalHandler is optional so legacy route handlers remain
 // compatible when hosted customer-portal support is not implemented.
 type billingmanagerPortalHandler interface {
@@ -71,6 +76,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	billingmanagerActiveOnlyRoutes := request.Router.NewRouteGroup(APIBillingManagerV1Prefix, router.ActiveSessionOrAPI, request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
 	if checkoutHandler, ok := request.Handler.(billingmanagerCheckoutHandler); ok {
 		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/checkout", Operation: "billingmanager.ProcessBillingProviderCheckout", Methods: []string{http.MethodPost, http.MethodOptions}}, checkoutHandler.ProcessBillingProviderCheckout)
+	}
+	if statusHandler, ok := request.Handler.(billingmanagerCheckoutStatusHandler); ok {
+		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/checkout/status", Operation: "billingmanager.GetBillingProviderCheckoutStatus", Methods: []string{http.MethodGet, http.MethodOptions}}, statusHandler.GetBillingProviderCheckoutStatus)
 	}
 	if portalHandler, ok := request.Handler.(billingmanagerPortalHandler); ok {
 		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/portal", Operation: "billingmanager.ProcessBillingProviderPortal", Methods: []string{http.MethodPost, http.MethodOptions}}, portalHandler.ProcessBillingProviderPortal)
