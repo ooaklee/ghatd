@@ -82,6 +82,16 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add opt-in [browser transport protection](external/http/browsersecurity/README.md)
+  with opaque host-resolved principal bindings, signed CSRF cookies, explicit
+  verified native audience admission and a bounded process-local rate limiter.
+  Hosts choose cookie names and retain session verification, action authority,
+  response projection and distributed admission. Ambiguous fetch-site headers
+  suppress CSRF issuance; native mode rejects even empty or malformed Cookie
+  headers. Configuration rejects empty queries/hostnames, unsafe local cookie
+  prefixes and invalid cookie names. Existing wire framing can be retained with
+  identical keys, names and binding order; no storage conversion is required.
+
 - Add opt-in [Partners authority](external/partneraccess/README.md),
   [billing lifecycle recovery](external/billinglifecycle/README.md),
   [referral route helpers](external/partnermanager/helper/README.md) and
