@@ -82,6 +82,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [Partners HTTP transport](external/partnermanager/http/README.md) with
+  independently mounted member/customer/operator routes, current scoped authority,
+  safe projections and host-configurable browser protection. Financial recovery
+  stays with its existing owners; hosts adopt routes and code checks atomically.
+
 - Add opt-in [browser transport protection](external/http/browsersecurity/README.md)
   with opaque host-resolved principal bindings, signed CSRF cookies, explicit
   verified native audience admission and a bounded process-local rate limiter.
