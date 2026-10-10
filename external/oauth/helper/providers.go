@@ -83,6 +83,8 @@ func BuildAppleProvider(cfg AppleProviderConfig, store oauth.SecureTransactionSt
 	return provider, nil
 }
 
+// configuredFields counts how many of the supplied values are non-blank after
+// trimming, used to detect partially-supplied provider credentials.
 func configuredFields(values ...string) int {
 	count := 0
 	for _, value := range values {

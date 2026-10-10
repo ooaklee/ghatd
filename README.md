@@ -65,6 +65,13 @@ A complete billing solution split into three composable packages for maximum fle
 - **[Pricer](./external/pricer/README.md)** - Source-of-truth pricing catalog with plans, feature entitlements, provider refs, Mongo migrations, and pricing-card E2E fixtures
   - `pricer` - Manage pricing plans, costs, features, and provider-linked catalog metadata
 
+### Partner Programs
+
+Start with [partner program setup](./docs/how-to/configure-partner-program.md) for
+storage, current authority, referral/signup routes and explicit worker composition.
+The [Partner Manager](./external/partnermanager/README.md) coordinates the owning
+program, referral and earnings services; hosts retain commercial policy and scheduling.
+
 ### Additional Packages
 - **[Audit](./external/audit/)** - Handles audit logging for compliance and debugging
 - **[Content Manager](./external/contentmanager/README.md)** - HTTP orchestration for CMS-style content

@@ -30,6 +30,8 @@ func (m *Manager) AdminPartnerStatus(ctx context.Context, actor, partnerID strin
 	return p, nil
 }
 
+// selectedPartnerValid reports whether a partner record is the selected program
+// partner with a usable customer identity and a positive revision.
 func selectedPartnerValid(p partnerprogram.Partner, id string) bool {
 	return p.ID == id && p.ProgramID == partnerprogram.ProgramID && validWorkText(p.CustomerID, 256) && p.Revision > 0
 }

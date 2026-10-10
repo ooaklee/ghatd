@@ -19,6 +19,9 @@ type AccountIdentity struct {
 	admission partneraccess.AccountAdmission
 }
 
+// GetPartnerPrincipal reads one partner principal and applies the host's
+// durable deletion admission before returning it; a scope mismatch is
+// unavailability rather than a principal.
 func (i *AccountIdentity) GetPartnerPrincipal(ctx context.Context, customerID string) (partnermanager.Principal, error) {
 	if ctx == nil || !validAccountID(customerID) {
 		return partnermanager.Principal{}, partnermanager.ErrInvalid
@@ -48,6 +51,9 @@ func (i *AccountIdentity) GetPartnerPrincipal(ctx context.Context, customerID st
 	return principal, nil
 }
 
+// GetSignupFact recovers the immutable signup capture fact without applying
+// mutable host account availability, so deletion cannot erase historical signup
+// evidence.
 func (i *AccountIdentity) GetSignupFact(ctx context.Context, customerID string) (partnermanager.SignupFact, error) {
 	if ctx == nil || !validAccountID(customerID) {
 		return partnermanager.SignupFact{}, partnermanager.ErrInvalid
@@ -77,6 +83,9 @@ func NewAccountIdentity(owner partnermanager.Identity, admission partneraccess.A
 	}
 	return &AccountIdentity{owner: owner, admission: admission}, nil
 }
+
+// validAccountID accepts non-empty identifiers up to 256 bytes of valid UTF-8
+// without whitespace or control characters.
 func validAccountID(value string) bool {
 	return value != "" && len(value) <= 256 && utf8.ValidString(value) && strings.IndexFunc(value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
 }

@@ -6,9 +6,9 @@ import (
 
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/billingmanager"
+	billingmanagerhelper "github.com/ooaklee/ghatd/external/billingmanager/helper"
 	"github.com/ooaklee/ghatd/external/partneraccess"
 	"github.com/ooaklee/ghatd/external/partnermanager"
-	billingmanagerhelper "github.com/ooaklee/ghatd/external/billingmanager/helper"
 	partnerruntime "github.com/ooaklee/ghatd/external/partnermanager/runtime"
 )
 
@@ -40,6 +40,8 @@ type Execution struct {
 	interval  time.Duration
 }
 
+// RunOnce binds the configured authority for this pass and runs one worker
+// pass, returning its report. It performs no scheduling; the host owns cadence.
 func (w *Execution) RunOnce(ctx context.Context) (partnermanager.WorkerReport, error) {
 	if w == nil || w.worker == nil || w.authority == nil {
 		return partnermanager.WorkerReport{}, partnermanager.ErrUnavailable

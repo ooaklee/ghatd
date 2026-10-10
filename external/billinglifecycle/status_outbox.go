@@ -18,6 +18,9 @@ const statusKind = "partners_lifecycle_status_input"
 // It validates native provenance under current global and selected refresh
 // authority. Stored preparing authorship is never permission for recovery.
 type StatusValidator interface {
+	// ValidateSubscriptionStatusPreparation checks the preparation's native
+	// provenance under current global and selected refresh authority, returning an
+	// error when validation fails.
 	ValidateSubscriptionStatusPreparation(context.Context, string, billing.SubscriptionStatusPreparation) error
 }
 
@@ -57,24 +60,34 @@ type statusPreparationPayload struct {
 	RequestedAt                                     time.Time
 }
 
+// statusEvidencePayload is the private durable encoding of verified
+// subscription status evidence.
 type statusEvidencePayload struct {
 	Scope                                      billing.RevenueScope
 	SubscriptionID, ProviderCustomerID, Status string
 	CancellationScheduled                      bool
 }
 
+// statusPayload is the private durable encoding of a retained status input and
+// its optional evidence.
 type statusPayload struct {
 	Schema      int
 	Preparation statusPreparationPayload
 	Evidence    *statusEvidencePayload
 }
 
+// statusPreparation converts a preparation to its private durable payload.
 func statusPreparation(p billing.SubscriptionStatusPreparation) statusPreparationPayload {
 	return statusPreparationPayload{p.Source, p.CheckoutIntentID, p.CheckoutFingerprint, p.CaptureID, p.FactID, p.FactFingerprint, p.ActorID, p.Scope, p.PrincipalID, p.ProviderCustomerID, p.SubscriptionID, p.ExpectedRevision, p.ExpectedFingerprint, p.RequestedAt}
 }
+
+// input rebuilds the billing preparation from its private durable payload.
 func (p statusPreparationPayload) input() billing.SubscriptionStatusPreparation {
 	return billing.SubscriptionStatusPreparation{Source: p.Source, CheckoutIntentID: p.CheckoutIntentID, CheckoutFingerprint: p.CheckoutFingerprint, CaptureID: p.CaptureID, FactID: p.FactID, FactFingerprint: p.FactFingerprint, ActorID: p.ActorID, Scope: p.Scope, PrincipalID: p.PrincipalID, ProviderCustomerID: p.ProviderCustomerID, SubscriptionID: p.SubscriptionID, ExpectedRevision: p.ExpectedRevision, ExpectedFingerprint: p.ExpectedFingerprint, RequestedAt: p.RequestedAt}
 }
+
+// statusPayloadFor encodes a status input, including optional evidence, under
+// schema 1.
 func statusPayloadFor(i StatusInput) statusPayload {
 	p := statusPayload{Schema: 1, Preparation: statusPreparation(i.Preparation)}
 	if e := i.Evidence; e != nil {
@@ -82,6 +95,9 @@ func statusPayloadFor(i StatusInput) statusPayload {
 	}
 	return p
 }
+
+// input rebuilds the status input from its durable payload, copying optional
+// evidence.
 func (p statusPayload) input() StatusInput {
 	i := StatusInput{Preparation: p.Preparation.input()}
 	if e := p.Evidence; e != nil {
@@ -89,10 +105,15 @@ func (p statusPayload) input() StatusInput {
 	}
 	return i
 }
+
+// statusIdentity derives the status record identity and scope partition from
+// preparation scope and capture ID.
 func statusIdentity(p billing.SubscriptionStatusPreparation) (string, string) {
 	return digest([]any{"partners.lifecycle.status.v1", p.Scope, p.CaptureID}), digest([]any{"partners.lifecycle.scope.v1", p.Scope})
 }
 
+// encodeStatus validates the input and encodes it as revision 1 "prepared" or
+// revision 2 "evidence" when verified evidence is present.
 func encodeStatus(i StatusInput) (recordstore.Record, error) {
 	if err := i.Preparation.Validate(); err != nil {
 		return recordstore.Record{}, err
@@ -110,6 +131,9 @@ func encodeStatus(i StatusInput) (recordstore.Record, error) {
 	return r, err
 }
 
+// decodeStatus strictly decodes a status record for the expected original
+// preparation. A different retained preparation is ErrConflict; corruption or
+// state drift is ErrUnavailable.
 func decodeStatus(r recordstore.Record, original billing.SubscriptionStatusPreparation) (StatusInput, error) {
 	id, partition := statusIdentity(original)
 	if r.Kind != statusKind || r.ID != id || r.Partition != partition || r.Sequence != 0 || r.ExpiresAt != nil {
@@ -132,6 +156,8 @@ func decodeStatus(r recordstore.Record, original billing.SubscriptionStatusPrepa
 	return i, nil
 }
 
+// begin validates the preparation, context and dependencies, then has the
+// configured validator authorize the actor before any storage attempt.
 func (o *StatusOutbox) begin(ctx context.Context, actor string, i billing.SubscriptionStatusPreparation) error {
 	if ctx == nil || i.Validate() != nil {
 		return recordstore.ErrInvalid
@@ -148,6 +174,9 @@ func (o *StatusOutbox) begin(ctx context.Context, actor string, i billing.Subscr
 	return ctx.Err()
 }
 
+// finish re-validates the preparation under current authority after an
+// operation and withholds all data on failure. An uncertain operation error is
+// joined so a previously unknown commit stays visible to recovery.
 func (o *StatusOutbox) finish(ctx context.Context, actor string, i billing.SubscriptionStatusPreparation, result StatusInput, operationErr error) (StatusInput, error) {
 	withhold := func(err error) (StatusInput, error) {
 		// Current authority still withholds all data. A previously observed
@@ -207,6 +236,9 @@ func (o *StatusOutbox) RetainEvidence(ctx context.Context, actor string, i billi
 	return o.retain(ctx, actor, StatusInput{Preparation: i, Evidence: &evidence})
 }
 
+// retain durably retains the input, detaching the evidence pointer before the
+// retryable callback. Absent records accept a first preparation only; existing
+// evidence is replayed when identical and conflicts otherwise.
 func (o *StatusOutbox) retain(ctx context.Context, actor string, input StatusInput) (StatusInput, error) {
 	i := input.Preparation
 	if err := o.begin(ctx, actor, i); err != nil {

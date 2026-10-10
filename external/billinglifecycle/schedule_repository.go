@@ -47,23 +47,37 @@ type ScheduledJob struct {
 	CheckoutPrepared                      bool                                   `json:"-"`
 }
 
+// ScheduleCursor is the durable scan position for one scope and lane; an empty
+// AfterID with revision zero means no cursor yet.
 type ScheduleCursor struct {
 	Revision int64  `json:"-"`
 	AfterID  string `json:"-"`
 }
+
+// ScheduleScan selects one page of jobs for a scope and lane; Limit is capped
+// by the repository.
 type ScheduleScan struct {
 	Scope billing.RevenueScope `json:"-"`
 	Lane  string               `json:"-"`
 	Limit int                  `json:"-"`
 }
+
+// ScheduleSnapshot is one consistent read of a scan cursor and the jobs after
+// it. Errors withhold the whole snapshot.
 type ScheduleSnapshot struct {
 	Cursor ScheduleCursor `json:"-"`
 	Jobs   []ScheduledJob `json:"-"`
 }
+
+// ScheduleWrite proposes one job replacement conditional on its expected stored
+// revision; revision zero bootstraps a new record.
 type ScheduleWrite struct {
 	ExpectedRevision int64        `json:"-"`
 	Job              ScheduledJob `json:"-"`
 }
+
+// ScheduleCommit carries never-executed job writes and one scan cursor
+// expectation for CommitScan to apply transactionally.
 type ScheduleCommit struct {
 	Scope       billing.RevenueScope `json:"-"`
 	Lane        string               `json:"-"`
@@ -79,7 +93,13 @@ type ScheduleCommit struct {
 // progress, and checks current authority outside retryable storage callbacks.
 // It must never interpret a storage error as an empty or completed sweep.
 type ScheduleRepository interface {
+	// ReadScan returns one consistent page of due-order jobs after the stored
+	// cursor; corrupt rows, lane or scope drift or over-limit results yield
+	// ErrUnavailable with the snapshot withheld.
 	ReadScan(context.Context, ScheduleScan) (ScheduleSnapshot, error)
+	// CommitScan applies at most 200 never-executed job writes and advances the
+	// cursor in one transaction; any execution activity or cursor mismatch is
+	// refused without advancing.
 	CommitScan(context.Context, ScheduleCommit) error
 }
 
@@ -89,6 +109,8 @@ type ScheduleRepository interface {
 // No provider I/O, authority, due-time policy or automatic startup is supplied.
 type RecordScheduleRepository struct{ store recordstore.Store }
 
+// NewRecordScheduleRepository borrows a prepared record store. A nil or typed-
+// nil store is rejected; no migration or index preparation occurs.
 func NewRecordScheduleRepository(store recordstore.Store) (*RecordScheduleRepository, error) {
 	if nilPort(store) {
 		return nil, recordstore.ErrUnavailable
@@ -96,11 +118,16 @@ func NewRecordScheduleRepository(store recordstore.Store) (*RecordScheduleReposi
 	return &RecordScheduleRepository{store}, nil
 }
 
+// scheduleSourcePayload is the private durable encoding of a scheduled source,
+// carrying the checkout intent when present.
 type scheduleSourcePayload struct {
 	Scope                                               billing.RevenueScope
 	Kind, SourceID, PrincipalID, SubscriptionID, FactID string
 	Checkout                                            *checkoutPayload
 }
+
+// scheduleJobPayload is the private durable encoding of a scheduled job,
+// including lease, attempt and retained-original state.
 type scheduleJobPayload struct {
 	LastSupersessionID                    string
 	LastCompletionID                      string
@@ -114,12 +141,16 @@ type scheduleJobPayload struct {
 	OriginalStatus                        *statusPreparationPayload
 	CheckoutPrepared                      bool
 }
+
+// scheduleCursorPayload is the private durable encoding of a scan cursor.
 type scheduleCursorPayload struct {
 	Schema        int
 	Scope         billing.RevenueScope
 	Lane, AfterID string
 }
 
+// scheduleSource converts a scheduled source to its durable payload, re-
+// encoding any checkout intent through the checkout codec.
 func scheduleSource(s ScheduledSource) scheduleSourcePayload {
 	p := scheduleSourcePayload{Scope: s.Scope, Kind: s.Kind, SourceID: s.SourceID, PrincipalID: s.PrincipalID, SubscriptionID: s.SubscriptionID, FactID: s.FactID}
 	if s.Checkout != nil {
@@ -128,6 +159,9 @@ func scheduleSource(s ScheduledSource) scheduleSourcePayload {
 	}
 	return p
 }
+
+// source decodes the durable payload back into a scheduled source, restoring a
+// copied checkout intent pointer.
 func (p scheduleSourcePayload) source() ScheduledSource {
 	s := ScheduledSource{Scope: p.Scope, Kind: p.Kind, SourceID: p.SourceID, PrincipalID: p.PrincipalID, SubscriptionID: p.SubscriptionID, FactID: p.FactID}
 	if p.Checkout != nil {
@@ -136,6 +170,9 @@ func (p scheduleSourcePayload) source() ScheduledSource {
 	}
 	return s
 }
+
+// scheduleJob converts a scheduled job to its durable payload, copying any
+// retained original status and stamping schema 1.
 func scheduleJob(j ScheduledJob) scheduleJobPayload {
 	p := scheduleJobPayload{LastSupersessionID: j.LastSupersessionID, LastCompletionID: j.LastCompletionID, CadenceAnchor: j.CadenceAnchor, CheckoutPrepared: j.CheckoutPrepared, Schema: 1, Source: scheduleSource(j.Source), Lane: j.Lane, CreatedAt: j.CreatedAt, NextAttemptAt: j.NextAttemptAt, LeasedUntil: j.LeasedUntil, Attempts: j.Attempts, Fence: j.Fence, LeaseActor: j.LeaseActor, LeaseToken: j.LeaseToken}
 	if j.OriginalStatus != nil {
@@ -144,6 +181,9 @@ func scheduleJob(j ScheduledJob) scheduleJobPayload {
 	}
 	return p
 }
+
+// job rebuilds a scheduled job from the payload under the record's revision,
+// copying any retained original input.
 func (p scheduleJobPayload) job(revision int64) ScheduledJob {
 	j := ScheduledJob{LastSupersessionID: p.LastSupersessionID, LastCompletionID: p.LastCompletionID, CadenceAnchor: p.CadenceAnchor, CheckoutPrepared: p.CheckoutPrepared, Source: p.Source.source(), Revision: revision, Lane: p.Lane, CreatedAt: p.CreatedAt, NextAttemptAt: p.NextAttemptAt, LeasedUntil: p.LeasedUntil, Attempts: p.Attempts, Fence: p.Fence, LeaseActor: p.LeaseActor, LeaseToken: p.LeaseToken}
 	if p.OriginalStatus != nil {
@@ -152,15 +192,27 @@ func (p scheduleJobPayload) job(revision int64) ScheduledJob {
 	}
 	return j
 }
+
+// scheduleLane reports whether the lane is one of the three durable lanes,
+// including retired.
 func scheduleLane(lane string) bool {
 	return lane == ColdLane || lane == RefreshLane || lane == RetiredLane
 }
+
+// scheduleText accepts non-empty strings up to 256 bytes that are trimmed and
+// free of control characters and newlines.
 func scheduleText(v string) bool {
 	return v != "" && len(v) <= 256 && strings.TrimSpace(v) == v && !strings.ContainsAny(v, "\r\n\x00")
 }
+
+// scheduleScope validates a single revenue scope using the shared revenue
+// history scope rules.
 func scheduleScope(s billing.RevenueScope) bool {
 	return billing.ValidateRevenueHistoryScopes([]billing.RevenueScope{s}) == nil
 }
+
+// schedulePosition accepts an empty position or a 64-character lowercase
+// hexadecimal identifier used for scan ordering.
 func schedulePosition(id string) bool {
 	if id == "" {
 		return true
@@ -176,12 +228,20 @@ func schedulePosition(id string) bool {
 	}
 	return true
 }
+
+// scheduledIdentity derives the stable job record identity from scope, kind and
+// source ID.
 func scheduledIdentity(s ScheduledSource) string {
 	return digest([]any{"partners.lifecycle.job.v1", s.Scope, s.Kind, s.SourceID})
 }
+
+// schedulePartition derives the scan partition for one scope and lane.
 func schedulePartition(s billing.RevenueScope, lane string) string {
 	return digest([]any{"partners.lifecycle.schedule.v1", s, lane})
 }
+
+// scheduleCursorID derives the scan cursor record identity for one scope and
+// lane.
 func scheduleCursorID(s billing.RevenueScope, lane string) string {
 	return digest([]any{"partners.lifecycle.scan.v1", s, lane})
 }
@@ -196,6 +256,11 @@ func scheduleSourceShape(s ScheduledSource) bool {
 	}
 	return s.Kind == billing.LifecycleSubscriptionSources && s.Checkout == nil && scheduleText(s.SubscriptionID) && (s.FactID == "" || scheduleText(s.FactID)) && s.SourceID == billing.LifecycleDiscoverySourceID(s.Scope, s.Kind, s.SubscriptionID)
 }
+
+// validateScheduledJob enforces the durable job invariants: shape, lane,
+// revision, lease-field consistency and cross-field rules for supersession,
+// completion, cadence, checkout preparation and retained originals. It is codec
+// validation, not admission policy.
 func validateScheduledJob(j ScheduledJob) error {
 	if !scheduleSourceShape(j.Source) || !scheduleLane(j.Lane) || j.Revision < 1 || j.CreatedAt.IsZero() || j.NextAttemptAt.IsZero() || j.Attempts < 0 || j.Fence < 0 {
 		return recordstore.ErrInvalid
@@ -224,6 +289,9 @@ func validateScheduledJob(j ScheduledJob) error {
 	}
 	return nil
 }
+
+// jobRecord validates a job and encodes it as a record keyed by source
+// identity, partitioned by scope and lane, with the lane as state.
 func jobRecord(j ScheduledJob) (recordstore.Record, error) {
 	if err := validateScheduledJob(j); err != nil {
 		return recordstore.Record{}, err
@@ -232,6 +300,9 @@ func jobRecord(j ScheduledJob) (recordstore.Record, error) {
 	r.State = j.Lane
 	return r, err
 }
+
+// strictScheduleDecode decodes exactly one JSON value with unknown fields
+// rejected; any malformation or trailing data is ErrUnavailable.
 func strictScheduleDecode(raw []byte, p any) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
@@ -240,6 +311,9 @@ func strictScheduleDecode(raw []byte, p any) error {
 	}
 	return nil
 }
+
+// readJob decodes a stored job record and requires it to re-encode to the
+// identical record envelope; corruption or drift is ErrUnavailable.
 func readJob(r recordstore.Record) (ScheduledJob, error) {
 	var p scheduleJobPayload
 	if strictScheduleDecode(r.Data, &p) != nil || p.Schema != 1 {
@@ -255,6 +329,9 @@ func readJob(r recordstore.Record) (ScheduledJob, error) {
 	}
 	return j, nil
 }
+
+// readCursor loads the scan cursor inside a transaction. A missing record is an
+// empty cursor; corrupted rows are ErrUnavailable.
 func readCursor(ctx context.Context, tx recordstore.Tx, scope billing.RevenueScope, lane string) (ScheduleCursor, error) {
 	r, err := tx.Get(ctx, scheduleCursorKind, scheduleCursorID(scope, lane))
 	if soleNotFound(err) {
@@ -269,6 +346,9 @@ func readCursor(ctx context.Context, tx recordstore.Tx, scope billing.RevenueSco
 	}
 	return ScheduleCursor{r.Revision, p.AfterID}, nil
 }
+
+// ready rejects nil contexts and nil or typed-nil stores before repository
+// operations and propagates context cancellation.
 func (r *RecordScheduleRepository) ready(ctx context.Context) error {
 	if ctx == nil {
 		return recordstore.ErrInvalid
@@ -281,6 +361,10 @@ func (r *RecordScheduleRepository) ready(ctx context.Context) error {
 	}
 	return nil
 }
+
+// ReadScan returns one consistent page of due-order jobs after the stored
+// cursor. Corrupt rows, lane or scope drift or over-limit results are
+// ErrUnavailable with the snapshot withheld.
 func (r *RecordScheduleRepository) ReadScan(ctx context.Context, q ScheduleScan) (ScheduleSnapshot, error) {
 	if err := r.ready(ctx); err != nil {
 		return ScheduleSnapshot{}, err
@@ -325,6 +409,11 @@ func (r *RecordScheduleRepository) ReadScan(ctx context.Context, q ScheduleScan)
 	}
 	return out, nil
 }
+
+// CommitScan applies at most 200 never-executed job writes and advances the
+// cursor in one transaction, refusing any write or prior state showing
+// execution activity. Cursor mismatch or a same-source drift returns
+// ErrConflict without advancing.
 func (r *RecordScheduleRepository) CommitScan(ctx context.Context, c ScheduleCommit) error {
 	if err := r.ready(ctx); err != nil {
 		return err

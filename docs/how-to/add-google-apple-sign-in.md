@@ -9,8 +9,8 @@ shows how to connect the existing APIs, with [placeholder configuration](../../e
 
 ## Prerequisites and ownership
 
-Use a GHATD revision containing secure providers and native handoff, MongoDB
-with the OAuth identity indexes, Redis, your normal email/auth services and
+Use a GHATD host with MongoDB (including the OAuth identity indexes), Redis,
+your normal email/auth services and
 host-controlled session-cookie settings. Browser and native clients share the
 same backend accounts and normal access/refresh sessions.
 
@@ -270,8 +270,8 @@ cover the security lifecycle; commands are in the [OAuth package guide](../../ex
 Do not use a production store or report credentials, tokens or provider subjects
 in test evidence.
 
-Merge the GHATD feature before downstream hosts and repin their Go dependency to
-the merged revision. Ship the host-owned identity migration before enabling the
+Pin an exact reviewed GHATD revision with these endpoints. Ship the host-owned
+identity migration before enabling the
 provider credentials. Use staging registrations/secrets first, then verify the
 production origins, mobile allowlist and email sender configuration.
 

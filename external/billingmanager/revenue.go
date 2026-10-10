@@ -14,15 +14,33 @@ import (
 // RevenueProviderRegistry exposes optional authenticated economic evidence.
 // Webhook-only registries retain their existing interface and behaviour.
 type RevenueProviderRegistry interface {
+	// GetRevenueProvider resolves the optional revenue provider registered under
+	// the given provider name, returning an error when unavailable.
 	GetRevenueProvider(string) (paymentprovider.RevenueProvider, error)
 }
 
+// RevenueFeedService is the owning persistence port for verified revenue:
+// delivery, acceptance, fact lookup, observation reads, resolution history and
+// quarantine resolution. It is the single configured feed behind revenue
+// features.
 type RevenueFeedService interface {
+	// GetRevenueDelivery returns the stored delivery observation for the event
+	// identified within the given revenue scope.
 	GetRevenueDelivery(context.Context, billing.RevenueScope, string) (billing.RevenueObservation, error)
+	// AcceptVerified persists a verified revenue request and returns the resulting
+	// revenue observation from the owning feed.
 	AcceptVerified(context.Context, billing.VerifiedRevenueRequest) (billing.RevenueObservation, error)
+	// FindPaymentRevenueFacts returns the revenue facts recorded for the given
+	// payment identifier within the revenue scope.
 	FindPaymentRevenueFacts(context.Context, billing.RevenueScope, string) ([]billing.RevenueFact, error)
+	// GetRevenueObservation returns the revenue observation persisted under the
+	// given observation identifier.
 	GetRevenueObservation(context.Context, string) (billing.RevenueObservation, error)
+	// GetRevenueSourceResolution returns the stored resolution-history observation
+	// for the given revenue source identifier.
 	GetRevenueSourceResolution(context.Context, string) (billing.RevenueObservation, error)
+	// ResolveQuarantinedRevenue resolves a quarantined revenue record per the
+	// request and returns the resulting revenue observation.
 	ResolveQuarantinedRevenue(context.Context, billing.ResolveRevenueRequest) (billing.RevenueObservation, error)
 }
 
@@ -30,11 +48,21 @@ type RevenueFeedService interface {
 // historical paying principal and immutable price mapping. Current access,
 // customer-email matches and organization seats cannot establish this result.
 type RevenueAssociationRequest = billing.RevenueAssociationRequest
+
+// RevenueAssociation aliases the billing result describing a historically
+// verified paying principal and immutable price mapping.
 type RevenueAssociation = billing.RevenueAssociation
+
+// RevenueAssociationService resolves the historical paying principal and price
+// mapping for a request; it cannot establish current access or entitlement.
 type RevenueAssociationService interface {
+	// ResolveRevenueAssociation returns the historical paying principal and price
+	// mapping for the request; it cannot establish current access or entitlement.
 	ResolveRevenueAssociation(context.Context, RevenueAssociationRequest) (RevenueAssociation, error)
 }
 
+// nilRevenueDependency reports whether v is nil, including nil values hidden
+// inside interface, pointer, func, map, slice or channel wrappers.
 func nilRevenueDependency(v any) bool {
 	if v == nil {
 		return true
@@ -60,6 +88,8 @@ func (s *Service) WithRevenueServices(registry RevenueProviderRegistry, feed Rev
 	return s, nil
 }
 
+// billingRevenueScope converts a payment provider revenue scope into the
+// equivalent billing scope, copying provider, account and live mode only.
 func billingRevenueScope(s paymentprovider.RevenueScope) billing.RevenueScope {
 	return billing.RevenueScope{Provider: s.Provider, AccountID: s.AccountID, LiveMode: s.LiveMode}
 }
@@ -142,6 +172,11 @@ func (s *Service) acceptRevenueWebhook(ctx context.Context, name string, req *ht
 	return true, nil
 }
 
+// revenueRequest turns verified provider evidence into a durable request,
+// fetching the invoice when absent, reconciling original facts by line, and
+// resolving historical payer/plan association for new payment lines. Ambiguous
+// or pending economics quarantine the request with a reason instead of failing;
+// only unassessable association errors propagate.
 func (s *Service) revenueRequest(ctx context.Context, provider paymentprovider.RevenueProvider, e *paymentprovider.RevenueEvidence) (billing.VerifiedRevenueRequest, error) {
 	req := billing.VerifiedRevenueRequest{Scope: billingRevenueScope(e.Scope), EnvelopeID: e.EnvelopeID, QuarantineReason: e.QuarantineReason, SourceFingerprint: e.SourceFingerprint}
 	if e.QuarantineReason != "" {
@@ -261,9 +296,14 @@ func (s *Service) revenueRequest(ctx context.Context, provider paymentprovider.R
 // RevenueReconciliationAuthority must resolve current scoped worker/operator
 // permission, including revocation, for every attempt and receipt replay.
 type RevenueReconciliationAuthority interface {
+	// AuthorizeRevenueReconciliation resolves current scoped worker or operator
+	// permission for the given actor, including revocation, per attempt.
 	AuthorizeRevenueReconciliation(context.Context, string) error
 }
 
+// WithRevenueReconciliationAuthority installs the authority that must approve
+// revenue reconciliation attempts; a nil authority returns
+// ErrRevenueUnavailable without mutating the service.
 func (s *Service) WithRevenueReconciliationAuthority(authority RevenueReconciliationAuthority) (*Service, error) {
 	if s == nil || nilRevenueDependency(authority) {
 		return nil, billing.ErrRevenueUnavailable
@@ -272,6 +312,10 @@ func (s *Service) WithRevenueReconciliationAuthority(authority RevenueReconcilia
 	return s, nil
 }
 
+// ReconcileRevenueSourceRequest selects a quarantined observation for
+// resolution. ActorID is bound from verified context and never decoded from
+// transport; OriginalSnapshot is optional private recovery input verified
+// against the retained original hash.
 type ReconcileRevenueSourceRequest struct {
 	ObservationID       string
 	ExpectedFingerprint string
@@ -283,6 +327,11 @@ type ReconcileRevenueSourceRequest struct {
 	OriginalSnapshot []byte `json:"-"`
 }
 
+// ReconcileRevenueSource re-fetches authenticated provider evidence for a
+// quarantined observation, verifies scope and source fingerprints, rebuilds
+// facts, and resolves the quarantine under current authority. Fingerprint or
+// ownership mismatches return ErrRevenueConflict; a matching existing
+// resolution is returned idempotently when actor and reason agree.
 func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileRevenueSourceRequest) (billing.RevenueObservation, error) {
 	if ctx == nil || strings.TrimSpace(req.ActorID) == "" || strings.TrimSpace(req.Reason) == "" || req.ExpectedFingerprint == "" || req.ObservationID == "" {
 		return billing.RevenueObservation{}, billing.ErrRevenueInvalid
@@ -364,6 +413,9 @@ func boundRevenueResolution(source, resolution billing.RevenueObservation) bool 
 	return source.ID != "" && source.QuarantineReason != "" && source.ResolutionOf == "" && resolution.ID != "" && resolution.Fingerprint != "" && !resolution.AcceptedAt.IsZero() && resolution.ResolutionOf == source.ID && resolution.QuarantineReason == "" && resolution.Scope == source.Scope && resolution.EnvelopeID == source.EnvelopeID && resolution.SourceFingerprint == source.SourceFingerprint
 }
 
+// verifyRevenueOriginalSnapshot asks the provider to verify a retained original
+// snapshot and returns its canonical fingerprint, rejecting identities whose
+// scope, envelope or original fingerprint differ from the stored source.
 func verifyRevenueOriginalSnapshot(ctx context.Context, provider paymentprovider.RevenueProvider, source billing.RevenueObservation, snapshot []byte) (string, error) {
 	verifier, ok := provider.(paymentprovider.RevenueSnapshotVerifier)
 	if !ok || nilRevenueDependency(verifier) {
@@ -379,6 +431,10 @@ func verifyRevenueOriginalSnapshot(ctx context.Context, provider paymentprovider
 	}
 	return identity.CanonicalFingerprint, nil
 }
+
+// singleRevenueAbsence reports whether the error chain contains
+// billing.ErrRevenueNotFound within 32 unwraps, treating it as conclusive
+// absence.
 func singleRevenueAbsence(err error) bool {
 	for i := 0; err != nil && i < 32; i++ {
 		if err == billing.ErrRevenueNotFound {

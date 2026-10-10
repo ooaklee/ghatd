@@ -32,6 +32,9 @@ type Worker struct {
 	nextScope          int
 }
 
+// NewWorker requires every stage component to share the same scheduler, manager
+// instance, authority, clock and scope ordering; equal settings on different
+// instances are rejected. Construction performs no storage or provider work.
 func NewWorker(d *DiscoveryCollector, s *Scheduler, c *CheckoutExecution, status *StatusExecution, cc *CheckoutCompletion, sc *StatusCompletionService, resolver *StatusOriginalResolver) (*Worker, error) {
 	if d == nil || s == nil || c == nil || status == nil || cc == nil || sc == nil || resolver == nil || !resolver.ready() || nilPort(d.repo) || nilPort(s.repo) || nilPort(cc.repo) || nilPort(sc.repo) {
 		return nil, billing.ErrRevenueUnavailable
@@ -51,9 +54,14 @@ func NewWorker(d *DiscoveryCollector, s *Scheduler, c *CheckoutExecution, status
 	return &Worker{discovery: d, scheduler: s, checkout: c, status: status, checkoutCompletion: cc, statusCompletion: sc, resolver: resolver}, nil
 }
 
+// unknownExecution reports whether an error represents an unknown billing or
+// storage commit outcome.
 func unknownExecution(err error) bool {
 	return errors.Is(err, billing.ErrRevenueUncertain) || errors.Is(err, recordstore.ErrUncertain)
 }
+
+// preserveExecutionError prefers the later error but always joins an unknown
+// original error so an uncertain commit is never hidden.
 func preserveExecutionError(later, original error) error {
 	if later == nil {
 		return original
@@ -63,6 +71,9 @@ func preserveExecutionError(later, original error) error {
 	}
 	return later
 }
+
+// finish re-checks scheduler authority after a pass and withholds the whole
+// report on any failure, preserving uncertain operation errors by joining them.
 func (w *Worker) finish(ctx context.Context, sources []ScheduledSource, report WorkerReport, err error) (WorkerReport, error) {
 	if final := w.scheduler.finish(ctx, sources, nil); final != nil {
 		return WorkerReport{}, preserveExecutionError(final, err)
@@ -145,6 +156,9 @@ func (w *Worker) RunOnce(ctx context.Context) (WorkerReport, error) {
 	return w.finish(ctx, sources, report, issues)
 }
 
+// inspectHistory verifies retained completion and supersession pointers still
+// match the job snapshot; a newer history or mismatched pointer is
+// ErrRevenueUnavailable.
 func (w *Worker) inspectHistory(ctx context.Context, j ScheduledJob) error {
 	if j.LastCompletionID != "" {
 		v, err := w.statusCompletion.InspectLast(ctx, j.Source)
@@ -167,6 +181,10 @@ func (w *Worker) inspectHistory(ctx context.Context, j ScheduledJob) error {
 	return nil
 }
 
+// execute runs one job's stage sequence: checkout jobs observe and complete
+// directly; subscription jobs inspect history, resolve any retained original,
+// then observe and complete. The returned superseded count reflects a resolved
+// original; errors preserve the most recent job state.
 func (w *Worker) execute(ctx context.Context, j ScheduledJob) (ScheduledJob, int, error) {
 	current, err := executionStep(ctx, w.scheduler, j, nil)
 	if err != nil {

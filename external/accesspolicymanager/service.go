@@ -26,6 +26,8 @@ var (
 // UserReader resolves explicitly selected stored users, preserving dependency
 // errors. A repository port avoids treating a failed database read as absence.
 type UserReader interface {
+	// GetUserByID resolves the explicitly selected stored user, preserving
+	// dependency errors rather than treating a failed read as absence.
 	GetUserByID(context.Context, string) (*userv2.UniversalUser, error)
 }
 
@@ -33,6 +35,8 @@ type UserReader interface {
 // grant transactions. It creates neither a grant nor a credential. Hosts must
 // initialize it and share the policy/token repository's managed client/database.
 type InventoryPreparer interface {
+	// PrepareTokenInventory idempotently prepares the owner's inventory fence
+	// outside grant transactions; it creates neither a grant nor a credential.
 	PrepareTokenInventory(context.Context, string) error
 }
 

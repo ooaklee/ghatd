@@ -64,6 +64,8 @@ type GetChangelogItemsResponse struct {
 	*GetPostsResponse
 }
 
+// GetEmbeddedPostsResponse returns the changelog response's embedded
+// GetPostsResponse without any transformation.
 func (g *GetChangelogItemsResponse) GetEmbeddedPostsResponse() *GetPostsResponse {
 	return g.GetPostsResponse
 }
@@ -74,6 +76,8 @@ type GetGlossaryItemsResponse struct {
 	*GetPostsResponse
 }
 
+// GetEmbeddedPostsResponse returns the glossary response's embedded
+// GetPostsResponse without any transformation.
 func (g *GetGlossaryItemsResponse) GetEmbeddedPostsResponse() *GetPostsResponse {
 	return g.GetPostsResponse
 }
@@ -84,6 +88,8 @@ type GetFaqItemsResponse struct {
 	*GetPostsResponse
 }
 
+// GetEmbeddedPostsResponse returns the FAQ response's embedded GetPostsResponse
+// without any transformation.
 func (g *GetFaqItemsResponse) GetEmbeddedPostsResponse() *GetPostsResponse {
 	return g.GetPostsResponse
 }
@@ -93,6 +99,8 @@ type GetArticlesResponse struct {
 	*GetPostsResponse
 }
 
+// GetEmbeddedPostsResponse returns the articles response's embedded
+// GetPostsResponse without any transformation.
 func (g *GetArticlesResponse) GetEmbeddedPostsResponse() *GetPostsResponse {
 	return g.GetPostsResponse
 }

@@ -14,10 +14,19 @@ import (
 // DiscoveryManager must be the configured billing manager, which owns source
 // provenance and current discovery permission. A raw revenue read is insufficient.
 type DiscoveryManager interface {
+	// DiscoverLifecycleSources returns a page of lifecycle discovery results for
+	// the query under the configured billing manager, which owns source provenance
+	// and current discovery permission.
 	DiscoverLifecycleSources(context.Context, string, billing.LifecycleDiscoveryQuery) (billing.LifecycleDiscoveryPage, error)
 }
 
-type LifecycleClock interface{ Now() time.Time }
+// LifecycleClock supplies the collector's current time, allowing tests to drive
+// deterministic observations.
+type LifecycleClock interface {
+	// Now returns the collector's current time, allowing tests to drive
+	// deterministic lifecycle observations through the LifecycleClock port.
+	Now() time.Time
+}
 
 // DiscoveryConfig freezes the verified service actor and allowed native scopes.
 // Configuration creates neither service identity nor discovery grants.
@@ -47,6 +56,9 @@ type DiscoveryCollector struct {
 	limit     int
 }
 
+// NewDiscoveryCollector validates ports, actor shape, page limit and scopes,
+// copying the scope slice; it borrows the repository, manager and authority
+// without starting any page, migration or provider call.
 func NewDiscoveryCollector(repo DiscoveryRepository, manager DiscoveryManager, authority billingmanager.LifecycleDiscoveryAuthority, clock LifecycleClock, cfg DiscoveryConfig) (*DiscoveryCollector, error) {
 	if nilPort(repo) || nilPort(manager) || nilPort(authority) || nilPort(clock) {
 		return nil, billing.ErrRevenueUnavailable
@@ -60,6 +72,8 @@ func NewDiscoveryCollector(repo DiscoveryRepository, manager DiscoveryManager, a
 	return &DiscoveryCollector{repo: repo, manager: manager, authority: authority, clock: clock, actor: cfg.ActorID, scopes: append([]billing.RevenueScope(nil), cfg.Scopes...), limit: cfg.PageLimit}, nil
 }
 
+// discoveryTargets projects one discovery page into manager targets, carrying
+// intent IDs only for checkout sources.
 func discoveryTargets(q billing.LifecycleDiscoveryQuery, page billing.LifecycleDiscoveryPage) []billingmanager.LifecycleDiscoveryTarget {
 	result := make([]billingmanager.LifecycleDiscoveryTarget, 0, len(page.Items))
 	for _, item := range page.Items {
@@ -72,6 +86,9 @@ func discoveryTargets(q billing.LifecycleDiscoveryQuery, page billing.LifecycleD
 	return result
 }
 
+// authorize rechecks context, delegates one discovery authorization decision to
+// the configured authority for the collector's actor, then rechecks context
+// again.
 func (s *DiscoveryCollector) authorize(ctx context.Context, target billingmanager.LifecycleDiscoveryTarget) error {
 	if err := ctx.Err(); err != nil {
 		return err

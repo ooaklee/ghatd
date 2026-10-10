@@ -11,6 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// InitPricingIndexesUp creates unique slug, status, created_at and published_at
+// indexes on the plans collection plus unique slug, type and created_at indexes
+// on the features collection, logging progress and returning the first creation
+// error.
 func InitPricingIndexesUp(db *mongo.Database) error { //Up
 
 	log.SetFlags(0)
@@ -84,6 +88,9 @@ func InitPricingIndexesUp(db *mongo.Database) error { //Up
 
 }
 
+// InitPricingIndexesDown drops the named pricing plan and feature indexes
+// created by InitPricingIndexesUp, stopping at and returning the first drop
+// error.
 func InitPricingIndexesDown(db *mongo.Database) error { //Down
 	log.SetFlags(0)
 

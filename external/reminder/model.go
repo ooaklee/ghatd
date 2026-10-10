@@ -192,6 +192,8 @@ func BuildNextDueAt(targetTime string, timezone string, now time.Time) (string, 
 	return nextLocal.UTC().Format(common.RFC3339NanoUTC), nil
 }
 
+// parsedReminderTargetTime is the parsed form of a reminder target: either a
+// local wall-clock time of day or an absolute instant.
 type parsedReminderTargetTime struct {
 	localWallClock bool
 	hour           int
@@ -200,6 +202,9 @@ type parsedReminderTargetTime struct {
 	absoluteTime   time.Time
 }
 
+// parseReminderTargetTime parses a required target time as HH:MM or HH:MM:SS
+// local wall-clock values or RFC3339 absolute timestamps, normalised to UTC.
+// Empty or unsupported values return target-time errors.
 func parseReminderTargetTime(value string) (parsedReminderTargetTime, error) {
 	if value == "" {
 		return parsedReminderTargetTime{}, ErrTargetTimeIsRequired

@@ -72,13 +72,11 @@ if err := runtime.Prepare(ctx); err != nil {
 
 ## Storage and verification
 
-Existing owning record kinds, fingerprints, encryption metadata, scopes and
-retained evidence formats are independent of Go package placement. This runtime
-uses them directly and ships no legacy dual-read adapter or alternate storage
-copy. Changing those contracts requires an explicit reviewed migration.
+Record kinds, fingerprints, encryption metadata, scopes and retained evidence
+formats belong to their owning services. Persist the configured keys and those
+contracts across restarts; changing storage identifiers requires a data migration.
 
 Native tests use `GHATD_TEST_MONGO_URI` pointing to an isolated replica set and
 create/drop separate fixture databases. They cover owner interoperability,
 stable-key restart, wrong-key refusal, policy pauses and no implicit privileged
-records. Controlled identity fixtures do not qualify real session cryptography,
-provider traffic, deployment or authenticated browser flows.
+records. Run `go test ./external/partnermanager/runtime`.

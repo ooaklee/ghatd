@@ -17,6 +17,10 @@ type ConversionSnapshot struct {
 // repository. Combined links+members+heads+history+bindings fit 10,000 rows;
 // day buckets and partial-day raw evidence each have independent 10,000 budgets.
 type ConversionSnapshotRepository interface {
+	// ReadConversionSnapshot reads the complete conversion evidence snapshot for
+	// the partner and scope identified by the two string arguments under the
+	// analytics query. The owning repository treats it as one complete snapshot
+	// within its documented row budgets, not a page or partial result.
 	ReadConversionSnapshot(context.Context, string, string, AnalyticsQuery) (ConversionSnapshot, error)
 }
 

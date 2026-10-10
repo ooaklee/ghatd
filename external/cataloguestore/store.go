@@ -43,12 +43,31 @@ var ErrClosed = errors.New("cataloguestore/closed")
 // built with repository.NewMongoDbRepositoryFromDatabase over the host's
 // managed database (no additional connection pool).
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the mongo collection matching
+	// filter through the MongoDbStore helper subset used by the generic adapter.
+	// Returns the count or an error; ctx governs cancellation.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteFindOneCommandDecodeResult runs a single-document find on the given
+	// collection and decodes the match into result, using resultObjectName for
+	// diagnostics and returning onFailureErr when no document is found.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteFindCommand runs a find on the given collection with the supplied
+	// filter and find options and returns the driver cursor for caller-side
+	// iteration.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts one document into the given collection and
+	// returns the driver insert receipt, naming the target via resultObjectName in
+	// diagnostics.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteReplaceOneCommandResult replaces the first document matching filter
+	// with replacement, honouring replace options, and returns the driver update
+	// result.
 	ExecuteReplaceOneCommandResult(ctx context.Context, collection *mongo.Collection, filter, replacement any, opts ...options.Lister[options.ReplaceOptions]) (*mongo.UpdateResult, error)
+	// ExecuteDeleteOneCommandResult deletes the first document matching filter,
+	// honouring delete-one options, and returns the driver delete result.
 	ExecuteDeleteOneCommandResult(ctx context.Context, collection *mongo.Collection, filter any, opts ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
+	// MapAllInCursorToResult exhausts the cursor and decodes every document into
+	// the caller-supplied result slice, using resultObjectName in diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
@@ -327,6 +346,8 @@ func (m *MongoStore) Count(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+// escapeRegex escapes regular-expression metacharacters so user input can be
+// safely used as a literal in prefix searches.
 func escapeRegex(s string) string {
 	// Conservative escape of regex metacharacters for prefix search.
 	replacer := strings.NewReplacer(
@@ -528,6 +549,8 @@ func (m *MemoryStore) Count(ctx context.Context) (int64, error) {
 	return total, nil
 }
 
+// cloneDocument deep-copies a document via a BSON round-trip, matching
+// MongoDB's document isolation for returned copies.
 func cloneDocument(doc Document) (Document, error) {
 	encoded, err := bson.Marshal(doc)
 	if err != nil {

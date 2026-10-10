@@ -24,6 +24,10 @@ func (s *StripeProvider) CheckoutRevenueScope(ctx context.Context) (RevenueScope
 	}
 	return scope, nil
 }
+
+// verifyCheckoutMerchant fetches /v1/account and requires its ID to equal
+// scope.AccountID, returning ErrRevenueUnassessable on mismatch and the request
+// error otherwise.
 func (s *StripeProvider) verifyCheckoutMerchant(ctx context.Context, scope RevenueScope) error {
 	account, err := s.revenueGet(ctx, scope, "/v1/account")
 	if err != nil {
@@ -73,6 +77,12 @@ func (s *StripeProvider) LookupRevenueCheckoutSessionEvidence(ctx context.Contex
 	return s.checkoutSessionEvidence(ctx, scope, session, id, "")
 }
 
+// checkoutSessionEvidence validates a checkout session against the scope,
+// expected session/subscription IDs, subscription mode, complete status and a
+// non-empty checkout_intent_id metadata entry, then fetches its line items via
+// complete pagination. It accepts exactly one quantity-1 recurring price with a
+// supported weekly/monthly/yearly cadence and returns ErrRevenueUnassessable
+// for any other shape instead of guessing.
 func (s *StripeProvider) checkoutSessionEvidence(ctx context.Context, scope RevenueScope, session map[string]json.RawMessage, expectedSession, expectedSubscription string) (RevenueCheckoutEvidence, error) {
 	id := rawStripeID(session["id"])
 	subscription := rawStripeID(session["subscription"])
@@ -120,6 +130,8 @@ func (s *StripeProvider) checkoutSessionEvidence(ctx context.Context, scope Reve
 	return RevenueCheckoutEvidence{Scope: scope, SessionID: id, IntentID: metadata["checkout_intent_id"], ClientReferenceID: reference, CustomerID: customer, SubscriptionID: subscription, PriceID: priceID, Currency: currency, Mode: CheckoutModeSubscription, Status: "complete", CreatedAt: time.Unix(created, 0).UTC(), UnitAmountMinor: amount, IntervalCount: count, BillingCadence: cadence}, nil
 }
 
+// validCheckoutEvidenceCurrency reports whether currency is exactly three
+// uppercase ASCII letters.
 func validCheckoutEvidenceCurrency(currency string) bool {
 	if len(currency) != 3 {
 		return false

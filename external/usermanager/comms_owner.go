@@ -233,6 +233,10 @@ func RequireCommsOwner(next http.Handler) http.Handler { return requireOwner(nex
 // installed only before serving; requests never mutate the route or inventory.
 type ownerGuard struct{ next http.Handler }
 
+// ServeHTTP applies the owner guard only to mutating methods, comparing the
+// bounded owner header against the session's user and access UUID and writing
+// no-store plus a mapped owner error on mismatch; other methods and passing
+// checks forward untouched to the wrapped handler.
 func (g *ownerGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
 		g.next.ServeHTTP(w, r)

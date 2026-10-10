@@ -83,19 +83,23 @@ func NewNoOpRepositoryLogger() *NoOpRepositoryLogger {
 	return &NoOpRepositoryLogger{}
 }
 
-// Error does nothing
+// Error discards the message, error and fields; it satisfies RepositoryLogger
+// for the no-op logger.
 func (l *NoOpRepositoryLogger) Error(ctx context.Context, message string, err error, fields ...Field) {
 }
 
-// Warn does nothing
+// Warn discards the message, error and fields; it satisfies RepositoryLogger
+// for the no-op logger.
 func (l *NoOpRepositoryLogger) Warn(ctx context.Context, message string, err error, fields ...Field) {
 }
 
-// Info does nothing
+// Info discards the message, error and fields; it satisfies RepositoryLogger
+// for the no-op logger.
 func (l *NoOpRepositoryLogger) Info(ctx context.Context, message string, err error, fields ...Field) {
 }
 
-// Debug does nothing
+// Debug discards the message, error and fields; it satisfies RepositoryLogger
+// for the no-op logger.
 func (l *NoOpRepositoryLogger) Debug(ctx context.Context, message string, err error, fields ...Field) {
 }
 

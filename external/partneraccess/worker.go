@@ -12,9 +12,13 @@ import (
 // WorkerIdentity verifies the configured, currently active service account
 // through the identity owner. A stored grant alone is not a live identity.
 type WorkerIdentity interface {
+	// CheckWorkerIdentity verifies the configured, currently active service account
+	// through the identity owner; a stored grant alone is not a live identity.
 	CheckWorkerIdentity(context.Context, string) error
 }
 
+// workerContextKey is the private context key holding the instance-bound
+// scheduler value.
 type workerContextKey struct{}
 
 // WorkerAuthority permits only the scheduler bound to this instance and the
@@ -27,6 +31,9 @@ type WorkerAuthority struct {
 	lifecycleScopes []billing.RevenueScope
 }
 
+// NewWorkerAuthority validates the system, actor, identity and policy inputs,
+// returning ErrUnavailable rather than constructing around missing
+// dependencies.
 func NewWorkerAuthority(system, actor string, identity WorkerIdentity, policy PolicyService) (*WorkerAuthority, error) {
 	if !validID(system) || !validID(actor) || nilPort(identity) || nilPort(policy) {
 		return nil, partnermanager.ErrUnavailable
@@ -50,6 +57,11 @@ func (a *WorkerAuthority) Bind(ctx context.Context) (context.Context, error) {
 	return context.WithValue(ctx, workerContextKey{}, a), nil
 }
 
+// CheckPartners permits only the bound scheduler context with no session
+// present, the configured actor, a known worker capability and a valid optional
+// target. It verifies live worker identity before and after the program-scope
+// policy grant, mapping sole denials to ErrDenied and returning other policy or
+// context errors unchanged.
 func (a *WorkerAuthority) CheckPartners(ctx context.Context, actor, capability, target string) error {
 	if ctx == nil {
 		return partnermanager.ErrDenied
@@ -84,6 +96,7 @@ func (a *WorkerAuthority) CheckPartners(ctx context.Context, actor, capability, 
 	return ctx.Err()
 }
 
+// workerCapability recognizes the fixed scheduler worker capabilities.
 func workerCapability(capability string) bool {
 	switch capability {
 	case partnermanager.CapabilitySignupWorker, partnermanager.CapabilityRevenueWorker, partnermanager.CapabilityMaturityWorker:
@@ -92,10 +105,14 @@ func workerCapability(capability string) bool {
 	return false
 }
 
+// workerSubject builds the user-subject identity for the real configured
+// service account.
 func workerSubject(system, actor string) accesspolicy.Subject {
 	return accesspolicy.Subject{System: system, Kind: accesspolicy.UserSubject, ID: actor}
 }
 
+// AuthorizeRevenueReconciliation forwards to CheckPartners with the revenue
+// worker capability and no target.
 func (a *WorkerAuthority) AuthorizeRevenueReconciliation(ctx context.Context, actor string) error {
 	return a.CheckPartners(ctx, actor, partnermanager.CapabilityRevenueWorker, "")
 }

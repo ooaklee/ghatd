@@ -28,6 +28,8 @@ func NewMemoryRepository(now func() time.Time) *MemoryRepository {
 	return &MemoryRepository{store: cataloguestore.NewMemoryStore(now)}
 }
 
+// toDocument maps a Record into the store's document shape; the payload carries
+// name and sanitised SVG while the code doubles as ID and key.
 func (r *MemoryRepository) toDocument(record *Record) cataloguestore.Document {
 	return cataloguestore.Document{
 		ID:      record.Code,

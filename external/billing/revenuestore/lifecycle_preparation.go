@@ -16,6 +16,9 @@ const (
 	kindLifecyclePreparationProgress = "billing_lifecycle_preparation_progress"
 )
 
+// lifecycleSourceEpoch is the persisted source-write epoch DTO for one scope;
+// Schema pins the only recognized encoding. Its record revision, not the
+// struct, carries the epoch counter.
 type lifecycleSourceEpoch struct {
 	Scope  billing.RevenueScope
 	Schema int
@@ -30,11 +33,18 @@ type lifecyclePreparationProgress struct {
 	AfterID                                                string
 	PreparedAt                                             time.Time
 }
+
+// preparationBound binds one native transaction to a single revenue scope for
+// the lifecycle preparation callback; it is valid only inside
+// WithLifecyclePreparation.
 type preparationBound struct {
 	tx    recordstore.Tx
 	scope billing.RevenueScope
 }
 
+// readLifecycleSourceEpoch returns the scope's epoch as the record revision. A
+// genuine single-record absence yields 0 with no error; corrupt or mismatched
+// rows become ErrRevenueUnavailable.
 func readLifecycleSourceEpoch(ctx context.Context, tx recordstore.Tx, scope billing.RevenueScope) (int64, error) {
 	id, part := checkoutScopeKey(scope), lifecycleSourcePartition(scope)
 	v, row, err := get[lifecycleSourceEpoch](ctx, tx, kindLifecycleSourceEpoch, id, part)
@@ -49,6 +59,10 @@ func readLifecycleSourceEpoch(ctx context.Context, tx recordstore.Tx, scope bill
 	}
 	return row.Revision, nil
 }
+
+// replaceLifecycleSourceEpoch advances the epoch from expected to expected+1
+// using Insert when absent and CAS Replace otherwise. Negative, MaxInt64 or
+// stale expectations fail without writing.
 func replaceLifecycleSourceEpoch(ctx context.Context, tx recordstore.Tx, scope billing.RevenueScope, expected int64) error {
 	if expected < 0 || expected == math.MaxInt64 {
 		return billing.ErrRevenueUnavailable
@@ -72,6 +86,11 @@ func touchLifecycleSourceEpoch(ctx context.Context, tx recordstore.Tx, scope bil
 	}
 	return replaceLifecycleSourceEpoch(ctx, tx, scope, revision)
 }
+
+// WithLifecyclePreparation runs fn inside one scope-named transaction after
+// validating scope/cursor shape. Store failures are classified; unexpected
+// errors join ErrRevenueUnavailable while conflict, uncertainty, invalid and
+// cancellation pass through, and ctx.Err() is returned on success.
 func (r *Repository) WithLifecyclePreparation(ctx context.Context, scope billing.RevenueScope, fn func(billing.LifecyclePreparationTx) error) error {
 	if ctx == nil || fn == nil {
 		return billing.ErrRevenueInvalid
@@ -92,6 +111,11 @@ func (r *Repository) WithLifecyclePreparation(ctx context.Context, scope billing
 	}
 	return ctx.Err()
 }
+
+// State reads preparation progress in the bound transaction. First absence is
+// conclusive only when the discovery marker is also absent; a Complete phase
+// additionally requires a joined marker whose PreparedAt matches exactly,
+// otherwise unavailable/corruption errors are returned.
 func (b *preparationBound) State(ctx context.Context) (billing.LifecyclePreparationState, error) {
 	id, part := checkoutScopeKey(b.scope), lifecycleSourcePartition(b.scope)
 	p, row, err := get[lifecyclePreparationProgress](ctx, b.tx, kindLifecyclePreparationProgress, id, part)
@@ -118,15 +142,26 @@ func (b *preparationBound) State(ctx context.Context) (billing.LifecyclePreparat
 	}
 	return v, nil
 }
+
+// errOrUnavailable converts a nil error into ErrRevenueUnavailable, preserving
+// any non-nil error unchanged; used where missing joined evidence must read as
+// unavailability, not success.
 func errOrUnavailable(err error) error {
 	if err == nil {
 		return billing.ErrRevenueUnavailable
 	}
 	return err
 }
+
+// Epoch reads the bound scope's lifecycle source epoch, returning 0 on first
+// absence and ErrRevenueUnavailable on corrupt rows.
 func (b *preparationBound) Epoch(ctx context.Context) (int64, error) {
 	return readLifecycleSourceEpoch(ctx, b.tx, b.scope)
 }
+
+// Save writes the next preparation state at revision expected+1 via Insert or
+// CAS Replace. Mismatched scope or non-contiguous revisions are invalid; stale
+// expectations fail at the store.
 func (b *preparationBound) Save(ctx context.Context, v billing.LifecyclePreparationState, expected int64) error {
 	if v.Scope != b.scope || v.Revision != expected+1 {
 		return billing.ErrRevenueInvalid
@@ -141,6 +176,10 @@ func (b *preparationBound) Save(ctx context.Context, v billing.LifecyclePreparat
 	}
 	return mapped(b.tx.Replace(ctx, row, expected))
 }
+
+// Complete atomically advances the source epoch, saves the completed state at
+// expected+1 and inserts the discovery marker with the same PreparedAt. Non-
+// complete phases, zero PreparedAt or an epoch other than current+1 conflict.
 func (b *preparationBound) Complete(ctx context.Context, v billing.LifecyclePreparationState, expected int64) error {
 	epoch, err := b.Epoch(ctx)
 	if err != nil {
@@ -157,6 +196,11 @@ func (b *preparationBound) Complete(ctx context.Context, v billing.LifecyclePrep
 	}
 	return insert(ctx, b.tx, kindLifecycleDiscoveryPreparation, checkoutScopeKey(b.scope), lifecycleSourcePartition(b.scope), lifecycleDiscoveryPreparation{b.scope, 1, v.PreparedAt})
 }
+
+// Retain admits one candidate in the bound scope. Acknowledged checkout intents
+// replay exactly (identical retained rows return nil; differences conflict) and
+// otherwise retain the original; subscription candidates retain
+// subscription/fact/anchor evidence without an intent.
 func (b *preparationBound) Retain(ctx context.Context, c billing.LifecycleDiscoveryCandidate) error {
 	if c.Scope != b.scope {
 		return billing.ErrRevenueConflict

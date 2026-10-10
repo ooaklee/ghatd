@@ -71,9 +71,21 @@ type SubscriptionStatusSnapshot struct {
 // SubscriptionStatusTx is bound to one subscription's owning transaction.
 // Callbacks may repeat; provider I/O and external effects are prohibited.
 type SubscriptionStatusTx interface {
+	// GetCurrent returns the subscription's current status snapshot within the
+	// owning transaction bound by SubscriptionStatusTx; callbacks may repeat, so
+	// implementations must avoid provider I/O and external effects.
 	GetCurrent(context.Context) (SubscriptionStatusSnapshot, error)
+	// GetCapture returns the captured SubscriptionStatus identified by its string
+	// capture ID within the transaction, without performing provider I/O or
+	// external effects.
 	GetCapture(context.Context, string) (SubscriptionStatus, error)
+	// InsertCapture records the supplied SubscriptionStatus as a capture within the
+	// owning transaction; callbacks may repeat and provider I/O or external effects
+	// are prohibited.
 	InsertCapture(context.Context, SubscriptionStatus) error
+	// PutCurrent stores the supplied SubscriptionStatus as the current head with
+	// the given int64 sequence within the owning transaction, repeating safely
+	// without provider I/O or external effects.
 	PutCurrent(context.Context, SubscriptionStatus, int64) error
 }
 
@@ -81,7 +93,13 @@ type SubscriptionStatusTx interface {
 // atomic capture/head CAS under one subscription guard. It does not call a
 // provider or decide active paid reporting, identity or financial eligibility.
 type SubscriptionStatusRepository interface {
+	// ReadSubscriptionStatus returns the joined snapshot for the subscription
+	// identified by RevenueScope and string ID; the repository owns encryption and
+	// joined reads but performs no provider calls or eligibility decisions.
 	ReadSubscriptionStatus(context.Context, RevenueScope, string) (SubscriptionStatusSnapshot, error)
+	// WithSubscriptionStatusTransaction runs the supplied callback with a
+	// SubscriptionStatusTx under the subscription's single guard, providing atomic
+	// capture/head compare-and-swap within that subscription's transaction.
 	WithSubscriptionStatusTransaction(context.Context, RevenueScope, string, func(SubscriptionStatusTx) error) error
 }
 
@@ -90,6 +108,9 @@ type SubscriptionStatusRepository interface {
 func SubscriptionStatusIdentity(scope RevenueScope, subscription string) string {
 	return "subscription_status_" + subscriptionDigest([]any{scope.Provider, scope.AccountID, scope.LiveMode, subscription})
 }
+
+// subscriptionDigest returns the SHA-256 hex digest of value's canonical JSON
+// encoding; values that cannot marshal yield the empty string.
 func subscriptionDigest(value any) string {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -98,9 +119,16 @@ func subscriptionDigest(value any) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
+
+// cleanStatusID reports whether a status identifier is a valid revenue identity
+// without carriage return, newline or NUL characters.
 func cleanStatusID(value string) bool {
 	return validRevenueIdentity(value) && !strings.ContainsAny(value, "\r\n\x00")
 }
+
+// validStatus reports whether status is one of the recognized provider
+// lifecycle states; unknown strings are rejected rather than treated as
+// inactive.
 func validStatus(status string) bool {
 	switch status {
 	case "active", "trialing", "incomplete", "incomplete_expired", "past_due", "unpaid", "canceled", "paused":
@@ -109,6 +137,10 @@ func validStatus(status string) bool {
 		return false
 	}
 }
+
+// preparationBody builds the canonical fingerprint body for a preparation,
+// preserving the legacy fact-based shape and wrapping checkout-sourced
+// preparations with their intent identity and fingerprint.
 func preparationBody(p SubscriptionStatusPreparation) any {
 	legacy := struct {
 		Fact, Fingerprint, Actor, Provider, Account, Principal, Customer, Subscription string
@@ -159,6 +191,10 @@ func (p SubscriptionStatusPreparation) Validate() error {
 	}
 	return nil
 }
+
+// statusFingerprint digests the canonical preparation body together with status
+// and cancellation scheduling; identical observations therefore share a
+// fingerprint.
 func statusFingerprint(p SubscriptionStatusPreparation, status string, scheduled bool) string {
 	return subscriptionDigest([]any{preparationBody(p), status, scheduled})
 }
@@ -171,10 +207,17 @@ func (s SubscriptionStatus) Validate() error {
 	}
 	return nil
 }
+
+// sameSubscriptionStatus reports whether two statuses are the exact same
+// observation: equal fingerprint, capture, revision and ObservedAt.
 func sameSubscriptionStatus(a, b SubscriptionStatus) bool {
 	return a.Fingerprint == b.Fingerprint && a.Preparation.CaptureID == b.Preparation.CaptureID && a.Revision == b.Revision && a.ObservedAt.Equal(b.ObservedAt)
 }
 
+// statusRepository returns the repository's optional
+// SubscriptionStatusRepository capability after verifying the revenue context
+// and non-nil service, clock and repository; absence or nil ports yield
+// ErrRevenueUnavailable.
 func (s *RevenueService) statusRepository(ctx context.Context) (SubscriptionStatusRepository, error) {
 	if err := revenueContext(ctx); err != nil {
 		return nil, err
@@ -188,6 +231,11 @@ func (s *RevenueService) statusRepository(ctx context.Context) (SubscriptionStat
 	}
 	return repo, nil
 }
+
+// statusFact loads one payment fact and rejects anything not canonical, not a
+// payment, with zero sequence/time, or with unclean
+// principal/customer/subscription IDs as unassessable; it also enforces
+// retained paid-checkout ownership.
 func (s *RevenueService) statusFact(ctx context.Context, id string) (RevenueFact, error) {
 	f, err := s.GetRevenueFact(ctx, id)
 	if err != nil {
@@ -202,6 +250,10 @@ func (s *RevenueService) statusFact(ctx context.Context, id string) (RevenueFact
 	}
 	return f, nil
 }
+
+// matchesStatusFact reports whether a legacy fact-sourced preparation exactly
+// matches the fact's ID, fingerprint, scope, principal, customer and
+// subscription with RequestedAt not before acceptance.
 func matchesStatusFact(p SubscriptionStatusPreparation, f RevenueFact) bool {
 	return p.Source == "" && p.FactID == f.ID && p.FactFingerprint == f.Fingerprint && p.Scope == f.Scope && p.PrincipalID == f.PrincipalID && p.ProviderCustomerID == f.ProviderCustomerID && p.SubscriptionID == f.SubscriptionID && !p.RequestedAt.Before(f.AcceptedAt)
 }
@@ -221,6 +273,10 @@ func (s *RevenueService) ValidateSubscriptionStatusPreparation(ctx context.Conte
 	}
 	return ctx.Err()
 }
+
+// verifyStatus revalidates a snapshot's head and receipt, requires them to be
+// the same observation, and rechecks the preparation's immutable billing
+// provenance.
 func (s *RevenueService) verifyStatus(ctx context.Context, snapshot SubscriptionStatusSnapshot) error {
 	v := snapshot.Current
 	if v.Validate() != nil || snapshot.Receipt.Validate() != nil || !sameSubscriptionStatus(v, snapshot.Receipt) {
@@ -338,6 +394,11 @@ func (s *RevenueService) GetSubscriptionStatusForFact(ctx context.Context, factI
 	return s.readStatusForIdentity(ctx, repo, f.Scope, f.SubscriptionID, f.PrincipalID, f.ProviderCustomerID, maxAge)
 }
 
+// prepareStatus completes a preparation against current state: an existing
+// verified head must keep the same owner and pins expected
+// revision/fingerprint; RequestedAt is set from the clock and must not precede
+// the source or head observation. CaptureID is derived from the canonical
+// preparation body.
 func (s *RevenueService) prepareStatus(ctx context.Context, repo SubscriptionStatusRepository, p SubscriptionStatusPreparation, sourceAt time.Time) (SubscriptionStatusPreparation, error) {
 	current, err := repo.ReadSubscriptionStatus(ctx, p.Scope, p.SubscriptionID)
 	if err == nil {
@@ -366,6 +427,11 @@ func (s *RevenueService) prepareStatus(ctx context.Context, repo SubscriptionSta
 	return p, nil
 }
 
+// readStatusForIdentity reads one verified joined snapshot and requires its
+// preparation to exactly match the requested scope, subscription, principal and
+// customer. Freshness is measured from now back to RequestedAt within maxAge,
+// returning ErrSubscriptionStatusStale beyond it; a rewound clock is
+// unavailable.
 func (s *RevenueService) readStatusForIdentity(ctx context.Context, repo SubscriptionStatusRepository, scope RevenueScope, subscription, principal, customer string, maxAge time.Duration) (SubscriptionStatus, error) {
 	snapshot, err := repo.ReadSubscriptionStatus(ctx, scope, subscription)
 	if err != nil {

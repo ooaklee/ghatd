@@ -27,8 +27,16 @@ const (
 	partition       = "billing-verified-revenue-v1"
 )
 
+// Repository borrows one prepared transaction-capable record store; it creates
+// no client, fallback or background state. All methods map store errors to
+// billing classifications.
 type Repository struct{ store recordstore.Store }
+
+// bound forwards revenue operations through the retained record-store
+// transaction.
 type bound struct{ tx recordstore.Tx }
+
+// sequenceHead holds the persisted global sequence counter for revenue appends.
 type sequenceHead struct {
 	Sequence int64 `json:"sequence"`
 }
@@ -39,6 +47,10 @@ type persistedFact struct {
 	Fact        billing.RevenueFact `json:"fact"`
 	Fingerprint string              `json:"fingerprint"`
 }
+
+// persistedObservation retains private resolution/fingerprint fields excluded
+// from the public observation shape. Only its JSON encoding is stored; decode
+// validates canonical shape before use.
 type persistedObservation struct {
 	Observation         billing.RevenueObservation `json:"observation"`
 	ResolutionBy        string                     `json:"resolution_by,omitempty"`
@@ -46,6 +58,10 @@ type persistedObservation struct {
 	RecoveryFingerprint string                     `json:"recovery_fingerprint,omitempty"`
 }
 
+// decodeObservation decodes and validates one observation row.
+// ID/kind/partition must match, fingerprint and AcceptedAt must be present, and
+// a recovery fingerprint (bounded, trimmed, resolution-bearing) must be
+// consistent; otherwise ErrRevenueUnavailable.
 func decodeObservation(row recordstore.Record) (billing.RevenueObservation, error) {
 	var stored persistedObservation
 	if err := row.Decode(&stored); err != nil {
@@ -61,11 +77,17 @@ func decodeObservation(row recordstore.Record) (billing.RevenueObservation, erro
 	return v, nil
 }
 
+// persistedAcknowledgement stores one consumer acknowledgement beside its
+// ActorID, which is not part of the public acknowledgement value; decode
+// reattaches it for verified identity.
 type persistedAcknowledgement struct {
 	Acknowledgement billing.RevenueAcknowledgement `json:"acknowledgement"`
 	ActorID         string                         `json:"actor_id"`
 }
 
+// decodeFact decodes and validates one fact row: ID, sequence and partition
+// must match the record with sequence >= 1 plus fingerprint and AcceptedAt;
+// anything else is ErrRevenueUnavailable rather than a partial value.
 func decodeFact(row recordstore.Record) (billing.RevenueFact, error) {
 	var stored persistedFact
 	if err := row.Decode(&stored); err != nil {
@@ -91,12 +113,21 @@ func NewRepository(store recordstore.Store) (*Repository, error) {
 	}
 	return &Repository{store}, nil
 }
+
+// key derives a stable opaque SHA-256 identifier for the given ordered parts;
+// marshal failures collapse to hashing the empty body.
 func key(parts ...string) string {
 	body, _ := json.Marshal(parts)
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
 }
+
+// ackPartition derives the per-consumer acknowledgement partition so one
+// consumer's acknowledgements cannot mix with another's.
 func ackPartition(consumer string) string { return "billing-revenue-consumer:" + key(consumer) }
+
+// singleCause reports whether target appears in err's unwrap chain up to 32
+// levels, without using errors.Is semantics for joined wrappers.
 func singleCause(err, target error) bool {
 	for depth := 0; err != nil && depth < 32; depth++ {
 		if err == target {
@@ -106,6 +137,10 @@ func singleCause(err, target error) bool {
 	}
 	return false
 }
+
+// mapped translates record store errors into billing classifications: not
+// found, conflict, invalid, uncertain and unavailable wrap their cause with the
+// billing sentinel; other errors pass through unchanged.
 func mapped(err error) error {
 	switch {
 	case singleCause(err, recordstore.ErrNotFound):
@@ -122,6 +157,10 @@ func mapped(err error) error {
 		return err
 	}
 }
+
+// get reads one record by kind/ID and decodes it into T, rejecting rows whose
+// ID, kind or partition do not match and mapping store errors to billing
+// classifications.
 func get[T any](ctx context.Context, tx recordstore.Tx, kind, id, part string) (T, recordstore.Record, error) {
 	var value T
 	row, err := tx.Get(ctx, kind, id)
@@ -134,6 +173,9 @@ func get[T any](ctx context.Context, tx recordstore.Tx, kind, id, part string) (
 	err = row.Decode(&value)
 	return value, row, err
 }
+
+// insert creates a first-revision record for value and inserts it; existing
+// rows or construction failures surface as mapped billing errors.
 func insert(ctx context.Context, tx recordstore.Tx, kind, id, part string, value any) error {
 	row, err := recordstore.NewRecord(kind, id, part, 1, value)
 	if err != nil {
@@ -141,12 +183,19 @@ func insert(ctx context.Context, tx recordstore.Tx, kind, id, part string, value
 	}
 	return mapped(tx.Insert(ctx, row))
 }
+
+// WithRevenueTransaction runs fn against one transaction bound to the revenue
+// partition and maps store failures to billing classifications; nil ctx or fn
+// is invalid.
 func (r *Repository) WithRevenueTransaction(ctx context.Context, fn func(billing.RevenueTx) error) error {
 	if ctx == nil || fn == nil {
 		return billing.ErrRevenueInvalid
 	}
 	return mapped(r.store.Transact(ctx, partition, func(tx recordstore.Tx) error { return fn(&bound{tx}) }))
 }
+
+// GetObservation reads one observation by ID within the bound transaction; ID
+// mismatch and corrupt payloads are unavailable, not found is preserved.
 func (b *bound) GetObservation(ctx context.Context, id string) (billing.RevenueObservation, error) {
 	row, err := b.tx.Get(ctx, kindObservation, id)
 	if err != nil {
@@ -157,6 +206,10 @@ func (b *bound) GetObservation(ctx context.Context, id string) (billing.RevenueO
 	}
 	return decodeObservation(row)
 }
+
+// InsertObservation persists a new observation at revision 1, marking row state
+// quarantined or accepted from QuarantineReason. Repeated inserts fail at the
+// store as conflict.
 func (b *bound) InsertObservation(ctx context.Context, v billing.RevenueObservation) error {
 	row, err := recordstore.NewRecord(kindObservation, v.ID, partition, 1, persistedObservation{Observation: v, ResolutionBy: v.ResolutionBy, SourceFingerprint: v.SourceFingerprint, RecoveryFingerprint: v.RecoveryFingerprint})
 	if err != nil {
@@ -169,6 +222,9 @@ func (b *bound) InsertObservation(ctx context.Context, v billing.RevenueObservat
 	}
 	return mapped(b.tx.Insert(ctx, row))
 }
+
+// GetFact reads one fact by ID in the bound transaction; rows whose ID, kind or
+// partition mismatch, or that fail decode validation, are unavailable.
 func (b *bound) GetFact(ctx context.Context, id string) (billing.RevenueFact, error) {
 	row, err := b.tx.Get(ctx, kindFact, id)
 	if err != nil {
@@ -179,6 +235,12 @@ func (b *bound) GetFact(ctx context.Context, id string) (billing.RevenueFact, er
 	}
 	return decodeFact(row)
 }
+
+// AppendFact allocates the next global sequence via head CAS, inserts the fact
+// and, for payment facts with provider customer evidence, retains the lifecycle
+// subscription source and touches the source epoch, all in one transaction.
+// Caller-supplied sequences or exhausted counters are invalid; the returned
+// fact carries the assigned sequence.
 func (b *bound) AppendFact(ctx context.Context, v billing.RevenueFact) (billing.RevenueFact, error) {
 	if v.ID == "" || v.Sequence != 0 || v.Fingerprint == "" || v.AcceptedAt.IsZero() {
 		return billing.RevenueFact{}, billing.ErrRevenueInvalid
@@ -230,6 +292,9 @@ func (b *bound) AppendFact(ctx context.Context, v billing.RevenueFact) (billing.
 	}
 	return v, nil
 }
+
+// GetRevenueFact reads one fact in a single snapshot; empty ID is invalid and
+// decode failures surface as unavailable rather than partial data.
 func (r *Repository) GetRevenueFact(ctx context.Context, id string) (billing.RevenueFact, error) {
 	if ctx == nil || id == "" {
 		return billing.RevenueFact{}, billing.ErrRevenueInvalid
@@ -247,6 +312,10 @@ func (r *Repository) PendingRevenueFacts(ctx context.Context, consumer string, l
 	return r.PendingRevenueFactsAfter(ctx, consumer, 0, limit)
 }
 
+// PendingRevenueFactsAfter returns unacknowledged facts with sequence strictly
+// after afterSequence in one snapshot, ordered by sequence and truncated to the
+// 1..200 limit. Any acknowledgement decode inconsistency makes the whole read
+// unavailable; acknowledged facts are excluded regardless of sequence.
 func (r *Repository) PendingRevenueFactsAfter(ctx context.Context, consumer string, afterSequence int64, limit int) ([]billing.RevenueFact, error) {
 	if ctx == nil || consumer == "" || afterSequence < 0 || limit < 1 || limit > 200 {
 		return nil, billing.ErrRevenueInvalid
@@ -298,6 +367,10 @@ func (r *Repository) PendingRevenueFactsAfter(ctx context.Context, consumer stri
 	}
 	return out, nil
 }
+
+// AcknowledgeRevenueFact durably records one consumer acknowledgement for an
+// existing fact. An identical replay is a no-op; any field difference is
+// conflict. Consumer, fact, acceptance, actor and time are all required.
 func (r *Repository) AcknowledgeRevenueFact(ctx context.Context, a billing.RevenueAcknowledgement) error {
 	if ctx == nil || a.ConsumerID == "" || a.FactID == "" || a.AcceptanceID == "" || a.ActorID == "" || a.AcceptedAt.IsZero() {
 		return billing.ErrRevenueInvalid
@@ -323,6 +396,9 @@ func (r *Repository) AcknowledgeRevenueFact(ctx context.Context, a billing.Reven
 	}))
 }
 
+// GetRevenueAcknowledgement reads one consumer/fact acknowledgement in a
+// snapshot, rejecting rows with mismatched identity, missing
+// actor/acceptance/time or an unknown outcome as unavailable.
 func (r *Repository) GetRevenueAcknowledgement(ctx context.Context, consumer, fact string) (billing.RevenueAcknowledgement, error) {
 	if ctx == nil || consumer == "" || fact == "" {
 		return billing.RevenueAcknowledgement{}, billing.ErrRevenueInvalid

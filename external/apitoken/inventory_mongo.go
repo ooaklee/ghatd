@@ -25,7 +25,11 @@ const InventoryFenceCollection = ApiTokenCollection + "_inventory_fences"
 // inventorySetup is required only when enabling transactional token admission.
 // It uses the shared repository's lifecycle and privacy-safe setup primitives.
 type inventorySetup interface {
+	// EnsureMongoCollection prepares the named collection within the supplied
+	// database using the shared repository's privacy-safe setup primitives.
 	EnsureMongoCollection(context.Context, *mongo.Database, string) error
+	// ProbeMongoTransactions verifies that the supplied collection's deployment
+	// supports the transactions required for transactional token admission.
 	ProbeMongoTransactions(context.Context, *mongo.Collection) error
 }
 

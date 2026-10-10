@@ -25,17 +25,26 @@ values and injected configuration remain read-only shared values.
 
 ## Table of Contents
 
+- [Batch user lookup](#batch-user-lookup)
+- [Conditional account roles](#conditional-account-roles)
+- [Conditional account status](#conditional-account-status)
+- [Display handles](#display-handles)
+- [Legacy broad updates](#legacy-broad-updates)
+- [Conditional login state](#conditional-login-state)
+- [Conditional profile names](#conditional-profile-names)
+- [Conditional email changes](#conditional-email-changes)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
-- [Batch user lookup](#batch-user-lookup)
 - [MongoDB Setup](#mongodb-setup)
-- [Display handles](#display-handles)
-- [Conditional email changes](#conditional-email-changes)
-- [Conditional account status](#conditional-account-status)
-- [Conditional account roles](#conditional-account-roles)
 - [API Endpoints](#api-endpoints)
 - [Configuration Examples](#configuration-examples)
 - [Testing](#testing)
+- [Best Practices](#best-practices)
+- [Error Handling](#error-handling)
+- [Monitoring & Metrics](#monitoring--metrics)
+- [Support](#support)
+- [Optional immutable signup attribution](#optional-immutable-signup-attribution)
+- [Provider identity persistence](#provider-identity-persistence)
 
 ## Batch user lookup
 
@@ -543,7 +552,7 @@ dept, exists := user.GetExtension("department")
 ┌──────────────────────▼──────────────────────────────────┐
 │                  Handler Layer (handler.go)             │
 │  - HTTP request/response handling                       │
-│  - 23 endpoint handlers                                 │
+│  - endpoint handlers                                    │
 │  - Error response formatting                            │
 └──────────────────────┬──────────────────────────────────┘
                        │

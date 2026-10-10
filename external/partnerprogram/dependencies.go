@@ -6,6 +6,8 @@ import (
 	"reflect"
 )
 
+// nilProgramDependency detects nil values including nil pointers stored in non-
+// nil interfaces.
 func nilProgramDependency(value any) bool {
 	if value == nil {
 		return true
@@ -18,6 +20,8 @@ func nilProgramDependency(value any) bool {
 	return false
 }
 
+// singleProgramCause reports whether target appears within 32 unwrap levels of
+// err.
 func singleProgramCause(err, target error) bool {
 	for n := 0; err != nil && n < 32; n++ {
 		if err == target {
@@ -28,6 +32,8 @@ func singleProgramCause(err, target error) bool {
 	return false
 }
 
+// ready rejects a nil or expired context and a service with nil repository,
+// clock or ID generator.
 func (s *Service) ready(ctx context.Context) error {
 	if ctx == nil {
 		return ErrInvalid

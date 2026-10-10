@@ -20,11 +20,26 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given collection matching the
+	// filter, honouring count options.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes the first document matching the filter from
+	// the given collection, reporting failures via the target object name; callers
+	// needing the delete result use the result-bearing variant.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand runs a find on the given collection with the supplied
+	// filter and find options and returns the driver cursor for caller-side
+	// iteration.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts one document into the given collection and
+	// returns the driver insert receipt, naming the target via resultObjectName in
+	// diagnostics.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand applies the update filter to the first document
+	// matching the given filter, reporting failures via the target object name.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteAggregateCommand runs the supplied aggregation pipeline on the given
+	// collection and returns the driver cursor.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
 	// ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
 	// ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
@@ -32,9 +47,15 @@ type MongoDbStore interface {
 	// ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
 	// ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 
+	// GetDatabase resolves the named database handle from the store's client.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes the underlying MongoDB client for the store.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult exhausts the cursor and decodes every document into
+	// the caller-supplied result slice, using resultObjectName in diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes the first document from the cursor into the
+	// caller-supplied result, using resultObjectName in diagnostics.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

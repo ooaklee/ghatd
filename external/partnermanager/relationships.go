@@ -21,6 +21,10 @@ type ReferralTerms struct {
 	TermsVersion     string     `json:"terms_version"`
 	RecurrenceEndsAt *time.Time `json:"recurrence_ends_at,omitempty"`
 }
+
+// ReferralPeriod is one contiguous ownership interval with the frozen terms
+// snapshot in force. Until is nil while the period is open; Corrected marks a
+// period ended by correction rather than natural expiry.
 type ReferralPeriod struct {
 	ID        string        `json:"id"`
 	From      time.Time     `json:"from"`
@@ -28,18 +32,29 @@ type ReferralPeriod struct {
 	Terms     ReferralTerms `json:"terms"`
 	Corrected bool          `json:"corrected"`
 }
+
+// CustomerReferral is the customer-facing projection of one referred
+// relationship: stable ID, first ownership time, current flag and ordered
+// periods. Internal customer and attribution identities are absent.
 type CustomerReferral struct {
 	ID           string           `json:"id"`
 	FirstOwnedAt time.Time        `json:"first_owned_at"`
 	Current      bool             `json:"current"`
 	Periods      []ReferralPeriod `json:"periods"`
 }
+
+// CustomerReferralPage is one bounded page of customer referral projections
+// with cursor continuation; it is not a complete relationship set.
 type CustomerReferralPage struct {
 	Items     []CustomerReferral `json:"items"`
 	HasMore   bool               `json:"has_more"`
 	NextAfter string             `json:"next_after,omitempty"`
 }
 
+// relationshipPage reads and strictly validates one owning relationship page:
+// identity fields, ordering, derived IDs, non-overlapping contiguous periods
+// with in-range frozen terms, and consistency between Current and the last
+// period's open end. Any malformed projection fails with ErrUnavailable.
 func (m *Manager) relationshipPage(ctx context.Context, partner string, q referral.RelationshipQuery) (referral.RelationshipPage, error) {
 	page, err := m.deps.Referral.ListRelationships(ctx, partner, q)
 	if err != nil {

@@ -2,7 +2,11 @@ package emailtemplater
 
 // TemplateRequest is the generic interface for all template generation requests
 type TemplateRequest interface {
+	// GetEmailTo returns the recipient email address for a TemplateRequest, giving
+	// generic template generation a common recipient accessor.
 	GetEmailTo() string
+	// Validate checks that the TemplateRequest carries all fields required for
+	// template generation, returning an error describing the first missing field.
 	Validate() error
 }
 

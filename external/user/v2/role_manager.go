@@ -9,8 +9,16 @@ import (
 // Implementations must use a live verifier; trusted domain methods alone do not
 // satisfy this contract. Its native manifests join the handler response chain.
 type RoleManager interface {
+	// AddUserRole adds the requested role to the target user and returns the
+	// updated account; the RoleManager contract binds this command to live
+	// administrator verification and attributable audit for external callers.
 	AddUserRole(context.Context, *AddUserRoleRequest) (*AddUserRoleResponse, error)
+	// RemoveUserRole removes the requested role from the target user and returns
+	// the updated account; the RoleManager contract binds this command to live
+	// administrator verification and attributable audit for external callers.
 	RemoveUserRole(context.Context, *RemoveUserRoleRequest) (*RemoveUserRoleResponse, error)
+	// RoleManagerErrorMaps returns the manager's native error manifests for
+	// inclusion in the handler response chain.
 	RoleManagerErrorMaps() []reply.ErrorManifest
 }
 

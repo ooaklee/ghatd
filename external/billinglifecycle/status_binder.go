@@ -18,6 +18,8 @@ type StatusBinder struct {
 	validator StatusValidator
 }
 
+// NewStatusBinder requires a fully constructed scheduler, a binding repository
+// and a status validator. It performs no storage or authority calls.
 func NewStatusBinder(scheduler *Scheduler, repo StatusBindingRepository, validator StatusValidator) (*StatusBinder, error) {
 	if scheduler == nil || nilPort(scheduler.repo) || nilPort(scheduler.authority) || nilPort(scheduler.clock) || nilPort(repo) || nilPort(validator) {
 		return nil, billing.ErrRevenueUnavailable
@@ -25,6 +27,9 @@ func NewStatusBinder(scheduler *Scheduler, repo StatusBindingRepository, validat
 	return &StatusBinder{scheduler, repo, validator}, nil
 }
 
+// finish re-checks scheduler authority and validates the preparation after a
+// bind operation, returning the original error on success. Uncertain operation
+// errors are joined so unknown commits remain visible.
 func (b *StatusBinder) finish(ctx context.Context, h LeaseHandle, p billing.SubscriptionStatusPreparation, operationErr error) error {
 	preserve := func(err error) error {
 		if errors.Is(operationErr, recordstore.ErrUncertain) {

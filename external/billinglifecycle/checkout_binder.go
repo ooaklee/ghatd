@@ -20,6 +20,9 @@ type CheckoutBinder struct {
 	validator CheckoutValidator
 }
 
+// NewCheckoutBinder borrows an already constructed scheduler, binding
+// repository and configured validator; nil or missing inner ports return
+// unavailable. No lease, work or identity is created.
 func NewCheckoutBinder(scheduler *Scheduler, repo CheckoutBindingRepository, validator CheckoutValidator) (*CheckoutBinder, error) {
 	if scheduler == nil || nilPort(scheduler.repo) || nilPort(scheduler.authority) || nilPort(scheduler.clock) || nilPort(repo) || nilPort(validator) {
 		return nil, billing.ErrRevenueUnavailable
@@ -27,6 +30,10 @@ func NewCheckoutBinder(scheduler *Scheduler, repo CheckoutBindingRepository, val
 	return &CheckoutBinder{scheduler, repo, validator}, nil
 }
 
+// finish re-runs scheduler finalization and a configured lifecycle validation
+// outside the retryable callback. Denial withholds output, but a previously
+// observed ErrUncertain operation remains joined so an unknown commit stays
+// visible.
 func (b *CheckoutBinder) finish(ctx context.Context, h LeaseHandle, p billing.CheckoutIntent, operationErr error) error {
 	preserve := func(err error) error {
 		if errors.Is(operationErr, recordstore.ErrUncertain) {
@@ -104,6 +111,9 @@ func (b *CheckoutBinder) Bind(ctx context.Context, h LeaseHandle, input Checkout
 	return out, nil
 }
 
+// sameCheckoutEvidence compares two evidence values ignoring their CreatedAt
+// location and requiring the instants to be equal, so identical evidence
+// compares equal across time-zone representations.
 func sameCheckoutEvidence(a, b paymentprovider.RevenueCheckoutEvidence) bool {
 	at, bt := a.CreatedAt, b.CreatedAt
 	a.CreatedAt, b.CreatedAt = time.Time{}, time.Time{}

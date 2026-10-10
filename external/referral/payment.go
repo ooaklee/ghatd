@@ -53,6 +53,11 @@ func (s *Service) BindPayment(ctx context.Context, customer, paymentID string, p
 	return result, nil
 }
 
+// bindPayment freezes the owning referral revision at paidAt under the payment
+// ID. An existing binding replays only when customer and effective time match;
+// otherwise ErrStaleWrite. No eligible prior revision yields ErrNotFound, and a
+// losing insert race is resolved by re-reading and replaying the stored
+// binding.
 func (s *Service) bindPayment(ctx context.Context, customer, paymentID string, paidAt time.Time) (PaymentAttribution, error) {
 	replay := func(old PaymentAttribution) (PaymentAttribution, error) {
 		if old.ReferredCustomer != customer || !old.EffectiveAt.Equal(paidAt) {

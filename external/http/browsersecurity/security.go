@@ -47,6 +47,8 @@ type Security struct {
 	csrfName      string
 }
 
+// csrfSession is the cookie payload: a 43-byte nonce, its principal binding and
+// an expiry.
 type csrfSession struct {
 	Nonce     string `json:"nonce"`
 	Binding   string `json:"binding"`
@@ -100,12 +102,15 @@ func New(config Config) (*Security, error) {
 	return security, nil
 }
 
+// mac returns the base64url HMAC-SHA256 of value under the configured key.
 func (s *Security) mac(value string) string {
 	m := hmac.New(sha256.New, s.key)
 	_, _ = m.Write([]byte(value))
 	return base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
 
+// configured reports whether the receiver has a clock and a key of at least 32
+// bytes plus a cookie name, i.e. is usable for cookie signing.
 func (s *Security) configured() bool {
 	return s != nil && s.now != nil && len(s.key) >= 32 && s.csrfName != ""
 }
@@ -131,6 +136,8 @@ func UniqueCookie(r *http.Request, name string) (*http.Cookie, error) {
 	return found, nil
 }
 
+// decodeCookie reads the single CSRF cookie, verifies its HMAC, decodes the
+// JSON session and rejects nonces of wrong length or expired timestamps.
 func (s *Security) decodeCookie(r *http.Request) (csrfSession, error) {
 	cookie, err := UniqueCookie(r, s.csrfName)
 	if err != nil {
@@ -252,6 +259,8 @@ func (s *Security) Issue(w http.ResponseWriter, r *http.Request, identity Identi
 	return nil
 }
 
+// issuanceSiteAllowed permits token issuance only when Sec-Fetch-Site is
+// absent, or exactly one value equal to same-origin, same-site or none.
 func issuanceSiteAllowed(r *http.Request) bool {
 	values := r.Header.Values("Sec-Fetch-Site")
 	if len(values) == 0 {
@@ -280,6 +289,8 @@ func (s *Security) PublicIdentity(r *http.Request) string {
 	return "public_" + s.mac("client\n"+clientAddress(r))
 }
 
+// clientAddress extracts the host from the connection's RemoteAddr, returning
+// the raw address when it lacks a port.
 func clientAddress(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {
@@ -303,6 +314,8 @@ func (s *Security) RateIdentity(r *http.Request, identity Identity) string {
 	return "authenticated:" + s.mac("rate\n"+identity.binding)
 }
 
+// setCookie writes a host-wide Strict, HttpOnly cookie that is Secure unless
+// local insecurity is configured; a non-future expiry becomes a session cookie.
 func (s *Security) setCookie(w http.ResponseWriter, name, value string, expires time.Time) {
 	age := int(expires.Sub(s.now()).Seconds())
 	if age < 1 {

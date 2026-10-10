@@ -332,24 +332,44 @@ func (s *Service) repo() Repository {
 // unavailableRepository fails every call with ErrUnavailable.
 type unavailableRepository struct{}
 
+// Get reports the wiring failure catalogue.ErrUnavailable for this repository
+// stub.
 func (unavailableRepository) Get(context.Context, string) (*Record, error) {
 	return nil, catalogue.ErrUnavailable
 }
+
+// GetByID reports the wiring failure catalogue.ErrUnavailable for this
+// repository stub.
 func (unavailableRepository) GetByID(context.Context, string) (*Record, error) {
 	return nil, catalogue.ErrUnavailable
 }
+
+// List reports the wiring failure catalogue.ErrUnavailable for this repository
+// stub.
 func (unavailableRepository) List(context.Context, catalogue.ListQuery, bool) ([]Record, int64, error) {
 	return nil, 0, catalogue.ErrUnavailable
 }
+
+// Create reports the wiring failure catalogue.ErrUnavailable for this
+// repository stub.
 func (unavailableRepository) Create(context.Context, *Record) (*Record, error) {
 	return nil, catalogue.ErrUnavailable
 }
+
+// ReplaceWithRevision reports the wiring failure catalogue.ErrUnavailable for
+// this repository stub.
 func (unavailableRepository) ReplaceWithRevision(context.Context, *Record, int) (*Record, error) {
 	return nil, catalogue.ErrUnavailable
 }
+
+// Count reports the wiring failure catalogue.ErrUnavailable for this repository
+// stub.
 func (unavailableRepository) Count(context.Context) (int64, error) {
 	return 0, catalogue.ErrUnavailable
 }
+
+// InsertIfAbsent reports the wiring failure catalogue.ErrUnavailable for this
+// repository stub.
 func (unavailableRepository) InsertIfAbsent(context.Context, *Record) (*Record, bool, error) {
 	return nil, false, catalogue.ErrUnavailable
 }

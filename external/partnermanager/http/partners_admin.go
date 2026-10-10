@@ -8,6 +8,10 @@ import (
 	"github.com/ooaklee/ghatd/external/partnerprogram"
 )
 
+// partnersPublishPolicy decodes a policy publish request, requiring explicit
+// rate, hold days and a non-negative expected revision, parses RFC3339
+// effective dates and forwards the draft to Manager.AdminPublishPolicy under
+// the actor's authority. Malformed input fails as an invalid request.
 func partnersPublishPolicy(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	var input struct {
 		Scope            string   `json:"scope"`
@@ -49,6 +53,11 @@ func partnersPublishPolicy(ctx context.Context, svc *partnermanager.Manager, p P
 	return reply(201, policyView(version), "")
 }
 
+// partnersRecordPayment records a completed external transfer. The operator
+// supplies the actual paid-at date; the claim's immutable amount and currency
+// are read from the owning service via AdminPaymentClaim, never from the
+// browser, and the result is confirmed through acceptedPayment before being
+// returned as an operator receipt.
 func partnersRecordPayment(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	// V1 records a completed external transfer. The browser chooses neither the
 	// actor, immutable claim amount/currency nor the recording timestamp. PaidAt
@@ -79,6 +88,12 @@ func partnersRecordPayment(ctx context.Context, svc *partnermanager.Manager, p P
 	return operatorReceipt(result, acceptedPayment(result, command))
 }
 
+// partnersAttribution serves attribution preview and apply. Preview rejects any
+// expected-revision/fingerprint input and returns the prospective change with
+// original identifiers and fingerprints; apply requires the echoed revision,
+// referral ID and both fingerprints, forwards to Manager.ApplyAttribution, and
+// returns partnerearnings.ErrUncertain unless the stored correction exactly
+// matches the submitted request. Neither mode rewrites past allocations.
 func partnersAttribution(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	// Preview is a read model; Apply binds the identical prospective request and
 	// original owning revisions/fingerprints. Neither rewrites past allocations.

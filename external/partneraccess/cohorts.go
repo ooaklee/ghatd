@@ -23,6 +23,8 @@ const cohortCandidateCapacity = 10_000
 // owning group service. Successful empty sets are nonnil and sorted/unique.
 // It must not be implemented using the generic inherited access map.
 type DirectGroups interface {
+	// GetActiveDirectGroupIDs returns the complete current set of active direct
+	// group memberships for the user from the owning group service.
 	GetActiveDirectGroupIDs(context.Context, string) ([]string, error)
 }
 
@@ -47,6 +49,8 @@ type Cohorts struct {
 	policy PolicyService
 }
 
+// NewCohorts validates the system identifier and borrowed ports, returning
+// ErrUnavailable rather than constructing around missing dependencies.
 func NewCohorts(system string, groups DirectGroups, policy PolicyService) (*Cohorts, error) {
 	if !validID(system) || nilPort(groups) || nilPort(policy) {
 		return nil, partnermanager.ErrUnavailable
@@ -116,6 +120,11 @@ func (c *Cohorts) PartnerGroupIDs(ctx context.Context, customerID string) ([]str
 	return approved, nil
 }
 
+// memberships reads current direct group IDs, enforcing a non-nil sorted unique
+// result within the candidate capacity and returning ErrUnavailable otherwise;
+// context errors take precedence and other failures become unavailable. The
+// slice is cloned so a source reusing its backing storage cannot mutate an
+// earlier read.
 func (c *Cohorts) memberships(ctx context.Context, customerID string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

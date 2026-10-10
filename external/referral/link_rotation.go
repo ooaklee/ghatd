@@ -30,24 +30,49 @@ type LinkRotationReceipt struct {
 // LinkRotationTransaction binds link retirement, issuance and receipt storage
 // to one partner guard. The callback may retry and performs no external effects.
 type LinkRotationTransaction interface {
+	// GetLinkByCode returns the Link for the exact case-sensitive code, including
+	// retired ones, or the repository's absence error. Within
+	// LinkRotationTransaction it is the read step used while a rotation holds its
+	// single partner guard; the Service delegates after its readiness check.
 	GetLinkByCode(context.Context, string) (Link, error)
+	// RetireLink retires the link identified by ID at the supplied time with a
+	// reason and actor. Within LinkRotationTransaction it performs the retirement
+	// step under the partner guard; the Service validates non-empty actor and
+	// reason of at most 1000 characters before delegating.
 	RetireLink(context.Context, string, time.Time, string, string) error
+	// InsertLink stores a new Link as the issuance step of the link rotation
+	// transaction, bound to the same single partner guard as retirement and receipt
+	// storage; the callback may retry and must perform no external effects.
 	InsertLink(context.Context, Link) error
+	// GetLinkRotation reads the LinkRotationReceipt for the identifiers supplied as
+	// its three string arguments, letting a transaction callback inspect prior
+	// rotation history while holding the partner guard.
 	GetLinkRotation(context.Context, string, string, string) (LinkRotationReceipt, error)
+	// InsertLinkRotation stores a LinkRotationReceipt within the link rotation
+	// transaction so receipt persistence is bound to the same partner guard as
+	// retirement and issuance.
 	InsertLinkRotation(context.Context, LinkRotationReceipt) error
 }
 
 // LinkRotationRepository is an optional atomic capability. An adapter without
 // it cannot safely rotate; there is no separate retire/issue fallback.
 type LinkRotationRepository interface {
+	// WithLinkTransaction runs the supplied callback with a LinkRotationTransaction
+	// scoped to the partner identified by the two string arguments, binding
+	// retirement, issuance and receipt storage to one atomic guard with no separate
+	// fallback.
 	WithLinkTransaction(context.Context, string, string, func(LinkRotationTransaction) error) error
 }
 
+// normalizedRotation clears the mutable acquisition permission flag on a copy
+// of the request before fingerprinting, so replay input stays stable.
 func normalizedRotation(req RotateLinkRequest) RotateLinkRequest {
 	req.Partner.CanAcquireReferrals = false
 	return req
 }
 
+// rotationFingerprint digests the program, actor and normalized request so
+// actor identity is bound even though it is excluded from transport JSON.
 func rotationFingerprint(req RotateLinkRequest) (string, error) {
 	// ActorID is intentionally excluded from transport JSON, so encode it
 	// explicitly in private request identity rather than relying on that tag.
@@ -64,6 +89,9 @@ func LinkRotationID(partner, actor, key string) string {
 	return "lnk_rotation_" + fp
 }
 
+// validRotationRequest checks that partner, actor, expected link code, reason
+// and idempotency key are all non-empty, trimmed and within their length
+// limits.
 func validRotationRequest(req RotateLinkRequest) bool {
 	return correctionText(req.Partner.PartnerID, 256) && correctionText(req.Partner.CustomerID, 256) &&
 		correctionText(req.ActorID, 256) && correctionText(req.ExpectedLinkCode, 128) &&
@@ -89,6 +117,11 @@ func (v LinkRotationReceipt) Validate() error {
 	return nil
 }
 
+// recoveredRotation replays a prior rotation receipt inside the rotation
+// transaction. It verifies the receipt's identity and request fingerprint,
+// confirms the issued link is still stored unretired, and that the original
+// link's retirement still matches this request; any mismatch or missing storage
+// yields ErrUnavailable or ErrStaleWrite rather than issuing a new link.
 func recoveredRotation(ctx context.Context, tx LinkRotationTransaction, req RotateLinkRequest, fp string) (Link, error) {
 	v, err := tx.GetLinkRotation(ctx, req.Partner.PartnerID, req.ActorID, req.IdempotencyKey)
 	if err != nil {

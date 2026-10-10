@@ -11,8 +11,15 @@ import (
 // HardenedRateLimitStore is the ephemeral storage contract needed by the
 // accessmanager hardened rate-limit middleware.
 type HardenedRateLimitStore interface {
+	// TrackHardenedAttempt records a failed attempt for the given IP and code
+	// against maxAttempts within window, as required by the hardened rate-limit
+	// middleware's ephemeral store.
 	TrackHardenedAttempt(ctx context.Context, ip, code string, maxAttempts int, window time.Duration) error
+	// BlockIP marks the given IP as blocked for the supplied duration in the
+	// ephemeral store used by the hardened rate-limit middleware.
 	BlockIP(ctx context.Context, ip string, duration time.Duration) error
+	// IsIPBlocked reports whether the given IP is currently blocked in the hardened
+	// rate-limit middleware's ephemeral store.
 	IsIPBlocked(ctx context.Context, ip string) (bool, error)
 }
 

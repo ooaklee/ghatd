@@ -23,6 +23,8 @@ type SignupConfig struct {
 	Message string
 }
 
+// defaults fills the host signup message placeholder when the host supplied
+// none, leaving other copy untouched.
 func (c SignupConfig) defaults() SignupConfig {
 	if c.Message == "" {
 		c.Message = "Email me when early access is available."
@@ -48,12 +50,16 @@ func NewCommsSignupStoreWithConfig(service *contacter.Service, audience Store, c
 	return &commsSignupStore{Store: audience, service: service, config: config.defaults()}
 }
 
+// commsSignupStore routes waitlist joins into the contact service while
+// retaining the embedded waitlist Store for audience reads.
 type commsSignupStore struct {
 	Store
 	service *contacter.Service
 	config  SignupConfig
 }
 
+// Join enrolls an email by submitting a waitlist-typed contact message through
+// the contact service; the returned record is discarded.
 func (s *commsSignupStore) Join(ctx context.Context, email string) error {
 	_, err := s.service.CreateComms(ctx, &contacter.CreateCommsRequest{
 		FullName: "Waitlist subscriber", Email: email, Type: CommsType,
@@ -89,12 +95,18 @@ func NewCommsServiceWithConfig(repository *contacter.Repository, audience Store,
 	return contacter.NewService(&commsRepository{Repository: repository, audience: audience, consent: version}, types), nil
 }
 
+// commsRepository embeds the contact repository and additionally carries the
+// waitlist audience store and consent version so waitlist-type comms can enroll
+// with consent.
 type commsRepository struct {
 	*contacter.Repository
 	audience Store
 	consent  string
 }
 
+// CreateComms passes non-waitlist contacts straight through; waitlist-type
+// comms require a canonical email and message, and are saved with audience
+// enrollment via saveWaitlistCommsWithConsent.
 func (r *commsRepository) CreateComms(ctx context.Context, comm *contacter.Comms) (*contacter.Comms, error) {
 	if comm.Type != CommsType {
 		return r.Repository.CreateComms(ctx, comm)

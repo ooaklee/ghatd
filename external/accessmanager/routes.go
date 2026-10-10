@@ -11,21 +11,58 @@ import (
 
 // AccessmanagerHandler expected methods for valid accessmanager handler
 type AccessmanagerHandler interface {
+	// CreateUser handles user creation requests by mapping the request, delegating
+	// to the service, and writing the created user response.
 	CreateUser(w http.ResponseWriter, r *http.Request)
+	// ValidateEmailVerificationCode handles one-use email proof admission,
+	// publishing session cookies only for a complete validated session.
 	ValidateEmailVerificationCode(w http.ResponseWriter, r *http.Request)
+	// CreateInitalLoginOrVerificationTokenEmail handles initial login or
+	// verification email requests, returning an enumeration-resistant accepted
+	// receipt after valid mapping.
 	CreateInitalLoginOrVerificationTokenEmail(w http.ResponseWriter, r *http.Request)
+	// LoginUser handles email-proof login, exchanging a valid token or code for
+	// session cookies after the service activates provisioned accounts.
 	LoginUser(w http.ResponseWriter, r *http.Request)
+	// RefreshToken handles refresh-credential rotation, publishing rotated cookies
+	// and clearing them for known credential rejections.
 	RefreshToken(w http.ResponseWriter, r *http.Request)
+	// LogoutUser handles logout by clearing client cookies and delegating verified
+	// session-record removal to the service.
 	LogoutUser(w http.ResponseWriter, r *http.Request)
+	// CreateUserAPIToken handles API token creation requests, publishing a
+	// validated creation-only secret on success.
 	CreateUserAPIToken(w http.ResponseWriter, r *http.Request)
+	// DeleteUserAPIToken handles owner-bound API token deletion requests, returning
+	// the established accepted blank response on success.
 	DeleteUserAPIToken(w http.ResponseWriter, r *http.Request)
+	// ActivateUserAPIToken handles API token activation requests by delegating the
+	// status update and returning the accepted blank response on success.
 	ActivateUserAPIToken(w http.ResponseWriter, r *http.Request)
+	// RevokeUserAPIToken handles API token revocation requests by delegating the
+	// status update and returning the accepted blank response on success.
 	RevokeUserAPIToken(w http.ResponseWriter, r *http.Request)
+	// GetSpecificUserAPITokens handles token listing requests, returning
+	// owner-checked display rows without plaintext secrets.
 	GetSpecificUserAPITokens(w http.ResponseWriter, r *http.Request)
+	// GetUserAPITokenThreshold handles threshold queries, writing the owner's
+	// current token display limits; a missing result is unavailable rather than
+	// unlimited.
 	GetUserAPITokenThreshold(w http.ResponseWriter, r *http.Request)
+	// OauthLogin handles validated OAuth login requests, redirecting browsers to
+	// the provider authorization URL while setting the transaction cookie.
 	OauthLogin(w http.ResponseWriter, r *http.Request)
+	// OauthCallback serves the OAuth provider redirect endpoint: it maps the HTTP
+	// request, invokes the service callback, and completes browser redirects,
+	// mobile flows, cookies, or token responses according to the returned result.
 	OauthCallback(w http.ResponseWriter, r *http.Request)
+	// LogoutUserOthers handles the HTTP endpoint that ends a user's other sessions:
+	// it maps and validates the request, delegates the owner-scoped sweep to the
+	// service, and writes an accepted response on success.
 	LogoutUserOthers(w http.ResponseWriter, r *http.Request)
+	// UpdateUserEmail handles the email-change endpoint: it maps the request, calls
+	// the service, and returns the mutation receipt with post-commit delivery
+	// flags, clearing caller cookies only for a valid self-change.
 	UpdateUserEmail(w http.ResponseWriter, r *http.Request)
 }
 

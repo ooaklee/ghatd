@@ -42,6 +42,8 @@ type PartnersReferralConfig struct {
 
 // VisitPreparer is the owning manager's consented referral issuance port.
 type VisitPreparer interface {
+	// PrepareVisit issues a consented referral visit through the owning manager,
+	// returning the prepared visit for the request.
 	PrepareVisit(context.Context, partnermanager.PrepareVisitRequest) (partnermanager.PreparedVisit, error)
 }
 
@@ -150,6 +152,8 @@ func AttachPartnersReferralRoutes(router *ghatdrouter.Router, cfg PartnersReferr
 	return router.ValidateRoutePolicies()
 }
 
+// referralLoopbackHost reports whether a host is "localhost" or a loopback IP
+// address.
 func referralLoopbackHost(host string) bool {
 	if host == "localhost" {
 		return true
@@ -158,10 +162,14 @@ func referralLoopbackHost(host string) bool {
 	return err == nil && ip.IsLoopback()
 }
 
+// validReferralCookieName accepts non-empty names up to 128 bytes that form a
+// valid http.Cookie name.
 func validReferralCookieName(name string) bool {
 	return name != "" && len(name) <= 128 && (&http.Cookie{Name: name, Value: "valid"}).Valid() == nil
 }
 
+// validReferralPath accepts a rooted, cleaned absolute path of limited length
+// using only alphanumerics and /._-, excluding "/" and scheme-relative paths.
 func validReferralPath(value string) bool {
 	if len(value) > 256 || value == "/" || !strings.HasPrefix(value, "/") || strings.HasPrefix(value, "//") || path.Clean(value) != value {
 		return false
@@ -174,6 +182,8 @@ func validReferralPath(value string) bool {
 	return true
 }
 
+// nilHelperPort reports whether port is nil or a typed nil in one of the
+// nilable kinds, so helper ports can be rejected without dereference.
 func nilHelperPort(port any) bool {
 	if port == nil {
 		return true
@@ -187,6 +197,12 @@ func nilHelperPort(port any) bool {
 	}
 }
 
+// ServeHTTP renders the anonymous consent page for GET/HEAD and processes the
+// consent POST. The POST requires an exact same-origin Origin, a tiny form-
+// encoded body with one yes/no choice, prior valid evidence and visit cookies
+// and admission; consent prepares a visit and sets both cookies only after
+// validating both outputs, while decline clears cookies. Failures render safe
+// pages, never diagnostics.
 func (h *PartnersReferralHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.headers(w)
 	code := mux.Vars(r)["code"]
@@ -312,22 +328,34 @@ func (h *PartnersReferralHandler) admit(r *http.Request) int {
 	return http.StatusServiceUnavailable
 }
 
+// partnersAdmissionResponse captures only the status and headers written by
+// admission middleware, discarding body writes.
 type partnersAdmissionResponse struct {
 	header http.Header
 	status int
 }
 
+// Header returns the captured header set written during admission.
 func (w *partnersAdmissionResponse) Header() http.Header { return w.header }
+
+// WriteHeader records the first status written; later writes do not override
+// it.
 func (w *partnersAdmissionResponse) WriteHeader(status int) {
 	if w.status == 0 {
 		w.status = status
 	}
 }
+
+// Write satisfies http.ResponseWriter by recording an implicit 200 status and
+// discarding the body.
 func (w *partnersAdmissionResponse) Write(body []byte) (int, error) {
 	w.WriteHeader(http.StatusOK)
 	return len(body), nil
 }
 
+// partnersReferralCookie returns a named cookie's value only when it appears at
+// most once and is within 2048 bytes; duplicates or oversize values are
+// invalid.
 func partnersReferralCookie(r *http.Request, name string) (string, bool) {
 	var found string
 	count := 0
@@ -340,6 +368,7 @@ func partnersReferralCookie(r *http.Request, name string) (string, bool) {
 	return found, count <= 1 && len(found) <= 2048
 }
 
+// validPartnersReferralCode accepts exactly 22 URL-safe base64 characters.
 func validPartnersReferralCode(code string) bool {
 	if len(code) != 22 {
 		return false
@@ -353,6 +382,9 @@ func validPartnersReferralCode(code string) bool {
 	return true
 }
 
+// partnersKnownBot applies a conservative exclusion heuristic: known crawler
+// substrings or an oversized user agent count as bots, but a negative result is
+// never proof of a human visitor.
 func partnersKnownBot(userAgent string) bool {
 	if len(userAgent) > 512 {
 		return true // unknown oversized agent cannot seed attribution
@@ -366,6 +398,10 @@ func partnersKnownBot(userAgent string) bool {
 	return false // an exclusion heuristic, never proof of a human visitor
 }
 
+// validPreparedVisit checks clock sanity and window bounds, then requires a bot
+// response to issue no cookies at all and a human response to carry bounded,
+// unexpired evidence and visit cookies within their configured windows and
+// valid as cookies.
 func (h *PartnersReferralHandler) validPreparedVisit(out partnermanager.PreparedVisit, knownBot bool) bool {
 	now := h.clock.Now().UTC()
 	if now.IsZero() || h.window <= 0 || h.window > 180*24*time.Hour || h.visitWindow < 0 || h.visitWindow > 24*time.Hour {
@@ -383,6 +419,9 @@ func (h *PartnersReferralHandler) validPreparedVisit(out partnermanager.Prepared
 	return out.Evidence != "" && valid(h.signupCookieName, out.Evidence, out.EvidenceExpiresAt, h.window) && valid(h.visitCookieName, out.VisitCookie, out.VisitExpiresAt, h.visitWindow)
 }
 
+// cookie writes one HttpOnly, Secure (unless local insecure mode), SameSite=Lax
+// referral cookie rooted at "/" with an absolute expiry; an empty value expires
+// it immediately.
 func (h *PartnersReferralHandler) cookie(w http.ResponseWriter, name, value string, expiry time.Time) {
 	cookie := &http.Cookie{Name: name, Value: value, Path: "/", HttpOnly: true, Secure: !h.insecureLocal, SameSite: http.SameSiteLaxMode, Expires: expiry}
 	if value == "" {
@@ -391,15 +430,20 @@ func (h *PartnersReferralHandler) cookie(w http.ResponseWriter, name, value stri
 	http.SetCookie(w, cookie)
 }
 
+// clearCookies expires both the signup evidence and visit cookies.
 func (h *PartnersReferralHandler) clearCookies(w http.ResponseWriter) {
 	h.cookie(w, h.signupCookieName, "", time.Time{})
 	h.cookie(w, h.visitCookieName, "", time.Time{})
 }
 
+// signup redirects the browser to the configured signup path with 303.
 func (h *PartnersReferralHandler) signup(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.signupPath, http.StatusSeeOther)
 }
 
+// headers sets the consent page's no-store, noindex, nosniff, same-origin
+// referrer and locked-down CSP response headers. Same-origin referrer keeps
+// form Origin usable for consent while withholding referral URLs cross-origin.
 func (*PartnersReferralHandler) headers(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -412,6 +456,9 @@ func (*PartnersReferralHandler) headers(w http.ResponseWriter) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'self'; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 }
 
+// page writes the status and renders the consent page view, skipping the body
+// for HEAD requests; render failures are deliberately ignored rather than half-
+// writing a response.
 func (h *PartnersReferralHandler) page(w http.ResponseWriter, r *http.Request, status int, available bool) {
 	w.WriteHeader(status)
 	if r.Method == http.MethodHead {
@@ -423,8 +470,11 @@ func (h *PartnersReferralHandler) page(w http.ResponseWriter, r *http.Request, s
 // Hide ResponseWriter capabilities even from a renderer's type assertion.
 type referralPageWriter struct{ writer io.Writer }
 
+// Write forwards page bytes to the wrapped response writer.
 func (w referralPageWriter) Write(body []byte) (int, error) { return w.writer.Write(body) }
 
+// partnersReferralWindow formats a whole-day duration as "N days" and any other
+// duration using time.Duration.String.
 func partnersReferralWindow(window time.Duration) string {
 	if window >= 24*time.Hour && window%(24*time.Hour) == 0 {
 		return fmt.Sprintf("%d days", window/(24*time.Hour))

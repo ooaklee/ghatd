@@ -21,6 +21,10 @@ type lifecycleCheckoutSource struct {
 	Scope                                  billing.RevenueScope
 	IntentID, IntentFingerprint, SessionID string
 }
+
+// lifecycleSubscriptionSource is the mutable native ownership row binding one
+// subscription to its scope, principal and customer, with optional pointers to
+// its accepted fact and first anchor (identity plus fingerprint pairs).
 type lifecycleSubscriptionSource struct {
 	Scope                                   billing.RevenueScope
 	SubscriptionID, PrincipalID, CustomerID string
@@ -28,12 +32,21 @@ type lifecycleSubscriptionSource struct {
 	AnchorIntentID, AnchorFingerprint       string
 }
 
+// lifecycleSourcePartition builds the per-scope partition string for lifecycle
+// source projections.
 func lifecycleSourcePartition(scope billing.RevenueScope) string {
 	return "billing-lifecycle-source-v1:" + checkoutScopeKey(scope)
 }
+
+// lifecycleSubscriptionKey builds the storage key for one scope's subscription
+// source row.
 func lifecycleSubscriptionKey(scope billing.RevenueScope, sub string) string {
 	return key("billing-lifecycle-source-v1", checkoutScopeKey(scope), sub)
 }
+
+// validLifecycleOwner accepts a source row only when its scope-bound
+// identifiers are valid and fact and anchor references are either both present
+// or both empty.
 func validLifecycleOwner(v lifecycleSubscriptionSource) bool {
 	if !statusScopeValid(v.Scope, v.SubscriptionID) || !statusScopeValid(v.Scope, v.PrincipalID) || !statusScopeValid(v.Scope, v.CustomerID) {
 		return false
@@ -126,6 +139,8 @@ func retainLifecycleSubscription(ctx context.Context, tx recordstore.Tx, v lifec
 	return mapped(tx.Replace(ctx, next, revision-1))
 }
 
+// retainLifecycleCheckout stores the immutable subscription checkout source
+// projection keyed by intent; payment-mode intents are skipped entirely.
 func retainLifecycleCheckout(ctx context.Context, tx recordstore.Tx, intent billing.CheckoutIntent, session string) error {
 	if intent.Request.Mode != paymentprovider.CheckoutModeSubscription {
 		return nil

@@ -233,6 +233,8 @@ func visionViewerNanoID(ctx context.Context, usersByID map[string]VisionUser) st
 	return usersByID[accessmanagerhelpers.AcquireAuthenticatedUserIDFrom(ctx)].NanoID
 }
 
+// visionUserLookup indexes resolved users two ways: by raw internal ID and by
+// public NanoID, for privacy-safe enrichment lookups.
 type visionUserLookup struct {
 	byID   map[string]VisionUser
 	public map[string]VisionUser

@@ -11,6 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+// GetSignupAttribution loads a customer's stored attribution for the program,
+// returning ErrUserNotFound when the account or matching attribution is absent
+// and ErrSignupEvidenceUnavailable on ownership mismatch, with the stored
+// creation time restored to UTC.
 func (r *Repository) GetSignupAttribution(ctx context.Context, program, customer string) (SignupAttribution, error) {
 	if err := r.checkSignupQuery(ctx, program, customer); err != nil {
 		return SignupAttribution{}, err
@@ -27,9 +31,18 @@ func (r *Repository) GetSignupAttribution(ctx context.Context, program, customer
 	}
 	return restoredSignupTime(*u.SignupAttribution)
 }
+
+// PendingSignupAttributions returns up to limit pending attributions for a
+// program from the beginning of the feed; it forwards to
+// PendingSignupAttributionsAfter with an empty cursor.
 func (r *Repository) PendingSignupAttributions(ctx context.Context, program string, limit int) ([]SignupAttribution, error) {
 	return r.PendingSignupAttributionsAfter(ctx, program, "", limit)
 }
+
+// PendingSignupAttributionsAfter returns up to 200 pending attributions with
+// IDs strictly after afterCustomer, ordered by ID and projected to attribution
+// fields only. Malformed cursors, nil cursors or ownership mismatches yield
+// signup evidence errors.
 func (r *Repository) PendingSignupAttributionsAfter(ctx context.Context, program, afterCustomer string, limit int) ([]SignupAttribution, error) {
 	if afterCustomer != strings.TrimSpace(afterCustomer) || len(afterCustomer) > 256 || strings.ContainsAny(afterCustomer, "\r\n\x00") {
 		return nil, ErrSignupEvidenceInvalid
@@ -77,6 +90,11 @@ func (r *Repository) PendingSignupAttributionsAfter(ctx context.Context, program
 	}
 	return out, nil
 }
+
+// ConsumeSignupAttribution atomically moves a pending attribution to consumed
+// with the given receipt. When the conditional update finds no pending
+// document, it re-reads and treats an identical prior consumption as success,
+// reporting ErrSignupEvidenceConflict for any other state.
 func (r *Repository) ConsumeSignupAttribution(ctx context.Context, program, customer string, c SignupConsumption) error {
 	if err := r.checkSignupQuery(ctx, program, customer); err != nil {
 		return err
@@ -110,6 +128,9 @@ func (r *Repository) ConsumeSignupAttribution(ctx context.Context, program, cust
 	return nil
 }
 
+// checkSignupQuery validates the context, bounded program and customer
+// identifiers, and repository readiness before any signup-evidence storage
+// access.
 func (r *Repository) checkSignupQuery(ctx context.Context, program, customer string) error {
 	if ctx == nil || strings.TrimSpace(program) == "" || len(program) > 128 || strings.TrimSpace(customer) == "" || len(customer) > 256 {
 		return ErrSignupEvidenceInvalid
@@ -123,6 +144,8 @@ func (r *Repository) checkSignupQuery(ctx context.Context, program, customer str
 	return nil
 }
 
+// cloneSignupAttribution returns a copy with a duplicated Consumption pointer
+// so callers cannot mutate the original nested receipt.
 func cloneSignupAttribution(v SignupAttribution) SignupAttribution {
 	if v.Consumption != nil {
 		c := *v.Consumption
@@ -131,6 +154,10 @@ func cloneSignupAttribution(v SignupAttribution) SignupAttribution {
 	return v
 }
 
+// restoredSignupTime verifies the stored UTC timestamp string round-trips and
+// matches the typed CreatedAt to millisecond precision, then returns the
+// attribution with a canonical UTC time; mismatches yield
+// ErrSignupEvidenceUnavailable.
 func restoredSignupTime(v SignupAttribution) (SignupAttribution, error) {
 	at, err := time.Parse(time.RFC3339Nano, v.CreatedAtUTC)
 	if err != nil || at.IsZero() || v.CreatedAtUTC != at.UTC().Format(time.RFC3339Nano) || !at.Truncate(time.Millisecond).Equal(v.CreatedAt.Truncate(time.Millisecond)) {

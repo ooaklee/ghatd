@@ -82,7 +82,12 @@ func validLoginReceipt(v *UniversalUser, command SetLoginStateRequest, activate 
 // Unlike the legacy formatter, NowUTC retains its explicit timezone.
 type loginClock struct{ at time.Time }
 
+// Now returns the single instant captured by this login clock, making model
+// transitions use one consistent time.
 func (c loginClock) Now() time.Time { return c.at }
+
+// NowUTC formats the captured instant as RFC3339Nano, retaining its explicit
+// timezone rather than forcing UTC formatting.
 func (c loginClock) NowUTC() string { return c.at.Format(time.RFC3339Nano) }
 
 // RecordFreshLogin confirms a live ACTIVE account without replacing its profile.

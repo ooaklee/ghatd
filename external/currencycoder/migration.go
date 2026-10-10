@@ -12,6 +12,8 @@ import (
 //go:embed seeds.json
 var seedData []byte
 
+// Seeds decodes the embedded currency seed data, returning the rows used by
+// package-owned migrations.
 func Seeds() ([]Currency, error) {
 	var rows []Currency
 	err := json.Unmarshal(seedData, &rows)
@@ -33,6 +35,9 @@ func Migrate(ctx context.Context, db *mongo.Database) error {
 	}
 	return service.Migrate(ctx)
 }
+
+// Migrate seeds the embedded currency rows through the catalogue lifecycle,
+// preserving existing records on reruns.
 func (s *Service) Migrate(ctx context.Context) error {
 	rows, err := Seeds()
 	if err != nil {

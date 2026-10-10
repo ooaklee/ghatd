@@ -29,6 +29,13 @@ func (m *Service) partnersSession(ctx context.Context, p Principal) (context.Con
 	}
 	return bound, m.manager, nil
 }
+
+// partnerError translates owning-service errors into transport Error values.
+// Uncertain outcomes map to 503, dependency failures and cancellation to 503,
+// unknown wrapped causes to 500 before denials, denials to 403, not-found to
+// 404, invalid to 400, stale writes to 412, and conflicts/insufficient funds to
+// 409. Only transport errors on the allowlist pass through; all other host
+// diagnostics collapse to 500.
 func partnerError(err error) error {
 	switch {
 	case err == nil:
@@ -59,6 +66,10 @@ func partnerError(err error) error {
 	}
 	return fail("PARTNERS_INTERNAL_ERROR", 500)
 }
+
+// partnerLimit parses the singular limit query parameter, defaulting to 50. It
+// returns -1 for duplicates, non-numeric values, or values outside 1..100,
+// which callers treat as invalid.
 func partnerLimit(req Request) int {
 	values := req.Query["limit"]
 	if len(values) > 1 {
@@ -73,6 +84,10 @@ func partnerLimit(req Request) int {
 	}
 	return n
 }
+
+// partnerQueryText returns the single value for a query key, or empty when
+// absent. More than one value or a value longer than max bytes fails with
+// PARTNERS_INVALID_REQUEST.
 func partnerQueryText(req Request, key string, max int) (string, error) {
 	values := req.Query[key]
 	if len(values) > 1 {
@@ -110,6 +125,9 @@ func partnerClaimStates(req Request) ([]string, error) {
 	}
 	return append([]string(nil), values...), nil
 }
+
+// partnerDate parses an RFC3339Nano timestamp, rejecting parse failures and the
+// zero time, and normalizes the result to UTC.
 func partnerDate(value string) (time.Time, error) {
 	t, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil || t.IsZero() {
@@ -117,6 +135,11 @@ func partnerDate(value string) (time.Time, error) {
 	}
 	return t.UTC(), nil
 }
+
+// partnerDates parses optional singular from/to query timestamps as UTC values.
+// Providing both requires to to be strictly after from; duplicates, overlong
+// values, malformed timestamps or an inverted range fail with
+// PARTNERS_INVALID_REQUEST.
 func partnerDates(req Request) (*time.Time, *time.Time, error) {
 	var from, to *time.Time
 	for _, key := range []string{"from", "to"} {
@@ -141,6 +164,10 @@ func partnerDates(req Request) (*time.Time, *time.Time, error) {
 	}
 	return from, to, nil
 }
+
+// partnerStatementQuery builds a StatementQuery from limit, kind, from/to dates
+// and an optional positive before_sequence cursor. Any invalid component fails
+// with PARTNERS_INVALID_REQUEST.
 func partnerStatementQuery(req Request) (partnerearnings.StatementQuery, error) {
 	q := partnerearnings.StatementQuery{Limit: partnerLimit(req), Kinds: req.Query["kind"]}
 	if q.Limit < 1 {
@@ -163,6 +190,10 @@ func partnerStatementQuery(req Request) (partnerearnings.StatementQuery, error) 
 	}
 	return q, nil
 }
+
+// partnerReferralQuery builds a ReferralSummaryQuery from a validated limit, an
+// optional bounded after cursor and optional from/to dates, forwarding any
+// parse failure.
 func partnerReferralQuery(req Request) (partnermanager.ReferralSummaryQuery, error) {
 	q := partnermanager.ReferralSummaryQuery{Limit: partnerLimit(req)}
 	if q.Limit < 1 {
@@ -176,6 +207,10 @@ func partnerReferralQuery(req Request) (partnermanager.ReferralSummaryQuery, err
 	q.From, q.To, err = partnerDates(req)
 	return q, err
 }
+
+// Read serves member-facing partners read operations. It resolves the live
+// session authority, dispatches to partnersReadBody, and converts every error
+// through partnerError so only mapped transport codes escape.
 func (m *Service) Read(ctx context.Context, p Principal, req Request) (Response, error) {
 	ctx, svc, err := m.partnersSession(ctx, p)
 	if err != nil {
@@ -184,6 +219,12 @@ func (m *Service) Read(ctx context.Context, p Principal, req Request) (Response,
 	response, err := m.partnersReadBody(ctx, svc, p, req)
 	return response, partnerError(err)
 }
+
+// partnersReadBody dispatches a fixed member read operation (program, overview,
+// share link, referrals, ledger, claims, claim, destination) after validating
+// query inputs. Program disclosure additionally rechecks the host partner
+// session; all other reads delegate to the owning Manager scoped to the
+// verified actor. Unknown operations are rejected as invalid requests.
 func (m *Service) partnersReadBody(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	switch req.Operation {
 	case "partners.program.read":
@@ -263,6 +304,10 @@ func (m *Service) partnersReadBody(ctx context.Context, svc *partnermanager.Mana
 	}
 	return Response{}, fail("PARTNERS_INVALID_REQUEST", 400)
 }
+
+// Command serves member-facing partners commands. It resolves the live session
+// authority, dispatches to partnersCommandBody, and converts every error
+// through partnerError so only mapped transport codes escape.
 func (m *Service) Command(ctx context.Context, p Principal, req Request) (Response, error) {
 	ctx, svc, err := m.partnersSession(ctx, p)
 	if err != nil {
@@ -271,6 +316,13 @@ func (m *Service) Command(ctx context.Context, p Principal, req Request) (Respon
 	response, err := m.partnersCommandBody(ctx, svc, p, req)
 	return response, partnerError(err)
 }
+
+// partnersCommandBody decodes and forwards a fixed member command: enroll,
+// share-link rotate, claim create/cancel or destination update. Bodies with
+// unknown fields, missing required values (terms version, expected destination
+// version) or invalid expected versions fail as invalid requests; commands run
+// against the owning Manager with the request idempotency key. Unknown
+// operations are rejected.
 func (m *Service) partnersCommandBody(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	switch req.Operation {
 	case "partners.enroll":
@@ -357,6 +409,14 @@ func (m *Service) Admin(ctx context.Context, p Principal, req Request) (Response
 	response, err := m.partnersAdminBody(ctx, svc, p, req)
 	return response, partnerError(err)
 }
+
+// partnersAdminBody dispatches fixed operator operations, binding the verified
+// actor into every command and revalidating decoded inputs before delegating to
+// Manager. Mutating commands (claim create/decide/amend/return, status change)
+// carry the actor and idempotency key; attribution apply verifies the returned
+// correction echoes the exact request and reports uncertainty otherwise;
+// receipts are confirmed through the accepted* projections. Unknown operations
+// are rejected as invalid requests.
 func (m *Service) partnersAdminBody(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	switch req.Operation {
 	case "admin.partners.access.read":
@@ -564,6 +624,11 @@ func partnerUnknownCause(err error, depth int) bool {
 	}
 	return true
 }
+
+// safePartnerHostError reports whether a transport Error may pass through
+// unchanged: only host-produced invalid-request(400), auth-required(401),
+// verification/account(403) and dependency-unavailable(503) pairs are allowed.
+// Every other code/status combination is treated as unsafe.
 func safePartnerHostError(e *Error) bool {
 	if e == nil {
 		return false

@@ -12,18 +12,26 @@ import (
 // PreparationOwner advances native history through its existing owning service.
 // It owns projection/state transactions; this orchestration supplies no records.
 type PreparationOwner interface {
+	// PrepareLifecycleDiscovery advances native discovery history through the
+	// owning service for the revenue scope and page size, returning the preparation
+	// result; orchestration supplies no records.
 	PrepareLifecycleDiscovery(context.Context, billing.RevenueScope, int) (billing.LifecyclePreparationResult, error)
 }
 
 // PreparationAuthority is deliberately distinct from recurring read/refresh.
 // Nil scope requires current preparation permission on ALL configured scopes.
 type PreparationAuthority interface {
+	// AuthorizeLifecyclePreparation checks the actor's current preparation
+	// permission for the scope, where a nil scope requires permission across all
+	// configured scopes.
 	AuthorizeLifecyclePreparation(context.Context, string, *billing.RevenueScope) error
 }
 
 var ErrPreparationBudget = errors.New("partners/lifecycle-preparation-budget-exhausted: rerun to resume native progress")
 var ErrPreparationOverlap = errors.New("partners/lifecycle-preparation-already-running")
 
+// PreparationConfig carries the validated actor, scopes, page limits and
+// timeout for one preparation sweep.
 type PreparationConfig struct {
 	ActorID            string
 	Scopes             []billing.RevenueScope
@@ -38,6 +46,9 @@ func (c PreparationConfig) ValidateLimits() error {
 	}
 	return nil
 }
+
+// Validate checks the actor and revenue scopes plus the page limits and
+// timeout, returning ErrRevenueInvalid on any malformed field.
 func (c PreparationConfig) Validate() error {
 	if !scheduleText(c.ActorID) || billing.ValidateRevenueHistoryScopes(c.Scopes) != nil {
 		return billing.ErrRevenueInvalid
@@ -53,6 +64,9 @@ type PreparationReport struct {
 	Complete                         bool
 }
 
+// Preparation runs bounded native history sweeps over a borrowed owning service
+// and preparation authority. Its mutex serializes sweep attempts on the shared
+// instance.
 type Preparation struct {
 	owner     PreparationOwner
 	authority PreparationAuthority
@@ -60,6 +74,9 @@ type Preparation struct {
 	running   sync.Mutex
 }
 
+// NewPreparation validates the configuration and copies the scope slice so
+// later caller mutation cannot change the sweep. Nil owner or authority is
+// rejected.
 func NewPreparation(owner PreparationOwner, authority PreparationAuthority, cfg PreparationConfig) (*Preparation, error) {
 	if nilPort(owner) || nilPort(authority) {
 		return nil, billing.ErrRevenueUnavailable
@@ -70,6 +87,10 @@ func NewPreparation(owner PreparationOwner, authority PreparationAuthority, cfg 
 	cfg.Scopes = append([]billing.RevenueScope(nil), cfg.Scopes...)
 	return &Preparation{owner: owner, authority: authority, cfg: cfg}, nil
 }
+
+// check authorizes the configured actor for preparation, once globally and once
+// for a selected scope when given. Context cancellation is checked before and
+// after.
 func (p *Preparation) check(ctx context.Context, scope *billing.RevenueScope) error {
 	if err := ctx.Err(); err != nil {
 		return err

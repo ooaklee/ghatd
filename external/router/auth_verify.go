@@ -55,6 +55,9 @@ func AttachDefaultAuthVerifyRoute(request *AttachDefaultAuthVerifyRouteRequest) 
 	return nil
 }
 
+// normaliseAbsoluteBaseURL validates a base URL is absolute without query or
+// fragment and returns it with trailing slashes removed. Missing, relative or
+// query-bearing inputs return distinct errors.
 func normaliseAbsoluteBaseURL(rawBaseURL string) (string, error) {
 	rawBaseURL = strings.TrimSpace(rawBaseURL)
 	if rawBaseURL == "" {

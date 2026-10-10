@@ -22,7 +22,7 @@ The host owns explicit setup timing and deadline, timestamped migration
 registration, database/configuration lifetime and feature policy. Importing
 these packages registers nothing and starts no worker or listener. For separate
 operator migrations, call the owning child `Migrate(ctx, db)` functions directly
-in the same order. No production legacy path or data backfill is introduced.
+in the same order.
 
 Mount [the manager's handler](../README.md) with a trusted live `HTTPSecurity`
 adapter. It owns verified administrator identity, the selected CSRF guard/cookie
@@ -34,5 +34,4 @@ Run `go test ./external/internationalisationmanager/helper`. With
 `GHATD_TEST_MONGO_URI` configured for an isolated replica set, native fixtures
 exercise original catalogue counts, bounded pagination and administrator-state
 preservation across setup. Guard tables cover disabled/nil/cancelled/invalid
-configuration before storage or provider I/O. These are setup checks, not
-production rollout or provider availability evidence.
+configuration before storage or provider I/O.

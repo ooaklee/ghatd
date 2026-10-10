@@ -9,6 +9,9 @@ import (
 // Limiter is the injectable transport admission port. A positive duration asks
 // the caller to refuse admission and return a bounded retry delay.
 type Limiter interface {
+	// Allow decides admission for the given key: zero duration admits it within the
+	// current window, while a positive duration reports the bounded retry delay
+	// until the limit resets.
 	Allow(context.Context, string) (time.Duration, error)
 }
 
@@ -21,6 +24,8 @@ type WindowLimiter struct {
 	now     func() time.Time
 	buckets map[string]rateBucket
 }
+
+// rateBucket counts admissions within a window ending at reset.
 type rateBucket struct {
 	count int
 	reset time.Time
@@ -37,6 +42,11 @@ func NewWindowLimiter(limit int, window time.Duration, now func() time.Time) (*W
 	return &WindowLimiter{limit: limit, window: window, now: now, buckets: map[string]rateBucket{}}, nil
 }
 
+// Allow admits a key within its window and returns zero delay, or a positive
+// duration until reset when the limit is reached. Keys must be 1-512 bytes; nil
+// receiver, nil context or misconfiguration returns invalid/configuration
+// errors. New identities are refused with a full-window delay once 10,000
+// buckets exist even after expired buckets are evicted.
 func (l *WindowLimiter) Allow(ctx context.Context, key string) (time.Duration, error) {
 	if l == nil || ctx == nil {
 		return 0, ErrInvalidRequest

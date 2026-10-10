@@ -28,9 +28,12 @@ var redisDurationBuckets = []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 1
 
 // RedisHookOption configures the Redis OpenTelemetry hook.
 type RedisHookOption interface {
+	// applyRedisHook applies this option's configuration changes to the Redis
+	// OpenTelemetry hook configuration.
 	applyRedisHook(*redisHookConfig)
 }
 
+// redisHookOptionFunc adapts a plain function to RedisHookOption.
 type redisHookOptionFunc func(*redisHookConfig)
 
 // applyRedisHook applies a functional option to the Redis hook configuration.
@@ -38,6 +41,8 @@ func (option redisHookOptionFunc) applyRedisHook(config *redisHookConfig) {
 	option(config)
 }
 
+// redisHookConfig holds the providers and module-command vocabulary a Redis
+// hook is constructed with.
 type redisHookConfig struct {
 	tracerProvider trace.TracerProvider
 	meterProvider  metric.MeterProvider
@@ -64,6 +69,8 @@ func WithRedisMeterProvider(provider metric.MeterProvider) RedisHookOption {
 	})
 }
 
+// redisHook holds one hook's immutable tracer, metrics, server attributes, per-
+// instance state key and module-command set.
 type redisHook struct {
 	tracer            trace.Tracer
 	operationDuration metric.Float64Histogram
@@ -79,6 +86,8 @@ type redisHookStateKey struct {
 	_ byte
 }
 
+// redisOperationState tracks one Redis operation's span and start time, guarded
+// by once so it finishes exactly once.
 type redisOperationState struct {
 	operation string
 	startedAt time.Time

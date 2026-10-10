@@ -163,6 +163,8 @@ func NewRuntime(db *mongo.Database, cfg Config, deps Dependencies) (*Runtime, er
 	return &Runtime{recordStore: store, Manager: manager, Program: program, Referral: referrals, Earnings: earnings, Revenue: revenue, Work: work, Evidence: signer, checkoutRepository: revenueRepo, managerDependencies: managerDeps}, nil
 }
 
+// independentPartnersKey accepts only a 32-byte non-zero key that differs from
+// every reserved key; reserved entries must themselves be valid.
 func independentPartnersKey(key []byte, reserved [][]byte) bool {
 	if len(key) != 32 || bytes.Equal(key, make([]byte, 32)) {
 		return false
@@ -226,6 +228,8 @@ func (r *Runtime) ManagerWithAuthority(authority partnermanager.Authority) (*par
 	return partnermanager.NewManager(deps)
 }
 
+// validReservedKeys accepts 1..32 keys that are each independently valid and
+// distinct from all earlier entries.
 func validReservedKeys(keys [][]byte) bool {
 	if len(keys) == 0 || len(keys) > 32 {
 		return false
@@ -238,6 +242,8 @@ func validReservedKeys(keys [][]byte) bool {
 	return true
 }
 
+// nilRuntimePort detects nil values including nil pointers stored in non-nil
+// interfaces, which plain == nil misses.
 func nilRuntimePort(port any) bool {
 	if port == nil {
 		return true

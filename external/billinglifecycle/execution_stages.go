@@ -15,17 +15,43 @@ import (
 // silently use a different manager. No raw billing repository enters a service.
 type CheckoutExecutionOwner interface {
 	CheckoutValidator
+	// PrepareCheckoutLifecycle returns the acknowledged checkout intent original
+	// for the actor under the configured owning billing manager, rechecking current
+	// selected refresh authority.
 	PrepareCheckoutLifecycle(context.Context, string, billing.CheckoutIntent) (billing.CheckoutIntent, error)
+	// FindCheckoutLifecycleReceipt returns the checkout lifecycle anchor for the
+	// intent from the owning billing manager, checking current refresh authority
+	// even on replay or conclusive absence.
 	FindCheckoutLifecycleReceipt(context.Context, string, billing.CheckoutIntent) (billing.CheckoutLifecycleAnchor, error)
+	// LookupCheckoutLifecycleEvidence returns the revenue checkout evidence for the
+	// intent from the owning billing manager after validation under current
+	// authority; callers retain it durably before capture.
 	LookupCheckoutLifecycleEvidence(context.Context, string, billing.CheckoutIntent) (paymentprovider.RevenueCheckoutEvidence, error)
+	// CaptureCheckoutLifecycleEvidence submits the retained original intent and
+	// evidence to the owning billing manager and returns the resulting checkout
+	// lifecycle anchor, replaying exactly to recover receipts.
 	CaptureCheckoutLifecycleEvidence(context.Context, string, billing.CheckoutIntent, paymentprovider.RevenueCheckoutEvidence) (billing.CheckoutLifecycleAnchor, error)
 }
 
+// StatusExecutionOwner is the owning manager port for status preparation,
+// lookup and capture. It extends StatusValidator and must be the same
+// configured manager bound to the outbox.
 type StatusExecutionOwner interface {
 	StatusValidator
+	// PrepareSubscriptionStatus returns a status preparation for the actor and
+	// subscription identifier from the same configured manager bound to the outbox.
 	PrepareSubscriptionStatus(context.Context, string, string) (billing.SubscriptionStatusPreparation, error)
+	// PrepareSubscriptionStatusForCheckout returns a status preparation for the
+	// actor, revenue scope and subscription identifier from the configured owning
+	// manager port.
 	PrepareSubscriptionStatusForCheckout(context.Context, string, billing.RevenueScope, string) (billing.SubscriptionStatusPreparation, error)
+	// LookupSubscriptionStatus returns verified subscription status evidence for
+	// the supplied preparation from the owning manager, validated under current
+	// authority.
 	LookupSubscriptionStatus(context.Context, string, billing.SubscriptionStatusPreparation) (billing.VerifiedSubscriptionStatusEvidence, error)
+	// CaptureSubscriptionStatus records the verified evidence against the
+	// preparation with the owning manager and returns the resulting subscription
+	// status.
 	CaptureSubscriptionStatus(context.Context, string, billing.SubscriptionStatusPreparation, billing.VerifiedSubscriptionStatusEvidence) (billing.SubscriptionStatus, error)
 }
 
@@ -37,18 +63,26 @@ type CheckoutObservation struct {
 	Input   CheckoutInput                   `json:"-"`
 	Receipt billing.CheckoutLifecycleAnchor `json:"-"`
 }
+
+// StatusObservation bundles the leased job, its retained original input and the
+// confirmed owning receipt. All fields are withheld on any error.
 type StatusObservation struct {
 	Job     ScheduledJob               `json:"-"`
 	Input   StatusInput                `json:"-"`
 	Receipt billing.SubscriptionStatus `json:"-"`
 }
 
+// CheckoutExecution composes the scheduler, checkout binder, outbox and the
+// configured owning manager for checkout execution stages.
 type CheckoutExecution struct {
 	scheduler *Scheduler
 	binder    *CheckoutBinder
 	outbox    *CheckoutOutbox
 	owner     CheckoutExecutionOwner
 }
+
+// StatusExecution composes the scheduler, status binder, outbox and the
+// configured owning manager for subscription status execution stages.
 type StatusExecution struct {
 	scheduler *Scheduler
 	binder    *StatusBinder
@@ -56,6 +90,9 @@ type StatusExecution struct {
 	owner     StatusExecutionOwner
 }
 
+// NewCheckoutExecution derives its owner from the outbox's validator, refusing
+// configurations where that validator is not the checkout execution owner. It
+// then builds the checkout binder over the same scheduler and owner.
 func NewCheckoutExecution(s *Scheduler, repo CheckoutBindingRepository, outbox *CheckoutOutbox) (*CheckoutExecution, error) {
 	if outbox == nil || nilPort(outbox.store) || nilPort(outbox.validator) {
 		return nil, billing.ErrRevenueUnavailable
@@ -70,6 +107,10 @@ func NewCheckoutExecution(s *Scheduler, repo CheckoutBindingRepository, outbox *
 	}
 	return &CheckoutExecution{s, binder, outbox, owner}, nil
 }
+
+// NewStatusExecution derives its owner from the outbox's validator, refusing
+// configurations where that validator is not the status execution owner. It
+// then builds the status binder over the same scheduler and owner.
 func NewStatusExecution(s *Scheduler, repo StatusBindingRepository, outbox *StatusOutbox) (*StatusExecution, error) {
 	if outbox == nil || nilPort(outbox.store) || nilPort(outbox.validator) {
 		return nil, billing.ErrRevenueUnavailable
@@ -114,6 +155,9 @@ func executionStep(ctx context.Context, s *Scheduler, expected ScheduledJob, ope
 	return current, nil
 }
 
+// soleRevenueNotFound reports whether ErrRevenueNotFound is the single wrapped
+// cause. Joined multi-error trees return false rather than guessing among
+// causes.
 func soleRevenueNotFound(err error) bool {
 	for n := 0; n < 64 && err != nil; n++ {
 		if err == billing.ErrRevenueNotFound {
@@ -224,6 +268,9 @@ func (x *CheckoutExecution) Observe(ctx context.Context, h LeaseHandle) (Checkou
 	return CheckoutObservation{j, input, receipt}, nil
 }
 
+// sameStatusPreparation compares preparations field-wise, treating RequestedAt
+// by instant equality because time.Time's == also compares monotonic clocks and
+// location.
 func sameStatusPreparation(a, b billing.SubscriptionStatusPreparation) bool {
 	at, bt := a.RequestedAt, b.RequestedAt
 	a.RequestedAt, b.RequestedAt = time.Time{}, time.Time{}

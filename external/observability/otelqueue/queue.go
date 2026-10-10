@@ -42,6 +42,8 @@ type Config struct {
 	DurationMetric string
 }
 
+// Observer owns the tracer, counters, duration histogram and finite operation
+// vocabulary for queue job instrumentation.
 type Observer struct {
 	tracer     trace.Tracer
 	count      metric.Int64Counter
@@ -51,6 +53,9 @@ type Observer struct {
 
 var operationName = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 
+// New validates at most 64 operation names, defaults metric names and
+// providers, and creates the count counter and seconds histogram with fixed
+// boundaries. Construction errors never include supplied values.
 func New(config Config) (*Observer, error) {
 	if len(config.Operations) > 64 {
 		return nil, errors.New("otelqueue: at most 64 operations are allowed")
@@ -87,6 +92,8 @@ func New(config Config) (*Observer, error) {
 	return &Observer{tracer: config.TracerProvider.Tracer(instrumentationScope), count: count, duration: duration, operations: operations}, nil
 }
 
+// Job tracks one queue job's span, context and settlement, completing at most
+// once via an atomic flag.
 type Job struct {
 	observer  *Observer
 	span      trace.Span

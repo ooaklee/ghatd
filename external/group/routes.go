@@ -9,35 +9,137 @@ import (
 
 // GroupHandler interface defines expected methods for valid group handler
 type GroupHandler interface {
+	// CreateGroup serves HTTP group creation requests: the Handler maps and
+	// validates the request, delegates to the GroupService, and responds with
+	// status 201 and the created group.
 	CreateGroup(w http.ResponseWriter, r *http.Request)
+	// GetGroupByID serves HTTP requests to fetch a single group by its ID: the
+	// Handler maps and validates the request, delegates to the GroupService, and
+	// responds with the group.
 	GetGroupByID(w http.ResponseWriter, r *http.Request)
+	// GetGroupLineage serves HTTP requests for a group's root-first ancestry: the
+	// Handler delegates to the GroupService and responds with the lineage including
+	// the group itself.
 	GetGroupLineage(w http.ResponseWriter, r *http.Request)
+	// GetGroupDescendants serves HTTP requests for a group's descendants grouped by
+	// depth level: the Handler delegates to the GroupService and responds with
+	// direct children at index 0, grandchildren next, and so on.
 	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
+	// GetGroupByNanoID serves HTTP requests fetching a single group by its nano ID;
+	// the Handler implementation maps and validates the request, delegates to the
+	// group service, and writes the found group or an error response.
 	GetGroupByNanoID(w http.ResponseWriter, r *http.Request)
+	// UpdateGroup serves HTTP requests updating an existing group; the Handler
+	// implementation validates the request, delegates to the service which merges
+	// changes and persists them, and responds with the updated group.
 	UpdateGroup(w http.ResponseWriter, r *http.Request)
+	// DeleteGroup serves HTTP requests deleting a group; the Handler implementation
+	// validates the request, delegates to the service which cascades soft or hard
+	// deletion over descendants, and responds with no content on success.
 	DeleteGroup(w http.ResponseWriter, r *http.Request)
+	// GetGroups serves HTTP requests listing groups with filters and pagination;
+	// the Handler implementation validates the request, delegates to the service,
+	// and returns the page of groups optionally with pagination metadata.
 	GetGroups(w http.ResponseWriter, r *http.Request)
+	// GetGroupsByUserID serves HTTP requests listing groups where a user is
+	// referenced as owner or member; the Handler implementation validates the
+	// request, delegates to the service, and writes the matching groups (and
+	// optional descendants) as the response.
 	GetGroupsByUserID(w http.ResponseWriter, r *http.Request)
+	// GetGroupsAwaitingAnswerForInvitationsByMemberID serves HTTP requests listing
+	// groups with pending invitations for a member ID; the Handler implementation
+	// validates the request, delegates to the service, and returns the filtered
+	// groups.
 	GetGroupsAwaitingAnswerForInvitationsByMemberID(w http.ResponseWriter, r *http.Request)
+	// AddMember serves HTTP requests adding a member to a group; the Handler
+	// implementation validates the request, delegates to the service which enforces
+	// role and membership rules and persists the change, and responds with the
+	// updated group.
 	AddMember(w http.ResponseWriter, r *http.Request)
+	// InviteUser serves HTTP requests adding a pending email invitation to a
+	// top-level group; the Handler implementation validates the request, delegates
+	// to the service, and responds with the updated group.
 	InviteUser(w http.ResponseWriter, r *http.Request)
+	// UninviteUser serves HTTP requests revoking a pending invitation from a
+	// top-level group; the Handler implementation validates the request, delegates
+	// to the service which removes the pending invite, and responds with the
+	// updated group.
 	UninviteUser(w http.ResponseWriter, r *http.Request)
+	// AcceptInvite serves HTTP requests accepting a pending group invitation; the
+	// Handler implementation validates the request, delegates to the service which
+	// materialises membership, and responds with the updated group.
 	AcceptInvite(w http.ResponseWriter, r *http.Request)
+	// RejectInvite serves HTTP requests rejecting a pending group invitation; the
+	// Handler implementation validates the request, delegates to the service which
+	// removes the pending invite, and responds with the updated group.
 	RejectInvite(w http.ResponseWriter, r *http.Request)
+	// RemoveMember serves HTTP requests removing a member from a group; the Handler
+	// implementation validates the request, delegates to the service which persists
+	// removal and cascades to descendants for root groups, and responds with the
+	// updated group.
 	RemoveMember(w http.ResponseWriter, r *http.Request)
+	// UpdateMemberRole serves HTTP requests changing a member's role; the Handler
+	// implementation validates the request, delegates to the service which
+	// validates the role against the group type configuration and persists it, and
+	// responds with the updated group.
 	UpdateMemberRole(w http.ResponseWriter, r *http.Request)
+	// GetGroupMembers serves HTTP requests listing a group's members; the Handler
+	// implementation validates the request, delegates to the service which filters
+	// by member type and role, and returns the members.
 	GetGroupMembers(w http.ResponseWriter, r *http.Request)
+	// UpdateOwner serves HTTP requests changing a group's owner; the Handler
+	// implementation validates the request, delegates to the service which promotes
+	// or adds the owner as an admin member and persists the change, and responds
+	// with the updated group.
 	UpdateOwner(w http.ResponseWriter, r *http.Request)
+	// RepairInvalidMembers serves HTTP requests repairing groups containing members
+	// with empty or null IDs; the Handler implementation delegates to the service
+	// and returns the affected group IDs before and after the repair.
 	RepairInvalidMembers(w http.ResponseWriter, r *http.Request)
+	// ArchiveGroup serves HTTP requests archiving a group; the Handler
+	// implementation validates the request, delegates to the service which sets the
+	// group status to archived and persists it, and responds with the updated
+	// group.
 	ArchiveGroup(w http.ResponseWriter, r *http.Request)
+	// RestoreGroup serves HTTP requests restoring an archived group; the Handler
+	// implementation validates the request, delegates to the service which sets the
+	// group status back to active and persists it, and responds with the updated
+	// group.
 	RestoreGroup(w http.ResponseWriter, r *http.Request)
+	// GetGroupStats serves HTTP requests for a single group's statistics; the
+	// Handler implementation validates the request, delegates to the service which
+	// computes member and subgroup counts, and writes the statistics response.
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
+	// GetGroupsStats serves HTTP requests for aggregate statistics across all
+	// groups; the Handler implementation delegates to the service with an empty
+	// request and writes the aggregated counts response.
 	GetGroupsStats(w http.ResponseWriter, r *http.Request)
+	// GetGroupsConfig serves HTTP requests for the group service configuration; the
+	// Handler implementation delegates to the service and writes the configured
+	// group capabilities as the response.
 	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
+	// ValidateGroupName serves HTTP requests previewing how a proposed group name
+	// resolves without persisting anything; the Handler implementation validates
+	// the request, delegates to the service, and returns the resolved name,
+	// availability and hint.
 	ValidateGroupName(w http.ResponseWriter, r *http.Request)
+	// EnableGroupAutoJoinByEmailDomain handles the HTTP request that enables
+	// email-domain based auto-join for a group. As a GroupHandler port it maps the
+	// request, delegates to the service, and writes a data or error HTTP response.
 	EnableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request)
+	// DisableGroupAutoJoinByEmailDomain handles the HTTP request that disables
+	// email-domain based auto-join for a group. As a GroupHandler port it maps the
+	// request, delegates to the service, and writes a data or error HTTP response.
 	DisableGroupAutoJoinByEmailDomain(w http.ResponseWriter, r *http.Request)
+	// EnableGroupAutoInviteByEmailDomain handles the HTTP request that enables
+	// email-domain based auto-invite for a group. As a GroupHandler port it maps
+	// the request, delegates to the service, and writes a data or error HTTP
+	// response.
 	EnableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request)
+	// DisableGroupAutoInviteByEmailDomain handles the HTTP request that disables
+	// email-domain based auto-invite for a group. As a GroupHandler port it maps
+	// the request, delegates to the service, and writes a data or error HTTP
+	// response.
 	DisableGroupAutoInviteByEmailDomain(w http.ResponseWriter, r *http.Request)
 }
 

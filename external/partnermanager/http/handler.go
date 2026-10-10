@@ -18,16 +18,24 @@ import (
 
 // HTTPService delegates fixed operations to owning managers through safe DTOs.
 type HTTPService interface {
+	// Handle dispatches a fixed operation, resolved from the Principal and Request,
+	// to the appropriate read, command or admin path and refuses unknown
+	// operations.
 	Handle(context.Context, Principal, Request) (Response, error)
 }
 
 // PrincipalResolver must verify the current host session and account admission.
 // Native audiences and transport binding must be derived from verified claims.
 type PrincipalResolver interface {
+	// Resolve verifies the current host session and account admission for the
+	// request, producing the verified Principal.
 	Resolve(context.Context, *http.Request) (Principal, error)
 }
+
+// PrincipalResolverFunc adapts a function to the PrincipalResolver port.
 type PrincipalResolverFunc func(context.Context, *http.Request) (Principal, error)
 
+// Resolve calls the wrapped resolver function.
 func (f PrincipalResolverFunc) Resolve(ctx context.Context, r *http.Request) (Principal, error) {
 	return f(ctx, r)
 }
@@ -40,6 +48,9 @@ type Observation struct {
 	RetryAfter                                         time.Duration
 	Duration                                           time.Duration
 }
+
+// Observer receives one observation per handled request for host metrics; it
+// must not block the request path.
 type Observer func(context.Context, Observation)
 
 // Config is trusted HTTP composition. Security and resolver must represent the
@@ -95,6 +106,9 @@ func New(service HTTPService, resolver PrincipalResolver, config Config) (*Handl
 
 var resourceID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}$`)
 
+// match compares a literal path pattern with an optional {id} segment,
+// accepting candidates up to 2048 bytes and returning the captured ID only when
+// it satisfies the resource ID grammar.
 func match(pattern, candidate string) (string, bool) {
 	p, c := strings.Split(pattern, "/"), strings.Split(candidate, "/")
 	if len(p) != len(c) || len(candidate) > 2048 {
@@ -116,6 +130,8 @@ func match(pattern, candidate string) (string, bool) {
 	return id, true
 }
 
+// resolveRoute finds the first route whose path matches; on method mismatch it
+// returns the sorted allowed methods so the caller can answer 405.
 func (h *Handler) resolveRoute(method, candidate string) (Route, string, []string, bool) {
 	allowed := map[string]bool{}
 	for _, entry := range h.routes {
@@ -136,6 +152,13 @@ func (h *Handler) resolveRoute(method, candidate string) (Route, string, []strin
 	return Route{}, "", methods, false
 }
 
+// ServeHTTP handles one request through fixed stages: routing with 404/405
+// responses, principal resolution, native-transport checks, CSRF issuance and
+// verification, rate limiting with Retry-After, request-shape validation
+// (idempotency key, If-Match, body size, GET without body) and service
+// dispatch. It sets security headers, observes stage/status/duration, and
+// rejects any service response outside 2xx, invalid JSON or a non-strong ETag
+// as an internal error.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store, no-transform")
 	w.Header().Set("Content-Type", "application/json")
@@ -282,6 +305,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(response.Body)
 }
 
+// validKey accepts idempotency keys of 1-128 visible ASCII characters.
 func validKey(key string) bool {
 	if len(key) < 1 || len(key) > 128 {
 		return false
@@ -293,6 +317,9 @@ func validKey(key string) bool {
 	}
 	return true
 }
+
+// strongETag accepts only quoted etags of bounded length whose inner characters
+// are visible ASCII without embedded quotes.
 func strongETag(tag string) bool {
 	if len(tag) < 3 || len(tag) > 512 || tag[0] != '"' || tag[len(tag)-1] != '"' {
 		return false
@@ -304,6 +331,11 @@ func strongETag(tag string) bool {
 	}
 	return true
 }
+
+// readBody reads at most maximum bytes of a JSON object body and returns the
+// raw bytes. A missing or empty body yields nil without error; a nil/absent,
+// oversized (413), unreadable, non-JSON-object, wrong media type or non-UTF-8
+// charset body fails with PARTNERS_INVALID_REQUEST.
 func readBody(r *http.Request, maximum int64) (json.RawMessage, error) {
 	if r.Body == nil {
 		return nil, nil
@@ -333,6 +365,11 @@ func readBody(r *http.Request, maximum int64) (json.RawMessage, error) {
 	return body, nil
 }
 
+// publicError maps an error to a public code/status pair. It walks wrapped and
+// joined errors (bounded depth and width), accepts only Error values whose
+// code/status pair is allowed, prefers outcome-uncertain/dependency/internal
+// candidates, and maps cancellation or deadline to 503. Anything else becomes
+// PARTNERS_INTERNAL_ERROR/500; private causes are never echoed.
 func publicError(err error) (string, int) {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "PARTNERS_DEPENDENCY_UNAVAILABLE", 503
@@ -395,6 +432,10 @@ func publicError(err error) (string, int) {
 	}
 	return "PARTNERS_INTERNAL_ERROR", 500
 }
+
+// writeError emits the fixed JSON error envelope {"error":{code,message}} with
+// a generic message and the given HTTP status. Marshal and write failures are
+// ignored.
 func writeError(w http.ResponseWriter, code string, status int) {
 	body, _ := json.Marshal(map[string]any{"error": map[string]string{"code": code, "message": "The request could not be completed."}})
 	w.WriteHeader(status)

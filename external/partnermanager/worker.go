@@ -19,20 +19,40 @@ import (
 // SignupFeed is the owning identity creation/consumption capability. Discovery
 // does not read current profile fields or manufacture capture for old accounts.
 type SignupFeed interface {
+	// GetSignupAttribution returns the SignupAttribution for the identified signup,
+	// a read owned by the identity-creating SignupFeed.
 	GetSignupAttribution(context.Context, string) (user.SignupAttribution, error)
+	// PendingSignupAttributionsAfter returns pending SignupAttributions after the
+	// cursor bounded by the count, feeding discovery from the signup owner.
 	PendingSignupAttributionsAfter(context.Context, string, int) ([]user.SignupAttribution, error)
+	// ConsumeSignupAttribution records the SignupConsumption for the identified
+	// attribution, consuming it within the owning feed.
 	ConsumeSignupAttribution(context.Context, string, user.SignupConsumption) error
 }
 
 // RevenueFeed combines immutable billing inputs and independent consumer
 // receipts. Acknowledgements are separate from source quarantine resolution.
 type RevenueFeed interface {
+	// GetRevenueFact reads the immutable billing RevenueFact for the identified
+	// source, an input owned by RevenueFeed.
 	GetRevenueFact(context.Context, string) (billing.RevenueFact, error)
+	// PendingRevenueFactsAfter returns pending RevenueFacts after the cursor
+	// identifier and revision bounded by the count, feeding revenue discovery.
 	PendingRevenueFactsAfter(context.Context, string, int64, int) ([]billing.RevenueFact, error)
+	// GetRevenueAcknowledgement reads the stored RevenueAcknowledgement for the
+	// identified fact and consumer, an independent receipt within RevenueFeed.
 	GetRevenueAcknowledgement(context.Context, string, string) (billing.RevenueAcknowledgement, error)
+	// AcknowledgeRevenueFact stores the supplied RevenueAcknowledgement, recording
+	// consumption separately from source quarantine resolution.
 	AcknowledgeRevenueFact(context.Context, billing.RevenueAcknowledgement) error
+	// GetRevenueObservation returns the RevenueObservation for the identified
+	// source, a read owned by the revenue feed.
 	GetRevenueObservation(context.Context, string) (billing.RevenueObservation, error)
+	// GetRevenueSourceResolution returns the RevenueObservation resolving the
+	// identified revenue source's quarantine within the feed.
 	GetRevenueSourceResolution(context.Context, string) (billing.RevenueObservation, error)
+	// UnresolvedRevenueObservationsAfter returns unresolved RevenueObservations
+	// after the cursor bounded by the count, driving source reconciliation.
 	UnresolvedRevenueObservationsAfter(context.Context, string, int) ([]billing.RevenueObservation, error)
 }
 
@@ -40,9 +60,14 @@ type RevenueFeed interface {
 // authority. The billing manager implements this owning capability; the worker
 // never interprets raw provider objects or accepts a browser payment assertion.
 type RevenueSourceReconciler interface {
+	// ReconcileRevenueSource authenticates provider evidence per the
+	// ReconcileRevenueSourceRequest and returns the resulting RevenueObservation;
+	// workers never interpret raw provider objects.
 	ReconcileRevenueSource(context.Context, billingmanager.ReconcileRevenueSourceRequest) (billing.RevenueObservation, error)
 }
 
+// WorkerConfig holds the worker identity used for authorization and receipts,
+// the revenue ConsumerID, and discovery/processing page and batch sizes.
 type WorkerConfig struct {
 	ActorID, ConsumerID string
 	PageSize, BatchSize int
@@ -54,6 +79,9 @@ type WorkerReport struct {
 	Discovered, Completed, Retried int
 	Issues                         []WorkerIssue
 }
+
+// WorkerIssue is a bounded structured issue classification; it carries no
+// source identity or raw dependency error.
 type WorkerIssue struct{ Kind, Code string }
 
 // Worker performs one bounded sweep/attempt batch. The host owns scheduling,
@@ -69,6 +97,10 @@ type Worker struct {
 	config     WorkerConfig
 }
 
+// NewWorker validates all capabilities and cross-owner configuration: the
+// manager, queue, maturity feed program/currency agreement and worker config
+// bounds. It revalidates the manager and queue wiring and fails closed on any
+// mismatch; it starts nothing.
 func NewWorker(manager *Manager, queue *WorkQueue, signups SignupFeed, revenue RevenueFeed, reconciler RevenueSourceReconciler, config WorkerConfig) (*Worker, error) {
 	if manager == nil || queue == nil || nilManagerDependency(signups) || nilManagerDependency(revenue) || nilManagerDependency(reconciler) {
 		return nil, ErrUnavailable
@@ -93,6 +125,9 @@ func NewWorker(manager *Manager, queue *WorkQueue, signups SignupFeed, revenue R
 	return &Worker{manager: manager, queue: queue, signups: signups, revenue: revenue, reconciler: reconciler, maturity: maturity, config: config}, nil
 }
 
+// authorize maps a work kind to its capability (signup, maturity or revenue
+// worker) and checks current authority for the configured ActorID against the
+// target source.
 func (w *Worker) authorize(ctx context.Context, kind, target string) error {
 	capability := CapabilityRevenueWorker
 	if kind == WorkSignup {
@@ -193,6 +228,10 @@ func (w *Worker) RunOnce(ctx context.Context) (WorkerReport, error) {
 	return report, errors.Join(failures...)
 }
 
+// workerErrorCode maps dependency failures to bounded issue codes: fenced
+// leases, pending receipts, conflicts, admission/evidence denial, review-
+// pending unassessable facts, and missing owning evidence; everything else is
+// dependency_pending. Raw errors are not propagated.
 func workerErrorCode(err error) string {
 	switch {
 	case singleManagerAbsence(err, ErrWorkLeaseLost):
@@ -212,6 +251,8 @@ func workerErrorCode(err error) string {
 	}
 }
 
+// sourceDigest returns the SHA-256 hex fingerprint of value's canonical JSON
+// encoding, failing only when marshaling fails.
 func sourceDigest(value any) (string, error) {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -220,6 +261,11 @@ func sourceDigest(value any) (string, error) {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+// signupCandidate converts a signup attribution into queue input, validating
+// program, customer text, timestamp consistency and evidence size. The
+// fingerprint covers immutable private creation fields omitted from public JSON
+// and excludes mutable consumption state.
 func signupCandidate(c user.SignupAttribution, program string) (WorkCandidate, error) {
 	at, err := time.Parse(time.RFC3339Nano, c.CreatedAtUTC)
 	if err != nil || !at.Equal(c.CreatedAt) || c.CreatedAt.IsZero() || c.ProgramID != program || !validWorkText(c.CustomerID, 256) || len(c.Evidence) > 2048 {
@@ -233,6 +279,10 @@ func signupCandidate(c user.SignupAttribution, program string) (WorkCandidate, e
 	}{c.ProgramID, c.CustomerID, at.UTC().Format(time.RFC3339Nano), c.Evidence, c.Individual})
 	return WorkCandidate{SourceID: c.CustomerID, SourceFingerprint: fp}, err
 }
+
+// revenueCandidate converts an accepted revenue fact into queue input,
+// requiring a valid ID, positive sequence, fingerprint and acceptance time, and
+// fingerprinting the fact with its source fingerprint.
 func revenueCandidate(f billing.RevenueFact) (WorkCandidate, error) {
 	if !validWorkText(f.ID, 256) || f.Sequence < 1 || !validWorkText(f.Fingerprint, 256) || f.AcceptedAt.IsZero() {
 		return WorkCandidate{}, ErrUnavailable
@@ -243,6 +293,10 @@ func revenueCandidate(f billing.RevenueFact) (WorkCandidate, error) {
 	}{f, f.Fingerprint})
 	return WorkCandidate{SourceID: f.ID, SourceFingerprint: fp}, err
 }
+
+// observationCandidate converts a quarantined revenue observation (not a
+// resolution) into queue input, fingerprinting the observation with its source
+// fingerprint.
 func observationCandidate(o billing.RevenueObservation) (WorkCandidate, error) {
 	if !validWorkText(o.ID, 256) || !validWorkText(o.Fingerprint, 256) || o.AcceptedAt.IsZero() || o.QuarantineReason == "" || o.ResolutionOf != "" {
 		return WorkCandidate{}, ErrUnavailable
@@ -254,6 +308,11 @@ func observationCandidate(o billing.RevenueObservation) (WorkCandidate, error) {
 	return WorkCandidate{SourceID: o.ID, SourceFingerprint: fp}, err
 }
 
+// discover reads one page of pending sources for the kind, validating strictly
+// increasing positions and candidate well-formedness, then authorizes the
+// capability and enqueues the retained candidates with the cursor advance.
+// Empty discovery at a fresh cursor advances nothing; maturity discovery may
+// race financial completion and relies on queued rechecks.
 func (w *Worker) discover(ctx context.Context, kind string) (int, error) {
 	cursor, err := w.queue.Cursor(ctx, kind)
 	if err != nil {
@@ -334,6 +393,8 @@ func (w *Worker) discover(ctx context.Context, kind string) (int, error) {
 	return len(candidates), nil
 }
 
+// process dispatches one item to its kind-specific owning use case and returns
+// ErrInvalid for unknown kinds.
 func (w *Worker) process(ctx context.Context, item WorkItem) error {
 	switch item.Kind {
 	case WorkSignup:
@@ -348,12 +409,18 @@ func (w *Worker) process(ctx context.Context, item WorkItem) error {
 	}
 	return ErrInvalid
 }
+
+// decide rechecks current authority for the item's source before recording the
+// immutable decision receipt.
 func (w *Worker) decide(ctx context.Context, item WorkItem, outcome, acceptance, reason string) (WorkDecision, error) {
 	if err := w.authorize(ctx, item.Kind, item.SourceID); err != nil {
 		return WorkDecision{}, err
 	}
 	return w.queue.Decide(ctx, item, w.config.ActorID, outcome, acceptance, reason)
 }
+
+// complete rechecks current authority for the item's source before
+// acknowledging the decision receipt with the queue.
 func (w *Worker) complete(ctx context.Context, item WorkItem, decision WorkDecision) error {
 	if err := w.authorize(ctx, item.Kind, item.SourceID); err != nil {
 		return err
@@ -361,6 +428,11 @@ func (w *Worker) complete(ctx context.Context, item WorkItem, decision WorkDecis
 	return w.queue.Complete(ctx, item, decision.ID)
 }
 
+// processSignup revalidates the immutable capture fingerprint, then consumes
+// pending evidence through the manager (attributed), records
+// no_evidence/ineligible refusals, or replays an existing decision. It verifies
+// the source's consumption receipt matches the decision before completing;
+// conflicts and unknown states return without discarding evidence.
 func (w *Worker) processSignup(ctx context.Context, item WorkItem) error {
 	capture, err := w.signups.GetSignupAttribution(ctx, item.SourceID)
 	if err != nil {
@@ -416,6 +488,11 @@ func (w *Worker) processSignup(ctx context.Context, item WorkItem) error {
 	return w.complete(ctx, item, decision)
 }
 
+// processRevenue revalidates the fact fingerprint, processes it through the
+// financial owner (or replays the existing decision), then cross-checks the
+// consumer acknowledgement: an existing receipt must match the decision
+// exactly, an absent one is written idempotently after re-authorization. Only
+// after this agreement does it complete the work item.
 func (w *Worker) processRevenue(ctx context.Context, item WorkItem) error {
 	fact, err := w.revenue.GetRevenueFact(ctx, item.SourceID)
 	if err != nil {
@@ -469,6 +546,12 @@ func (w *Worker) processRevenue(ctx context.Context, item WorkItem) error {
 	return w.complete(ctx, item, decision)
 }
 
+// refusedRevenue derives a conclusive refusal reason for a failed financial
+// operation: a verified NoEntitlementReason, an original payment's recorded no-
+// entitlement for non-payment facts, or signup evidence proving
+// paid_before_signup or an earlier ineligible/no-evidence consumption. Anything
+// else returns the original error or ErrUnresolved; historical signup absence
+// never becomes permission to discard money.
 func (w *Worker) refusedRevenue(ctx context.Context, fact billing.RevenueFact, processErr error) (string, error) {
 	if reason := noEntitlementReason(processErr); reason != "" {
 		return reason, nil
@@ -502,6 +585,11 @@ func (w *Worker) refusedRevenue(ctx context.Context, fact billing.RevenueFact, p
 	return "", partnerearnings.ErrUnresolved
 }
 
+// processSource revalidates the observation fingerprint and resolves an
+// unresolved source through the reconciler when no resolution exists, or
+// replays an existing accepted decision against the existing resolution. It
+// verifies resolution/observation agreement and completes only with the
+// resolution identity as acceptance.
 func (w *Worker) processSource(ctx context.Context, item WorkItem) error {
 	source, err := w.revenue.GetRevenueObservation(ctx, item.SourceID)
 	if err != nil {

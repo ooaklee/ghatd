@@ -101,6 +101,9 @@ func NewDescriptionPathResolver(cfg DescriptionInventoryConfig) (func(*http.Requ
 	}, nil
 }
 
+// validDescriptionPrefix reports whether a route prefix is a clean absolute
+// path: it must start with '/', equal its path.Clean form, and contain no
+// query, fragment, percent or control characters.
 func validDescriptionPrefix(prefix string) bool {
 	return strings.HasPrefix(prefix, "/") && prefix == path.Clean(prefix) && !strings.ContainsAny(prefix, "\\?#%") && strings.IndexFunc(prefix, unicode.IsControl) < 0
 }

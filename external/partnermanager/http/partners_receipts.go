@@ -18,6 +18,11 @@ func operatorReceipt(c partnerearnings.Claim, accepted map[string]any) (Response
 	return reply(200, map[string]any{"claim": claimView(c, false), "accepted": accepted}, "")
 }
 
+// acceptedPayment confirms a record/observe command against the claim's current
+// state: revision must exceed the expected one and the recorded payment or
+// observation must match actor, state, amount, currency, trimmed
+// method/reference and paid-at. It returns the durable acceptance receipt
+// fields, or nil when no match confirms the command.
 func acceptedPayment(c partnerearnings.Claim, r partnerearnings.RecordPaymentRequest) map[string]any {
 	if c.ID != r.ClaimID || c.Revision <= r.ExpectedRevision {
 		return nil
@@ -38,6 +43,10 @@ func acceptedPayment(c partnerearnings.Claim, r partnerearnings.RecordPaymentReq
 	return nil
 }
 
+// acceptedAmendment confirms an amendment command by matching an entry in the
+// claim's PaymentAmendments on actor, idempotency key, trimmed
+// method/reference/reason and paid-at, with revision advanced past the expected
+// one. Returns the receipt map or nil when no amendment matches.
 func acceptedAmendment(c partnerearnings.Claim, r partnerearnings.AmendPaymentRequest) map[string]any {
 	if c.ID != r.ClaimID || c.Revision <= r.ExpectedRevision {
 		return nil
@@ -50,6 +59,10 @@ func acceptedAmendment(c partnerearnings.Claim, r partnerearnings.AmendPaymentRe
 	return nil
 }
 
+// acceptedReturn confirms a returned-transfer command by matching a
+// ReturnedAdjustments entry on actor, idempotency key, amount, currency,
+// reference, returned-at and reason, with revision advanced past the expected
+// one. Returns the receipt map or nil when no adjustment matches.
 func acceptedReturn(c partnerearnings.Claim, r partnerearnings.ReturnRequest) map[string]any {
 	if c.ID != r.ClaimID || c.Revision <= r.ExpectedRevision {
 		return nil
@@ -62,6 +75,10 @@ func acceptedReturn(c partnerearnings.Claim, r partnerearnings.ReturnRequest) ma
 	return nil
 }
 
+// acceptedOperatorClaim confirms an on-behalf claim creation by matching the
+// returned claim's partner, requester, reason, amount, non-zero requested-at
+// and destination snapshot version against the submitted command. Returns the
+// acceptance receipt or nil on any mismatch.
 func acceptedOperatorClaim(c partnerearnings.Claim, actor, partner, reason, key string, amount, version int64) map[string]any {
 	if c.PartnerID != partner || c.RequestedBy != actor || c.RequestedReason != reason || c.AmountMinor != amount || c.RequestedAt.IsZero() || c.DestinationSnapshot["version"] != strconv.FormatInt(version, 10) {
 		return nil

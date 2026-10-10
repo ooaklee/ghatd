@@ -589,6 +589,8 @@ func isSafeText(s string) bool {
 	return true
 }
 
+// isASCII reports whether s contains only printable ASCII characters plus
+// newline, tab and carriage return.
 func isASCII(s string) bool {
 	for i := 0; i < len(s); i++ {
 		if s[i] > 0x7e || s[i] < 0x20 && s[i] != '\n' && s[i] != '\t' && s[i] != '\r' {

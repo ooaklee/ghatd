@@ -18,39 +18,64 @@ const (
 	checkoutPartition       = "billing-checkout-history-v1"
 )
 
+// checkoutBound binds a record-store transaction to one revenue scope for
+// writes, or an unbound read view when scope is nil.
 type checkoutBound struct {
 	tx    recordstore.Tx
 	scope *billing.RevenueScope
 }
+
+// persistedCheckout is the stored intent shape separating the intent metadata,
+// original provider request and fingerprint.
 type persistedCheckout struct {
 	Intent      billing.CheckoutIntent
 	Request     paymentprovider.CheckoutSessionRequest
 	Fingerprint string
 }
+
+// checkoutAcknowledgement persists the immutable intent-to-session binding.
 type checkoutAcknowledgement struct{ IntentID, SessionID string }
 
+// checkoutScopeKey hashes a scope into a stable storage key component.
 func checkoutScopeKey(s billing.RevenueScope) string { b, _ := json.Marshal(s); return key(string(b)) }
+
+// associationKey builds the composite storage key for a scope's subscription
+// and optional price binding.
 func associationKey(s billing.RevenueScope, sub, price string) string {
 	return key(checkoutScopeKey(s), sub, price)
 }
+
+// WithCheckoutTransaction runs the callback inside a transaction partitioned
+// and keyed to the exact revenue scope, rejecting nil context or callback as
+// invalid.
 func (r *Repository) WithCheckoutTransaction(ctx context.Context, scope billing.RevenueScope, fn func(billing.CheckoutTx) error) error {
 	if ctx == nil || fn == nil {
 		return billing.ErrRevenueInvalid
 	}
 	return mapped(r.store.Transact(ctx, checkoutPartition+":"+checkoutScopeKey(scope), func(tx recordstore.Tx) error { return fn(&checkoutBound{tx, &scope}) }))
 }
+
+// ReadCheckout runs the callback on an unbound read view without a scope
+// binding, rejecting nil context or callback as invalid.
 func (r *Repository) ReadCheckout(ctx context.Context, fn func(billing.CheckoutTx) error) error {
 	if ctx == nil || fn == nil {
 		return billing.ErrRevenueInvalid
 	}
 	return mapped(r.store.Read(ctx, func(tx recordstore.Tx) error { return fn(&checkoutBound{tx, nil}) }))
 }
+
+// checkScope conflicts when this bound transaction's scope differs from the
+// requested one, and passes for unbound reads.
 func (b *checkoutBound) checkScope(scope billing.RevenueScope) error {
 	if b.scope != nil && *b.scope != scope {
 		return billing.ErrRevenueConflict
 	}
 	return nil
 }
+
+// GetCheckoutIntent returns the stored intent only when its ID, fingerprint,
+// creation time and absent session match the stored shape and its scope
+// satisfies the transaction binding.
 func (b *checkoutBound) GetCheckoutIntent(ctx context.Context, id string) (billing.CheckoutIntent, error) {
 	stored, _, err := get[persistedCheckout](ctx, b.tx, kindCheckoutIntent, id, checkoutPartition)
 	if err != nil {
@@ -67,6 +92,9 @@ func (b *checkoutBound) GetCheckoutIntent(ctx context.Context, id string) (billi
 	}
 	return v, nil
 }
+
+// InsertCheckoutIntent stores a new intent in this scope after rejecting one
+// that already carries a session ID.
 func (b *checkoutBound) InsertCheckoutIntent(ctx context.Context, v billing.CheckoutIntent) error {
 	if err := b.checkScope(v.Scope); err != nil {
 		return err
@@ -76,6 +104,9 @@ func (b *checkoutBound) InsertCheckoutIntent(ctx context.Context, v billing.Chec
 	}
 	return insert(ctx, b.tx, kindCheckoutIntent, v.ID, checkoutPartition, persistedCheckout{v, v.Request, v.Fingerprint})
 }
+
+// GetCheckoutAcknowledgement returns the stored session ID only when the
+// record's intent matches and a session is present.
 func (b *checkoutBound) GetCheckoutAcknowledgement(ctx context.Context, id string) (string, error) {
 	v, _, err := get[checkoutAcknowledgement](ctx, b.tx, kindCheckoutAck, id, checkoutPartition)
 	if err != nil {
@@ -86,6 +117,11 @@ func (b *checkoutBound) GetCheckoutAcknowledgement(ctx context.Context, id strin
 	}
 	return v.SessionID, nil
 }
+
+// InsertCheckoutAcknowledgement re-reads the intent, reserves the reverse
+// session key (conflicting with a different owner), stores the forward binding,
+// retains the lifecycle checkout source, and touches the source epoch for
+// subscription-mode intents.
 func (b *checkoutBound) InsertCheckoutAcknowledgement(ctx context.Context, id, session string) error {
 	intent, err := b.GetCheckoutIntent(ctx, id)
 	if err != nil {
@@ -118,6 +154,10 @@ func (b *checkoutBound) InsertCheckoutAcknowledgement(ctx context.Context, id, s
 	}
 	return nil
 }
+
+// GetCheckoutAssociation returns the stored price-keyed association only when
+// it matches the requested scope, subscription, price and has a link time,
+// after checking the transaction scope.
 func (b *checkoutBound) GetCheckoutAssociation(ctx context.Context, scope billing.RevenueScope, sub, price string) (billing.CheckoutAssociation, error) {
 	if err := b.checkScope(scope); err != nil {
 		return billing.CheckoutAssociation{}, err
@@ -131,6 +171,12 @@ func (b *checkoutBound) GetCheckoutAssociation(ctx context.Context, scope billin
 	}
 	return v, nil
 }
+
+// InsertCheckoutAssociation writes the immutable association after verifying
+// agreement with any existing lifecycle anchor and prior principal binding,
+// retaining the subscription source row, recording the principal binding,
+// storing the price-keyed record and touching the source epoch; disagreements
+// conflict.
 func (b *checkoutBound) InsertCheckoutAssociation(ctx context.Context, v billing.CheckoutAssociation) error {
 	if err := b.checkScope(v.Scope); err != nil {
 		return err

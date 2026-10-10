@@ -153,6 +153,11 @@ func (s *StripeProvider) populateStripeRevenueRefunds(ctx context.Context, req R
 	return nil
 }
 
+// stripeCreditLineNet derives a credit-note line net by reusing
+// stripeRevenueLineNet with the note amount as subtotal, then subtracting only
+// inclusive taxes from the taxes or tax_amounts arrays. Exclusive taxes and
+// other unsupported tax behaviors, negative amounts or non-int64 results return
+// ErrRevenueUnassessable.
 func stripeCreditLineNet(line map[string]json.RawMessage) (int64, error) {
 	base, ok := rawStripeInt(line["amount"])
 	if !ok || base < 0 {

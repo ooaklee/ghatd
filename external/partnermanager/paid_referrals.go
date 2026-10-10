@@ -29,8 +29,17 @@ type RevenueReportingConfig struct {
 	Scopes       []billing.RevenueScope `json:"-"`
 	StatusMaxAge time.Duration          `json:"-"`
 }
+
+// revenueReportingSource is the private billing-owner capability required for
+// paid evidence: accepted payment history and per-fact subscription status
+// reads.
 type revenueReportingSource interface {
+	// GetPaymentRevenueHistory returns the accepted PaymentRevenueHistory matching
+	// the RevenueHistoryQuery, a billing-owner read for paid evidence.
 	GetPaymentRevenueHistory(context.Context, billing.RevenueHistoryQuery) (billing.PaymentRevenueHistory, error)
+	// GetSubscriptionStatusForFact returns the SubscriptionStatus for the
+	// identified revenue fact within the freshness window, a per-fact billing-owner
+	// read.
 	GetSubscriptionStatusForFact(context.Context, string, time.Duration) (billing.SubscriptionStatus, error)
 }
 
@@ -91,9 +100,16 @@ func (m *Manager) WithRevenueReporting(config RevenueReportingConfig) (*Manager,
 	return m, nil
 }
 
+// sourceCohort reports whether at falls in the half-open cohort [From,To); nil
+// bounds are unbounded on that side.
 func sourceCohort(at time.Time, q ReferralSummaryQuery) bool {
 	return (q.From == nil || !at.Before(*q.From)) && (q.To == nil || at.Before(*q.To))
 }
+
+// eligiblePaidBinding reports whether an original payment fact satisfies frozen
+// binding terms: positive amount, matching currency/exponent, a plan in
+// EligiblePlanIDs, and effective time before any recurring end. Other facts are
+// not eligible.
 func eligiblePaidBinding(original billing.RevenueFact, binding referral.PaymentAttribution) bool {
 	terms := binding.Terms
 	if original.PaidMinor <= 0 || original.Currency != terms.Currency || original.CurrencyExponent != terms.CurrencyExponent || (terms.RecurrenceEndsAt != nil && !original.EffectiveAt.Before(*terms.RecurrenceEndsAt)) {
@@ -106,6 +122,9 @@ func eligiblePaidBinding(original billing.RevenueFact, binding referral.PaymentA
 	}
 	return false
 }
+
+// statusTimeRange widens the [*from,*to) observation window to include at,
+// initializing missing bounds and never shrinking existing ones.
 func statusTimeRange(from, to **time.Time, at time.Time) {
 	if *from == nil || at.Before(**from) {
 		value := at
@@ -117,6 +136,9 @@ func statusTimeRange(from, to **time.Time, at time.Time) {
 	}
 }
 
+// joinReferralPaidEvidence fetches attribution snapshots for the page, computes
+// paid evidence, then rereads each snapshot and returns ErrStaleWrite if any
+// fingerprint changed during the independent revenue reads.
 func (m *Manager) joinReferralPaidEvidence(ctx context.Context, partner string, page referral.RelationshipPage, q ReferralSummaryQuery, out *ReferralSummaryPage) error {
 	snapshots := make([]referral.AttributionSnapshot, len(page.Items))
 	for i, item := range page.Items {
@@ -145,6 +167,14 @@ func (m *Manager) joinReferralPaidEvidence(ctx context.Context, partner string, 
 // Further candidates stay unknown; paid-source counts still cover the full set.
 const SubscriptionStatusReadCapacity = 200
 
+// calculateReferralPaidEvidence joins frozen attribution snapshots and binding
+// terms to confirmed revenue history within configured scopes, enforcing per-
+// item capacity budgets and rejecting duplicate principals, malformed facts or
+// mismatched bindings with ErrUnavailable/ErrStaleWrite. Subscription status is
+// read for at most SubscriptionStatusReadCapacity candidates; failures beyond
+// capacity or on error keep the subscription unknown rather than failing the
+// report, and coverage fields plus a SHA-256 revision over the status proofs
+// describe the outcome.
 func (m *Manager) calculateReferralPaidEvidence(ctx context.Context, partner string, page referral.RelationshipPage, q ReferralSummaryQuery, snapshots []referral.AttributionSnapshot, out *ReferralSummaryPage) error {
 	owner, ok := m.deps.Revenue.(revenueReportingSource)
 	if !ok || nilManagerDependency(owner) {

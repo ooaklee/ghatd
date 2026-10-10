@@ -229,6 +229,9 @@ var (
 		"Fudge Cookies"}
 )
 
+// randItem picks one entry from the list using a time-seeded pseudo-random
+// source; randomness is intentionally weak and unsuitable for security
+// purposes.
 func randItem(list []string) string {
 	randSource := rand.NewSource(time.Now().Unix())
 	r := rand.New(randSource)

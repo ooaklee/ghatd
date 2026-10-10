@@ -26,18 +26,27 @@ const (
 	kindReceipt       = "partner_earnings_receipt"
 )
 
+// identity derives a non-enumerable SHA-256 hex identity from the given parts'
+// canonical JSON.
 func identity(parts ...string) string {
 	body, _ := json.Marshal(parts)
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
 }
+
+// ledgerPartition derives the per-partner ledger partition key from program,
+// partner and currency.
 func ledgerPartition(program, partner, currency string) string {
 	return "partner-ledger:" + identity(program, partner, currency)
 }
 
+// recordReference is the internal stored pointer from a source-identity record
+// to its entry ID.
 type recordReference struct {
 	ID string `json:"id"`
 }
+
+// ledgerHead is the internal per-partition sequence head record.
 type ledgerHead struct {
 	Sequence int64 `json:"sequence"`
 }
@@ -51,6 +60,8 @@ type EarningsRepository struct {
 	boundPartner      string
 }
 
+// NewEarningsRepository validates the store and configuration and pins one
+// program/currency; it opens nothing eagerly.
 func NewEarningsRepository(store recordstore.Store, config partnerearnings.Config) (*EarningsRepository, error) {
 	if nilStoreDependency(store) {
 		return nil, partnerearnings.ErrUnavailable
@@ -60,6 +71,10 @@ func NewEarningsRepository(store recordstore.Store, config partnerearnings.Confi
 	}
 	return &EarningsRepository{store: store, program: config.ProgramID, currency: config.Currency}, nil
 }
+
+// earningsError translates recordstore not-found, conflict, uncertain and
+// unavailable failures into the earnings domain, wrapping uncertain/unavailable
+// with the original cause; other errors pass through unchanged.
 func earningsError(err error) error {
 	switch {
 	case singleCauseIs(err, recordstore.ErrNotFound):
@@ -73,6 +88,9 @@ func earningsError(err error) error {
 	}
 	return err
 }
+
+// read executes fn on the bound transaction or a fresh store read, translating
+// failures through earningsError and rejecting nil/expired contexts.
 func (r *EarningsRepository) read(ctx context.Context, fn func(recordstore.Tx) error) error {
 	if ctx == nil {
 		return partnerearnings.ErrInvalid
@@ -85,6 +103,10 @@ func (r *EarningsRepository) read(ctx context.Context, fn func(recordstore.Tx) e
 	}
 	return earningsError(r.store.Read(ctx, fn))
 }
+
+// WithTransaction runs fn on a repository bound to the same transaction and the
+// requested partner within the pinned program/currency; nesting or a mismatched
+// partition fails with ErrInvalid.
 func (r *EarningsRepository) WithTransaction(ctx context.Context, program, partner, currency string, fn func(partnerearnings.Repository) error) error {
 	if r.tx != nil || program != r.program || currency != r.currency || partner == "" || fn == nil {
 		return partnerearnings.ErrInvalid
@@ -93,6 +115,10 @@ func (r *EarningsRepository) WithTransaction(ctx context.Context, program, partn
 		return fn(&EarningsRepository{tx: tx, program: r.program, currency: r.currency, boundPartner: partner})
 	}))
 }
+
+// ListEntries returns the partner's ledger entries sorted by sequence,
+// validating each decoded row's identity against its storage key and rejecting
+// a partner outside the bound transaction with ErrInvalid.
 func (r *EarningsRepository) ListEntries(ctx context.Context, program, partner string) ([]partnerearnings.Entry, error) {
 	if program != r.program || partner == "" || (r.tx != nil && partner != r.boundPartner) {
 		return nil, partnerearnings.ErrInvalid
@@ -122,6 +148,10 @@ func (r *EarningsRepository) ListEntries(ctx context.Context, program, partner s
 	sort.Slice(out, func(i, j int) bool { return out[i].Sequence < out[j].Sequence })
 	return out, err
 }
+
+// AppendEntry inserts one sequenced entry and its source-identity record inside
+// the bound transaction only; out-of-transaction use or a mismatched
+// partner/currency/sequence fails with ErrInvalid.
 func (r *EarningsRepository) AppendEntry(ctx context.Context, e partnerearnings.Entry) error {
 	if r.tx == nil || e.ProgramID != r.program || e.Currency != r.currency || e.Sequence < 1 || e.PartnerID != r.boundPartner {
 		return partnerearnings.ErrInvalid
@@ -141,6 +171,9 @@ func (r *EarningsRepository) AppendEntry(ctx context.Context, e partnerearnings.
 	}
 	return earningsError(r.tx.Insert(ctx, source))
 }
+
+// EntryBySource scans the partner's entries for one matching kind and source
+// event ID, returning ErrNotFound when no entry exists.
 func (r *EarningsRepository) EntryBySource(ctx context.Context, program, partner, kind, source string) (partnerearnings.Entry, error) {
 	rows, err := r.ListEntries(ctx, program, partner)
 	if err != nil {
@@ -153,6 +186,10 @@ func (r *EarningsRepository) EntryBySource(ctx context.Context, program, partner
 	}
 	return partnerearnings.Entry{}, partnerearnings.ErrNotFound
 }
+
+// NextSequence allocates the next ledger sequence number by CAS-advancing the
+// ledger head revision inside the bound transaction. It rejects overflow of the
+// sequence or revision with ErrInvalid.
 func (r *EarningsRepository) NextSequence(ctx context.Context, program, partner string) (int64, error) {
 	if r.tx == nil || program != r.program || partner != r.boundPartner {
 		return 0, partnerearnings.ErrInvalid
@@ -188,6 +225,10 @@ func (r *EarningsRepository) NextSequence(ctx context.Context, program, partner 
 	}
 	return head.Sequence, earningsError(err)
 }
+
+// GetClaim reads one claim and re-verifies its program, currency, revision,
+// partition and (on a bound repository) owning partner; mismatches yield
+// ErrUnavailable rather than the decoded value.
 func (r *EarningsRepository) GetClaim(ctx context.Context, program, id string) (partnerearnings.Claim, error) {
 	if program != r.program {
 		return partnerearnings.Claim{}, partnerearnings.ErrInvalid
@@ -208,6 +249,9 @@ func (r *EarningsRepository) GetClaim(ctx context.Context, program, id string) (
 	})
 	return c, err
 }
+
+// claimRevision writes the claim's immutable per-revision copy into the same
+// transaction as the head write. It requires an active repository transaction.
 func (r *EarningsRepository) claimRevision(ctx context.Context, c partnerearnings.Claim) error {
 	row, err := recordstore.NewRecord(kindClaimRevision, identity(c.ID, fmt.Sprint(c.Revision)), ledgerPartition(c.ProgramID, c.PartnerID, c.Currency), 1, c)
 	if err != nil {
@@ -215,6 +259,10 @@ func (r *EarningsRepository) claimRevision(ctx context.Context, c partnerearning
 	}
 	return r.tx.Insert(ctx, row)
 }
+
+// InsertClaim stores a first-revision claim and its immutable revision copy in
+// the bound transaction, enforcing the repository's program, currency and
+// partner pins. Conflict from an existing claim surfaces as an earnings error.
 func (r *EarningsRepository) InsertClaim(ctx context.Context, c partnerearnings.Claim) error {
 	if r.tx == nil || c.ProgramID != r.program || c.Currency != r.currency || c.Revision != 1 || c.PartnerID != r.boundPartner {
 		return partnerearnings.ErrInvalid
@@ -229,6 +277,10 @@ func (r *EarningsRepository) InsertClaim(ctx context.Context, c partnerearnings.
 	}
 	return earningsError(r.claimRevision(ctx, c))
 }
+
+// ReplaceClaim advances a claim from expected revision via compare-and-swap and
+// records the immutable revision copy in the same transaction. A storage
+// conflict maps to ErrStaleWrite.
 func (r *EarningsRepository) ReplaceClaim(ctx context.Context, c partnerearnings.Claim, expected int64) (partnerearnings.Claim, error) {
 	if r.tx == nil || c.ProgramID != r.program || c.Currency != r.currency || c.Revision != expected+1 || c.PartnerID != r.boundPartner {
 		return partnerearnings.Claim{}, partnerearnings.ErrInvalid
@@ -250,6 +302,11 @@ func (r *EarningsRepository) ReplaceClaim(ctx context.Context, c partnerearnings
 	}
 	return c, nil
 }
+
+// ListClaims decodes every claim in the program/partition, cross-checking row
+// identity, revision and partition, and returns those after the cursor matching
+// the optional state filter up to limit. An inconsistent row fails the whole
+// list with ErrUnavailable.
 func (r *EarningsRepository) ListClaims(ctx context.Context, program, partner string, states []string, limit int, after string) ([]partnerearnings.Claim, error) {
 	if program != r.program || limit < 0 || (r.tx != nil && partner != r.boundPartner) {
 		return nil, partnerearnings.ErrInvalid
@@ -298,9 +355,16 @@ func (r *EarningsRepository) ListClaims(ctx context.Context, program, partner st
 	}
 	return out, err
 }
+
+// receiptID derives the storage identity of an idempotency receipt from its
+// full program/partner/actor/use-case/currency/key tuple.
 func receiptID(k partnerearnings.ReceiptKey) string {
 	return identity(k.ProgramID, k.PartnerID, k.ActorID, k.UseCase, k.Currency, k.Key)
 }
+
+// GetReceipt reads an idempotency receipt by key and verifies envelope
+// invariants (revision 1, no state/expiry) and full key agreement; any mismatch
+// returns ErrUnavailable instead of the decoded value.
 func (r *EarningsRepository) GetReceipt(ctx context.Context, k partnerearnings.ReceiptKey) (partnerearnings.Receipt, error) {
 	if k.ProgramID != r.program || k.Currency != r.currency || (r.tx != nil && k.PartnerID != r.boundPartner) {
 		return partnerearnings.Receipt{}, partnerearnings.ErrInvalid
@@ -321,6 +385,10 @@ func (r *EarningsRepository) GetReceipt(ctx context.Context, k partnerearnings.R
 	})
 	return out, err
 }
+
+// PutReceipt inserts a one-time idempotency receipt inside the bound
+// transaction; an existing receipt maps to ErrAlreadyExists so retries cannot
+// re-apply the operation.
 func (r *EarningsRepository) PutReceipt(ctx context.Context, v partnerearnings.Receipt) error {
 	if r.tx == nil || v.ProgramID != r.program || v.Currency != r.currency || v.PartnerID != r.boundPartner {
 		return partnerearnings.ErrInvalid

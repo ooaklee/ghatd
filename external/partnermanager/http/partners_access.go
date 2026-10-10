@@ -71,6 +71,9 @@ func partnerOperatorQuery(req Request) (string, string, error) {
 	return capability, target, nil
 }
 
+// solePartnersAccessDenial walks up to 32 wrapped errors and reports whether
+// the chain contains exactly partnermanager.ErrDenied as an unwrapped sentinel,
+// distinguishing a pure denial from one joined with storage failures.
 func solePartnersAccessDenial(err error) bool {
 	for depth := 0; err != nil && depth < 32; depth++ {
 		if err == partnermanager.ErrDenied {
@@ -81,6 +84,9 @@ func solePartnersAccessDenial(err error) bool {
 	return false
 }
 
+// missingPartnersAccessPort reports whether a dependency port is absent: nil
+// interface or a nil channel, func, interface, map, pointer or slice value.
+// Non-nil scalar kinds are present.
 func missingPartnersAccessPort(value any) bool {
 	if value == nil {
 		return true

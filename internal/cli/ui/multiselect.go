@@ -17,6 +17,8 @@ var (
 	titleStyle         = lipgloss.NewStyle().Bold(true)
 )
 
+// Model is a bubbletea multi-select state: item list, cursor, per-index
+// selection, title and terminal flags for done, cancelled and quitting.
 type Model struct {
 	items     []string
 	cursor    int
@@ -27,6 +29,7 @@ type Model struct {
 	quitting  bool
 }
 
+// NewModel creates a multi-select model with all items initially unselected.
 func NewModel(title string, items []string) Model {
 	selected := make(map[int]bool, len(items))
 	return Model{
@@ -36,10 +39,16 @@ func NewModel(title string, items []string) Model {
 	}
 }
 
+// Init satisfies the bubbletea model interface; the component needs no initial
+// command.
 func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+// Update handles key input: quit marks the model cancelled, confirm marks it
+// done, arrows and j/k move the cursor, space toggles, and a/n select or clear
+// all; after quitting further input is ignored. Both terminal paths return
+// tea.Quit.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -81,6 +90,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View renders the title, cursor-marked checklist and a keybinding help line,
+// returning empty output once quitting.
 func (m Model) View() string {
 	if m.quitting {
 		return ""
@@ -113,6 +124,8 @@ func (m Model) View() string {
 	return b.String()
 }
 
+// SelectedIndices returns the selected item indices in ascending order; an
+// empty selection yields an empty slice.
 func (m Model) SelectedIndices() []int {
 	result := make([]int, 0, len(m.selected))
 	for i := range m.items {
@@ -123,10 +136,16 @@ func (m Model) SelectedIndices() []int {
 	return result
 }
 
+// Cancelled reports whether the user aborted the multiselect prompt, for
+// example via the quit key, rather than confirming a selection.
 func (m Model) Cancelled() bool {
 	return m.cancelled
 }
 
+// MultiSelect runs an interactive multiselect prompt with the given title and
+// items. It returns the indices of the chosen items, nil (with no error) if the
+// user cancelled, and an error wrapped with the "ui" prefix if the terminal
+// program fails to run.
 func MultiSelect(title string, items []string) ([]int, error) {
 	m := NewModel(title, items)
 	p := tea.NewProgram(m)
@@ -141,6 +160,9 @@ func MultiSelect(title string, items []string) ([]int, error) {
 	return fm.SelectedIndices(), nil
 }
 
+// keyMap binds the keys for multiselect navigation and selection: cursor
+// movement, toggling items, selecting or deselecting all, confirming, and
+// quitting.
 type keyMap struct {
 	Up          key.Binding
 	Down        key.Binding

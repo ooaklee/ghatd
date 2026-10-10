@@ -118,6 +118,9 @@ func (s *Service) Handle(ctx context.Context, principal Principal, request Reque
 	}
 }
 
+// member enforces the minimum Partners admission: a non-empty actor and
+// credential (401) and a verified principal (403). It performs no capability or
+// session check; partnersSession binds the credential to live authority.
 func member(principal Principal) error {
 	if principal.ActorID == "" || principal.Credential == "" {
 		return fail("PARTNERS_AUTH_REQUIRED", 401)
@@ -128,6 +131,9 @@ func member(principal Principal) error {
 	return nil
 }
 
+// decode unmarshals a body into out, treating an empty body as {}. Unknown
+// fields or trailing content fail with PARTNERS_INVALID_REQUEST; it never
+// supplies identity or authority fields.
 func decode(body json.RawMessage, out any) error {
 	if len(body) == 0 {
 		body = json.RawMessage(`{}`)
@@ -144,6 +150,8 @@ func decode(body json.RawMessage, out any) error {
 	return nil
 }
 
+// reply wraps data in the {"data":...} envelope and returns a Response with the
+// given status and optional ETag. Marshaling errors are returned to the caller.
 func reply(status int, data any, etag string) (Response, error) {
 	body, err := json.Marshal(struct {
 		Data any `json:"data"`

@@ -23,6 +23,9 @@ import (
 // AuditService defines the interface for logging audit events.
 // Implementations should ensure audit logs are persisted reliably.
 type AuditService interface {
+	// LogAuditEvent persists an audit event described by the request r, using ctx
+	// for cancellation. As the AuditService port it records events reliably and
+	// returns an error when logging fails.
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 
@@ -30,31 +33,112 @@ type AuditService interface {
 // Implementations handle storage and retrieval of group data with support
 // for filtering, pagination, and complex queries.
 type GroupRepository interface {
+	// CreateGroup persists the supplied group and returns the stored record. As a
+	// GroupRepository port it performs data-layer creation; the repository
+	// implementation inserts the group unchanged and returns it.
 	CreateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error)
+	// GetGroupByID retrieves a single group by its unique identifier, returning the
+	// group or an error. As a GroupRepository port it provides lookup-by-ID
+	// persistence; the repository implementation returns ErrResourceNotFound when
+	// absent.
 	GetGroupByID(ctx context.Context, id string) (*UniversalGroup, error)
+	// GetGroupByNanoID retrieves a single group by its nano identifier, returning
+	// the group or an error. As a GroupRepository port it provides
+	// alternate-identifier lookup; the repository implementation returns
+	// ErrResourceNotFound when absent.
 	GetGroupByNanoID(ctx context.Context, nanoID string) (*UniversalGroup, error)
+	// GetGroupByName retrieves a group by normalised name, optionally constrained
+	// to groupType, with logError controlling error logging. As a GroupRepository
+	// port it returns the matching group or ErrUnableToFindGroupWithName.
 	GetGroupByName(ctx context.Context, name, groupType string, logError bool) (*UniversalGroup, error)
+	// GetGroupByNameAndParent retrieves a group by normalised name within the group
+	// identified by parentGroupID, with logError controlling error logging. As a
+	// GroupRepository port it returns the matching group or
+	// ErrUnableToFindGroupWithName.
 	GetGroupByNameAndParent(ctx context.Context, name, parentGroupID string, logError bool) (*UniversalGroup, error)
+	// GetGroupsByLineageAncestor retrieves all non-deleted groups descending from
+	// the ancestor identified by ancestorGroupID. As a GroupRepository port it
+	// returns the matched groups for hierarchy queries.
 	GetGroupsByLineageAncestor(ctx context.Context, ancestorGroupID string) ([]UniversalGroup, error)
+	// UpdateGroup persists changes to the supplied group, matched by its ID, and
+	// returns the updated record. As a GroupRepository port it writes the full
+	// group; the repository implementation unsets empty member arrays.
 	UpdateGroup(ctx context.Context, group *UniversalGroup) (*UniversalGroup, error)
+	// DeleteGroupByID permanently removes the group with the given id from storage.
+	// As a GroupRepository port it performs hard deletion and returns any storage
+	// error.
 	DeleteGroupByID(ctx context.Context, id string) error
+	// SoftDeleteGroup marks the group identified by id as deleted by recording
+	// deletedByID and deletedAt and archiving its status. As a GroupRepository port
+	// it preserves the record while flagging deletion.
 	SoftDeleteGroup(ctx context.Context, id, deletedByID string, deletedAt string) error
+	// GetGroups retrieves groups matching the filters and pagination in req. As a
+	// GroupRepository port it returns the filtered, sorted, paginated page of
+	// groups for listing queries.
 	GetGroups(ctx context.Context, req *GetGroupsRequest) ([]UniversalGroup, error)
+	// GetTotalGroups counts groups matching the filters in req. As a
+	// GroupRepository port it supports pagination totals by returning the count of
+	// matching records.
 	GetTotalGroups(ctx context.Context, req *GetGroupsRequest) (int64, error)
+	// GetGroupsByType retrieves groups of the given groupType, paginated by page
+	// and pageSize and ordered by order. As a GroupRepository port it returns the
+	// matching page of groups.
 	GetGroupsByType(ctx context.Context, groupType string, page, pageSize int, order string) ([]UniversalGroup, error)
+	// GetGroupsByStatus retrieves groups with the given status, paginated by page
+	// and pageSize and ordered by order. As a GroupRepository port it returns the
+	// matching page of groups.
 	GetGroupsByStatus(ctx context.Context, status string, page, pageSize int, order string) ([]UniversalGroup, error)
+	// GetGroupsByReferencedUserID retrieves groups where the user identified by
+	// userID is owner or member. As a GroupRepository port it returns all such
+	// groups without pagination.
 	GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error)
+	// GetGroupsAwaitingAnswerForInvitationsByMemberID retrieves non-deleted groups
+	// where memberID has a pending invitation. As a GroupRepository port it returns
+	// the matching groups ordered newest first.
 	GetGroupsAwaitingAnswerForInvitationsByMemberID(ctx context.Context, memberID string) ([]UniversalGroup, error)
+	// GetGroupsByMemberID retrieves groups containing a member with the given
+	// memberID and optional memberType, paginated by page and pageSize. As a
+	// GroupRepository port it returns the matching page of groups.
 	GetGroupsByMemberID(ctx context.Context, memberID string, memberType string, page, pageSize int) ([]UniversalGroup, error)
+	// GetGroupsByLeaderID retrieves groups owned by the user identified by
+	// leaderID, paginated by page and pageSize. As a GroupRepository port it
+	// returns the matching page of groups ordered newest first.
 	GetGroupsByLeaderID(ctx context.Context, leaderID string, page, pageSize int) ([]UniversalGroup, error)
+	// SearchGroupsByExtension retrieves groups whose extension field key equals
+	// value, paginated by page and pageSize. As a GroupRepository port it returns
+	// the matching page of groups.
 	SearchGroupsByExtension(ctx context.Context, key string, value interface{}, page, pageSize int) ([]UniversalGroup, error)
+	// HasGroupDependents reports whether any non-deleted group references groupID
+	// as parent or as a GROUP member. As a GroupRepository port it supports
+	// deletion-safety checks.
 	HasGroupDependents(ctx context.Context, groupID string) (bool, error)
+	// AddMemberToGroup appends the supplied member to the group identified by
+	// groupID. As a GroupRepository port it mutates the stored members array and
+	// returns any storage error.
 	AddMemberToGroup(ctx context.Context, groupID string, member Member) error
+	// RemoveMemberFromGroup removes the member identified by memberID from the
+	// group identified by groupID. As a GroupRepository port it mutates the stored
+	// members array and returns any storage error.
 	RemoveMemberFromGroup(ctx context.Context, groupID, memberID string) error
+	// ClearOwnerFromGroup clears the owner_id of the group identified by groupID
+	// when it currently matches ownerID. As a GroupRepository port it conditionally
+	// removes stored ownership.
 	ClearOwnerFromGroup(ctx context.Context, groupID, ownerID string) error
+	// GetGroupIDsWithInvalidMembers returns identifiers of groups containing
+	// members with empty or null IDs. As a GroupRepository port it supports
+	// detecting corrupt member data.
 	GetGroupIDsWithInvalidMembers(ctx context.Context) ([]string, error)
+	// RepairInvalidMembers removes members with empty or null IDs from all affected
+	// groups. As a GroupRepository port it performs the bulk data repair and
+	// returns any storage error.
 	RepairInvalidMembers(ctx context.Context) error
+	// BulkUpdateGroupsStatus sets the status of all groups whose IDs appear in
+	// groupIDs. As a GroupRepository port it applies the bulk update and returns
+	// any storage error.
 	BulkUpdateGroupsStatus(ctx context.Context, groupIDs []string, status string) error
+	// GetGroupsStatsCounts returns aggregated statistics for all non-soft-deleted
+	// groups, computed via a single $facet aggregation covering totals, status,
+	// type, visibility, integrations, ownership and member counts.
 	GetGroupsStatsCounts(ctx context.Context) (*AllGroupsStats, error)
 }
 

@@ -124,6 +124,9 @@ func NormaliseChangeFrequency(value interface{}) ChangeFrequency {
 	return ChangeFrequency(strings.ToLower(strings.TrimSpace(fmt.Sprint(value))))
 }
 
+// validateSitemapItem normalises and validates a sitemap item in place,
+// defaulting change frequency to weekly and last_mod to now, and rejecting
+// missing, malformed or out-of-range fields with specific errors.
 func validateSitemapItem(item *SitemapItem) error {
 	if item == nil {
 		return ErrSitemapItemError
@@ -155,6 +158,8 @@ func validateSitemapItem(item *SitemapItem) error {
 	return nil
 }
 
+// normaliseSitemapURI trims the value and prefixes relative paths with a slash,
+// leaving http/https URLs untouched; blank input returns blank.
 func normaliseSitemapURI(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -172,6 +177,9 @@ func normaliseSitemapURI(value string) string {
 	return value
 }
 
+// validateSitemapURI accepts http/https absolute URLs with a host, or root-
+// relative paths not starting with '//'; anything else fails with
+// ErrSitemapItemInvalidURI.
 func validateSitemapURI(value string) error {
 	parsed, err := url.Parse(value)
 	if err != nil {
@@ -192,6 +200,9 @@ func validateSitemapURI(value string) error {
 	return nil
 }
 
+// formatSitemapTimestamp parses an RFC3339-like or date-only timestamp and
+// renders it in the UTC sitemap format, defaulting empty input to now and
+// returning the parse error for unsupported values.
 func formatSitemapTimestamp(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

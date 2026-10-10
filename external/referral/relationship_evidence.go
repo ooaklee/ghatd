@@ -21,6 +21,10 @@ type RelationshipEvidenceRow struct {
 // repository. A page, partial result or separately assembled customer reads
 // cannot satisfy its complete owning snapshot contract.
 type RelationshipEvidenceRepository interface {
+	// ReadRelationshipEvidence reads the complete set of relationship evidence rows
+	// for the partner and scope given by its two string arguments. The owning
+	// repository requires a complete snapshot; pages or separately assembled reads
+	// cannot satisfy this contract.
 	ReadRelationshipEvidence(context.Context, string, string) ([]RelationshipEvidenceRow, error)
 }
 

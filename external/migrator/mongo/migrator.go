@@ -35,8 +35,13 @@ var (
 
 const maximumMigrationNameLength = 128
 
+// settingsLoader loads the migrator Settings for one command invocation,
+// allowing the host to supply a function other than environment loading.
 type settingsLoader func() (*Settings, error)
 
+// commandOptions collects the host-supplied options for NewCommand: the
+// settings loader, an optional MongoDB command monitor with its explicit-set
+// flag, and an optional telemetry resolver.
 type commandOptions struct {
 	loadSettings   settingsLoader
 	commandMonitor *event.CommandMonitor
@@ -90,6 +95,8 @@ func WithMongoCommandMonitor(monitor *event.CommandMonitor) CommandOption {
 	}
 }
 
+// mongoClient is the subset of the MongoDB driver client used by the migrator:
+// obtaining a database handle, disconnecting, and pinging the deployment.
 type mongoClient interface {
 	// Database returns a handle for the named MongoDB database.
 	Database(string, ...options.Lister[options.DatabaseOptions]) *mongodb.Database
@@ -99,6 +106,8 @@ type mongoClient interface {
 	Ping(context.Context, *readpref.ReadPref) error
 }
 
+// migrationRunner is the subset of the migration runner used by the migrator:
+// applying and reverting a requested number of migrations.
 type migrationRunner interface {
 	// Up applies the requested number of pending migrations.
 	Up(context.Context, int) error
@@ -106,6 +115,9 @@ type migrationRunner interface {
 	Down(context.Context, int) error
 }
 
+// commandDependencies holds the injectable constructor functions the migrator
+// uses to connect a client, build a migration runner, list registered
+// migrations, and read the current time.
 type commandDependencies struct {
 	connect              func(*options.ClientOptions) (mongoClient, error)
 	newMigrationRunner   func(*mongodb.Database, []migrate.Migration, string) migrationRunner
@@ -113,6 +125,8 @@ type commandDependencies struct {
 	now                  func() time.Time
 }
 
+// commandRunner carries the resolved options and injectable dependencies that
+// execute the migrator command actions.
 type commandRunner struct {
 	loadSettings   settingsLoader
 	commandMonitor *event.CommandMonitor

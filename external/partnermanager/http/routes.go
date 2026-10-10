@@ -8,6 +8,8 @@ const BootstrapPath = BasePath + "/csrf"
 // every entry; current exact capability/target authority remains with Manager.
 type Route struct{ Method, Path, Operation string }
 
+// route builds a Route bound to BasePath plus the given path, keeping
+// method/path/operation construction consistent across the registry.
 func route(method, path, operation string) Route { return Route{method, BasePath + path, operation} }
 
 // Routes returns a fresh copy of the registry, including selected operator reads.

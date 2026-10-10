@@ -26,24 +26,46 @@ type ProgramView struct {
 func partnerView(p partnerprogram.Partner) map[string]any {
 	return map[string]any{"id": p.ID, "status": p.Status, "enrolled_at": p.EnrolledAt, "accepted_terms_version": p.AcceptedTermsVersion, "can_acquire_referrals": p.CanAcquireReferrals, "can_accrue": p.CanAccrue, "can_request_payouts": p.CanRequestPayouts, "revision": p.Revision}
 }
+
+// destinationView projects the payout destination's public fields: ID, method,
+// email, version and creation time.
 func destinationView(d partnerprogram.Destination) map[string]any {
 	return map[string]any{"id": d.ID, "method": d.Method, "email": d.Email, "version": d.Version, "created_at": d.CreatedAt}
 }
+
+// termsView projects effective terms, converting hold duration to whole days
+// and exposing which policy sources resolved the rate and hold.
 func termsView(t partnerprogram.EffectiveTerms) map[string]any {
 	return map[string]any{"rate_basis_points": t.RateBasisPoints, "hold_duration_days": int(t.HoldDuration / (24 * time.Hour)), "currency": t.Currency, "currency_exponent": t.CurrencyExponent, "terms_version": t.TermsVersion, "recurrence_ends_at": t.RecurrenceEndsAt, "resolved_at": t.ResolvedAt, "rate_source": t.RateSource.Kind, "hold_source": t.HoldSource.Kind}
 }
+
+// frozenTermsView projects a locked terms snapshot: rate, hold days, currency
+// with exponent, terms version and recurrence end. It carries no policy version
+// identifiers.
 func frozenTermsView(t referral.TermsSnapshot) map[string]any {
 	return map[string]any{"rate_basis_points": t.RateBasisPoints, "hold_duration_days": t.HoldDurationDays, "currency": t.Currency, "currency_exponent": t.CurrencyExponent, "terms_version": t.TermsVersion, "recurrence_ends_at": t.RecurrenceEndsAt}
 }
+
+// linkView projects a referral link as its code, a share URL built from the
+// configured referral base with the code path-escaped, creation time and
+// retired flag.
 func (m *Service) linkView(l referral.Link) map[string]any {
 	return map[string]any{"code": l.Code, "url": m.referralBase + "/" + url.PathEscape(l.Code), "created_at": l.CreatedAt, "retired": l.RetiredAt != nil}
 }
+
+// paymentView projects a manual payment with its claim-relative version,
+// returning nil for an absent payment so the field is omitted from views.
 func paymentView(p *partnerearnings.ManualPayment, version int64) any {
 	if p == nil {
 		return nil
 	}
 	return map[string]any{"method": p.Method, "reference": p.Reference, "paid_at": p.PaidAt, "recorded_at": p.RecordedAt, "amount_minor": p.AmountMinor, "currency": p.Currency, "state": p.State, "version": version}
 }
+
+// claimView projects a claim for member or operator audiences. Payment details
+// are overlaid with non-empty amendment fields and versioned by amendment
+// count; destination comes from the claim's snapshot. Only operator projections
+// include partner, requester, processing actor and reason fields.
 func claimView(c partnerearnings.Claim, operator bool) map[string]any {
 	var payment *partnerearnings.ManualPayment
 	version := int64(0)
@@ -88,6 +110,10 @@ func claimView(c partnerearnings.Claim, operator bool) map[string]any {
 	}
 	return out
 }
+
+// claimsView projects one bounded page of claims. A full page sets
+// may_have_more and exposes the last row's ID as next_after; this permits
+// another read but is not evidence that more rows exist.
 func claimsView(rows []partnerearnings.Claim, limit int, operator bool) map[string]any {
 	items := make([]map[string]any, 0, len(rows))
 	for _, c := range rows {
@@ -102,9 +128,15 @@ func claimsView(rows []partnerearnings.Claim, limit int, operator bool) map[stri
 	// permits a next read; it is not evidence that another row exists.
 	return map[string]any{"claims": items, "limit": limit, "may_have_more": mayHaveMore, "next_after": after}
 }
+
+// entryView projects one ledger entry, including sequence, amounts, commission,
+// applied rate/hold and terms version.
 func entryView(e partnerearnings.Entry) map[string]any {
 	return map[string]any{"id": e.ID, "sequence": e.Sequence, "kind": e.Kind, "amount_minor": e.AmountMinor, "currency": e.Currency, "created_at": e.CreatedAt, "occurred_at": e.OccurredAt, "available_at": e.AvailableAt, "commission_minor": e.CommissionMinor, "rate_basis_points": e.RateBasisPoints, "hold_duration_days": int(e.HoldDuration / (24 * time.Hour)), "terms_version": e.TermsVersion}
 }
+
+// statementView projects a statement, decorating each entry with its running
+// matured balance and versioned payment, plus page cursor fields.
 func statementView(s partnerearnings.Statement) map[string]any {
 	entries := make([]map[string]any, 0, len(s.Lines))
 	for _, l := range s.Lines {
@@ -115,6 +147,11 @@ func statementView(s partnerearnings.Statement) map[string]any {
 	}
 	return map[string]any{"currency": s.Currency, "revision": s.Revision, "as_of": s.AsOf, "ledger_sequence": s.LedgerSequence, "balances": s.Balances, "entries": entries, "has_more": s.HasMore, "next_before_sequence": s.NextBeforeSequence}
 }
+
+// policyView projects a policy version including group, publisher and audit
+// identity; it copies the eligible plan list so callers cannot mutate the
+// source. Unlike the individual selected view, it is for operator/policy
+// audiences.
 func policyView(v partnerprogram.PolicyVersion) map[string]any {
 	var plans []string
 	if v.EligiblePlanIDs != nil {

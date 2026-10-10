@@ -10,10 +10,15 @@ import (
 
 const kindReferralRelationship = "partner_referral_relationship"
 
+// referralRelationship records one partner/customer pairing and the first
+// referral that established it, persisted as the relationship's immutable
+// anchor.
 type referralRelationship struct {
 	ProgramID, PartnerID, ReferredCustomer, FirstReferralID string
 }
 
+// relationshipsPartition derives the per-partner partition holding that
+// partner's referral relationship records.
 func relationshipsPartition(partner string) string {
 	return "partner-referral-relationships:" + identity(referral.ProgramID, partner)
 }

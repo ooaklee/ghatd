@@ -46,7 +46,6 @@ adds neither.
 The [router](../../router/README.md) and [SPA bootstrap](../../spa/README.md)
 accept the returned slice. The [cache telemetry adapter](../../observability/otelcache/cache.go)
 can supply `CacheObserver` without coupling this helper to telemetry ownership.
-No dependency upgrade or stored-data conversion is needed to adopt this helper.
 
 ```sh
 go test -race ./external/middleware/helper

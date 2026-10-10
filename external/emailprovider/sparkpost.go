@@ -10,6 +10,8 @@ import (
 
 // SparkPostClient is the interface for SparkPost email client
 type SparkPostClient interface {
+	// Send submits the SparkPost transmission t, returning the provider message id,
+	// the provider response, and any submission error.
 	Send(t *sp.Transmission) (id string, res *sp.Response, err error)
 }
 
@@ -18,6 +20,9 @@ type SparkPostClient interface {
 // provider can propagate cancellation, deadlines and tracing parents into the
 // outbound HTTP request.
 type sparkPostContextClient interface {
+	// SendContext submits the SparkPost transmission t while propagating ctx
+	// cancellation, deadlines and tracing, returning the message id, response and
+	// error.
 	SendContext(ctx context.Context, t *sp.Transmission) (id string, res *sp.Response, err error)
 }
 

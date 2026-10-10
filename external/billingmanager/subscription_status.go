@@ -26,18 +26,39 @@ type SubscriptionStatusTarget struct {
 // SubscriptionStatusAuthority checks current actor/action and owning scope on
 // every stage and replay. Stored preparing authorship is not current authority.
 type SubscriptionStatusAuthority interface {
+	// AuthorizeSubscriptionStatus checks the current actor and action against the
+	// SubscriptionStatusTarget on every stage and replay through the
+	// SubscriptionStatusAuthority port. Returns a non-nil error when the action is
+	// not currently authorized.
 	AuthorizeSubscriptionStatus(context.Context, string, string, SubscriptionStatusTarget) error
 }
 
 // SubscriptionStatusService is derived from the SAME configured revenue feed.
 // A second lifecycle service could silently read a different billing ledger.
 type SubscriptionStatusService interface {
+	// PrepareSubscriptionStatus freezes billing provenance and revision for the
+	// fact before provider I/O via the SubscriptionStatusService derived from the
+	// configured revenue feed. Returns the preparation or an error; hosts must
+	// durably retain it before capture.
 	PrepareSubscriptionStatus(context.Context, string, string) (billing.SubscriptionStatusPreparation, error)
+	// ValidateSubscriptionStatusPreparation rechecks a retained preparation through
+	// the SubscriptionStatusService under the current actor's refresh permission
+	// without performing fresh preparation or writes. Returns a non-nil error when
+	// the preparation is invalid.
 	ValidateSubscriptionStatusPreparation(context.Context, billing.SubscriptionStatusPreparation) error
+	// CaptureVerifiedSubscriptionStatus records the verified status evidence
+	// against the retained preparation via the SubscriptionStatusService derived
+	// from the configured revenue feed. Returns the captured status or an error.
 	CaptureVerifiedSubscriptionStatus(context.Context, billing.SubscriptionStatusPreparation, billing.VerifiedSubscriptionStatusEvidence) (billing.SubscriptionStatus, error)
+	// GetSubscriptionStatusForFact reads retained fresh status evidence for the
+	// fact within maxAge via the SubscriptionStatusService without provider I/O.
+	// Returns the status or an error; maxAge is host configuration.
 	GetSubscriptionStatusForFact(context.Context, string, time.Duration) (billing.SubscriptionStatus, error)
 }
 
+// statusService validates actor shape and wiring and returns the configured
+// revenue feed cast to SubscriptionStatusService. Missing authority, registry
+// or feed capability returns ErrRevenueUnavailable.
 func (s *Service) statusService(ctx context.Context, actor string) (SubscriptionStatusService, error) {
 	if ctx == nil || actor == "" || strings.TrimSpace(actor) != actor || len(actor) > 256 || strings.ContainsAny(actor, "\r\n\x00") {
 		return nil, billing.ErrRevenueInvalid
@@ -54,9 +75,16 @@ func (s *Service) statusService(ctx context.Context, actor string) (Subscription
 	}
 	return owner, nil
 }
+
+// statusTarget derives the authorization target from a retained preparation's
+// scope, principal and subscription IDs for permission checks.
 func statusTarget(p billing.SubscriptionStatusPreparation) SubscriptionStatusTarget {
 	return SubscriptionStatusTarget{Scope: p.Scope, PrincipalID: p.PrincipalID, SubscriptionID: p.SubscriptionID}
 }
+
+// statusAuthorize checks context cancellation, delegates to the subscription
+// status authority for the actor/action/target, and rechecks cancellation so a
+// cancelled context fails the stage.
 func (s *Service) statusAuthorize(ctx context.Context, actor, action string, target SubscriptionStatusTarget) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -80,6 +108,10 @@ func (s *Service) statusFinish(ctx context.Context, actor, action string, target
 	return operationErr
 }
 
+// retainedStatusOwner resolves the status owner, validates the retained
+// preparation, and authorizes both empty-scope refresh and the preparation's
+// selected target before owner provenance validation. A retained input is a
+// selection to authorize, never proof of permission.
 func (s *Service) retainedStatusOwner(ctx context.Context, actor string, p billing.SubscriptionStatusPreparation) (SubscriptionStatusService, error) {
 	owner, err := s.statusService(ctx, actor)
 	if err != nil {

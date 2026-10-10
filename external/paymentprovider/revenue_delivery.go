@@ -13,8 +13,18 @@ import (
 // financial API lookup, so an already committed delivery can be acknowledged
 // during provider outages without changing original acceptance.
 type RevenueDeliveryVerifier interface {
+	// VerifyRevenueDelivery authenticates the signed delivery request and returns
+	// its immutable RevenueDeliveryIdentity before any financial API lookup,
+	// allowing acknowledgement of committed deliveries during provider outages.
+	// Part of the RevenueDeliveryVerifier contract; it does not change original
+	// acceptance.
 	VerifyRevenueDelivery(context.Context, *http.Request) (RevenueDeliveryIdentity, error)
 }
+
+// RevenueDeliveryIdentity is the authenticated result of verifying a delivery:
+// scope, envelope ID and current source fingerprint plus a legacy fingerprint
+// for exact replay of unchanged pre-versioned snapshots. Both fingerprints are
+// private and JSON-omitted.
 type RevenueDeliveryIdentity struct {
 	Scope             RevenueScope
 	EnvelopeID        string
@@ -69,6 +79,11 @@ func legacyStripeRevenueDigest(event stripeRevenueEvent) (string, error) {
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+// VerifyRevenueDelivery authenticates the signed request first, then checks
+// envelope shape and relevance and derives the scope and both source
+// fingerprints. It performs no economic API lookup; malformed payloads,
+// irrelevant events or disabled configuration return provider errors.
 func (s *StripeProvider) VerifyRevenueDelivery(ctx context.Context, req *http.Request) (RevenueDeliveryIdentity, error) {
 	if ctx == nil {
 		return RevenueDeliveryIdentity{}, ErrPaymentProviderInvalidPayload

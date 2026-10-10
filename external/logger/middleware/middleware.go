@@ -22,7 +22,9 @@ import (
 
 const unknownRoute = "unknown"
 
-// Middleware of logger
+// Middleware carries the zap logger used for request logging and a
+// uriIgnoreList of request URIs whose completed requests are suppressed from
+// logs. Instances are constructed via NewLogger.
 type Middleware struct {
 	logger *zap.Logger
 
@@ -133,6 +135,9 @@ func routeTemplate(req *http.Request) string {
 	return unknownRoute
 }
 
+// httpResponseStatus records the response state observed by the logging
+// middleware's response writer: the final status code and whether the header
+// has been written.
 type httpResponseStatus struct {
 	statusCode    int
 	headerWritten bool

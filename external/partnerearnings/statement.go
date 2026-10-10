@@ -16,6 +16,11 @@ type StatementQuery struct {
 	Kinds          []string
 	From, To       *time.Time
 }
+
+// StatementLine is one rendered journal line with its running matured balance.
+// Payment is the administrator-recorded presentation at record time, not
+// provider proof; PaymentVersion reflects later amended details retained
+// separately as claim audit.
 type StatementLine struct {
 	Entry               Entry
 	RunningMaturedMinor int64
@@ -39,6 +44,8 @@ type Statement struct {
 	NextBeforeSequence            int64
 }
 
+// validStatementKind reports whether an entry kind may appear as a statement
+// line.
 func validStatementKind(kind string) bool {
 	switch kind {
 	case EntryAccrued, EntryMatured, EntryReversed, EntryAllocated, EntryAllocationReleased, EntryAllocationSettled, EntryPaid, EntryPaymentObserved, EntryReturned, EntryDisputeHold, EntryDisputeReleased, EntryDisputeDecision, EntryDisputeWon, EntryDisputeLost:
@@ -46,6 +53,9 @@ func validStatementKind(kind string) bool {
 	}
 	return false
 }
+
+// statementMatches reports whether an entry passes the query's sequence, kind
+// and economic OccurredAt (inclusive From, exclusive To) filters.
 func statementMatches(e Entry, q StatementQuery, kinds map[string]bool) bool {
 	return (q.BeforeSequence == 0 || e.Sequence < q.BeforeSequence) && (len(kinds) == 0 || kinds[e.Kind]) && (q.From == nil || !e.OccurredAt.Before(*q.From)) && (q.To == nil || e.OccurredAt.Before(*q.To))
 }

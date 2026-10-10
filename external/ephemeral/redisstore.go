@@ -17,16 +17,35 @@ import (
 
 // PersistentClient holds methods for a valid cache
 type PersistentClient interface {
+	// Set stores a value under the given key with a time.Duration expiration,
+	// returning the cache client's redis status command. Part of PersistentClient
+	// for a valid cache.
 	Set(key string, value interface{}, expiration time.Duration) *redis.StatusCmd
 	// SetNX stores a value only when the key is not already present.
 	SetNX(key string, value interface{}, expiration time.Duration) *redis.BoolCmd
+	// Get retrieves the string value stored under the given key, returning the
+	// cache client's redis string command. Part of PersistentClient for a valid
+	// cache.
 	Get(key string) *redis.StringCmd
+	// Del removes the entries stored under the supplied keys, returning the cache
+	// client's redis integer command. Part of PersistentClient for a valid cache.
 	Del(keys ...string) *redis.IntCmd
+	// Incr increments the integer counter stored under the given key, returning the
+	// cache client's redis integer command. Part of PersistentClient for a valid
+	// cache.
 	Incr(key string) *redis.IntCmd
+	// Scan iterates cached keys from the given cursor matching the pattern,
+	// returning the cache client's redis scan command for up to count items. Part
+	// of PersistentClient for a valid cache.
 	Scan(cursor uint64, match string, count int64) *redis.ScanCmd
 }
 
+// contextAwarePersistentClient is the optional go-redis capability used to
+// derive a client bound to a context.
 type contextAwarePersistentClient interface {
+	// WithContext returns a PersistentClient derived from this client and bound to
+	// the supplied context. Optional go-redis capability declared by
+	// contextAwarePersistentClient.
 	WithContext(context.Context) PersistentClient
 }
 

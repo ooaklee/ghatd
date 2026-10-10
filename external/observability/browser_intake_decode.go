@@ -75,6 +75,11 @@ func browserJSONValue(decoder *json.Decoder, depth int) (any, error) {
 	}
 }
 
+// decode parses and validates a browser trace batch into an OTLP export
+// request. It enforces the byte and UTF-8 limits, duplicate-free token
+// decoding, exactly one resource and scope, the span count bound, and unique
+// trace/span identity pairs, delegating each span to decodeSpan. The server-
+// owned resource and fixed scope replace any client-supplied ones.
 func (intake *BrowserTraceIntake) decode(body []byte, now time.Time) (*collectortrace.ExportTraceServiceRequest, error) {
 	if len(body) > browserIntakeMaximumBytes || !utf8.Valid(body) {
 		return nil, errBrowserBatch
@@ -129,6 +134,8 @@ func (intake *BrowserTraceIntake) decode(body []byte, now time.Time) (*collector
 	return &collectortrace.ExportTraceServiceRequest{ResourceSpans: []*tracepb.ResourceSpans{{Resource: intake.resource, ScopeSpans: []*tracepb.ScopeSpans{{Scope: &commonpb.InstrumentationScope{Name: browserIntakeScope}, Spans: output}}}}}, nil
 }
 
+// browserID parses a hex-encoded trace, span or parent ID of the given byte
+// size, rejecting non-hex input, wrong lengths and all-zero identifiers.
 func browserID(value any, size int) ([]byte, bool) {
 	text, ok := value.(string)
 	if !ok || len(text) != size*2 {
@@ -146,6 +153,8 @@ func browserID(value any, size int) ([]byte, bool) {
 	return nil, false
 }
 
+// browserTime parses a decimal digit string as a uint64 nanosecond timestamp,
+// reporting validity; empty or non-digit text is rejected.
 func browserTime(value any) (uint64, bool) {
 	text, ok := value.(string)
 	if !ok || text == "" || strings.Trim(text, "0123456789") != "" {
@@ -155,6 +164,8 @@ func browserTime(value any) (uint64, bool) {
 	return result, err == nil
 }
 
+// browserInteger parses a JSON number as an int64 within the inclusive
+// minimum/maximum bounds, reporting validity.
 func browserInteger(value any, minimum, maximum int64) (int64, bool) {
 	number, ok := value.(json.Number)
 	if !ok {
@@ -164,6 +175,13 @@ func browserInteger(value any, minimum, maximum int64) (int64, bool) {
 	return integer, err == nil && integer >= minimum && integer <= maximum
 }
 
+// decodeSpan rebuilds one browser span from decoded JSON, allowing only the
+// four fixed span names and validating IDs, parent inequality, timing bounds
+// (max 120s duration, within ten minutes past to two minutes future), kind,
+// status code and up to sixteen unique attributes. Per-name attribute rules map
+// client values onto the fixed server-owned vocabulary, defaulting unknown
+// groups to "other" and setting error status for failure outcomes; every
+// failure returns errBrowserBatch.
 func (intake *BrowserTraceIntake) decodeSpan(value any, now time.Time) (*tracepb.Span, error) {
 	input, ok := value.(map[string]any)
 	if !ok {
@@ -312,6 +330,9 @@ func (intake *BrowserTraceIntake) decodeSpan(value any, now time.Time) (*tracepb
 	return span, nil
 }
 
+// browserGroupAttribute resolves a group-valued attribute: absent or unknown
+// values default to "other", while present values must be valid text attributes
+// within the allowed group set.
 func browserGroupAttribute(attributes map[string]map[string]any, key string, groups map[string]struct{}) (string, bool) {
 	if _, present := attributes[key]; !present {
 		return "other", true
@@ -326,11 +347,16 @@ func browserGroupAttribute(attributes map[string]map[string]any, key string, gro
 	return value, true
 }
 
+// browserTextAttribute returns the string value of an attribute only when it is
+// carried solely by stringValue; any additional value representation makes it
+// invalid.
 func browserTextAttribute(attributes map[string]map[string]any, key string) (string, bool) {
 	value, ok := attributes[key]["stringValue"].(string)
 	return value, ok && len(attributes[key]) == 1
 }
 
+// browserEnumAttribute returns an attribute's string value only when it exactly
+// matches one of the allowed values.
 func browserEnumAttribute(attributes map[string]map[string]any, key string, values ...string) (string, bool) {
 	value, ok := browserTextAttribute(attributes, key)
 	if !ok {

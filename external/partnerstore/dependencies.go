@@ -2,6 +2,8 @@ package partnerstore
 
 import "reflect"
 
+// nilStoreDependency detects nil values including nil pointers stored in non-
+// nil interfaces.
 func nilStoreDependency(v any) bool {
 	if v == nil {
 		return true

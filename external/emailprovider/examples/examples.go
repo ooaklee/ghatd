@@ -128,10 +128,15 @@ type CustomEmailProvider struct {
 	apiKey string
 }
 
+// NewCustomEmailProvider configures the example custom provider with the given
+// API key. It configures an example, not production sending.
 func NewCustomEmailProvider(apiKey string) *CustomEmailProvider {
 	return &CustomEmailProvider{apiKey: apiKey}
 }
 
+// Send validates the recipient and simulates a successful custom-provider send
+// in this example, printing the destination instead of contacting a vendor. A
+// missing recipient returns ErrEmailProviderMissingRecipient.
 func (p *CustomEmailProvider) Send(ctx context.Context, email *emailprovider.Email) (*emailprovider.SendResult, error) {
 	// Validate email first
 	if email.To == "" {
@@ -154,15 +159,21 @@ func (p *CustomEmailProvider) Send(ctx context.Context, email *emailprovider.Ema
 	}, nil
 }
 
+// Name returns the fixed identifier "CUSTOM" used in results for this example
+// provider.
 func (p *CustomEmailProvider) Name() string {
 	return "CUSTOM"
 }
 
+// IsHealthy reports whether the example provider has a configured API key; it
+// performs no remote check.
 func (p *CustomEmailProvider) IsHealthy(ctx context.Context) bool {
 	// Your health check logic
 	return p.apiKey != ""
 }
 
+// ExampleCustomProvider demonstrates constructing and sending through the
+// custom example provider with a configured API key.
 func ExampleCustomProvider() {
 	provider := NewCustomEmailProvider("api-key-123")
 

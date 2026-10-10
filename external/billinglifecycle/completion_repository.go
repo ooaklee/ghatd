@@ -34,6 +34,9 @@ type CompletedExecution struct {
 	Receipt        CompletionReceipt                      `json:"-"`
 }
 
+// StatusCompletion carries one status observation with its service-selected
+// next attempt time; both fields are private process state excluded from JSON
+// transport.
 type StatusCompletion struct {
 	Observation   StatusObservation `json:"-"`
 	NextAttemptAt time.Time         `json:"-"`
@@ -43,12 +46,27 @@ type StatusCompletion struct {
 // the exact execution. The service confirms current native receipts/permission;
 // no foreign I/O or authorization occurs in these retryable callbacks.
 type CompletionRepository interface {
+	// CompleteCheckout atomically retains the host completion identity from the
+	// observation's native receipt, clears the exact bound execution, and returns
+	// the completed execution; no foreign I/O or authorization occurs.
 	CompleteCheckout(context.Context, CheckoutObservation) (CompletedExecution, error)
+	// CompleteStatus clears the exact confirmed active original, resets that
+	// cycle's retry attempts, schedules the supplied next observation time, and
+	// returns the completed execution with its native receipt identity.
 	CompleteStatus(context.Context, StatusCompletion) (CompletedExecution, error)
+	// FindCompletion returns the immutable completed execution matching the
+	// completion key; it is a historical read that neither acquires a lease nor
+	// authorizes fresh work.
 	FindCompletion(context.Context, CompletionKey) (CompletedExecution, error)
+	// FindLastCompletion joins the scheduled source's current job reference with
+	// its immutable last completion in one snapshot for crash inspection; the
+	// returned historical job cannot authorize subsequent execution.
 	FindLastCompletion(context.Context, ScheduledSource) (CompletedExecution, error)
 }
 
+// completionPayload is the encrypted-record codec retaining the completed job,
+// native receipt timestamps and optional original status preparation that
+// public JSON tags omit.
 type completionPayload struct {
 	OriginalStatus                                   *statusPreparationPayload
 	Schema                                           int
@@ -58,12 +76,22 @@ type completionPayload struct {
 	NativeRequestedAt, NativeObservedAt, CompletedAt time.Time
 }
 
+// completionIdentity derives the deterministic completion record ID and scope
+// partition for one completion key.
 func completionIdentity(k CompletionKey) (string, string) {
 	return digest([]any{"partners.lifecycle.completion.v1", k.Source.Scope, k.Source.Kind, k.Source.SourceID, k.NativeCaptureID}), digest([]any{"partners.lifecycle.scope.v1", k.Source.Scope})
 }
+
+// completionKeyShape checks source shape, non-empty native capture ID, and for
+// checkout sources that the capture ID equals the acknowledged checkout's ID.
 func completionKeyShape(k CompletionKey) bool {
 	return scheduleSourceShape(k.Source) && scheduleText(k.NativeCaptureID) && (k.Source.Kind != billing.LifecycleCheckoutSources || k.NativeCaptureID == k.Source.Checkout.ID)
 }
+
+// completedShape validates a completed execution against its key: unleased
+// valid job at revision >= 3, consistent receipt chronology, linked completion
+// ID, and lane-specific requirements for retired checkout versus refresh-
+// scheduled status completions.
 func completedShape(v CompletedExecution, k CompletionKey) bool {
 	j, c := v.Job, v.Receipt
 	if !completionKeyShape(k) || validateScheduledJob(j) != nil || !sameScheduledSource(j.Source, k.Source) || j.Revision < 3 || j.Fence < 1 || j.LeaseActor != "" || j.LeaseToken != "" || !j.LeasedUntil.IsZero() || j.OriginalStatus != nil || c.NativeCaptureID != k.NativeCaptureID || !scheduleText(c.NativeFingerprint) || c.NativeRequestedAt.IsZero() || c.NativeObservedAt.Before(c.NativeRequestedAt) || c.CompletedAt.IsZero() || c.CompletedAt.Before(c.NativeObservedAt) || c.CompletedAt.Before(j.CreatedAt) {
@@ -78,6 +106,9 @@ func completedShape(v CompletedExecution, k CompletionKey) bool {
 	}
 	return v.OriginalStatus != nil && v.OriginalStatus.Validate() == nil && v.OriginalStatus.CaptureID == k.NativeCaptureID && statusMatchesSource(*v.OriginalStatus, j.Source) && v.OriginalStatus.RequestedAt.Equal(c.NativeRequestedAt) && !j.CadenceAnchor.IsZero() && !c.NativeRequestedAt.Before(j.CadenceAnchor) && j.Lane == RefreshLane && !j.CheckoutPrepared && j.Attempts == 0 && j.NextAttemptAt.After(c.CompletedAt)
 }
+
+// encodeCompletion builds the immutable completion record, first requiring
+// completedShape; invalid executions are rejected before any record exists.
 func encodeCompletion(v CompletedExecution) (recordstore.Record, error) {
 	k := CompletionKey{v.Job.Source, v.Receipt.NativeCaptureID}
 	if !completedShape(v, k) {
@@ -95,6 +126,9 @@ func encodeCompletion(v CompletedExecution) (recordstore.Record, error) {
 	row.State = "completed"
 	return row, err
 }
+
+// decodeCompletion strictly decodes and shape-validates a completion row for
+// its key; any divergence is unavailable rather than a partial value.
 func decodeCompletion(row recordstore.Record, k CompletionKey) (CompletedExecution, error) {
 	id, partition := completionIdentity(k)
 	if row.Kind != completionKind || row.ID != id || row.Partition != partition || row.Revision != 1 || row.State != "completed" || row.Sequence != 0 || row.ExpiresAt != nil {
@@ -115,13 +149,23 @@ func decodeCompletion(row recordstore.Record, k CompletionKey) (CompletedExecuti
 	}
 	return out, nil
 }
+
+// sameExecutionJob compares jobs by source, original inputs, revision, fence,
+// attempts, lane, lease fields and timestamps, leaving no field unchecked.
 func sameExecutionJob(a, b ScheduledJob) bool {
 	return sameScheduledSource(a.Source, b.Source) && sameOriginalInputs(a, b) && a.Revision == b.Revision && a.Fence == b.Fence && a.Attempts == b.Attempts && a.Lane == b.Lane && a.LeaseActor == b.LeaseActor && a.LeaseToken == b.LeaseToken && a.LeasedUntil.Equal(b.LeasedUntil) && a.CreatedAt.Equal(b.CreatedAt) && a.NextAttemptAt.Equal(b.NextAttemptAt)
 }
 
+// checkoutObservationShape validates a checkout observation: a leased valid
+// prepared job whose input matches the scheduled checkout with retained
+// evidence the receipt validates.
 func checkoutObservationShape(o CheckoutObservation) bool {
 	return validateScheduledJob(o.Job) == nil && leaseShape(JobLease(o.Job)) && o.Job.CheckoutPrepared && checkoutMatchesSource(o.Input, o.Job.Source) && o.Input.Evidence != nil && o.Receipt.ValidateCapturedEvidence(o.Input.Intent, *o.Input.Evidence) == nil
 }
+
+// statusObservationShape validates a status observation: a leased job retaining
+// the same original preparation, evidence valid for it, and a receipt that
+// exactly matches the evidence's status and scheduling.
 func statusObservationShape(o StatusObservation) bool {
 	return validateScheduledJob(o.Job) == nil && leaseShape(JobLease(o.Job)) && o.Job.OriginalStatus != nil && statusMatchesSource(o.Input.Preparation, o.Job.Source) && sameStatusPreparation(*o.Job.OriginalStatus, o.Input.Preparation) && o.Input.Evidence != nil && o.Input.Evidence.Validate(o.Input.Preparation) == nil && o.Receipt.Validate() == nil && sameStatusPreparation(o.Receipt.Preparation, o.Input.Preparation) && o.Receipt.Status == o.Input.Evidence.Status && o.Receipt.CancellationScheduled == o.Input.Evidence.CancellationScheduled
 }
@@ -163,6 +207,11 @@ func (r *RecordExecutionRepository) CompleteStatus(ctx context.Context, q Status
 	return r.complete(ctx, o.Job, input, c, q.NextAttemptAt)
 }
 
+// complete atomically retires one exact leased job: it re-reads the selected
+// job, verifies the exact lease and retained input codec, inserts the shape-
+// validated completion and CAS-replaces the unleased successor job. Clock
+// regressions and existing completions conflict; missing originals return
+// unavailable joined with not-found.
 func (r *RecordExecutionRepository) complete(ctx context.Context, expected ScheduledJob, input recordstore.Record, c CompletionReceipt, next time.Time) (CompletedExecution, error) {
 	h := JobLease(expected)
 	if expected.Revision == math.MaxInt64 {

@@ -26,6 +26,8 @@ type LeaseHandle struct {
 	Until              time.Time       `json:"-"`
 }
 
+// JobLease extracts the current lease fields of a scheduled job into an exact
+// LeaseHandle snapshot.
 func JobLease(j ScheduledJob) LeaseHandle {
 	return LeaseHandle{Source: j.Source, Revision: j.Revision, Fence: j.Fence, Actor: j.LeaseActor, Token: j.LeaseToken, Lane: j.Lane, Until: j.LeasedUntil}
 }
@@ -38,10 +40,24 @@ type LeaseDisposition struct {
 	Lane          string      `json:"-"`
 }
 
+// ExecutionRepository reads, acquires, checks and releases job executions. Each
+// write enforces the exact current revision/token/expiry predicate inside its
+// transaction.
 type ExecutionRepository interface {
+	// ReadJob returns the scheduled job for a shape-valid source; a same-identity
+	// job stored under a different source digest is a conflict, and any error
+	// returns a zero job.
 	ReadJob(context.Context, ScheduledSource) (ScheduledJob, error)
+	// Acquire grants a lease only when the job matches the expected revision, is
+	// due, on an execution lane, unleased and within capacity; the write enforces
+	// the exact predicate inside its transaction.
 	Acquire(context.Context, LeaseRequest) (ScheduledJob, error)
+	// CheckLease re-reads the job and returns it only while the exact lease handle
+	// is still active; it is a snapshot check, not a fence for later writes.
 	CheckLease(context.Context, LeaseHandle) (ScheduledJob, error)
+	// Release clears the exact active lease and moves the job to the requested lane
+	// and next attempt time, re-checking the revision/token/expiry predicate at the
+	// conditional write.
 	Release(context.Context, LeaseDisposition) (ScheduledJob, error)
 }
 
@@ -54,6 +70,9 @@ type RecordExecutionRepository struct {
 	clock LifecycleClock
 }
 
+// NewRecordExecutionRepository wraps a prepared schedule repository with a
+// required non-nil local clock. It borrows the store and creates no indexes or
+// services.
 func NewRecordExecutionRepository(store recordstore.Store, clock LifecycleClock) (*RecordExecutionRepository, error) {
 	if nilPort(clock) {
 		return nil, recordstore.ErrUnavailable
@@ -65,8 +84,12 @@ func NewRecordExecutionRepository(store recordstore.Store, clock LifecycleClock)
 	return &RecordExecutionRepository{r, clock}, nil
 }
 
+// executionLane reports whether the lane is one of the two lanes in which
+// execution may run.
 func executionLane(lane string) bool { return lane == ColdLane || lane == RefreshLane }
 
+// executionReady verifies the repository, embedded scheduler repository and
+// clock are usable before an execution operation.
 func (r *RecordExecutionRepository) executionReady(ctx context.Context) error {
 	if r == nil || r.RecordScheduleRepository == nil || nilPort(r.clock) {
 		return recordstore.ErrUnavailable
@@ -74,6 +97,8 @@ func (r *RecordExecutionRepository) executionReady(ctx context.Context) error {
 	return r.ready(ctx)
 }
 
+// selectedJob reads one job within a transaction and requires its source digest
+// to match the caller's expectation, returning ErrConflict otherwise.
 func selectedJob(ctx context.Context, tx recordstore.Tx, id, sourceDigest string) (ScheduledJob, error) {
 	row, err := tx.Get(ctx, scheduleJobKind, id)
 	if err != nil {
@@ -89,6 +114,9 @@ func selectedJob(ctx context.Context, tx recordstore.Tx, id, sourceDigest string
 	return j, nil
 }
 
+// ReadJob returns the job for a shape-valid source. A job stored under the same
+// identity with a different source digest is a conflict, and any error returns
+// a zero job.
 func (r *RecordExecutionRepository) ReadJob(ctx context.Context, source ScheduledSource) (ScheduledJob, error) {
 	if err := r.executionReady(ctx); err != nil {
 		return ScheduledJob{}, err
@@ -112,6 +140,10 @@ func (r *RecordExecutionRepository) ReadJob(ctx context.Context, source Schedule
 	return out, nil
 }
 
+// Acquire grants a lease only when the job is at ExpectedRevision, on an
+// execution lane, due, unleased and within capacity limits. The clock is re-
+// read before the conditional write so a retried or delayed callback cannot
+// persist an already expired grant; failures return a zero job.
 func (r *RecordExecutionRepository) Acquire(ctx context.Context, q LeaseRequest) (ScheduledJob, error) {
 	if err := r.executionReady(ctx); err != nil {
 		return ScheduledJob{}, err
@@ -160,14 +192,20 @@ func (r *RecordExecutionRepository) Acquire(ctx context.Context, q LeaseRequest)
 	return out, nil
 }
 
+// leaseShape checks that every lease handle field required for exact matching
+// is present and well formed.
 func leaseShape(h LeaseHandle) bool {
 	return scheduleSourceShape(h.Source) && h.Revision > 0 && h.Fence > 0 && executionLane(h.Lane) && scheduleText(h.Actor) && scheduleText(h.Token) && !h.Until.IsZero()
 }
 
+// exactLease reports whether the job currently holds exactly this handle's
+// revision, fence, actor, token and lane, and has not expired at now.
 func exactLease(j ScheduledJob, h LeaseHandle, now time.Time) bool {
 	return !now.IsZero() && j.Revision == h.Revision && j.Fence == h.Fence && j.Lane == h.Lane && j.LeaseActor == h.Actor && j.LeaseToken == h.Token && j.LeasedUntil.Equal(h.Until) && j.LeasedUntil.After(now)
 }
 
+// CheckLease re-reads the job and succeeds only while the exact lease is still
+// active. It is a snapshot check, not a fence for later writes.
 func (r *RecordExecutionRepository) CheckLease(ctx context.Context, h LeaseHandle) (ScheduledJob, error) {
 	if err := r.executionReady(ctx); err != nil {
 		return ScheduledJob{}, err
@@ -188,6 +226,9 @@ func (r *RecordExecutionRepository) CheckLease(ctx context.Context, h LeaseHandl
 	return j, nil
 }
 
+// Release clears the exact active lease and moves the job to the requested lane
+// and next attempt time. The predicate is re-checked at the conditional write
+// against a fresh clock reading; failures return a zero job.
 func (r *RecordExecutionRepository) Release(ctx context.Context, q LeaseDisposition) (ScheduledJob, error) {
 	if err := r.executionReady(ctx); err != nil {
 		return ScheduledJob{}, err

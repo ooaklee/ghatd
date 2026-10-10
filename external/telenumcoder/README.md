@@ -18,8 +18,9 @@ the host/manager owns administrator admission.
 selectable region. A number starting with `+` selects its actual region instead.
 Libphonenumber validates the number and extensions are rejected. The actual
 region's availability is rechecked, so selecting another country cannot bypass
-a disabled region. The returned `NormalisedNumber` is complete canonical E.164
-with `+` and a country calling code. There is no locale-based country inference.
+a disabled region. The returned `Number.NormalisedNumber` field is complete
+canonical E.164 with `+` and a country calling code; `RegionCode` identifies the
+actual region. There is no locale-based country inference.
 
 Normalisation is formatting/numbering evidence, not residency, contact ownership
 or WhatsApp registration. A separate messaging provider checks channel registration; it must accept only
@@ -30,8 +31,8 @@ canonical numbers.
 `WithReachability` injects the narrow `Reachability.Check` port.
 `Service.Check` first normalises, then reports `reachable`, `unreachable` or
 `unavailable`. A missing provider, provider failure or unknown state remains
-unavailable; cancellation propagates. The result's `channel` is `sms` because
-this is the legacy SMS reachability contract. It does not enable SMS messaging
+unavailable; cancellation propagates. The result's `channel` is `sms`, matching
+the reachability port's wire contract. It does not enable SMS messaging
 or determine WhatsApp registration; this adapter does not send SMS.
 
 `NewHTTPReachability` accepts trusted HTTPS configuration, copies an injected

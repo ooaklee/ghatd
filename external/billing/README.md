@@ -11,6 +11,10 @@ The `billing` package (`external/billing`) gives you the tools for core subscrip
 - [Service Methods](#service-methods)
 - [Repository Implementation](#repository-implementation)
 - [Best Practices](#best-practices)
+- [Further Reading](#further-reading)
+- [Support](#support)
+- [Verified revenue feed](#verified-revenue-feed)
+- [Bounded lifecycle source discovery](#bounded-lifecycle-source-discovery)
 
 ## Key Features
 

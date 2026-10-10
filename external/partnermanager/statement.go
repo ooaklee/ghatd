@@ -5,6 +5,9 @@ import (
 	"github.com/ooaklee/ghatd/external/partnerearnings"
 )
 
+// Statement returns the verified actor's own earnings statement, validating
+// partner and currency before and rechecking self authority after the owning
+// read.
 func (m *Manager) Statement(ctx context.Context, actor string, query partnerearnings.StatementQuery) (partnerearnings.Statement, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
@@ -23,6 +26,9 @@ func (m *Manager) Statement(ctx context.Context, actor string, query partnerearn
 	return result, nil
 }
 
+// AdminStatement requires reporting authority for the selected partner before
+// and after the read, verifies the partner record, and validates statement
+// partner/currency identity; a mismatch fails with ErrUnavailable.
 func (m *Manager) AdminStatement(ctx context.Context, actor, partner string, query partnerearnings.StatementQuery) (partnerearnings.Statement, error) {
 	if !validWorkText(partner, 256) {
 		return partnerearnings.Statement{}, ErrInvalid

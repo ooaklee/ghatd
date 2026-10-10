@@ -8,9 +8,9 @@ import (
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/billinglifecycle"
 	"github.com/ooaklee/ghatd/external/billingmanager"
+	billingmanagerhelper "github.com/ooaklee/ghatd/external/billingmanager/helper"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
-	billingmanagerhelper "github.com/ooaklee/ghatd/external/billingmanager/helper"
 )
 
 // Authority binds a trusted service invocation and checks every lifecycle action.
@@ -19,6 +19,9 @@ import (
 type Authority interface {
 	billinglifecycle.ExecutionAuthority
 	billingmanager.LifecycleDiscoveryAuthority
+	// Bind returns a context carrying the trusted bound worker invocation for
+	// checking lifecycle actions; implementations enforce current authority rather
+	// than granting worker access from a human facade.
 	Bind(context.Context) (context.Context, error)
 }
 
@@ -41,6 +44,9 @@ type Runtime struct {
 	interval, passTimeout time.Duration
 }
 
+// RunOnce binds the runtime's trusted worker authority to the context before
+// running one bounded worker pass. Nil runtime or missing authority returns an
+// empty report with ErrRevenueUnavailable.
 func (w *Runtime) RunOnce(ctx context.Context) (billinglifecycle.WorkerReport, error) {
 	if w == nil || w.worker == nil || nilPort(w.authority) {
 		return billinglifecycle.WorkerReport{}, billing.ErrRevenueUnavailable
@@ -209,6 +215,9 @@ func (r *Runtime) PassTimeout() time.Duration {
 	}
 	return r.passTimeout
 }
+
+// nilPort detects nil values behind interfaces and the nilable reflect kinds,
+// so typed-nil ports are not mistaken for present dependencies.
 func nilPort(port any) bool {
 	if port == nil {
 		return true

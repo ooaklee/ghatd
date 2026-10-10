@@ -31,6 +31,7 @@ type Runtime struct {
 	shutdownTimeout time.Duration
 }
 
+// runtimeContextKey is the private context key attaching a telemetry runtime.
 type runtimeContextKey struct{}
 
 // StartRuntime starts telemetry and installs its logger and runtime in the

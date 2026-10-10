@@ -27,6 +27,8 @@ type Regions struct {
 	policy PolicyService
 }
 
+// NewRegions validates the system identifier and borrowed policy port,
+// returning ErrUnavailable on invalid input.
 func NewRegions(system string, policy PolicyService) (*Regions, error) {
 	if !validID(system) || nilPort(policy) {
 		return nil, partnermanager.ErrUnavailable

@@ -69,13 +69,12 @@ phone, locale, GeoIP, cohort approval and operator roles cannot supply admission
 Known missing/revoked approval returns false; unknown or joined failures remain
 unavailable. No grant or commercial launch decision is created by this read.
 
-The host installs this adapter with the published Partners runtime. Its operator
+The host installs this adapter with its Partners runtime composition. Its operator
 access endpoint projects one current action/target result after live session
 checks; it is transient UI guidance, not a reusable grant. Known permission
 denial returns `allowed=false` only with a still-live credential. Revoked sessions
 and dependency/unknown/joined failures remain errors. Every owning read and
-mutation still authorizes independently. Native fixture tests do not certify
-authentication cryptography, customer/operator browser flows or platform E2E.
+mutation still authorizes independently.
 
 
 `NewLifecycleWorkerAuthority` is a separate optional configuration path for the

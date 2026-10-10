@@ -50,7 +50,12 @@ type AttributionSnapshot struct {
 	Fingerprint      string
 }
 
+// correctionText reports whether v is non-empty, equals its trimmed form and
+// fits within n bytes.
 func correctionText(v string, n int) bool { return v != "" && v == strings.TrimSpace(v) && len(v) <= n }
+
+// correctionDigest returns the lowercase hex SHA-256 of the JSON encoding of v,
+// or ErrInvalid when the value cannot be marshalled.
 func correctionDigest(v any) (string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -59,10 +64,16 @@ func correctionDigest(v any) (string, error) {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+// correctionID derives the stable storage ID for an actor/customer/key
+// correction receipt from the program-scoped digest.
 func correctionID(actor, customer, key string) string {
 	fp, _ := correctionDigest([]string{ProgramID, customer, actor, key})
 	return "ref_correction_" + fp
 }
+
+// validCorrectionFingerprint reports whether v is a lowercase hex string
+// decoding to exactly a SHA-256 digest length.
 func validCorrectionFingerprint(v string) bool {
 	b, err := hex.DecodeString(v)
 	return err == nil && len(b) == sha256.Size && v == strings.ToLower(v)
@@ -94,6 +105,10 @@ func (s *Service) GetAttributionSnapshot(ctx context.Context, customer string) (
 	return out, nil
 }
 
+// attributionSnapshot reads the customer's referral head, complete history and
+// payment bindings within the caller's transaction, then hands them to the
+// shared validator. A missing head is treated as empty; any other read failure
+// returns no snapshot.
 func attributionSnapshot(ctx context.Context, tx Repository, customer string) (AttributionSnapshot, error) {
 	head, err := tx.GetReferralByCustomer(ctx, ProgramID, customer)
 	if err != nil && !singleReferralCause(err, ErrNotFound) {
@@ -181,6 +196,11 @@ func (s *Service) FindCorrection(ctx context.Context, actor, customer, key strin
 	}
 	return out, nil
 }
+
+// findCorrection recovers the receipt row for the exact actor/customer/key
+// identity, re-deriving its request fingerprint from stored evidence and
+// checking revision and linkage invariants. Mismatched or tampered evidence is
+// ErrUnavailable; absence is ErrNotFound.
 func findCorrection(ctx context.Context, tx Repository, actor, customer, key string) (Referral, error) {
 	rows, err := tx.ListReferralHistory(ctx, ProgramID, customer)
 	if err != nil {
@@ -204,6 +224,9 @@ func findCorrection(ctx context.Context, tx Repository, actor, customer, key str
 	return Referral{}, ErrNotFound
 }
 
+// correctionRequestFingerprint digests the replay-stable request view with the
+// program and actor, explicitly clearing mutable acquisition permission and
+// normalizing signup time and terms before hashing.
 func correctionRequestFingerprint(req CorrectionRequest) (string, error) {
 	// Current acquisition permission is not part of immutable replay input.
 	req.Partner.CanAcquireReferrals = false

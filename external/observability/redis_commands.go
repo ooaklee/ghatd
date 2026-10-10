@@ -62,6 +62,8 @@ func (hook *redisHook) operationName(command redis.Cmder) string {
 	return unknownRedisOperation
 }
 
+// validRedisCommandToken accepts 1–64 byte names starting with a letter and
+// containing only letters, digits, dots, underscores and hyphens.
 func validRedisCommandToken(name string) bool {
 	if len(name) == 0 || len(name) > maxRedisCommandLength || !redisCommandLetter(name[0]) {
 		return false
@@ -75,6 +77,7 @@ func validRedisCommandToken(name string) bool {
 	return true
 }
 
+// redisCommandLetter reports whether a byte is an ASCII letter.
 func redisCommandLetter(character byte) bool {
 	return (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z')
 }

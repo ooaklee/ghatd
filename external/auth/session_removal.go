@@ -24,6 +24,9 @@ type SessionRemovalDetails struct {
 // managers. Implementations must validate signature, purpose and configured
 // trust boundaries without consulting live account status or issuing tokens.
 type SessionRemovalVerifier interface {
+	// ExtractSessionRemovalMetadata verifies one access or refresh credential for
+	// deletion only, validating signature, purpose and trust boundaries without
+	// consulting live account status or issuing tokens.
 	ExtractSessionRemovalMetadata(context.Context, string, string) (*SessionRemovalDetails, error)
 }
 
@@ -35,6 +38,9 @@ type removalClaims struct {
 	now time.Time
 }
 
+// GetExpirationTime returns the claim's expiry, substituting a one-minute-
+// future date only when the expiry is well-formed and already elapsed; missing
+// or invalid expiry errors pass through unchanged.
 func (c removalClaims) GetExpirationTime() (*jwt.NumericDate, error) {
 	expires, err := c.MapClaims.GetExpirationTime()
 	if err == nil && expires != nil && expires.Before(c.now) {

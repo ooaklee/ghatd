@@ -22,12 +22,17 @@ var (
 	errDependencyFailed = errors.New("example dependency failed")
 )
 
+// workResponse is the JSON reply of a work item carrying status, an optional
+// classified error code, and the trace ID correlating the request.
 type workResponse struct {
 	Status  string `json:"status"`
 	Code    string `json:"code,omitempty"`
 	TraceID string `json:"trace_id"`
 }
 
+// exampleService holds the shared instrumented operations, error classifier,
+// HTTP client and dependency URL used by both the CLI work command and the HTTP
+// handlers.
 type exampleService struct {
 	operations    *observability.Operations
 	classifier    *observability.ErrorClassifier
@@ -35,6 +40,8 @@ type exampleService struct {
 	dependencyURL string
 }
 
+// newService wires an exampleService with an observability HTTP client using
+// the default transport and a three-second timeout.
 func newService(operations *observability.Operations, classifier *observability.ErrorClassifier, dependencyURL string) *exampleService {
 	return &exampleService{
 		operations: operations, classifier: classifier, dependencyURL: dependencyURL,
@@ -42,6 +49,9 @@ func newService(operations *observability.Operations, classifier *observability.
 	}
 }
 
+// process runs one traced "process-work" operation, captures the trace ID from
+// the span context, and logs the classified outcome before returning the
+// underlying error unchanged.
 func (service *exampleService) process(ctx context.Context, reject bool) (traceID string, err error) {
 	ctx, operation := service.operations.Start(ctx, "process-work")
 	defer operation.Finish(&err)
@@ -54,6 +64,9 @@ func (service *exampleService) process(ctx context.Context, reject bool) (traceI
 	return traceID, err
 }
 
+// perform either rejects with errQuotaExceeded or GETs the dependency,
+// requiring a 204 with a fully drained body; any transport, body or status
+// failure returns errDependencyFailed joined with its cause.
 func (service *exampleService) perform(ctx context.Context, reject bool) error {
 	if reject {
 		return errQuotaExceeded
@@ -76,6 +89,9 @@ func (service *exampleService) perform(ctx context.Context, reject bool) error {
 	return nil
 }
 
+// newHandler registers health, dependency and accepted/rejected work routes on
+// the shared router wrapped with OpenTelemetry HTTP instrumentation and the
+// supplied server options.
 func newHandler(runtime *observability.Runtime, service *exampleService, options ...observability.HTTPServerOption) http.Handler {
 	routes := router.NewRouter(nil, nil).GetRouter()
 	routes.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }).Methods(http.MethodGet)
@@ -85,6 +101,9 @@ func newHandler(runtime *observability.Runtime, service *exampleService, options
 	return otelhttp.WrapWithOptions("example-api", runtime.Logger(), routes, options...)
 }
 
+// workHandler adapts process results to JSON: quota rejections map to 429 with
+// status "rejected", other errors to 503 with the classifier's code, and
+// success to 200 with the trace ID.
 func workHandler(service *exampleService, reject bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, request *http.Request) {
 		traceID, err := service.process(request.Context(), reject)
@@ -103,6 +122,8 @@ func workHandler(service *exampleService, reject bool) http.HandlerFunc {
 	}
 }
 
+// dependencyHandler answers every request with 204 No Content, satisfying
+// perform's expected dependency contract.
 func dependencyHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }

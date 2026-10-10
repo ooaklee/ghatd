@@ -37,6 +37,10 @@ type SetAccountStatusRequest struct {
 // AccountStatusRepository persists configured status transitions without broad
 // user replacement, upsert or retry. It returns an acknowledged post-image.
 type AccountStatusRepository interface {
+	// SetAccountStatus persists a configured status transition, merging only
+	// model-owned fields and returning the acknowledged post-image as a
+	// UniversalUser. Per the AccountStatusRepository contract it performs no
+	// upsert, retry, broad replacement or audit.
 	SetAccountStatus(context.Context, *SetAccountStatusRequest) (*UniversalUser, error)
 }
 

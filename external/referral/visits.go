@@ -38,11 +38,15 @@ type VisitRequest struct {
 	KnownBot  bool          `json:"-"`
 }
 
+// VisitObservation pairs the current click with the frozen first eligible
+// observation for the same link, which is preserved even on duplicates.
 type VisitObservation struct {
 	Click    Click
 	Eligible Click // frozen first observation, including on duplicates
 }
 
+// analyticsID reports whether an identifier is non-empty, within max bytes,
+// trimmed, valid UTF-8 and free of control characters.
 func analyticsID(id string, max int) bool {
 	if id == "" || len(id) > max || strings.TrimSpace(id) != id || !utf8.ValidString(id) {
 		return false

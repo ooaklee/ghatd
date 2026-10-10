@@ -76,11 +76,10 @@ the public receipt never exposes them. A different canonical email is a differen
 signup; no account-email migration or automatic consent transfer is performed.
 Host database separation provides application isolation, not the UUID prefix.
 
-`CampaignID` remains `prerelease-v1`; the default `ConsentVersion` is
+`CampaignID` is fixed to `prerelease-v1`; the default `ConsentVersion` is
 `prerelease-v1`. Trusted host configuration may select a different consent
-version for newly inserted contacts and audience records. This package assumes the
-new shared ID scheme: it does not silently convert, backfill or delete differently
-keyed prototype contact records. Review existing data before adopting it elsewhere.
+version for newly inserted contacts and audience records. Signup and contact records use the deterministic ID scheme above. The package
+performs no conversion, backfill or deletion of records keyed differently.
 
 | Collection | Purpose |
 | --- | --- |
@@ -109,7 +108,7 @@ return the same minimal receipt, never an existing private contact snapshot.
 | `POST /api/v1/waitlist/announcement/send` | Admin session | Dispatch up to ten unclaimed recipients |
 | `POST /api/v1/waitlist/unsubscribe` | Public + rate limiter | Opaque token, idempotent 204; no membership disclosure |
 
-Existing `waitlist.*` operation IDs remain unchanged. Signup `OPTIONS` uses a
+The `waitlist.*` operation IDs are fixed wire identifiers. Signup `OPTIONS` uses a
 dedicated public `waitlist.Preflight` operation returning 204 without JSON
 decoding or rate-limit consumption. Optional custom announcement fields and
 variants are additive; neutral responses omit them. Private
@@ -146,12 +145,6 @@ go test -race ./external/waitlist -count=1
 Set `GHATD_TEST_MONGO_URI` to an isolated test MongoDB to include persistence and
 concurrency checks. Tests own randomly named databases only; they do not use live
 mail. Missing integration configuration is reported as skipped, not verified.
-
-Test-style audit: `http_test.go` combines validation/route tables and a focused
-CSV projection invariant; `announcement_test.go` combines mode/error tables with
-documented stateful dispatch/consent/concurrency lifecycles; `store_test.go` and
-`comms_test.go` retain ordered persistence/retry lifecycles with isolated fixtures;
-`config_test.go` uses named tables for copy, fixed identity, filenames and escaping.
 
 ## Host policy and presentation
 
@@ -192,8 +185,7 @@ time and sequence, including after unsubscribe. Rows without a sequence remain
 zero and are not retroactively enrolled. Hosts interpret a positive sequence;
 GHATD does not assign eligibility. Initialization and new enrollment fail on an
 unsupported standalone Mongo deployment. The default unsequenced store keeps its
-existing standalone-compatible behavior. No legacy cohort collection is read,
-migrated or deleted.
+existing standalone-compatible behavior.
 
 `RouteConfig.Columns` supplies optional `CSVColumn{Header, Value}` projections.
 Nil retains the six standard columns; an empty/invalid list fails before any
@@ -231,9 +223,3 @@ may already have been accepted: an error is not a rollback. Existing no-resend,
 suppression and uncertain-provider rules remain in force. Custom payloads are
 revalidated after loading; a changed host renderer must remain compatible with
 its saved commands or require a separately reviewed transition.
-
-Additional test-style audit: `extensions_test.go` uses tables for malformed data,
-configuration and rendering failures, plus one documented stateful mutation-isolation
-scenario. `sequence_test.go` uses configuration/counter tables and documented concurrent
-initialization and enrollment/rollback/restart scenarios. Existing `http_test.go` updates its preflight
-expectation; the other existing test dispositions remain unchanged.

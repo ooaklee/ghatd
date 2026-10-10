@@ -10,7 +10,7 @@ explains runtime ownership and dependency wiring.
 
 Use `external/observability/otelhttp.Wrap` once around the complete router. It
 composes HTTP telemetry, this package's request middleware and panic recovery.
-See the [router guide](../router/README.md#getting-started) for plain Gorilla
+See the [router guide](../router/README.md#example-initialisation) for plain Gorilla
 Mux route observation and middleware ordering.
 
 The middleware emits the static message `http request completed` at info level:

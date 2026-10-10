@@ -12,24 +12,52 @@ import (
 
 // BillingManagerService manages business logic around billingmanager request
 type BillingManagerService interface {
+	// ProcessBillingProviderWebhooks verifies and parses the named provider's
+	// webhook payload, resolves access association, updates subscription access,
+	// records billing events and optionally audit logs; verification and processing
+	// failures return errors, though an already accepted revenue webhook with an
+	// invalid event type returns nil.
 	ProcessBillingProviderWebhooks(ctx context.Context, req *ProcessBillingProviderWebhooksRequest) error
+	// GetUserSubscriptionStatus returns the selected user's subscription access
+	// projection, repairing legacy email associations, after the trusted actor is
+	// authorized for the operation.
 	GetUserSubscriptionStatus(ctx context.Context, r *GetUserSubscriptionStatusRequest) (*GetUserSubscriptionStatusResponse, error)
+	// GetUserBillingDetail returns the selected user's billing detail, including
+	// plan access and optional invoice estimate enrichment, after the trusted actor
+	// is authorized for the operation.
 	GetUserBillingDetail(ctx context.Context, r *GetUserBillingDetailRequest) (*GetUserBillingDetailResponse, error)
+	// GetUserBillingEvents returns paginated billing event summaries for the
+	// selected user's account after the trusted actor is authorized, with
+	// pagination supplied by the request.
 	GetUserBillingEvents(ctx context.Context, r *GetUserBillingEventsRequest) (*GetUserBillingEventsResponse, error)
+	// GetPricingPlans returns catalogue price plans matching the request filters;
+	// non-administrator actors are restricted to published, non-deleted plans via a
+	// request-local filter copy.
 	GetPricingPlans(ctx context.Context, r *GetPricingPlansRequest) (*GetPricingPlansResponse, error)
+	// GetPricePlanBySlug returns the price plan identified by the request slug;
+	// non-administrator actors only receive publicly published plans.
 	GetPricePlanBySlug(ctx context.Context, r *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
+	// GetPricingFeatures returns catalogue feature items matching the request
+	// filters; non-administrator actors are restricted to published, non-deleted
+	// features via a request-local filter copy.
 	GetPricingFeatures(ctx context.Context, r *GetPriceFeaturesRequest) (*GetPriceFeaturesResponse, error)
 }
 
 // billingManagerCheckoutService is an additive handler capability so existing
 // BillingManagerService implementations and test doubles remain compatible.
 type billingManagerCheckoutService interface {
+	// ProcessBillingProviderCheckout creates a provider checkout session for an
+	// authenticated request validated against the published catalogue, returning
+	// the created session; webhooks remain authoritative for fulfilment.
 	ProcessBillingProviderCheckout(ctx context.Context, req *ProcessBillingProviderCheckoutRequest) (*ProcessBillingProviderCheckoutResponse, error)
 }
 
 // billingManagerPortalService is additive so existing BillingManagerService
 // implementations and test doubles remain source compatible.
 type billingManagerPortalService interface {
+	// ProcessBillingProviderPortal creates a fresh provider-hosted
+	// billing-management session for the authenticated account's resolved provider
+	// customer, returning the hosted session.
 	ProcessBillingProviderPortal(ctx context.Context, req *ProcessBillingProviderPortalRequest) (*ProcessBillingProviderPortalResponse, error)
 }
 
@@ -110,6 +138,9 @@ func (h *Handler) ProcessBillingProviderPortal(w http.ResponseWriter, r *http.Re
 
 // BillingManagerValidator expected methods of a valid
 type BillingManagerValidator interface {
+	// Validate reports whether the supplied value satisfies the validator's
+	// expected billingmanager request shape, returning an error describing the
+	// first validation failure.
 	Validate(s interface{}) error
 }
 

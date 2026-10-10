@@ -20,7 +20,15 @@ import (
 // CommsConversationService is the optional domain/manager conversation port.
 // Provider ingestion is deliberately absent from the public HTTP capability.
 type CommsConversationService interface {
+	// AppendCommsEntry appends an immutable entry to a comms conversation and
+	// returns the stored entry. The Service rechecks live administrator authority,
+	// includes actor attribution in the entry, and treats the separate audit sink
+	// as best effort.
 	AppendCommsEntry(context.Context, *contacter.AppendCommsEntryRequest) (*contacter.AppendCommsEntryResponse, error)
+	// ListCommsConversation returns a page of entries for a comms conversation. The
+	// Service requires live administrator authority even for reads because notes
+	// and mail metadata are private and never projected through optional or public
+	// access.
 	ListCommsConversation(context.Context, *contacter.ListCommsConversationRequest) (*contacter.CommsConversationPage, error)
 }
 

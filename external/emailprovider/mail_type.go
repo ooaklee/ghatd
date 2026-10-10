@@ -18,7 +18,12 @@ func (t MailType) Valid() bool { return t == Transactional || t == Marketing }
 // MailTypeProvider separates sending capability from an ordered routing preference.
 // Preferences never grant capability. Empty preferences participate in round-robin.
 type MailTypeProvider interface {
+	// SupportedMailTypes returns the mail types the provider can send; it declares
+	// capability only and never grants routing preference.
 	SupportedMailTypes() []MailType
+	// MailTypePreference returns the provider's ordered routing preference among
+	// mail types, which never grants capability; an empty result participates in
+	// round-robin.
 	MailTypePreference() []MailType
 }
 
@@ -123,5 +128,8 @@ type CampaignRequest struct {
 // CampaignProvider is an optional capability for a vendor audience operation.
 // Inline email adapters do not implement this contract merely by supporting Marketing.
 type CampaignProvider interface {
+	// SubmitCampaign submits the audience campaign described by the request to a
+	// vendor supporting the optional CampaignProvider capability, returning a send
+	// result or an error.
 	SubmitCampaign(context.Context, *CampaignRequest) (*SendResult, error)
 }

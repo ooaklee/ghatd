@@ -22,18 +22,66 @@ type PricerRepository interface {
 
 // PricerService describes pricing business operations.
 type PricerService interface {
+	// CreatePricePlan creates a new price plan per PricerService: it validates the
+	// request, verifies the actor matches context, normalises slug, status and
+	// publication fields, validates publishability, then persists via the
+	// repository and returns the created plan.
 	CreatePricePlan(ctx context.Context, req *CreatePricePlanRequest) (*CreatePricePlanResponse, error)
+	// UpdatePricePlan updates a selected price plan per PricerService: it applies
+	// editable fields or a trusted replacement whose ID must match, preserves
+	// stored audit history, attributes the update to ActorID, validates, persists,
+	// and returns the updated plan.
 	UpdatePricePlan(ctx context.Context, req *UpdatePricePlanRequest) (*UpdatePricePlanResponse, error)
+	// GetPricePlanByID returns a price plan by its required ID per PricerService,
+	// forwarding include options for features, costs and providers to the
+	// repository lookup.
 	GetPricePlanByID(ctx context.Context, req *GetPricePlanByIDRequest) (*GetPricePlanByIDResponse, error)
+	// GetPricePlanBySlug returns a price plan by slug per PricerService,
+	// normalising the required slug before the repository lookup and forwarding
+	// include options for features, costs and providers.
 	GetPricePlanBySlug(ctx context.Context, req *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
+	// GetPricePlans returns a paginated, filtered list of price plans. The Service
+	// implementation normalises and validates the request, fetches the total and
+	// matching plans from the repository, and the response carries plans plus
+	// total, page and per-page metadata.
 	GetPricePlans(ctx context.Context, req *GetPricePlansRequest) (*GetPricePlansResponse, error)
+	// ValidatePriceSlug normalises a name or slug and reports availability against
+	// existing plans or features without persisting anything. The Service returns
+	// the normalised slug, resource type, adjusted flag, existing ID and a hint; an
+	// exclude ID exempts the caller's own record.
 	ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error)
+	// PublishPricePlan validates a selected plan and records the requesting actor
+	// as its publisher. The Service binds the actor to the verified context,
+	// applies publication timestamps, validates publishability, delegates the
+	// status update to the repository and returns the published plan.
 	PublishPricePlan(ctx context.Context, req *PublishPricePlanRequest) (*PublishPricePlanResponse, error)
+	// ArchivePricePlan marks a price plan archived. The Service validates the ID
+	// and context-bound actor, stamps archive time via the repository, which sets
+	// status and update metadata, then returns the refreshed plan with features,
+	// costs and providers.
 	ArchivePricePlan(ctx context.Context, req *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error)
+	// DeletePricePlan soft-deletes a price plan. The Service validates the ID and
+	// context-bound actor, delegates to the repository's soft delete with the
+	// current timestamp, and returns the resulting plan state.
 	DeletePricePlan(ctx context.Context, req *DeletePricePlanRequest) (*DeletePricePlanResponse, error)
+	// CreateFeature creates a feature catalog item. The Service binds the actor to
+	// the verified context, normalises the slug, optionally publishes immediately,
+	// validates the feature, and the repository assigns missing IDs and timestamps
+	// before returning the created feature.
 	CreateFeature(ctx context.Context, req *CreateFeatureRequest) (*CreateFeatureResponse, error)
+	// UpdateFeature updates a selected feature while preserving stored audit
+	// history. The Service accepts either a full replacement trusted in-process
+	// that must agree with the request ID, or partial fields applied to the stored
+	// feature, then validates and delegates to the repository.
 	UpdateFeature(ctx context.Context, req *UpdateFeatureRequest) (*UpdateFeatureResponse, error)
+	// GetFeatures returns a paginated, filtered list of feature catalog items. The
+	// Service normalises and validates the request, obtains the total and matching
+	// features from the repository, and the response carries features plus total,
+	// page and per-page metadata.
 	GetFeatures(ctx context.Context, req *GetFeaturesRequest) (*GetFeaturesResponse, error)
+	// DeleteFeature soft-deletes a feature catalog item. The Service validates the
+	// ID and context-bound actor, delegates to the repository's soft delete with
+	// the current timestamp, and returns the resulting feature state.
 	DeleteFeature(ctx context.Context, req *DeleteFeatureRequest) (*DeleteFeatureResponse, error)
 }
 
@@ -275,6 +323,8 @@ func preservePricePlanAuditMetadata(pricePlan, existingPricePlan *PricePlan) {
 	pricePlan.UpdatedAt = existingPricePlan.UpdatedAt
 }
 
+// assignMissingPriceCostIDs fills each cost lacking an ID with a newly
+// generated UUID in place.
 func assignMissingPriceCostIDs(costs []PriceCost) {
 	for i := range costs {
 		if costs[i].ID == "" {
@@ -445,6 +495,10 @@ func (s *Service) ValidatePriceSlug(ctx context.Context, req *ValidatePriceSlugR
 	}, nil
 }
 
+// normalisePriceSlugResourceType maps a trimmed, lowercased resource type (plus
+// legacy spellings) onto the canonical slug-validation resource type and its
+// catalogue scope, defaulting to plan when empty. Unknown values return
+// ErrInvalidPriceQueryParam.
 func normalisePriceSlugResourceType(value string) (string, string, error) {
 	resourceType := strings.TrimSpace(strings.ToLower(value))
 	if resourceType == "" {
@@ -863,11 +917,15 @@ var validPriceSortOrders = map[string]struct{}{
 	"display_order_desc": {},
 }
 
+// isValidPriceSortOrder reports whether order is one of the recognised named
+// sort orders.
 func isValidPriceSortOrder(order string) bool {
 	_, ok := validPriceSortOrders[order]
 	return ok
 }
 
+// validatePricePlanListRequest rejects a plan list request whose order is not a
+// recognised sort order.
 func validatePricePlanListRequest(req *GetPricePlansRequest) error {
 	if !isValidPriceSortOrder(req.Order) {
 		return ErrInvalidPriceQueryParam
@@ -875,6 +933,8 @@ func validatePricePlanListRequest(req *GetPricePlansRequest) error {
 	return nil
 }
 
+// validateFeatureListRequest rejects a feature list request whose order is not
+// a recognised sort order.
 func validateFeatureListRequest(req *GetFeaturesRequest) error {
 	if !isValidPriceSortOrder(req.Order) {
 		return ErrInvalidPriceQueryParam

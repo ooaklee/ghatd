@@ -36,10 +36,17 @@ type FinancialSummary struct {
 	SubscriptionCoverage     string                              `json:"subscription_coverage"`
 }
 
+// validFinancialQuery reports whether the owning query self-validates.
 func validFinancialQuery(q partnerearnings.FinancialMetricsQuery) bool {
 	return q.Validate() == nil
 }
 
+// financialMetrics fetches and strictly validates an owning financial report
+// before projection: identity, currency, revision, pagination, non-negative
+// amounts and counts, cohort/claim consistency, maturity bounded by balances,
+// canonical ascending plan keys matching the filter, and cursor agreement with
+// has_more. Any inconsistency yields ErrUnavailable rather than a distorted
+// report.
 func (m *Manager) financialMetrics(ctx context.Context, partner string, q partnerearnings.FinancialMetricsQuery) (partnerearnings.FinancialMetrics, error) {
 	out, err := m.deps.Earnings.GetFinancialMetrics(ctx, partner, q)
 	if err != nil {
@@ -74,10 +81,15 @@ func (m *Manager) financialMetrics(ctx context.Context, partner string, q partne
 	return out, nil
 }
 
+// validMovementAmounts requires every commission movement component to be non-
+// negative.
 func validMovementAmounts(a partnerearnings.CommissionMovements) bool {
 	return a.AccruedMinor >= 0 && a.MaturedGrossMinor >= 0 && a.RefundReversedMinor >= 0 && a.DisputeLostMinor >= 0 && a.DisputeHeldMinor >= 0 && a.DisputeReleasedMinor >= 0 && a.PaidMinor >= 0 && a.ReturnedMinor >= 0
 }
 
+// validCurrentClaims requires non-negative claim counts and exposure, exposure
+// exactly when claims are potentially sent, and a non-zero oldest-open
+// timestamp exactly when open claims exist.
 func validCurrentClaims(c partnerearnings.CurrentClaimMetrics) bool {
 	if c.Requested < 0 || c.Processing < 0 || c.NeedsReview < 0 || c.Paid < 0 || c.Cancelled < 0 || c.Rejected < 0 || c.ProcessingExposureMinor < 0 {
 		return false
@@ -120,6 +132,9 @@ func (m *Manager) FinancialSummary(ctx context.Context, actor string, q Financia
 	return out, nil
 }
 
+// commissionProjection converts owning PaymentAmounts into the public
+// ReferralCommission aggregate, copying backing fields without exposing payer
+// or transaction identity.
 func commissionProjection(a partnerearnings.PaymentAmounts) *ReferralCommission {
 	return &ReferralCommission{AccruedMinor: a.AccruedMinor, PendingEarnedMinor: a.PendingEarnedMinor, MaturedEarnedMinor: a.MaturedEarnedMinor, ReversedMinor: a.ReversedMinor, DisputeLostMinor: a.DisputeLostMinor, DisputeHoldMinor: a.DisputeHoldMinor, ReservedBackingMinor: a.ReservedBackingMinor, ReviewBackingMinor: a.ReviewBackingMinor, GrossPaidBackingMinor: a.GrossPaidBackingMinor, ReturnedBackingMinor: a.ReturnedBackingMinor, NetPaidBackingMinor: a.NetPaidBackingMinor}
 }

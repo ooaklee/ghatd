@@ -9,18 +9,60 @@ import (
 	"github.com/ooaklee/reply/v2"
 )
 
+// visionUsermanagerService is the usermanager-side view of vision domain
+// operations, returning manager-enriched vision responses; it narrows the
+// vision service to what the handler layer invokes.
 type visionUsermanagerService interface {
+	// CreateVision stores an authenticated feedback or bug submission and returns a
+	// manager-enriched vision response. Contract of visionUsermanagerService, the
+	// handler-facing view of vision operations; r carries the submission, and the
+	// response contains the enriched created vision.
 	CreateVision(ctx context.Context, r *vision.CreateVisionRequest) (*GetVisionResponse, error)
+	// GetVisionByNanoID retrieves a vision by its NanoID and returns it with
+	// privacy-safe public user summaries. Contract of visionUsermanagerService; r
+	// identifies the vision to fetch, and the response contains the projected
+	// vision, public users and viewer NanoID.
 	GetVisionByNanoID(ctx context.Context, r *vision.GetVisionByNanoIDRequest) (*GetVisionResponse, error)
+	// GetVisions returns a page of vision summaries enriched with associated user
+	// views for the usermanager handler. The implementation delegates to the vision
+	// service and projects each vision with its users and total count.
 	GetVisions(ctx context.Context, r *vision.GetVisionsRequest) (*GetVisionsResponse, error)
+	// GetVisionConfig returns client-safe vision capabilities and configuration.
+	// The implementation forwards the call to the configured vision service and
+	// returns its response unchanged.
 	GetVisionConfig(ctx context.Context) (*vision.GetVisionConfigResponse, error)
+	// UpdateVision applies owner-or-admin edits restricted to descriptive vision
+	// fields, clearing metadata, and returns the enriched updated vision. The
+	// implementation rechecks the requester identity against the trusted context
+	// and the current vision before delegating.
 	UpdateVision(ctx context.Context, r *vision.UpdateVisionRequest) (*GetVisionResponse, error)
+	// UpdateVisionStatus performs an admin roadmap status transition for a vision
+	// and returns the enriched result. The implementation delegates the transition
+	// to the vision service, then enriches the updated vision.
 	UpdateVisionStatus(ctx context.Context, r *vision.UpdateVisionStatusRequest) (*GetVisionResponse, error)
+	// DeleteVision permanently removes a vision after owner-or-admin authorization.
+	// The implementation verifies the authenticated requester matches the actor and
+	// can manage the current vision before delegating deletion.
 	DeleteVision(ctx context.Context, r *vision.DeleteVisionRequest) (*vision.DeleteVisionResponse, error)
+	// SetVisionVote records a vote on a vision and returns the enriched updated
+	// vision. The implementation delegates the vote to the vision service, then
+	// enriches the resulting vision.
 	SetVisionVote(ctx context.Context, r *vision.SetVisionVoteRequest) (*GetVisionResponse, error)
+	// RemoveVisionVote removes the caller's vote on a vision and returns the
+	// enriched updated vision. The implementation delegates removal to the vision
+	// service, then enriches the resulting vision.
 	RemoveVisionVote(ctx context.Context, r *vision.RemoveVisionVoteRequest) (*GetVisionResponse, error)
+	// AddVisionComment stores a comment on a vision and returns the enriched
+	// updated vision. The implementation delegates comment storage to the vision
+	// service, then enriches the resulting vision.
 	AddVisionComment(ctx context.Context, r *vision.AddVisionCommentRequest) (*GetVisionResponse, error)
+	// SetVisionCommentVote records a vote on a vision comment and returns the
+	// enriched updated vision. The implementation delegates the comment vote to the
+	// vision service, then enriches the resulting vision.
 	SetVisionCommentVote(ctx context.Context, r *vision.SetVisionCommentVoteRequest) (*GetVisionResponse, error)
+	// RemoveVisionCommentVote removes a vote on a vision comment and returns the
+	// enriched updated vision. The implementation delegates the vote removal to the
+	// vision service, then enriches the resulting vision.
 	RemoveVisionCommentVote(ctx context.Context, r *vision.RemoveVisionCommentVoteRequest) (*GetVisionResponse, error)
 }
 

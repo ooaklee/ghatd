@@ -13,6 +13,9 @@ import (
 // then validate both resulting projection sets against their original sources.
 const LifecyclePreparationComplete = 6
 
+// LifecyclePreparationState is the durable per-scope sweep progress: counters,
+// current phase and position, and the prepared timestamp set only on
+// completion.
 type LifecyclePreparationState struct {
 	Scope                                                            RevenueScope `json:"-"`
 	Revision, Epoch, Sweeps, Scanned, Selected, CustomerlessPayments int64        `json:"-"`
@@ -36,21 +39,48 @@ type LifecyclePreparationRow struct {
 // All source joins, projection handoff, progress and final epoch CAS are atomic.
 // Callback repetitions must have no effects outside this bound transaction.
 type LifecyclePreparationTx interface {
+	// State reads the current lifecycle preparation state within the bound
+	// transaction; all joins, handoff, progress and final epoch CAS performed
+	// through this LifecyclePreparationTx are atomic.
 	State(context.Context) (LifecyclePreparationState, error)
+	// Epoch reads the current preparation epoch within the bound
+	// LifecyclePreparationTx transaction used for the final atomic
+	// compare-and-swap.
 	Epoch(context.Context) (int64, error)
+	// Sources reads a bounded page of lifecycle preparation rows within the bound
+	// transaction using the supplied limit and cursor arguments; source joins and
+	// projection handoff are atomic.
 	Sources(context.Context, int, string, int) ([]LifecyclePreparationRow, error)
+	// Retain marks a discovery candidate as retained within the bound
+	// LifecyclePreparationTx transaction; repeated callback invocations must have
+	// no effects outside this transaction.
 	Retain(context.Context, LifecycleDiscoveryCandidate) error
+	// Save persists lifecycle preparation progress state and epoch within the bound
+	// transaction, keeping source joins, projection handoff and progress atomic.
 	Save(context.Context, LifecyclePreparationState, int64) error
+	// Complete finalizes lifecycle preparation with the given state and epoch via
+	// an atomic compare-and-swap within the bound transaction.
 	Complete(context.Context, LifecyclePreparationState, int64) error
 }
+
+// LifecyclePreparationRepository provides lifecycle preparation transactions
+// scoped to one revenue scope; atomicity depends on the implementation.
 type LifecyclePreparationRepository interface {
+	// WithLifecyclePreparation runs the callback with a LifecyclePreparationTx
+	// scoped to one revenue scope; atomicity of the joins, handoff, progress and
+	// epoch CAS depends on the implementation.
 	WithLifecyclePreparation(context.Context, RevenueScope, func(LifecyclePreparationTx) error) error
 }
+
+// LifecyclePreparationResult reports the sweep's resulting state and whether
+// changes during the sweep restarted progress from the beginning.
 type LifecyclePreparationResult struct {
 	State     LifecyclePreparationState `json:"-"`
 	Restarted bool                      `json:"-"`
 }
 
+// lifecyclePreparationPosition accepts a continuation ID only when it carries
+// the phase's checkout_/revenue_ prefix with a valid 64-hex digest suffix.
 func lifecyclePreparationPosition(phase int, id string) bool {
 	prefix := ""
 	if phase == 0 {
@@ -61,6 +91,9 @@ func lifecyclePreparationPosition(phase int, id string) bool {
 	return strings.HasPrefix(id, prefix) && discoveryDigest(strings.TrimPrefix(id, prefix))
 }
 
+// validLifecyclePreparation accepts state matching the scope with consistent
+// counters, an in-range phase whose position matches its prefix rules, an empty
+// position only at completion, and a prepared timestamp exactly when complete.
 func validLifecyclePreparation(v LifecyclePreparationState, scope RevenueScope) bool {
 	return v.Scope == scope && v.Revision >= 1 && v.Epoch >= 0 && v.Sweeps >= 1 && v.Scanned >= 0 && v.Selected >= 0 && v.Selected <= v.Scanned && v.CustomerlessPayments >= 0 && v.CustomerlessPayments <= v.Selected && v.Phase >= 0 && v.Phase <= LifecyclePreparationComplete && (v.AfterID == "" || lifecyclePreparationPosition(v.Phase, v.AfterID)) && (v.Phase != LifecyclePreparationComplete || v.AfterID == "") && (v.Phase == LifecyclePreparationComplete) == !v.PreparedAt.IsZero()
 }

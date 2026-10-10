@@ -81,16 +81,22 @@ func AttachLocalInboxRoutes(request *AttachLocalInboxRoutesRequest) error {
 	return nil
 }
 
+// localInboxHandlers binds the captured-email provider to a mounted route
+// prefix for the local inbox pages.
 type localInboxHandlers struct {
 	provider *LoggingEmailProvider
 	prefix   string
 }
 
+// localInboxIndexView carries the route prefix and summaries rendered by the
+// inbox list page.
 type localInboxIndexView struct {
 	Prefix string
 	Emails []localInboxEmailSummary
 }
 
+// localInboxDetailView carries the route prefix, captured email, formatted
+// timestamp, raw HTML path and extracted links for the detail page.
 type localInboxDetailView struct {
 	Prefix      string
 	Email       LocalEmail
@@ -99,6 +105,8 @@ type localInboxDetailView struct {
 	Links       []string
 }
 
+// localInboxEmailSummary is the list/API projection of a captured email,
+// including detail-path and link fields built by emailSummaries.
 type localInboxEmailSummary struct {
 	ProviderID string   `json:"providerId,omitempty"`
 	Provider   string   `json:"provider,omitempty"`

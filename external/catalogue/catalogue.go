@@ -61,19 +61,23 @@ type Audit struct {
 // Clock supplies current instants. Services accept an injectable
 // implementation so tests are deterministic; production uses RealClock.
 type Clock interface {
+	// Now returns the current instant supplied by the Clock port. Implementations
+	// include RealClock, returning wall-clock time in UTC, and ClockFunc delegating
+	// to a wrapped function.
 	Now() time.Time
 }
 
 // RealClock returns the wall-clock time in UTC.
 type RealClock struct{}
 
-// Now implements Clock.
+// Now implements Clock by returning the current wall-clock time converted to
+// UTC.
 func (RealClock) Now() time.Time { return time.Now().UTC() }
 
 // ClockFunc adapts a function to Clock.
 type ClockFunc func() time.Time
 
-// Now implements Clock.
+// Now implements Clock by delegating to the wrapped function f.
 func (f ClockFunc) Now() time.Time { return f() }
 
 // MaxPageSize bounds list requests; catalogues are small but must not

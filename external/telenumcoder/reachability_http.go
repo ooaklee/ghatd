@@ -18,11 +18,19 @@ type HTTPConfig struct {
 	Client          *http.Client
 	Timeout         time.Duration
 }
+
+// HTTPReachability is the HTTPS adapter for the secondary reachability system;
+// it holds the trusted endpoint, bearer token and a redirect-refusing client
+// configured at construction.
 type HTTPReachability struct {
 	endpoint, token string
 	client          *http.Client
 }
 
+// NewHTTPReachability validates trusted endpoint and timeout configuration
+// before serving. The endpoint must be an HTTPS URL without userinfo, query or
+// fragment; a missing timeout defaults to 3s and must stay within 100ms..10s.
+// Configuration failures return ErrLookupUnavailable.
 func NewHTTPReachability(config HTTPConfig) (*HTTPReachability, error) {
 	endpoint, err := url.Parse(config.Endpoint)
 	if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil || endpoint.Fragment != "" || endpoint.RawQuery != "" {
@@ -42,6 +50,12 @@ func NewHTTPReachability(config HTTPConfig) (*HTTPReachability, error) {
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &HTTPReachability{endpoint: config.Endpoint, token: config.Token, client: client}, nil
 }
+
+// Check POSTs the number as an SMS-channel lookup to the configured endpoint
+// with an optional bearer token. Any transport failure, non-200 status, body
+// over 4096 bytes, unknown JSON fields, trailing content or unexpected state
+// yields Unavailable with ErrLookupUnavailable; caller cancellation is returned
+// as ctx.Err().
 func (p *HTTPReachability) Check(ctx context.Context, number string) (State, error) {
 	body, err := json.Marshal(struct {
 		Number  string `json:"number"`

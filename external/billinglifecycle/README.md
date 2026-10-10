@@ -47,20 +47,6 @@ after uncertainty. Provider calls and financial capture never run in these
 storage callbacks. Authenticated lookup output is trusted internal input, never
 HTTP-decoded payload.
 
-The isolated named test cases verify round trips, stage conservation, detached
-maps, uncertain replay, current authority and corrupt-record refusal. The native
-suite uses encrypted Mongo, real billing and manager services, native policy
-grants and the instance-bound worker authority. It checks replacement-worker
-recovery, key/metadata tampering, grant revocation, concurrent identical and
-different evidence writes, and receipt/capture recovery without another lookup.
-Provider responses and active service identities are controlled fixtures.
-Lost-reply tests return uncertainty after a real successful commit; they do not
-simulate Mongo server unknown-commit labels or production network failures.
-
-Neither suite certifies scheduler execution fences, actual service-account
-admission, migration readiness, runtime installation or authenticated platform
-end-to-end behavior. Those remain integration qualification requirements.
-
 ## Original subscription status inputs
 
 `StatusOutbox` retains billing's original `SubscriptionStatusPreparation`, then
@@ -74,8 +60,7 @@ not reconstruct billing's capture identity or business fingerprints.
 
 Its validator must be the configured billing manager's
 `ValidateSubscriptionStatusPreparation(ctx, currentActor, original)` method.
-The raw revenue owner does not supply current caller authority. Native tests bind this interface to the actual configured manager. Neither
-module adoption nor native interoperability proves runtime installation.
+The raw revenue owner does not supply current caller authority.
 
 Status input records use kind `partners_lifecycle_status_input` and ID
 SHA256 of `["partners.lifecycle.status.v1", scope, captureID]`. Partition uses
@@ -109,21 +94,6 @@ cleanup. With no expiration, these records grow with observation count. Capacity
 and safe cleanup remain collector integration requirements. No provider call,
 capture, financial fact or commission is created by an outbox operation.
 
-Status tests use actual billing preparation/capture and native codecs over
-isolated records, with controlled current-authority validation. They verify both
-sources, later revisions, exact original replay after later heads, a stale
-uncaptured conflict, uncertainty, cancellation, revocation and private codec
-integrity. The native status suite uses encrypted Mongo, configured billing
-manager and current native policy grants. It checks both payment and checkout
-provenance, lost preparation/evidence/capture replies, current and post-commit
-revocation/cancellation, replacement-worker recovery, wrong-key and AAD tamper
-refusal, concurrent evidence conservation and original receipt replay after a
-later head without another provider lookup. Provider evidence and active service
-identities remain controlled fixtures; lost replies are injected after real
-successful commits, not Mongo server commit labels or production network faults.
-Runtime fences, retention/cleanup, actual service-account admission, migration
-readiness and authenticated complete platform flows require separate proof.
-
 ## Scheduling storage boundary
 
 `ScheduleRepository` is the private typed port for recurring lifecycle work.
@@ -154,18 +124,13 @@ an ordinary scan cannot prove exhaustive coverage. Reconciliation is required.
 The guard selects serialization, not a single-kind restriction: the existing
 `recordstore.Tx` supports job and cursor kinds in the same transaction. No new
 Mongo transaction infrastructure or direct driver calls are needed here.
-Native named cases verify atomic cursor/jobs, rollback, stale CAS, uncertain
-reply recovery by reading persisted state, concurrent competing pages, private
-codec round trips and tamper refusal. Source descriptors in adapter tests are
-fixtures; those tests do not prove owning discovery or current queue authority.
 
 An opting host explicitly composes this storage boundary. The owning scheduling service
 must still enforce current global/selected worker authority outside callbacks,
 due-work selection, fair lane budgets, lease/stage fencing and backoff, and bind
 original inputs plus active job pointers atomically before lookup/capture.
 An unknown commit requires reading current durable state before deciding whether
-to replay a page. Full collector, retention, migration and platform verification
-remain required; financial `WorkComplete` does not retire lifecycle observations.
+to replay a page. Financial `WorkComplete` does not retire lifecycle observations.
 
 ## Atomic discovery admission
 
@@ -194,17 +159,13 @@ Discovery is admission, not permission to retire or reschedule a job.
 Inputs are encoded before retryable callbacks. Known failures roll back all jobs
 and the checkpoint. An uncertain result requires reading durable checkpoint and
 job state; it neither proves rollback nor authorizes a new provider lookup.
-Named encrypted Mongo cases cover competing pages, late conflicts/corruption,
-lost replies, empty-page progress, independent cursors, and preservation of
-native original status inputs after a first paid fact. Owning preparation/read
-fixtures prove native page interoperability, not a qualified host migration.
 
 This repository does not authenticate page provenance by itself. The owning
 collector must obtain the page from its configured billing manager under current
 discovery authority, recheck global and selected authority around admission,
 and retain uncertainty through later denial/cancellation. `DiscoveryCollector`
-below supplies that admission boundary. Atomic input/job binding, execution
-fencing and runtime installation remain required.
+below supplies that admission boundary; the binders and execution services
+coordinate retained inputs and active-job fences.
 
 ## Current worker discovery collector
 
@@ -230,24 +191,9 @@ retry that commit automatically; a subsequent invocation reads actual durable
 checkpoint state before obtaining the next owning page. Reached-end remains a
 repeatable sweep position, not permission to retire lifecycle work.
 
-Isolated named cases cover dependency/config boundaries, checkpoint validation,
-all storage/manager outcomes, current selected denial, late scope revocation,
-cancellation and uncertainty conservation. Native cases use actual owning
-preparation/discovery, the configured billing manager, native policy grants,
-instance-bound worker context and encrypted Mongo. Discovery-only grants suffice;
-read/refresh grants, disabled/wrong-scope grants and another instance's context
-do not. Post-commit revoke/cancel withhold results while durable admission remains
-inspectable, and lost reply recovery advances from the committed native cursor
-without another provider lookup. Active API-service identity and provider
-responses remain controlled fixtures; actual UMS/platform admission is separate.
-
-An opting host explicitly composes this service. The fair scheduler and atomic binding
-services below supply separate private boundaries. Owning execution/recovery
-orchestration, confirmed recurring status refresh, validated runtime
-configuration, host migration/retention/ops and complete authenticated platform
-flows remain required. It does not use financial
-`WorkComplete`, look up a provider, capture status or create financial facts.
-
+Compose this collector with the scheduler and atomic binders below. Discovery
+does not look up a provider, capture status or create financial facts; financial
+`WorkComplete` cannot retire lifecycle work.
 
 ## Execution repository fences
 
@@ -285,15 +231,6 @@ instant or atomic fencing of billing's separate capture transaction. Exact billi
 inputs, native capture receipts and head CAS remain required after in-flight
 lease loss. Long-running operations need an explicit bounded execution policy;
 no heartbeat or forced-expiry administrative override is implemented here.
-
-Named encrypted Mongo tests cover acquisition races, stale/replaced/expired
-handles, clock changes, overflow, lost acquisition/disposition replies, lane
-changes, bootstrap-write bypass refusal and native original-input preservation.
-Most storage protocol cases use descriptor fixtures; they do not prove native
-discovery, current worker authority or runtime. Native original cases use real
-billing preparation but do not implement atomic input/job binding. The fair scheduler and fenced binding services below supply their separate
-private boundaries; execution orchestration, runtime and platform qualification
-remain required.
 
 ## Fair scheduler service
 
@@ -338,26 +275,9 @@ current permission and the exact lease again around each subsequent stage.
 `Retry` uses the durable acquisition count to choose exponential delay capped by
 the configured maximum, releases only that execution and preserves unresolved
 originals. Lost release replies require inspecting durable state; the old handle
-cannot release again. Confirmed status-cycle completion and rescheduling from
-the original observation time remain separate work. No provider calls, captures,
+cannot release again. The completion service performs status-cycle completion
+and rescheduling from the original observation time. No provider calls, captures,
 financial completion checks or public routes run through this service.
-
-Named isolated service cases cover dependency/configuration boundaries, source
-and original conservation, current authority, corrupt responses, conflict
-classification, cursor/lease failure, cancellation and uncertainty. Native cases
-verify budget suffix progress, future/active prefixes, full-page wrap, independent
-lanes, known failed prefixes, counter reporting, unknown acquisition/cursor
-recovery and retry caps using encrypted transactions and actual native grants.
-Additional native cases compose actual billing preparation, manager discovery,
-atomic queue admission and scheduler acquisition for checkout/subscription inputs;
-discovery permission does not confer execution permission. API-service identity
-and provider responses remain controlled fixtures. These are package flows, not
-actual UMS admission, runtime installation or authenticated platform E2E.
-
-Atomic fenced original/evidence plus active-job handoffs, confirmed recurring
-completion, runtime/configuration, migration/retention/clock/capacity/operations,
-exact host CI and complete authenticated platform/browser qualification remain
-required. Source admission and scheduling alone do not finish issue #14.
 
 ## Atomic active status-input binding
 
@@ -384,8 +304,7 @@ Callers must use the returned successor handle; the consumed handle is stale.
 The same job guard used by acquisition/disposition serializes job operations.
 The outbox row also participates in the transaction and its native revision CAS;
 overlap with a standalone outbox writer under a different guard is resolved by
-native overlapping-record transaction conflicts. Named native tests cover same
-and different evidence across those writers. Runtime execution must use the
+native overlapping-record transaction conflicts. Runtime execution must use the
 binding port for writes, rather than a separate `StatusOutbox` write followed by
 an advisory lease check. The standalone outbox remains a current-authority read
 and explicitly separate adapter boundary, not an alternative fenced stage.
@@ -412,24 +331,8 @@ be mislabeled an unknown commit. Native billing validation errors and private
 recordstore errors retain their owning cause vocabularies.
 Construction creates no identity, grant, migration, provider work or goroutine.
 
-Isolated named cases cover service dependencies, current checks, all storage
-outcomes, malformed successor responses and private JSON. Encrypted Mongo cases
-use actual native status originals, the configured billing manager, native grants
-and instance-bound context. They verify atomic preparation/evidence, immutable
-originals, consumed/stale/replaced handles, clock expiry/backward steps, competing
-stages, late rollback, joined absence failures, outbox overlap, lost replies,
-post-commit revocation/cancellation, replacement-worker reuse and exact owning
-capture recovery without another provider lookup. API-service identity/provider
-responses remain controlled. Lost replies are injected after real commits; they
-are not Mongo server unknown-commit labels. Source admission in these binding
-fixtures is explicit fixture setup, not owning discovery or host migration proof.
-
-An opting host explicitly composes this boundary. Complete
-execution/recovery orchestration, confirmed recurring observation completion,
-original-pointer clearing under confirmed native evidence, retention/cleanup,
-actual service-account admission, migration/operations and authenticated full
-platform E2E remain required. Financial `WorkComplete` cannot retire status work.
-
+Use the execution and completion services below to advance bound work.
+Financial `WorkComplete` cannot retire status work.
 
 ## Atomic active checkout-input binding
 
@@ -438,9 +341,8 @@ outbox stage and its active job binding marker in one encrypted native
 transaction. The immutable acknowledged intent already lives in
 `ScheduledJob.Source.Checkout`; `CheckoutPrepared` records that its exact outbox
 input has been bound. No second intent copy or business fingerprint is invented.
-The private schema-1 job codec preserves the marker; earlier local records
-without that field decode it as false. This is pre-runtime compatibility, not a
-qualified deployed migration. A true marker is allowed only on checkout jobs
+The private schema-1 job codec preserves the marker; an absent marker decodes
+as false. A true marker is allowed only on checkout jobs
 with execution history. Bootstrap writes cannot fabricate it. Discovery replay,
 acquisition and retry conserve it.
 
@@ -466,20 +368,6 @@ and must not be mislabeled uncertain. Callers must inspect durable state after a
 failure once storage was attempted. Provider lookup, billing capture and confirmed
 job completion remain separate stages. Construction creates no identity/grants,
 provider calls, indexes or background worker.
-
-Named isolated tests cover current service checks, private JSON, dependencies,
-malformed successor/input evidence and marker conservation in scheduler
-acquisition, final lease response and retry. Native cases use acknowledged billing
-intents, current grants/instance-bound worker contexts and encrypted multi-kind
-transactions. They cover preparation/evidence, sequential exact replay,
-preparation replay without resetting evidence, replacement-worker reuse,
-consumed/stale handles, clock changes, joined absence errors, competing stages,
-late rollback, older codec shape, bootstrap refusal and release/reacquisition
-conservation. A controlled owning checkout capture loses its real committed reply
-and recovers the exact retained evidence without another provider lookup.
-API-service identity and provider responses remain controlled, and source
-admission here is fixture setup. These are package flows, not runtime or full
-platform E2E. No financial fact or commission is created by binding.
 
 ## Owning execution stages
 
@@ -522,22 +410,6 @@ retirement nor recurring rescheduling occurs in `Observe`. The separate completi
 services below perform those transitions. Financial `WorkComplete` cannot retire
 lifecycle status work.
 
-Named native cases exercise the complete retained-input/provider/capture stage
-sequence, committed lost replies at each write boundary, replacement-worker
-recovery, current revocation/cancellation/lease loss, receipt-first recovery,
-missing bound inputs, joined absence errors, malformed owning output and old
-receipt recovery after a later head. Paid-source and pre-payment trial status
-remain separate from creating paid facts. Native billing, configured managers,
-current grants, instance-bound worker contexts and encrypted Mongo transactions
-are real; provider and API-service identity responses remain controlled. Source
-admission is fixture setup. These are package flows, not runtime or platform E2E.
-
-Installation of recurring observation/completion orchestration, conclusive supersession,
-runtime/default-off configuration, actual service admission, migration/readiness,
-retention/cleanup, capacity/ops and full authenticated platform/browser
-qualification remain required.
-
-
 ## Confirmed fenced completion
 
 `CheckoutCompletion` and `StatusCompletionService` reuse their execution service's
@@ -566,9 +438,8 @@ or running an unbounded catch-up loop. Due times must remain future at commit.
 Each job retains `LastCompletionID`; the immutable record keeps the completed job
 snapshot and, for status, the original preparation needed to authenticate its
 native receipt later. Acquisition, binding, retry and discovery preserve this
-reference and cadence anchor. Bootstrap cannot fabricate them. Old private job
-rows default absent fields to empty/zero; this is pre-runtime codec compatibility,
-not deployment migration evidence.
+reference and cadence anchor. Bootstrap cannot fabricate them. Absent private
+codec fields decode as empty/zero.
 
 Any failed completion returns zero data. Uncertain storage outcomes remain joined
 with later denial or cancellation; a known commit followed by denial remains known.
@@ -577,15 +448,6 @@ the durable reference and rejoins the original/native receipt under current
 identity and grants without a live lease, since completion deliberately cleared
 it. It performs no provider GET and works after later native heads or a newer
 active host cycle. Its historical snapshot grants no execution authority.
-
-Named isolated cadence and native encrypted cases cover atomic transitions,
-rollback, committed lost replies, current revocation, stale and expired handles,
-missing/changed retained evidence, private codec/ciphertext checks, recurring
-cycles, retry-counter reset, anchor conservation and historical receipt inspection
-after a later native head. Identity/provider responses and source admission remain
-controlled fixtures. These are package flows, not installed runtime/platform E2E.
-Conclusive uncaptured supersession, runtime composition and the rollout/operational
-qualifications above remain required before merge readiness.
 
 ## Retained status resolution and supersession
 
@@ -611,10 +473,8 @@ state `superseded`, no sequence and no expiration. Its opaque ID hashes
 `["partners.lifecycle.status-supersession.v1", scope, sourceKind, sourceID,
 originalCaptureID]`; its partition uses the lifecycle scope tuple. Private schema
 1 retains the complete original input and native newer receipt, including the
-owning revision and fingerprint, without recreating billing identities. The
-optional job reference is compatible with earlier private schema-1 records;
-missing fields decode empty. It is conserved by subsequent execution stages.
-This codec compatibility does not certify a deployed upgrade.
+owning revision and fingerprint, without recreating billing identities. The optional job reference decodes empty when absent and is conserved by
+subsequent execution stages.
 
 A failed write or disclosure requires inspecting the current job and immutable
 history under current authority. A consumed old handle must not be replayed.
@@ -625,12 +485,8 @@ is never permission to execute; obtain and check a current lease before resuming
 Missing referenced history fails unavailable. Retained rows still need qualified
 capacity, reconciliation and safe cleanup; no TTL is introduced.
 
-These services are composed explicitly by an opting host.
-Operational admission, migration/readiness, operations,
-exact host CI and full authenticated customer/admin platform flows remain
-required. Native Mongo tests use controlled source admission, identity and
-provider responses; injected lost replies follow real successful transactions,
-not Mongo server commit labels or production provider traffic.
+Compose these services through the optional helper below, using current worker
+authority and the same owning billing manager.
 
 ## Bounded lifecycle worker pass
 
@@ -676,17 +532,6 @@ they do not imply rollback. Final current global and attempted-source permission
 is checked before report disclosure, preserving observed uncertainty after late
 denial. Reports contain no source IDs, destinations or provider payloads.
 
-Native worker tests prepare owning discovery explicitly and exercise both source
-kinds across passes, retained original states, committed lost replies, replacement
-leases, known provider failures after binding revisions, final authority and
-constructor conservation. Source admission now comes from native discovery in
-these worker flows; provider responses and active API-service identity remain
-controlled. These tests do not prove
-deployment, migration/readiness qualification, operational retention or
-authenticated full-platform journeys. Actual service identity/current native
-grants, default-off settings, startup readiness, restart, deadlines and shutdown
-drain have separate server tests; empty startup discovery makes no provider calls.
-
 ## Explicit bounded preparation orchestration
 
 `Preparation` composes the native `billing.RevenueService.PrepareLifecycleDiscovery`
@@ -728,14 +573,18 @@ Retain the original input, lease fences and recovery receipts across restart.
 
 The durable `partners_lifecycle_*` kinds and `partners.lifecycle.*.v1` hash domains
 are storage identifiers, independent of the Go import path. This package uses
-those identifiers directly; it does not ship legacy dual reads or compatibility
-copies. Hosts changing storage identifiers need an explicit reviewed data migration.
+those identifiers directly. Changing storage identifiers requires a data migration.
 
-Run the native encrypted transaction suite with `GHATD_TEST_MONGO_URI` pointing
-to an isolated replica set. Each case creates and drops its own test database;
-never point fixture tools at a production database. Controlled provider responses
-and service identities do not certify authenticated provider or production flows.
+## Verification
 
+Run `go test -race ./external/billinglifecycle/...`. Native cases require
+`GHATD_TEST_MONGO_URI` pointing to an isolated replica set and create/drop their
+own databases; without it they skip. Never point fixtures at production.
+
+The suite checks encrypted storage, leases, current grants and retained-input
+recovery using controlled provider and service-identity responses. Lost replies
+are injected after successful commits. Host authentication, provider integration,
+deployment and restore procedures require host-level verification.
 
 ## Optional host composition
 

@@ -21,21 +21,45 @@ type Entry struct {
 	RegionCodes []string `json:"region_codes,omitempty" bson:"region_codes,omitempty"`
 	Audit       `bson:",inline"`
 }
+
+// Repository is the typed persistence port behind Lifecycle: keyed reads,
+// insert-if-absent creation, revision-guarded replace and paged listing.
 type Repository[T any] interface {
+	// Get reads one typed record by its natural code key through the Repository
+	// persistence port behind Lifecycle. Returns the record or an error;
+	// implementations forward repository absence and failure semantics unchanged.
 	Get(context.Context, string) (T, error)
+	// InsertIfAbsent creates the typed record only when its key is absent, per the
+	// Repository port's insert-if-absent contract. Returns the stored record,
+	// whether it was newly inserted, or an error.
 	InsertIfAbsent(context.Context, T) (T, bool, error)
+	// Replace updates the typed record through the Repository port guarded by the
+	// supplied expected revision. Returns the replaced record or an error when the
+	// revision is stale; ctx governs cancellation.
 	Replace(context.Context, T, int) (T, error)
+	// List returns a page of typed records plus the total matching count through
+	// the Repository port, applying ListQuery sanitisation before the underlying
+	// read.
 	List(context.Context, ListQuery) ([]T, int64, error)
 }
+
+// CreateRequest carries a new record and its verified-context actor; ActorID is
+// excluded from JSON because it is never transport-decoded.
 type CreateRequest[T any] struct {
 	Record  T      `json:"record"`
 	ActorID string `json:"-"`
 }
+
+// UpdateRequest carries a full replacement record with the caller's expected
+// revision and verified-context actor for compare-and-swap updates.
 type UpdateRequest[T any] struct {
 	Record           T      `json:"record"`
 	ExpectedRevision int    `json:"-"`
 	ActorID          string `json:"-"`
 }
+
+// ChangeRequest selects a record by code with the expected revision and the
+// verified-context actor requesting the state change.
 type ChangeRequest struct {
 	Code             string
 	ExpectedRevision int
@@ -51,6 +75,9 @@ type Lifecycle[T any] struct {
 	validate func(T) error
 }
 
+// NewLifecycle wires a typed lifecycle over a repository, entry accessor and
+// record validator, defaulting to the real clock when none is supplied. Nil
+// wiring returns ErrUnavailable.
 func NewLifecycle[T any](repo Repository[T], clock Clock, entry func(*T) *Entry, validate func(T) error) (*Lifecycle[T], error) {
 	if repo == nil || (reflect.ValueOf(repo).Kind() == reflect.Pointer && reflect.ValueOf(repo).IsNil()) || entry == nil || validate == nil {
 		return nil, ErrUnavailable
@@ -60,10 +87,19 @@ func NewLifecycle[T any](repo Repository[T], clock Clock, entry func(*T) *Entry,
 	}
 	return &Lifecycle[T]{repo: repo, clock: clock, entry: entry, validate: validate}, nil
 }
+
+// Get reads one record by its natural code key, forwarding repository absence
+// and failure semantics unchanged.
 func (s *Lifecycle[T]) Get(ctx context.Context, code string) (T, error) { return s.repo.Get(ctx, code) }
+
+// List returns a page of records plus the total matching count, applying
+// ListQuery sanitisation before the repository read.
 func (s *Lifecycle[T]) List(ctx context.Context, q ListQuery) ([]T, int64, error) {
 	return s.repo.List(ctx, q.Sanitised())
 }
+
+// RequireSelectable reads a record by code and returns ErrNotSelectable unless
+// its entry is enabled, unhidden and undeleted.
 func (s *Lifecycle[T]) RequireSelectable(ctx context.Context, code string) (T, error) {
 	record, err := s.Get(ctx, code)
 	if err != nil {
@@ -76,12 +112,19 @@ func (s *Lifecycle[T]) RequireSelectable(ctx context.Context, code string) (T, e
 	}
 	return record, nil
 }
+
+// validateActor accepts only a non-blank actor of at most 256 bytes that is
+// already trimmed and free of control characters.
 func validateActor(actor string) error {
 	if actor == "" || len(actor) > 256 || strings.TrimSpace(actor) != actor || strings.ContainsAny(actor, "\r\n\x00") {
 		return ErrInvalidPayload
 	}
 	return nil
 }
+
+// validateRecord enforces shared entry invariants (code, name, region codes,
+// flag length) before delegating to the domain-specific validator supplied at
+// construction.
 func (s *Lifecycle[T]) validateRecord(record T) error {
 	base := s.entry(&record)
 	if base.Code == "" || len(base.Code) > 100 || strings.TrimSpace(base.Code) != base.Code || strings.ContainsAny(base.Code, "\r\n\x00") || strings.TrimSpace(base.Name) == "" || utf8.RuneCountInString(base.Name) > 200 || strings.ContainsAny(base.Name, "\r\n\x00") {
@@ -97,6 +140,9 @@ func (s *Lifecycle[T]) validateRecord(record T) error {
 	}
 	return s.validate(record)
 }
+
+// prepare validates actor and record, then stamps a fresh audit block with
+// revision 1 and the UTC creation time for insertion.
 func (s *Lifecycle[T]) prepare(record T, actor string) (T, error) {
 	if err := validateActor(actor); err != nil {
 		return record, err
@@ -108,6 +154,10 @@ func (s *Lifecycle[T]) prepare(record T, actor string) (T, error) {
 	s.entry(&record).Audit = Audit{Revision: 1, CreatedAt: now, UpdatedAt: &now, CreatedBy: actor, UpdatedBy: actor}
 	return record, nil
 }
+
+// Create validates and prepares a new record, then inserts it if absent; an
+// existing code returns ErrAlreadyExists with a zero record rather than
+// overwriting administrator edits.
 func (s *Lifecycle[T]) Create(ctx context.Context, req CreateRequest[T]) (T, error) {
 	record, err := s.prepare(req.Record, req.ActorID)
 	if err != nil {
@@ -123,6 +173,10 @@ func (s *Lifecycle[T]) Create(ctx context.Context, req CreateRequest[T]) (T, err
 	}
 	return stored, nil
 }
+
+// Update replaces a record after validating actor, payload, expected revision
+// and non-deleted current state, preserving original audit attribution while
+// bumping revision and updated-by. Stale revisions return ErrStaleWrite.
 func (s *Lifecycle[T]) Update(ctx context.Context, req UpdateRequest[T]) (T, error) {
 	var zero T
 	if req.ExpectedRevision < 1 {
@@ -154,12 +208,22 @@ func (s *Lifecycle[T]) Update(ctx context.Context, req UpdateRequest[T]) (T, err
 	base.UpdatedBy = req.ActorID
 	return s.repo.Replace(ctx, input, req.ExpectedRevision)
 }
+
+// Delete soft-deletes a record selected by ChangeRequest, disabling it and
+// recording the deleting actor under revision guard.
 func (s *Lifecycle[T]) Delete(ctx context.Context, req ChangeRequest) (T, error) {
 	return s.changeState(ctx, req, false)
 }
+
+// Restore clears the soft-delete marker of a deleted record under revision
+// guard, leaving it disabled until separately enabled.
 func (s *Lifecycle[T]) Restore(ctx context.Context, req ChangeRequest) (T, error) {
 	return s.changeState(ctx, req, true)
 }
+
+// changeState implements Delete and Restore: it validates revision and actor,
+// requires the record's deleted state to match the requested transition, then
+// bumps revision and rewrites the soft-delete markers via compare-and-swap.
 func (s *Lifecycle[T]) changeState(ctx context.Context, req ChangeRequest, restore bool) (T, error) {
 	var zero T
 	if req.ExpectedRevision < 1 {

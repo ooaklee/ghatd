@@ -49,7 +49,8 @@ func (g *DefaultIDGenerator) GenerateNanoID() string {
 // DefaultTimeProvider provides default time operations
 type DefaultTimeProvider struct{}
 
-// Now returns current time
+// Now returns the current local time from the default time provider. Unlike
+// catalogue's RealClock it does not convert to UTC.
 func (t *DefaultTimeProvider) Now() time.Time {
 	return time.Now()
 }

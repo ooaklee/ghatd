@@ -28,22 +28,34 @@ func NextRefreshSlot(anchor, now time.Time, cadence time.Duration) (time.Time, e
 	return next, nil
 }
 
+// CheckoutCompletion couples one checkout execution with the completion
+// repository to retire a confirmed original; it holds no live lease and
+// performs no provider I/O.
 type CheckoutCompletion struct {
 	execution *CheckoutExecution
 	repo      CompletionRepository
 }
+
+// StatusCompletionService couples one status execution, the completion
+// repository and the refresh cadence that schedules the next observation cycle.
 type StatusCompletionService struct {
 	execution *StatusExecution
 	repo      CompletionRepository
 	cadence   time.Duration
 }
 
+// NewCheckoutCompletion borrows a fully constructed checkout execution plus
+// repository; nil or incomplete ports return unavailable and no work starts.
 func NewCheckoutCompletion(x *CheckoutExecution, repo CompletionRepository) (*CheckoutCompletion, error) {
 	if x == nil || x.scheduler == nil || x.binder == nil || x.outbox == nil || nilPort(x.owner) || nilPort(repo) {
 		return nil, billing.ErrRevenueUnavailable
 	}
 	return &CheckoutCompletion{x, repo}, nil
 }
+
+// NewStatusCompletion borrows a fully constructed status execution, repository
+// and a refresh cadence bounded to 1s..24h; invalid cadence or nil ports return
+// errors without starting work.
 func NewStatusCompletion(x *StatusExecution, repo CompletionRepository, cadence time.Duration) (*StatusCompletionService, error) {
 	if x == nil || x.scheduler == nil || x.binder == nil || x.outbox == nil || nilPort(x.owner) || nilPort(repo) {
 		return nil, billing.ErrRevenueUnavailable
@@ -54,6 +66,9 @@ func NewStatusCompletion(x *StatusExecution, repo CompletionRepository, cadence 
 	return &StatusCompletionService{x, repo, cadence}, nil
 }
 
+// completionAuthority re-runs scheduler finalization after an operation. Its
+// denial withholds results, but a previously observed uncertain operation stays
+// joined so an unknown commit remains visible.
 func completionAuthority(ctx context.Context, s *Scheduler, source ScheduledSource, operationErr error) error {
 	if err := s.finish(ctx, []ScheduledSource{source}, nil); err != nil {
 		if errors.Is(operationErr, recordstore.ErrUncertain) || errors.Is(operationErr, billing.ErrRevenueUncertain) {
@@ -63,18 +78,32 @@ func completionAuthority(ctx context.Context, s *Scheduler, source ScheduledSour
 	}
 	return operationErr
 }
+
+// sameCompletion compares two completed executions by job, native receipt
+// times/fingerprints and optional original status presence/content, ignoring
+// incidental field differences.
 func sameCompletion(a, b CompletedExecution) bool {
 	if !sameExecutionJob(a.Job, b.Job) || a.Receipt.NativeCaptureID != b.Receipt.NativeCaptureID || a.Receipt.NativeFingerprint != b.Receipt.NativeFingerprint || !a.Receipt.NativeRequestedAt.Equal(b.Receipt.NativeRequestedAt) || !a.Receipt.NativeObservedAt.Equal(b.Receipt.NativeObservedAt) || !a.Receipt.CompletedAt.Equal(b.Receipt.CompletedAt) || (a.OriginalStatus == nil) != (b.OriginalStatus == nil) {
 		return false
 	}
 	return a.OriginalStatus == nil || sameStatusPreparation(*a.OriginalStatus, *b.OriginalStatus)
 }
+
+// sameCheckoutInput reports whether two inputs carry the same acknowledged
+// intent and exactly equal retained evidence.
 func sameCheckoutInput(a, b CheckoutInput) bool {
 	return a.Intent.ValidateAcknowledgedInput(b.Intent) == nil && a.Evidence != nil && b.Evidence != nil && sameCheckoutEvidence(*a.Evidence, *b.Evidence)
 }
+
+// sameStatusInput reports whether two status inputs share an identical
+// preparation and exactly equal retained evidence.
 func sameStatusInput(a, b StatusInput) bool {
 	return sameStatusPreparation(a.Preparation, b.Preparation) && a.Evidence != nil && b.Evidence != nil && *a.Evidence == *b.Evidence
 }
+
+// boundInputError upgrades a sole not-found when reading a bound input to
+// unavailable joined with its cause, so absence of a required original is never
+// treated as plain absence.
 func boundInputError(err error) error {
 	if soleNotFound(err) {
 		return errors.Join(recordstore.ErrUnavailable, err)
@@ -95,6 +124,11 @@ func (c *CheckoutCompletion) Run(ctx context.Context, h LeaseHandle) (CompletedE
 	}
 	return c.Complete(ctx, o)
 }
+
+// Complete retires one confirmed checkout: it re-finds the retained input, re-
+// validates it against the native captured receipt, then commits the completion
+// and separately re-reads it, returning only when the stored completion matches
+// the write exactly.
 func (c *CheckoutCompletion) Complete(ctx context.Context, o CheckoutObservation) (CompletedExecution, error) {
 	if c == nil || c.execution == nil || nilPort(c.repo) {
 		return CompletedExecution{}, billing.ErrRevenueUnavailable
@@ -189,6 +223,11 @@ func (c *StatusCompletionService) Run(ctx context.Context, h LeaseHandle) (Compl
 	}
 	return c.Complete(ctx, o)
 }
+
+// Complete finishes one confirmed status observation: it re-finds the retained
+// preparation, re-captures native status, schedules the next cadence slot and
+// commits, then verifies the stored completion matches exactly. Payment facts
+// never retire the recurring job.
 func (c *StatusCompletionService) Complete(ctx context.Context, o StatusObservation) (CompletedExecution, error) {
 	if c == nil || c.execution == nil || nilPort(c.repo) {
 		return CompletedExecution{}, billing.ErrRevenueUnavailable

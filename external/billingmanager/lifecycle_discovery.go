@@ -21,13 +21,22 @@ type LifecycleDiscoveryTarget struct {
 	Scope                                       billing.RevenueScope `json:"-"`
 	Kind, PrincipalID, SubscriptionID, IntentID string               `json:"-"`
 }
+
+// LifecycleDiscoveryAuthority resolves current actor/action permission for a
+// discovery target. It is consulted before candidate reads and before page
+// disclosure, so implementations must honour revocation per attempt.
 type LifecycleDiscoveryAuthority interface {
+	// AuthorizeLifecycleDiscovery resolves whether the actor may discover the given
+	// target under the current action, honoured per attempt including revocation.
 	AuthorizeLifecycleDiscovery(context.Context, string, string, LifecycleDiscoveryTarget) error
 }
 
 // LifecycleDiscoveryService is an optional capability on the SAME configured
 // revenue feed. No alternative owner, repository or provider lookup is injected.
 type LifecycleDiscoveryService interface {
+	// DiscoverLifecycleSources returns a validated page of lifecycle discovery
+	// candidates matching the query from the configured revenue feed, with
+	// permission withheld on failure.
 	DiscoverLifecycleSources(context.Context, billing.LifecycleDiscoveryQuery) (billing.LifecycleDiscoveryPage, error)
 }
 
@@ -44,6 +53,10 @@ func (s *Service) WithLifecycleDiscoveryAuthority(a LifecycleDiscoveryAuthority)
 	s.lifecycleDiscoveryAuthority = a
 	return s, nil
 }
+
+// discoveryOwner validates actor shape and wiring, then returns the revenue
+// feed cast to LifecycleDiscoveryService. A feed without the capability or nil
+// dependencies returns ErrRevenueUnavailable.
 func (s *Service) discoveryOwner(ctx context.Context, actor string) (LifecycleDiscoveryService, error) {
 	if ctx == nil || actor == "" || strings.TrimSpace(actor) != actor || len(actor) > 256 || strings.ContainsAny(actor, "\r\n\x00") {
 		return nil, billing.ErrRevenueInvalid
@@ -60,6 +73,10 @@ func (s *Service) discoveryOwner(ctx context.Context, actor string) (LifecycleDi
 	}
 	return owner, nil
 }
+
+// discoveryAuthorize checks context cancellation, delegates to the discovery
+// authority for the LifecycleDiscovery action, and rechecks cancellation before
+// returning.
 func (s *Service) discoveryAuthorize(ctx context.Context, actor string, target LifecycleDiscoveryTarget) error {
 	if err := ctx.Err(); err != nil {
 		return err

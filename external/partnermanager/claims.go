@@ -38,6 +38,12 @@ func (m *Manager) RequestClaim(ctx context.Context, actor string, amount int64, 
 	return m.requestClaim(ctx, actor, amount, 0, key)
 }
 
+// requestClaim reserves a self-service payout for the authenticated partner. It
+// replays an original receipt only when partner, actor, amount, currency and
+// (when supplied) destination version match, rechecking capability on replay.
+// Fresh requests enforce claim controls, payout admission, the configured
+// minimum and a current owned destination, optionally requiring an exact
+// destination version.
 func (m *Manager) requestClaim(ctx context.Context, actor string, amount, destinationVersion int64, key string) (partnerearnings.Claim, error) {
 	p, err := m.self(ctx, actor, CapabilityClaims)
 	if err != nil {

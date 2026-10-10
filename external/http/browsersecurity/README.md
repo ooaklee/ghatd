@@ -107,15 +107,15 @@ for a `Retry-After` header.
 
 The signed cookie uses HMAC-SHA256 over `cookie\n<base64url-json>`; the response
 token uses `token\n<nonce>\n<binding>`. Retain the key, cookie name and exact
-binding order when adopting without rotating browser cookies. The frozen
-`testdata/legacy-v1.json` fixture pins the preceding cookie/token and pseudonymous
-identity format using dummy inputs. No database migration or dual read is needed.
+binding order when adopting without rotating browser cookies. The
+[`testdata/legacy-v1.json`](testdata/legacy-v1.json) fixture pins the cookie/token
+and pseudonymous identity format using dummy inputs.
 Guest/draft session cookies and raw-token-to-cookie response transformation are
 host-specific concerns and remain outside this package.
 
 Run `go test -race ./external/http/browsersecurity`. Table tests cover valid and
 rejected configuration, browser proof/session changes, issuance provenance,
-native admission, legacy wire vectors, expiry/rebinding, key/config ownership,
+native admission, wire-contract vectors, expiry/rebinding, key/config ownership,
 identity bounds and concurrent/capacity recovery. The single construction
 ownership sequence verifies one dependent lifetime contract. Hosts must also
 test their principal mapping, error projection, session exchange and HTTP/CORS

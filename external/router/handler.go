@@ -61,6 +61,8 @@ func NewAuthVerifyHandler(apiVerifyEndpoint, apiLoginEndpoint, frontendLoginUrl,
 	}
 }
 
+// hostForLog extracts a URL's host for logging, returning an empty string when
+// the URL cannot be parsed.
 func hostForLog(rawURL string) string {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {

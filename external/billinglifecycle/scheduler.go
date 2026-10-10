@@ -15,10 +15,15 @@ import (
 
 var ErrExecutionCounterExhausted = errors.New("partnerlifecycle/execution-counter-exhausted")
 
+// SchedulerRepository is the combined scan and execution port the scheduler
+// needs over one store.
 type SchedulerRepository interface {
 	ScheduleRepository
 	ExecutionRepository
 }
+
+// ExecutionAuthority combines subscription status and checkout lifecycle
+// authorization for scheduler stage checks.
 type ExecutionAuthority interface {
 	billingmanager.SubscriptionStatusAuthority
 	billingmanager.CheckoutLifecycleAuthority
@@ -41,6 +46,8 @@ type ScheduleBatch struct {
 	Examined, Conflicts int            `json:"-"`
 }
 
+// Scheduler owns due selection, leases and retry policy over the borrowed
+// repository, execution authority and clock.
 type Scheduler struct {
 	repo      SchedulerRepository
 	authority ExecutionAuthority
@@ -48,6 +55,9 @@ type Scheduler struct {
 	cfg       SchedulerConfig
 }
 
+// NewScheduler validates bounded configuration and copies the scopes. Nil
+// repository, authority or clock is ErrRevenueUnavailable; malformed settings
+// are ErrRevenueInvalid.
 func NewScheduler(repo SchedulerRepository, authority ExecutionAuthority, clock LifecycleClock, cfg SchedulerConfig) (*Scheduler, error) {
 	if nilPort(repo) || nilPort(authority) || nilPort(clock) {
 		return nil, billing.ErrRevenueUnavailable
@@ -62,6 +72,8 @@ func NewScheduler(repo SchedulerRepository, authority ExecutionAuthority, clock 
 	return &Scheduler{repo, authority, clock, cfg}, nil
 }
 
+// begin checks context and dependencies and requires the scope to be configured
+// before authorizing a global pass. Unknown scopes are rejected as invalid.
 func (s *Scheduler) begin(ctx context.Context, scope billing.RevenueScope) error {
 	if ctx == nil {
 		return billing.ErrRevenueInvalid
@@ -80,6 +92,9 @@ func (s *Scheduler) begin(ctx context.Context, scope billing.RevenueScope) error
 	return billing.ErrRevenueInvalid
 }
 
+// authorize refresh-checks the configured actor either globally or against a
+// specific source's checkout or subscription target, then re-checks the
+// context.
 func (s *Scheduler) authorize(ctx context.Context, source *ScheduledSource) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -98,6 +113,9 @@ func (s *Scheduler) authorize(ctx context.Context, source *ScheduledSource) erro
 	return ctx.Err()
 }
 
+// finish re-checks global and per-source authority after an operation,
+// returning the original error unless authority fails. An uncertain operation
+// error is always joined so unknown commits stay visible.
 func (s *Scheduler) finish(ctx context.Context, sources []ScheduledSource, operationErr error) error {
 	withhold := func(err error) error {
 		if errors.Is(operationErr, recordstore.ErrUncertain) {
@@ -121,6 +139,8 @@ func (s *Scheduler) finish(ctx context.Context, sources []ScheduledSource, opera
 	return operationErr
 }
 
+// soleConflict reports whether ErrConflict is the single wrapped cause. Joined
+// multi-error trees return false rather than guessing among causes.
 func soleConflict(err error) bool {
 	for n := 0; n < 64 && err != nil; n++ {
 		if err == recordstore.ErrConflict {
@@ -134,6 +154,8 @@ func soleConflict(err error) bool {
 	return false
 }
 
+// sameScheduledSource compares identity fields and, for checkouts, requires the
+// other source to validate as the exact acknowledged original input.
 func sameScheduledSource(a, b ScheduledSource) bool {
 	if a.Scope != b.Scope || a.Kind != b.Kind || a.SourceID != b.SourceID || a.PrincipalID != b.PrincipalID || a.SubscriptionID != b.SubscriptionID || a.FactID != b.FactID || (a.Checkout == nil) != (b.Checkout == nil) {
 		return false
@@ -141,6 +163,9 @@ func sameScheduledSource(a, b ScheduledSource) bool {
 	return a.Checkout == nil || a.Checkout.ValidateAcknowledgedInput(*b.Checkout) == nil
 }
 
+// sameOriginalInputs compares all retained execution-independent metadata,
+// treating the retained original status equal by fields with RequestedAt
+// compared by instant.
 func sameOriginalInputs(a, b ScheduledJob) bool {
 	if a.LastSupersessionID != b.LastSupersessionID || a.LastCompletionID != b.LastCompletionID || !a.CadenceAnchor.Equal(b.CadenceAnchor) || a.CheckoutPrepared != b.CheckoutPrepared {
 		return false
@@ -314,6 +339,8 @@ func (s *Scheduler) Check(ctx context.Context, h LeaseHandle) (ScheduledJob, err
 	return j, nil
 }
 
+// retryDelay doubles base per attempt above one, saturating at the configured
+// maximum.
 func retryDelay(attempts int64, base, maximum time.Duration) time.Duration {
 	for attempts > 1 && base < maximum {
 		if base > maximum/2 {

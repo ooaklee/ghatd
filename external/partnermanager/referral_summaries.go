@@ -37,6 +37,10 @@ type ReferralCommission struct {
 	NetPaidBackingMinor   int64 `json:"net_paid_backing_minor"`
 }
 
+// CustomerReferralSummary is the customer-safe projection of one relationship:
+// accepted payment-row counts, acceptance classification, review flag and
+// optional aggregate commission and paid evidence. It embeds CustomerReferral
+// and never carries internal attribution or raw identities.
 type CustomerReferralSummary struct {
 	CustomerReferral
 	AcceptedPaymentRows int                   `json:"accepted_payment_rows"`
@@ -70,10 +74,14 @@ type ReferralSummaryPage struct {
 	PaidCoverage           *ReferralPaidTotals       `json:"paid_coverage,omitempty"`
 }
 
+// validReferralSummaryQuery accepts limits 1..100, non-zero From/To bounds and
+// a strictly ordered From→To window.
 func validReferralSummaryQuery(q ReferralSummaryQuery) bool {
 	return q.Limit >= 1 && q.Limit <= 100 && (q.From == nil || !q.From.IsZero()) && (q.To == nil || !q.To.IsZero()) && (q.From == nil || q.To == nil || q.To.After(*q.From))
 }
 
+// relationshipPageRevision fingerprints the exact serialized page so a later
+// identical read can prove no on-page mutation occurred.
 func relationshipPageRevision(page referral.RelationshipPage) (string, error) {
 	data, err := json.Marshal(page)
 	if err != nil {
@@ -83,6 +91,11 @@ func relationshipPageRevision(page referral.RelationshipPage) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+// referralSummaries pages relationships, joins earnings amounts per referral
+// period, and optionally paid evidence when revenue reporting is configured. It
+// observes the clock once for attribution, validates every financial row, then
+// rereads the relationship page and returns ErrStaleWrite on any revision
+// change instead of retrying.
 func (m *Manager) referralSummaries(ctx context.Context, partner string, q ReferralSummaryQuery) (ReferralSummaryPage, error) {
 	rq := referral.RelationshipQuery{Limit: q.Limit, After: q.After}
 	page, err := m.relationshipPage(ctx, partner, rq)
@@ -142,6 +155,9 @@ func (m *Manager) referralSummaries(ctx context.Context, partner string, q Refer
 	return out, nil
 }
 
+// validReferralAmounts checks a financial row's self-consistency: non-negative
+// component amounts, zero rows must be entirely empty, and non-zero rows must
+// carry first/last payment times inside the queried cohort window.
 func validReferralAmounts(row partnerearnings.ReferralAmounts, q ReferralSummaryQuery) bool {
 	a := row.Amounts
 	if !validCohortAmounts(a) {
@@ -153,6 +169,8 @@ func validReferralAmounts(row partnerearnings.ReferralAmounts, q ReferralSummary
 	return row.FirstPaymentAt != nil && row.LastPaymentAt != nil && !row.FirstPaymentAt.IsZero() && !row.LastPaymentAt.Before(*row.FirstPaymentAt) && (q.From == nil || !row.FirstPaymentAt.Before(*q.From)) && (q.To == nil || row.LastPaymentAt.Before(*q.To))
 }
 
+// validCohortAmounts rejects any negative payment-amount component; it does not
+// judge correctness of relationships between components.
 func validCohortAmounts(a partnerearnings.PaymentAmounts) bool {
 	for _, amount := range []int64{a.OriginalRevenueMinor, a.RefundedRevenueMinor, a.AccruedMinor, a.PendingEarnedMinor, a.MaturedEarnedMinor, a.ReversedMinor, a.DisputeLostMinor, a.DisputeHoldMinor, a.ReservedBackingMinor, a.ReviewBackingMinor, a.GrossPaidBackingMinor, a.ReturnedBackingMinor, a.NetPaidBackingMinor} {
 		if amount < 0 {

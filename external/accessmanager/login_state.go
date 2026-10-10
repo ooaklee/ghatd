@@ -13,7 +13,12 @@ import (
 // loginStateUsers keeps account transitions in the user domain. Custom adapters
 // must implement both narrow commands; there is no broad UpdateUser fallback.
 type loginStateUsers interface {
+	// RecordFreshLogin applies a fresh-login account transition in the user domain
+	// for the supplied account snapshot, returning the updated universal user.
 	RecordFreshLogin(context.Context, *user.AccountSnapshot) (*user.UniversalUser, error)
+	// ActivateVerifiedEmail applies the verified-email activation transition in the
+	// user domain for the supplied account snapshot, returning the updated
+	// universal user.
 	ActivateVerifiedEmail(context.Context, *user.AccountSnapshot) (*user.UniversalUser, error)
 }
 

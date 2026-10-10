@@ -12,7 +12,11 @@ import (
 	"github.com/ooaklee/ghatd/external/referral"
 )
 
+// conversionEvidenceService is the owning referral dependency that supplies
+// conversion evidence; the manager detects it by type assertion.
 type conversionEvidenceService interface {
+	// GetConversionEvidence returns the referral conversion evidence for the given
+	// identifier and analytics query from the owning referral dependency.
 	GetConversionEvidence(context.Context, string, referral.AnalyticsQuery) (referral.ConversionEvidence, error)
 }
 
@@ -26,6 +30,9 @@ type ConversionFraction struct {
 	ObservedRate       *float64 `json:"observed_rate"`
 }
 
+// ConversionCohorts holds the report's cohort fractions: measured/unmeasured
+// signups, manual initial acquisitions, correction events and measured visits,
+// each with original-cohort denominators.
 type ConversionCohorts struct {
 	MeasuredSignups   ConversionFraction `json:"measured_signups"`
 	UnmeasuredSignups ConversionFraction `json:"unmeasured_signups"`
@@ -34,6 +41,8 @@ type ConversionCohorts struct {
 	MeasuredVisits    ConversionFraction `json:"measured_visits"`
 }
 
+// LinkConversions is one share link's public identity and its conversion cohort
+// fractions.
 type LinkConversions struct {
 	LinkID  string            `json:"link_id"`
 	Code    string            `json:"code"`
@@ -89,16 +98,23 @@ type AdminConversionQuery struct {
 	AfterPlanID string
 }
 
+// convertedPeriod tracks whether a referral revision converted (paid, net-
+// positive) and under which plans, during report assembly.
 type convertedPeriod struct {
 	paid, net bool
 	plans     map[string]bool
 	netPlans  map[string]bool
 }
 
+// conversionPeriod reports whether at falls in the query's inclusive-From,
+// exclusive-To original cohort window; nil bounds are unbounded.
 func conversionPeriod(at time.Time, q referral.AnalyticsQuery) bool {
 	return (q.From == nil || !at.Before(*q.From)) && (q.To == nil || at.Before(*q.To))
 }
 
+// finishFraction validates counter consistency (net ≤ converted ≤ denominator,
+// all non-negative), failing as unavailable otherwise, and computes the
+// observed rate only when the denominator is present and complete.
 func finishFraction(f *ConversionFraction, complete bool) error {
 	if f.Denominator < 0 || f.ConfirmedConverted < 0 || f.NetPositive < 0 || f.NetPositive > f.ConfirmedConverted || f.ConfirmedConverted > f.Denominator {
 		return ErrUnavailable
@@ -110,6 +126,8 @@ func finishFraction(f *ConversionFraction, complete bool) error {
 	return nil
 }
 
+// finishCohorts finishes signup, manual and correction fractions as complete,
+// and the visit fraction only when measured origins are complete.
 func finishCohorts(c *ConversionCohorts, originsComplete bool) error {
 	for _, f := range []*ConversionFraction{&c.MeasuredSignups, &c.UnmeasuredSignups, &c.ManualInitial, &c.CorrectionEvents} {
 		if err := finishFraction(f, true); err != nil {
@@ -119,6 +137,8 @@ func finishCohorts(c *ConversionCohorts, originsComplete bool) error {
 	return finishFraction(&c.MeasuredVisits, originsComplete)
 }
 
+// convertedCount increments a fraction's confirmed-converted and net-positive
+// counters from one referral revision's paid/net status.
 func convertedCount(f *ConversionFraction, period convertedPeriod) {
 	if period.paid {
 		f.ConfirmedConverted++
@@ -128,6 +148,13 @@ func convertedCount(f *ConversionFraction, period convertedPeriod) {
 	}
 }
 
+// conversionReport assembles the private conversion report by joining owning
+// conversion evidence, relationship attribution and scoped revenue history,
+// cross-validating every record's program/partner scope, revision and
+// consistency and failing as unavailable on contradiction. Conversions require
+// eligible paid bindings within ownership periods; one measured origin converts
+// at most one visit, plan rows share cohort denominators, and a final evidence
+// re-read must return the same revision or the report is stale.
 func (m *Manager) conversionReport(ctx context.Context, partner string, q referral.AnalyticsQuery) (AdminConversionReport, error) {
 	owner, ok := m.deps.Referral.(conversionEvidenceService)
 	source, sourceOK := m.deps.Revenue.(revenueReportingSource)

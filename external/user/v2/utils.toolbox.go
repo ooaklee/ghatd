@@ -30,7 +30,8 @@ func (t *UniversalUserToolbox) GenerateUUID() string {
 	return toolbox.GenerateUuidV4()
 }
 
-// Now returns current time
+// Now returns the current local time from the toolbox. Unlike catalogue's
+// RealClock it does not convert to UTC.
 func (t *UniversalUserToolbox) Now() time.Time {
 	return time.Now()
 }

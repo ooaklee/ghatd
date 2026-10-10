@@ -28,27 +28,51 @@ import (
 
 // AuditService expected methods of a valid audit service
 type AuditService interface {
+	// LogAuditEvent records one audit event described by the supplied request for
+	// the AuditService port; implementations persist the entry and report failure
+	// via the returned error.
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 
 // OauthService expected methods of a valid oauth service
 type OauthService interface {
+	// ProviderGetName returns the identifying name of the OAuth provider this
+	// OauthService instance represents.
 	ProviderGetName() string
+	// ProviderGenerateProtectionToken returns a freshly generated state/protection
+	// token used to correlate an OAuth authorization request with its callback.
 	ProviderGenerateProtectionToken() string
+	// ProviderGetCookieKey returns the cookie name under which this provider stores
+	// its transaction state during an OAuth flow.
 	ProviderGetCookieKey() string
+	// ProviderGetUserData exchanges the callback query entries for the
+	// provider-authenticated user info, returning identity details or an error from
+	// the exchange.
 	ProviderGetUserData(ctx context.Context, requestUriEntries url.Values) (oauth.OauthUserInfo, error)
+	// ProviderGenerateAuthCodeUrl returns the provider authorization URL embedding
+	// the supplied protection token for redirecting a user to log in.
 	ProviderGenerateAuthCodeUrl(protectionToken string) string
+	// ProviderVerifyRequestIsAuthentic checks callback query entries against the
+	// protection cookie, returning the verified state value and whether the request
+	// is authentic.
 	ProviderVerifyRequestIsAuthentic(requestUriEntries url.Values, protectionCookien *http.Cookie) (string, bool)
 }
 
 // EphemeralStore expected methods of a valid ephemeral storage
 type EphemeralStore interface {
+	// CreateAuth persists the supplied authentication token details for the given
+	// user in ephemeral storage, reporting failure via the returned error.
 	CreateAuth(ctx context.Context, userID string, tokenDetails ephemeral.TokenDetailsAuth) error
+	// StoreToken records the access token UUID for the given user with the
+	// specified time-to-live in ephemeral storage.
 	StoreToken(ctx context.Context, accessTokenUUID string, userID string, ttl time.Duration) error
 	// FetchAuth returns the live session owner. Expected absence uses
 	// ephemeral.ErrAuthNotFound (legacy redis.Nil is accepted); other errors
 	// represent operational failures and must not masquerade as revocation.
 	FetchAuth(ctx context.Context, accessDetails ephemeral.TokenDetailsAccess) (string, error)
+	// DeleteAuth removes the token with matching ID metadata from ephemeral
+	// storage, returning the number of removed entries; the owning Service
+	// delegates directly to EphemeralStore.
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
 	// AcquireRefreshTokenRotationLock claims the right to rotate one refresh token.
 	AcquireRefreshTokenRotationLock(ctx context.Context, userID, refreshTokenUUID string, ttl time.Duration) (bool, error)
@@ -62,40 +86,87 @@ type EphemeralStore interface {
 	AcquireLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string, ttl time.Duration) (bool, error)
 	// ReleaseLoginEmailCooldown releases a login-email send window after a failed send setup.
 	ReleaseLoginEmailCooldown(ctx context.Context, userID string, isDashboardRequest bool, requestURL string) (int64, error)
+	// AddRequestCountEntry records a request-count entry for the supplied client IP
+	// in ephemeral storage, supporting rate limiting.
 	AddRequestCountEntry(ctx context.Context, clientIp string) error
+	// DeleteAllTokenExceptedSpecified deletes all stored tokens for the given user
+	// except those whose IDs appear in the exemption list.
 	DeleteAllTokenExceptedSpecified(ctx context.Context, userId string, exemptionTokenIds []string) error
+	// CodeExists reports whether the supplied code is already present in ephemeral
+	// storage.
 	CodeExists(ctx context.Context, code string) (bool, error)
+	// StoreCode records the supplied code in ephemeral storage with the specified
+	// time-to-live.
 	StoreCode(ctx context.Context, code string, ttl time.Duration) error
+	// StoreCodeMapping records an association between the supplied code and token
+	// in ephemeral storage with the specified time-to-live.
 	StoreCodeMapping(ctx context.Context, code, token string, ttl time.Duration) error
+	// GetCodeMapping retrieves the token associated with the supplied code from
+	// ephemeral storage.
 	GetCodeMapping(ctx context.Context, code string) (string, error)
 }
 
 // EmailManager expected methods of a valid email manager
 type EmailManager interface {
+	// SendCustomEmail delivers the custom email described by the request through
+	// the EmailManager port, reporting delivery failure via the returned error.
 	SendCustomEmail(ctx context.Context, req *emailmanager.SendCustomEmailRequest) error
+	// SendLoginEmail delivers the login email described by the request, reporting
+	// delivery failure via the returned error.
 	SendLoginEmail(ctx context.Context, req *emailmanager.SendLoginEmailRequest) error
+	// SendVerificationEmail delivers the verification email described by the
+	// request, reporting delivery failure via the returned error.
 	SendVerificationEmail(ctx context.Context, req *emailmanager.SendVerificationEmailRequest) error
 }
 
 // AuthService expected methods of a valid auth service
 type AuthService interface {
+	// CreateInitalToken creates the initial token pair for the supplied user model,
+	// returning the resulting token details or an error.
 	CreateInitalToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	// CreateToken creates a token pair for the supplied user model, returning the
+	// resulting token details or an error.
 	CreateToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	// ExtractTokenMetadata extracts and validates access token credentials from the
+	// supplied HTTP request, returning the parsed access details or an error.
 	ExtractTokenMetadata(ctx context.Context, r *http.Request) (*auth.TokenAccessDetails, error)
+	// CheckRefreshTokenIsValid parses the supplied refresh token string and reports
+	// whether it is a structurally valid JWT, returning the parsed token.
 	CheckRefreshTokenIsValid(ctx context.Context, t string) (*jwt.Token, error)
+	// GetRefreshTokenUUID extracts refresh token details, including its UUID, from
+	// the supplied parsed JWT.
 	GetRefreshTokenUUID(ctx context.Context, token *jwt.Token) (*auth.TokenRefreshDetails, error)
+	// CheckAccessTokenValidityGetDetails validates the supplied parsed access token
+	// and returns its extracted access details.
 	CheckAccessTokenValidityGetDetails(ctx context.Context, token *jwt.Token) (*auth.TokenAccessDetails, error)
+	// ParseAccessTokenFromString parses the supplied access token string into a JWT
+	// token without asserting higher-level validity semantics.
 	ParseAccessTokenFromString(ctx context.Context, tokenAsString string) (*jwt.Token, error)
+	// CreateEmailVerificationToken creates and stores a verification proof for the
+	// supplied account revision, then asks the mail adapter to deliver it.
 	CreateEmailVerificationToken(ctx context.Context, user auth.UserModel) (*auth.TokenDetails, error)
+	// ExtractRefreshTokenMetadataByString parses and validates the supplied refresh
+	// token string, returning its extracted refresh details.
 	ExtractRefreshTokenMetadataByString(ctx context.Context, tokenAsString string) (*auth.TokenRefreshDetails, error)
+	// ExtractAccessTokenMetadataByString parses and validates the supplied access
+	// token string, returning its extracted access details.
 	ExtractAccessTokenMetadataByString(ctx context.Context, tokenAsString string) (*auth.TokenAccessDetails, error)
 }
 
 // UserService expected methods of a valid user service
 type UserService interface {
+	// GetUserByNanoID fetches the stored user identified by the request's nano ID,
+	// returning the user or an error.
 	GetUserByNanoID(ctx context.Context, r *userv2.GetUserByNanoIDRequest) (*userv2.GetUserByNanoIDResponse, error)
+	// GetUserByID fetches the stored user identified by the request's ID, returning
+	// the user or an error.
 	GetUserByID(ctx context.Context, r *userv2.GetUserByIDRequest) (*userv2.GetUserByIDResponse, error)
+	// GetUserByEmail fetches the stored user with the request's email address,
+	// returning the user or an error.
 	GetUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
+	// CreateUser creates a new user from the request, assigns generated
+	// identifiers, records an audit event, and initiates a verification email
+	// unless disabled.
 	CreateUser(ctx context.Context, r *userv2.CreateUserRequest) (*userv2.CreateUserResponse, error)
 }
 
@@ -103,32 +174,64 @@ type UserService interface {
 // workflows where a missing email is an expected result. Keeping it separate
 // preserves compatibility with existing UserService implementations.
 type userByEmailFinder interface {
+	// FindUserByEmail optionally locates a user by email where absence is an
+	// expected result; it preserves dependency errors separately from a
+	// missing-email outcome.
 	FindUserByEmail(ctx context.Context, r *userv2.GetUserByEmailRequest) (*userv2.GetUserByEmailResponse, error)
 }
 
 // ApitokenService expected methods of a valid apitoken service
 type ApitokenService interface {
+	// ExtractValidateUserAPITokenMetadata extracts and validates the API token
+	// credentials from the supplied HTTP request, returning the requesting token
+	// identity.
 	ExtractValidateUserAPITokenMetadata(ctx context.Context, r *http.Request) (*apitoken.APITokenRequester, error)
+	// UpdateAPITokenLastUsedAt records the last-used timestamp for the API token
+	// identified by the supplied request.
 	UpdateAPITokenLastUsedAt(ctx context.Context, r *apitoken.UpdateAPITokenLastUsedAtRequest) error
+	// CreateAPIToken creates a new API token per the supplied request, returning
+	// the created credential details.
 	CreateAPIToken(ctx context.Context, r *apitoken.CreateAPITokenRequest) (*apitoken.CreateAPITokenResponse, error)
+	// DeleteAPIToken deletes the API token identified by the supplied request,
+	// reporting failure via the returned error.
 	DeleteAPIToken(ctx context.Context, r *apitoken.DeleteAPITokenRequest) error
+	// RevokeAPIToken marks the API token identified by the supplied request
+	// revoked, reporting failure via the returned error.
 	RevokeAPIToken(ctx context.Context, r *apitoken.RevokeAPITokenRequest) error
+	// ActivateAPIToken marks the API token identified by the supplied request
+	// active, reporting failure via the returned error.
 	ActivateAPIToken(ctx context.Context, r *apitoken.ActivateAPITokenRequest) error
+	// GetAPITokensFor returns the API tokens matching the selection in the supplied
+	// request.
 	GetAPITokensFor(ctx context.Context, r *apitoken.GetAPITokensForRequest) (*apitoken.GetAPITokensForResponse, error)
 }
 
 // BillingService expected methods of a valid billing service
 type BillingService interface {
+	// GetUnassociatedSubscriptions returns billing subscriptions not yet associated
+	// with a user, per the supplied request.
 	GetUnassociatedSubscriptions(ctx context.Context, req *billing.GetUnassociatedSubscriptionsRequest) (*billing.GetUnassociatedSubscriptionsResponse, error)
+	// AssociateSubscriptionsWithUser links the subscriptions selected by the
+	// request to their user, returning the association result.
 	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
+	// AssociateBillingEventsWithUser links the billing events selected by the
+	// request to their user, returning the association result.
 	AssociateBillingEventsWithUser(ctx context.Context, req *billing.AssociateBillingEventsWithUserRequest) (*billing.AssociateBillingEventsWithUserResponse, error)
+	// GetUnassociatedBillingEvents returns billing events not yet associated with a
+	// user, per the supplied request.
 	GetUnassociatedBillingEvents(ctx context.Context, req *billing.GetUnassociatedBillingEventsRequest) (*billing.GetUnassociatedBillingEventsResponse, error)
 }
 
 // GroupService expected methods of a valid group service
 type GroupService interface {
+	// GetParentGroupsWithAutoJoinForEmail returns parent groups whose auto-join
+	// rules match the supplied email address.
 	GetParentGroupsWithAutoJoinForEmail(ctx context.Context, email string) (*group.GetParentGroupsWithAutoJoinForEmailResponse, error)
+	// AddMember adds a member to a group per the supplied request, returning the
+	// membership result.
 	AddMember(ctx context.Context, req *group.AddMemberRequest) (*group.AddMemberResponse, error)
+	// InviteUser sends a group invitation per the supplied request, returning the
+	// invitation result.
 	InviteUser(ctx context.Context, req *group.InviteUserRequest) (*group.InviteUserResponse, error)
 }
 

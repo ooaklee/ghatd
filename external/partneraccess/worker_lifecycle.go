@@ -81,6 +81,11 @@ func (a *WorkerAuthority) AuthorizeSubscriptionStatus(ctx context.Context, actor
 	return a.checkLifecycle(ctx, actor, action, &target.Scope)
 }
 
+// checkLifecycle enforces the bound scheduler context, selected scope
+// membership and at least one configured lifecycle grant, verifying live worker
+// identity before and after the policy authorize call. Sole policy denials
+// become ErrDenied; other errors, including context errors, are returned
+// unchanged.
 func (a *WorkerAuthority) checkLifecycle(ctx context.Context, actor, action string, selected *billing.RevenueScope) error {
 	if ctx == nil {
 		return partnermanager.ErrDenied

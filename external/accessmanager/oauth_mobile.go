@@ -172,8 +172,15 @@ type mobileOAuthGrant struct {
 // mobileOAuthService is the internal capability required to initiate and finish
 // native OAuth without transferring browser session cookies to the app.
 type mobileOAuthService interface {
+	// OAuthProviders lists provider names available for native OAuth given required
+	// host capabilities and secure provider configuration.
 	OAuthProviders() []string
+	// mobileOAuthLinkProof derives linking authority from a signed session token,
+	// rechecking ownership, recent authentication and account revision before
+	// returning the proof.
 	mobileOAuthLinkProof(context.Context, string) (*oauth.LinkProof, error)
+	// completeMobileOAuth finalises a redeemed native grant, rechecking link proof
+	// against the initiating session before returning the callback response.
 	completeMobileOAuth(context.Context, *mobileOAuthGrant, string) (*OauthCallbackResponse, error)
 }
 

@@ -20,7 +20,11 @@ import (
 // checks the metadata actor and signature/algorithm/audience separately; it trusts
 // neither a decoded body nor a session result's native audience alone.
 type NativeTokenVerifier interface {
+	// ExtractTokenMetadata extracts verified native token access details from the
+	// request via the owning live token verifier.
 	ExtractTokenMetadata(context.Context, *http.Request) (*auth.TokenAccessDetails, error)
+	// VerifyToken verifies the request's native JWT and returns the verified token
+	// from the owning live verifier.
 	VerifyToken(context.Context, *http.Request) (*jwt.Token, error)
 }
 
@@ -61,6 +65,9 @@ func NewHTTPPrincipalResolver(cfg HTTPPrincipalConfig) (partnerhttp.PrincipalRes
 		authCookie: cfg.CookieName, nativeIDs: ids, transportIdentity: cfg.TransportIdentity}, nil
 }
 
+// httpPrincipalResolver holds the borrowed member/session/token ports, cookie
+// name, native audience allowlist and the host transport-identity binding used
+// to authenticate each request.
 type httpPrincipalResolver struct {
 	members           partneraccess.SessionAuthenticator
 	sessions          partneraccess.SessionVerifier
@@ -70,10 +77,18 @@ type httpPrincipalResolver struct {
 	transportIdentity func(*http.Request, string, string, string) (browsersecurity.Identity, error)
 }
 
+// partnersAuthError builds the transport Error carrying an HTTP status and
+// public code.
 func partnersAuthError(status int, code string) error {
 	return &partnerhttp.Error{Status: status, Code: code}
 }
 
+// Resolve authenticates one request from the configured cookie or a single
+// Bearer Authorization header (never both, never X-Api-Token). It enforces
+// active email-verified membership, durable session admission, and for native
+// requests verifies the token's signature, algorithm and exact allowed audience
+// with a matching user ID. It returns a verified principal binding ActorID
+// server-side or a typed denial; dependency failures surface as 503.
 func (p *httpPrincipalResolver) Resolve(ctx context.Context, r *http.Request) (partnerhttp.Principal, error) {
 	denied := partnersAuthError(401, "PARTNERS_AUTH_REQUIRED")
 	if ctx == nil {
@@ -173,6 +188,9 @@ func (p *httpPrincipalResolver) Resolve(ctx context.Context, r *http.Request) (p
 	return partnerhttp.Principal{ActorID: result.UserID, Credential: credential, Verified: true, Transport: identity}, nil
 }
 
+// validPartnersCredential accepts only non-empty credentials up to 8192
+// printable non-comma ASCII characters, rejecting anything that could not be a
+// single session token.
 func validPartnersCredential(value string) bool {
 	if len(value) == 0 || len(value) > 8192 {
 		return false

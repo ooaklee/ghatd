@@ -13,11 +13,22 @@ import (
 // keeps unresolved observations separate from per-consumer fact decisions;
 // an envelope with no facts cannot be acknowledged using a fact cursor.
 type RevenueSourceRepository interface {
+	// GetRevenueObservation returns the unresolved or resolved observation for the
+	// given identity; the service implementation validates the ID and requires the
+	// optional source-reconciliation extension before forwarding.
 	GetRevenueObservation(context.Context, string) (RevenueObservation, error)
+	// UnresolvedRevenueObservations returns up to the given limit of unresolved
+	// source observations; the service implementation validates a 1–200 limit and
+	// requires the optional source-reconciliation extension.
 	UnresolvedRevenueObservations(context.Context, int) ([]RevenueObservation, error)
+	// FindPaymentRevenueFacts returns the revenue facts associated with a payment
+	// in the given revenue scope; the service implementation validates scope and
+	// payment identity and requires the optional source-reconciliation extension.
 	FindPaymentRevenueFacts(context.Context, RevenueScope, string) ([]RevenueFact, error)
 }
 
+// GetRevenueObservation validates the observation ID, requires the optional
+// source-reconciliation extension, and forwards the owning read by identity.
 func (s *RevenueService) GetRevenueObservation(ctx context.Context, id string) (RevenueObservation, error) {
 	if err := revenueContext(ctx); err != nil {
 		return RevenueObservation{}, err
@@ -31,6 +42,10 @@ func (s *RevenueService) GetRevenueObservation(ctx context.Context, id string) (
 	}
 	return repo.GetRevenueObservation(ctx, id)
 }
+
+// UnresolvedRevenueObservations validates the 1–200 limit, requires the
+// optional source-reconciliation extension, and forwards the bounded
+// unresolved-observation read.
 func (s *RevenueService) UnresolvedRevenueObservations(ctx context.Context, limit int) ([]RevenueObservation, error) {
 	if err := revenueContext(ctx); err != nil {
 		return nil, err
@@ -44,6 +59,10 @@ func (s *RevenueService) UnresolvedRevenueObservations(ctx context.Context, limi
 	}
 	return repo.UnresolvedRevenueObservations(ctx, limit)
 }
+
+// FindPaymentRevenueFacts validates scope and payment identity, requires the
+// optional source-reconciliation extension, and forwards the owning fact
+// lookup.
 func (s *RevenueService) FindPaymentRevenueFacts(ctx context.Context, scope RevenueScope, payment string) ([]RevenueFact, error) {
 	if err := revenueContext(ctx); err != nil {
 		return nil, err

@@ -12,6 +12,8 @@ import (
 //go:embed seeds.json
 var seedData []byte
 
+// Seeds decodes the embedded country seed data into Country rows, returning any
+// JSON unmarshalling error.
 func Seeds() ([]Country, error) {
 	var rows []Country
 	err := json.Unmarshal(seedData, &rows)
@@ -33,6 +35,9 @@ func Migrate(ctx context.Context, db *mongo.Database) error {
 	}
 	return service.Migrate(ctx)
 }
+
+// Migrate seeds the catalogue with the package's embedded country rows via the
+// insertion-only Seed path, preserving existing administrator edits on reruns.
 func (s *Service) Migrate(ctx context.Context) error {
 	rows, err := Seeds()
 	if err != nil {

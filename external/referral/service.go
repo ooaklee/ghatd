@@ -119,8 +119,22 @@ type Eligibility struct {
 	Terms              TermsSnapshot
 }
 
-type Clock interface{ Now() time.Time }
-type IDGenerator interface{ NewID() string }
+// Clock supplies current time to the service; injecting it allows deterministic
+// testing of timing-dependent decisions.
+type Clock interface {
+	// Now returns the current time, allowing deterministic testing of
+	// timing-dependent service decisions when a Clock is injected. The supplied
+	// realClock implementation returns the system time converted to UTC.
+	Now() time.Time
+}
+
+// IDGenerator supplies new opaque identifiers; the service treats generated IDs
+// as non-enumerable secrets.
+type IDGenerator interface {
+	// NewID returns a newly generated opaque identifier that the service treats as
+	// a non-enumerable secret.
+	NewID() string
+}
 
 // Repository operations preserve absence/conflict/unavailability and context.
 // Inserts require atomic unique/head checks; history listing must be complete.
@@ -129,19 +143,49 @@ type Repository interface {
 	// ownership correction for one program/customer. The callback uses only its
 	// bound repository and may retry; it performs no external effects.
 	WithAttributionTransaction(context.Context, string, string, func(Repository) error) error
+	// GetPaymentAttribution reads the PaymentAttribution identified by its two
+	// string arguments from the referral store. The owning Repository contract
+	// requires absence, conflict and unavailability distinctions and context
+	// propagation to be preserved.
 	GetPaymentAttribution(context.Context, string, string) (PaymentAttribution, error)
 	// InsertPaymentAttribution enforces unique program/payment ID, including competing writers.
 	InsertPaymentAttribution(context.Context, PaymentAttribution) error
 	// ListPaymentAttributionsByCustomer returns complete immutable bindings,
 	// including future-effective ones that a prospective cutover cannot move.
 	ListPaymentAttributionsByCustomer(context.Context, string, string) ([]PaymentAttribution, error)
+	// GetLinkByCode returns the Link for the exact case-sensitive code, including
+	// retired ones, or the repository's absence error; the Service delegates after
+	// its readiness check.
 	GetLinkByCode(context.Context, string) (Link, error)
+	// InsertLink stores a new Link, requiring an atomic unique check per the owning
+	// Repository contract so duplicate codes are rejected atomically.
 	InsertLink(context.Context, Link) error
+	// RetireLink retires the link identified by ID at the supplied time with a
+	// reason and actor. The Service validates a non-empty actor and reason of at
+	// most 1000 characters before delegating with the service clock's current UTC
+	// time.
 	RetireLink(context.Context, string, time.Time, string, string) error
+	// ListLinksByPartner returns the links belonging to the partner identified by
+	// the first string argument, scoped by the second, under the Repository
+	// contract that listing be complete and preserve absence, conflict and
+	// unavailability distinctions.
 	ListLinksByPartner(context.Context, string, string) ([]Link, error)
+	// GetReferralByCustomer reads the Referral for the customer identified by its
+	// two string arguments, preserving absence, conflict and unavailability errors
+	// per the Repository contract.
 	GetReferralByCustomer(context.Context, string, string) (Referral, error)
+	// InsertReferral stores a Referral, using the int64 argument within the
+	// repository's atomic insert; the owning contract requires atomic unique and
+	// head checks so conflicting writes are rejected atomically.
 	InsertReferral(context.Context, Referral, int64) error
+	// ListReferralHistory returns the complete referral history for the identifiers
+	// given by its two string arguments; the owning Repository contract requires
+	// history listing to be complete.
 	ListReferralHistory(context.Context, string, string) ([]Referral, error)
+	// ListReferralsByPartner returns referrals for the partner identified by the
+	// first string argument, filtered by the second, with the int and trailing
+	// string refining the selection; listing must be complete per the Repository
+	// contract.
 	ListReferralsByPartner(context.Context, string, string, int, string) ([]Referral, error)
 	// ListRelationshipSnapshots returns a bounded page of lifetime partner/customer
 	// membership and each member's complete head/history in one read snapshot.
@@ -151,14 +195,38 @@ type Repository interface {
 	ReadAnalyticsSnapshot(context.Context, string, string, AnalyticsQuery) (AnalyticsSnapshot, error)
 	// CountClicks is a raw stored-observation count, never a conversion denominator.
 	CountClicks(context.Context, string, time.Time, time.Time) (int64, error)
+	// RecordClick persists a Click stamped with the supplied time, under the
+	// Repository contract preserving absence, conflict and unavailability
+	// distinctions and context.
 	RecordClick(context.Context, Click, time.Time) error
+	// GetClick reads the Click identified by its two string arguments from the
+	// referral store, preserving absence, conflict and unavailability errors per
+	// the Repository contract.
 	GetClick(context.Context, string, string) (Click, error)
+	// WithVisitTransaction runs the supplied callback against the Repository,
+	// scoped by the string argument, binding visit-related operations into one
+	// atomic unit under the Repository contract.
 	WithVisitTransaction(context.Context, string, func(Repository) error) error
+	// GetVisitReceipt reads the VisitReceipt identified by its two string
+	// arguments, preserving absence, conflict and unavailability distinctions per
+	// the Repository contract.
 	GetVisitReceipt(context.Context, string, string) (VisitReceipt, error)
+	// InsertVisitReceipt stores a VisitReceipt under the Repository contract, which
+	// requires atomic unique and head checks for inserts and preserved context.
 	InsertVisitReceipt(context.Context, VisitReceipt) error
+	// GetVisitDay reads the VisitDay for the scope identified by the string
+	// argument at the supplied time, preserving absence, conflict and
+	// unavailability distinctions per the Repository contract.
 	GetVisitDay(context.Context, string, time.Time) (VisitDay, error)
+	// PutVisitDay writes the VisitDay using the int64 argument, under the
+	// Repository contract requiring atomic head checks and preserved absence,
+	// conflict and unavailability distinctions.
 	PutVisitDay(context.Context, VisitDay, int64) error
 }
+
+// Service is the referral domain entry point over a Repository, an injected
+// clock and ID generator, the commercial attribution window and optional
+// analytics retention configuration.
 type Service struct {
 	repo      Repository
 	clock     Clock
@@ -166,8 +234,11 @@ type Service struct {
 	window    time.Duration
 	analytics *AnalyticsConfig
 }
+
+// realClock is the default Clock returning the actual system time in UTC.
 type realClock struct{}
 
+// Now returns the current system time converted to UTC.
 func (realClock) Now() time.Time { return time.Now().UTC() }
 
 // NewService rejects missing commercial timing instead of inventing a window.
@@ -186,6 +257,9 @@ func NewService(repo Repository, clock Clock, ids IDGenerator, window time.Durat
 	}
 	return &Service{repo: repo, clock: clock, ids: ids, window: window}, nil
 }
+
+// activeLink returns the partner's first non-retired link from its listing, or
+// ErrNotFound when every link is retired or none exists.
 func (s *Service) activeLink(ctx context.Context, partnerID string) (Link, error) {
 	links, err := s.repo.ListLinksByPartner(ctx, ProgramID, partnerID)
 	if err != nil {
@@ -238,6 +312,10 @@ func (s *Service) newCode() string {
 	digest := sha256.Sum256([]byte(s.ids.NewID()))
 	return base64.RawURLEncoding.EncodeToString(digest[:])[:22]
 }
+
+// RetireLink retires a link by ID with a non-empty reason of at most 1000
+// characters and a non-empty actor. Invalid input is denied before the
+// repository stamps retirement with the service clock's current UTC time.
 func (s *Service) RetireLink(ctx context.Context, id, reason, actorID string) error {
 	if err := s.ready(ctx); err != nil {
 		return err
@@ -285,12 +363,18 @@ func (s *Service) ObserveClick(ctx context.Context, code, userAgent string) (Cli
 	}
 	return c, nil
 }
+
+// GetLinkByCode returns the link, including retired ones, for the exact case-
+// sensitive code, or the repository's absence error.
 func (s *Service) GetLinkByCode(ctx context.Context, code string) (Link, error) {
 	if err := s.ready(ctx); err != nil {
 		return Link{}, err
 	}
 	return s.repo.GetLinkByCode(ctx, code)
 }
+
+// ClickCount counts recorded clicks for a link in the half-open range [from,
+// to). A zero start or non-increasing range returns ErrInvalid.
 func (s *Service) ClickCount(ctx context.Context, id string, from, to time.Time) (int64, error) {
 	if err := s.ready(ctx); err != nil {
 		return 0, err
@@ -354,9 +438,14 @@ func (s *Service) LockAttribution(ctx context.Context, p PartnerState, l Link, e
 	return r, nil
 }
 
+// validTerms reports whether a TermsSnapshot's rate, hold days, currency,
+// exponent, versions and plan lists are within supported bounds.
 func validTerms(t TermsSnapshot) bool {
 	return t.RateBasisPoints >= 0 && t.RateBasisPoints <= 10000 && t.HoldDurationDays >= 0 && t.HoldDurationDays <= 28 && currencyPattern.MatchString(t.Currency) && t.CurrencyExponent >= 0 && t.CurrencyExponent <= 3 && t.TermsVersion != "" && len(t.PolicyVersionIDs) > 0 && t.EligiblePlanIDs != nil
 }
+
+// cloneTerms returns a deep copy so callers cannot share slice, map-backed plan
+// IDs or the recurrence-end pointer with the original snapshot.
 func cloneTerms(t TermsSnapshot) TermsSnapshot {
 	t.PolicyVersionIDs = append([]string(nil), t.PolicyVersionIDs...)
 	if t.EligiblePlanIDs != nil {
@@ -368,18 +457,27 @@ func cloneTerms(t TermsSnapshot) TermsSnapshot {
 	}
 	return t
 }
+
+// GetReferralForCustomer returns the customer's current referral revision, or
+// the repository's absence error.
 func (s *Service) GetReferralForCustomer(ctx context.Context, customer string) (Referral, error) {
 	if err := s.ready(ctx); err != nil {
 		return Referral{}, err
 	}
 	return s.repo.GetReferralByCustomer(ctx, ProgramID, customer)
 }
+
+// History returns the customer's complete referral revision history in
+// repository order, including corrections.
 func (s *Service) History(ctx context.Context, customer string) ([]Referral, error) {
 	if err := s.ready(ctx); err != nil {
 		return nil, err
 	}
 	return s.repo.ListReferralHistory(ctx, ProgramID, customer)
 }
+
+// ListByPartner pages a partner's referrals by cursor; limit must be between 1
+// and 100 or ErrInvalid is returned.
 func (s *Service) ListByPartner(ctx context.Context, partnerID string, limit int, after string) ([]Referral, error) {
 	if err := s.ready(ctx); err != nil {
 		return nil, err
@@ -389,6 +487,9 @@ func (s *Service) ListByPartner(ctx context.Context, partnerID string, limit int
 	}
 	return s.repo.ListReferralsByPartner(ctx, ProgramID, partnerID, limit, after)
 }
+
+// AttributionWindow returns the configured commercial attribution window used
+// to decide visit eligibility.
 func (s *Service) AttributionWindow() time.Duration { return s.window }
 
 // NormalizeCode trims whitespace without changing the case-sensitive code.

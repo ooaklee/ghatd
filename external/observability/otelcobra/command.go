@@ -136,9 +136,17 @@ func Instrument(command *cobra.Command, resolve func(*cobra.Command) (Config, er
 // exposing the original identity solely to the configured errors.Is registry.
 type commandLogError struct{ cause error }
 
-func (commandLogError) Error() string     { return "command failed" }
+// Error returns a constant message so automatic command logs never expose the
+// original error text.
+func (commandLogError) Error() string { return "command failed" }
+
+// Unwrap exposes the original cause only to errors.Is-based registries.
 func (err commandLogError) Unwrap() error { return err.cause }
 
+// complete writes the classification's outcome and, when present, static error
+// code to the span, then logs completion at the level chosen by outcome. Panics
+// log a static error.type; other errors are wrapped so only the classifier sees
+// their identity.
 func complete(span trace.Span, logger *zap.Logger, name string, classification observability.Classification, err error) {
 	span.SetAttributes(attribute.String("outcome", string(classification.Outcome)))
 	fields := []zap.Field{zap.String("command", name), zap.String("outcome", string(classification.Outcome))}
@@ -167,6 +175,8 @@ func complete(span trace.Span, logger *zap.Logger, name string, classification o
 	}
 }
 
+// validName accepts 1–64 byte command names starting with an ASCII letter and
+// containing only letters, digits, dots, underscores and hyphens.
 func validName(name string) bool {
 	if len(name) == 0 || len(name) > 64 || !asciiLetter(name[0]) {
 		return false
@@ -180,10 +190,13 @@ func validName(name string) bool {
 	return true
 }
 
+// asciiLetter reports whether a byte is an ASCII letter.
 func asciiLetter(char byte) bool {
 	return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
 }
 
+// validScope accepts 1–255 byte UTF-8 scopes without surrounding whitespace or
+// control characters.
 func validScope(scope string) bool {
 	if len(scope) == 0 || len(scope) > 255 || !utf8.ValidString(scope) || strings.TrimSpace(scope) != scope {
 		return false

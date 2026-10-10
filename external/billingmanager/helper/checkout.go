@@ -49,6 +49,10 @@ func (p CheckoutEvidence) LookupRevenueCheckoutSessionEvidence(ctx context.Conte
 
 var _ paymentprovider.RevenueCheckoutSessionEvidenceProvider = CheckoutEvidence{}
 
+// LookupRevenueCheckout resolves the scope's checkout provider and forwards the
+// exact retained session, returning ErrRevenueUnavailable when the provider
+// lacks the revenue checkout capability. It performs no billing validation
+// itself.
 func (p CheckoutEvidence) LookupRevenueCheckout(ctx context.Context, scope paymentprovider.RevenueScope, subscription string) (paymentprovider.RevenueCheckoutEvidence, error) {
 	if ctx == nil {
 		return paymentprovider.RevenueCheckoutEvidence{}, billing.ErrRevenueInvalid
@@ -76,6 +80,8 @@ func NewCheckoutEvidence(registry billingmanager.CheckoutProviderRegistry) Check
 	return CheckoutEvidence{registry: registry}
 }
 
+// nilPort reports whether port is nil, including nil values stored inside
+// interface, pointer, func, map, slice or channel wrappers.
 func nilPort(port any) bool {
 	if port == nil {
 		return true

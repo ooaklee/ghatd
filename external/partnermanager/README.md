@@ -162,7 +162,7 @@ returning its result. A late postcommit revocation returns
 `partnerearnings.ErrUncertain` without a claim; the committed receipt remains
 recoverable under the original key once current authority permits it. Permission
 reads and the financial transaction are separate owner boundaries.
-The earlier `CancelClaim` API performs a conditional one-shot decision; clients
+The alternative `CancelClaim` API performs a conditional one-shot decision; clients
 requiring lost-response recovery should use `CancelClaimWithReceipt`.
 
 `RotateLink(ctx, actor, referral.RotateLinkRequest)` binds actor and partner

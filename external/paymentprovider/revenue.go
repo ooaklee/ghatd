@@ -11,7 +11,14 @@ import (
 // Access state, checkout completion and catalogue prices are not paid revenue.
 // Implementations must authenticate each webhook before returning its scope.
 type RevenueProvider interface {
+	// ResolveRevenueWebhook authenticates an incoming webhook request and returns
+	// its RevenueEvidence; the Stripe implementation verifies the signed envelope
+	// before using any field.
 	ResolveRevenueWebhook(context.Context, *http.Request) (*RevenueEvidence, error)
+	// LookupRevenueInvoice retrieves paid invoice evidence within the accepted
+	// scope; the Stripe implementation requires exactly one matching payment intent
+	// and line nets summing to the invoice net, otherwise returns
+	// ErrRevenueUnassessable.
 	LookupRevenueInvoice(context.Context, RevenueInvoiceRequest) (*RevenueInvoiceEvidence, error)
 }
 
@@ -19,6 +26,9 @@ type RevenueProvider interface {
 // without a fresh delivery signature. Billing supplies only persisted source
 // scope/identity after its current reconciliation authority check.
 type RevenueReconciliationProvider interface {
+	// ReconcileRevenueEvent re-fetches the identified event within the persisted
+	// scope without a fresh delivery signature; the Stripe implementation binds
+	// retrieval to the already accepted scope and refuses forged signatures.
 	ReconcileRevenueEvent(context.Context, RevenueScope, string) (*RevenueEvidence, error)
 }
 
@@ -27,6 +37,11 @@ type RevenueReconciliationProvider interface {
 // authentication and does not replace authenticated provider reconciliation.
 // Billing uses this optional native capability only after current authority.
 type RevenueSnapshotVerifier interface {
+	// VerifyRetainedRevenueSnapshot checks a retained original snapshot against its
+	// previously authenticated source fingerprint and derives a versioned
+	// RevenueSnapshotIdentity. Per the RevenueSnapshotVerifier contract it provides
+	// local verification only, without provider requests or new delivery
+	// authentication.
 	VerifyRetainedRevenueSnapshot(context.Context, RevenueSnapshotRequest) (RevenueSnapshotIdentity, error)
 }
 
@@ -65,6 +80,9 @@ type RevenueConfig struct {
 	CurrencyExponents   map[string]int
 }
 
+// RevenueScope names the authenticated provider account and mode that own a
+// piece of economic evidence. It is derived by the provider after
+// authentication, never supplied by callers as input.
 type RevenueScope struct {
 	Provider  string
 	AccountID string
@@ -91,6 +109,9 @@ type RevenueEvidence struct {
 	QuarantineReason             string
 }
 
+// RevenueInvoiceRequest asks a provider to re-fetch one invoice within an
+// already authenticated scope, optionally including refunds checked against an
+// expected cumulative refunded amount.
 type RevenueInvoiceRequest struct {
 	Scope                                RevenueScope
 	InvoiceID                            string
@@ -115,6 +136,9 @@ type RevenueInvoiceEvidence struct {
 	Lines            []RevenueLineEvidence
 }
 
+// RevenueLineEvidence carries one invoice line's provider identities and minor-
+// unit net/refunded amounts. Billing resolves plan and price meaning separately
+// from these references.
 type RevenueLineEvidence struct {
 	ID                      string
 	SubscriptionID          string
@@ -123,6 +147,9 @@ type RevenueLineEvidence struct {
 	CumulativeRefundedMinor int64
 }
 
+// GetRevenueProvider resolves a registered provider by name and returns it only
+// when it implements the revenue capability; otherwise
+// ErrPaymentProviderUnsupportedProvider.
 func (r *ProviderRegistry) GetRevenueProvider(name string) (RevenueProvider, error) {
 	p, err := r.Get(name)
 	if err != nil {

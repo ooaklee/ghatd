@@ -266,8 +266,17 @@ func (s *Service) confirmOAuthConnectionVerification(ctx context.Context, provid
 // native current-email verification. Hosts without it retain existing sign-in
 // behaviour and receive an unsupported response from these endpoints.
 type mobileConnectionVerificationService interface {
+	// StartMobileOAuthConnectionVerification sends a verification code and review
+	// link to the signed-in account's current email, binding the challenge to the
+	// initiating session, provider and return address.
 	StartMobileOAuthConnectionVerification(context.Context, string, string, string) (*OAuthDisconnectStartResponse, error)
+	// ReviewMobileOAuthConnectionVerification returns pending challenge metadata
+	// for the initiating app session; it accepts no proof and neither consumes the
+	// challenge nor refreshes authentication.
 	ReviewMobileOAuthConnectionVerification(context.Context, string, string, string, string) (*OAuthDisconnectStartResponse, error)
+	// ConfirmMobileOAuthConnectionVerification consumes one emailed code or link
+	// token, rechecks the initiating session, and returns a fresh session without
+	// changing email or provider connections.
 	ConfirmMobileOAuthConnectionVerification(context.Context, string, *OAuthDisconnectConfirmRequest, string, string) (*OAuthDisconnectResponse, error)
 }
 

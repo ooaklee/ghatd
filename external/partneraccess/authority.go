@@ -28,16 +28,25 @@ const (
 // SessionVerifier rechecks the credential's live identity, verification and
 // account-deletion admission. It must never accept stored role claims alone.
 type SessionVerifier interface {
+	// CheckPartnerSession rechecks that the credential's live identity matches the
+	// actor with active, verified status and passes account-deletion admission;
+	// stored role claims alone are never accepted.
 	CheckPartnerSession(context.Context, string, string) error
 }
 
 // PolicyService is the existing access-policy owner's current enforcement API.
 // The adapter neither reads its store nor synthesizes grants from account roles.
 type PolicyService interface {
+	// Authorize checks current access-policy permission for the subject against the
+	// requested actions and resources, as the policy owner's enforcement API.
 	Authorize(context.Context, accesspolicy.Subject, []string, []string) error
 }
 
+// verifiedSession carries the actor and credential placed by
+// WithVerifiedSession at a trusted host boundary.
 type verifiedSession struct{ actor, credential string }
+
+// sessionKey is the private context key carrying the verified session.
 type sessionKey struct{}
 
 // WithVerifiedSession carries credentials only between trusted host boundaries.
@@ -63,6 +72,9 @@ type Authority struct {
 	policy   PolicyService
 }
 
+// NewAuthority validates the system identifier and borrowed ports, returning
+// ErrUnavailable rather than constructing an authority around missing
+// dependencies.
 func NewAuthority(system string, sessions SessionVerifier, policy PolicyService) (*Authority, error) {
 	if !validID(system) || nilPort(sessions) || nilPort(policy) {
 		return nil, partnermanager.ErrUnavailable
@@ -98,6 +110,12 @@ func OperatorTargetValid(capability, target string) bool {
 	return capability != partnermanager.CapabilityOperations || target == partnerprogram.ProgramID
 }
 
+// CheckPartners enforces an actor-bound verified session, then derives self,
+// program or hashed target scopes from the capability before and after the
+// policy grant read, rechecking the live session after policy I/O to catch
+// revocation. Unknown shapes, joined or ambiguous failures return denial or
+// their original error; program-wide scope is checked only on a sole known
+// denial of the explicit target scope.
 func (a *Authority) CheckPartners(ctx context.Context, actor, capability, target string) error {
 	if ctx == nil {
 		return partnermanager.ErrDenied
@@ -158,6 +176,8 @@ func (a *Authority) CheckPartners(ctx context.Context, actor, capability, target
 	return ctx.Err()
 }
 
+// customerCapability recognizes the fixed self-service capabilities requiring
+// the target to equal the actor.
 func customerCapability(capability string) bool {
 	switch capability {
 	case partnermanager.CapabilitySelf, partnermanager.CapabilityEnroll, partnermanager.CapabilityClaims:
@@ -166,6 +186,8 @@ func customerCapability(capability string) bool {
 	return false
 }
 
+// operatorCapability recognizes the fixed operator capabilities that use
+// program or selected-target scopes.
 func operatorCapability(capability string) bool {
 	switch capability {
 	case partnermanager.CapabilityCreateClaimOnBehalf, partnermanager.CapabilityPolicy,
@@ -178,10 +200,14 @@ func operatorCapability(capability string) bool {
 	return false
 }
 
+// validID accepts non-empty UTF-8 identifiers up to 256 bytes without
+// whitespace or control characters.
 func validID(value string) bool {
 	return value != "" && len(value) <= 256 && utf8.ValidString(value) && strings.IndexFunc(value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
 }
 
+// nilPort reports whether a value is nil or a nil pointer, interface, map,
+// slice, function, channel or map behind an interface.
 func nilPort(value any) bool {
 	if value == nil {
 		return true
@@ -194,6 +220,9 @@ func nilPort(value any) bool {
 	return false
 }
 
+// soleDenial walks up to 32 wrapped errors looking for the exact access-policy
+// denial sentinel, distinguishing a pure denial from a denial joined with other
+// failures.
 func soleDenial(err error) bool {
 	for depth := 0; err != nil && depth < 32; depth++ {
 		if err == accesspolicy.ErrDenied {

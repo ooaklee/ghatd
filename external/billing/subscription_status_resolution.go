@@ -22,6 +22,9 @@ type SubscriptionStatusOriginalSnapshot struct {
 // Existing status repositories remain compatible. It creates no capture/head
 // and must not mix separately sampled absence and current head observations.
 type SubscriptionStatusResolutionRepository interface {
+	// ReadSubscriptionStatusOriginal returns the original status snapshot keyed by
+	// RevenueScope and two string identifiers as a private read capability; it
+	// creates no capture/head and must not mix separately sampled observations.
 	ReadSubscriptionStatusOriginal(context.Context, RevenueScope, string, string) (SubscriptionStatusOriginalSnapshot, error)
 }
 
@@ -36,11 +39,18 @@ type SubscriptionStatusResolution struct {
 	Current     *SubscriptionStatus           `json:"-"`
 }
 
+// sameStatusOriginal compares two preparations for exact equality after
+// normalizing RequestedAt to UTC, so naive time-zone differences cannot
+// distinguish identical originals.
 func sameStatusOriginal(a, b SubscriptionStatusPreparation) bool {
 	at, bt := a.RequestedAt, b.RequestedAt
 	a.RequestedAt, b.RequestedAt = at.UTC(), bt.UTC()
 	return a == b
 }
+
+// sameStatusOwner reports whether two preparations address the same scope,
+// subscription, principal and provider customer, independent of capture or
+// request times.
 func sameStatusOwner(a, b SubscriptionStatusPreparation) bool {
 	return a.Scope == b.Scope && a.SubscriptionID == b.SubscriptionID && a.PrincipalID == b.PrincipalID && a.ProviderCustomerID == b.ProviderCustomerID
 }

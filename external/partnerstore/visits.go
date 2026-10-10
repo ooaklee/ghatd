@@ -33,6 +33,9 @@ func (r *ReferralRepository) WithVisitTransaction(ctx context.Context, link stri
 	}))
 }
 
+// GetClick loads a click from the link's partition and verifies revision,
+// visit-day state and an expiry within the allowed 24h-365h window;
+// inconsistent rows surface as ErrUnavailable.
 func (r *ReferralRepository) GetClick(ctx context.Context, link, id string) (referral.Click, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return referral.Click{}, referralError(err)
@@ -62,6 +65,9 @@ func (r *ReferralRepository) GetClick(ctx context.Context, link, id string) (ref
 	return out, nil
 }
 
+// GetVisitReceipt loads a link/digest receipt and verifies its revision,
+// measured click reference and that the stored expiry matches the decoded value
+// exactly.
 func (r *ReferralRepository) GetVisitReceipt(ctx context.Context, link, digest string) (referral.VisitReceipt, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return referral.VisitReceipt{}, referralError(err)
@@ -91,6 +97,9 @@ func (r *ReferralRepository) GetVisitReceipt(ctx context.Context, link, digest s
 	return out, nil
 }
 
+// InsertVisitReceipt writes a first-revision visit receipt with the domain
+// expiry in the link's clicks partition; duplicate inserts surface as domain
+// storage errors.
 func (r *ReferralRepository) InsertVisitReceipt(ctx context.Context, v referral.VisitReceipt) error {
 	if err := validStoreContext(ctx); err != nil {
 		return referralError(err)
@@ -114,7 +123,12 @@ func (r *ReferralRepository) InsertVisitReceipt(ctx context.Context, v referral.
 	}))
 }
 
+// visitDayKey formats a timestamp as its UTC calendar day, used as the
+// anonymous bucket key for visit aggregation.
 func visitDayKey(at time.Time) string { return at.UTC().Format("2006-01-02") }
+
+// validVisitDay reports whether a timestamp is nonzero and exactly a UTC
+// midnight, so a day bucket cannot be written with partial-day times.
 func validVisitDay(at time.Time) bool {
 	return !at.IsZero() && at.Equal(at.UTC().Truncate(24*time.Hour))
 }

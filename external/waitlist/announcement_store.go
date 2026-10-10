@@ -101,6 +101,8 @@ func (s *MongoStore) Unsubscribe(ctx context.Context, hash string) error {
 	return err
 }
 
+// deliveryMetadata is the stored per-recipient projection used for state
+// summaries: delivery state, provider message ID and unsubscribe flag.
 type deliveryMetadata struct {
 	ID           string `bson:"_id"`
 	State        string `bson:"state"`
@@ -108,6 +110,8 @@ type deliveryMetadata struct {
 	Unsubscribed bool   `bson:"unsubscribed"`
 }
 
+// deliveryMetadata loads all delivery records projected to identity, state,
+// message ID and unsubscribe flag, keyed by record ID.
 func (s *MongoStore) deliveryMetadata(ctx context.Context) (map[string]deliveryMetadata, error) {
 	cursor, err := s.deliveries.Find(ctx, bson.M{}, options.Find().SetProjection(bson.M{"_id": 1, "state": 1, "messageID": 1, "unsubscribed": 1}))
 	if err != nil {

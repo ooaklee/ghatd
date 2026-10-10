@@ -583,6 +583,7 @@ func Example14_BillingEventUtilityMethods() {
 
 // Helper functions
 
+// setupService builds an example service over a fresh in-memory repository.
 func setupService() *billing.Service {
 
 	// Create in-memory repository
@@ -592,6 +593,9 @@ func setupService() *billing.Service {
 	return billing.NewService(baseRepo, baseRepo)
 }
 
+// createSubscription inserts a fixed-shape subscription for the example,
+// deriving its integrator ID from provider, user and status; creation errors
+// are ignored.
 func createSubscription(service *billing.Service, ctx context.Context, userID, email, status, provider string) *billing.Subscription {
 	req := &billing.CreateSubscriptionRequest{
 		IntegratorSubscriptionID: fmt.Sprintf("%s_%s_%s", provider, userID, status),
@@ -609,6 +613,9 @@ func createSubscription(service *billing.Service, ctx context.Context, userID, e
 	return resp.Subscription
 }
 
+// createSubscriptionWithDetails inserts an active example subscription with
+// explicit provider, currency and amount, deriving its integrator ID and email;
+// creation errors are ignored.
 func createSubscriptionWithDetails(service *billing.Service, ctx context.Context, userID, provider, currency string, amount int64) *billing.Subscription {
 	req := &billing.CreateSubscriptionRequest{
 		IntegratorSubscriptionID: fmt.Sprintf("%s_%s_%s_%d", provider, userID, currency, amount),

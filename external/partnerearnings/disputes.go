@@ -11,11 +11,16 @@ import (
 	"time"
 )
 
+// financialFingerprint returns the lowercase hex SHA-256 of the JSON encoding
+// of value; marshalling failures fingerprint the fallback encoding.
 func financialFingerprint(value any) string {
 	body, _ := json.Marshal(value)
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
 }
+
+// strictFinancialAbsence walks up to 32 wrapped errors for the exact
+// ErrNotFound sentinel, distinguishing pure absence from joined failures.
 func strictFinancialAbsence(err error) bool {
 	for i := 0; err != nil && i < 32; i++ {
 		if err == ErrNotFound {
@@ -183,6 +188,9 @@ func (s *Service) Dispute(ctx context.Context, req DisputeRequest) (DisputeResul
 	}
 	return result, nil
 }
+
+// activeDisputeHolds sums per-dispute hold balances from a payment's journal
+// entries, adding holds and subtracting releases and wins.
 func activeDisputeHolds(entries []Entry, payment string) map[string]*big.Int {
 	holds := map[string]*big.Int{}
 	for _, e := range entries {
@@ -201,6 +209,11 @@ func activeDisputeHolds(entries []Entry, payment string) map[string]*big.Int {
 	}
 	return holds
 }
+
+// reduceDisputeHolds appends dispute-release entries in sorted dispute-ID order
+// until the given amount is covered, skipping non-positive balances. Release
+// entry IDs derive from the operation and dispute, and each append goes through
+// the service's journal.
 func (s *Service) reduceDisputeHolds(ctx context.Context, tx Repository, partner, payment, operation string, amount int64, at time.Time) error {
 	entries, err := tx.ListEntries(ctx, s.programID, partner)
 	if err != nil {

@@ -20,6 +20,8 @@ import (
 // closed instead of overwriting operator-managed pricing data.
 var ErrTestStripePlansSeedConflict = errors.New("test Stripe pricing seed conflict")
 
+// testStripeStoredPlan mirrors the full stored plan shape used to compare an
+// existing document against a rendered fixture during reconciliation.
 type testStripeStoredPlan struct {
 	ID            string                    `bson:"_id"`
 	NanoID        string                    `bson:"_nano_id"`
@@ -124,6 +126,9 @@ func InitTestStripePlansSeedReconcileDown(db *mongo.Database) error { //Down
 	return err
 }
 
+// requireOwnedBaseTestPlans verifies that the Free, Pro and Enterprise base
+// plans exist with the expected slugs and test-seed creator; otherwise it
+// returns ErrTestStripePlansSeedConflict.
 func requireOwnedBaseTestPlans(ctx context.Context, db *mongo.Database) error {
 	expected := map[string]string{
 		TestSeedPlanFreeID:       "free",
@@ -145,6 +150,8 @@ func requireOwnedBaseTestPlans(ctx context.Context, db *mongo.Database) error {
 	return nil
 }
 
+// findTestStripePlanDocuments loads any stored plan whose ID or slug matches a
+// configured Stripe test fixture seed.
 func findTestStripePlanDocuments(ctx context.Context, db *mongo.Database) ([]testStripeStoredPlan, error) {
 	ids := make([]string, 0, len(testStripePlanSeeds))
 	slugs := make([]string, 0, len(testStripePlanSeeds))
@@ -171,6 +178,9 @@ func findTestStripePlanDocuments(ctx context.Context, db *mongo.Database) ([]tes
 	return documents, nil
 }
 
+// preflightTestStripeCostReferences fails with a conflict error when any
+// document outside the fixture plan IDs already uses one of the fixture cost
+// IDs or provider price IDs.
 func preflightTestStripeCostReferences(ctx context.Context, db *mongo.Database) error {
 	costIDs := make([]string, 0, 7)
 	priceIDs := make([]string, 0, 7)
@@ -199,6 +209,8 @@ func preflightTestStripeCostReferences(ctx context.Context, db *mongo.Database) 
 	return nil
 }
 
+// testStripePlanSeedByID returns the configured Stripe fixture seed with the
+// given ID, or false when none matches.
 func testStripePlanSeedByID(id string) (testStripePlanSeed, bool) {
 	for _, seed := range testStripePlanSeeds {
 		if seed.ID == id {
@@ -208,6 +220,10 @@ func testStripePlanSeedByID(id string) (testStripePlanSeed, bool) {
 	return testStripePlanSeed{}, false
 }
 
+// testStripeStoredPlanMatches compares a stored plan against the fixture
+// rendered from its seed after normalizing metadata encodings and ignoring the
+// exact publication timestamp. It requires effective publication, no deletion
+// and deep equality elsewhere.
 func testStripeStoredPlanMatches(document testStripeStoredPlan, seed testStripePlanSeed) bool {
 	if !testStripePublicationIsEffective(document.PublishedAt) || strings.TrimSpace(document.DeletedAt) != "" || strings.TrimSpace(document.DeletedByID) != "" {
 		return false
@@ -230,6 +246,8 @@ func testStripeStoredPlanMatches(document testStripeStoredPlan, seed testStripeP
 	return reflect.DeepEqual(document, expected)
 }
 
+// testStripePublicationIsEffective reports whether publishedAt parses as
+// RFC3339 and is not in the future.
 func testStripePublicationIsEffective(publishedAt string) bool {
 	publishedAt = strings.TrimSpace(publishedAt)
 	if publishedAt == "" {
@@ -244,6 +262,9 @@ func testStripePublicationIsEffective(publishedAt string) bool {
 	return false
 }
 
+// normalizeTestStripeStoredPlanMetadata normalizes metadata maps on the plan
+// and every nested feature, cost, discount, provider ref and payment terms so
+// BSON and Go map encodings compare equal.
 func normalizeTestStripeStoredPlanMetadata(plan *testStripeStoredPlan) {
 	plan.Metadata = normalizeTestStripeMetadataMap(plan.Metadata)
 	for index := range plan.Features {
@@ -273,6 +294,8 @@ func normalizeTestStripeStoredPlanMetadata(plan *testStripeStoredPlan) {
 	}
 }
 
+// normalizeTestStripeMetadataMap returns a copy of metadata with each value
+// recursively normalized; nil maps stay nil.
 func normalizeTestStripeMetadataMap(metadata map[string]interface{}) map[string]interface{} {
 	if metadata == nil {
 		return nil
@@ -284,6 +307,8 @@ func normalizeTestStripeMetadataMap(metadata map[string]interface{}) map[string]
 	return normalized
 }
 
+// normalizeTestStripeMetadataValue converts BSON documents and arrays to plain
+// Go maps and slices recursively so fixture comparisons are encoding agnostic.
 func normalizeTestStripeMetadataValue(value interface{}) interface{} {
 	switch typed := value.(type) {
 	case bson.D:

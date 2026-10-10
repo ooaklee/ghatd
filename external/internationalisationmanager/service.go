@@ -26,6 +26,8 @@ type Service struct {
 	clock      catalogue.Clock
 }
 
+// NewService composes the four owning catalogue services; a nil child service
+// returns catalogue.ErrUnavailable and a nil clock defaults to the real clock.
 func NewService(currencies *currencycoder.Service, phones *telenumcoder.Service, flags *globalflagger.Service, timezones *timezonecoder.Service, clock catalogue.Clock) (*Service, error) {
 	if currencies == nil || phones == nil || flags == nil || timezones == nil {
 		return nil, catalogue.ErrUnavailable
@@ -38,6 +40,9 @@ func NewService(currencies *currencycoder.Service, phones *telenumcoder.Service,
 
 var _ HTTPService = (*Service)(nil)
 
+// domainError maps known catalogue and coder failures onto transport Error
+// codes, and returns other errors unchanged so the HTTP boundary can hide
+// native text.
 func domainError(err error) error {
 	if err == nil {
 		return nil
@@ -59,9 +64,14 @@ func domainError(err error) error {
 		return err // HTTP boundary hides native error text.
 	}
 }
+
+// invalidRecord returns the 422 invalid-record error attributed to a field.
 func invalidRecord(field string) error {
 	return &Error{Code: "I18N_INVALID_RECORD", Status: 422, Field: field}
 }
+
+// entryView projects common catalogue fields; audit actor fields are included
+// only for admin views.
 func entryView(entry catalogue.Entry, admin bool) RecordView {
 	updated := entry.CreatedAt
 	if entry.UpdatedAt != nil {
@@ -75,17 +85,24 @@ func entryView(entry catalogue.Entry, admin bool) RecordView {
 	}
 	return result
 }
+
+// currencyView extends the common view with the currency's minor unit.
 func currencyView(record currencycoder.Currency, admin bool) RecordView {
 	result := entryView(record.Entry, admin)
 	result.MinorUnit = &record.MinorUnit
 	return result
 }
+
+// phoneView extends the common view with calling code and dial prefixes.
 func phoneView(record telenumcoder.Country, admin bool) RecordView {
 	result := entryView(record.Entry, admin)
 	result.CallingCode = record.CallingCode
 	result.DialPrefixes = record.DialPrefixes
 	return result
 }
+
+// timezoneView extends the common view with the offset and local time described
+// at the given instant; description failures propagate.
 func (s *Service) timezoneView(record timezonecoder.Timezone, admin bool, at time.Time) (RecordView, error) {
 	result := entryView(record.Entry, admin)
 	description, err := s.timezones.DescribeRecord(record, at)
@@ -96,6 +113,9 @@ func (s *Service) timezoneView(record timezonecoder.Timezone, admin bool, at tim
 	result.LocalTime = description.LocalTime.Format(time.RFC3339)
 	return result, nil
 }
+
+// flagURL builds the admin or public SVG endpoint URL, cache-busting with the
+// record revision.
 func flagURL(code string, revision int, admin bool) string {
 	prefix := BasePath
 	if admin {
@@ -103,6 +123,9 @@ func flagURL(code string, revision int, admin bool) string {
 	}
 	return fmt.Sprintf("%s/flags/%s/svg?v=%d", prefix, url.PathEscape(code), revision)
 }
+
+// flagView projects a flag record with its SVG URL; the raw SVG is included
+// only when requested.
 func flagView(record globalflagger.Record, admin, includeSVG bool) RecordView {
 	result := entryView(catalogue.Entry{Code: record.Code, Name: record.Name, Enabled: record.Enabled, Hidden: record.Hidden, Audit: record.Audit}, admin)
 	result.SVGURL = flagURL(record.Code, record.Revision, admin)
@@ -111,6 +134,9 @@ func flagView(record globalflagger.Record, admin, includeSVG bool) RecordView {
 	}
 	return result
 }
+
+// isPublic reports whether a record is enabled, unhidden and undeleted, i.e.
+// selectable by non-admin callers.
 func isPublic(record RecordView) bool {
 	return catalogue.Selectable(record.Enabled, record.Hidden, record.DeletedAt)
 }
@@ -124,6 +150,10 @@ type cursor struct {
 	Limit int  `json:"l"`
 }
 
+// pageQuery validates kind and limit, and decodes a cursor only if it matches
+// the request's kind, admin flag and page size and names a page between 2 and
+// 10000; otherwise it returns an invalid request. Admin queries include
+// deleted, hidden and disabled records.
 func pageQuery(kind Kind, admin bool, q ListQuery) (catalogue.ListQuery, error) {
 	if !kind.valid() || q.Limit < 1 || q.Limit > 200 {
 		return catalogue.ListQuery{}, invalidHTTP()
@@ -145,6 +175,9 @@ func pageQuery(kind Kind, admin bool, q ListQuery) (catalogue.ListQuery, error) 
 	}
 	return catalogue.ListQuery{Page: page, PageSize: q.Limit, IncludeDeleted: admin, IncludeHidden: admin, IncludeDisabled: admin}, nil
 }
+
+// nextCursor returns an encoded next-page cursor when more pages remain, and an
+// empty string on the final page.
 func nextCursor(kind Kind, admin bool, q catalogue.ListQuery, total int64) string {
 	if int64(q.Page*q.PageSize) >= total {
 		return ""
@@ -152,6 +185,10 @@ func nextCursor(kind Kind, admin bool, q catalogue.ListQuery, total int64) strin
 	raw, _ := json.Marshal(cursor{kind, admin, q.Page + 1, q.PageSize})
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
+
+// List returns one page of the requested kind. Flags use the public listing for
+// non-admin callers; other kinds attach flag URLs via a bounded index. Failures
+// are mapped through domainError and an empty page is always non-nil.
 func (s *Service) List(ctx context.Context, kind Kind, admin bool, query ListQuery) (result ListResult, err error) {
 	defer func() { err = domainError(err) }()
 	q, err := pageQuery(kind, admin, query)
@@ -247,6 +284,10 @@ func (s *Service) flagIndex(ctx context.Context, admin bool) (map[string]globalf
 	}
 	return nil, catalogue.ErrUnavailable
 }
+
+// Get returns one record by kind and code; non-admin callers receive only
+// selectable records and never raw SVG. A referenced flag's URL is attached
+// when that flag exists and remains selectable.
 func (s *Service) Get(ctx context.Context, kind Kind, code string, admin bool) (result RecordView, err error) {
 	defer func() { err = domainError(err) }()
 	switch kind {
@@ -294,6 +335,9 @@ func (s *Service) Get(ctx context.Context, kind Kind, code string, admin bool) (
 	}
 	return result, nil
 }
+
+// validMutation rejects kind-specific fields applied to the wrong resource,
+// attributing the failure to the offending field.
 func validMutation(kind Kind, m Mutation) error {
 	if !kind.valid() {
 		return invalidHTTP()
@@ -312,6 +356,10 @@ func validMutation(kind Kind, m Mutation) error {
 	}
 	return nil
 }
+
+// mergeEntry applies non-nil mutation fields to a copy, and when FlagID changes
+// to a non-empty value verifies the flag exists and is not deleted, mapping
+// lookup misses to an invalid flag_id record error.
 func (s *Service) mergeEntry(ctx context.Context, entry catalogue.Entry, m Mutation) (catalogue.Entry, error) {
 	if m.Name != nil {
 		entry.Name = *m.Name
@@ -342,6 +390,12 @@ func (s *Service) mergeEntry(ctx context.Context, entry catalogue.Entry, m Mutat
 	}
 	return entry, nil
 }
+
+// Create persists a new record of the given kind with the actor as creator.
+// Currencies and phone codes require known ISO definitions for the code (minor
+// unit and calling data default from them); flags require an SVG payload.
+// Validation failures return 422 field errors and child errors pass through
+// domainError.
 func (s *Service) Create(ctx context.Context, kind Kind, code string, m Mutation, actor string) (result RecordView, err error) {
 	defer func() { err = domainError(err) }()
 	if err = validMutation(kind, m); err != nil {
@@ -400,12 +454,20 @@ func (s *Service) Create(ctx context.Context, kind Kind, code string, m Mutation
 	}
 	return result, invalidHTTP()
 }
+
+// expectedInt narrows a revision to a positive int within int32 range,
+// otherwise returning an invalid request.
 func expectedInt(expected int64) (int, error) {
 	if expected < 1 || expected > 2147483646 {
 		return 0, invalidHTTP()
 	}
 	return int(expected), nil
 }
+
+// Update applies a compare-and-swap partial update for the kind: it reads the
+// current record, merges mutation fields (flag changes are reference-checked)
+// and submits with the expected revision and actor. Flags accept an optional
+// replacement SVG but reject empty SVG values.
 func (s *Service) Update(ctx context.Context, kind Kind, code string, m Mutation, expected int64, actor string) (result RecordView, err error) {
 	defer func() { err = domainError(err) }()
 	revision, err := expectedInt(expected)
@@ -496,12 +558,23 @@ func (s *Service) Update(ctx context.Context, kind Kind, code string, m Mutation
 	}
 	return result, invalidHTTP()
 }
+
+// Remove soft-deletes a record by kind and code, requiring the current
+// revision; it forwards to changeState with restore disabled.
 func (s *Service) Remove(ctx context.Context, kind Kind, code string, expected int64, actor string) (RecordView, error) {
 	return s.changeState(ctx, kind, code, expected, actor, false)
 }
+
+// Restore un-deletes a soft-deleted record by kind and code, requiring the
+// revision observed while deleted; it forwards to changeState with restore
+// enabled.
 func (s *Service) Restore(ctx context.Context, kind Kind, code string, expected int64, actor string) (RecordView, error) {
 	return s.changeState(ctx, kind, code, expected, actor, true)
 }
+
+// changeState performs the delete or restore against the owning child service
+// with the expected revision and actor, mapping domain failures through
+// domainError and rejecting unknown kinds.
 func (s *Service) changeState(ctx context.Context, kind Kind, code string, expected int64, actor string, restore bool) (result RecordView, err error) {
 	defer func() { err = domainError(err) }()
 	revision, err := expectedInt(expected)
@@ -563,6 +636,9 @@ func (s *Service) NormalisePhone(ctx context.Context, phone, region string) (tel
 	return s.phones.Normalise(ctx, phone, region)
 }
 
+// CheckPhone normalises and validates a phone number for a region; an unknown
+// or non-selectable region maps to a 422 region_code field error and other
+// failures pass through domainError.
 func (s *Service) CheckPhone(ctx context.Context, phone, region string) (PhoneCheck, error) {
 	result, err := s.phones.Check(ctx, phone, region)
 	if err != nil {
@@ -580,10 +656,16 @@ func (s *Service) ValidateCurrency(ctx context.Context, code string) error {
 	_, err := s.currencies.RequireSelectable(ctx, code)
 	return err
 }
+
+// ValidatePhone normalises a number with an empty region and returns any
+// validation error.
 func (s *Service) ValidatePhone(ctx context.Context, number string) error {
 	_, err := s.phones.Normalise(ctx, number, "")
 	return err
 }
+
+// ValidateTimezone requires the zone to exist and be selectable, returning any
+// failure.
 func (s *Service) ValidateTimezone(ctx context.Context, zone string) error {
 	_, err := s.timezones.RequireSelectable(ctx, zone)
 	return err

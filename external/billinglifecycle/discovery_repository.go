@@ -31,10 +31,18 @@ type DiscoveryCommit struct {
 // DiscoveryRepository commits all sources before advancing their checkpoint in
 // one transaction. Repeated admission never resets execution or recovery state.
 type DiscoveryRepository interface {
+	// ReadDiscovery returns the durable discovery checkpoint for a validated query;
+	// absence yields an empty checkpoint while storage or context errors return a
+	// zero value.
 	ReadDiscovery(context.Context, billing.LifecycleDiscoveryQuery) (DiscoveryCheckpoint, error)
+	// CommitDiscovery atomically admits a validated discovery page and advances the
+	// checkpoint only when it still matches the expected state; repeated admission
+	// never resets execution or recovery state.
 	CommitDiscovery(context.Context, DiscoveryCommit) error
 }
 
+// discoveryCheckpointPayload persists one scope/kind continuation cursor;
+// Schema pins the recognized encoding used by checkpoint records.
 type discoveryCheckpointPayload struct {
 	Schema int
 	Scope  billing.RevenueScope
@@ -42,10 +50,15 @@ type discoveryCheckpointPayload struct {
 	Cursor string
 }
 
+// discoveryCheckpointID derives the stable checkpoint record identity for one
+// scope and source kind.
 func discoveryCheckpointID(q billing.LifecycleDiscoveryQuery) string {
 	return digest([]any{"partners.lifecycle.discovery.v1", q.Scope, q.Kind})
 }
 
+// readDiscoveryCheckpoint loads the discovery continuation inside a
+// transaction. A missing record is an empty checkpoint, not an error; any
+// corrupted or inconsistent stored row is reported as ErrUnavailable.
 func readDiscoveryCheckpoint(ctx context.Context, tx recordstore.Tx, q billing.LifecycleDiscoveryQuery) (DiscoveryCheckpoint, error) {
 	id := discoveryCheckpointID(q)
 	r, err := tx.Get(ctx, discoveryCheckpointKind, id)
@@ -67,6 +80,9 @@ func readDiscoveryCheckpoint(ctx context.Context, tx recordstore.Tx, q billing.L
 	return DiscoveryCheckpoint{r.Revision, p.Cursor}, nil
 }
 
+// ReadDiscovery returns the durable discovery checkpoint for a validated query.
+// Absence yields an empty checkpoint; storage or context errors return a zero
+// value.
 func (r *RecordScheduleRepository) ReadDiscovery(ctx context.Context, q billing.LifecycleDiscoveryQuery) (DiscoveryCheckpoint, error) {
 	if err := r.ready(ctx); err != nil {
 		return DiscoveryCheckpoint{}, err
@@ -89,6 +105,8 @@ func (r *RecordScheduleRepository) ReadDiscovery(ctx context.Context, q billing.
 	return out, nil
 }
 
+// discoverySource projects a discovery candidate into an immutable private
+// ScheduledSource; checkout sources additionally copy the candidate's intent.
 func discoverySource(q billing.LifecycleDiscoveryQuery, c billing.LifecycleDiscoveryCandidate) ScheduledSource {
 	s := ScheduledSource{Scope: q.Scope, Kind: q.Kind, SourceID: c.ID, PrincipalID: c.PrincipalID, SubscriptionID: c.SubscriptionID, FactID: c.Fact.ID}
 	if q.Kind == billing.LifecycleCheckoutSources {
@@ -110,6 +128,10 @@ func sameDiscoveryOwner(prior, next ScheduledSource) bool {
 	return digest(a) == digest(b)
 }
 
+// CommitDiscovery atomically admits a validated page and advances the
+// checkpoint only when it still matches Expected. Existing jobs are left
+// untouched unless sameDiscoveryOwner permits the replay; mismatched cursor,
+// revision or owner returns ErrConflict without advancing.
 func (r *RecordScheduleRepository) CommitDiscovery(ctx context.Context, c DiscoveryCommit) error {
 	if err := r.ready(ctx); err != nil {
 		return err

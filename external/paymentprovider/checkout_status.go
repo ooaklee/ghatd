@@ -21,6 +21,9 @@ type CheckoutStatusEvidence struct {
 // CheckoutStatusProvider is optional and read-only. Implementations must never
 // submit a checkout, change metadata, capture revenue or grant access here.
 type CheckoutStatusProvider interface {
+	// LookupCheckoutStatus reads checkout status evidence for the session within
+	// the RevenueScope; the Stripe implementation authenticates the merchant, reads
+	// only, and rejects unsupported shapes as unassessable.
 	LookupCheckoutStatus(context.Context, RevenueScope, string) (CheckoutStatusEvidence, error)
 }
 

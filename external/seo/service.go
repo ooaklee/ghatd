@@ -18,14 +18,35 @@ import (
 
 // SitemapRepository defines the repository surface used by the service.
 type SitemapRepository interface {
+	// CreateSitemapItem persists a new sitemap item in the sitemap items collection
+	// and returns the stored item; part of the repository surface used by the
+	// service.
 	CreateSitemapItem(ctx context.Context, item *SitemapItem) (*SitemapItem, error)
+	// DeleteSitemapItemsByURIs deletes sitemap items whose URIs match the supplied
+	// exact strings, returning nil early when no URIs are given.
 	DeleteSitemapItemsByURIs(ctx context.Context, uris []string) error
+	// GetAllSitemapItems returns every sitemap item using an empty filter,
+	// supporting XML sitemap generation.
 	GetAllSitemapItems(ctx context.Context) ([]SitemapItem, error)
+	// GetLatestSitemapItemByURIRegex returns the newest sitemap item whose URI
+	// matches the given regex, sorting by last_mod then created_at; missing matches
+	// yield ErrSitemapItemResourceNotFound.
 	GetLatestSitemapItemByURIRegex(ctx context.Context, uriRegex string) (*SitemapItem, error)
+	// GetSitemapItemByURI retrieves a single sitemap item by its normalised URI,
+	// returning ErrSitemapItemResourceNotFound when absent.
 	GetSitemapItemByURI(ctx context.Context, uri string) (*SitemapItem, error)
+	// GetSitemapItems retrieves sitemap items matching the request filter, sorted
+	// by URI with optional pagination, and decodes all cursor results.
 	GetSitemapItems(ctx context.Context, req *GetSitemapItemsRequest) ([]SitemapItem, error)
+	// GetTotalSitemapItems counts sitemap items matching the same list filter used
+	// by GetSitemapItems.
 	GetTotalSitemapItems(ctx context.Context, req *GetSitemapItemsRequest) (int64, error)
+	// UpdateSitemapItemByURI updates the existing sitemap item selected by URI with
+	// the supplied item's fields and returns it.
 	UpdateSitemapItemByURI(ctx context.Context, item *SitemapItem) (*SitemapItem, error)
+	// UpsertSitemapItemByURI creates or replaces a sitemap item matched by URI
+	// using upsert semantics; the bool result reports whether a new document was
+	// created.
 	UpsertSitemapItemByURI(ctx context.Context, item *SitemapItem) (*SitemapItem, bool, error)
 }
 
@@ -362,6 +383,9 @@ func (s *Service) GenerateXML(items []SitemapItem) (string, error) {
 	return buffer.String(), nil
 }
 
+// shouldExcludeSitemapURI reports whether a URI's path equals or falls under an
+// administrative prefix such as /admin, /api, /app, /auth, /offline, /portal or
+// /settings, excluding it from public sitemap output.
 func shouldExcludeSitemapURI(uri string) bool {
 	uri = normaliseSitemapURI(uri)
 	parsed, err := url.Parse(uri)
@@ -416,6 +440,9 @@ func (s *Service) DownloadSitemapByPath(_ context.Context, req *DownloadSitemapB
 	}, nil
 }
 
+// buildLoc resolves a sitemap URI to an absolute URL: absolute URIs pass
+// through unchanged, while relative paths are resolved against the configured
+// frontend domain. A missing or invalid domain returns an error.
 func (s *Service) buildLoc(uri string) (string, error) {
 	uri = normaliseSitemapURI(uri)
 	parsed, err := url.Parse(uri)
@@ -434,6 +461,9 @@ func (s *Service) buildLoc(uri string) (string, error) {
 	return base.ResolveReference(parsed).String(), nil
 }
 
+// readSitemapFile reads sitemap content from the validated writable path,
+// falling back to the embedded filesystem (optionally under a prefix) only when
+// the file does not exist on disk. Other read errors propagate.
 func (s *Service) readSitemapFile(requestedPath string) ([]byte, string, error) {
 	cleanPath, err := cleanSitemapPath(requestedPath)
 	if err != nil {
@@ -469,6 +499,9 @@ func (s *Service) readSitemapFile(requestedPath string) ([]byte, string, error) 
 	return content, cleanPath, nil
 }
 
+// writeSitemapFile atomically writes sitemap content: under a mutex it creates
+// the target directory, writes and chmods a temp file, then renames it into
+// place, removing the temp file on any path.
 func (s *Service) writeSitemapFile(requestedPath string, content []byte) error {
 	cleanPath, err := cleanSitemapPath(requestedPath)
 	if err != nil {
@@ -511,6 +544,9 @@ func (s *Service) writeSitemapFile(requestedPath string, content []byte) error {
 	return os.Rename(tmpPath, fullPath)
 }
 
+// resolveWritablePath joins a cleaned relative path under the configured
+// writable root (defaulting when unset) and rejects any result escaping the
+// root with ErrSitemapPathIsInvalid.
 func (s *Service) resolveWritablePath(cleanPath string) (string, error) {
 	root := strings.TrimSpace(s.WritableRootPath)
 	if root == "" {
@@ -535,6 +571,9 @@ func (s *Service) resolveWritablePath(cleanPath string) (string, error) {
 	return absoluteFullPath, nil
 }
 
+// cleanSitemapPath normalises an optional sitemap path to a safe relative slash
+// path, defaulting to the default sitemap path when empty and rejecting
+// absolute paths or any traversal outside the root.
 func cleanSitemapPath(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -552,12 +591,18 @@ func cleanSitemapPath(value string) (string, error) {
 	return cleaned, nil
 }
 
+// sitemapURLSet is the XML root element for a rendered sitemap document,
+// holding the namespace attribute and the set of URL entries serialised as
+// <url> children.
 type sitemapURLSet struct {
 	XMLName xml.Name          `xml:"urlset"`
 	Xmlns   string            `xml:"xmlns,attr"`
 	URLs    []sitemapURLEntry `xml:"url"`
 }
 
+// sitemapURLEntry is a single <url> record in generated sitemap XML; its loc,
+// lastmod, changefreq and priority fields are pre-formatted strings from stored
+// sitemap items.
 type sitemapURLEntry struct {
 	Loc        string `xml:"loc"`
 	LastMod    string `xml:"lastmod"`

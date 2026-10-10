@@ -19,6 +19,8 @@ type AccountAdmission func(context.Context, string) error
 // SessionAuthenticator supplies a current owning member session directly from
 // its bearer. It never synthesizes an HTTP request or trusts a decoded actor.
 type SessionAuthenticator interface {
+	// AuthenticateSession resolves the current owning member session for a bearer
+	// credential, returning the authenticated user response.
 	AuthenticateSession(context.Context, string) (*accessmanager.MiddlewareAuthedUserResponse, error)
 }
 
@@ -40,6 +42,12 @@ func NewMemberSessionVerifier(members SessionAuthenticator, admission AccountAdm
 	}
 	return &MemberSessionVerifier{members, admission, activeStatus}, nil
 }
+
+// CheckPartnerSession authenticates the credential with the owning member
+// service and requires the returned identity to match the actor with active
+// status and verified email. Malformed actor or credential shapes are denials;
+// missing dependencies are unavailable; context errors are returned directly.
+// The host admission hook runs last and its error is returned.
 func (v *MemberSessionVerifier) CheckPartnerSession(ctx context.Context, actor, credential string) error {
 	if ctx == nil {
 		return partnermanager.ErrDenied
@@ -74,6 +82,9 @@ type UserWorkerIdentity struct {
 	accountType, activeStatus string
 }
 
+// NewUserWorkerIdentity validates the borrowed user service, admission hook and
+// the configured account type/status strings, returning unavailable or invalid
+// rather than constructing around invalid configuration.
 func NewUserWorkerIdentity(users billingmanager.CheckoutPayerUserService, admission AccountAdmission, accountType, activeStatus string) (*UserWorkerIdentity, error) {
 	if nilPort(users) || admission == nil {
 		return nil, partnermanager.ErrUnavailable
@@ -83,6 +94,11 @@ func NewUserWorkerIdentity(users billingmanager.CheckoutPayerUserService, admiss
 	}
 	return &UserWorkerIdentity{users, admission, accountType, activeStatus}, nil
 }
+
+// CheckWorkerIdentity reads the account through user/v2 and requires a matching
+// ID with the configured type and active status, then runs the host admission
+// hook. Shape failures are denials, lookup inconsistencies are unavailable, and
+// context errors are returned directly.
 func (i *UserWorkerIdentity) CheckWorkerIdentity(ctx context.Context, actor string) error {
 	if ctx == nil || !validID(actor) {
 		return partnermanager.ErrDenied

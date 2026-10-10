@@ -89,6 +89,8 @@ func IsCanonicalReportID(id string) bool {
 	return ok && cleaned == id
 }
 
+// canonicalMetricID reports whether an identifier satisfies the canonical
+// report ID contract; it forwards to IsCanonicalReportID.
 func canonicalMetricID(id string) bool { return IsCanonicalReportID(id) }
 
 // Validate checks range, plan selection and cursor shape without reading data.
@@ -99,21 +101,38 @@ func (q FinancialMetricsQuery) Validate() error {
 	}
 	return nil
 }
+
+// financialPlanKey maps a plan ID to its metrics key, representing an empty
+// plan as the fixed "unspecified" provenance key.
 func financialPlanKey(plan string) string {
 	if plan == "" {
 		return "unspecified"
 	}
 	return "plan:" + plan
 }
+
+// validPlanKey reports whether a pagination key is the unspecified key or a
+// plan-prefixed key whose plan ID is canonical.
 func validPlanKey(key string) bool {
 	return key == "unspecified" || (strings.HasPrefix(key, "plan:") && canonicalMetricID(strings.TrimPrefix(key, "plan:")))
 }
+
+// validFinancialMetricsQuery checks limit bounds, canonical plan selection
+// (never both a plan and unspecified-only), cursor key shape, non-zero dates
+// and From strictly before To, without reading data.
 func validFinancialMetricsQuery(q FinancialMetricsQuery) bool {
 	return q.Limit >= 1 && q.Limit <= 100 && (q.PlanID == "" || canonicalMetricID(q.PlanID)) && !(q.PlanID != "" && q.UnspecifiedPlanOnly) && (q.AfterPlanKey == "" || validPlanKey(q.AfterPlanKey)) && (q.From == nil || !q.From.IsZero()) && (q.To == nil || !q.To.IsZero()) && (q.From == nil || q.To == nil || q.To.After(*q.From))
 }
+
+// metricDateMatches reports whether at falls in the query's inclusive-From,
+// exclusive-To range; nil bounds are unbounded.
 func metricDateMatches(at time.Time, q FinancialMetricsQuery) bool {
 	return (q.From == nil || !at.Before(*q.From)) && (q.To == nil || at.Before(*q.To))
 }
+
+// metricPlanMatches reports whether a row's plan satisfies the query's plan
+// selection: exact plan when set, or empty plan when unspecified-only is
+// requested.
 func metricPlanMatches(plan string, q FinancialMetricsQuery) bool {
 	return (q.PlanID == "" || plan == q.PlanID) && (!q.UnspecifiedPlanOnly || plan == "")
 }
@@ -249,6 +268,9 @@ func (s *Service) GetFinancialMetrics(ctx context.Context, partner string, q Fin
 	return out, nil
 }
 
+// addCommissionMovement adds one journal entry's amount to its matching
+// movement total, negating debit-signed kinds so every bucket is non-negative.
+// Unknown kinds or negative results are conflicts.
 func addCommissionMovement(target *CommissionMovements, e Entry) error {
 	var field *int64
 	amount := big.NewInt(e.AmountMinor)
@@ -282,6 +304,10 @@ func addCommissionMovement(target *CommissionMovements, e Entry) error {
 	return addSignedAmount(field, amount)
 }
 
+// currentClaimMetrics counts claims by state over the current claim list,
+// summing processing/needs-review exposure and tracking the oldest open request
+// time. Unknown states or open claims without a request time fail as conflicts;
+// it aborts on context cancellation.
 func currentClaimMetrics(ctx context.Context, claims []Claim) (CurrentClaimMetrics, error) {
 	out := CurrentClaimMetrics{}
 	for _, c := range claims {

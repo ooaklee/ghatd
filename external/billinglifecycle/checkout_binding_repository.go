@@ -18,9 +18,14 @@ type CheckoutBinding struct {
 // CheckoutBindingRepository atomically retains an acknowledged checkout/evidence and its
 // active job binding marker. Native provenance and current authority belong to services.
 type CheckoutBindingRepository interface {
+	// BindCheckout atomically retains the checkout input for the exact leased
+	// execution and marks the job prepared in one transaction, returning the bound
+	// job and retained input; replays consume the current revision.
 	BindCheckout(context.Context, LeaseHandle, CheckoutInput) (CheckoutBinding, error)
 }
 
+// checkoutMatchesSource reports whether a retained input's acknowledged intent
+// exactly matches the scheduled checkout source.
 func checkoutMatchesSource(input CheckoutInput, source ScheduledSource) bool {
 	return source.Checkout != nil && input.Intent.ValidateAcknowledgedInput(*source.Checkout) == nil
 }

@@ -51,9 +51,8 @@ The existing 60-second login cooldown remains best-effort. Its boolean acquisiti
 and unconditional release are **not an ownership-fenced lease**; a delayed release
 can affect a later claim. Code check/reservation is likewise not atomic. Earlier
 proof writes are not rolled back on later failure, and delivery errors can be
-uncertain. Do not automatically replay requests or infer rollback. Atomic code
-reservation, owned cooldown cleanup and lower mail-provider error handling remain
-separate work; this contract makes no end-to-end delivery or rate-limit guarantee.
+uncertain. Do not automatically replay requests or infer rollback; this contract
+makes no end-to-end delivery or rate-limit guarantee.
 
 ### Live session authority
 
@@ -501,8 +500,8 @@ not an alternative public admission endpoint.
 Review and seed grants explicitly before enabling the port. Existing credentials
 are neither deleted nor granted scopes automatically. Token-specific route grants
 remain separate: this port does not copy user scopes onto the issued credential.
-Host rollout, migration/rollback tooling and legacy-tier removal remain required
-before the overall permissions upgrade is complete. Custom HTTP integrations
+Verify host rollout, migration and rollback before retiring legacy role limits.
+Custom HTTP integrations
 must retain owner/session checks and consistent reply error manifests.
 
 Policy failures retain their original causes through admission. The handler's
@@ -549,7 +548,6 @@ func main() {
         Router:                             ghatdRouter,
         Handler:                            accessmanagerHandler,
         ActiveOnlyMiddleware:               activeMiddleware,
-        ActiveValidApiTokenOrJWTMiddleware: apiTokenOrJWTMiddleware,
         HardenedRateLimitMiddleware:        hardenedRateLimitMiddleware,
     })
 }

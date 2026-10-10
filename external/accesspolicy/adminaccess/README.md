@@ -108,8 +108,3 @@ For signed-session, Redis and Mongo CAS integration, provide isolated
 `GHATD_TEST_REDIS_ADDR`. Tests use generated database/key namespaces and synthetic
 email capture; no mailbox or live send is required. Without both, integration
 tests skip explicitly.
-
-Test-style audit: `http_test.go`, `config_test.go`, `store_integration_test.go`
-and `integration_test.go` are table-driven across codecs, configuration, exact
-route contracts, state transitions, browser provenance, revocation and one-use
-concurrent apply. Each stateful approval case owns an isolated fixture.

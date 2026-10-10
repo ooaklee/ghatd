@@ -24,6 +24,9 @@ const checkoutKind = "partners_lifecycle_checkout_input"
 // rechecks current selected refresh authority and original native joins; the
 // original preparing actor and saved payload are never authority themselves.
 type CheckoutValidator interface {
+	// ValidateCheckoutLifecycle checks whether the checkout intent passes the
+	// configured owning billing manager's lifecycle validation under current
+	// selected refresh authority, returning an error otherwise.
 	ValidateCheckoutLifecycle(context.Context, string, billing.CheckoutIntent) error
 }
 
@@ -42,6 +45,8 @@ type CheckoutOutbox struct {
 	validator CheckoutValidator
 }
 
+// nilPort reports whether v is nil including typed nil pointers, interfaces,
+// maps, slices, chans and funcs; values of other kinds are never nil ports.
 func nilPort(v any) bool {
 	if v == nil {
 		return true
@@ -54,6 +59,8 @@ func nilPort(v any) bool {
 	return false
 }
 
+// NewCheckoutOutbox borrows a prepared store and the configured validator; nil
+// ports return unavailable. No index, lease or provider call is made here.
 func NewCheckoutOutbox(store recordstore.Store, validator CheckoutValidator) (*CheckoutOutbox, error) {
 	if nilPort(store) || nilPort(validator) {
 		return nil, recordstore.ErrUnavailable
@@ -74,25 +81,36 @@ type checkoutPayload struct {
 	Evidence    *paymentprovider.RevenueCheckoutEvidence
 }
 
+// payload converts a CheckoutInput into its persisted codec shape, tagging
+// schema 1 and retaining evidence absent from the intent's public JSON.
 func payload(i CheckoutInput) checkoutPayload {
 	v := i.Intent
 	return checkoutPayload{1, v.ID, v.Scope, v.Request, v.CreatedAt, v.SessionID, v.Fingerprint, i.Evidence}
 }
 
+// input reconstructs a CheckoutInput from the persisted payload; it is a pure
+// field mapping with no validation.
 func (p checkoutPayload) input() CheckoutInput {
 	return CheckoutInput{Intent: billing.CheckoutIntent{ID: p.ID, Scope: p.Scope, Request: p.Request, CreatedAt: p.CreatedAt, SessionID: p.SessionID, Fingerprint: p.Fingerprint}, Evidence: p.Evidence}
 }
 
+// digest returns the SHA-256 hex digest of v's JSON encoding; marshal failures
+// collapse to hashing nil.
 func digest(v any) string {
 	raw, _ := json.Marshal(v)
 	hash := sha256.Sum256(raw)
 	return hex.EncodeToString(hash[:])
 }
 
+// checkoutIdentity derives the deterministic record ID and scope partition for
+// one checkout intent.
 func checkoutIdentity(i billing.CheckoutIntent) (string, string) {
 	return digest([]any{"partners.lifecycle.checkout.v1", i.Scope, i.ID}), digest([]any{"partners.lifecycle.scope.v1", i.Scope})
 }
 
+// encode validates an acknowledged input and builds its record: revision
+// 1/prepared without evidence, revision 2/evidence once authenticated evidence
+// is retained.
 func encode(i CheckoutInput) (recordstore.Record, error) {
 	if err := i.Intent.ValidateAcknowledgedSubscription(); err != nil {
 		return recordstore.Record{}, err
@@ -110,6 +128,9 @@ func encode(i CheckoutInput) (recordstore.Record, error) {
 	return r, err
 }
 
+// decode validates a retained row against the exact original intent using
+// strict JSON decoding, then re-encodes to confirm revision and state;
+// mismatches are conflict, structural divergence unavailable.
 func decode(r recordstore.Record, original billing.CheckoutIntent) (CheckoutInput, error) {
 	id, partition := checkoutIdentity(original)
 	if r.Kind != checkoutKind || r.ID != id || r.Partition != partition || r.Sequence != 0 || r.ExpiresAt != nil {
@@ -147,6 +168,8 @@ func soleNotFound(err error) bool {
 	return false
 }
 
+// begin performs pre-storage checks: acknowledged subscription shape, live ctx,
+// non-nil ports and configured lifecycle validation under the given actor.
 func (o *CheckoutOutbox) begin(ctx context.Context, actor string, i billing.CheckoutIntent) error {
 	if ctx == nil || i.ValidateAcknowledgedSubscription() != nil {
 		return recordstore.ErrInvalid
@@ -163,6 +186,10 @@ func (o *CheckoutOutbox) begin(ctx context.Context, actor string, i billing.Chec
 	return ctx.Err()
 }
 
+// finish rechecks context and configured lifecycle validation after the
+// operation. Failures withhold all output, except a previously observed
+// ErrUncertain operation whose unknown commit must stay visible to recovery
+// callers.
 func (o *CheckoutOutbox) finish(ctx context.Context, actor string, i billing.CheckoutIntent, result CheckoutInput, operationErr error) (CheckoutInput, error) {
 	withhold := func(err error) (CheckoutInput, error) {
 		// Current authority still withholds all data. A previously observed
@@ -222,6 +249,10 @@ func (o *CheckoutOutbox) RetainEvidence(ctx context.Context, actor string, i bil
 	return o.retain(ctx, actor, CheckoutInput{Intent: i, Evidence: &evidence})
 }
 
+// retain commits preparation or evidence inside one intent-scoped transaction.
+// First-time preparation inserts a new record; evidence cannot claim an absent
+// row and must match already-retained evidence by digest. Inputs are detached
+// via encode/decode before the retryable callback.
 func (o *CheckoutOutbox) retain(ctx context.Context, actor string, input CheckoutInput) (CheckoutInput, error) {
 	i := input.Intent
 	if err := o.begin(ctx, actor, i); err != nil {

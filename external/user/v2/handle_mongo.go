@@ -17,6 +17,9 @@ const UserHandleIndexName = "idx_users_handle"
 // atomicUserMongoStore opts into atomic post-image writes without expanding the
 // legacy MongoDbStore interface required by existing applications and mocks.
 type atomicUserMongoStore interface {
+	// ExecuteFindOneAndUpdateCommandDecodeResult atomically finds, updates and
+	// decodes one document with the supplied filter, update and options, enabling
+	// post-image writes without extending the legacy store interface.
 	ExecuteFindOneAndUpdateCommandDecodeResult(context.Context, *mongo.Collection, any, any, any, ...options.Lister[options.FindOneAndUpdateOptions]) error
 }
 

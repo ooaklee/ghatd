@@ -109,8 +109,12 @@ func ParseStripePaidServicePeriod(raw []byte, cfg StripePaidServicePeriodConfig)
 	return StripePaidServicePeriod{InvoiceID: invoice.ID, SubscriptionID: string(subscription), CustomerID: string(invoice.Customer), PriceID: string(price), Currency: invoice.Currency, Quantity: line.Quantity, StartsAt: start, ExpiresAt: end}, nil
 }
 
+// stripePeriodID holds a Stripe object ID that may arrive either as a JSON
+// string or nested inside an expanded object.
 type stripePeriodID string
 
+// UnmarshalJSON accepts a JSON string, an object with an "id" field, or null,
+// storing the resulting ID. Other shapes fail decoding.
 func (id *stripePeriodID) UnmarshalJSON(raw []byte) error {
 	if string(raw) == "null" {
 		return nil
@@ -130,6 +134,9 @@ func (id *stripePeriodID) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// stripePeriodLine decodes one invoice line's price identity, quantity,
+// proration flag, period bounds and nested modern pricing/parent fields used
+// for paid-period parsing.
 type stripePeriodLine struct {
 	Price     stripePeriodID `json:"price"`
 	Quantity  int            `json:"quantity"`

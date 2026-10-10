@@ -23,30 +23,62 @@ const (
 
 // ResponseHolder represents a valid post type response
 type ResponseHolder interface {
+	// GetEmbeddedPostsResponse returns the embedded common posts response held by a
+	// ResponseHolder, exposing the shared post list and metadata across post-type
+	// responses.
 	GetEmbeddedPostsResponse() *post.GetPostsResponse
 }
 
 // userService represents the user service
 type userService interface {
+	// GetUserByID queries the userService for a single user identified by req,
+	// returning the matching user response or an error.
 	GetUserByID(ctx context.Context, req *userV2.GetUserByIDRequest) (*userV2.GetUserByIDResponse, error)
+	// GetUsers queries the userService for users matching req, returning the
+	// matching user response or an error.
 	GetUsers(ctx context.Context, req *userV2.GetUsersRequest) (*userV2.GetUsersResponse, error)
 }
 
 // postService represents the post service
 type postService interface {
+	// GetArticles asks the postService for article posts matching req, returning
+	// the matching posts response or an error.
 	GetArticles(ctx context.Context, req *post.GetArticlesRequest) (*post.GetArticlesResponse, error)
+	// GetChangelogItems asks the postService for changelog posts matching req,
+	// returning the matching posts response or an error.
 	GetChangelogItems(ctx context.Context, req *post.GetChangelogItemsRequest) (*post.GetChangelogItemsResponse, error)
+	// GetFaqItems asks the postService for FAQ posts matching req, returning the
+	// matching posts response or an error.
 	GetFaqItems(ctx context.Context, req *post.GetFaqItemsRequest) (*post.GetFaqItemsResponse, error)
+	// GetGlossaryItems asks the postService for glossary posts matching req,
+	// returning the matching posts response or an error.
 	GetGlossaryItems(ctx context.Context, req *post.GetGlossaryItemsRequest) (*post.GetGlossaryItemsResponse, error)
 
+	// CreatePost asks the postService to create a post described by req, returning
+	// the created post response or an error.
 	CreatePost(ctx context.Context, req *post.CreatePostRequest) (*post.CreatePostResponse, error)
+	// UpdatePost asks the postService to update a post described by req, returning
+	// the updated post response or an error.
 	UpdatePost(ctx context.Context, req *post.UpdatePostRequest) (*post.UpdatePostResponse, error)
+	// DeletePostById asks the postService to delete the post identified in req,
+	// returning the deletion response or an error.
 	DeletePostById(ctx context.Context, req *post.DeletePostByIdRequest) (*post.DeletePostByIdResponse, error)
+	// RestorePostById asks the postService to restore the post identified in req,
+	// returning the restored post response or an error.
 	RestorePostById(ctx context.Context, req *post.RestorePostByIdRequest) (*post.RestorePostByIdResponse, error)
+	// GetPosts asks the postService for posts matching req, returning the matching
+	// posts response or an error.
 	GetPosts(ctx context.Context, req *post.GetPostsRequest) (*post.GetPostsResponse, error)
 
+	// GetPostByUrlFriendlyId asks the postService for the post with the given
+	// URL-friendly identifier, returning the post or an error.
 	GetPostByUrlFriendlyId(ctx context.Context, urlFriendlyId string) (*post.Post, error)
+	// GetLatestPostsByType asks the postService for the latest post overviews of
+	// the requested type, returning the overviews response or an error.
 	GetLatestPostsByType(ctx context.Context, req *post.GetLatestPostsByTypeRequest) (*post.GetLatestPostsByTypeResponse, error)
+	// GetLatestNotificationOverviews asks the postService for the latest
+	// notification overviews matching req, returning the overviews response or an
+	// error.
 	GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error)
 }
 

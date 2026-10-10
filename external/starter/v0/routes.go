@@ -257,6 +257,9 @@ func validateAttachDefaultRouteHandlers(handlers *Handlers, skip map[RouteGroup]
 	return nil
 }
 
+// routeMiddlewareRequirements records which middleware families the non-skipped
+// route groups need, computed from the skip set by
+// newRouteMiddlewareRequirements.
 type routeMiddlewareRequirements struct {
 	adminOnly                          bool
 	authenticated                      bool

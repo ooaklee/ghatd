@@ -82,6 +82,10 @@ func partnersSelectedRead(ctx context.Context, svc *partnermanager.Manager, p Pr
 	return Response{}, invalid
 }
 
+// selectedIndividualPolicyView projects one individual policy version for a
+// selected read. It preserves the nil-versus-empty distinction of eligible plan
+// IDs (inherit versus exclude all) while omitting publisher identity, audit
+// fields and group data.
 func selectedIndividualPolicyView(v partnerprogram.PolicyVersion) map[string]any {
 	// Nil plans mean inherit; an explicit empty list means exclude all. Preserve
 	// that distinction without exposing publisher/audit identity or group data.

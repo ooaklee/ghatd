@@ -144,6 +144,9 @@ func (s *Service) RecordReturnedTransfer(ctx context.Context, req ReturnRequest)
 	}
 	return result, nil
 }
+
+// restoredBacking subtracts a negative returned amount from the prior restored
+// total using big-int arithmetic, failing on int64 overflow.
 func restoredBacking(prior, negative int64) (int64, error) {
 	return bigToInt64(new(big.Int).Add(big.NewInt(prior), negBigInt(negative)))
 }

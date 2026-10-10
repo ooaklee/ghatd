@@ -21,12 +21,17 @@ type AnalyticsSnapshot struct {
 	Relationships []RelationshipSnapshot
 }
 
+// AnalyticsQuery selects the reporting window, page size and link cursor for an
+// analytics report. From and To are optional bounds and AfterLinkID pages
+// through links.
 type AnalyticsQuery struct {
 	From, To    *time.Time
 	Limit       int
 	AfterLinkID string
 }
 
+// Validate requires a page limit between 1 and 100, an optional non-zero window
+// with To strictly after From, and a bounded non-empty AfterLinkID.
 func (q AnalyticsQuery) Validate() error {
 	if q.Limit < 1 || q.Limit > 100 || (q.AfterLinkID != "" && !analyticsID(q.AfterLinkID, 128)) || (q.From != nil && q.From.IsZero()) || (q.To != nil && q.To.IsZero()) || (q.From != nil && q.To != nil && !q.To.After(*q.From)) {
 		return ErrInvalid
@@ -58,6 +63,8 @@ type SignupMetrics struct {
 	CorrectionAcquisitionEvents int64 `json:"correction_acquisition_events"`
 }
 
+// LinkAnalytics carries one selected link's identity, retirement state and
+// visit/signup metrics for the report window.
 type LinkAnalytics struct {
 	LinkID  string        `json:"link_id"`
 	Code    string        `json:"code"`
@@ -76,6 +83,10 @@ type AnalyticsCoverage struct {
 	MissingMeasuredSignupOrigins int64  `json:"missing_measured_signup_origins"`
 }
 
+// Analytics is the derived report for one partner and window: totals,
+// relationship counts, coverage limits and a paged link breakdown. AsOf is
+// report generation time after the owning snapshot read, not an identity or
+// billing watermark.
 type Analytics struct {
 	ProgramID string     `json:"program_id"`
 	PartnerID string     `json:"partner_id"`
@@ -96,23 +107,34 @@ type Analytics struct {
 	NextAfterLinkID       string            `json:"next_after_link_id,omitempty"`
 }
 
+// analyticsPeriod reports whether at falls in the half-open [From, To) window,
+// treating nil bounds as unbounded.
 func analyticsPeriod(at time.Time, q AnalyticsQuery) bool {
 	return (q.From == nil || !at.Before(*q.From)) && (q.To == nil || at.Before(*q.To))
 }
 
+// measuredOrigin identifies the link and observation time of one eligible
+// measured visit.
 type measuredOrigin struct {
 	LinkID string
 	At     time.Time
 }
+
+// visitDayIdentity keys per-link day aggregation by link ID and UTC date
+// string.
 type visitDayIdentity struct {
 	Link string
 	Day  string
 }
 
+// dayIdentity returns the link and UTC day string for a timestamp.
 func dayIdentity(link string, at time.Time) visitDayIdentity {
 	return visitDayIdentity{link, utcDay(at).Format("2006-01-02")}
 }
 
+// observationMetric returns single-observation metrics classifying a click as
+// eligible, duplicate, known bot or unmeasured based on its stored
+// classification.
 func observationMetric(c Click) VisitMetrics {
 	v := VisitMetrics{Observations: 1}
 	switch c.Classification {
@@ -454,6 +476,9 @@ func analyticsFromSnapshot(ctx context.Context, partner string, q AnalyticsQuery
 	return out, nil
 }
 
+// addVisitMetrics accumulates b into a after checking every counter for
+// negativity and int64 overflow, returning false without modifying a when the
+// sum would not be representable.
 func addVisitMetrics(a *VisitMetrics, b VisitMetrics) bool {
 	for _, pair := range [][2]int64{{a.Observations, b.Observations}, {a.EligibleMeasuredVisits, b.EligibleMeasuredVisits}, {a.DuplicateObservations, b.DuplicateObservations}, {a.KnownBotObservations, b.KnownBotObservations}, {a.UnmeasuredObservations, b.UnmeasuredObservations}, {a.ConvertedMeasuredVisits, b.ConvertedMeasuredVisits}, {a.SignupsFromVisitCohort, b.SignupsFromVisitCohort}} {
 		if pair[0] < 0 || pair[1] < 0 || pair[0] > math.MaxInt64-pair[1] {
@@ -474,6 +499,9 @@ func addVisitMetrics(a *VisitMetrics, b VisitMetrics) bool {
 // trims or aliases another partner's selected identity.
 func IsCanonicalAnalyticsPartnerID(id string) bool { return analyticsID(id, 256) }
 
+// validVisitMetrics requires non-negative counters, that the four observation
+// classes sum exactly to Observations, that conversions do not exceed eligible
+// measured visits and that cohort signups are at least the conversions.
 func validVisitMetrics(v VisitMetrics) bool {
 	for _, n := range []int64{v.Observations, v.EligibleMeasuredVisits, v.DuplicateObservations, v.KnownBotObservations, v.UnmeasuredObservations, v.ConvertedMeasuredVisits, v.SignupsFromVisitCohort} {
 		if n < 0 {
@@ -489,10 +517,15 @@ func validVisitMetrics(v VisitMetrics) bool {
 	}
 	return v.Observations == total.Observations && v.ConvertedMeasuredVisits <= v.EligibleMeasuredVisits && v.SignupsFromVisitCohort >= v.ConvertedMeasuredVisits
 }
+
+// visitMetricsWithin reports whether every counter of v is less than or equal
+// to the corresponding counter of total.
 func visitMetricsWithin(v, total VisitMetrics) bool {
 	return v.Observations <= total.Observations && v.EligibleMeasuredVisits <= total.EligibleMeasuredVisits && v.DuplicateObservations <= total.DuplicateObservations && v.KnownBotObservations <= total.KnownBotObservations && v.UnmeasuredObservations <= total.UnmeasuredObservations && v.ConvertedMeasuredVisits <= total.ConvertedMeasuredVisits && v.SignupsFromVisitCohort <= total.SignupsFromVisitCohort
 }
 
+// validSignupMetrics requires all signup counters to be non-negative and within
+// AnalyticsCapacity.
 func validSignupMetrics(v SignupMetrics) bool {
 	for _, n := range []int64{v.MeasuredSignups, v.UnmeasuredSignups, v.ManualInitialAcquisitions, v.CorrectionAcquisitionEvents} {
 		if n < 0 || n > AnalyticsCapacity {

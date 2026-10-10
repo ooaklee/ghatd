@@ -9,14 +9,31 @@ import (
 	"github.com/ooaklee/ghatd/external/catalogue"
 )
 
+// Timezone is a catalogue entry whose code must be a known, loadable IANA zone
+// name.
 type Timezone struct {
 	catalogue.Entry `bson:",inline"`
 }
+
+// CreateRequest is the catalogue creation request specialised for Timezone
+// entries.
 type CreateRequest = catalogue.CreateRequest[Timezone]
+
+// UpdateRequest is the catalogue update request specialised for Timezone
+// entries.
 type UpdateRequest = catalogue.UpdateRequest[Timezone]
+
+// ChangeRequest is the catalogue's generic change request used for timezone
+// administration.
 type ChangeRequest = catalogue.ChangeRequest
+
+// Service administers the timezone catalogue through the embedded generic
+// lifecycle.
 type Service struct{ *catalogue.Lifecycle[Timezone] }
 
+// NewService builds a timezone catalogue service whose payload validator
+// rejects codes that are unknown to package definitions or cannot be loaded as
+// time locations.
 func NewService(repo Repository, clock catalogue.Clock) (*Service, error) {
 	lifecycle, err := catalogue.NewLifecycle(repo, clock, func(t *Timezone) *catalogue.Entry { return &t.Entry }, func(t Timezone) error {
 		if !knownZone(t.Code) {
@@ -46,8 +63,12 @@ var definitions = func() map[string]bool {
 	return result
 }()
 
+// knownZone reports whether the code exists in the package's immutable timezone
+// definitions.
 func knownZone(code string) bool { return definitions[code] }
 
+// Description attaches resolved UTC offset and local time at a specific instant
+// to a timezone record already read through this service.
 type Description struct {
 	Record        Timezone
 	OffsetSeconds int

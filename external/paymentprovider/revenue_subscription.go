@@ -10,6 +10,10 @@ import (
 // RevenueSubscriptionProvider is optional authenticated current lifecycle
 // evidence. Status is not proof of paid revenue, entitlement or commission.
 type RevenueSubscriptionProvider interface {
+	// LookupRevenueSubscription returns RevenueSubscriptionEvidence for the given
+	// sub_ subscription ID within the supplied RevenueScope via authenticated
+	// retrieval. Part of the optional RevenueSubscriptionProvider contract; status
+	// evidence is not proof of paid revenue, entitlement or commission.
 	LookupRevenueSubscription(context.Context, RevenueScope, string) (RevenueSubscriptionEvidence, error)
 }
 
@@ -22,6 +26,8 @@ type RevenueSubscriptionEvidence struct {
 	CancellationScheduled              bool         `json:"-"`
 }
 
+// validSubscriptionStatus reports whether a status string is one of the eight
+// recognized Stripe subscription lifecycle states.
 func validSubscriptionStatus(status string) bool {
 	switch status {
 	case "active", "trialing", "incomplete", "incomplete_expired", "past_due", "unpaid", "canceled", "paused":

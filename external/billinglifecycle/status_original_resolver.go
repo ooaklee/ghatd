@@ -9,9 +9,15 @@ import (
 // StatusOriginalResolutionOwner is optional on the same configured manager.
 // Legacy execution ports stay compatible; no raw second billing owner is used.
 type StatusOriginalResolutionOwner interface {
+	// ResolveSubscriptionStatus returns the status resolution for the actor's
+	// preparation from the optional same-configured manager; legacy execution ports
+	// stay compatible without a second raw billing owner.
 	ResolveSubscriptionStatus(context.Context, string, billing.SubscriptionStatusPreparation) (billing.SubscriptionStatusResolution, error)
 }
 
+// StatusOriginalOutcome reports the durable resolution state with the current
+// job plus at most one observation or supersession result. It is private
+// recovery evidence, not a lease or execution grant.
 type StatusOriginalOutcome struct {
 	State        string              `json:"-"`
 	Job          ScheduledJob        `json:"-"`
@@ -28,6 +34,9 @@ type StatusOriginalResolver struct {
 	owner     StatusOriginalResolutionOwner
 }
 
+// NewStatusOriginalResolver derives its optional owner from the status
+// execution's owner and requires a fully built execution and supersession
+// repository. No storage or provider call occurs.
 func NewStatusOriginalResolver(x *StatusExecution, repo StatusSupersessionRepository) (*StatusOriginalResolver, error) {
 	if x == nil || x.scheduler == nil || x.binder == nil || x.outbox == nil || nilPort(x.owner) || nilPort(repo) {
 		return nil, billing.ErrRevenueUnavailable
@@ -38,6 +47,9 @@ func NewStatusOriginalResolver(x *StatusExecution, repo StatusSupersessionReposi
 	}
 	return &StatusOriginalResolver{x, repo, owner}, nil
 }
+
+// ready verifies the resolver's borrowed execution components, repository and
+// owner are all present.
 func (s *StatusOriginalResolver) ready() bool {
 	return s != nil && s.execution != nil && s.execution.scheduler != nil && s.execution.binder != nil && s.execution.outbox != nil && !nilPort(s.repo) && !nilPort(s.owner)
 }
@@ -118,6 +130,10 @@ func (s *StatusOriginalResolver) Resolve(ctx context.Context, h LeaseHandle) (St
 	}
 	return StatusOriginalOutcome{}, billing.ErrRevenueUnavailable
 }
+
+// sameNativeSupersession compares two valid superseded resolutions, including
+// their current status revisions and fingerprints, with preparations compared
+// by instant-equal RequestedAt.
 func sameNativeSupersession(a, b billing.SubscriptionStatusResolution) bool {
 	if a.State != billing.SubscriptionStatusSuperseded || b.State != billing.SubscriptionStatusSuperseded || a.Validate() != nil || b.Validate() != nil || !sameStatusPreparation(a.Preparation, b.Preparation) {
 		return false

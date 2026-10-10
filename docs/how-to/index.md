@@ -13,3 +13,7 @@ Please use the sections referenced below to locate practical step-by-step guides
 | ***Observability*** <br><br>Add tracing, choose signal destinations, and update existing services | <ul><li>[Add Service Observability](./add-service-observability.md)</li><li>[OpenTelemetry Package](../../external/observability/README.md)</li><li>[Telemetry Doctor](../../external/observability/DOCTOR.md)</li></ul> |
 | ***MongoDB Migrations*** <br><br>Create, register, apply, and safely revert host-owned MongoDB migrations | <ul><li>[Managing MongoDB Migrations](./manage-mongodb-migrations.md)</li><li>[MongoDB Migrator](../../external/migrator/mongo/README.md)</li></ul> |
 | ***Web Push Notifications*** <br><br>End-to-end runbook for enabling, testing, and troubleshooting Web Push | <ul><li>[Web Push Runbook](./web-push/runbook.md)</li></ul>   |
+
+## Partner programs
+
+- [Configure a partner program](configure-partner-program.md): choose owners, prepare storage, configure current authority and mount optional routes/workers.

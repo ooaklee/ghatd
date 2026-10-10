@@ -16,6 +16,9 @@ import (
 
 // Validator is the minimal validator contract shared by GHATD handlers.
 type Validator interface {
+	// Validate checks the supplied value against validation constraints and returns
+	// an error describing any violation; the minimal validator contract shared by
+	// handlers. The Config implementation checks port, environment and log level.
 	Validate(s interface{}) error
 }
 

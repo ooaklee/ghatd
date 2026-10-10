@@ -19,9 +19,14 @@ type StatusBinding struct {
 // StatusBindingRepository atomically retains a native original/evidence and its
 // active job pointer. Native provenance and current authority belong to services.
 type StatusBindingRepository interface {
+	// BindStatus atomically retains the status input for the exact leased execution
+	// and sets the job's original pointer in one transaction, returning the bound
+	// job and retained input; exact replays consume the current revision.
 	BindStatus(context.Context, LeaseHandle, StatusInput) (StatusBinding, error)
 }
 
+// statusMatchesSource reports whether a preparation targets the same
+// subscription in the same scope as a subscription-kind source.
 func statusMatchesSource(p billing.SubscriptionStatusPreparation, source ScheduledSource) bool {
 	return source.Kind == billing.LifecycleSubscriptionSources && p.Scope == source.Scope && p.PrincipalID == source.PrincipalID && p.SubscriptionID == source.SubscriptionID
 }

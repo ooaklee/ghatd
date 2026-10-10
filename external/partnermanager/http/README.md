@@ -156,7 +156,7 @@ or unknown transfers stay under review and cannot settle. Amendments and returns
 use the existing append-only owner contracts. Program pause does not erase
 retained earnings, reservations or the evidence for a previous transfer.
 
-## Safe errors and compatibility
+## Error responses
 
 Errors use `{ "error": { "code": "PARTNERS_...", "message": "..." } }` with a
 generic message. Dependency diagnostics and error strings are never serialized.
@@ -178,10 +178,8 @@ Unknown errors fail closed. Unavailable/uncertain joined outcomes retain their
 honest recovery status; unknown causes cannot become successful denial/absence.
 Construction and route ownership do not alter owner record kinds, permission
 names, scope hashes, encryption metadata or financial receipt fingerprints.
-This optional transport was not a prior GHATD HTTP API. Hosts adopting it must
-update their browser routes and error-code checks atomically and explicitly
-handle any pre-production pending intents containing former host-specific paths.
-It supplies no legacy route aliases, automatic intent conversion or database reset.
+Configure clients against the routes and error codes above when mounting this
+optional transport.
 
 ## Verification scope
 

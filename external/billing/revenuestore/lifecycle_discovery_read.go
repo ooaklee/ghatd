@@ -20,15 +20,26 @@ type lifecycleDiscoveryPreparation struct {
 	PreparedAt time.Time
 }
 
+// discoveryJoinedError maps conclusively absent joined records to
+// ErrRevenueUnavailable while preserving every other error, including outages,
+// unchanged.
 func discoveryJoinedError(err error) error {
 	if singleCause(err, billing.ErrRevenueNotFound) || singleCause(err, recordstore.ErrNotFound) {
 		return billing.ErrRevenueUnavailable
 	}
 	return err
 }
+
+// discoveryMetadata validates that a raw record matches the expected kind, ID
+// and partition, has a positive revision that is exactly one when immutable,
+// and carries no sequence, state or expiry.
 func discoveryMetadata(row recordstore.Record, kind, id, part string, immutable bool) bool {
 	return row.Kind == kind && row.ID == id && row.Partition == part && row.Revision >= 1 && (!immutable || row.Revision == 1) && row.Sequence == 0 && row.State == "" && row.ExpiresAt == nil
 }
+
+// discoveryIntent loads a checkout intent and verifies its immutable stored row
+// plus both acknowledgement directions: the forward intent binding and the
+// reverse session reservation must match exactly, or the join is unavailable.
 func discoveryIntent(ctx context.Context, tx recordstore.Tx, id string) (billing.CheckoutIntent, error) {
 	b := &checkoutBound{tx: tx}
 	i, err := b.GetCheckoutIntent(ctx, id)
@@ -61,6 +72,10 @@ func discoveryIntent(ctx context.Context, tx recordstore.Tx, id string) (billing
 	i.SessionID = ack.SessionID
 	return i, nil
 }
+
+// joinDiscoveryCheckout reconstructs one checkout-kind candidate from an
+// immutable source row whose computed ID and scope must match, joining the
+// fully validated intent and confirming session and fingerprint agreement.
 func joinDiscoveryCheckout(ctx context.Context, tx recordstore.Tx, row recordstore.Record, scope billing.RevenueScope) (billing.LifecycleDiscoveryCandidate, error) {
 	var source lifecycleCheckoutSource
 	part := lifecycleSourcePartition(scope)
@@ -77,6 +92,11 @@ func joinDiscoveryCheckout(ctx context.Context, tx recordstore.Tx, row recordsto
 	return billing.LifecycleDiscoveryCandidate{ID: row.ID, Revision: 1, Scope: scope, PrincipalID: i.Request.UserID, Intent: i}, nil
 }
 
+// joinDiscoverySubscription reconstructs one subscription-kind candidate from
+// its ownership row, joining and validating the optional accepted fact, first
+// anchor with receipt and immutable rows, acknowledged anchor intent, and paid-
+// owner association. Absent joined records map to unavailable; only a
+// conclusively absent anchor is tolerated when no anchor is referenced.
 func joinDiscoverySubscription(ctx context.Context, tx recordstore.Tx, row recordstore.Record, scope billing.RevenueScope) (billing.LifecycleDiscoveryCandidate, error) {
 	var source lifecycleSubscriptionSource
 	if row.Decode(&source) != nil || !validLifecycleOwner(source) || source.Scope != scope || !discoveryMetadata(row, kindLifecycleSubscriptionSource, lifecycleSubscriptionKey(scope, source.SubscriptionID), lifecycleSourcePartition(scope), false) {

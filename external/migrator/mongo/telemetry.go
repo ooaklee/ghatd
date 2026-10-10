@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// telemetryResolver builds an otelcobra config plus a cleanup function for one
+// command invocation, returning an error when telemetry cannot be prepared.
 type telemetryResolver func(*cobra.Command) (otelcobra.Config, func(), error)
 
 // WithTelemetry gives each up/down invocation an action-scoped runtime and a
@@ -48,6 +50,11 @@ func WithTelemetryFromEnvironment(defaultComponent, scope string) CommandOption 
 	}
 }
 
+// telemetryFromEnvironment loads telemetry settings with envconfig, applies
+// defaults for environment, commit, timeout and log level, and requires a non-
+// empty component. It returns a config whose service name is the component
+// suffixed with -mongo-migrator and a cleanup that syncs the created logger.
+// Errors are fixed strings so environment values are never echoed.
 func telemetryFromEnvironment(defaultComponent, scope string) (otelcobra.Config, func(), error) {
 	settings := struct {
 		Environment           string `default:"local"`
@@ -82,6 +89,10 @@ func telemetryFromEnvironment(defaultComponent, scope string) (otelcobra.Config,
 	}, func() { _ = appLogger.Sync() }, nil
 }
 
+// runDatabaseCommand executes a database action, wrapping it in the otelcobra
+// runtime named mongo-migrator.<action> when a telemetry resolver is
+// configured; without telemetry it runs the action directly. It restores the
+// command's original context and runs telemetry cleanup afterwards.
 func (runner commandRunner) runDatabaseCommand(command *cobra.Command, args []string, action string) error {
 	execute := func(command *cobra.Command, _ []string) error {
 		return runner.run(command, action, func(settings Settings) error {
