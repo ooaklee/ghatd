@@ -76,7 +76,8 @@ jobs:
         run: >-
           go test -race -count=1 -timeout=10m
           ./external/partnerearnings ./external/partnerstore
-          ./external/partnermanager ./external/partnerprogram ./external/referral
+          ./external/partneraccess/... ./external/partnermanager/... ./external/partnerprogram ./external/referral
+          ./external/billinglifecycle/... ./external/http/browsersecurity/...
           ./external/billing ./external/billing/revenuestore
           ./external/billingmanager ./external/paymentprovider
           ./external/repository/recordstore ./external/user/v2 ./external/accessmanager
@@ -85,7 +86,8 @@ jobs:
         run: >-
           go vet
           ./external/partnerearnings ./external/partnerstore
-          ./external/partnermanager ./external/partnerprogram ./external/referral
+          ./external/partneraccess/... ./external/partnermanager/... ./external/partnerprogram ./external/referral
+          ./external/billinglifecycle/... ./external/http/browsersecurity/...
           ./external/billing ./external/billing/revenuestore
           ./external/billingmanager ./external/paymentprovider
           ./external/repository/recordstore ./external/user/v2 ./external/accessmanager
