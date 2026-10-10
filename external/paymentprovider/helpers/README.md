@@ -38,6 +38,41 @@ are absent and configuration is otherwise valid, Stripe is disabled and the
 slice is unchanged; `NewProvider` returns `(nil, nil)` in that case. Do not
 append that nil provider manually.
 
+## Provider construction options
+
+Use `NewProviderWithOptions` or `AppendProviderWithOptions` when runtime
+capabilities are resolved after settings validation. They retain the same
+configured-before-build checks and revalidate exported settings before
+constructing one provider. Existing `NewProvider` and `AppendProvider` use zero
+options and retain their signatures and defaults.
+
+| `StripeProviderOptions` field | Behaviour |
+| --- | --- |
+| `HTTPClient` | Explicit caller-owned client; nil uses the provider's traced default. The helper does not close the client. |
+| `Revenue` | Explicit authenticated economic-evidence configuration; nil keeps revenue disabled. The provider validates and snapshots it at construction. |
+| `AllowPromotionCodes` | Trusted host opt-in to Stripe's promotion-code entry for payment and subscription checkout. False omits the parameter; true emits it while constructing the checkout form. |
+
+For example, after a successful `Configure`, pass resolved capabilities directly:
+
+```go
+providers, err := settings.AppendProviderWithOptions(existing, paymenthelpers.StripeProviderOptions{
+    HTTPClient:          client,
+    Revenue:             revenue,
+    AllowPromotionCodes: true,
+})
+```
+
+The host owns the commercial decision to enable codes. Never populate that
+option from a browser request. Coupon eligibility remains provider-owned;
+enabling entry does not grant access or change pricing-policy validation.
+Promotion enablement is independent of test/live credential mode and of the
+environment's URL safety rules. Disabled Stripe ignores these options and leaves
+the existing slice unchanged. Errors also preserve the existing slice.
+
+Hosts that previously rewrote serialized checkout requests can remove that
+transport and supply their ordinary client and revenue configuration here.
+Construction performs no provider I/O, credential discovery or reconciliation.
+
 ## Settings and validation
 
 | Field | Purpose |

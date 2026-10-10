@@ -82,6 +82,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [Stripe construction capabilities](external/paymentprovider/helpers/README.md#provider-construction-options)
+  bind an explicit HTTP client, revenue configuration and trusted promotion-code
+  policy to one validated provider. Existing constructors retain their signatures
+  and defaults; promotion-code entry is disabled by default. Hosts can replace
+  checkout-form rewriting with `Config.AllowPromotionCodes` or the helper option.
+
 - Optional [notification credential checks](external/notifier/helper/README.md)
   validate VAPID pairs and an explicit PKCS8-RSA FCM service-account profile
   over resolved inputs. Hosts retain secret loading and channel switches;

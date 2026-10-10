@@ -35,13 +35,14 @@ var stripeCustomerPortalConfigurationIDPattern = regexp.MustCompile(`^bpc_[A-Za-
 // StripeProvider implements webhook and subscription lookup plus optional
 // browser-session capabilities without expanding the base Provider interface.
 type StripeProvider struct {
-	config             *Config
-	name               string
-	httpClient         *http.Client
-	apiBaseURL         string
-	apiVersion         string
-	signatureTolerance time.Duration
-	maxWebhookBodySize int64
+	config              *Config
+	name                string
+	httpClient          *http.Client
+	apiBaseURL          string
+	apiVersion          string
+	signatureTolerance  time.Duration
+	maxWebhookBodySize  int64
+	allowPromotionCodes bool
 }
 
 // NewStripeProvider creates a Stripe payment provider.
@@ -90,13 +91,14 @@ func NewStripeProvider(config *Config) (*StripeProvider, error) {
 	}
 
 	return &StripeProvider{
-		config:             config,
-		name:               stripeProviderName,
-		httpClient:         client,
-		apiBaseURL:         baseURL,
-		apiVersion:         apiVersion,
-		signatureTolerance: tolerance,
-		maxWebhookBodySize: maxBodySize,
+		config:              config,
+		name:                stripeProviderName,
+		httpClient:          client,
+		apiBaseURL:          baseURL,
+		apiVersion:          apiVersion,
+		signatureTolerance:  tolerance,
+		maxWebhookBodySize:  maxBodySize,
+		allowPromotionCodes: config.AllowPromotionCodes,
 	}, nil
 }
 
@@ -684,6 +686,9 @@ func (s *StripeProvider) CreateCheckoutSession(ctx context.Context, input *Check
 	form.Set("line_items[0][quantity]", "1")
 	form.Set("customer_email", input.CustomerEmail)
 	form.Set("client_reference_id", userReference)
+	if s.allowPromotionCodes {
+		form.Set("allow_promotion_codes", "true")
+	}
 	metadata := map[string]string{
 		"plan_id": input.PlanID, "plan_slug": input.PlanSlug, "plan_name": input.PlanName,
 		"cost_id": input.CostID, "price_id": input.PriceID, "provider_price_id": input.PriceID,
