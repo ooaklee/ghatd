@@ -1,5 +1,6 @@
-// Package oauthhelper supplies optional signing-key loading from explicit host
-// inputs. It never reads environment variables or chooses provider configuration.
-// Provider constructors retain PEM/curve validation; hosts retain key lifetime,
-// secret storage and completeness policy. Canonical contracts are in README.md.
+// Package oauthhelper supplies optional secure-provider construction and signing
+// key loading from explicit host inputs. All-blank providers remain disabled;
+// partial inputs fail with redacted errors. Native constructors validate callback
+// and key policy. Hosts retain secret storage, registration and runtime lifetime.
+// Canonical contracts are in README.md.
 package oauthhelper

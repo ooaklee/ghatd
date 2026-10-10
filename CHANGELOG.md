@@ -82,6 +82,16 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional [OAuth provider builders](external/oauth/helper/README.md#optional-provider-builders)
+  keep all-blank providers disabled, reject partial inputs and preserve explicit
+  Apple key-source precedence with redacted errors. Secure provider owners retain
+  callback/key validation; hosts retain secret loading and runtime dependencies.
+
+- A configurable [SPA description resolver](external/spa/README.md#description-shells-from-a-build-inventory)
+  validates build inventories and static shells once, preserving ordered
+  pathname-only selection and host asset/fallback policy. Missing inventory
+  requires an explicit opt-in; the resolver performs no per-request file I/O.
+
 - Optional [Stripe construction capabilities](external/paymentprovider/helpers/README.md#provider-construction-options)
   bind an explicit HTTP client, revenue configuration and trusted promotion-code
   policy to one validated provider. Existing constructors retain their signatures
