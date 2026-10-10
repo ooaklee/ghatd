@@ -19,9 +19,9 @@ API-token ID. Identity names are bounded, valid UTF-8 and byte-exact: the packag
 does not case-fold or Unicode-normalize independently assigned IDs. Hosts must
 derive subjects from verified, stable identifiers, never display names.
 `Grant` carries exact scopes, permissions, token-inventory limits
-and fixed-window usage budgets. Missing, disabled, expired or invalid grants deny
-access. Zero limits do not mean unlimited. User type and signed administrator
-claims never synthesize a grant.
+and fixed-window usage budgets. Ordinary service authorization denies missing,
+disabled, expired or invalid grants. Zero limits do not mean unlimited. User type
+and signed administrator claims never synthesize a grant.
 
 `Service.Authorize` checks all required names on the same subject. Administrative
 replacement uses an injected live `ManagementAuthorizer` and expected revision;
@@ -35,6 +35,33 @@ Services reject nil dependencies/contexts and already-canceled requests before
 dispatch. Read-only resolution rechecks cancellation after custom storage returns.
 Stores must still honor context and transaction guarantees after dispatch; an
 error cannot establish whether an earlier or uncertain transaction committed.
+
+## Explicit user defaults
+
+`NewDefaultAuthorizer(policy, system, scopes, permissions)` optionally lets a
+host admit ordinary authenticated users to an exact set of capabilities when
+the authoritative store establishes that no grant exists. Configure only
+capabilities every authenticated user may attempt. The caller still supplies
+verified identity and enforces domain eligibility; this authorizer does not
+authenticate users or establish subscription, regional or operator eligibility.
+
+Defaults apply to user subjects in one configured system. API tokens, other
+systems and capabilities outside the configured lists cannot borrow them.
+Construction copies the lists; authorization reads current storage on every
+call. Dependency failures and ambiguous absence fail closed. No grant, audit
+record, quota or token allowance is created by these reads.
+
+**A stored grant replaces the defaults in full.** Disabled or expired grants
+deny access, and omitted scopes or permissions are not filled from defaults.
+When provisioning an operator who also uses member features, include both sets
+of intended capabilities in that person's grant. Retain a disabled grant for
+revocation: deleting it would make absence defaults applicable again.
+
+Use the ordinary `Service` for management, quota consumption and any routes
+that require explicitly provisioned authority. Installing this adapter does
+not change `Service.Authorize`, `Consume`, or token creation. Recheck current
+authority at command boundaries; a successful read is not an authority lease
+or a transactional fence against subsequent policy changes.
 
 ## Explicit capability administration
 
