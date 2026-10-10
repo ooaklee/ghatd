@@ -71,7 +71,7 @@ func (m *Manager) relationshipPage(ctx context.Context, partner string, q referr
 		previous = item.ID
 		seen := map[string]bool{}
 		for i, period := range item.Periods {
-			if period.ReferralID == "" || seen[period.ReferralID] || period.From.IsZero() || (period.Until != nil && period.Until.Before(period.From)) || period.Terms.Currency != m.deps.Program.Config().Currency || period.Terms.CurrencyExponent != m.deps.Program.Config().CurrencyExponent || period.Terms.TermsVersion == "" || period.Terms.RateBasisPoints < 0 || period.Terms.RateBasisPoints > 10000 || period.Terms.HoldDurationDays < 0 || period.Terms.HoldDurationDays > 28 {
+			if period.ReferralID == "" || seen[period.ReferralID] || period.From.IsZero() || (period.Until != nil && period.Until.Before(period.From)) || period.Terms.Currency != m.deps.Program.Config().Currency || period.Terms.CurrencyExponent != m.deps.Program.Config().CurrencyExponent || period.Terms.TermsVersion == "" || period.Terms.RateBasisPoints < 0 || period.Terms.RateBasisPoints > 10000 || period.Terms.HoldDurationDays < 0 || period.Terms.HoldDurationDays > partnerprogram.MaxSupportedHoldDays {
 				return referral.RelationshipPage{}, ErrUnavailable
 			}
 			if i == 0 && !period.From.Equal(item.FirstOwnedAt) {
