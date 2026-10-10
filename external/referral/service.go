@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/ooaklee/ghatd/external/partnerprogram"
 )
 
 var (
@@ -441,7 +443,7 @@ func (s *Service) LockAttribution(ctx context.Context, p PartnerState, l Link, e
 // validTerms reports whether a TermsSnapshot's rate, hold days, currency,
 // exponent, versions and plan lists are within supported bounds.
 func validTerms(t TermsSnapshot) bool {
-	return t.RateBasisPoints >= 0 && t.RateBasisPoints <= 10000 && t.HoldDurationDays >= 0 && t.HoldDurationDays <= 28 && currencyPattern.MatchString(t.Currency) && t.CurrencyExponent >= 0 && t.CurrencyExponent <= 3 && t.TermsVersion != "" && len(t.PolicyVersionIDs) > 0 && t.EligiblePlanIDs != nil
+	return t.RateBasisPoints >= 0 && t.RateBasisPoints <= 10000 && t.HoldDurationDays >= 0 && t.HoldDurationDays <= partnerprogram.MaxSupportedHoldDays && currencyPattern.MatchString(t.Currency) && t.CurrencyExponent >= 0 && t.CurrencyExponent <= 3 && t.TermsVersion != "" && len(t.PolicyVersionIDs) > 0 && t.EligiblePlanIDs != nil
 }
 
 // cloneTerms returns a deep copy so callers cannot share slice, map-backed plan

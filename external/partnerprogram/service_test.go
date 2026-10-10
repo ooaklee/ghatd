@@ -172,6 +172,14 @@ func TestConfiguration(t *testing.T) {
 		want  error
 	}{
 		{"valid", func(c *Config) {}, nil},
+		{"thirty day default", func(c *Config) { c.DefaultHoldDays = 30 }, nil},
+		{"default maximum exceeded", func(c *Config) { c.DefaultHoldDays = 31 }, ErrInvalid},
+		{"custom maximum", func(c *Config) { c.MaxHoldDays = 90; c.DefaultHoldDays = 90 }, nil},
+		{"structural maximum", func(c *Config) { c.MaxHoldDays = 365; c.DefaultHoldDays = 365 }, nil},
+		{"custom maximum exceeded", func(c *Config) { c.MaxHoldDays = 10 }, ErrInvalid},
+		{"negative maximum", func(c *Config) { c.MaxHoldDays = -1 }, ErrInvalid},
+		{"unsupported maximum", func(c *Config) { c.MaxHoldDays = 366 }, ErrInvalid},
+		{"maximum integer overflow", func(c *Config) { c.MaxHoldDays = math.MaxInt }, ErrInvalid},
 		{"unapproved zero hold", func(c *Config) { c.DefaultHoldDays = 0 }, ErrInvalid},
 		{"explicit zero hold", func(c *Config) { c.DefaultHoldDays = 0; c.AllowZeroHold = true }, nil},
 		{"hold integer overflow", func(c *Config) { c.DefaultHoldDays = math.MaxInt }, ErrInvalid},
@@ -288,7 +296,8 @@ func TestPolicyValidation(t *testing.T) {
 		want        error
 	}{
 		{"global", func(d *PolicyDraft) {}, false, nil},
-		{"maximum rate and hold", func(d *PolicyDraft) { d.RateBasisPoints = 10000; d.HoldDays = 28 }, false, nil},
+		{"maximum rate and default hold", func(d *PolicyDraft) { d.RateBasisPoints = 10000; d.HoldDays = 30 }, false, nil},
+		{"legacy twenty eight day hold", func(d *PolicyDraft) { d.HoldDays = 28 }, false, nil},
 		{"fourteen day hold", func(d *PolicyDraft) { d.HoldDays = 14 }, false, nil},
 		{"negative global rate", func(d *PolicyDraft) { d.RateBasisPoints = -1 }, false, ErrInvalid},
 		{"override explicit inheritance", func(d *PolicyDraft) {
@@ -303,7 +312,7 @@ func TestPolicyValidation(t *testing.T) {
 		{"unapproved zero hold", func(d *PolicyDraft) { d.HoldDays = 0 }, false, ErrInvalid},
 		{"explicit zero hold and bonus", func(d *PolicyDraft) { d.HoldDays = 0; d.RateBasisPoints = 0 }, true, nil},
 		{"hold overflow", func(d *PolicyDraft) { d.HoldDays = math.MaxInt }, false, ErrInvalid},
-		{"hold beyond maximum", func(d *PolicyDraft) { d.HoldDays = 29 }, false, ErrInvalid},
+		{"hold beyond maximum", func(d *PolicyDraft) { d.HoldDays = 31 }, false, ErrInvalid},
 		{"rate beyond maximum", func(d *PolicyDraft) { d.RateBasisPoints = 10001 }, false, ErrInvalid},
 		{"unsupported currency", func(d *PolicyDraft) { d.Currency = "USD" }, false, ErrInvalid},
 		{"global missing plans", func(d *PolicyDraft) { d.EligiblePlanIDs = nil }, false, ErrInvalid},

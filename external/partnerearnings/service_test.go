@@ -329,7 +329,7 @@ func TestMaturity(t *testing.T) {
 	cases := []struct {
 		name string
 		days int
-	}{{"seven_day_hold", 7}, {"fourteen_day_hold", 14}, {"twenty_eight_day_hold", 28}}
+	}{{"seven_day_hold", 7}, {"fourteen_day_hold", 14}, {"twenty_eight_day_hold", 28}, {"thirty_day_hold", 30}, {"ninety_day_hold", 90}, {"structural_maximum_hold", 365}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, _, clock := newTestService(t)

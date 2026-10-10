@@ -46,9 +46,14 @@ const (
 
 	MinRateBasisPoints = 0
 	MaxRateBasisPoints = 10000
-	// MaxHoldDuration bounds cooling-off holds. 7/14/28-day holds are the
-	// supported examples; 28 days is the documented maximum.
-	MaxHoldDuration = 28 * 24 * time.Hour
+	// DefaultMaxHoldDays limits new policies when Config.MaxHoldDays is omitted.
+	DefaultMaxHoldDays = 30
+	// MaxSupportedHoldDays is the stable financial-history safety bound. A
+	// programme may admit a smaller maximum without invalidating frozen terms.
+	MaxSupportedHoldDays = 365
+	// MaxHoldDuration bounds retained holds and protects duration conversion.
+	// It is not the programme's configurable limit for new policy publication.
+	MaxHoldDuration = MaxSupportedHoldDays * 24 * time.Hour
 
 	DestinationMethodPayPal = "paypal"
 )
@@ -213,6 +218,10 @@ type Config struct {
 	EnrollmentApprovalRequired bool
 	DefaultRateBasisPoints     int
 	DefaultHoldDays            int
+	// MaxHoldDays bounds new default and published holds, in elapsed 24-hour
+	// days. Zero selects DefaultMaxHoldDays; values above MaxSupportedHoldDays
+	// are rejected. Changing this bound does not rewrite retained policies.
+	MaxHoldDays int
 	// AllowZeroHold must explicitly permit a zero-day policy.
 	AllowZeroHold     bool
 	Currency          string
@@ -231,7 +240,10 @@ func (c Config) validate() error {
 	if c.DefaultRateBasisPoints < MinRateBasisPoints || c.DefaultRateBasisPoints > MaxRateBasisPoints {
 		return fmt.Errorf("%w: default rate out of bounds", ErrInvalid)
 	}
-	if c.DefaultHoldDays < 0 || c.DefaultHoldDays > 28 || (c.DefaultHoldDays == 0 && !c.AllowZeroHold) {
+	if c.MaxHoldDays < 0 || c.MaxHoldDays > MaxSupportedHoldDays {
+		return fmt.Errorf("%w: maximum hold out of bounds", ErrInvalid)
+	}
+	if c.DefaultHoldDays < 0 || c.DefaultHoldDays > c.MaximumHoldDays() || (c.DefaultHoldDays == 0 && !c.AllowZeroHold) {
 		return fmt.Errorf("%w: default hold exceeds maximum", ErrInvalid)
 	}
 	if !currencyPattern.MatchString(c.Currency) || c.CurrencyExponent < 0 || c.CurrencyExponent > 3 {
@@ -252,6 +264,15 @@ func (c Config) validate() error {
 // Validate exposes configuration validation so hosts can reject invalid
 // partner settings at startup, before any store is opened.
 func (c Config) Validate() error { return c.validate() }
+
+// MaximumHoldDays resolves the omitted maximum without mutating configuration.
+// Call Validate before using the result from unvalidated host configuration.
+func (c Config) MaximumHoldDays() int {
+	if c.MaxHoldDays == 0 {
+		return DefaultMaxHoldDays
+	}
+	return c.MaxHoldDays
+}
 
 // Repository is the narrow typed persistence port. Implementations own all
 // datastore I/O; they never choose rates or invent eligibility rules.
@@ -473,7 +494,7 @@ func (s *Service) ValidatePolicy(d PolicyDraft) error {
 		return fmt.Errorf("%w: rate outside 0..10000 or inheritance", ErrInvalid)
 	}
 	// Compare days before duration conversion; a huge integer must not overflow.
-	if d.HoldDays < min || d.HoldDays > 28 || (d.HoldDays == 0 && !s.config.AllowZeroHold) {
+	if d.HoldDays < min || d.HoldDays > s.config.MaximumHoldDays() || (d.HoldDays == 0 && !s.config.AllowZeroHold) {
 		return fmt.Errorf("%w: hold outside supported range", ErrInvalid)
 	}
 	if (d.Scope == "global" || d.Currency != "") && d.Currency != s.config.Currency {

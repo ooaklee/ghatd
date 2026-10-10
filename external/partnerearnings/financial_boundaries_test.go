@@ -163,7 +163,14 @@ func TestFinancialHoldBounds(t *testing.T) {
 		hold time.Duration
 		want error
 	}
-	cases := []testCase{{name: "approved_zero_hold"}, {name: "maximum_28_days", hold: 28 * 24 * time.Hour}, {name: "beyond_28_days", hold: 28*24*time.Hour + time.Nanosecond, want: ErrInvalid}}
+	cases := []testCase{
+		{name: "approved_zero_hold"},
+		{name: "legacy_28_days", hold: 28 * 24 * time.Hour},
+		{name: "thirty_days", hold: 30 * 24 * time.Hour},
+		{name: "longer_retained_policy", hold: 90 * 24 * time.Hour},
+		{name: "structural_maximum", hold: maxHoldDuration},
+		{name: "beyond_structural_maximum", hold: maxHoldDuration + time.Nanosecond, want: ErrInvalid},
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, repo, clock := newTestService(t)

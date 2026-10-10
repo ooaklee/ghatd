@@ -10,11 +10,22 @@ authority before invoking an owning use case.
 
 Supply a typed `Repository`, an ID generator and explicit `Config`. A nil clock
 uses the UTC real clock. Configuration never invents approved commercial terms:
-the rate must be 0–10000 basis points, the hold 0–28 days, the attribution window
+the rate must be 0–10000 basis points, the hold within the configured maximum, the attribution window
 positive and at most 180 days, and the single currency three uppercase letters
 with exponent 0–3. Zero hold additionally requires `AllowZeroHold`. Supply the
 accepted terms version and eligible plan IDs; fixture values are not approval to
 launch a program. The current program identity is `partners-v1`.
+
+`MaxHoldDays` limits new defaults and published policies. Omitting it selects
+30 days; an explicit maximum may be 1–365 days. Holds are elapsed 24-hour days,
+not a calendar payout schedule. `DefaultHoldDays` must fit that maximum; zero
+still requires `AllowZeroHold`. Existing 28-day configurations remain valid.
+
+The stable `MaxSupportedHoldDays`/`MaxHoldDuration` bounds validate retained
+referral and financial evidence up to 365 days. Lowering `MaxHoldDays` does not
+rewrite or invalidate an already-published policy or frozen commission. Publish
+a new prospective policy to change commercial holds; changing this validation
+limit alone does not replace the active published policy.
 
 Enrollment requires explicit acceptance of the configured terms. Repository
 uniqueness makes repeated or competing enrollment return the same participant.

@@ -152,6 +152,13 @@ when the release version has been selected, and remove unused subsections.
   scoped grants. Human sessions cannot create instance-bound worker invocations;
   provider uncertainty is retained through later revocation or cancellation.
 
+### Changed
+
+- [Partner policy hold limits](external/partnerprogram/README.md) are configurable,
+  defaulting to 30 days with an explicit maximum up to 365 days. New-policy
+  validation stays separate from retained referral and financial evidence, so
+  lowering a programme limit does not invalidate existing commissions.
+
 ## [0.4.0] - Unreleased
 
 ### Added

@@ -1,6 +1,10 @@
 package partnerearnings
 
-import "time"
+import (
+	"time"
+
+	"github.com/ooaklee/ghatd/external/partnerprogram"
+)
 
 // Journal entry kinds. The set is closed; balances are derived solely from
 // these append-only entries plus claim states.
@@ -96,9 +100,9 @@ const (
 	maxTermsLength       = 256
 	maxPolicyLength      = 256
 	maxSourceKindLength  = 256
-	// maxHoldDuration caps the maturity hold. The financial rule is bounded so a
-	// single event cannot freeze credit beyond a sane horizon.
-	maxHoldDuration = 28 * 24 * time.Hour
+	// maxHoldDuration validates frozen financial evidence independently of a
+	// programme's current admission limit, preserving previously accepted holds.
+	maxHoldDuration = partnerprogram.MaxHoldDuration
 )
 
 // Config captures host wiring: the single program and approved currency. The
