@@ -82,6 +82,9 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Explicit, opt-in [user capability defaults](external/accesspolicy/README.md#explicit-user-defaults)
+  for authoritative grant absence. Stored grants fully replace defaults; revocation,
+  expiry, missing capabilities and storage failures continue to deny admission.
 - An opt-in [partner program](external/partnerprogram/README.md) with enrollment,
   scoped policy, referral attribution and links, an [earnings ledger](external/partnerearnings/README.md),
   statements, withdrawal claims and manual payment recovery. [Partner Manager](external/partnermanager/README.md)
