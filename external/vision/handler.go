@@ -9,22 +9,55 @@ import (
 	"github.com/ooaklee/reply/v2"
 )
 
+// visionService is the handler's narrow view of the vision service, covering
+// creation, reads, mutations, votes, comments, deletion and config.
 type visionService interface {
+	// CreateVision creates feedback or a bug report from the CreateVisionRequest;
+	// the vision Service validates title, type and actor, persists a new vision
+	// with no roadmap status, and returns it.
 	CreateVision(ctx context.Context, r *CreateVisionRequest) (*VisionResponse, error)
+	// GetVisionByNanoID returns the full vision addressed by public NanoID,
+	// including comments, with vote state projected for the authenticated viewer.
 	GetVisionByNanoID(ctx context.Context, r *GetVisionByNanoIDRequest) (*VisionResponse, error)
+	// GetVisions returns a filtered, paginated list of vision summaries with viewer
+	// vote state and a total count; comments are omitted from list rows.
 	GetVisions(ctx context.Context, r *GetVisionsRequest) (*GetVisionsResponse, error)
+	// UpdateVision updates descriptive fields (title, description, metadata) on the
+	// vision addressed by NanoID without changing type or status, and returns the
+	// updated vision.
 	UpdateVision(ctx context.Context, r *UpdateVisionRequest) (*VisionResponse, error)
+	// UpdateVisionStatus applies and persists a validated roadmap status transition
+	// on the vision addressed by NanoID, recording the acting user.
 	UpdateVisionStatus(ctx context.Context, r *UpdateVisionStatusRequest) (*VisionResponse, error)
+	// SetVisionVote atomically sets or changes the requesting actor's vote on the
+	// vision addressed by NanoID and returns the updated vision.
 	SetVisionVote(ctx context.Context, r *SetVisionVoteRequest) (*VisionResponse, error)
+	// RemoveVisionVote removes only the requesting actor's shared vote from the
+	// vision addressed by NanoID and returns the updated vision.
 	RemoveVisionVote(ctx context.Context, r *RemoveVisionVoteRequest) (*VisionResponse, error)
+	// AddVisionComment appends an actor's comment to the vision addressed by
+	// NanoID, validating any parent comment, and returns the updated vision.
 	AddVisionComment(ctx context.Context, r *AddVisionCommentRequest) (*VisionResponse, error)
+	// SetVisionCommentVote atomically sets or changes the requesting actor's vote
+	// on a vision comment and returns the updated vision.
 	SetVisionCommentVote(ctx context.Context, r *SetVisionCommentVoteRequest) (*VisionResponse, error)
+	// RemoveVisionCommentVote removes only the requesting actor's shared vote from
+	// a vision comment and returns the updated vision.
 	RemoveVisionCommentVote(ctx context.Context, r *RemoveVisionCommentVoteRequest) (*VisionResponse, error)
+	// DeleteVision deletes the vision addressed by public NanoID and reports
+	// whether deletion occurred.
 	DeleteVision(ctx context.Context, r *DeleteVisionRequest) (*DeleteVisionResponse, error)
+	// GetVisionConfig returns the client-safe vision capabilities derived from the
+	// service configuration.
 	GetVisionConfig(ctx context.Context) (*GetVisionConfigResponse, error)
 }
 
+// visionValidator validates arbitrary request structs, abstracting the concrete
+// validation library from the handler.
 type visionValidator interface {
+	// Validate checks the supplied request struct for validity, abstracting the
+	// concrete validation library from the handler, and returns an error describing
+	// any failure.
 	Validate(s interface{}) error
 }
 

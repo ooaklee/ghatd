@@ -42,7 +42,7 @@ adds an immutable, attributed `internal_note` or `reply`; several administrators
 can contribute without replacing one another's messages. A reply **records**
 correspondence: it does not send mail or prove delivery. Corrections and later
 replies are new entries, optionally linked by `parent_entry_id` within the same
-conversation. This first version has no editing, deletion, draft or outbox API.
+conversation. There is no editing, deletion, draft or outbox API.
 
 Entries use a separate `comms_entries` collection, avoiding an unbounded array
 inside the original contact. `Service.ListCommsConversation` returns:
@@ -114,7 +114,7 @@ internal notes to customer-facing notifications or mail projections.
 ### Trusted email ingestion
 
 `Service.ImportCommsEmail(ctx, *ImportCommsEmailRequest)` is a separate in-process
-hook for a future provider adapter, not an HTTP/webhook endpoint. The adapter
+hook for a trusted provider adapter, not an HTTP/webhook endpoint. The adapter
 must authenticate the mailbox/webhook, authorize ingestion and explicitly
 select an existing contact and trusted ingestion actor **before** invoking it.
 Calling a lower domain method with an arbitrary actor ID is not authentication.
@@ -204,7 +204,3 @@ Custom lower-domain adapters use `GetCommsVotesRequest`,
 `ChangeCommsVoteRequest` and `CommsVoteResult`; they do not resolve users or
 construct HTTP participants. HTTP composition, owner guards and participant
 models are documented in [User Manager's service contracts](../usermanager/README.md#conversation-service-contracts).
-
-Voting test-style audit: `service.voting_test.go` uses named delegation,
-capability, membership and receipt tables with driver-free probes. Signed-session
-and persistence lifecycles live in User Manager's integration tests.

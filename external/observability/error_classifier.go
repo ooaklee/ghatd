@@ -106,10 +106,15 @@ func (classifier *ErrorClassifier) Classify(err error) Classification {
 	return classifyOperation("internal", OutcomeError)
 }
 
+// classifyOperation builds a Classification from a trusted static code and
+// outcome, deriving Category from the outcome's own vocabulary.
 func classifyOperation(code string, outcome OperationOutcome) Classification {
 	return Classification{Code: code, Outcome: outcome, Category: string(outcome)}
 }
 
+// validErrorSentinel reports whether an error is a non-nil, comparable value
+// that is not a nil pointer, interface, map, slice, function or channel, making
+// it usable with errors.Is.
 func validErrorSentinel(err error) bool {
 	if err == nil {
 		return false
@@ -126,6 +131,8 @@ func validErrorSentinel(err error) bool {
 	}
 }
 
+// validErrorCode accepts 1–64 byte codes starting with an ASCII letter and
+// containing only letters, digits, dots, underscores and hyphens.
 func validErrorCode(code string) bool {
 	if len(code) == 0 || len(code) > 64 || !operationIdentifierLetter(code[0]) {
 		return false
@@ -139,6 +146,7 @@ func validErrorCode(code string) bool {
 	return true
 }
 
+// operationIdentifierLetter reports whether a byte is an ASCII letter.
 func operationIdentifierLetter(char byte) bool {
 	return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
 }

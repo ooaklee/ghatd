@@ -12,9 +12,21 @@ import (
 
 // RepositoryLogger defines interface for repository-level logging
 type RepositoryLogger interface {
+	// Error emits a repository-level error log for message with optional err and
+	// structured fields. The Zap implementation appends the error as a zap field;
+	// the helper delegates to LogError. Part of the RepositoryLogger contract.
 	Error(ctx context.Context, message string, err error, fields ...Field)
+	// Warn emits a repository-level warning log for message with optional err and
+	// structured fields, per the RepositoryLogger contract. Implementations include
+	// Zap logging, helper delegation, and a no-op discard.
 	Warn(ctx context.Context, message string, err error, fields ...Field)
+	// Info emits a repository-level informational log for message with optional err
+	// and structured fields, per the RepositoryLogger contract. Implementations
+	// include Zap logging, helper delegation, and a no-op discard.
 	Info(ctx context.Context, message string, err error, fields ...Field)
+	// Debug emits a repository-level debug log for message with optional err and
+	// structured fields, per the RepositoryLogger contract. Implementations include
+	// Zap logging, helper delegation, and a no-op discard.
 	Debug(ctx context.Context, message string, err error, fields ...Field)
 }
 
@@ -26,22 +38,70 @@ type Field struct {
 
 // CursorMapper defines interface for cursor mapping operations
 type CursorMapper interface {
+	// MapAllToResult decodes all documents from the supplied cursor into result as
+	// part of the CursorMapper contract. The helper implementation closes the
+	// cursor and wraps decode failures in a repository error with the native cause
+	// retained.
 	MapAllToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, objectName string) error
+	// MapOneToResult decodes the first document from the supplied cursor into
+	// result, closing the cursor, per the CursorMapper contract. The helper maps
+	// absence to a not-found repository error and wraps other failures with their
+	// causes.
 	MapOneToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, objectName string) error
 }
 
 // CommonOperations defines interface for common MongoDB operations
 type CommonOperations interface {
+	// ExecuteCountDocuments returns the number of documents in collection matching
+	// filter, honouring optional driver count options. The helper wraps count
+	// failures in a repository error preserving the cause; part of
+	// CommonOperations.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteManyCommand removes all documents in collection matching filter;
+	// targetObjectName names the affected object for diagnostics. The helper
+	// discards the delete count and returns any driver error via CommonOperations.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteUpdateManyCommand applies updateFilter to all documents in collection
+	// matching filter; resultObjectName names the affected object. The helper
+	// discards the update result and returns any driver error via CommonOperations.
 	ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteUpdateOneCommand applies updateFilter to a single document in
+	// collection matching filter; resultObjectName names the affected object. The
+	// helper discards matched/modified counts and returns any driver error via
+	// CommonOperations.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteDeleteOneCommand deletes the first document matching the filter from
+	// the given collection, preserving the error-only legacy signature; callers
+	// needing the delete result use the result-bearing helper.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult runs a findOne on collection with filter
+	// and decodes the document into result. logError controls error logging and
+	// onFailureErr substitutes for absence; other errors keep their identity per
+	// CommonOperations.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteReplaceOneCommand replaces a single document in collection matching
+	// filter with replacementObject; resultObjectName names the affected object.
+	// The helper discards the update result and returns any driver error via
+	// CommonOperations.
 	ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
+	// ExecuteFindCommand returns a cursor over documents in collection matching
+	// filter with optional find options, per CommonOperations. The helper wraps
+	// cursor-creation failures in a repository error; the caller owns cursor
+	// closure.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteAggregateCommand returns a cursor over the aggregation of
+	// mongoPipeline on collection, per CommonOperations. The helper wraps failures
+	// in a repository error with the native cause and never logs pipeline data.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts document into collection and returns the
+	// driver's InsertOneResult with the inserted key; resultObjectName names the
+	// object for diagnostics. The helper preserves duplicate-key and other driver
+	// error identities.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteInsertManyCommand inserts documents into collection and returns the
+	// driver's InsertManyResult; resultObjectName names the objects for
+	// diagnostics. Ordered-write and retry semantics remain with the driver per
+	// CommonOperations.
 	ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
 }
 
@@ -49,15 +109,37 @@ type CommonOperations interface {
 type RepositoryHelper interface {
 	RepositoryLogger
 	CursorMapper
+	// GetClient returns the underlying mongo.Client for repository operations,
+	// honouring ctx cancellation. The helper resolves it from its managed client
+	// wrapper; the borrowed implementation returns the existing client without
+	// opening a new pool.
 	GetClient(ctx context.Context) (*mongo.Client, error)
+	// GetDatabase returns the named database, falling back to the helper's default
+	// when dbName is empty. The borrowed implementation rejects names outside its
+	// bound database; part of the RepositoryHelper contract.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// Health returns a map of health information for the repository connection. The
+	// helper delegates to its client wrapper; the borrowed implementation reports
+	// only availability, excluding server or credential details.
 	Health(ctx context.Context) map[string]interface{}
+	// Stats returns connection statistics for the repository's MongoDB client. The
+	// helper delegates to its client wrapper; the borrowed implementation returns
+	// zero values because it owns no connection pool counters.
 	Stats() repositoryhelpers.ConnectionStats
 
 	// Explicit Log* methods for clear API
 	LogError(ctx context.Context, message string, err error, fields ...Field)
+	// LogWarn emits a warning-level repository log for message with optional err
+	// and structured fields via the configured logger, per RepositoryHelper. No
+	// output occurs when no logger is configured.
 	LogWarn(ctx context.Context, message string, err error, fields ...Field)
+	// LogInfo emits an info-level repository log for message with optional err and
+	// structured fields via the configured logger, per RepositoryHelper. No output
+	// occurs when no logger is configured.
 	LogInfo(ctx context.Context, message string, err error, fields ...Field)
+	// LogDebug emits a debug-level repository log for message with optional err and
+	// structured fields via the configured logger, per RepositoryHelper. No output
+	// occurs when no logger is configured.
 	LogDebug(ctx context.Context, message string, err error, fields ...Field)
 
 	CommonOperations

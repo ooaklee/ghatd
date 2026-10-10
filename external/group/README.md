@@ -10,6 +10,9 @@ This guide will walk you through the architecture, setup, and common use cases o
 group/
 ├── config.go                     # GroupConfig and hierarchy tree configuration
 ├── const.go                      # Group types, statuses, roles, visibility constants
+├── direct_membership.go          # Bounded current active direct membership
+├── direct_membership_test.go     # Owning membership and admission cases
+├── direct_membership_mongo_test.go # Explicit native bounded-query contracts
 ├── errormap.go                   # HTTP error code mappings
 ├── fender.go                     # HTTP request mappers (fender layer)
 ├── handler.go                    # HTTP handlers
@@ -38,6 +41,39 @@ The package follows a standard layered architecture common throughout this proje
 4.  **Service (`service.go`)**: Contains the core business logic. It orchestrates operations like creating, updating, and retrieving groups, and it interacts with the repository.
 5.  **Repository (`repository.go`)**: The data access layer. It is responsible for all database operations (Create, Read, Update, Delete) for the `groups` collection in MongoDB.
 6.  **Model (`model.go`)**: Defines the `UniversalGroup` data structure and its associated helper methods. This is the core entity of the package.
+
+## Active direct membership capability
+
+`Service.GetActiveDirectGroupIDs(ctx, userID)` is an in-process owning read for
+active, nondeleted groups where the selected user is an owner or an accepted
+direct `USER` member. Pending invitations (including legacy `invited_at`),
+non-user references and inherited descendant administration do not qualify.
+Accepted membership has a literally empty invitation state and no pending invite.
+Unknown or whitespace-only invitation states do not qualify.
+The existing generic access map is not a substitute for this capability.
+
+The optional `DirectMembershipRepository` port supplies bounded current
+reference rows. `Repository.GetGroupsByReferencedUserIDBounded` uses a native
+`limit+1` probe and the existing owner/member selector; the service applies
+membership rules. Its 10,000-reference budget applies before filtering, and an
+extra row refuses truncation. Successful empty reads are explicit; malformed or
+duplicate evidence, unavailable dependencies, late read failure and cancellation
+discard all output. `ErrDirectMembershipUnavailable` retains operational causes;
+`ErrDirectMembershipCapacity` requires an explicit owning projection/review,
+never a partial or fabricated empty result. Existing unbounded reference reads
+keep their selector and sort behavior. This adds no schema or index migration.
+
+This method registers no HTTP route and supplies neither caller authorization
+nor financial cohort approval. Hosts authenticate the selected target and
+independently enforce privileged rate-bearing cohort admission; ordinary group
+creation/joining or administrator role inheritance cannot grant a higher rate.
+The result is current evidence from one group query, not historical membership
+or an atomic snapshot with a separate policy/grant domain. Do not expose another
+customer's group identifiers directly in customer JSON.
+
+Native bounded membership tests use `GHATD_TEST_MONGO_URI`, create independent
+fixture databases and drop only those fixtures. They do not use a memongo
+fallback and still run with `-short` when that explicit native URI is set.
 
 ## Running Tests
 

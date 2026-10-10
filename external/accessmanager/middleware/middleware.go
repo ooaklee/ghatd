@@ -29,12 +29,32 @@ const (
 
 // accessManagerService holds method of valid access manaer service
 type accessManagerService interface {
+	// MiddlewareAdminJWTRequired authenticates the request with an administrator
+	// JWT and returns the authenticated user details for downstream middleware
+	// handling.
 	MiddlewareAdminJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	// MiddlewareAdminAPITokenRequired authenticates the request with an
+	// administrator API token and returns the authenticated user details for
+	// downstream middleware handling.
 	MiddlewareAdminAPITokenRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	// MiddlewareActiveJWTRequired authenticates the request with an active-account
+	// JWT and returns the authenticated user details for downstream middleware
+	// handling.
 	MiddlewareActiveJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	// MiddlewareJWTRequired authenticates the request with a valid JWT and returns
+	// the authenticated user details for downstream middleware handling.
 	MiddlewareJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	// MiddlewareValidAPITokenRequired authenticates the request with a valid API
+	// token and returns the authenticated user details for downstream middleware
+	// handling.
 	MiddlewareValidAPITokenRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	// MiddlewareRateLimitOrActiveJWTRequired authenticates the request with an
+	// active-account JWT under rate limiting and returns the authenticated user
+	// details for downstream handling.
 	MiddlewareRateLimitOrActiveJWTRequired(r *http.Request) (*accessmanager.MiddlewareAuthedUserResponse, error)
+	// RefreshToken rotates the supplied refresh credential into a new
+	// access/refresh token pair, returning the replacement tokens and their expiry
+	// times.
 	RefreshToken(ctx context.Context, r *accessmanager.RefreshTokenRequest) (*accessmanager.RefreshTokenResponse, error)
 }
 

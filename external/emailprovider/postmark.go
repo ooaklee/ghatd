@@ -103,11 +103,16 @@ func (p *PostmarkEmailProvider) WithMailTypePreference(types []MailType) *Prefer
 	return WithMailTypePreference(p, types)
 }
 
+// postmarkMessage is the JSON submission body for one Postmark send, carrying
+// inline fields and the target message stream.
 type postmarkMessage struct {
 	From, To, ReplyTo, Subject, HtmlBody, TextBody, MessageStream string
 	TrackOpens                                                    bool
 	TrackLinks                                                    string
 }
+
+// postmarkReceipt is the parsed Postmark response: a submitted message ID plus
+// a nullable error code.
 type postmarkReceipt struct {
 	MessageID string
 	ErrorCode *int

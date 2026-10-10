@@ -19,7 +19,13 @@ import (
 // another policy backend, but it must preserve exact AND and atomic admission
 // semantics; signed role/type claims are not substitutes for current grants.
 type RoutePolicyService interface {
+	// Authorize admits or denies a subject holding all of the listed scopes and
+	// permissions as an atomic live-grant decision; signed role or type claims are
+	// not substitutes for current grants.
 	Authorize(context.Context, accesspolicy.Subject, []string, []string) error
+	// ConsumeAuthorized records an authorized consumption event for the subject and
+	// metric, returning the resulting usage; admission and consumption must
+	// preserve atomic semantics.
 	ConsumeAuthorized(context.Context, accesspolicy.Consumption) (accesspolicy.Usage, error)
 }
 

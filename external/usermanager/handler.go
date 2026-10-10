@@ -16,67 +16,244 @@ import (
 
 // UsermanagerService manages business logic around usermanager request
 type UsermanagerService interface {
+	// GetUserMicroProfile returns the requesting actor's micro profile by
+	// delegating to the user service with the actor ID. The manager service wraps
+	// the domain response for the handler.
 	GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error)
+	// GetUserProfile fetches a user's profile; when the requested ID differs from
+	// the actor, the implementation loads the requesting user and rejects non-admin
+	// access with an authorisation error.
 	GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error)
+	// GetUserByID fetches a user by the requested ID; when the target differs from
+	// the actor, the implementation loads the requesting user and rejects non-admin
+	// access with an authorisation error.
 	GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error)
+	// GetUsers lists users for the actor's filters. Non-admin callers must supply
+	// an accessible group ID; otherwise an empty list is returned, and accessible
+	// root-group member IDs constrain the visible users.
 	GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error)
+	// UpdateUserProfile updates the authenticated caller's own profile names after
+	// rechecking session or API credentials, live ACTIVE status, and email
+	// revision, then delegating a guarded domain write and best-effort audit.
 	UpdateUserProfile(ctx context.Context, r *UpdateUserProfileRequest) (*UpdateUserProfileResponse, error)
+	// DeleteUserPermanently deletes the target user and their platform resources.
+	// Self-deletion or admin authority is enforced for other-target requests; group
+	// memberships, the account and owned API tokens are removed, with a best-effort
+	// audit event.
 	DeleteUserPermanently(ctx context.Context, r *DeleteUserPermanentlyRequest) error
+	// CreateComms creates a comms by delegating to the contacter service and
+	// returning the created comms. The handler responds with the comms creation
+	// receipt on success.
 	CreateComms(ctx context.Context, req *CreateCommsRequest) (*CreateCommsResponse, error)
+	// GetComms returns comms matching the request filters by delegating to the
+	// contacter service, including pagination metadata when the underlying response
+	// provides it.
 	GetComms(ctx context.Context, req *GetCommsRequest) (*GetCommsResponse, error)
+	// UpdateComms updates a comms by delegating to the contacter service and
+	// returns the updated comms in the response.
 	UpdateComms(ctx context.Context, req *UpdateCommsRequest) (*UpdateCommsResponse, error)
+	// GetCommsStats returns comms statistics by delegating to the contacter service
+	// and wrapping the resulting stats for the handler.
 	GetCommsStats(ctx context.Context, req *GetCommsStatsRequest) (*GetCommsStatsResponse, error)
+	// GetAvailableCommsTypes returns the contact categories configured by the
+	// underlying contacter service. It exposes configuration only and does not
+	// return comms records.
 	GetAvailableCommsTypes(ctx context.Context) (*GetAvailableCommsTypesResponse, error)
 	// Group/Team management methods
 	GetEnrichedUserProfile(ctx context.Context, r *GetEnrichedUserProfileRequest) (*GetEnrichedUserProfileResponse, error)
+	// GetUserGroupMemberships returns group memberships for the trusted caller
+	// only, projecting groups by the actor's ID with optional descendants, name
+	// prefix and group type filters.
 	GetUserGroupMemberships(ctx context.Context, r *GetUserGroupMembershipsRequest) (*GetUserGroupMembershipsResponse, error)
+	// GetUserGroups returns the actor's group memberships as summaries with paging
+	// and optional metadata, filtered by group types, status and name prefix via
+	// the group service.
 	GetUserGroups(ctx context.Context, r *GetUserGroupsRequest) (*GetUserGroupsResponse, error)
+	// GetLatestNotificationOverviews returns notification overviews. Self-service
+	// defaults to the actor's live email, ignoring recipient selectors; explicit
+	// AdminView requires a live ACTIVE administrator before selecting another
+	// account or invite email.
 	GetLatestNotificationOverviews(ctx context.Context, r *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error)
+	// GetNotifierConfig returns the public, user-independent notifier configuration
+	// describing available push channels and subscription keys, by delegating to
+	// the notifier service.
 	GetNotifierConfig(ctx context.Context, r *GetNotifierConfigRequest) (*GetNotifierConfigResponse, error)
+	// RegisterNotificationAddress registers a push destination for the
+	// authenticated user, forwarding a web-push subscription or FCM token to the
+	// notifier service; the response omits endpoint URLs and tokens.
 	RegisterNotificationAddress(ctx context.Context, r *RegisterNotificationAddressRequest) (*RegisterNotificationAddressResponse, error)
+	// ListNotificationAddresses returns the current user's registered push
+	// destinations with channel, device and status details but no endpoints or
+	// tokens; AdminView switches to the administrative listing.
 	ListNotificationAddresses(ctx context.Context, r *ListNotificationAddressesRequest) (*ListNotificationAddressesResponse, error)
+	// DeleteNotificationAddress removes a single registered push destination
+	// belonging to the current user by delegating to the notifier service's delete
+	// operation.
 	DeleteNotificationAddress(ctx context.Context, r *DeleteNotificationAddressRequest) error
+	// GetNotificationPreferences returns the current user's notification
+	// preferences, with per-channel toggles, defaulting to all channels enabled
+	// when none were previously set.
 	GetNotificationPreferences(ctx context.Context, r *GetNotificationPreferencesRequest) (*GetNotificationPreferencesResponse, error)
+	// UpdateNotificationPreferences changes the current user's notification
+	// settings, applying an optional global enable flag and per-channel toggles;
+	// unknown channel names are rejected by the notifier service.
 	UpdateNotificationPreferences(ctx context.Context, r *UpdateNotificationPreferencesRequest) (*UpdateNotificationPreferencesResponse, error)
+	// NotifyUser dispatches a push notification to a target user's active
+	// addresses, honouring that user's notification preferences. Part of
+	// UsermanagerService; r selects the target user, title, message, channels and
+	// payload data, and the response reports delivery results.
 	NotifyUser(ctx context.Context, r *NotifyUserRequest) (*NotifyUserResponse, error)
+	// NotifyUsers dispatches a push notification to multiple users across selected
+	// channels, honouring per-user preferences; an empty user list targets all
+	// users with active addresses. Part of UsermanagerService; r carries
+	// recipients, title, message, channels and payload data.
 	NotifyUsers(ctx context.Context, r *NotifyUsersRequest) (*NotifyUsersResponse, error)
+	// GetMyGroupInvitations returns the requester's outstanding group invitations,
+	// resolved via the requester's ActorID and email. Part of UsermanagerService; r
+	// identifies the requester and optional name prefix, and the response lists
+	// pending invitations with group and member details.
 	GetMyGroupInvitations(ctx context.Context, r *GetMyGroupInvitationsRequest) (*GetMyGroupInvitationsResponse, error)
+	// AcceptMyGroupInvitation accepts one of the requester's pending group
+	// invitations. Part of UsermanagerService; r carries the requester's ActorID
+	// and target GroupID, and the response wraps the underlying accept-invite
+	// result after resolving the requester's email.
 	AcceptMyGroupInvitation(ctx context.Context, r *AcceptMyGroupInvitationRequest) (*AcceptMyGroupInvitationResponse, error)
+	// RejectMyGroupInvitation rejects one of the requester's pending group
+	// invitations. Part of UsermanagerService; r carries the requester's ActorID
+	// and target GroupID, and the response wraps the underlying reject-invite
+	// result after resolving the requester's email.
 	RejectMyGroupInvitation(ctx context.Context, r *RejectMyGroupInvitationRequest) (*RejectMyGroupInvitationResponse, error)
+	// GetGroupDetail returns a single group's details with enriched members and
+	// owner, applying membership or admin access checks for non-admin requesters.
+	// Part of UsermanagerService; r identifies the requester and GroupID, and the
+	// response contains the group, members and owner.
 	GetGroupDetail(ctx context.Context, r *GetGroupDetailRequest) (*GetGroupDetailResponse, error)
+	// GetGroupStats returns aggregate statistics for a group, including seat usage,
+	// role breakdown and settings, after access checks. Part of UsermanagerService;
+	// r identifies the requester, GroupID and optional prefix, and the response
+	// carries the computed GroupStats.
 	GetGroupStats(ctx context.Context, r *GetGroupStatsRequest) (*GetGroupStatsResponse, error)
+	// CreateGroup creates a new group via the group service after verifying the
+	// requester is an admin or has admin access to a specified parent group. Part
+	// of UsermanagerService; r carries the requester's ActorID and group fields,
+	// and the response returns the created group.
 	CreateGroup(ctx context.Context, r *CreateGroupRequest) (*CreateGroupResponse, error)
+	// UpdateGroup updates an existing group, restricted to admins or requesters
+	// with effective admin-level access to the target group. Part of
+	// UsermanagerService; r carries the requester's ActorID and the group update
+	// fields, and the response wraps the underlying update result.
 	UpdateGroup(ctx context.Context, r *UpdateGroupRequest) (*UpdateGroupResponse, error)
+	// DeleteGroup deletes a group, attributing deletion to the requester; non-admin
+	// requesters must own the target group and are forced to hard delete. Part of
+	// UsermanagerService; r identifies the requester and target group, and the
+	// response wraps the underlying delete result.
 	DeleteGroup(ctx context.Context, r *DeleteGroupRequest) (*DeleteGroupResponse, error)
+	// GetGroupsByUserID returns the groups a user belongs to, applying filters;
+	// non-admin requesters may only query their own groups. Part of
+	// UsermanagerService; r carries the requester's ActorID, the target UserID and
+	// filter fields, and the response wraps the group listing.
 	GetGroupsByUserID(ctx context.Context, r *GetGroupsByUserIDRequest) (*GetGroupsByUserIDResponse, error)
+	// GetGroupsConfig retrieves the group service's configuration capabilities.
+	// Part of UsermanagerService; r is accepted but unused, and the response wraps
+	// the configuration returned by the backing group service.
 	GetGroupsConfig(ctx context.Context, r *GetGroupsConfigRequest) (*GetGroupsConfigResponse, error)
+	// GetGroupLineage returns a group's lineage, gated by group access for
+	// non-admin requesters and issued as the requester. Part of UsermanagerService;
+	// r identifies the requester and group, and the response wraps the lineage
+	// returned by the backing group service.
 	GetGroupLineage(ctx context.Context, r *GetGroupLineageRequest) (*GetGroupLineageResponse, error)
+	// GetGroupDescendants returns a group's descendants, gated by group access for
+	// non-admin requesters and issued as the requester. Part of UsermanagerService;
+	// r identifies the requester and ancestor group, and the response wraps the
+	// descendant listing.
 	GetGroupDescendants(ctx context.Context, r *GetGroupDescendantsRequest) (*GetGroupDescendantsResponse, error)
+	// ValidateGroupName validates a proposed group name through the group service;
+	// non-admin requesters need access to the supplied parent group when one is
+	// given. Part of UsermanagerService; r carries the requester, name and optional
+	// parent group, and the response wraps the validation result.
 	ValidateGroupName(ctx context.Context, r *ValidateGroupNameRequest) (*ValidateGroupNameResponse, error)
 	// Group management methods
 	AddGroupMember(ctx context.Context, r *AddGroupMemberRequest) (*AddGroupMemberResponse, error)
+	// RemoveGroupMember removes a user from a group after verifying the requester
+	// is an admin or has admin access to the group. Part of UsermanagerService; r
+	// identifies the requester, group and member, and the response reports whether
+	// removal succeeded.
 	RemoveGroupMember(ctx context.Context, r *RemoveGroupMemberRequest) (*RemoveGroupMemberResponse, error)
+	// UpdateGroupMember updates a member's role in a group after verifying the
+	// requester is an admin or has admin access to the group. Part of
+	// UsermanagerService; r identifies the requester, group, member and new role,
+	// and the response reports success.
 	UpdateGroupMember(ctx context.Context, r *UpdateGroupMemberRequest) (*UpdateGroupMemberResponse, error)
+	// UpdateGroupOwner transfers group ownership after verifying the requester is
+	// an admin or has admin access, returning the enriched new owner. Part of
+	// UsermanagerService; r identifies the requester, group and new OwnerID, and
+	// the response contains the enriched owner.
 	UpdateGroupOwner(ctx context.Context, r *UpdateGroupOwnerRequest) (*UpdateGroupOwnerResponse, error)
 	// Reminder methods
 	CreateReminder(ctx context.Context, r *CreateReminderRequest) (*CreateReminderResponse, error)
+	// GetReminderByID returns a single reminder owned by the authenticated
+	// requester; admins may retrieve reminders regardless of owner. Part of
+	// UsermanagerService; r carries the requester's ActorID and reminder ID, and
+	// the response wraps the reminder service result.
 	GetReminderByID(ctx context.Context, r *GetReminderByIDRequest) (*GetReminderByIDResponse, error)
+	// ListReminders returns reminders for the authenticated requester, or across
+	// users when the requester is an admin with a user filter. Part of
+	// UsermanagerService; r carries the requester, filters and pagination, and the
+	// response wraps the reminder listing.
 	ListReminders(ctx context.Context, r *ListRemindersRequest) (*ListRemindersResponse, error)
+	// UpdateReminderByID updates a reminder owned by the authenticated requester
+	// after validating the requester. Part of UsermanagerService; r carries the
+	// requester's ActorID and reminder update fields, and the response wraps the
+	// updated reminder.
 	UpdateReminderByID(ctx context.Context, r *UpdateReminderByIDRequest) (*UpdateReminderByIDResponse, error)
+	// DeleteReminderByID deletes a reminder owned by the authenticated requester.
+	// Part of UsermanagerService; r carries the requester's ActorID and reminder
+	// ID, and the error result reports deletion failure.
 	DeleteReminderByID(ctx context.Context, r *DeleteReminderByIDRequest) error
+	// DisableReminderByID disables a reminder owned by the authenticated requester.
+	// Part of UsermanagerService; r carries the requester's ActorID and reminder
+	// ID, and the response wraps the disabled reminder.
 	DisableReminderByID(ctx context.Context, r *DisableReminderByIDRequest) (*UpdateReminderByIDResponse, error)
+	// GetReminderStats returns aggregate reminder statistics for admin or service
+	// views, scoped by the requester's administrative role and user filters. Part
+	// of UsermanagerService; r carries the requester and optional user filters, and
+	// the response wraps the computed statistics.
 	GetReminderStats(ctx context.Context, r *GetReminderStatsRequest) (*GetReminderStatsResponse, error)
+	// GetDueReminders returns reminders ready for scheduler dispatch, scoped by the
+	// requester's role, user filters, due-before cutoff and limit. Part of
+	// UsermanagerService; r carries those parameters, and the response wraps the
+	// due reminder listing.
 	GetDueReminders(ctx context.Context, r *GetDueRemindersRequest) (*GetDueRemindersResponse, error)
 	// Streak methods
 	RecordStreak(ctx context.Context, r *RecordStreakRequest) (*RecordStreakResponse, error)
+	// ListStreaks returns streak entries for the authenticated requester,
+	// defaulting to a daily period when unspecified. Part of UsermanagerService; r
+	// carries the requester, optional user filter and streak filters, and the
+	// response wraps the streak service listing.
 	ListStreaks(ctx context.Context, r *ListStreaksRequest) (*ListStreaksResponse, error)
+	// GetCurrentStreak returns the current streak count for the authenticated
+	// requester, defaulting to a daily period. Part of UsermanagerService; r
+	// carries the requester and count filters, and the response wraps the current
+	// count result.
 	GetCurrentStreak(ctx context.Context, r *GetCurrentStreakRequest) (*GetCurrentStreakResponse, error)
+	// GetLongestStreak returns the personal best streak for the authenticated
+	// requester, defaulting to a daily period. Part of UsermanagerService; r
+	// carries the requester and streak filters, and the response wraps the longest
+	// streak result.
 	GetLongestStreak(ctx context.Context, r *GetLongestStreakRequest) (*GetLongestStreakResponse, error)
+	// GetNumberOfStreaks returns how many streak entries match the filters for the
+	// authenticated requester, defaulting to a daily period. Part of
+	// UsermanagerService; r carries the requester and filters, and the response
+	// wraps the matching streak count.
 	GetNumberOfStreaks(ctx context.Context, r *GetNumberOfStreaksRequest) (*GetNumberOfStreaksResponse, error)
 }
 
 // UsermanagerValidator expected methods of a valid
 type UsermanagerValidator interface {
+	// Validate checks that the supplied value satisfies the validator's expected
+	// validation rules, returning an error describing any failure. Contract of
+	// UsermanagerValidator, which defines the request-validation interface the
+	// handler layer relies on.
 	Validate(s interface{}) error
 }
 

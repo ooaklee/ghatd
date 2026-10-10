@@ -4,7 +4,9 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
-// Settings for client
+// Settings holds client-side configuration loaded from the environment.
+// Component defaults to "ghatdcli" and LogLevel (envconfig key log_level)
+// defaults to "info".
 type Settings struct {
 	Component string `default:"ghatdcli"`
 	LogLevel  string `envconfig:"log_level" default:"info"`

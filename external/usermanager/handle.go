@@ -86,8 +86,18 @@ func (s *Service) UpdateMyHandle(ctx context.Context, req *MyHandleRequest) (*us
 
 // handleManager is optional to preserve the existing handler service interface.
 type handleManager interface {
+	// GetMyHandle returns the requesting actor's current handle metadata. The
+	// Service resolves the user handle domain and delegates to GetUserHandle with
+	// the actor ID; the handler returns self metadata with an ETag.
 	GetMyHandle(context.Context, *MyHandleRequest) (*user.UserHandle, error)
+	// ValidateMyHandle checks a candidate handle for the requesting actor and
+	// returns availability or suggestions without reserving it. The Service
+	// delegates to the user domain's ValidateUserHandle with no mutation.
 	ValidateMyHandle(context.Context, *MyHandleRequest) (*user.ValidateUserHandleResponse, error)
+	// UpdateMyHandle applies a handle change for the requesting actor using the
+	// expected revision for revision-safe writes. The Service delegates to
+	// UpdateUserHandle with the actor as the immutable target; the handler enforces
+	// a numeric If-Match.
 	UpdateMyHandle(context.Context, *MyHandleRequest) (*user.UserHandle, error)
 }
 
@@ -233,8 +243,17 @@ func (h *Handler) serveHandle(w http.ResponseWriter, r *http.Request, operation 
 
 // handleHTTP is an optional route capability, distinct from legacy manager APIs.
 type handleHTTP interface {
+	// GetMyHandle serves the HTTP route returning the authenticated caller's
+	// current handle metadata and ETag. As part of the optional handleHTTP route
+	// capability, the Handler delegates shared serving logic by mode.
 	GetMyHandle(http.ResponseWriter, *http.Request)
+	// ValidateMyHandle serves the HTTP route for advisory handle validation,
+	// returning availability or suggestions without mutation or reservation. The
+	// Handler delegates shared serving logic by validation mode.
 	ValidateMyHandle(http.ResponseWriter, *http.Request)
+	// UpdateMyHandle serves the HTTP route applying the exact handle candidate
+	// under a mandatory numeric If-Match revision. The Handler delegates shared
+	// serving logic by update mode for the authenticated caller.
 	UpdateMyHandle(http.ResponseWriter, *http.Request)
 }
 

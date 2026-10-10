@@ -36,6 +36,30 @@ dispatch. Read-only resolution rechecks cancellation after custom storage return
 Stores must still honor context and transaction guarantees after dispatch; an
 error cannot establish whether an earlier or uncertain transaction committed.
 
+## Explicit capability administration
+
+`ReviewGrant` provides a live-management-authorized, detached stored snapshot,
+including disabled or expired policies. A nil snapshot means known absence;
+joined lookup failures never establish absence or permit first provisioning.
+Review is read-only and is not a transferable approval or enforcement decision.
+
+`ApplyCapabilities` takes an explicit user subject, reviewed revision and
+`Capabilities` replacement: enabled state, expiry, exact scopes and permissions.
+It preserves existing token allowances and usage budgets. Revision zero creates
+only a missing user grant, with no token or budget entitlement. Replacements use
+the same transactional compare-and-swap and administrative audit as other grant
+writes; stale revisions fail even when requested fields happen to match.
+Current management authority is checked again before writing. An error supplies
+no success receipt and does not establish rollback after an uncertain commit.
+
+The caller must verify the selected stored user through the owning identity
+service and bind the system from trusted configuration. API-token targets are
+excluded. These in-process methods do not install an HTTP administration route,
+authenticate an operator, seed default grants or infer permissions from roles.
+The [optional manager transport](../accesspolicymanager/README.md#optional-capability-management)
+supplies explicit bearer administrator routes; host attachment and operational
+approval remain required.
+
 ## Error responses
 
 `AccessPolicyErrorMap` supplies safe default reply entries. Compose it with the
@@ -268,33 +292,19 @@ and does not enable the host's `TokenPolicy` automatically. Retire the
 legacy role fallback only after source review, provisioning, host wiring and
 rollback verification are complete.
 
-### Test coverage
-
-Table-driven unit tests cover encoding, identifiers, validation and window
-boundaries. Real-Mongo tests use `GHATD_TEST_MONGO_URI` and allocate/drop only their
-own uniquely named databases. They cover CAS/auditing, rollback, current-policy
-replay, concurrent admission and inventory, resource checks on replay, transient
-callback retry, revocation, cancellation and session boundaries.
-Migration cases additionally cover field preservation, disabled/expired grants,
-read-only planning, independent preview/receipt snapshots, concurrent plans,
-no-op and stale review, audit rollback, concurrent permission edits at the CAS
-boundary, lost commit responses and retention of usage receipts across apply
-and rollback. Cancellation before CAS, write-time audit identity, revision
-exhaustion and rollback racing a policy edit are also covered. The lost-response case wraps a real committed write; it is not
-replica-set failover or driver commit-result fault injection.
+### Verification
 
 ```sh
-go test ./external/accesspolicy
 # Set GHATD_TEST_MONGO_URI to an isolated transaction-capable test server first.
 go test -race -count=1 -v ./external/accesspolicy
 ```
 
-Without the environment variable, database cases skip. A normal green unit run
-is not proof of transactional behavior. Commit-result uncertainty/failover fault
-injection, production load and host-specific integration remain separate gates.
+Without the environment variable, database cases skip. The suite covers CAS/audit,
+replay, concurrent admission, rollback and explicit grant migration. Lost-response
+cases wrap successful commits; they do not simulate replica-set failover.
+Commit-result uncertainty, production load and host-specific integration require
+separate verification.
 
-Before replacing legacy tier rules, explicitly migrate reviewed grants, wire
-route guards and token inventory through the shared store, validate the same
-client/transaction boundary, and test rollback to the prior application version.
-Do not seed blanket administrator privileges or keep a missing-grant fallback to
-old role thresholds: either would defeat default-deny enforcement.
+Before replacing legacy tier rules, migrate reviewed grants, wire route guards
+and token inventory through the same managed client, and verify rollback. Do not
+seed blanket administrator privileges or retain a missing-grant role fallback.

@@ -9,28 +9,98 @@ import (
 
 // UserHandler interface defines expected methods for valid user handler
 type UserHandler interface {
+	// CreateUser serves the user creation HTTP endpoint: implementations decode and
+	// validate the request, invoke user creation, and write the created user or an
+	// error response.
 	CreateUser(w http.ResponseWriter, r *http.Request)
+	// GetUserByID serves the user-by-ID retrieval HTTP endpoint: implementations
+	// decode the request, load the matching user, and write it or an error
+	// response.
 	GetUserByID(w http.ResponseWriter, r *http.Request)
+	// GetUserByNanoID serves the user-by-nano-ID retrieval HTTP endpoint:
+	// implementations decode the request, load the matching user, and write it or
+	// an error response.
 	GetUserByNanoID(w http.ResponseWriter, r *http.Request)
+	// GetUserByEmail serves the user-by-email retrieval HTTP endpoint:
+	// implementations decode the request, resolve the account by email, and write
+	// it or an error response.
 	GetUserByEmail(w http.ResponseWriter, r *http.Request)
+	// UpdateUser serves the user update HTTP endpoint: implementations decode and
+	// validate the request, apply the update, and write the updated user or an
+	// error response.
 	UpdateUser(w http.ResponseWriter, r *http.Request)
+	// DeleteUser serves the user deletion HTTP endpoint: implementations decode the
+	// request, remove the account, and write a no-content success or an error
+	// response.
 	DeleteUser(w http.ResponseWriter, r *http.Request)
+	// GetUsers serves the HTTP endpoint that retrieves multiple users. It maps the
+	// request into filters and pagination, delegates to the service, and writes the
+	// matching users, with pagination metadata when requested, via w.
 	GetUsers(w http.ResponseWriter, r *http.Request)
+	// UpdateUserStatus serves the HTTP endpoint for user status transitions. It
+	// validates the request, delegates to the status manager, and writes the
+	// updated user via w; responses are marked no-store.
 	UpdateUserStatus(w http.ResponseWriter, r *http.Request)
+	// AddUserRole serves the HTTP endpoint that adds a role to a user. It validates
+	// the request, delegates to the role manager, and writes the updated user via
+	// w; responses are marked no-store.
 	AddUserRole(w http.ResponseWriter, r *http.Request)
+	// RemoveUserRole serves the HTTP endpoint that removes a role from a user. It
+	// validates the request, delegates to the role manager, and writes the updated
+	// user via w; responses are marked no-store.
 	RemoveUserRole(w http.ResponseWriter, r *http.Request)
+	// VerifyUserEmail serves the HTTP endpoint that marks a user's email as
+	// verified. It validates the request, delegates to the service, and writes the
+	// updated user via w.
 	VerifyUserEmail(w http.ResponseWriter, r *http.Request)
+	// UnverifyUserEmail serves the HTTP endpoint that marks a user's email as
+	// unverified. It validates the request, delegates to the service, and writes
+	// the updated user via w.
 	UnverifyUserEmail(w http.ResponseWriter, r *http.Request)
+	// VerifyUserPhone serves the HTTP endpoint that marks a user's phone as
+	// verified. It validates the request, delegates to the service, and writes the
+	// updated user via w.
 	VerifyUserPhone(w http.ResponseWriter, r *http.Request)
+	// RecordUserLogin serves the HTTP endpoint that records a user login event,
+	// updating the user's last-login timestamp. It validates the request, delegates
+	// to the service, and writes the updated user via w.
 	RecordUserLogin(w http.ResponseWriter, r *http.Request)
+	// GetUserProfile serves the HTTP endpoint that retrieves a user's full profile
+	// representation. It validates the request, delegates to the service, and
+	// writes the profile via w.
 	GetUserProfile(w http.ResponseWriter, r *http.Request)
+	// GetUserMicroProfile serves the HTTP endpoint that retrieves a user's reduced
+	// micro profile representation. It validates the request, delegates to the
+	// service, and writes the micro profile via w.
 	GetUserMicroProfile(w http.ResponseWriter, r *http.Request)
+	// SetUserExtension serves the HTTP endpoint that sets a user extension field
+	// value. It validates the request carrying the user ID, key and value,
+	// delegates to the service, and writes the updated user via w.
 	SetUserExtension(w http.ResponseWriter, r *http.Request)
+	// GetUserExtension serves the HTTP endpoint that retrieves a user extension
+	// field value. It validates the request carrying the user ID and key, delegates
+	// to the service, and writes the key/value response via w.
 	GetUserExtension(w http.ResponseWriter, r *http.Request)
+	// UpdateUserPersonalInfo serves the HTTP endpoint that updates a user's
+	// personal information fields. It validates the request, delegates to the
+	// service, and writes the updated user via w.
 	UpdateUserPersonalInfo(w http.ResponseWriter, r *http.Request)
+	// ValidateUser serves the HTTP endpoint that validates a user by ID, reporting
+	// whether the account is valid and any validation errors. It delegates to the
+	// service and writes the validation result via w.
 	ValidateUser(w http.ResponseWriter, r *http.Request)
+	// BulkUpdateUsersStatus serves the HTTP endpoint that applies a desired status
+	// to multiple user IDs. It validates the request, delegates to the status
+	// manager, and writes the per-batch outcome via w; responses are marked
+	// no-store.
 	BulkUpdateUsersStatus(w http.ResponseWriter, r *http.Request)
+	// GetUserStats serves the HTTP endpoint that retrieves aggregated platform user
+	// statistics. It validates the request, delegates to the service, and writes
+	// the stats response via w.
 	GetUserStats(w http.ResponseWriter, r *http.Request)
+	// GetUserConfigs serves the HTTP endpoint that retrieves supported user config
+	// presets and capabilities, including the default config type. It delegates to
+	// the service and writes the response via w.
 	GetUserConfigs(w http.ResponseWriter, r *http.Request)
 }
 

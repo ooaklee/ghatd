@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+// profile is the parsed JSON verification profile covering service identity,
+// dashboards, compose and Helm sections.
 type profile struct {
 	Version    int              `json:"version"`
 	Service    serviceProfile   `json:"service"`
@@ -19,10 +21,15 @@ type profile struct {
 	Compose    composeProfile   `json:"compose"`
 	Helm       helmProfile      `json:"helm"`
 }
+
+// serviceProfile names the service and namespace under verification.
 type serviceProfile struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 }
+
+// dashboardProfile selects dashboard paths, expected metric names and queue
+// operation, plus optional panel ID overrides.
 type dashboardProfile struct {
 	Paths             []string       `json:"paths"`
 	CacheMetric       string         `json:"cache_metric"`
@@ -31,6 +38,9 @@ type dashboardProfile struct {
 	QueueOperation    string         `json:"queue_operation"`
 	Panels            map[string]int `json:"panels,omitempty"`
 }
+
+// composeProfile selects compose files, roles and fixture environment for
+// collector verification.
 type composeProfile struct {
 	Base             []string          `json:"base"`
 	Monitor          string            `json:"monitor"`
@@ -40,6 +50,9 @@ type composeProfile struct {
 	FixtureEnv       map[string]string `json:"fixture_env"`
 	AssetsDir        string            `json:"assets_dir"`
 }
+
+// helmProfile selects chart paths, values files, render script and output,
+// port, worker definitions and optional production trace settings.
 type helmProfile struct {
 	ChartDir        string                  `json:"chart_dir"`
 	BaseValues      string                  `json:"base_values"`
@@ -53,6 +66,9 @@ type helmProfile struct {
 	Workers         []workerProfile         `json:"workers"`
 	ProductionTrace *productionTraceProfile `json:"production_trace,omitempty"`
 }
+
+// productionTraceProfile describes the verified HTTPS OTLP endpoint and its
+// credential plumbing for production trace checks.
 type productionTraceProfile struct {
 	Endpoint      string `json:"endpoint"`
 	HeaderName    string `json:"header_name"`
@@ -61,6 +77,8 @@ type productionTraceProfile struct {
 	SecretKey     string `json:"secret_key"`
 	RemoteKey     string `json:"remote_key"`
 }
+
+// workerProfile maps a worker's values key to its name suffix.
 type workerProfile struct {
 	ValuesKey string `json:"values_key"`
 	Suffix    string `json:"suffix"`
@@ -76,6 +94,10 @@ var (
 	secretKey  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$`)
 )
 
+// parseProfile decodes at most 1 MiB of strict JSON, rejecting unknown fields,
+// trailing data, wrong versions, and out-of-bounds names, metrics, panels,
+// roles, ports, workers, endpoints, secrets and environment entries with a
+// single generic error. Panel overrides must remain unique.
 func parseProfile(data []byte) (profile, error) {
 	var p profile
 	invalid := errors.New("invalid verification profile; check the documented version, fields and bounded values")
@@ -195,6 +217,10 @@ func safePath(root, path string, exists bool, directory bool) error {
 		probe = next
 	}
 }
+
+// validatePaths checks every profile-referenced file and directory against the
+// host root, requiring existence for inputs and validating Helm value filenames
+// before joining them under the chart directory to prevent traversal.
 func validatePaths(root string, p profile) error {
 	files := append([]string(nil), p.Dashboards.Paths...)
 	files = append(files, p.Compose.Base...)

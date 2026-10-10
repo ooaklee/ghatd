@@ -5,6 +5,15 @@ The [**repository**](./mongo_repository.go) and [**repositoryhelpers**](./helper
 
 ## Transaction-safe operations
 
+`repositoryhelpers.WithTopology(replicaSet, directConnection)` merges explicit
+topology into `Config.ConnectionString` before `BuildClientOptions`. Other URI
+options survive; a nonempty replica set or `true` direct connection overrides
+that URI option, while blank/false leaves existing selections unchanged. The
+helper adds the slash required before a Mongo query and performs no I/O. URI
+parse errors are left untouched for driver validation. It mutates the configured
+URI; do not log credential-bearing connection strings. Hosts own environment
+parsing and the decision to enable direct connection. A nil config is inert.
+
 Reuse the host's `MongoDbRepository`. When an integration receives an existing
 `*mongo.Database`, `NewMongoDbRepositoryFromDatabase(db, logger)` adapts it without
 creating or taking ownership of another client. Its manager cannot reconnect,

@@ -906,57 +906,290 @@ func TestSubscriptionLifecycle(t *testing.T) {
 }
 ```
 
-## Potential Future Improvements
+## Optional verified-revenue orchestration
 
-Here's a list of areas for improvement in future iterations of `billingmanager`, `billing`, and `paymentprovider`. Please note that these suggestions are not prioritised.
+`WithRevenueServices` supplies an optional `RevenueProviderRegistry`, owning
+`RevenueFeedService` and `RevenueAssociationService`. Supply all capabilities
+before serving requests. Opt-in financial acceptance executes before legacy
+access/billing-event projection; a later projection failure may leave committed
+financial evidence, which a webhook retry deduplicates. Webhook-only providers
+and managers without the feature preserve their existing behaviour.
 
-### Additional Providers
-- [ ] Paddle provider
-- [ ] PayPal provider
-- [ ] Chargebee provider
-- [ ] Recurly provider
-- [ ] Braintree provider
+For providers implementing `RevenueDeliveryVerifier`, every replay first
+authenticates the delivery signature, scope, envelope and canonical source
+digest. A matching owning reception receipt can be acknowledged without another
+financial API call. A changed snapshot conflicts; joined absence/outage errors
+remain retryable. Replaying a quarantined reception does not resolve it or create
+facts. The explicit reconciliation path remains responsible for that obligation.
 
-### Advanced Features
-- [ ] Subscription plan upgrades/downgrades
-- [ ] Proration calculations
-- [ ] Usage-based billing support
-- [ ] Multi-currency support
-- [ ] Tax calculation integration
-- [ ] Invoice generation
-- [ ] Payment retry logic
-- [ ] Dunning management
-- [ ] Subscription trial extensions
-- [ ] Coupon/discount support
-- [ ] Metered billing
-- [ ] Subscription pausing/resuming
+The association port must resolve the historical paying principal and immutable
+provider-price/plan/cost mapping for the verified account, mode, customer,
+subscription and paid time. Current access, email matching, organization seats,
+browser metadata and current catalogue prices must not substitute for that
+source. Existing accepted payment facts preserve their original mapping during
+replay, refunds and disputes. Missing or ambiguous source evidence becomes a
+durable source quarantine; dependency outages remain retryable.
 
-### Data & Analytics
-- [ ] Revenue analytics
-- [ ] Churn rate tracking
-- [ ] MRR/ARR calculations
-- [ ] Cohort analysis
-- [ ] Subscription metrics dashboard
-- [ ] Export functionality
+`WithRevenueReconciliationAuthority` supplies current scoped authority for every
+`ReconcileRevenueSource` call and receipt replay. Recovery checks the original
+fingerprint and canonical signed-source digest, reads a committed resolution
+before a provider call, then uses the optional authenticated provider event
+lookup. Still-unresolved evidence remains pending. Recovered facts and a reasoned
+resolution are committed by the owning billing service in one transaction. No
+handler directly owns financial persistence, commission calculation or manual
+payout execution.
 
-### Testing
-- [ ] Unit tests for billing service
-- [ ] Unit tests for paymentprovider
-- [ ] Unit tests for billingmanager
-- [ ] Integration tests with real providers
-- [ ] Webhook simulation tools
-- [ ] Performance benchmarks
+`ReconcileRevenueSourceRequest.OriginalSnapshot` is optional private input for
+an explicit legacy-quarantine repair. The provider's retained-snapshot verifier
+must reproduce the exact original source hash and derive a stable identity;
+authenticated provider retrieval must independently match that identity before
+any recovered facts are accepted. Raw snapshot bytes are neither public JSON
+nor revenue-feed storage. Normal versioned sources and unchanged legacy
+snapshots reconcile without this input. A supplied snapshot is checked even
+when replaying a committed resolution; a changed proof cannot hide behind an
+existing receipt. Receipt replay without a payload retains its outage-tolerant
+behaviour and current-authority check.
 
-### Monitoring & Observability
-- [ ] Webhook processing metrics
-- [ ] Failed payment alerting
-- [ ] Provider health monitoring
-- [ ] Subscription status dashboard
-- [ ] Audit trail query interface
+Resolution replay is an exact original-request retry: the original verified
+actor and reason must match, as well as the source fingerprint. A different
+currently authorized operator does not inherit the earlier resolver's retry
+identity. Current authorization is still required for the original actor.
 
-### Developer Experience
-- [ ] CLI tool for testing webhooks
-- [ ] Provider migration utilities
-- [ ] Data export/import tools
-- [ ] Subscription reconciliation tools
-- [ ] Webhook replay functionality
+The owning resolution retains a private `RecoveryFingerprint` while preserving
+the original quarantine and its `SourceFingerprint`. Freshly signed redelivery
+may match that stable fingerprint only through a resolution bound to the exact
+original scope, envelope and source. No matching resolution means a legacy
+representation change still conflicts. This replay path performs no new
+economic acceptance and does not clear unresolved work by itself. Hosts must
+keep retained-proof recovery behind trusted native provisioning/recovery code;
+no browser-supplied actor or provider scope is admitted by this capability.
+
+The retained-snapshot bridge is deliberately limited to legacy quarantines.
+Already accepted legacy deliveries replay only when the exact legacy hash
+matches; a changed representation without an owning validated bridge remains
+a conflict. Do not rewrite an accepted source hash to acknowledge it. New
+versioned deliveries avoid this receipt-URL difference on both initial
+acceptance and later signed replay.
+
+### Capturing checkout authorization for verified revenue
+
+`WithCheckoutRevenueCapture(capture, authority)` opts checkout into immutable
+owning authorization. `billing.CheckoutService` implements the capture and
+historical association ports. `CheckoutPayerAuthority` must verify the current
+caller is the paying owning account on every attempt, including saved-session
+recovery. Authority is checked again before returning browser credentials after
+provider submission/retrieval; an in-flight revocation withholds the secret while
+retaining the acknowledged provider session. `NewUserCheckoutPayerAuthority` offers a `user/v2` adapter with explicit
+owning account-type/status lists and required current email verification. It
+rejects organization seats, revoked accounts and mismatched owning identities;
+no assumed type/status names or email joins are provided.
+
+The named checkout provider must implement `RevenueCheckoutProvider`. Stripe
+verifies the configured merchant through its authenticated API; mode is checked
+on returned sessions and prices. Before POST, the manager freezes the validated
+catalogue selection and complete request in owning storage. Existing intents
+recover their original parameters despite later profile/catalogue changes.
+Known sessions are retrieved, rather than submitted again. Uncertain intents
+outside the safe idempotency window require reconciliation.
+
+This capability is optional and does not alter legacy checkout when absent.
+Supply it together with `WithRevenueServices` before enabling financial
+reception. Legacy subscriptions and portal price changes without immutable
+reviewed mappings remain quarantined. No transport handler writes these records
+directly, and provider metadata alone cannot authorize a historical payer.
+
+### Current subscription status
+
+The same configured revenue feed may optionally implement
+`CheckoutSubscriptionStatusService`. `PrepareSubscriptionStatusForCheckout`
+and `GetSubscriptionStatusForCheckout` use the existing refresh/read permissions:
+program authority precedes source lookup, then selected owning permission is checked
+before disclosure. Checkout preparation requires immutable native checkout
+provenance without a paid fact. Checkout reads use the shared current head, whose
+own provenance may be checkout or payment after a later charge; they do not
+require a checkout-only head or manufacture payment evidence. Errors, missing or
+stale status and malformed owning output also recheck current program authority
+before returning an error, with no partial result.
+The selected scope/subscription is a trusted host source selector, never browser
+payer proof. Paid-only owners remain compatible; missing checkout capability
+returns unavailable. This does not install a collector or enable host trial UI.
+
+`WithSubscriptionStatusAuthority` requires the configured revenue feed to also
+implement `SubscriptionStatusService`; a second independent billing owner is
+not accepted. The dedicated `billing.subscription-status.refresh` and
+`billing.subscription-status.read` actions are separate from access and revenue
+reconciliation. `SubscriptionStatusAuthority` checks the verified current actor
+first at program scope, then against the owning principal, merchant/mode
+and subscription. Empty targets mean the initial program check, never a grant
+to read all payer data. The host supplies explicit scoped authorization.
+
+Private `PrepareSubscriptionStatus`, `LookupSubscriptionStatus` and
+`CaptureSubscriptionStatus` stages freeze the revision before authenticated
+provider I/O, allow durable host retention of preparation/evidence before save,
+and recover uncertain saves without another provider lookup. A currently
+authorized replacement operator can recover the original receipt while its
+preparing author remains unchanged. Stored authorship is not permission.
+Permission is rechecked after provider lookup and after capture/read; revocation
+withholds the response but does not undo already committed lifecycle truth.
+
+`ValidateSubscriptionStatusPreparation` independently rechecks a retained
+original under the current actor, who may differ from its preparing author. Its
+canonical shape is checked before I/O. Both program and selected refresh
+permission precede owning provenance validation, and selected permission is
+checked again after every outcome. Lookup and capture reuse this boundary before
+provider I/O or mutation. Provider/registry errors, invalid evidence and failed
+capture also require the final current selected check. Cancellation stops work
+between adapters. An observed unknown commit remains in the private error tree
+alongside a later authority failure or cancellation; every capture error requires
+recovery using the retained original inputs, never an assumed rollback or a new
+lookup replacing uncertain evidence. This validation performs no fresh
+preparation, provider call or write and does not change the original capture ID,
+authorship or lookup start time.
+
+`GetSubscriptionStatusForFact` reads retained evidence without a provider call.
+Its freshness budget is trusted host configuration, never customer input. No
+HTTP endpoint, durable refresh queue, scheduler, active-paid reporting join or
+customer/admin projection is enabled by adding this capability. Active status
+alone creates no access, commission or payout entitlement. See the
+[owning lifecycle contract](../billing/README.md#scoped-current-subscription-status).
+
+### Private lifecycle source discovery
+
+`WithLifecycleDiscoveryAuthority` installs a dedicated current authority for the
+optional `DiscoverLifecycleSources` capability on the SAME configured revenue
+feed. No second billing owner, concrete repository or provider fallback is
+accepted. Discovery does not require status read/refresh permission or perform a
+provider-registry lookup. The distinct action is
+`billing.subscription-status.discover`; installing an authority creates no grant.
+
+Queries select one native provider/account/mode scope, source kind and bounded
+cursor. `LifecycleDiscoveryTarget` carries that scope/kind before lookup, then
+the original selected principal with either acknowledged `IntentID` or owning
+`SubscriptionID` for each candidate. The verified current actor is independent
+of those targets. Current scope permission is checked again before disclosure,
+including empty pages and owning error results such as unprepared schema. A
+revocation, cancellation or later candidate denial withholds the entire page
+and its cursor. Hosts must check their current instance-bound service identity
+and exact scoped grant; stored preparing authorship, a cursor and a human role
+are not authorization credentials.
+
+Billing's `LifecycleDiscoveryPage.Validate` retains canonical provenance and
+page validation in its owning domain. The manager calls it before authorizing
+selected results. A short or empty visible page can still carry continuation:
+binding-only native rows advance the raw position without becoming refreshable
+sources. The cursor can therefore exceed the last visible candidate, and its
+end flag covers this native projection snapshot rather than provider delivery
+completeness. Durable handoff and repeated full sweeps remain required.
+
+These queries/candidates/targets remain private in-process data, excluded from
+JSON. This capability performs no source preparation, status/financial write,
+freshness reset, provider request or public HTTP routing. It does not expose the
+global legacy upgrade scan or install host authority, the collector, a recurring
+refresh schedule or trial reporting. See [owning discovery and preparation](../billing/README.md#bounded-lifecycle-source-discovery)
+for readiness admission and upgrade prerequisites.
+
+
+### Private acknowledged-checkout completion stages
+
+`WithCheckoutLifecycleAuthority` enables the optional `CheckoutLifecycleService`
+capability derived ONLY from the same `revenueAssociation` configured through
+`WithRevenueServices`. Paid checkout-capture wiring, payer admission and a second
+checkout owner are not substitutes. Configure the authority before serving work;
+no grant, HTTP endpoint or worker is installed by this option.
+
+The private `CheckoutLifecycleTarget` carries the original scope, paying
+principal and intent, independently of the verified current actor. Every stage
+requires `billing.subscription-status.refresh`, never discovery or read
+permission. The host must enforce its active API-service identity, instance-bound
+invocation and exact provider/account/mode grant. Current permission is checked
+before owning I/O and after its outcome, including absence, errors and malformed
+results. Lookup/capture additionally reauthorize after original validation and
+before provider I/O/commit. Cancellation or denial withholds all output. An observed uncertain owning
+outcome remains joined with a later authority failure or cancellation, so
+private callers can still recognize that the operation may have committed.
+Known outcomes do not become uncertain solely because a later check fails.
+These are current checks, not cross-domain locks.
+
+Use the separate stages in an explicitly durable host workflow:
+
+1. `PrepareCheckoutLifecycle` returns the detached native original, joining
+   intent, acknowledgement and reverse-session ownership. Retain that input
+   before lookup. `ValidateCheckoutLifecycle` revalidates a retained input for a
+   currently authorized replacement worker.
+2. `FindCheckoutLifecycleReceipt` recovers an existing original receipt without
+   provider I/O. Only conclusive receipt absence after valid original joins
+   permits a new lookup; joined failures are not absence.
+3. `LookupCheckoutLifecycleEvidence` performs the native authenticated lookup
+   after revalidation. Durably retain this original evidence before capture.
+4. `CaptureCheckoutLifecycleEvidence` submits that exact retained intent/evidence.
+   Replay recovers the same receipt without another provider call. Unknown commit
+   or post-commit revocation can withhold output despite retained truth; preserve
+   and replay original inputs rather than fetching replacement evidence.
+
+Billing owns canonical input/evidence/receipt validation. These stages neither
+combine lookup with capture nor create a host recovery outbox, refresh schedule,
+financial fact, current subscription status, commission or trial entitlement.
+The host collector, migration/drain qualification and full platform verification
+remain integration requirements. See [owning preparation and recovery](../billing/README.md#private-acknowledged-checkout-preparation-and-receipt-recovery).
+
+
+### Private retained status resolution
+
+`Service.ResolveSubscriptionStatus(ctx, actor, preparation)` derives the optional
+resolver from the **same configured status owner**, without widening existing
+status ports or installing a second ledger. It checks current global and selected
+refresh permission before native provenance validation, and both permissions
+again after owning outcomes, including errors and absence. Preparing authorship
+remains immutable and does not substitute for the current caller. Uncertainty
+remains available to private recovery callers after late denial/cancellation;
+failed calls return zero data.
+
+The native [original resolution](../billing/README.md#private-original-status-resolution)
+returns `captured`, `pending` or `superseded`. It makes no fresh preparation,
+provider lookup, capture or host-pointer change. The result is private and never
+HTTP-decoded. Hosts still own durable original retention, lease-fenced disposition,
+retry/inspection and runtime composition. A generic revision conflict alone is
+insufficient to discard an original.
+
+### Original checkout status recovery
+
+The optional authenticated read
+`GET /api/v1/bms/billings/{providerName}/checkout/status?session_id={sessionID}`
+checks one previously acknowledged checkout. Configure
+`WithCheckoutRevenueCapture` with the owning `billing.CheckoutService` and current
+`CheckoutPayerAuthority`; the named provider must also implement
+`CheckoutStatusProvider`. Existing handlers and providers remain compatible;
+missing optional capabilities return an unavailable result.
+
+The verified caller must still have paying-account authority and own the retained
+intent. The service validates the original forward and reverse session reservation
+in one owning snapshot, then matches fresh authenticated provider evidence against
+the frozen payer reference, merchant/live mode, price, currency, unit amount and
+cadence. Current catalogue values, existing access, email and browser-supplied
+actor or economic fields do not prove that this checkout was paid. Authority and
+cancellation are checked again before disclosure.
+
+The no-store response contains only `state`, `session_id`, `plan_id`, `cost_id` and
+`provider_price_id`. States are `paid`, `no_payment_required`, `pending`, `unpaid`
+and `expired`. A trial completion is never labelled paid. Missing, foreign or
+contradictory evidence and provider/storage failures return an unavailable error
+without a partial result. This read creates no session, captures no revenue,
+refreshes no persisted status and grants no access.
+
+A host can expose this read while an embedded checkout is uncertain, then use
+its existing bounded access refresh after the original returns `paid` or
+`no_payment_required`. Webhooks remain responsible for fulfilment; the host must
+distinguish verified original completion from delayed or unavailable access.
+
+Stripe may label a zero-total trial invoice `paid`. The status read requires an
+explicit nonnegative session total and reports zero-total completion as
+`no_payment_required`, only when the frozen intent authorizes a subscription
+trial. A positive total is required for `paid`; an unknown total fails closed.
+This completion read is not a refund-adjusted balance or a revenue receipt.
+
+
+## Optional evidence composition
+
+[Scoped checkout evidence helpers](helper/README.md) forward retained sessions
+to the explicit provider registry. Native checkout owns frozen-intent verification;
+the adapter creates no financial fact and supplies no subscription fallback.

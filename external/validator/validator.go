@@ -27,6 +27,8 @@ func (v *Validator) Validate(s interface{}) error {
 	return v.validator.Struct(s)
 }
 
+// createValidator builds a go-playground validator with required-struct
+// enforcement enabled.
 func createValidator() *validator.Validate {
 
 	v := validator.New(validator.WithRequiredStructEnabled())

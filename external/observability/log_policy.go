@@ -16,14 +16,21 @@ const maxLogFieldValues = 32
 // Obtain options with WithLogFieldValues or WithLogErrorClassifier; no
 // process-global policy is changed.
 type LogOption interface {
+	// applyLogPolicy applies this option to the logger's OpenTelemetry field
+	// policy, such as installing an error classifier or replacing allowed field
+	// values.
 	applyLogPolicy(*logFieldPolicy)
 }
 
+// staticLogFieldValues holds one field's snapshot of permitted static values
+// for a log field policy.
 type staticLogFieldValues struct {
 	field  string
 	values []string
 }
 
+// logErrorClassifierOption selects a shared immutable error classifier for a
+// logger's OpenTelemetry error fields.
 type logErrorClassifierOption struct{ classifier *ErrorClassifier }
 
 // WithLogErrorClassifier uses the same static error codes as Operations for
@@ -39,6 +46,8 @@ func WithLogErrorClassifier(classifier *ErrorClassifier) LogOption {
 	return logErrorClassifierOption{classifier: classifier}
 }
 
+// applyLogPolicy installs the classifier and enables error classification on
+// the policy.
 func (option logErrorClassifierOption) applyLogPolicy(policy *logFieldPolicy) {
 	policy.classifier = option.classifier
 	policy.classifyErrors = true
@@ -109,6 +118,8 @@ func (option staticLogFieldValues) applyLogPolicy(policy *logFieldPolicy) {
 	}
 }
 
+// logFieldPolicy is one logger's private immutable snapshot of permitted source
+// and provider values plus the optional error classifier.
 type logFieldPolicy struct {
 	sources        map[string]struct{}
 	providers      map[string]struct{}

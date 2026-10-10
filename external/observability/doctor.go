@@ -141,12 +141,19 @@ func ProbeConfiguration(ctx context.Context, config Config, timeout time.Duratio
 	return report, nil
 }
 
+// doctorMessage bundles one signal's probe: the request and response protobufs
+// to exchange and a function reading how many items the receiver reported
+// rejected.
 type doctorMessage struct {
 	request  proto.Message
 	response proto.Message
 	rejected func() int64
 }
 
+// doctorMessages builds one synthetic probe request per signal (traces,
+// metrics, logs) with a shared random trace/span identity and diagnostic
+// resource attributes, each paired with its response type and rejection
+// counter. Random-generation failures return ErrProbeFailed.
 func doctorMessages() (map[string]doctorMessage, error) {
 	traceID, spanID := make([]byte, 16), make([]byte, 8)
 	if _, err := rand.Read(traceID); err != nil {
@@ -194,6 +201,11 @@ func doctorMessages() (map[string]doctorMessage, error) {
 	}, nil
 }
 
+// probeHTTP sends one doctor probe over HTTP protobuf with optional gzip and
+// the signal's headers and TLS settings, using a fresh transport. It classifies
+// outcomes from transport errors, HTTP status and the protobuf response:
+// authentication failures, timeouts, rejections (including non-protobuf bodies
+// or reported rejections), partial acceptance, or full acceptance.
 func probeHTTP(ctx context.Context, signal resolvedSignalConfiguration, message doctorMessage) ProbeStatus {
 	payload, err := proto.Marshal(message.request)
 	if err != nil {
@@ -266,6 +278,11 @@ func probeHTTP(ctx context.Context, signal resolvedSignalConfiguration, message 
 	return ProbeAccepted
 }
 
+// probeGRPC sends one synthetic OTLP export over gRPC using the signal's
+// endpoint, headers, TLS or insecure transport, optional gzip compression and a
+// 64 KiB receive limit with retries disabled. It maps gRPC status codes to
+// authentication, timeout, transport or rejected statuses and uses the merged
+// response's rejected count to distinguish accepted, partial and rejected.
 func probeGRPC(ctx context.Context, signal resolvedSignalConfiguration, message doctorMessage) ProbeStatus {
 	var security credentials.TransportCredentials
 	if signal.insecure {
@@ -330,6 +347,9 @@ func probeGRPC(ctx context.Context, signal resolvedSignalConfiguration, message 
 	return ProbeAccepted
 }
 
+// probeTransportStatus classifies an Unavailable gRPC error as a timeout when
+// the context expired, the error wraps context.DeadlineExceeded, or it is a
+// network timeout; otherwise it reports unreachable.
 func probeTransportStatus(ctx context.Context, err error) ProbeStatus {
 	var networkError net.Error
 	if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) ||

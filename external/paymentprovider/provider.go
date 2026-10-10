@@ -34,6 +34,9 @@ type Provider interface {
 // CheckoutProvider is an optional capability. It intentionally remains outside
 // Provider so existing providers and test doubles do not need to implement checkout.
 type CheckoutProvider interface {
+	// CreateCheckoutSession creates a provider checkout session from the request;
+	// the Stripe implementation validates the catalogue price and request shape,
+	// leaving authentication policy to the calling service.
 	CreateCheckoutSession(ctx context.Context, request *CheckoutSessionRequest) (*CheckoutSession, error)
 }
 
@@ -42,6 +45,9 @@ type CheckoutProvider interface {
 // the registry resolves for checkout, without widening Provider or
 // CheckoutProvider for webhook-only and custom implementations.
 type CheckoutReturnURLProvider interface {
+	// GetCheckoutReturnURL returns the provider-owned trusted checkout return
+	// destination, kept on the same provider instance the registry resolves for
+	// checkout.
 	GetCheckoutReturnURL() string
 }
 
@@ -49,6 +55,8 @@ type CheckoutReturnURLProvider interface {
 // that can distinguish webhook-only configuration from checkout opt-in.
 // Implementations should treat an empty checkout ReturnURL as not opted in.
 type CheckoutConfigValidator interface {
+	// ValidateCheckoutConfig reports whether the provider's checkout configuration
+	// is usable; an empty checkout ReturnURL means not opted in and remains valid.
 	ValidateCheckoutConfig() error
 }
 
@@ -76,12 +84,18 @@ func ValidateCheckoutProviderConfig(provider Provider) error {
 // a returned session URL against the provider's trusted hosted-origin allowlist
 // before returning it to callers.
 type CustomerPortalProvider interface {
+	// CreateCustomerPortalSession creates a hosted billing-management session from
+	// the request; the Stripe implementation validates the returned URL against its
+	// trusted hosted-origin allowlist.
 	CreateCustomerPortalSession(ctx context.Context, request *CustomerPortalSessionRequest) (*CustomerPortalSession, error)
 }
 
 // UpcomingInvoicePreviewProvider is an optional capability for providers that
 // can estimate the next invoice for a server-owned recurring subscription.
 type UpcomingInvoicePreviewProvider interface {
+	// CreateUpcomingInvoicePreview returns a read-only estimate of the next invoice
+	// for a server-owned recurring subscription; the preview is deliberately not
+	// persisted as a payment event.
 	CreateUpcomingInvoicePreview(ctx context.Context, request *UpcomingInvoicePreviewRequest) (*UpcomingInvoicePreview, error)
 }
 
@@ -89,6 +103,8 @@ type UpcomingInvoicePreviewProvider interface {
 // generic browser routes. It verifies that a hosted session URL belongs to the
 // provider's trusted origin before the URL is returned to a client.
 type CustomerPortalSessionURLValidator interface {
+	// ValidateCustomerPortalSessionURL verifies the hosted session URL belongs to
+	// the provider's trusted origin before the URL reaches a client.
 	ValidateCustomerPortalSessionURL(sessionURL string) error
 }
 
@@ -96,6 +112,8 @@ type CustomerPortalSessionURLValidator interface {
 // capability. Keeping it separate preserves source compatibility for existing
 // providers and test doubles that only create sessions.
 type CustomerPortalReturnURLProvider interface {
+	// GetCustomerPortalReturnURL returns the provider-owned trusted portal return
+	// destination, deliberately independent from the checkout return URL.
 	GetCustomerPortalReturnURL() string
 }
 
@@ -104,6 +122,9 @@ type CustomerPortalReturnURLProvider interface {
 // provider can be used for webhooks, checkout, or API synchronization without
 // opting into a customer portal.
 type CustomerPortalConfigValidator interface {
+	// ValidateCustomerPortalConfig reports whether portal settings are valid; an
+	// empty return URL with no other portal settings stays valid for non-portal
+	// use.
 	ValidateCustomerPortalConfig() error
 }
 

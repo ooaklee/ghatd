@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/lipis/flag-icons",
+  "revision": "086f7e97d657358203916dbe84f61c2bccaa81eb",
+  "licence": "MIT",
+  "archive_sha256": "cffc1f5730311d0437a18fb14b936963bcb06af0daeee463872e479caa3852fb",
+  "excluded_assets": {
+    "sh-ac.svg": "Pinned upstream file contains 62 url(#...) paint references with no gradient definitions. Retained as source evidence; excluded from seeding. Ascension Island displays its country name and code without a flag."
+  }
+}

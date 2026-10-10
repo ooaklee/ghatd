@@ -22,15 +22,37 @@ import (
 // can be tested with a fake repository (see service_test.go) without needing
 // a real MongoDB connection.
 type NotificationRepository interface {
+	// UpsertAddress saves a notification address keyed by channel and address hash,
+	// updating mutable fields and returning the stored address so the latest owner
+	// owns it without duplicates.
 	UpsertAddress(ctx context.Context, address *NotificationAddress) (*NotificationAddress, error)
+	// GetActiveAddressesByUserID returns the user's active addresses, optionally
+	// restricted to the given channels, including full delivery data for
+	// server-side sends.
 	GetActiveAddressesByUserID(ctx context.Context, userID string, channels ...NotificationChannel) ([]NotificationAddress, error)
+	// GetAddresses returns notification addresses matching the optional admin
+	// filters in the list request.
 	GetAddresses(ctx context.Context, r *ListNotificationAddressesRequest) ([]NotificationAddress, error)
+	// CountAddresses returns how many notification addresses match the optional
+	// admin filters in the list request.
 	CountAddresses(ctx context.Context, r *ListNotificationAddressesRequest) (int64, error)
+	// GetAddressesByUserID returns every address for a user regardless of status,
+	// for the user-facing list of registered devices.
 	GetAddressesByUserID(ctx context.Context, userID string) ([]NotificationAddress, error)
+	// DeleteAddressByIDForUser deletes one address, scoping the deletion to both
+	// the address ID and the owning user's ID.
 	DeleteAddressByIDForUser(ctx context.Context, userID, addressID string) error
+	// DeleteAddressesByUserID deletes every notification address belonging to the
+	// user, used during account cleanup.
 	DeleteAddressesByUserID(ctx context.Context, userID string) error
+	// GetPreferencesByUserID retrieves the user's notification preferences document
+	// keyed by user ID.
 	GetPreferencesByUserID(ctx context.Context, userID string) (*NotificationPreferences, error)
+	// UpsertPreferences creates or updates the user's notification preferences
+	// document and returns the stored result.
 	UpsertPreferences(ctx context.Context, preferences *NotificationPreferences) (*NotificationPreferences, error)
+	// DeletePreferencesByUserID deletes the user's notification preferences
+	// document, used during account cleanup.
 	DeletePreferencesByUserID(ctx context.Context, userID string) error
 
 	// DisableAddressByHash sets the status of the address with the given
@@ -293,6 +315,8 @@ func (s *Service) ListAddresses(ctx context.Context, req *ListNotificationAddres
 	return response, nil
 }
 
+// sanitiseAddresses converts full notification addresses into sanitised
+// summaries, stripping endpoints and tokens, wrapped in a list response.
 func sanitiseAddresses(addresses []NotificationAddress) *ListNotificationAddressesResponse {
 	summaries := make([]NotificationAddressSummary, 0, len(addresses))
 	for _, address := range addresses {
@@ -302,6 +326,8 @@ func sanitiseAddresses(addresses []NotificationAddress) *ListNotificationAddress
 	return &ListNotificationAddressesResponse{Addresses: summaries}
 }
 
+// normaliseAddressListPagination clamps pagination inputs: pages below one
+// become 1, per-page below one becomes 25 and above 100 becomes 100.
 func normaliseAddressListPagination(page, perPage int) (int, int) {
 	if page <= 0 {
 		page = 1
@@ -721,6 +747,11 @@ func (s *Service) NotifyUsers(ctx context.Context, req *NotifyUsersRequest) (*No
 	return response, nil
 }
 
+// resolveNotifyUsersTargetUserIDs determines the recipients for NotifyUsers.
+// Explicit user IDs are trimmed and deduplicated; when none are given it
+// derives the sorted, deduplicated set of user IDs that have active addresses
+// for the channels, logging both resolution paths. Repository failures are
+// returned unchanged.
 func (s *Service) resolveNotifyUsersTargetUserIDs(ctx context.Context, userIDs []string, channels []NotificationChannel) ([]string, error) {
 	logger := logger.AcquirePackageFrom(ctx, "external/notifier").With(
 		zap.String("operation", "resolve-notify-users-targets"),

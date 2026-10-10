@@ -10,7 +10,11 @@ import (
 
 // RedisTransactionClient supplies the atomic Redis operations required here.
 type RedisTransactionClient interface {
+	// SetNX sets the key to the value only if absent, with the given time-to-live,
+	// returning whether the value was set.
 	SetNX(string, interface{}, time.Duration) *redis.BoolCmd
+	// Eval executes a Lua script against the given Redis keys with the supplied
+	// arguments, returning the raw command result.
 	Eval(string, []string, ...interface{}) *redis.Cmd
 }
 

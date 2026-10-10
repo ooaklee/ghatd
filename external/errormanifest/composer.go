@@ -4,6 +4,8 @@ import (
 	"github.com/ooaklee/reply/v2"
 )
 
+// Composer accumulates base manifests and a final override layer for building a
+// []reply.ErrorManifest with last-wins override semantics.
 type Composer struct {
 	base      []reply.ErrorManifest
 	overrides []reply.ErrorManifest

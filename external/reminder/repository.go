@@ -16,16 +16,39 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore describes the MongoDB helper operations the reminder repository uses.
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given MongoDB collection
+	// matching the filter, applying any count options, and returns the count for
+	// the reminder repository's use.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteFindCommand runs a MongoDB find on the collection with the filter and
+	// find options, returning a cursor over matching documents for the reminder
+	// repository.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the document into the given collection,
+	// naming the result object for diagnostics, and returns the insert result.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteFindOneCommandDecodeResult finds one document matching the filter and
+	// decodes it into result; logError controls diagnostics and onFailureErr is
+	// returned when nothing matches.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteUpdateOneCommand applies the update to the single document matching
+	// the filter in the collection, naming the target object for diagnostics.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, resultObjectName string) error
+	// ExecuteDeleteOneCommand deletes the single document matching the filter from
+	// the collection, naming the target object for diagnostics.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 
+	// GetDatabase returns the named MongoDB database handle for the reminder
+	// repository's collections.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes and returns the MongoDB client used by the
+	// reminder repository.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every remaining document in the cursor into
+	// the result slice, naming the result object for diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes a single document from the cursor into result,
+	// naming the result object for diagnostics.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
@@ -110,6 +133,9 @@ func (r *Repository) GetReminderExecutionsCollection(ctx context.Context) (*mong
 	return r.executionsCollection, nil
 }
 
+// getCollection returns a lazily initialised Mongo collection, retrying client
+// and database initialisation up to the configured attempt limit before
+// returning ErrDatabaseError wrapping the last failure.
 func (r *Repository) getCollection(ctx context.Context, collectionName string) (*mongo.Collection, error) {
 	var lastErr error
 	collectionInitMaxAttemptsLimit := r.collectionInitMaxAttemptsLimit
@@ -201,6 +227,9 @@ type ReminderExecutionFilter struct {
 	TargetId   string
 }
 
+// buildReminderListFilter translates a ReminderFilter into a Mongo query,
+// merging single and multiple user IDs, applying optional status, target, ID
+// and due-before constraints, and defaulting to a match-all filter for nil.
 func buildReminderListFilter(req *ReminderFilter) bson.M {
 	queryFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -238,6 +267,9 @@ func buildReminderListFilter(req *ReminderFilter) bson.M {
 	return queryFilter
 }
 
+// buildReminderExecutionFilter translates execution filters into a Mongo query
+// from optional reminder ID, user, status and target fields, defaulting to
+// match-all for nil.
 func buildReminderExecutionFilter(req *ReminderExecutionFilter) bson.M {
 	queryFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -264,6 +296,9 @@ func buildReminderExecutionFilter(req *ReminderExecutionFilter) bson.M {
 	return queryFilter
 }
 
+// buildReminderPaginationOptions clamps page and per-page to positive defaults
+// and returns skip/limit options sorting by target time ascending then creation
+// descending.
 func buildReminderPaginationOptions(page, perPage int) *options.FindOptionsBuilder {
 	if page <= 0 {
 		page = 1
@@ -364,6 +399,8 @@ func (r *Repository) PatchReminder(ctx context.Context, id string, update map[st
 	return nil
 }
 
+// toolboxTimeNow returns the current UTC timestamp in the toolbox platform
+// format.
 func toolboxTimeNow() string {
 	return toolbox.TimeNowUTC()
 }
@@ -384,6 +421,8 @@ func (r *Repository) DeleteReminderByID(ctx context.Context, id string) error {
 	return nil
 }
 
+// listReminders finds reminders matching the filter with pagination and maps
+// the cursor into reminder objects, returning store or decoding errors.
 func (r *Repository) listReminders(ctx context.Context, filter *ReminderFilter, page, perPage int) ([]*Reminder, error) {
 	collection, err := r.GetReminderCollection(ctx)
 	if err != nil {

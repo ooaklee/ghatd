@@ -51,6 +51,16 @@ type Config struct {
 	// ignore it; it must never come from browser input.
 	CustomerPortalConfigurationID string
 
+	// AllowPromotionCodes opts Stripe checkout into provider-owned promotion-code
+	// entry, captured at construction. The default is disabled. This is trusted
+	// host configuration, never browser input; other providers ignore it.
+	// Coupon eligibility remains with the provider and host commercial policy.
+	AllowPromotionCodes bool
+
+	// Revenue optionally enables authenticated net-paid economic evidence.
+	// Nil preserves existing webhook/access behaviour without a revenue feed.
+	Revenue *RevenueConfig
+
 	// HTTPClient allows applications to configure transport policy and test provider calls.
 	HTTPClient *http.Client
 

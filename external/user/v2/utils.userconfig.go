@@ -94,6 +94,8 @@ func BuiltInUserConfigs() []*UserConfig {
 	}
 }
 
+// ensureUserConfigType fills an empty config type with UserConfigTypeCustom in
+// place, passing nil through.
 func ensureUserConfigType(config *UserConfig) *UserConfig {
 	if config == nil {
 		return nil
@@ -106,6 +108,9 @@ func ensureUserConfigType(config *UserConfig) *UserConfig {
 	return config
 }
 
+// registerUserConfigs filters out nil entries and duplicate config types,
+// defaulting the type of unlabelled configs; when nothing remains it returns
+// just the default config.
 func registerUserConfigs(configs ...*UserConfig) []*UserConfig {
 	merged := make([]*UserConfig, 0, len(configs))
 	merged = append(merged, configs...)

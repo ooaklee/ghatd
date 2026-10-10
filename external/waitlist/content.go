@@ -12,8 +12,20 @@ import (
 // copy in HTML. Each call receives independent maps/slices; errors never fall
 // back to generic content or claim an unsent recipient.
 type AnnouncementContent interface {
+	// Validate checks the given Announcement through the AnnouncementContent port,
+	// which supplies trusted host validation without I/O or delivery-state changes;
+	// implementations report acceptance or an error and never fall back to generic
+	// content.
 	Validate(Announcement) error
+	// Preview builds an AnnouncementPresentation for the given announcement, sample
+	// entries, and locale through the AnnouncementContent port without I/O;
+	// implementations must escape user copy in HTML and use independent maps and
+	// slices per call.
 	Preview(Announcement, []Entry, string) (AnnouncementPresentation, error)
+	// Render produces the delivered copy for one announcement and entry in the
+	// given locale through the AnnouncementContent port; implementations must
+	// escape user copy in HTML and return an error rather than generic fallback
+	// content.
 	Render(Announcement, Entry, string) (string, error)
 }
 
@@ -33,8 +45,12 @@ type AnnouncementPresentation struct {
 	Variants []AnnouncementVariant
 }
 
+// cloneAnnouncement returns a copy with an independent Data map so recipients
+// cannot mutate shared metadata.
 func cloneAnnouncement(a Announcement) Announcement { a.Data = maps.Clone(a.Data); return a }
 
+// validText reports whether value is within max bytes and free of control
+// characters, permitting newlines only when multiline is set.
 func validText(value string, max int, multiline bool) bool {
 	if len(value) > max {
 		return false
@@ -47,6 +63,9 @@ func validText(value string, max int, multiline bool) bool {
 	return true
 }
 
+// validateContent applies base announcement validation plus host-data rules: at
+// most 16 identifier-keyed entries within a combined size budget, no data
+// without a content provider, and finally host validation on a clone.
 func (s *AnnouncementService) validateContent(a Announcement) error {
 	if err := a.validate(); err != nil {
 		return err
@@ -73,6 +92,10 @@ func (s *AnnouncementService) validateContent(a Announcement) error {
 	return s.Content.Validate(cloneAnnouncement(a))
 }
 
+// presentation produces validated preview HTML and variants, using the built-in
+// renderer when no content provider is configured; host-produced variants are
+// checked for keys, labels, sizes, HTML validity and plausible recipient counts
+// before being cloned.
 func (s *AnnouncementService) presentation(a Announcement, entries []Entry) (AnnouncementPresentation, error) {
 	if err := s.validateContent(a); err != nil {
 		return AnnouncementPresentation{}, err
@@ -98,8 +121,12 @@ func (s *AnnouncementService) presentation(a Announcement, entries []Entry) (Ann
 	return result, nil
 }
 
+// validHTML reports whether the HTML is non-blank and at most 1 MiB.
 func validHTML(value string) bool { return strings.TrimSpace(value) != "" && len(value) <= 1024*1024 }
 
+// renderRecipient validates the announcement and renders per-recipient HTML,
+// using the built-in template when no content provider is configured and
+// rejecting host output that is not valid HTML.
 func (s *AnnouncementService) renderRecipient(a Announcement, entry Entry, unsubscribe string) (string, error) {
 	if err := s.validateContent(a); err != nil {
 		return "", err

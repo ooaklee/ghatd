@@ -12,34 +12,100 @@ import (
 
 // UserService interface defines expected methods of a valid user service
 type UserService interface {
+	// CreateUser creates a new user from the request via the user service,
+	// resolving config, checking email uniqueness, assigning roles/status and
+	// persisting; the handler responds 201 with the created user.
 	CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error)
+	// GetUserByID loads the account with the requested persistent ID and returns it
+	// with model dependencies restored; the service maps missing accounts to
+	// ErrUserNotFound.
 	GetUserByID(ctx context.Context, r *GetUserByIDRequest) (*GetUserByIDResponse, error)
+	// GetUserByNanoID loads the account with the requested public nano identifier
+	// and returns it with model dependencies restored, sharing GetUserByID's
+	// absence contract.
 	GetUserByNanoID(ctx context.Context, r *GetUserByNanoIDRequest) (*GetUserByNanoIDResponse, error)
+	// GetUserByEmail performs a normalised email lookup and returns the matching
+	// account, preserving native failures including absence for the caller's error
+	// mapping.
 	GetUserByEmail(ctx context.Context, r *GetUserByEmailRequest) (*GetUserByEmailResponse, error)
+	// UpdateUser applies a trusted broad update to the targeted account, either
+	// patching non-empty scalar fields or replacing with the supplied snapshot, and
+	// returns the acknowledged post-image; authorization belongs to callers.
 	UpdateUser(ctx context.Context, r *UpdateUserRequest) (*UpdateUserResponse, error)
+	// DeleteUser deletes the account with the requested ID after confirming it
+	// exists, emitting an audit event when configured; the handler responds 204 on
+	// success.
 	DeleteUser(ctx context.Context, r *DeleteUserRequest) error
+	// GetUsers retrieves users matching the request filters with normalised
+	// pagination, returning users with dependencies restored plus pagination
+	// metadata.
 	GetUsers(ctx context.Context, r *GetUsersRequest) (*GetUsersResponse, error)
+	// GetTotalUsers returns the total count of users matching the request's
+	// filters.
 	GetTotalUsers(ctx context.Context, r *GetTotalUsersRequest) (*GetTotalUsersResponse, error)
+	// UpdateUserStatus applies a trusted status transition to the targeted account,
+	// validating the configured model and writing only owned fields; external
+	// callers use the manager for authorization.
 	UpdateUserStatus(ctx context.Context, r *UpdateUserStatusRequest) (*UpdateUserStatusResponse, error)
+	// AddUserRole adds the requested role to the targeted account as a trusted
+	// domain command, returning the updated user and whether a change occurred.
 	AddUserRole(ctx context.Context, r *AddUserRoleRequest) (*AddUserRoleResponse, error)
+	// RemoveUserRole removes all occurrences of the requested role from the
+	// targeted account, reporting Changed for no-ops without timestamp churn.
 	RemoveUserRole(ctx context.Context, r *RemoveUserRoleRequest) (*RemoveUserRoleResponse, error)
+	// VerifyUserEmail marks the targeted user's email as verified, persists the
+	// account and returns the updated user, emitting an audit event when
+	// configured.
 	VerifyUserEmail(ctx context.Context, r *VerifyUserEmailRequest) (*VerifyUserEmailResponse, error)
+	// UnverifyUserEmail marks the targeted user's email as unverified, persists the
+	// account and returns the updated user, emitting an audit event when
+	// configured.
 	UnverifyUserEmail(ctx context.Context, r *UnverifyUserEmailRequest) (*UnverifyUserEmailResponse, error)
+	// VerifyUserPhone marks the targeted user's phone as verified, persists the
+	// account and returns the updated user, emitting an audit event when
+	// configured.
 	VerifyUserPhone(ctx context.Context, r *VerifyUserPhoneRequest) (*VerifyUserPhoneResponse, error)
+	// RecordUserLogin loads the user identified by the request, stamps last-login
+	// and updated timestamps, persists the change, and returns the updated user
+	// within the response.
 	RecordUserLogin(ctx context.Context, r *RecordUserLoginRequest) (*RecordUserLoginResponse, error)
+	// GetUserProfile resolves the user referenced by the request ID and returns
+	// that user's full profile derived from the loaded account.
 	GetUserProfile(ctx context.Context, r *GetUserProfileRequest) (*GetUserProfileResponse, error)
+	// GetUserMicroProfile resolves the user referenced by the request ID and
+	// returns the reduced micro-profile projection of that account.
 	GetUserMicroProfile(ctx context.Context, r *GetUserMicroProfileRequest) (*GetUserMicroProfileResponse, error)
+	// SetUserExtension stores the request's key/value pair in the identified user's
+	// extension map, updates timestamps, persists the user, and returns the updated
+	// account.
 	SetUserExtension(ctx context.Context, r *SetUserExtensionRequest) (*SetUserExtensionResponse, error)
+	// GetUserExtension returns the value stored under the request's extension key
+	// for the identified user, along with the key itself.
 	GetUserExtension(ctx context.Context, r *GetUserExtensionRequest) (*GetUserExtensionResponse, error)
+	// UpdateUserPersonalInfo applies non-empty personal info fields from the
+	// request to the identified user, persists changes, and returns the updated
+	// account.
 	UpdateUserPersonalInfo(ctx context.Context, r *UpdateUserPersonalInfoRequest) (*UpdateUserPersonalInfoResponse, error)
+	// ValidateUser loads the identified user and reports whether the account passes
+	// model validation, returning validation error messages when it does not.
 	ValidateUser(ctx context.Context, r *ValidateUserRequest) (*ValidateUserResponse, error)
+	// BulkUpdateUsersStatus applies the requested status to each listed user
+	// individually, returning the count of successful updates and the IDs that
+	// failed.
 	BulkUpdateUsersStatus(ctx context.Context, r *BulkUpdateUsersStatusRequest) (*BulkUpdateUsersStatusResponse, error)
+	// GetUserStats returns aggregated statistics about platform users by delegating
+	// count queries to the user repository.
 	GetUserStats(ctx context.Context, r *GetUserStatsRequest) (*GetUserStatsResponse, error)
+	// GetUserConfigs returns the default user config type and the available config
+	// presets with their capabilities; request arguments are ignored.
 	GetUserConfigs(ctx context.Context, r *GetUserConfigsRequest) (*GetUserConfigsResponse, error)
 }
 
 // UserValidator interface defines expected methods of a valid validator
 type UserValidator interface {
+	// Validate checks the supplied value and reports configuration or field
+	// failures as an error; the model implementation verifies required fields,
+	// status, and roles without logging.
 	Validate(s interface{}) error
 }
 

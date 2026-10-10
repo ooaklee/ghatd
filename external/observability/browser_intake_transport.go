@@ -23,6 +23,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// browserIntakeSender owns the intake's outbound transport: either a gRPC
+// client connection or an HTTP client with its own transport, built from the
+// resolved signal settings.
 type browserIntakeSender struct {
 	settings  resolvedSignalConfiguration
 	http      *http.Client
@@ -30,6 +33,10 @@ type browserIntakeSender struct {
 	grpc      *grpc.ClientConn
 }
 
+// newBrowserIntakeSender builds the sender for the resolved settings, creating
+// a non-retrying gRPC client (with TLS unless insecure) or an HTTP/2-capable
+// transport with the configured timeouts and redirect handling. It returns a
+// fixed error when the gRPC client cannot be created.
 func newBrowserIntakeSender(settings resolvedSignalConfiguration) (*browserIntakeSender, error) {
 	sender := &browserIntakeSender{settings: settings}
 	if settings.protocol == "grpc" {
@@ -56,6 +63,8 @@ func newBrowserIntakeSender(settings resolvedSignalConfiguration) (*browserIntak
 	return sender, nil
 }
 
+// close releases the sender's transports, closing idle HTTP connections and the
+// gRPC connection when present.
 func (sender *browserIntakeSender) close() {
 	if sender.transport != nil {
 		sender.transport.CloseIdleConnections()
@@ -65,6 +74,11 @@ func (sender *browserIntakeSender) close() {
 	}
 }
 
+// send performs one synchronous OTLP export under the configured timeout, via
+// gRPC with metadata and optional gzip, or HTTP protobuf with a bounded
+// response body. It maps transport-level failures to 503, rejected or malformed
+// results to 502, and full acceptance to 202; HTTP request bodies are not
+// replayable.
 func (sender *browserIntakeSender) send(ctx context.Context, batch *collectortrace.ExportTraceServiceRequest) int {
 	ctx, cancel := context.WithTimeout(ctx, sender.settings.timeout)
 	defer cancel()

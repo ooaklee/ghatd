@@ -18,21 +18,58 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold group data
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the supplied MongoDB collection
+	// matching the filter, honouring optional count options, and returns the count.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes a single document matching the filter from
+	// the supplied collection; targetObjectName names the object for operational
+	// logging.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand runs a find query against the supplied collection with the
+	// filter and optional find options, returning a cursor over matching documents.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the supplied document into the collection and
+	// returns the insertion result; resultObjectName names the object for
+	// operational logging.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand applies the update filter to a single document
+	// matching the filter in the supplied collection; resultObjectName names the
+	// object for operational logging.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteDeleteManyCommand deletes all documents matching the filter from the
+	// supplied collection; targetObjectName names the object for operational
+	// logging.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult finds the first document matching the
+	// filter and decodes it into result; logError controls failure logging and
+	// onFailureErr is the error returned when no document matches.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteAggregateCommand runs the supplied aggregation pipeline against the
+	// collection and returns a cursor over the aggregated results.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
+	// ExecuteReplaceOneCommand replaces a single document matching the filter with
+	// the supplied replacement object; resultObjectName names the object for
+	// operational logging.
 	ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
+	// ExecuteUpdateManyCommand applies the update filter to all documents matching
+	// the filter in the supplied collection; resultObjectName names the object for
+	// operational logging.
 	ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteInsertManyCommand inserts the supplied documents into the collection
+	// and returns the insertion result; resultObjectName names the objects for
+	// operational logging.
 	ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
 
+	// GetDatabase returns the named MongoDB database handle from the store.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient initialises the store's MongoDB client and returns it.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every document remaining in the cursor into
+	// the supplied result; resultObjectName names the target for operational
+	// logging.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes the next document from the cursor into the
+	// supplied result; resultObjectName names the target for operational logging.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
@@ -386,6 +423,41 @@ func (r *Repository) GetGroupsByStatus(ctx context.Context, status string, page,
 
 // GetGroupsByReferencedUserID retrieves groups where user is either owner or a member.
 func (r *Repository) GetGroupsByReferencedUserID(ctx context.Context, userID string) ([]UniversalGroup, error) {
+	return r.groupsByReferencedUserID(ctx, userID, 0)
+}
+
+// GetGroupsByReferencedUserIDBounded uses the same owning reference selector,
+// with a native limit+1 probe. The service decides eligibility and capacity;
+// the adapter does not treat this bounded result as a complete truncated page.
+// Any caller selecting a smaller limit must reject len(result) > limit itself.
+func (r *Repository) GetGroupsByReferencedUserIDBounded(ctx context.Context, userID string, limit int) ([]UniversalGroup, error) {
+	if ctx == nil || !directMembershipID(userID) || limit < 1 || limit > DirectMembershipCapacity {
+		return nil, ErrInvalidQueryParam
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if r == nil || directMembershipNil(r.Store) {
+		return nil, ErrDirectMembershipUnavailable
+	}
+	rows, err := r.groupsByReferencedUserID(ctx, userID, int64(limit+1))
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err != nil {
+		return nil, err
+	}
+	if rows == nil {
+		rows = []UniversalGroup{}
+	}
+	return rows, nil
+}
+
+// groupsByReferencedUserID returns non-deleted groups where the user is owner
+// or appears in members, newest first. A positive probeLimit applies a
+// deterministic bounded read used for extra-row probing rather than a truncated
+// page.
+func (r *Repository) groupsByReferencedUserID(ctx context.Context, userID string, probeLimit int64) ([]UniversalGroup, error) {
 	collection, err := r.GetGroupCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -405,9 +477,12 @@ func (r *Repository) GetGroupsByReferencedUserID(ctx context.Context, userID str
 		"metadata.deleted_at": bson.M{"$exists": false},
 	}
 
-	options := options.Find().SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
+	find := options.Find().SetSort(bson.D{{Key: "metadata.created_at", Value: -1}})
+	if probeLimit > 0 {
+		find.SetLimit(probeLimit).SetSort(bson.D{{Key: "metadata.created_at", Value: -1}, {Key: "_id", Value: 1}})
+	}
 
-	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, options)
+	cursor, err := r.Store.ExecuteFindCommand(ctx, collection, queryFilter, find)
 	if err != nil {
 		return nil, err
 	}

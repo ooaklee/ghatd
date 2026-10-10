@@ -16,9 +16,19 @@ import (
 // oauthConnectionsService is the optional web Settings contract for listing
 // providers and verifying email before disconnection.
 type oauthConnectionsService interface {
+	// OAuthConnections returns the signed-in account's linked providers and the
+	// configured provider-management capabilities for the web Settings view.
 	OAuthConnections(context.Context, string) (*OAuthConnectionsResponse, error)
+	// OAuthConnectionsOrigin returns the configured web origin for verified
+	// provider management, or an empty string when unconfigured.
 	OAuthConnectionsOrigin() string
+	// StartOAuthDisconnect begins web Settings email verification for the named
+	// provider and requested email using the current session token, without
+	// changing the account; it returns the disconnect start response.
 	StartOAuthDisconnect(context.Context, string, string, string) (*OAuthDisconnectStartResponse, error)
+	// ConfirmOAuthDisconnect consumes web Settings proof for the provider and
+	// returns either the next email challenge or completed disconnection with a
+	// replacement session.
 	ConfirmOAuthDisconnect(context.Context, string, *OAuthDisconnectConfirmRequest, string) (*OAuthDisconnectResponse, error)
 }
 
@@ -188,9 +198,20 @@ func (h *Handler) ReviewOAuthDisconnectChallenge(w http.ResponseWriter, r *http.
 // Settings reauthentication before connecting Google or Apple. Hosts without it
 // retain existing behaviour and receive an unsupported response here.
 type webConnectionVerificationService interface {
+	// OAuthConnectionsOrigin returns the configured web origin for provider
+	// management, or an empty string when unconfigured.
 	OAuthConnectionsOrigin() string
+	// StartOAuthConnectionVerification starts web Settings reauthentication by
+	// emailing a code bound to the session, provider and configured return address;
+	// it returns the start response without connecting anything.
 	StartOAuthConnectionVerification(context.Context, string, string) (*OAuthDisconnectStartResponse, error)
+	// ReviewOAuthConnectionVerification returns pending challenge metadata for the
+	// initiating session and challenge id; it accepts no proof and does not consume
+	// the challenge.
 	ReviewOAuthConnectionVerification(context.Context, string, string, string) (*OAuthDisconnectStartResponse, error)
+	// ConfirmOAuthConnectionVerification consumes one emailed code, rechecks the
+	// initiating session, and returns a fresh session response without changing
+	// email or providers.
 	ConfirmOAuthConnectionVerification(context.Context, string, *OAuthDisconnectConfirmRequest, string) (*OAuthDisconnectResponse, error)
 }
 

@@ -35,19 +35,35 @@ var stripeCustomerPortalConfigurationIDPattern = regexp.MustCompile(`^bpc_[A-Za-
 // StripeProvider implements webhook and subscription lookup plus optional
 // browser-session capabilities without expanding the base Provider interface.
 type StripeProvider struct {
-	config             *Config
-	name               string
-	httpClient         *http.Client
-	apiBaseURL         string
-	apiVersion         string
-	signatureTolerance time.Duration
-	maxWebhookBodySize int64
+	config              *Config
+	name                string
+	httpClient          *http.Client
+	apiBaseURL          string
+	apiVersion          string
+	signatureTolerance  time.Duration
+	maxWebhookBodySize  int64
+	allowPromotionCodes bool
 }
 
 // NewStripeProvider creates a Stripe payment provider.
 func NewStripeProvider(config *Config) (*StripeProvider, error) {
 	if config == nil || strings.TrimSpace(config.WebhookSecret) == "" {
 		return nil, ErrPaymentProviderInvalidConfigWebhookSecret
+	}
+
+	if config.Revenue != nil {
+		if !validStripeRevenueConfig(config.Revenue) || strings.TrimSpace(config.APIKey) == "" {
+			return nil, ErrPaymentProviderInvalidConfiguration
+		}
+		copyConfig := *config
+		copyRevenue := *config.Revenue
+		copyRevenue.ConnectedAccountIDs = append([]string(nil), config.Revenue.ConnectedAccountIDs...)
+		copyRevenue.CurrencyExponents = make(map[string]int, len(config.Revenue.CurrencyExponents))
+		for code, exponent := range config.Revenue.CurrencyExponents {
+			copyRevenue.CurrencyExponents[code] = exponent
+		}
+		copyConfig.Revenue = &copyRevenue
+		config = &copyConfig
 	}
 
 	client := config.HTTPClient
@@ -75,13 +91,14 @@ func NewStripeProvider(config *Config) (*StripeProvider, error) {
 	}
 
 	return &StripeProvider{
-		config:             config,
-		name:               stripeProviderName,
-		httpClient:         client,
-		apiBaseURL:         baseURL,
-		apiVersion:         apiVersion,
-		signatureTolerance: tolerance,
-		maxWebhookBodySize: maxBodySize,
+		config:              config,
+		name:                stripeProviderName,
+		httpClient:          client,
+		apiBaseURL:          baseURL,
+		apiVersion:          apiVersion,
+		signatureTolerance:  tolerance,
+		maxWebhookBodySize:  maxBodySize,
+		allowPromotionCodes: config.AllowPromotionCodes,
 	}, nil
 }
 
@@ -669,6 +686,9 @@ func (s *StripeProvider) CreateCheckoutSession(ctx context.Context, input *Check
 	form.Set("line_items[0][quantity]", "1")
 	form.Set("customer_email", input.CustomerEmail)
 	form.Set("client_reference_id", userReference)
+	if s.allowPromotionCodes {
+		form.Set("allow_promotion_codes", "true")
+	}
 	metadata := map[string]string{
 		"plan_id": input.PlanID, "plan_slug": input.PlanSlug, "plan_name": input.PlanName,
 		"cost_id": input.CostID, "price_id": input.PriceID, "provider_price_id": input.PriceID,
@@ -722,9 +742,21 @@ func (s *StripeProvider) CreateCheckoutSession(ctx context.Context, input *Check
 		return nil, fmt.Errorf("%w: status %d", ErrPaymentProviderAPIRequestFailed, response.StatusCode)
 	}
 
-	var session CheckoutSession
-	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&session); err != nil {
+	var receipt struct {
+		CheckoutSession
+		Object            string            `json:"object"`
+		LiveMode          *bool             `json:"livemode"`
+		ClientReferenceID string            `json:"client_reference_id"`
+		Metadata          map[string]string `json:"metadata"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&receipt); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPaymentProviderAPIResponseInvalid, err)
+	}
+	session := receipt.CheckoutSession
+	if input.Metadata["checkout_intent_id"] != "" {
+		if s.config.Revenue == nil || receipt.Object != "checkout.session" || receipt.LiveMode == nil || *receipt.LiveMode != s.config.Revenue.LiveMode || receipt.ClientReferenceID != userReference || receipt.Metadata["checkout_intent_id"] != input.Metadata["checkout_intent_id"] {
+			return nil, ErrPaymentProviderAPIResponseInvalid
+		}
 	}
 	if strings.TrimSpace(session.ID) == "" || strings.TrimSpace(session.ClientSecret) == "" {
 		return nil, ErrPaymentProviderAPIResponseInvalid
@@ -968,6 +1000,7 @@ func (s *StripeProvider) validateCheckoutPrice(ctx context.Context, input *Check
 	}
 
 	var price struct {
+		LiveMode   *bool  `json:"livemode"`
 		ID         string `json:"id"`
 		Active     bool   `json:"active"`
 		Currency   string `json:"currency"`
@@ -982,6 +1015,11 @@ func (s *StripeProvider) validateCheckoutPrice(ctx context.Context, input *Check
 		return fmt.Errorf("%w: %v", ErrPaymentProviderAPIResponseInvalid, err)
 	}
 
+	if input.Metadata["checkout_intent_id"] != "" {
+		if s.config.Revenue == nil || price.LiveMode == nil || *price.LiveMode != s.config.Revenue.LiveMode {
+			return ErrPaymentProviderPriceMismatch
+		}
+	}
 	expectedCurrency := strings.ToLower(strings.TrimSpace(input.ExpectedCurrency))
 	expectedCadence := strings.ToLower(strings.TrimSpace(input.ExpectedBillingCadence))
 	if price.ID != input.PriceID || !price.Active || price.UnitAmount == nil || *price.UnitAmount != input.ExpectedAmount ||

@@ -83,3 +83,45 @@ legacyHandleUpdatePath := spa.NewHandleUpdatePathToIndex(
 - `NewHandleUpdatePathToIndex` builds a function that rewrites request paths to `/` unless the URL has a bypassed extension (defaults include `.js`, `.css`, images, fonts, etc.) or a bypassed filename. Exact filename ignore rules take precedence over both filename and extension bypasses. This keeps SPA deep links working while letting static assets be served directly.
 - `NewSpaHandler` uses that function inside `GetResourceNotFoundError` to serve the embedded `/dist/index.html` for non-API 404s.
 - `AttachRoutes` wires the same updater into a catch-all route so browser requests without a known asset extension are rewritten and served by the SPA bundle.
+
+## Description shells from a build inventory
+
+`NewDescriptionPathResolver(DescriptionInventoryConfig)` compiles an optional
+build-owned JSON inventory into the same request path-updater shape used by
+`BootstrapRequest.HandleUpdatePathToIndexFunc`. Hosts supply all filesystem
+locations, public paths and fallback/asset policy:
+
+```go
+resolver, err := spa.NewDescriptionPathResolver(spa.DescriptionInventoryConfig{
+    FS:                    assets,
+    InventoryPath:         "site/dist/descriptions.json",
+    ShellDirectory:        "site/dist/shells",
+    PublicShellPrefix:     "/shells",
+    Fallback:              spa.NewHandleUpdatePathToIndex(spa.BypassWithFileExtension("html")),
+    AllowMissingInventory: false,
+})
+// Handle err, then pass resolver to the bootstrap request.
+```
+
+The inventory is an array of `{"id":"about","pattern":"^/about$"}` entries;
+additional build metadata is accepted. IDs contain lowercase ASCII letters,
+digits and hyphens. Patterns retain inventory order and may share a shell ID;
+the first match wins. Empty inventories are valid. Each `<id>.html` must be a
+regular file in `ShellDirectory`. That filesystem directory is independent of
+`PublicShellPrefix`, a clean absolute URL prefix without escapes, queries,
+fragments, controls or a trailing slash (except root).
+
+Initialization reads and validates the inventory and shell files once. Missing
+inventory is accepted only with `AllowMissingInventory`; other read failures,
+malformed JSON, unsafe IDs/locations, invalid regexes and missing/non-file shells
+return errors. `ErrDescriptionInventoryConfig` classifies configuration failures;
+`ErrDescriptionInventory` classifies read/build data failures. No per-request
+filesystem I/O occurs in the resolver.
+
+Resolution consults the original `URL.Path`, then applies the supplied fallback.
+Only requests rewritten to `/` are eligible for description selection, preserving
+asset bypass. A matching rule replaces the path and clears `RawPath`; query data
+is never used to select or render content. Unmatched requests retain fallback
+behaviour. The callback must return a non-nil request with a URL. The host owns
+the generated HTML, route patterns and decision to support missing inventories;
+the helper does not generate pages or render account/request data into them.

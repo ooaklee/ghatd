@@ -51,9 +51,8 @@ The existing 60-second login cooldown remains best-effort. Its boolean acquisiti
 and unconditional release are **not an ownership-fenced lease**; a delayed release
 can affect a later claim. Code check/reservation is likewise not atomic. Earlier
 proof writes are not rolled back on later failure, and delivery errors can be
-uncertain. Do not automatically replay requests or infer rollback. Atomic code
-reservation, owned cooldown cleanup and lower mail-provider error handling remain
-separate work; this contract makes no end-to-end delivery or rate-limit guarantee.
+uncertain. Do not automatically replay requests or infer rollback; this contract
+makes no end-to-end delivery or rate-limit guarantee.
 
 ### Live session authority
 
@@ -501,8 +500,8 @@ not an alternative public admission endpoint.
 Review and seed grants explicitly before enabling the port. Existing credentials
 are neither deleted nor granted scopes automatically. Token-specific route grants
 remain separate: this port does not copy user scopes onto the issued credential.
-Host rollout, migration/rollback tooling and legacy-tier removal remain required
-before the overall permissions upgrade is complete. Custom HTTP integrations
+Verify host rollout, migration and rollback before retiring legacy role limits.
+Custom HTTP integrations
 must retain owner/session checks and consistent reply error manifests.
 
 Policy failures retain their original causes through admission. The handler's
@@ -549,7 +548,6 @@ func main() {
         Router:                             ghatdRouter,
         Handler:                            accessmanagerHandler,
         ActiveOnlyMiddleware:               activeMiddleware,
-        ActiveValidApiTokenOrJWTMiddleware: apiTokenOrJWTMiddleware,
         HardenedRateLimitMiddleware:        hardenedRateLimitMiddleware,
     })
 }
@@ -658,9 +656,21 @@ restricted user status is denied before session issuance.
 
 ## Native app handoff
 
+When supplying independently configured Google/Apple return URLs, set
+`MobileOAuthConfig.ProviderCallbacks` to `MobileOAuthProviderCallbacks{Google,
+Apple}` using those same constructor inputs. Non-empty URLs must match the exact
+HTTPS origin and `/api/v1/ams/oauth/<provider>/callback` path: no trailing slash,
+query, user information, opaque or encoded path, or fragment. These optional
+fields validate declared configuration only, not provider registrations or
+identity evidence. Empty fields retain existing consumers' behavior; a disabled
+native allowlist ignores all configuration. Configuration performs no store or
+provider I/O, copies the native allowlist and callback strings, and returns
+`oauth.ErrSecureProviderIncompleteConfig` on failure while clearing prior native
+configuration. Configure once before requests, not concurrently with serving.
+
 Native clients reuse the provider callbacks, identity resolution and normal
 session issuance above. Configure `Handler.ConfigureMobileOAuth` once at
-startup with `MobileOAuthConfig{Origin, RedirectURIs, Store}` and
+startup with `MobileOAuthConfig` (`Origin`, `RedirectURIs`, `Store`) and
 `NewRedisMobileOAuthStore(redisClient, namespace)`. An empty redirect allowlist
 disables native discovery and handoff. `Origin` must be the public HTTPS origin
 hosting the provider callbacks; register exact private app URIs such as
@@ -735,6 +745,26 @@ The `/oauth/mobile/connections` routes use the same account, stage and session
 logic, reject browser Origin headers, and bind email proof to the exact native
 return address. They renew cookies through the existing secure mobile cookie
 jar. See the adoption guide for code/link review and platform registration.
+
+## Optional browser signup evidence
+
+`Service.WithSignupEvidenceCookie(name)` installs an explicit startup-only
+browser cookie reader. There is no default cookie. The host owns consent and
+issuing a signed, bounded HttpOnly/SameSite cookie; accessmanager only transports
+its value into the identity owning service's atomic account creation context.
+Configure `user/v2.Service.WithSignupAttribution` and its additive feed migration
+separately. The cookie reader only transports evidence; an identity service
+without signup capture configured ignores it without rejecting account creation.
+Public signup JSON/query/form fields cannot supply this private value, and OAuth
+responses exclude it.
+
+Password signup reads the configured cookie at the handler boundary. Browser
+OAuth reads it only after the secure provider transaction is verified. Existing
+sign-ins do not overwrite signup evidence, and native app exchanges do not
+inherit browser evidence. Missing, empty, oversized or duplicate same-name
+cookies leave the account unattributed without blocking account creation. The
+owning referral consumer still verifies signature, audience, program and expiry
+at the immutable server creation time; cookie possession is not entitlement.
 
 ## Logout command boundaries
 

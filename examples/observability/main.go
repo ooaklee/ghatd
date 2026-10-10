@@ -24,6 +24,9 @@ import (
 
 const exampleScope = "github.com/ooaklee/ghatd/examples/observability"
 
+// main runs the example CLI under an interrupt/SIGTERM-aware context. On
+// failure it prints a fixed message without echoing arguments or endpoint
+// details and exits nonzero.
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -35,6 +38,9 @@ func main() {
 	}
 }
 
+// newCommand builds the example CLI with a serve subcommand running the local
+// HTTP reference service and a work subcommand running one instrumented work
+// item against an in-example dependency.
 func newCommand() *cobra.Command {
 	command := &cobra.Command{Use: "observability", SilenceErrors: true, SilenceUsage: true}
 	var listen string
@@ -81,6 +87,10 @@ func newCommand() *cobra.Command {
 	return command
 }
 
+// exampleRuntimeConfig builds the example runtime configuration: an error
+// classifier mapping quota and dependency failures, a production zap logger
+// without caller/stack detail, example identity, and a five-second shutdown
+// timeout.
 func exampleRuntimeConfig(serviceName string) (observability.RuntimeConfig, *observability.ErrorClassifier, error) {
 	classifier, err := observability.NewErrorClassifier(
 		observability.ErrorRule{Err: errQuotaExceeded, Code: "EXAMPLE-001", Outcome: observability.OutcomeRejected},
@@ -118,6 +128,9 @@ func exampleIdentity(defaultService string) observability.Config {
 	return config
 }
 
+// hasResourceIdentity reports whether OTEL_RESOURCE_ATTRIBUTES contains a non-
+// empty value for the given key, accepting URL-escaped values and taking the
+// last matching pair.
 func hasResourceIdentity(key string) bool {
 	value := ""
 	for _, pair := range strings.Split(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"), ",") {
@@ -132,6 +145,9 @@ func hasResourceIdentity(key string) bool {
 	return strings.TrimSpace(value) != ""
 }
 
+// exampleOperations builds the instrumented operations bundle from the running
+// telemetry SDK using the example scope, metric prefix and shared error
+// classifier.
 func exampleOperations(runtime *observability.Runtime, classifier *observability.ErrorClassifier) (*observability.Operations, error) {
 	return observability.NewOperations(observability.OperationConfig{
 		Scope: exampleScope + "/services", MetricPrefix: "example.service.operation",
@@ -139,6 +155,9 @@ func exampleOperations(runtime *observability.Runtime, classifier *observability
 	})
 }
 
+// runServer starts the telemetry runtime, serves the example HTTP API on the
+// given listener, and shuts down gracefully within five seconds on context
+// cancellation; telemetry shutdown failures are logged as warnings only.
 func runServer(ctx context.Context, listen string, suppressHTTPNoise bool) error {
 	var httpOptions []observability.HTTPServerOption
 	if suppressHTTPNoise {
@@ -203,6 +222,8 @@ func runServer(ctx context.Context, listen string, suppressHTTPNoise bool) error
 	}
 }
 
+// listenerURL derives a dialable http URL from a listener address, replacing
+// unspecified wildcard hosts with 127.0.0.1 (IPv4) or ::1 (IPv6).
 func listenerURL(listener net.Listener) string {
 	host, port, _ := net.SplitHostPort(listener.Addr().String())
 	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {

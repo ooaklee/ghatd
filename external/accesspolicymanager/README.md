@@ -2,8 +2,10 @@
 
 An opt-in administrative boundary over the [access-policy domain](../accesspolicy/README.md).
 It previews and applies **explicit token-inventory allowances for one stored user**.
-It does not infer allowances from roles, issue credentials, change scopes or
-permissions, scan accounts, or provision users during sign-up.
+Separately opted-in capability routes review and replace explicit scopes,
+permissions, enabled state and expiry for a selected stored user. It does not
+infer authority from roles, issue credentials, scan accounts or provision users
+during sign-up. Token-limit operations do not change scopes or permissions.
 
 `Service` coordinates narrow user/inventory ports and the policy domain. `Handler`
 owns bounded HTTP parsing and shared `reply/v2` manifests. `AttachRoutes` declares
@@ -114,6 +116,57 @@ Wrapped target-absence sentinels produce 404. Joined failures and custom `Is`
 aliases do not establish absence or permit provisioning; their original causes
 reach the response boundary. Nil or wrong-owner lookup results are inconsistent
 adapter responses and produce 503, not a fabricated missing-user result.
+
+## Optional capability management
+
+After `AttachRoutes`, explicitly call
+`AttachCapabilityRoutes(routes, handler, middlewareSuite.BearerSession)` with
+the same configured manager and handler. Token-only integrations do not gain
+these routes automatically. Missing optional service methods or a revision
+evaluator fails attachment; cookies and API tokens cannot replace an explicit
+administrator session. The manager rechecks current live management authority
+before resolving the selected stored user and before the owning policy write.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/access-policies/users/{userID}/capabilities` | Read stored policy, including disabled/expired policies, and strong ETag; `"0"` means known absence |
+| PUT | `/api/v1/access-policies/users/{userID}/capabilities` | Explicit authority replacement with mandatory reviewed `If-Match` |
+
+Both use the same explicit bearer and safe reply envelopes described above.
+PUT requires all four fields, including empty arrays when removing authority:
+
+```json
+{
+  "enabled": true,
+  "expires_at": null,
+  "scopes": ["reviewed-resource"],
+  "permissions": ["reviewed-action"]
+}
+```
+
+Null expiry explicitly removes expiry. Otherwise supply an RFC3339 timestamp;
+the adapter normalizes it to UTC milliseconds, matching policy persistence.
+Bodies are capped at 128 KiB; each array has at most 128 distinct, bounded exact
+names. Unknown/duplicate/missing fields, null booleans/arrays, wildcard names,
+malformed expiry and trailing JSON are rejected. Actor, system, token allowances
+and usage budgets are not request fields. Responses and grant-review data are
+administrator-only and must not be exposed as customer read models.
+
+The [owning capability operation](../accesspolicy/README.md#explicit-capability-administration)
+preserves existing token allowances and budgets, and creates neither on first
+provisioning. No token inventory is prepared by a capability write. Enabled
+state and expiry are explicit administrative choices, so a reviewer can activate
+or revoke a previously disabled or expired grant. This is privileged authority
+administration, not automatic enrollment eligibility or country verification.
+Hosts define the actual scope/action vocabulary and operational approval process.
+No new schema or index migration is required beyond policy-store initialization.
+
+Every accepted PUT advances the revision and records the live operator through
+the same transactional CAS/audit. A stale ETag fails even for matching fields.
+After an uncertain response, GET the selected policy and audit before reviewing
+another update; never retry with an unconditional revision. To restore earlier
+capabilities, review them against current policy and use its current ETag; this
+cannot erase audit history, undo consumption or revoke independent credentials.
 
 ## Verification
 

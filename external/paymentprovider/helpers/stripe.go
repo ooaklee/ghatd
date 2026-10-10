@@ -4,6 +4,7 @@ package helpers
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -44,6 +45,18 @@ type StripeConfiguration struct {
 	FrontendBaseURL          string
 	CheckoutReturnPath       string
 	CustomerPortalReturnPath string
+}
+
+// StripeProviderOptions supplies resolved, trusted capabilities at construction.
+// It does not discover credentials or enable an otherwise disabled integration.
+type StripeProviderOptions struct {
+	// HTTPClient selects transport policy; nil uses the provider's traced default.
+	HTTPClient *http.Client
+	// Revenue opts into authenticated economic evidence; nil leaves it disabled.
+	Revenue *paymentprovider.RevenueConfig
+	// AllowPromotionCodes enables Stripe's checkout entry for provider-owned codes.
+	// Supply it from host policy, never a decoded checkout request.
+	AllowPromotionCodes bool
 }
 
 // DefaultStripeConfiguration enables the standard checkout and customer portal routes.
@@ -161,7 +174,7 @@ func (s *StripeSettings) configure(configuration StripeConfiguration, validatePr
 	}
 
 	if validateProvider {
-		provider, err := s.newProvider(environment)
+		provider, err := s.newProvider(environment, StripeProviderOptions{})
 		if err != nil {
 			return stripeHelperError(ErrStripeProviderConfigurationInvalid, "Stripe provider configuration is invalid: %v", err)
 		}
@@ -188,6 +201,14 @@ func (s *StripeSettings) IsEnabled() bool {
 // first so provider creation cannot bypass the shared host-safety policy. A
 // fully configured but disabled Stripe integration returns nil without error.
 func (s *StripeSettings) NewProvider() (*paymentprovider.StripeProvider, error) {
+	return s.NewProviderWithOptions(StripeProviderOptions{})
+}
+
+// NewProviderWithOptions constructs one provider with explicit transport and
+// checkout/revenue capabilities. It revalidates the current settings using the
+// configured host policy; Configure must have succeeded first. Disabled settings
+// return nil without using the options or making provider requests.
+func (s *StripeSettings) NewProviderWithOptions(options StripeProviderOptions) (*paymentprovider.StripeProvider, error) {
 	if s == nil {
 		return nil, ErrStripeSettingsRequired
 	}
@@ -201,7 +222,7 @@ func (s *StripeSettings) NewProvider() (*paymentprovider.StripeProvider, error) 
 	if !validated.IsEnabled() {
 		return nil, nil
 	}
-	provider, err := validated.newProvider(validated.environment)
+	provider, err := validated.newProvider(validated.environment, options)
 	if err != nil {
 		return nil, stripeHelperError(ErrStripeProviderConfigurationInvalid, "Stripe provider configuration is invalid: %v", err)
 	}
@@ -217,7 +238,13 @@ func (s *StripeSettings) NewProvider() (*paymentprovider.StripeProvider, error) 
 // AppendProvider constructs Stripe when enabled and appends it to the provider
 // slice passed to Starter. Disabled Stripe settings leave the slice unchanged.
 func (s *StripeSettings) AppendProvider(providers []paymentprovider.Provider) ([]paymentprovider.Provider, error) {
-	provider, err := s.NewProvider()
+	return s.AppendProviderWithOptions(providers, StripeProviderOptions{})
+}
+
+// AppendProviderWithOptions appends one validated Stripe instance carrying the
+// supplied capabilities. Disabled settings and errors retain the existing slice.
+func (s *StripeSettings) AppendProviderWithOptions(providers []paymentprovider.Provider, options StripeProviderOptions) ([]paymentprovider.Provider, error) {
+	provider, err := s.NewProviderWithOptions(options)
 	if err != nil {
 		return providers, err
 	}
@@ -228,7 +255,7 @@ func (s *StripeSettings) AppendProvider(providers []paymentprovider.Provider) ([
 }
 
 // newProvider maps validated settings into the payment-provider configuration.
-func (s *StripeSettings) newProvider(environment string) (*paymentprovider.StripeProvider, error) {
+func (s *StripeSettings) newProvider(environment string, options StripeProviderOptions) (*paymentprovider.StripeProvider, error) {
 	return paymentprovider.NewStripeProvider(&paymentprovider.Config{
 		ProviderName:                  "stripe",
 		Environment:                   environment,
@@ -240,6 +267,9 @@ func (s *StripeSettings) newProvider(environment string) (*paymentprovider.Strip
 		ReturnURL:                     s.StripeSuccessURL,
 		CustomerPortalReturnURL:       s.StripePortalReturnURL,
 		CustomerPortalConfigurationID: s.StripePortalConfigurationID,
+		HTTPClient:                    options.HTTPClient,
+		Revenue:                       options.Revenue,
+		AllowPromotionCodes:           options.AllowPromotionCodes,
 	})
 }
 

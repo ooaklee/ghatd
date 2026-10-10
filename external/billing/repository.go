@@ -22,21 +22,56 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold resource data
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given MongoDB collection
+	// matching the filter, applying any count options, and returns the count from
+	// the datastore.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes a single document matching the filter in the
+	// given collection; the target object name identifies the resource in error
+	// reporting.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand queries the given collection with the filter and find
+	// options, returning a cursor over matching documents held by the datastore.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts one document into the given collection and
+	// returns the insert result; the object name identifies the resource in error
+	// reporting.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand updates a single document matching the filter with
+	// the provided update document in the given collection.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteAggregateCommand runs the supplied MongoDB aggregation pipeline
+	// against the given collection and returns a cursor over the results.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
+	// ExecuteReplaceOneCommand replaces a single document matching the filter with
+	// the supplied replacement object in the given collection.
 	ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
+	// ExecuteUpdateManyCommand updates all documents matching the filter with the
+	// provided update document in the given collection.
 	ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteFindOneCommandDecodeResult finds one document matching the filter and
+	// decodes it into result; logError and onFailureErr control error logging and
+	// the returned failure.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteInsertManyCommand inserts the supplied documents into the given
+	// collection and returns the insert result including inserted identifiers.
 	ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
+	// ExecuteDeleteManyCommand deletes all documents matching the filter in the
+	// given collection; the target object name identifies the resource in error
+	// reporting.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
 
+	// GetDatabase returns the MongoDB database handle for the given name from the
+	// datastore's client.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient creates and returns the datastore's MongoDB client for
+	// subsequent database and collection access.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every document in the cursor into the supplied
+	// result slice from the datastore.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes a single document from the cursor into the
+	// supplied result value.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

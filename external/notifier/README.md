@@ -39,6 +39,7 @@ notifier/
 ├── sender.go             # Web Push and FCM delivery adapters
 ├── sender_factory.go     # Standard sender factory (NewStandardSenders)
 ├── utils.go              # Shared helpers (credentials decoding, etc.)
+├── helper/               # Optional passive credential startup checks
 ├── request.go            # API request types
 ├── response.go           # API response types
 ├── const.go              # Constants and error keys
@@ -123,6 +124,10 @@ await umsClient.post('me/notifications/addresses', {
 ```
 
 ### 4. Use the sender factory
+
+For optional passive startup validation over resolved credentials, see
+[credential helpers](helper/README.md). Their strict FCM profile is opt-in; the
+sender factory and SDK credential acceptance remain unchanged.
 
 Instead of constructing each sender manually you can use the factory:
 

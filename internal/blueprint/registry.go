@@ -138,6 +138,8 @@ func (r *Registry) List() []Registration {
 	return result
 }
 
+// normaliseRegistrationKey trims surrounding whitespace and lowercases the key
+// so lookups are case-insensitive.
 func normaliseRegistrationKey(value string) string {
 	return strings.TrimSpace(strings.ToLower(value))
 }

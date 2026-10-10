@@ -631,20 +631,8 @@ explicitly; enabling routes does not migrate storage.
 
 ### Conversation verification
 
-```sh
-go test -race ./external/contacter ./external/usermanager ./external/voter ./external/starter/v0 -count=1
-```
-
-Set `GHATD_TEST_MONGO_URI` and `GHATD_TEST_REDIS_ADDR` to isolated test services
-for real signed-session/persistence checks. Tests create unique databases and
-clean up only their own databases and session/account keys. They do not contact
-live email providers. Skipped integrations are not persistence verification.
-
-Test-style audit: `comms_votes_test.go`, `comms_participants_test.go`,
-`comms_owner_test.go` and `comms_compatibility_test.go` use named boundary tables
-and focused composition assertions. The starter's `routes_comms_votes_test.go`
-covers disabled/enabled/skipped-manager composition. The
-`comms_owner_integration_test.go` and `comms_votes_integration_test.go` retain
-ordered account-switch/replay/demotion and voting/concurrency lifecycles; their
-stateful exceptions preserve the history being asserted. Lower-domain voting
-tables live in `contacter/service.voting_test.go`.
+Run `go test -race ./external/usermanager ./external/contacter ./external/voter ./external/starter/v0`.
+The starter's [composition tests](../starter/v0/routes_comms_votes_test.go) cover
+disabled, enabled and skipped-manager wiring.
+Signed-session integration cases require isolated `GHATD_TEST_MONGO_URI` and
+`GHATD_TEST_REDIS_ADDR` fixtures; without them they skip.

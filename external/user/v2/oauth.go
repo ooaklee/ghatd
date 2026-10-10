@@ -59,6 +59,7 @@ func CanonicalOAuthIdentity(identity *OAuthIdentity) (*OAuthIdentity, error) {
 
 // CreateOAuthUserRequest accepts only trusted identity and optional profile data.
 type CreateOAuthUserRequest struct {
+	AttributionEvidence                        string `json:"-" query:"-" form:"-"`
 	Identity                                   OAuthIdentity
 	Email, FirstName, LastName, FullName, Type string
 }
@@ -71,9 +72,22 @@ type CreateOAuthUserResponse struct {
 
 // OAuthRepository is an optional capability; existing UserRepository remains compatible.
 type OAuthRepository interface {
+	// GetUserByOAuthIdentity resolves and returns the user matching the
+	// canonicalised OAuth identity, without considering provider email; the
+	// repository implementation queries the identity key index.
 	GetUserByOAuthIdentity(context.Context, *OAuthIdentity) (*UniversalUser, error)
+	// CreateOAuthUser inserts a user document carrying exactly one verified OAuth
+	// identity, returning the created user or the existing winner on duplicate
+	// identity; the service implementation validates input and initialises the
+	// account before delegating.
 	CreateOAuthUser(context.Context, *UniversalUser) (*CreateOAuthUserResponse, error)
+	// LinkOAuthIdentity attaches the OAuth identity to the user with the given ID
+	// and returns the updated user; implementations require the repository to
+	// support the optional OAuth capability.
 	LinkOAuthIdentity(context.Context, string, *OAuthIdentity) (*UniversalUser, error)
+	// RecordOAuthLogin stamps login timestamps for the active user with the given
+	// ID at the supplied time and returns the resulting user document from the
+	// conditional update.
 	RecordOAuthLogin(context.Context, string, time.Time) (*UniversalUser, error)
 }
 
@@ -332,6 +346,9 @@ func (s *Service) CreateOAuthUser(ctx context.Context, req *CreateOAuthUserReque
 	user.Standardise()
 	if user.Validate() != nil {
 		return nil, ErrValidationFailed
+	}
+	if err := s.captureSignup(user, req.AttributionEvidence); err != nil {
+		return nil, err
 	}
 	response, err := createWithHandle(ctx, s, config, user, func() (*CreateOAuthUserResponse, error) { return repo.CreateOAuthUser(ctx, user) })
 	if err == nil {

@@ -250,6 +250,9 @@ func (s *Service) NotifyUsers(ctx context.Context, r *NotifyUsersRequest) (*Noti
 	return &NotifyUsersResponse{NotifyUsersResponse: response}, nil
 }
 
+// wrapNotificationPreferences wraps preferences in a user-decorated envelope,
+// resolving the owner profile only when includeUser is set; nil preferences
+// stay nil.
 func (s *Service) wrapNotificationPreferences(ctx context.Context, preferences *notifier.NotificationPreferences, includeUser bool) *NotificationPreferencesWithUser {
 	if preferences == nil {
 		return nil
@@ -275,6 +278,9 @@ func (s *Service) resolveNotificationUser(ctx context.Context, userID string) *E
 	return buildNotificationEnrichedUserProfile(usersByID[userID])
 }
 
+// buildNotificationEnrichedUserProfile projects a stored user into an enriched
+// profile with empty group memberships; nil input yields nil and optional
+// personal/metadata sections are copied only when present.
 func buildNotificationEnrichedUserProfile(user *userv2.UniversalUser) *EnrichedUserProfile {
 	if user == nil {
 		return nil

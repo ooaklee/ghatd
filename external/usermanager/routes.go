@@ -9,75 +9,233 @@ import (
 
 // UsermanagerHandler expected methods for valid usermanager handler
 type UsermanagerHandler interface {
+	// UpdateUserProfile serves HTTP requests updating the authenticated caller's
+	// own profile name attributes. It maps and validates the request, invokes the
+	// manager service, and writes the updated user response.
 	UpdateUserProfile(w http.ResponseWriter, r *http.Request)
+	// GetUserProfile serves HTTP requests fetching a user's profile. It maps and
+	// validates the request, delegates to the manager service, which resolves the
+	// profile by actor with admin override for other users, and writes the profile
+	// response.
 	GetUserProfile(w http.ResponseWriter, r *http.Request)
+	// GetUserByID serves HTTP requests fetching a user by identifier. It maps and
+	// validates the request and writes the user returned by the manager service,
+	// which permits self-access and admin access to other accounts.
 	GetUserByID(w http.ResponseWriter, r *http.Request)
+	// GetUsers serves HTTP requests listing users. It maps and validates the
+	// request and writes the user list, optionally with pagination metadata; the
+	// manager service restricts non-admin callers to their accessible group
+	// memberships.
 	GetUsers(w http.ResponseWriter, r *http.Request)
+	// GetUserMicroProfile serves HTTP requests fetching the authenticated caller's
+	// micro profile. It maps and validates the request and writes the compact
+	// profile returned by the manager service.
 	GetUserMicroProfile(w http.ResponseWriter, r *http.Request)
+	// DeleteUserPermanently serves HTTP requests to delete the caller's account and
+	// platform resources. It maps and validates the request, delegates to the
+	// manager service, and clears authentication cookies on success and failure.
 	DeleteUserPermanently(w http.ResponseWriter, r *http.Request)
+	// CreateComms serves HTTP requests creating a comms conversation. It maps and
+	// validates the request, delegates to the manager service, and writes the
+	// creation receipt with Created status.
 	CreateComms(w http.ResponseWriter, r *http.Request)
+	// GetComms serves HTTP requests listing comms. It maps and validates the
+	// request, delegates to the manager service, and writes the comms list,
+	// including pagination metadata when requested.
 	GetComms(w http.ResponseWriter, r *http.Request)
+	// UpdateComms serves HTTP requests updating a comms conversation. It maps and
+	// validates the request, delegates to the manager service, and writes the
+	// updated comms.
 	UpdateComms(w http.ResponseWriter, r *http.Request)
+	// GetCommsStats serves HTTP requests fetching comms statistics. It maps and
+	// validates the request, delegates to the manager service, and writes the
+	// returned stats.
 	GetCommsStats(w http.ResponseWriter, r *http.Request)
+	// GetAvailableCommsTypes serves public discovery of configured contact
+	// categories. It delegates to the manager service and writes the comms types,
+	// exposing configuration only and no comms records.
 	GetAvailableCommsTypes(w http.ResponseWriter, r *http.Request)
 	// Group/Team management methods
 	GetEnrichedUserProfile(w http.ResponseWriter, r *http.Request)
+	// GetUserGroupMembershipsRequest serves HTTP requests fetching a user's team
+	// memberships. It maps and validates the request, delegates to the manager
+	// service, and writes the membership response.
 	GetUserGroupMembershipsRequest(w http.ResponseWriter, r *http.Request)
+	// GetUserGroups serves HTTP requests fetching a user's group memberships with
+	// filtering. It maps and validates the request, delegates to the manager
+	// service, and writes group summaries, optionally with pagination metadata.
 	GetUserGroups(w http.ResponseWriter, r *http.Request)
+	// GetLatestNotificationOverviews serves HTTP requests fetching the latest
+	// notification overviews. The manager service pins the recipient to the trusted
+	// actor for self-service queries and requires an active administrator for
+	// AdminView selections.
 	GetLatestNotificationOverviews(w http.ResponseWriter, r *http.Request)
+	// GetNotifierConfig serves HTTP requests fetching the public notifier
+	// configuration describing available push channels and subscription keys. It
+	// maps and validates the request and writes the non-user-specific config.
 	GetNotifierConfig(w http.ResponseWriter, r *http.Request)
+	// RegisterNotificationAddress serves HTTP requests registering a push
+	// destination for the authenticated user. It maps and validates the request and
+	// writes the sanitised address summary with Created status.
 	RegisterNotificationAddress(w http.ResponseWriter, r *http.Request)
+	// ListNotificationAddresses serves HTTP requests listing registered push
+	// destinations. It maps and validates the request and writes the sanitised
+	// address list, optionally with pagination metadata; the service chooses admin
+	// or per-user listing by view.
 	ListNotificationAddresses(w http.ResponseWriter, r *http.Request)
+	// DeleteNotificationAddress serves HTTP requests removing one registered push
+	// destination. It maps and validates the request, delegates to the manager
+	// service, and writes a blank success response.
 	DeleteNotificationAddress(w http.ResponseWriter, r *http.Request)
+	// GetNotificationPreferences serves HTTP requests fetching the user's
+	// notification preferences. It maps and validates the request and writes the
+	// global and per-channel toggles returned by the manager service.
 	GetNotificationPreferences(w http.ResponseWriter, r *http.Request)
+	// UpdateNotificationPreferences serves HTTP requests changing the user's
+	// notification settings. It maps and validates the request, delegates the
+	// update to the manager service, and writes the resulting preferences.
 	UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request)
+	// NotifyUser serves admin or service notification sends to a target user's
+	// active addresses. It maps and validates the request, delegates to the manager
+	// service, and writes the per-delivery results.
 	NotifyUser(w http.ResponseWriter, r *http.Request)
+	// NotifyUsers serves admin notification dispatches to multiple users across
+	// channels. It maps and validates the request, delegates to the manager
+	// service, and writes the per-dispatch results.
 	NotifyUsers(w http.ResponseWriter, r *http.Request)
+	// GetMyGroupInvitations handles the HTTP request returning the current user's
+	// outstanding group invitations, mapped from groups awaiting their answer.
 	GetMyGroupInvitations(w http.ResponseWriter, r *http.Request)
+	// AcceptMyGroupInvitation handles the HTTP request accepting one of the current
+	// user's pending group invitations.
 	AcceptMyGroupInvitation(w http.ResponseWriter, r *http.Request)
+	// RejectMyGroupInvitation handles the HTTP request rejecting one of the current
+	// user's pending group invitations.
 	RejectMyGroupInvitation(w http.ResponseWriter, r *http.Request)
+	// GetGroupDetail handles the HTTP request returning a group's details, with
+	// membership or admin access enforced and members plus owner enriched.
 	GetGroupDetail(w http.ResponseWriter, r *http.Request)
+	// GetGroupStats handles the HTTP request returning a group's statistics, with
+	// membership or admin access enforced before computing seat usage and role
+	// breakdown.
 	GetGroupStats(w http.ResponseWriter, r *http.Request)
+	// CreateGroup handles the HTTP request creating a new group, restricted to
+	// admins or requesters with admin access to the specified parent group.
 	CreateGroup(w http.ResponseWriter, r *http.Request)
+	// UpdateGroup handles the HTTP request updating an existing group; admins may
+	// update any group while non-admins need effective admin-level access to the
+	// target.
 	UpdateGroup(w http.ResponseWriter, r *http.Request)
+	// DeleteGroup handles the HTTP request deleting a group; non-admins are
+	// restricted to owning the target and hard deletion, and deletion is attributed
+	// to the requester.
 	DeleteGroup(w http.ResponseWriter, r *http.Request)
 	// Group management methods
 	AddGroupMember(w http.ResponseWriter, r *http.Request)
+	// RemoveGroupMember handles the HTTP request removing a member from a group,
+	// requiring admin status or admin-level access to the target group.
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request)
+	// UpdateGroupMember handles the HTTP request updating a member's role in a
+	// group, requiring admin status or admin-level access to the target group.
 	UpdateGroupMember(w http.ResponseWriter, r *http.Request)
+	// UpdateGroupOwner handles the HTTP request transferring group ownership,
+	// requiring admin status or admin-level access, and returns the enriched new
+	// owner.
 	UpdateGroupOwner(w http.ResponseWriter, r *http.Request)
+	// GetGroupsByUserID handles the HTTP request returning groups for a user;
+	// reading another user's groups requires admin authority.
 	GetGroupsByUserID(w http.ResponseWriter, r *http.Request)
+	// GetGroupsConfig handles the HTTP request returning the group service
+	// configuration capabilities.
 	GetGroupsConfig(w http.ResponseWriter, r *http.Request)
+	// GetGroupLineage handles the HTTP request returning a group's lineage, gated
+	// by group access for non-admin requesters and issued as the requester.
 	GetGroupLineage(w http.ResponseWriter, r *http.Request)
+	// GetGroupDescendants handles the HTTP request returning a group's descendants,
+	// gated by group access for non-admin requesters and issued as the requester.
 	GetGroupDescendants(w http.ResponseWriter, r *http.Request)
+	// ValidateGroupName handles the HTTP request validating a proposed group name;
+	// non-admins must have access to the supplied parent group when one is given.
 	ValidateGroupName(w http.ResponseWriter, r *http.Request)
 	// Reminder methods
 	CreateReminder(w http.ResponseWriter, r *http.Request)
+	// GetReminderByID handles the HTTP request returning one reminder; admin
+	// requesters may look up reminders without user-scope restriction.
 	GetReminderByID(w http.ResponseWriter, r *http.Request)
+	// ListReminders handles the HTTP request listing reminders for the
+	// authenticated user, or across users when the requester is an admin.
 	ListReminders(w http.ResponseWriter, r *http.Request)
+	// UpdateReminderByID handles the HTTP request updating one reminder owned by
+	// the currently authenticated user.
 	UpdateReminderByID(w http.ResponseWriter, r *http.Request)
+	// DeleteReminderByID handles the HTTP request deleting one reminder owned by
+	// the currently authenticated user.
 	DeleteReminderByID(w http.ResponseWriter, r *http.Request)
+	// DisableReminderByID handles the HTTP request disabling one reminder owned by
+	// the currently authenticated user.
 	DisableReminderByID(w http.ResponseWriter, r *http.Request)
+	// GetReminderStats handles the HTTP request returning aggregate reminder
+	// statistics for admin or service views.
 	GetReminderStats(w http.ResponseWriter, r *http.Request)
+	// GetDueReminders handles the HTTP request returning reminders ready for
+	// scheduler dispatch, scoped to the requester's authority.
 	GetDueReminders(w http.ResponseWriter, r *http.Request)
 	// Streak methods
 	RecordStreak(w http.ResponseWriter, r *http.Request)
+	// ListStreaks handles the HTTP request returning streak entries for the
+	// authenticated user, with admin requesters able to filter across users.
 	ListStreaks(w http.ResponseWriter, r *http.Request)
+	// GetCurrentStreak handles the HTTP request returning the current streak count
+	// for the authenticated user, defaulting to the daily period.
 	GetCurrentStreak(w http.ResponseWriter, r *http.Request)
+	// GetLongestStreak handles the HTTP request returning the personal best streak
+	// for the authenticated user, defaulting to the daily period.
 	GetLongestStreak(w http.ResponseWriter, r *http.Request)
+	// GetNumberOfStreaks handles the HTTP request counting streak entries matching
+	// the filters, scoped to the requester's authority.
 	GetNumberOfStreaks(w http.ResponseWriter, r *http.Request)
 	// Vision methods
 	CreateVision(w http.ResponseWriter, r *http.Request)
+	// GetVisions handles the HTTP request returning a page of vision summaries
+	// enriched with associated public user data.
 	GetVisions(w http.ResponseWriter, r *http.Request)
+	// GetVisionByNanoID handles the HTTP request returning a privacy-safe vision
+	// detail by nano ID with public user summaries.
 	GetVisionByNanoID(w http.ResponseWriter, r *http.Request)
+	// GetVisionConfig handles the HTTP request returning the client-safe vision
+	// capabilities.
 	GetVisionConfig(w http.ResponseWriter, r *http.Request)
+	// UpdateVision handles the HTTP request for owner-or-admin edits restricted to
+	// descriptive vision fields, excluding internal metadata, and returns an
+	// enriched result.
 	UpdateVision(w http.ResponseWriter, r *http.Request)
+	// UpdateVisionStatus handles the HTTP request for an admin roadmap status
+	// transition and returns the enriched updated vision.
 	UpdateVisionStatus(w http.ResponseWriter, r *http.Request)
+	// DeleteVision handles the HTTP request for owner-or-admin permanent deletion
+	// of a vision after authorization.
 	DeleteVision(w http.ResponseWriter, r *http.Request)
+	// SetVisionVote serves the HTTP endpoint that records an authenticated vote on
+	// a vision. The handler maps and validates the request, calls the
+	// vision-enabled service, and writes an enriched vision response or error to w.
 	SetVisionVote(w http.ResponseWriter, r *http.Request)
+	// RemoveVisionVote serves the HTTP endpoint that removes an authenticated vote
+	// on a vision. The handler maps and validates the request, calls the
+	// vision-enabled service, and writes an enriched vision response or error to w.
 	RemoveVisionVote(w http.ResponseWriter, r *http.Request)
+	// AddVisionComment serves the HTTP endpoint that stores an authenticated
+	// comment on a vision. The handler maps and validates the request, calls the
+	// vision-enabled service, and writes an enriched vision response or error to w.
 	AddVisionComment(w http.ResponseWriter, r *http.Request)
+	// SetVisionCommentVote serves the HTTP endpoint that records an authenticated
+	// vote on a vision comment. The handler maps and validates the request, calls
+	// the vision-enabled service, and writes an enriched vision response or error
+	// to w.
 	SetVisionCommentVote(w http.ResponseWriter, r *http.Request)
+	// RemoveVisionCommentVote serves the HTTP endpoint that removes an
+	// authenticated vote on a vision comment. The handler maps and validates the
+	// request, calls the vision-enabled service, and writes an enriched vision
+	// response or error to w.
 	RemoveVisionCommentVote(w http.ResponseWriter, r *http.Request)
 }
 

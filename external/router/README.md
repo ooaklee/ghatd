@@ -333,3 +333,13 @@ func main() {
 ```
 
 By following this pattern, you establish a consistent foundation for routing across your entire application, which can then be referenced by other "Getting Started" guides.
+
+
+## Optional response middleware
+
+[Response middleware helpers](../middleware/helper/README.md) compose content
+type, a process-local LRU cache, gzip and HTML/SVG/JSON minification in order.
+Pass their returned slice to `NewRouter` before serving. Supply explicit cache
+settings, an optional observer and your own private-route bypass decorator;
+this helper neither authenticates callers nor installs privacy rules. Keep
+application logging/tracing at the existing outer HTTP boundary.

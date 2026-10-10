@@ -160,6 +160,8 @@ func (s *Service) resolvePortalCustomer(ctx context.Context, userID, providerNam
 	return "", nil
 }
 
+// isPreferredPortalSubscriptionStatus reports whether a status, compared case-
+// insensitively after trimming, is active or trialing.
 func isPreferredPortalSubscriptionStatus(status string) bool {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case billing.StatusActive, billing.StatusTrialing:
@@ -169,6 +171,9 @@ func isPreferredPortalSubscriptionStatus(status string) bool {
 	}
 }
 
+// portalSubscriptionPageMetadataValid rejects inconsistent or truncated
+// subscription pages, cross-checking page number, page size, totals and
+// remaining-item arithmetic against the fixed portal page size.
 func portalSubscriptionPageMetadataValid(response *billing.GetSubscriptionsResponse, page int) bool {
 	if response == nil || page < 1 || response.Page != page || response.PerPage != portalSubscriptionPageSize ||
 		response.Total < 0 || response.TotalPages < 0 || response.TotalPages > portalSubscriptionMaxPages ||
@@ -196,6 +201,9 @@ func portalSubscriptionPageMetadataValid(response *billing.GetSubscriptionsRespo
 	return expectedPageSize >= 0 && len(response.Subscriptions) == expectedPageSize
 }
 
+// portalReturnURLOrigin validates an absolute HTTP(S) URL without userinfo,
+// opaque parts, placeholders or invalid ports, returning its canonical origin
+// or ErrBillingManagerPortalConfigurationInvalid.
 func portalReturnURLOrigin(rawURL string) (string, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if strings.ContainsAny(rawURL, "{}") {

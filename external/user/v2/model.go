@@ -12,21 +12,35 @@ import (
 
 // IDGenerator generates unique identifiers
 type IDGenerator interface {
+	// GenerateUUID returns a newly generated unique identifier string; known
+	// implementations produce UUID v4 values.
 	GenerateUUID() string
+	// GenerateNanoID returns a newly generated short unique identifier string; the
+	// default implementation falls back to a random alphanumeric string if nano ID
+	// generation fails.
 	GenerateNanoID() string
 }
 
 // TimeProvider provides current time (useful for testing)
 type TimeProvider interface {
+	// Now returns the provider's current time, allowing callers such as tests to
+	// supply a fixed or captured instant.
 	Now() time.Time
+	// NowUTC returns the provider's current time formatted as an RFC3339Nano UTC
+	// string.
 	NowUTC() string
 }
 
 // StringUtils provides string manipulation utilities
 type StringUtils interface {
+	// ToTitleCase returns the supplied string converted to title case.
 	ToTitleCase(s string) string
+	// ToLowerCase returns the supplied string converted to lowercase.
 	ToLowerCase(s string) string
+	// ToUpperCase returns the supplied string converted to uppercase.
 	ToUpperCase(s string) string
+	// InSlice reports whether the given string equals any element of the supplied
+	// slice.
 	InSlice(item string, slice []string) bool
 }
 
@@ -157,6 +171,8 @@ func (c *UserConfig) GetType(fallback *UserConfig) string {
 
 // UniversalUser represents a flexible user model
 type UniversalUser struct {
+	// SignupAttribution is immutable private account-creation evidence; only owning signup operations write it.
+	SignupAttribution *SignupAttribution `json:"-" bson:"signup_attribution,omitempty"`
 	// Handle is a mutable, canonical display identifier, never an authority claim.
 	Handle string `json:"handle,omitempty" bson:"handle,omitempty"`
 	// HandleMetadata is private lifecycle state written only by handle operations.
@@ -730,14 +746,21 @@ func (u *UniversalUser) GetUserEmail() string {
 // Legacy method aliases for backward compatibility
 func (u *UniversalUser) GetUserId() string { return u.ID }
 
+// GetUserStatus returns the stored account status string without validation.
 func (u *UniversalUser) GetUserStatus() string { return u.Status }
 
+// IsAdmin reports whether the account currently carries the ADMIN role.
 func (u *UniversalUser) IsAdmin() bool { return u.HasRole("ADMIN") }
 
+// SetLastLoginAtTimeToNow is a fluent alias for SetLastLoginAtNow, stamping
+// last login from the injected time provider.
 func (u *UniversalUser) SetLastLoginAtTimeToNow() *UniversalUser {
 	return u.SetLastLoginAtNow()
 }
 
+// SetLastFreshLoginAtTimeToNow stamps the fresh-login timestamp from the
+// injected time provider and returns the receiver; it leaves metadata untouched
+// when no provider is set.
 func (u *UniversalUser) SetLastFreshLoginAtTimeToNow() *UniversalUser {
 	if u.timeProvider != nil {
 		u.Metadata.LastFreshLoginAt = u.timeProvider.NowUTC()
@@ -745,14 +768,20 @@ func (u *UniversalUser) SetLastFreshLoginAtTimeToNow() *UniversalUser {
 	return u
 }
 
+// SetUpdatedAtTimeToNow is a fluent alias for SetUpdatedAtNow, stamping the
+// updated timestamp from the injected time provider.
 func (u *UniversalUser) SetUpdatedAtTimeToNow() *UniversalUser {
 	return u.SetUpdatedAtNow()
 }
 
+// VerifyEmailNow is a fluent alias for VerifyEmail, marking the account's email
+// as verified.
 func (u *UniversalUser) VerifyEmailNow() *UniversalUser {
 	return u.VerifyEmail()
 }
 
+// GetAttributeByJsonPath is a casing alias forwarding to
+// GetAttributeByJSONPath.
 func (u *UniversalUser) GetAttributeByJsonPath(jsonPath string) (interface{}, error) {
 	return u.GetAttributeByJSONPath(jsonPath)
 }

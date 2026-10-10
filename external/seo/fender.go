@@ -11,9 +11,13 @@ import (
 
 // sitemapValidator expected methods of a valid validator.
 type sitemapValidator interface {
+	// Validate checks whether s represents a valid value and returns an error
+	// describing any validation failure, per the sitemapValidator contract.
 	Validate(s interface{}) error
 }
 
+// validateParsedRequest delegates request validation to the supplied validator,
+// skipping validation entirely when the validator is nil.
 func validateParsedRequest(request interface{}, validator sitemapValidator) error {
 	if validator == nil {
 		return nil

@@ -28,41 +28,110 @@ const (
 
 // MongoDbStore represents the datastore to hold pricer data.
 type MongoDbStore interface {
+	// ExecuteCountDocuments returns the number of documents in the given collection
+	// matching the filter, accepting Mongo count options for the pricer datastore.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes a single document matching the filter from
+	// the collection; targetObjectName identifies the resource in store
+	// diagnostics.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand runs a find query on the collection with the filter and
+	// find options, returning a cursor over matching documents.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the document into the collection and returns
+	// the insert result; resultObjectName identifies the resource in store
+	// diagnostics.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand applies the update filter to a single document
+	// matching the given filter in the collection; resultObjectName identifies the
+	// resource in store diagnostics.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteDeleteManyCommand deletes all documents matching the filter from the
+	// collection; targetObjectName identifies the resource in store diagnostics.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult finds a single matching document and
+	// decodes it into result; logError and onFailureErr control error logging and
+	// the returned failure error.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteAggregateCommand runs the aggregation pipeline against the collection
+	// and returns a cursor over the aggregated results.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
 
+	// GetDatabase returns the Mongo database handle for the given database name
+	// from the pricer datastore.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes the datastore connection and returns the
+	// initialised Mongo client.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every document in the cursor into result;
+	// resultObjectName identifies the resource in store diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes a single document from the cursor into result;
+	// resultObjectName identifies the resource in store diagnostics.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
 // PricePlanRepository describes price plan persistence operations.
 type PricePlanRepository interface {
+	// CreatePricePlan persists the supplied price plan and returns the stored plan,
+	// part of the price plan persistence contract.
 	CreatePricePlan(ctx context.Context, pricePlan *PricePlan) (*PricePlan, error)
+	// UpdatePricePlan persists changes to the supplied price plan identified by its
+	// ID and returns the updated plan as part of the price plan persistence
+	// contract.
 	UpdatePricePlan(ctx context.Context, pricePlan *PricePlan) (*PricePlan, error)
+	// GetPricePlanByID retrieves the stored price plan with the given ID; the
+	// request controls inclusion of features, costs, and providers in the
+	// projection.
 	GetPricePlanByID(ctx context.Context, id string, req *GetPricePlanByIDRequest) (*PricePlan, error)
+	// GetPricePlanBySlug retrieves the stored price plan matching the normalized
+	// slug; the request controls inclusion of features, costs, and providers in the
+	// projection.
 	GetPricePlanBySlug(ctx context.Context, slug string, req *GetPricePlanBySlugRequest) (*PricePlan, error)
+	// GetPricePlans retrieves price plans matching the request's filters, sort,
+	// pagination, and inclusion options from the price plan persistence contract.
 	GetPricePlans(ctx context.Context, req *GetPricePlansRequest) ([]PricePlan, error)
+	// GetTotalPricePlans returns the count of price plans matching the request's
+	// query filters, used for pagination totals.
 	GetTotalPricePlans(ctx context.Context, req *GetPricePlansRequest) (int64, error)
+	// PublishPricePlan sets the plan's status to published and records publication
+	// metadata; id selects the plan, publishedByID and publishedAt attribute the
+	// publication, defaulting the timestamp when empty.
 	PublishPricePlan(ctx context.Context, id, publishedByID, publishedAt string) error
+	// ArchivePricePlan sets the plan's status to archived and records update
+	// attribution; id selects the plan, updatedByID and updatedAt attribute the
+	// change, defaulting the timestamp when empty.
 	ArchivePricePlan(ctx context.Context, id, updatedByID, updatedAt string) error
+	// SoftDeletePricePlan marks the plan identified by id as deleted by setting
+	// archived status with deletion attribution; deletedByID and deletedAt
+	// attribute the deletion, defaulting the timestamp when empty.
 	SoftDeletePricePlan(ctx context.Context, id, deletedByID, deletedAt string) error
 }
 
 // PriceFeatureRepository describes feature catalog persistence operations.
 type PriceFeatureRepository interface {
+	// CreateFeature persists a new feature catalog item via PriceFeatureRepository,
+	// filling missing ID, NanoID, CreatedAt and normalising the slug before insert,
+	// returning the stored feature.
 	CreateFeature(ctx context.Context, feature *PriceFeature) (*PriceFeature, error)
+	// UpdateFeature replaces the stored feature catalog item matching feature.ID
+	// via PriceFeatureRepository, stamping UpdatedAt, normalising the slug and
+	// returning the updated feature.
 	UpdateFeature(ctx context.Context, feature *PriceFeature) (*PriceFeature, error)
+	// GetFeatureByID fetches a single feature catalog item by its ID via
+	// PriceFeatureRepository, returning the found feature or
+	// ErrPriceFeatureNotFound when no document matches.
 	GetFeatureByID(ctx context.Context, id string) (*PriceFeature, error)
+	// GetFeatures queries feature catalog items via PriceFeatureRepository using
+	// the request's filters, ordering and pagination, returning the matching page
+	// of features.
 	GetFeatures(ctx context.Context, req *GetFeaturesRequest) ([]PriceFeature, error)
+	// GetTotalFeatures counts feature catalog items matching the request's query
+	// filters via PriceFeatureRepository, returning the total for pagination.
 	GetTotalFeatures(ctx context.Context, req *GetFeaturesRequest) (int64, error)
+	// SoftDeleteFeature marks the feature catalog item with the given ID deleted by
+	// setting deleted_at, deleted_by_id and update audit fields, defaulting
+	// deletedAt to the current UTC time when empty.
 	SoftDeleteFeature(ctx context.Context, id, deletedByID, deletedAt string) error
 }
 
@@ -249,6 +318,8 @@ func buildPricePlanUpdate(pricePlan *PricePlan) bson.M {
 	return update
 }
 
+// setOrUnsetPricePlanField records value under key in setFields, or marks the
+// key for removal in unsetFields when unset is true.
 func setOrUnsetPricePlanField(setFields, unsetFields bson.M, key string, value interface{}, unset bool) {
 	if unset {
 		unsetFields[key] = ""
@@ -257,6 +328,8 @@ func setOrUnsetPricePlanField(setFields, unsetFields bson.M, key string, value i
 	setFields[key] = value
 }
 
+// setPricePlanAuditField writes a lifecycle audit field only when its value is
+// non-empty, so general updates never blank stored audit history.
 func setPricePlanAuditField(setFields bson.M, key, value string) {
 	if value != "" {
 		setFields[key] = value
@@ -585,12 +658,17 @@ func (r *Repository) SoftDeleteFeature(ctx context.Context, id, deletedByID, del
 	return r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"_id": id}, update, "price_feature")
 }
 
+// pricePlanIncludeOptions selects which heavy plan subdocuments (features,
+// costs, provider refs) a find should project.
 type pricePlanIncludeOptions struct {
 	includeFeatures  bool
 	includeCosts     bool
 	includeProviders bool
 }
 
+// buildPricePlanQueryFilter translates a GetPricePlansRequest into a Mongo
+// filter, applying comma-separated value, date-range, deletion and effective
+// publication predicates; unset fields add no constraint.
 func buildPricePlanQueryFilter(req *GetPricePlansRequest) bson.M {
 	queryFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -610,6 +688,9 @@ func buildPricePlanQueryFilter(req *GetPricePlansRequest) bson.M {
 	return queryFilter
 }
 
+// addPricePlanPublishedFilter constrains the filter to plans whose status is
+// published and whose published_at is present and not in the future, or the
+// complement for isNotPublished, using the current UTC time.
 func addPricePlanPublishedFilter(queryFilter bson.M, isPublished bool, isNotPublished bool) {
 	currentTime := toolbox.TimeNowUTC()
 
@@ -631,6 +712,9 @@ func addPricePlanPublishedFilter(queryFilter bson.M, isPublished bool, isNotPubl
 	}
 }
 
+// buildPriceFeatureQueryFilter translates a GetFeaturesRequest into a Mongo
+// filter over type, unit, slug, creators, date ranges, deletion and publication
+// state; unset fields add no constraint.
 func buildPriceFeatureQueryFilter(req *GetFeaturesRequest) bson.M {
 	queryFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -649,6 +733,8 @@ func buildPriceFeatureQueryFilter(req *GetFeaturesRequest) bson.M {
 	return queryFilter
 }
 
+// addCommaSeparatedFilter adds an $in filter for a comma-separated list,
+// skipping empty values entirely.
 func addCommaSeparatedFilter(queryFilter bson.M, field string, value string) {
 	values := toolbox.SplitCommaSeparatedStringAndRemoveEmptyStrings(value)
 	if len(values) > 0 {
@@ -656,6 +742,8 @@ func addCommaSeparatedFilter(queryFilter bson.M, field string, value string) {
 	}
 }
 
+// addDateRangeFilter adds $gte/$lte string bounds on a field when the
+// respective from or to value is non-empty.
 func addDateRangeFilter(queryFilter bson.M, field string, from string, to string) {
 	dateFilter := bson.M{}
 	if from != "" {
@@ -669,6 +757,8 @@ func addDateRangeFilter(queryFilter bson.M, field string, from string, to string
 	}
 }
 
+// addDeletedFilter matches documents with a non-empty deleted_at, or absent and
+// empty deleted_at when isNotDeleted is set.
 func addDeletedFilter(queryFilter bson.M, isDeleted bool, isNotDeleted bool) {
 	if isDeleted {
 		queryFilter["deleted_at"] = bson.M{"$exists": true, "$ne": ""}
@@ -683,6 +773,8 @@ func addDeletedFilter(queryFilter bson.M, isDeleted bool, isNotDeleted bool) {
 	}
 }
 
+// addPublishedFilter matches a present, non-empty published_at that is not in
+// the future, or its complement when isNotPublished is set.
 func addPublishedFilter(queryFilter bson.M, isPublished bool, isNotPublished bool) {
 	currentTime := toolbox.TimeNowUTC()
 
@@ -700,6 +792,8 @@ func addPublishedFilter(queryFilter bson.M, isPublished bool, isNotPublished boo
 	}
 }
 
+// appendAndFilter appends filter to the query's $and array, creating the array
+// when absent.
 func appendAndFilter(queryFilter bson.M, filter bson.M) {
 	if existing, ok := queryFilter["$and"].([]bson.M); ok {
 		queryFilter["$and"] = append(existing, filter)
@@ -709,6 +803,8 @@ func appendAndFilter(queryFilter bson.M, filter bson.M) {
 	queryFilter["$and"] = []bson.M{filter}
 }
 
+// buildPricerSortOptions maps a named sort order onto the corresponding single-
+// key BSON sort, defaulting to created_at descending.
 func buildPricerSortOptions(order string) bson.D {
 	switch order {
 	case "created_at_asc":
@@ -744,6 +840,8 @@ func buildPricerSortOptions(order string) bson.D {
 	}
 }
 
+// applyPricePlanFindProjection sets an exclusion projection on the find options
+// for any heavy plan fields not selected for inclusion.
 func applyPricePlanFindProjection(findOptions *options.FindOptionsBuilder, includeOptions pricePlanIncludeOptions) {
 	projection := buildPricePlanProjection(includeOptions)
 	if len(projection) > 0 {
@@ -751,6 +849,9 @@ func applyPricePlanFindProjection(findOptions *options.FindOptionsBuilder, inclu
 	}
 }
 
+// buildPricePlanProjection excludes features, costs or provider_refs when the
+// corresponding include option is false; full inclusion yields an empty
+// projection.
 func buildPricePlanProjection(includeOptions pricePlanIncludeOptions) bson.M {
 	projection := bson.M{}
 	if !includeOptions.includeFeatures {

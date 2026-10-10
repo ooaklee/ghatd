@@ -11,6 +11,10 @@ The `billing` package (`external/billing`) gives you the tools for core subscrip
 - [Service Methods](#service-methods)
 - [Repository Implementation](#repository-implementation)
 - [Best Practices](#best-practices)
+- [Further Reading](#further-reading)
+- [Support](#support)
+- [Verified revenue feed](#verified-revenue-feed)
+- [Bounded lifecycle source discovery](#bounded-lifecycle-source-discovery)
 
 ## Key Features
 
@@ -821,3 +825,399 @@ For issues or questions:
 - Check repository implementation in `external/billing/repository.go`
 - See migration files in `external/billing/migrations/`
 - Refer to examples in `external/billing/examples/examples.go`
+
+## Verified revenue feed
+
+`RevenueService` owns financial fact validation, provider/account/mode economic
+identity, immutable fingerprints and durable transaction acceptance. Its
+`RevenueRepository` atomically appends facts and delivery observations before
+webhook acknowledgement. The additive encrypted implementation is
+[`revenuestore`](revenuestore/README.md), using shared transaction-capable
+repository helpers. There is no nontransactional or in-memory feed fallback.
+
+`PaidMinor` is verified net paid line revenue after discounts and credits,
+excluding tax; it is independent from the existing subscription access model,
+individual billing-event gross amounts and catalogue commercial terms. Provider
+price/customer references and the historical principal/plan/cost association
+remain attached to accepted economic facts. Different webhook envelopes may
+refer to one economic allocation; they add observations rather than duplicate
+money. A changed payload under an existing economic identity conflicts.
+
+Consumers read bounded pending facts and acknowledge only with a durable owning
+acceptance or explicit no-entitlement/quarantine decision. A global cursor must
+not skip earlier unresolved facts. `GetRevenueAcknowledgement` reads the
+consumer's immutable owning receipt after a lost reply; its historical actor
+never supplies current permission. An adapter without the optional receipt-read
+capability returns unavailable. Quarantined delivery observations containing
+no facts have a separate source-reconciliation contract; they cannot be cleared
+with a fact acknowledgement. `ResolveQuarantinedRevenue` requires the original
+fingerprint, authenticated recovered facts (or a reasoned no-revenue outcome)
+and a server-bound actor. Facts and the immutable resolution commit together;
+the original quarantine remains available. Lost acknowledgement is recovered by
+reading/replaying the immutable resolution. Source digests and actor identity
+are private JSON fields, retained explicitly in encrypted persistence.
+
+An optional private `ResolveRevenueRequest.RecoveryFingerprint` binds the
+immutable resolution to the independently authenticated stable provider
+snapshot. It participates in changed-replay detection, while the original
+quarantine and source fingerprint remain untouched. An empty recovery
+fingerprint preserves the earlier resolution-hash contract. The storage field
+is additive and excluded from public JSON; it supplies no caller authority or
+provider authentication on its own.
+
+This owning service does not authenticate HTTP callers or query a provider.
+The billing manager supplies those boundaries and the provider evidence.
+Applications must supply current scoped worker/operator authority, complete
+historical payer/plan resolution, migrations and bounded reconciliation workers
+before exposing or scheduling the feature.
+
+Optional `RevenuePagingRepository` supports bounded full sweeps through pending
+facts and source quarantines. `PendingRevenueFactsAfter` uses acceptance sequence;
+`UnresolvedRevenueObservationsAfter` uses retained source ID. Advancing either
+read position does not acknowledge or resolve anything. Earlier failures remain
+pending and must be revisited on subsequent sweeps. The capability is explicit;
+adapters without it return unavailable rather than silently truncating work.
+
+### Immutable checkout and historical payer identity
+
+`CheckoutService` stores the exact server-authorized provider request before a
+checkout POST. The intent retains the paying account, plan/cost/provider price,
+amount, currency, cadence, trial terms, return URL and request key. Personal
+request fields are excluded from public JSON and explicitly retained in an
+encrypted repository envelope. Use `revenuestore.Repository` after preparing
+and probing the shared transaction-capable store.
+
+`FindCheckoutIntent` recovers frozen parameters before consulting a mutable
+catalogue or profile. `PrepareCheckout` conflicts when an existing key is reused
+with different parameters. `AcknowledgeCheckout` atomically reserves a provider
+session for one intent within provider/account/live scope. A lost POST response
+leaves the intent unresolved; it is not evidence that submission failed.
+
+`ResolveRevenueAssociation` first reads immutable subscription/price history.
+For new history, it requires authenticated complete checkout-session/line-item
+evidence and a matching pre-existing intent. Provider metadata supplies only the
+opaque intent pointer; principal and plan/cost come from the owning record.
+Session, customer, subscription, original price amount/cadence, currency, mode,
+client reference and creation time must agree. Acknowledgement, session owner,
+subscription principal and price association commit together. Renewals recover
+this history without calling the provider or current catalogue again.
+
+`CanSubmitCheckout` refuses acknowledged sessions and unresolved intents older
+than 23 hours. Stripe may prune idempotency keys after 24 hours; an old ambiguous
+attempt must be reconciled, rather than resubmitted under a possibly expired
+key. Managers retrieve an acknowledged session instead of creating it again.
+See [Stripe idempotency](https://docs.stripe.com/api/idempotent_requests),
+[subscription-filtered sessions](https://docs.stripe.com/api/checkout/sessions/list)
+and [complete original line items](https://docs.stripe.com/api/checkout/sessions/line_items).
+
+Legacy subscriptions lacking a saved authorization, portal changes to an
+unmapped provider price and contradictory evidence remain unassessable. There
+is no automatic legacy backfill, amount-based mapping or operator override in
+this service. Applications must provide an explicitly reviewed history recovery
+workflow before claiming these cases supported. This service supplies billing
+identity only; it neither determines partner entitlement nor issues payouts.
+
+### Pre-payment checkout lifecycle ownership
+
+For an acknowledged subscription checkout, `LookupCheckoutLifecycleEvidence`
+uses the optional provider session-evidence capability to read the exact retained
+session outside transactions. It checks the stored authorization, payer, original
+price/amount/currency/cadence, mode and complete session evidence. Hosts enforce
+current owning authority and durably retain this original evidence before calling
+`CaptureCheckoutLifecycleEvidence`; recovery reuses those inputs, not a new lookup.
+Missing acknowledgement or contradictory evidence cannot establish an anchor.
+
+The optional `CheckoutLifecycleTx` stores an immutable per-intent receipt and the
+first scope/subscription anchor. Exact capture retries return the original receipt
+and timestamp. Later checkouts may retain separate receipts for the same payer
+and provider customer but never replace the first anchor. Conflicting lifecycle
+and paid checkout owners are rejected under the same checkout scope transaction.
+`FindCheckoutLifecycleAnchor` verifies the first anchor, receipt and frozen intent.
+Legacy repositories without this optional extension remain compatible and report
+unavailable when the new capture/read capability is requested.
+
+All anchor fields are private JSON and explicitly encrypted by `revenuestore`.
+Restore requires both anchor and receipt records with their original intents and
+acknowledgements; no TTL or history rewrite is introduced. If a referenced intent,
+anchor or receipt is missing, joined recovery fails with `ErrRevenueUnavailable`.
+Restore the complete original owning records from a verified backup; do not delete
+receipts, re-submit checkout, fabricate replacement history or label the result
+inactive. Ordinary absence of any anchor remains `ErrRevenueNotFound`.
+These additions use the
+existing prepared record-store indexes. A completed checkout is neither a payment
+nor fresh subscription status: this workflow creates no revenue fact, paid
+conversion, commission or first-payment economic terms lock. The status workflow
+below can use these anchors. Bounded discovery, durable host scheduling and trial
+journey reporting still require separate integration.
+
+### Scoped current subscription status
+
+`PrepareSubscriptionStatusForCheckout` selects an immutable joined checkout
+anchor before the first payment. `GetSubscriptionStatusForCheckout` reads the same
+subscription head used by paid reporting. Checkout preparations use explicit
+`checkout-lifecycle-v1` provenance and contain no fact ID. Payment preparations
+retain their original canonical format and receipt IDs with empty source; old
+persistence records lacking the new fields still decode unchanged. Mixed or
+unknown source shapes are rejected. The private persistence codec retains the
+new provenance fields in encrypted head/receipt envelopes with existing indexes.
+
+Both sources must agree on provider/account/mode, subscription, paying principal
+and provider customer. Paid status preparation also checks an existing checkout
+anchor before the first status head, refusing contradictory payer proof. A later
+valid payment can advance a checkout-backed head; the old original receipt remains
+recoverable. Reading a checkout-backed active or trialing state never establishes
+paid conversion or commission. Current authority, original-input retention and
+freshness requirements below apply equally to both sources. Restores must retain
+the corresponding immutable payment fact or complete checkout provenance; do not
+rewrite old receipt identities or repair missing history with fresh observations.
+
+`RevenueService` optionally uses `SubscriptionStatusRepository` on its **same**
+revenue repository. `PrepareSubscriptionStatus` verifies an immutable accepted
+payment fact, freezes its merchant/mode, paying principal, provider customer and
+subscription, and reads the current head revision/fingerprint before provider
+I/O. Missing historical customer identity is unassessable. Refund/dispute facts
+cannot establish this binding; another payment cannot reassign an existing
+subscription to a different principal or provider customer.
+
+The billing manager authenticates the exact provider subscription and supplies
+`VerifiedSubscriptionStatusEvidence` to `CaptureVerifiedSubscriptionStatus`.
+Capture atomically retains an immutable receipt and replaces the head only at
+the prepared revision/fingerprint. Late responses conflict instead of replacing
+newer evidence. Current is defined by accepted revision, not provider timestamps.
+The owning clock bounds request/observation times and rejects rollback for a new
+capture. No raw response or browser-supplied evidence is retained.
+
+An uncertain commit must replay the **same preparation and evidence**. The
+original receipt is checked before later head changes or the current clock;
+changed evidence conflicts. A generic advanced-head conflict does not establish
+that the original capture is absent. Use the optional original resolution below
+before replacing a superseded preparation and performing a fresh lookup. The trusted host must persist
+the preparation and lookup evidence before capture for crash recovery; these
+methods do not supply a durable refresh scheduler.
+
+`GetSubscriptionStatusForFact` joins the head with its immutable receipt in one
+snapshot and verifies the original billing provenance. Explicit host-approved
+freshness is bounded to 1 second–24 hours, conservatively measured from request
+start. Missing, corrupt and stale evidence never becomes an inactive zero;
+`ErrSubscriptionStatusStale` identifies expired coverage. Reads perform no
+provider I/O. Status input, receipts and internal scope exclude public JSON.
+
+The eight recognized states remain distinct, including `trialing`, `paused`
+and `incomplete_expired`; scheduled cancellation remains separate from status.
+Unknown states fail closed. **Active status is not paid revenue or entitlement.**
+Original payment facts remain immutable while refunds/disputes are separate
+facts. Reporting must join those owning adjustments and retained relationships
+to establish its paid cohort; subtracting the original payment's refund field,
+counting allocations as people or using legacy access flags is insufficient.
+The optional [partner reporting join](../partnermanager/README.md#paid-referral-source-and-status-evidence)
+uses those owners explicitly. Refresh scheduling, coverage alerts and host
+customer/admin experiences remain integration work.
+
+### Confirmed payment revenue history
+
+`RevenueService.GetPaymentRevenueHistory` uses the optional
+`RevenueHistoryRepository` on its same configured revenue repository. Trusted
+queries select 1–10 explicit provider/account/mode scopes and 1–10,000 owning payer
+principals. They are private service inputs, not customer transport fields.
+The repository reads the global sequence head, facts and original/resolution
+receptions in one snapshot. The service validates canonical IDs/fingerprints,
+contiguous acceptance sequences and every fact's original reception before
+filtering. Missing, contradictory or future-accepted evidence fails; clock
+rollback cannot certify facts accepted after the current owning clock.
+
+Authenticated quarantine resolutions validate their private recovery identity
+with the same fingerprint format used at acceptance. Legacy resolutions without
+that identity keep their existing fingerprints. Reporting accepts valid recovered
+refund facts while rejecting altered recovery evidence; it never rewrites the
+original quarantine, resolution or financial journal. No storage migration is
+needed.
+
+The complete global budget is **10,000 facts plus reception/resolution receipts**,
+independent of filters. Capacity returns `ErrRevenueHistoryTooLarge`, never a
+truncated report. Persistent history eventually needs a reviewed budget or an
+indexed projection with equivalent completeness proof. No new projection or
+storage migration is introduced by this read capability.
+
+Original PAYMENT rows remain immutable. Refund is the maximum verified
+cumulative refunded amount across separate REFUND facts, not the sum of snapshot
+values or adjustment `PaidMinor`. Identical cumulative evidence under distinct
+delivery identities does not debit twice. Adjustments must resolve the exact
+original scope, payer, customer, subscription, plan, currency and allocation.
+Confirmed full-allocation dispute loss consumes the exposure remaining after
+refunds. Temporary hold overlaps net revenue; it is not another debit. Terminal
+won/lost evidence supersedes a hold for the same dispute identity; contradictory
+terminals fail. Each result validates nonnegative, conserved current economics.
+These calculations do not apply commission rates or create entitlement.
+
+The private result carries confirmed original allocations, an owning classification
+`AsOf`, source revision and acceptance sequence. `AsOf` is sampled after the
+snapshot, not a database commit timestamp. It does not establish an atomic view
+with attribution, commission or lifecycle owners, nor prove that every provider
+delivery arrived. Quarantines lacking historical payer association cannot be
+assigned to a relationship; their private scoped count belongs to operations.
+All history/query/economic fields exclude public JSON. Reads perform no provider
+I/O, revenue acceptance or attribution mutation.
+
+## Bounded lifecycle source discovery
+
+The owning `RevenueService.DiscoverLifecycleSources` optional capability reads
+acknowledged subscription checkouts or immutable scoped subscription sources
+through the same configured repository. Queries select one provider/account/mode
+scope and one source kind, with a limit of 1–200. Continuation cursors are bound
+to both selections; they are read positions, not authorization credentials.
+
+The adapter reads one indexed bounded page and joins original records in the
+same snapshot. Billing validates canonical accepted payments, frozen checkout
+intent/acknowledgement/session reservations, first lifecycle anchor and receipt,
+and any paid checkout owner with its original acknowledged intent before
+returning the whole page. Missing joins,
+contradictions, malformed ordering, cancellation and late failure withhold all
+items. A binding without paid or anchored lifecycle evidence is not refreshable,
+but still contributes to cursor progress so it cannot block later sources.
+Returned candidates and pages are private in-process data, excluded from JSON.
+`LifecycleDiscoveryPage.Validate` keeps canonical provenance and page-contract
+checks in billing for composing managers. Continuation may advance past the last
+visible candidate because binding-only rows count toward the raw cursor.
+
+Discovery requires an owning schema-preparation record. Missing preparation
+returns `ErrLifecycleDiscoveryUnprepared`, including when projections are empty.
+The optional owning preparation operation described below establishes native
+history coverage. This gated read does not enable a collector, expose a route or
+establish current caller permission. The optional
+[billing manager discovery boundary](../billingmanager/README.md#private-lifecycle-source-discovery)
+checks current scope permission before lookup, selected payer/source permission
+for each result and scope permission again before disclosure. Hosts still supply
+the current instance-bound authority and collector orchestration.
+
+`ReachedEnd` means the prepared projection's current page ended, not that all
+provider subscriptions/events are known. Repeat full sweeps to reach hashed
+identities inserted behind a saved position, and retain durable handoff before
+advancing a cursor. Discovery performs no provider I/O, financial or status
+writes, freshness reset, paid conversion or commission calculation.
+
+### Explicit bounded preparation
+
+`RevenueService.PrepareLifecycleDiscovery(ctx, scope, limit)` advances one
+bounded native-history page per call through the same optional owning repository.
+The limit is 1–200. Durable encrypted progress retains revision, phase, cursor,
+source epoch and sweep counts across restarts. Phases scan acknowledged checkouts,
+accepted payments, first lifecycle anchors and paid principal bindings, then
+validate both resulting projection sets against original evidence. Continue
+until `State.Phase == LifecyclePreparationComplete`; an intermediate result is
+not readiness. `Scanned` includes all legacy partition and validation rows;
+`Selected` counts selected original source rows, not distinct subscriptions or
+payments. `CustomerlessPayments` counts selected canonical legacy payments that
+remain financial-only. These private counts are not customer reporting metrics.
+
+Preparation reconstructs only additive source projections. Original checkout
+requests and payments are validated before scope/mode filtering; corrupt global
+history cannot hide selected sources by changing those fields, and may block a
+selected scope until remediated. Billing validates
+frozen intent/session reservations, canonical payments and immutable checkout
+ownership in the same transaction as each handoff and progress advance. It does
+not rewrite original receipts, economic sequences or financial history, create
+status/freshness, enroll customers, backfill attribution or accrue commissions.
+Contradictory owners, malformed evidence and missing joins prevent readiness;
+operators must investigate the original history rather than skip it silently.
+Lost commit replies return uncertainty; the next call reads committed durable
+progress before advancing, avoiding duplicate page counts. Completed retries
+return the original prepared state without rewriting its marker.
+
+**Upgrade precondition:** drain application instances running older source
+writers before preparation. Current native acknowledgements, payment facts
+(including customer-less payments), paid associations and lifecycle anchors
+atomically advance the selected scope's source epoch. Completion deliberately
+CAS-writes that same epoch with progress and the immutable schema marker, closing
+write skew with a concurrent current writer. An epoch change during a sweep
+resets its cursor/counts, preserves safe projections and returns `Restarted`;
+continue a new sweep. Continuous writes can require repeated sweeps, so an
+operator may need a controlled quiet period. The fence cannot observe writes
+from older binaries or direct database modifications; neither is safe during
+preparation. This prerequisite requires host deployment orchestration and is not
+a framework-enforced drain.
+
+Preparation scans the legacy global partitions through bounded indexed pages
+once per explicit upgrade sweep; ordinary discovery queries only the scope's
+prepared projection. Repeat discovery sweeps still remain necessary for later
+current writes behind a cursor. Host migration orchestration, manager authority,
+collector scheduling and deployment/restore qualification remain separate work.
+
+
+### Private acknowledged-checkout preparation and receipt recovery
+
+`CheckoutService.PrepareCheckoutLifecycle` validates the original frozen
+subscription intent and both acknowledgement directions in one owning snapshot.
+It returns a detached original input without provider I/O or writes. Retain it
+durably before lookup. New preparation requires the optional
+`CheckoutAcknowledgementTx` join; unsupported custom adapters return unavailable.
+`CheckoutIntent.ValidateAcknowledgedSubscription` checks shape only, never
+authority or current storage provenance.
+
+`FindCheckoutLifecycleReceipt` reads the per-intent receipt, first immutable
+anchor and original acknowledgements together. Only a missing receipt after
+valid original joins is conclusive absence. Missing joined records are
+unavailable; contradictory ownership or changed original input conflicts.
+Later same-owner receipts still depend on the first anchor and its receipt.
+Preparation/recovery does not reset original creation or anchoring times when
+the current clock changes. Native lookup, capture and retained-anchor validation
+also check the optional reverse-session join when the adapter supports it;
+existing legacy ports remain compatible. Receipt formats and fingerprints stay
+unchanged.
+
+These are private owning stages, not an automatic lookup-and-capture operation.
+Current manager/service-account authority, an encrypted host outbox retaining
+original lookup evidence before capture, and exact-input uncertain-commit
+recovery remain integration requirements. A native intent/acknowledgement alone
+does not retain the provider response or a host job's uncertain disposition.
+No financial fact, current status, commission or trial entitlement is created by
+preparation or receipt reads.
+
+
+### Private original status resolution
+
+`RevenueService.ResolveSubscriptionStatus` optionally inspects one retained
+status preparation through the same repository's
+`SubscriptionStatusResolutionRepository`. Existing status repository ports and
+receipt identities are unchanged. Unsupported adapters return unavailable.
+
+The adapter reads the exact capture and, only on conclusive absence, the joined
+current head/immutable receipt in **one native snapshot**. The service validates
+original billing provenance and returns a private typed result:
+
+- `captured`: the exact immutable original receipt is available. It wins before
+  inspecting later heads, even if a later head is damaged. Complete the original
+  through its normal recovery path.
+- `pending`: the capture is absent and its expected head still matches, or both
+  are absent for a first preparation. It may still commit; retain the original.
+- `superseded`: the capture is conclusively absent and the validated head has a
+  strictly greater revision under the same scope, subscription, payer and
+  customer. Native monotonic revision CAS prevents that old preparation from
+  ever creating a new capture.
+
+Missing expected heads, missing joined receipts, wrong ownership, equal-revision
+fingerprint disagreement, regressions, corrupt evidence and joined outage/unknown
+causes are errors, never permission to replace an original. Resolution performs
+no provider lookup, capture write or financial mutation. Validating the current
+head includes its owning payment/checkout provenance, so a joined provenance
+failure also withholds resolution.
+
+This is an observation of native truth, not a host execution grant. Hosts must
+reconfirm under current authority and their exact live lease, atomically retain
+resolution history and clear/replace their own original pointer only after a
+confirmed superseded result. Do not treat a generic conflict or uncertain capture
+reply as supersession. Durable host adoption remains separate integration work.
+
+### Original acknowledged checkout status
+
+`CheckoutService.FindAcknowledgedCheckout` resolves a retained session through
+optional `CheckoutSessionTx`, reads its immutable intent, and validates the native
+forward and reverse acknowledgements in the same read snapshot. It returns zero
+data on missing joins, cancellation or failure. The caller must authorize the
+current payer and withhold another account's intent.
+
+`CheckoutIntent.ValidateCheckoutStatusEvidence` compares a fresh
+`paymentprovider.CheckoutStatusEvidence` with the frozen authorization for either
+subscription or one-time checkout. This evidence is separate from persisted
+revenue and lifecycle evidence: existing hashes and subscription validators are
+unchanged. Neither method creates an acknowledgement, payment fact, status record
+or entitlement. See [authenticated status recovery](../billingmanager/README.md#original-checkout-status-recovery).

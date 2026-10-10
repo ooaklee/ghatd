@@ -487,6 +487,12 @@ func pricePlanHasProviderRef(pricePlan *PricePlan) bool {
 	return false
 }
 
+// validateStripePricePlanForPublish checks the constraints the built-in Stripe
+// checkout flow can represent: non-empty unique price IDs, positive amounts
+// without setup fees, no trials on one-time costs, trials capped at 730 days,
+// no plan-level Stripe ref without a Stripe cost, and no discounts or payment
+// terms on Stripe costs. Violations return
+// ErrPricePlanStripeCheckoutUnsupported.
 func validateStripePricePlanForPublish(pricePlan *PricePlan) error {
 	hasPlanStripeRef := false
 	for _, providerRef := range pricePlan.ProviderRefs {
@@ -705,6 +711,9 @@ func IsValidPricePaymentCollectionMethod(collectionMethod string) bool {
 	}
 }
 
+// refKey returns a stable deduplication key for the reference, preferring the
+// trimmed feature ID and falling back to the normalized feature slug; it is
+// empty when neither is present.
 func (r PlanFeatureRef) refKey() string {
 	if id := strings.TrimSpace(r.FeatureID); id != "" {
 		return "id:" + id
@@ -717,6 +726,9 @@ func (r PlanFeatureRef) refKey() string {
 	return ""
 }
 
+// parseOptionalPriceDate parses an optional date in RFC3339Nano, RFC3339 or
+// plain datetime/date layouts and returns it in UTC; empty input yields the
+// zero time and unparseable values return ErrInvalidPriceDate.
 func parseOptionalPriceDate(value string) (time.Time, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

@@ -21,9 +21,9 @@ evidence that a feature has been deployed.
 - Mark incompatible changes with **Breaking:** and include the required migration
   action. Use public issue, PR or documentation links where useful; never include
   private project details, credentials or machine-specific paths.
-- Use one `Unreleased` section until a version is selected. Then name it
-  `[x.y.z] - Unreleased`. On publication, replace `Unreleased` with the actual
-  `YYYY-MM-DD` release date and start a fresh unreleased section above it.
+- Keep work under its selected `[x.y.z] - Unreleased` scope. Older pending
+  scopes remain unreleased until publication; do not invent a release date. On
+  publication, use the actual `YYYY-MM-DD` date and start the next scope above it.
 - Keep newest releases first and omit empty categories. Do not invent versions,
   dates or historical entries. Preserve published entries; clarify inaccuracies
   explicitly rather than silently changing the recorded release scope.
@@ -78,168 +78,132 @@ when the release version has been selected, and remove unused subsections.
 
 ---
 
+## [0.5.0] - Unreleased
+
+### Added
+
+- An opt-in [partner program](external/partnerprogram/README.md) with enrollment,
+  scoped policy, referral attribution and links, an [earnings ledger](external/partnerearnings/README.md),
+  statements, withdrawal claims and manual payment recovery. [Partner Manager](external/partnermanager/README.md)
+  coordinates the owning services; payment destinations and approval remain explicit.
+- [Referral evidence and analytics](external/referral/README.md), including consented
+  visits, retained partner relationships, grouped commission reports and original-cohort
+  paid conversions. Reports use current scoped authority and retained financial evidence.
+- [Partners runtime](external/partnermanager/runtime/README.md),
+  [integration helpers](external/partnermanager/helper/README.md) and optional
+  [HTTP transport](external/partnermanager/http/README.md). Hosts provide configuration,
+  identity, browser protection and scheduling; construction creates no accounts or grants.
+- [Partner authority adapters](external/partneraccess/README.md), immutable
+  [signup attribution](external/user/v2/README.md#optional-immutable-signup-attribution),
+  an [active direct-membership read](external/group/README.md#active-direct-membership-capability)
+  and explicit [capability administration](external/accesspolicy/README.md#explicit-capability-administration).
+- [Authenticated revenue evidence](external/paymentprovider/README.md#authenticated-paid-revenue-evidence)
+  for Stripe paid invoices, cumulative refunds and dispute references, with billing-owned
+  checkout/payer identity, quarantine reconciliation and confirmed revenue history.
+  Acceptance never submits a charge, refund or payout.
+- [Billing lifecycle recovery](external/billinglifecycle/README.md) retains original
+  checkout/status inputs, admits bounded discovery pages, fences execution and recovers
+  receipts after uncertainty. [Composition helpers](external/billinglifecycle/helper/README.md)
+  support explicit preparation and sequential worker passes; hosts enable and schedule them.
+- [Principal-bound browser protection](external/http/browsersecurity/README.md) with
+  an explicit CSRF cookie, exact origins, verified native admission and a bounded
+  process-local limiter. It does not replace authentication or domain authorization.
+- Audited [currency, phone and timezone catalogues](external/internationalisationmanager/README.md)
+  with host-configured HTTP admission and explicit native setup; callable migrations
+  register no host migration or administrator authority automatically.
+- Stateless [OpenWA transport](external/teleprovider/README.md) for registration,
+  direct/group messages and cursor-based reply reads. Hosts own consent, durable delivery
+  and reply processing.
+- [Email-provider composition](external/emailmanager/helper/README.md) for resolved
+  named accounts and explicit local interception; [notification credential checks](external/notifier/helper/README.md)
+  validate resolved VAPID/FCM inputs without enabling a channel.
+- [OAuth provider builders and Apple key loading](external/oauth/helper/README.md),
+  plus optional native callback configuration validation. **Breaking import change:**
+  replace `examples/oauth.LoadAppleSigningKey` with `oauthhelper.LoadAppleSigningKey`
+  from `external/oauth/helper`; its signature and key-source precedence are unchanged.
+- [Stripe construction options](external/paymentprovider/helpers/README.md#provider-construction-options)
+  for a trusted HTTP client, revenue configuration and promotion-code policy.
+  Existing constructors retain their defaults; promotion-code entry defaults to disabled.
+  [Paid-service-period parsing](external/paymentprovider/helpers/README.md#paid-subscription-service-periods)
+  validates complete renewal invoices against explicit identity, mode and price expectations.
+- [SPA description shells](external/spa/README.md#description-shells-from-a-build-inventory)
+  selected from a validated build inventory, preserving ordered pathname matching and
+  host fallback/asset policy. Missing inventories require explicit opt-in.
+- [Response middleware composition](external/middleware/helper/README.md) and
+  [Mongo topology configuration](external/repository/README.md) over explicit trusted
+  inputs. Hosts retain cache bypass, process lifetime and deployment policy.
+
+### Fixed
+
+- [Retained revenue recovery](external/paymentprovider/README.md#versioned-source-fingerprints-and-retained-snapshot-recovery)
+  validates economic history while tolerating receipt-URL changes. Original checkout
+  status and lifecycle receipts recover without resubmitting provider work.
+- [Withdrawal and payment recovery](external/partnermanager/README.md#withdrawal-admission-and-recovery)
+  survives policy pauses, lost replies, changed current destinations and concurrent refunds.
+  Original request keys recover their receipts without a second reservation or debit.
+- [Share-link rotation](external/referral/README.md#share-links-and-evidence) is atomic
+  and recoverable; [customer claim cancellation](external/partnerearnings/README.md#financial-evidence-and-recovery)
+  preserves its original decision and financial history.
+- Complete HTTP mappings for bounded membership and referral-evidence failures.
+
+### Security
+
+- Partner reads and worker stages recheck current caller, selected target and exact
+  scoped grants. Human sessions cannot create instance-bound worker invocations;
+  provider uncertainty is retained through later revocation or cancellation.
+
 ## [0.4.0] - Unreleased
 
 ### Added
 
 - [Purpose-aware email routing](external/emailmanager/README.md#purpose-routing-and-submission-receipts)
-  with named provider accounts, ordered mail-type preferences, round-robin ties,
-  explicit transactional defaults, separate campaign capability and truthful
-  skipped/captured/accepted/failed/uncertain submission receipts. Legacy single-
-  provider constructors and error-only methods remain supported; routed generic
-  sends require an explicit trusted purpose. No failure triggers provider failover.
-  Provider compatibility adapters check the selected account readiness without
-  advancing selection turns.
-- A bounded [Postmark inline adapter](external/emailprovider/README.md#postmark-inline-email)
-  for transactional and explicitly configured broadcast streams, preserving host
-  instrumentation, HTML/plain text and Reply-To without automatic retries.
-- Provider instance, vendor and purpose attribution on local inbox list/API/detail
-  views. Local capture can intercept all routed providers into the same inbox.
-  SparkPost now preserves plain-text bodies as well as HTML.
-
-- [Waitlist host extensions](external/waitlist/README.md#host-policy-and-presentation)
-  for configured consent, optional transactional enrollment sequences, CSV
-  projections and persisted custom announcement data with recipient-specific
-  rendering and preview variants. Sequenced signup requires a Mongo replica set
-  or transaction-capable deployment; existing rows are not backfilled. Signup
-  preflight now returns public 204 without invoking JSON decoding or rate limiting.
-
-- A [user-domain batch lookup](external/user/v2/README.md#batch-user-lookup)
-  resolves references in bounded, count-free repository queries, with exact
-  returned identities, detached models, cancellation and native partial errors.
-  Consumers retain their own authorization and field-level projections.
-- A reusable lower-domain [voter service and repository](external/voter/README.md)
-  stores atomic actor-target votes with shared Mongo helpers, explicit unique
-  indexes and bounded count/viewer projections. Consumers retain permissions
-  and target validation; no generic voting HTTP surface is added.
-- An opt-in [prerelease waitlist](external/waitlist/README.md) with framework-owned
-  deterministic signup identities, explicit consent, private CSV export and one
-  previewed announcement. Host branding is independent of identity; durable
-  claims prevent automatic retries of uncertain sends. Local capture remains
-  explicit, and provider acceptance is not delivery confirmation.
-- User Manager provides optional [conversation ownership and voting](external/usermanager/README.md#private-conversation-voting)
-  through native admin-session routes, with live-authority
-  checks and owner preconditions rejecting stale-account mutations. The contact
-  service validates targets and delegates to the shared voter; UMS resolves
-  user references and exposes a private email/role-free participant projection.
-  Writes return an empty participant array. Hosts explicitly enable voting
-  routes and apply the shared vote and conversation paging indexes.
-- An opt-in [browser token-allowance approval bridge](external/accesspolicy/adminaccess/README.md)
-  binds exact-origin cookie sessions to one reviewed, email-confirmed policy
-  update. Proofs are short-lived and consumed before dispatch; the bearer-only
-  API remains unchanged. This does not grant general permissions or provide MFA.
-- A [Bird transactional email provider](external/emailprovider/README.md#bird-transactional-email)
-  with regional Bearer authentication, inline HTML/text and Reply-To mapping,
-  bounded requests/responses, redirect suppression and host HTTP/telemetry
-  injection. Receipts distinguish API acceptance from delivery; sends are not
-  automatically retried. Existing SparkPost and local capture providers are
-  unchanged. Sender readiness and live delivery require separate host validation.
-- [Private contact conversations](external/contacter/README.md#conversations-and-email-integration-hooks)
-  support attributed, append-only administrator notes and recorded replies,
-  bounded keyset history and atomic request/provider-message deduplication.
-  Admin-session routes recheck live authority; trusted in-process email hooks
-  preserve threading metadata without connecting a provider or sending mail.
-  Existing contacts remain legacy snapshots and statistics are unchanged; the
-  paging index is an explicit migration. Public creation keeps its direct 201
-  receipt while explicitly excluding administrative notes, replies and links.
-- Opt-in [display handles](external/user/v2/README.md#display-handles), with
-  per-account-type generation during ordinary and OAuth creation, an explicit
-  unique-index migration, independent revision metadata and atomic manual
-  updates. Stale profile writes preserve handles; old names are released.
-  The [session-only self-service API](external/usermanager/README.md#self-service-display-handles)
-  uses strict payloads, required update ETags and shared reply error maps.
-  Existing adapters and routes remain unchanged unless enabled. There is no
-  automatic backfill, settings UI or change to identity/authorization claims.
-- An opt-in [atomic Mongo update-and-decode helper](external/repository/README.md#atomic-update-and-selected-document-image)
-  returns the selected document image without a separate read. It preserves
-  native errors, caller sessions, collection codecs and driver options while
-  keeping automatic logs payload-free. Legacy repository interfaces are
-  unchanged; before-image upserts and decode failures can follow a successful
-  write, so callers must reconcile outcomes before retrying.
-- [Native route error manifests](external/router/README.md#native-policy-error-manifests)
-  extend router defaults with copied startup maps and ordered host overrides.
-  Mapped native errors do not need conversion to router sentinels; supplied
-  responses must be 4xx/5xx. Joined or unknown policy failures remain opaque 503s.
-- Configurable [session-probe responses](external/accessmanager/middleware/README.md#session-probe-response-policy)
-  through middleware and starter composition. Preserve the default `/me` 202
-  error envelope, or explicitly select an empty 202 or structured 401 for a
-  missing session. The private probe now sends no-store and noindex headers;
-  other authentication failures and endpoints retain their existing contracts.
-  An inconsistent identity returned as a successful verification is now a 503
-  verification failure, not a missing-session response.
-- [Explicit session-context authentication](external/accessmanager/middleware/README.md#explicitly-selected-sessions)
-  for hosts with custom credential selection. It reuses live Access Manager
-  verification, rejects incomplete or mixed credential results and clears
-  inherited identity on failure while preserving diagnostic causes. Context
-  publication also clears stale bearer-only transport markers. Verified
-  claim metadata and separate session/API-credential context helpers are reusable
-  without a second JWT parse or exposing raw credentials. Custom transports use
-  `AuthenticateSession` and `ContextWithAuthentication`; account/resource policy
-  remains explicit, and these helpers perform no refresh or cookie changes.
-- Opt-in [request-local proof admission](external/accessproof/README.md) for
-  exact alternative identity, assurance, capability, resource-binding and expiry
-  requirements. Policies are immutable and default-deny; hosts supply freshly
-  authenticated evidence and retain transactional ownership/replay checks. This
-  does not add guest accounts, persisted grants or implicit quota subjects.
-- Shared [strong-revision validation](external/router/README.md#shared-strong-revision-validation)
-  for singular If-Match headers and opaque ETags. Explicit size, whitespace and
-  byte-policy options let custom proof handlers reuse the standard parser while
-  retaining their wire contract. The route guard uses the same implementation;
-  syntax validation does not replace current resource checks or transactions.
-- Opt-in [token-policy management endpoints](external/accesspolicymanager/README.md)
-  for explicit stored-user preview and revision-checked provisioning. They reuse
-  lower-domain policy/user/inventory repositories and shared reply manifests;
-  no sign-up defaults, role translation or production migration is implied.
-- Reusable bearer-only session middleware and live policy-management authorization.
-  Management routes reject cookie-adapter miswiring, API credentials, stale updates
-  and revoked or demoted administrator sessions. Cookies are never refreshed.
-- Opt-in transactional API-token admission in Access Manager, using live policy
-  limits, exact stored inventory and one fenced count-and-insert transaction.
-  The threshold endpoint uses the same policy. Host rollout and explicit grant
-  migration remain required; see [adoption boundaries](external/accessmanager/README.md#transactional-api-token-policy).
-- Owner-wide token inventory fences shared across system grants, with explicit
-  startup initialization and idempotent owner-lock preparation. Policy adapters
-  must supply fenced counts; missing preparation or unsafe transaction context
-  denies issuance. See [inventory setup](external/apitoken/README.md#transactional-inventory-setup).
-- Explicit [token-limit migration](external/accesspolicy/README.md#explicit-token-limit-migration)
-  planning, audited apply and revision-checked rollback. Existing permissions,
-  scopes, enabled state, expiry and usage are preserved. Host source selection,
-  inventory provisioning and rollout remain explicit; no automatic role seeding
-  or production migration is performed.
-- Result-bearing Mongo mutation helpers, shared managed-client transactions,
-  explicit index/collection setup and a transactional startup probe. Domains
-  retain their schemas, authorization, revision checks and retention policy; see
-  [repository migration guidance](external/repository/README.md#transaction-safe-operations).
-- Reusable [AES-256-GCM payload encryption](external/encryption/README.md),
-  preserving the standard nonce-prefixed byte format and requiring explicit AAD
-  and a host-owned stable key. No automatic key rotation or data rewrite occurs.
-- Opt-in [copy-on-write memory snapshots](external/ephemeral/README.md#process-local-transactional-snapshots)
-  for local/test adapters, with cancellation-aware entry and deep-copy isolation.
-  These are not a Redis replacement or production persistence fallback.
-- [Typed JWT identity claims](external/auth/README.md) carrying the persisted user type, token purpose and
-  standard registered claims, with optional issuer/audience configuration. User
-  type remains classification, not a permission or replacement for the stable
-  user ID. See [authenticated context](docs/how-to/authenticated-session-context.md)
-  for the separate middleware integration.
-- Declarative route definitions, startup validation, defensive route inventories
-  and structured policy errors. The opt-in
-  [route-policy guard](external/accessmanager/middleware/README.md#route-policy-guard)
-  connects verified identity to live requirements. Raw Mux routes remain outside
-  the registry; host adoption and complete route coverage are not automatic.
-- System-scoped grants and atomic usage through an opt-in managed
-  [Mongo policy store](external/accesspolicy/README.md), with revision-CAS audit
-  records, current-authority replay checks, fixed-window counters and fenced
-  token-inventory callbacks. Business callbacks can commit changes with quota
-  receipts while rechecking resource authority on replay. Startup initialization
-  requires transaction-capable Mongo. Host wiring, legacy-tier migration and
-  retention tooling are not automatic or complete.
-- Contributor guidance establishing table-driven tests as the default and
-  requiring changelog updates for notable changes. The whole-suite test-style
-  audit remains separate work.
-- Reusable [manifest-driven HTTP error helpers](external/errormanifest/README.md#wrapped-errors-at-http-boundaries)
+  with named accounts, ordered preferences, truthful submission receipts and explicit
+  campaign support. Legacy constructors remain supported; failures never trigger
+  provider failover. [Bird and Postmark adapters](external/emailprovider/README.md)
+  support bounded transactional sends, HTML/text and Reply-To; local capture exposes
+  provider/purpose attribution and can intercept the same routed accounts.
+  SparkPost preserves plain-text bodies as well as HTML.
+- An opt-in [prerelease waitlist](external/waitlist/README.md) with deterministic
+  identities, configured consent, transactional enrollment sequences, private CSV
+  projections and saved announcement variants. Durable claims prevent automatic
+  retries of uncertain sends. Sequencing requires transaction-capable MongoDB.
+  Signup preflight returns public 204 without JSON decoding or rate-limit consumption.
+- A shared [voter service](external/voter/README.md), bounded
+  [user-reference lookup](external/user/v2/README.md#batch-user-lookup), and private
+  [contact conversations](external/contacter/README.md#conversations-and-email-integration-hooks)
+  with append-only entries and deduplication. [User Manager routes](external/usermanager/README.md#private-conversation-voting)
+  bind current administrator sessions, participant projections and optional voting;
+  hosts explicitly install the relevant indexes and ports.
+- Opt-in [display handles](external/user/v2/README.md#display-handles), including
+  per-account-type generation, a unique index and revision-checked manual updates.
+  The [self-service API](external/usermanager/README.md#self-service-display-handles)
+  requires update ETags; no account backfill or settings UI is installed automatically.
+- [System-scoped policy grants](external/accesspolicy/README.md) with transactional
+  usage, revision-CAS audit, replay checks and explicit token-limit migration/rollback.
+  [Policy-management routes](external/accesspolicymanager/README.md) and an optional
+  [email-confirmed browser approval bridge](external/accesspolicy/adminaccess/README.md)
+  keep current session and target authority separate from transport.
+- Opt-in [transactional API-token admission](external/accessmanager/README.md#transactional-api-token-policy)
+  using current policy limits and [owner-wide inventory fences](external/apitoken/README.md#transactional-inventory-setup).
+  Initialize the inventory and provision reviewed grants before enabling issuance;
+  all writers sharing that inventory must use the same fence.
+- [Typed JWT claims](external/auth/README.md), explicit
+  [session-context authentication](external/accessmanager/middleware/README.md#explicitly-selected-sessions)
+  and configurable `/me` probe responses. Verified classification does not grant
+  permissions; context publication never refreshes credentials or changes cookies.
+- [Request-local proof admission](external/accessproof/README.md),
+  [declarative route policies](external/router/README.md#declarative-route-policies),
+  startup validation, defensive route inventories and reusable strong ETag parsing.
+  Raw Mux routes remain outside the registry; hosts supply enforcing adapters.
+- [Result-bearing Mongo operations](external/repository/README.md#transaction-safe-operations),
+  managed-client transactions, explicit index setup, a transaction probe and atomic
+  update/decode helpers. Custom domains retain schema, authorization and revision checks.
+- [AES-256-GCM payload encryption](external/encryption/README.md) with explicit AAD
+  and stable host keys, and opt-in [memory snapshots](external/ephemeral/README.md#process-local-transactional-snapshots)
+  for local/test adapters. Memory snapshots do not replace production persistence.
+- [Manifest-driven HTTP errors](external/errormanifest/README.md#wrapped-errors-at-http-boundaries)
   preserve mapped wrappers and validation joins while rejecting unknown independent
-  causes. A separate strict resolver supports single-cause authentication
-  boundaries. Handler adoption and dependency-map wiring remain explicit.
+  causes. Authentication boundaries can select strict single-cause resolution.
 
 ### Changed
 

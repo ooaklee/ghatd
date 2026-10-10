@@ -95,9 +95,9 @@ caller-supplied regular expressions. Update clients that previously sent regexes
 
 **Compatibility:** clients that assumed GET would delete expired tokens must use
 an explicit owner-authorized deletion flow. Management callers must supply the
-trusted owner ID when activating, revoking or deleting a credential. This batch
-does not change the preloaded routes' accepted credential families or replace
-the legacy role-based admission flow. That flow is not concurrency-safe; the
+trusted owner ID when activating, revoking or deleting a credential. The
+preloaded routes retain their accepted credential families. Legacy role-based
+admission applies when no `TokenPolicy` is configured. That flow is not concurrency-safe; the
 fenced inventory primitive alone does not repair every existing writer.
 
 The API-token header continues to take precedence on preloaded mixed-credential

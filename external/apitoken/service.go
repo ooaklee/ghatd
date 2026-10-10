@@ -26,11 +26,22 @@ type ApitokenRespository interface {
 	// TouchAPIToken updates only last_used_at for the exact active credential.
 	// It must not read/replace the token or overwrite a concurrent revocation.
 	TouchAPIToken(context.Context, string, string, []byte, time.Time) error
+	// GetAPITokens returns the stored tokens matching the request's filters,
+	// sorting and pagination as a detached snapshot.
 	GetAPITokens(ctx context.Context, req *GetAPITokensRequest) ([]UserAPIToken, error)
+	// GetAPITokenByID returns the stored token with the matching identifier.
 	GetAPITokenByID(ctx context.Context, apiTokenID string) (*UserAPIToken, error)
+	// DeleteAPITokenFor deletes only the exact owner/credential pair regardless of
+	// expiry or status; an absent or differently owned record is indistinguishable.
 	DeleteAPITokenFor(ctx context.Context, userID string, apiTokenID string) error
+	// CreateUserAPIToken persists the supplied token resource, generating its
+	// identifiers, and returns the stored record.
 	CreateUserAPIToken(ctx context.Context, apiToken *UserAPIToken) (*UserAPIToken, error)
+	// DeleteResourcesByOwnerId deletes all token resources belonging to the
+	// specified owner identifier.
 	DeleteResourcesByOwnerId(ctx context.Context, ownerId string) error
+	// GetTotalApiTokens returns the count of stored tokens matching the supplied
+	// owner, text, status, time-range and permanence filters.
 	GetTotalApiTokens(ctx context.Context, userId, userNanoId, descriptionFilter, statusFilter, to, from string, onlyEphemeral bool, onlyPermanent bool) (int64, error)
 }
 

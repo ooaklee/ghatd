@@ -16,6 +16,8 @@ var (
 	errDoctorOutput    = errors.New("telemetry doctor: unable to write report")
 )
 
+// doctorReport aggregates the telemetry configuration summary and, when a probe
+// ran, its report for the doctor command's JSON output.
 type doctorReport struct {
 	Configuration observability.ConfigurationReport `json:"configuration"`
 	Probe         *observability.ProbeReport        `json:"probe,omitempty"`

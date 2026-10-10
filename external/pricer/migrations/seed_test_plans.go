@@ -74,6 +74,8 @@ var (
 	TestSeedStripeTrialWeekPriceID      = "price_test_stripe_trial_weekly"
 )
 
+// testStripeCostSeed describes one Stripe-backed test cost: its seed ID,
+// provider price placeholder, amount, cadence and optional trial period days.
 type testStripeCostSeed struct {
 	ID              string
 	ProviderPriceID string
@@ -82,6 +84,8 @@ type testStripeCostSeed struct {
 	TrialPeriodDays int
 }
 
+// testStripePlanSeed describes one Stripe test fixture plan, including its
+// identifiers, provider product placeholder, UI metadata and costs.
 type testStripePlanSeed struct {
 	ID                string
 	NanoID            string
@@ -189,6 +193,8 @@ func boolFeatureRef(featureID, slug, label string, included bool) bson.M {
 	}
 }
 
+// testStripeFixturePlans builds the BSON documents for every configured Stripe
+// test plan, stamped with the supplied timestamp.
 func testStripeFixturePlans(now string) []interface{} {
 	plans := make([]interface{}, 0, len(testStripePlanSeeds))
 	for _, seed := range testStripePlanSeeds {
@@ -197,6 +203,9 @@ func testStripeFixturePlans(now string) []interface{} {
 	return plans
 }
 
+// testStripeFixturePlan renders one Stripe test plan seed as a published BSON
+// plan with USD costs tagged as test fixtures, shared test feature references
+// and metadata marking it as a replaceable provider fixture.
 func testStripeFixturePlan(seed testStripePlanSeed, now string) bson.M {
 	costs := make([]bson.M, 0, len(seed.Costs))
 	for _, costSeed := range seed.Costs {
@@ -681,6 +690,9 @@ func InitTestPlansSeedUp(db *mongo.Database) error { //Up
 	return nil
 }
 
+// preflightTestPlansSeed fails with ErrTestPlansSeedConflict when any feature
+// ID/slug or plan ID/slug/cost ID/provider price ID the seed intends to insert
+// already exists, so seeding never collides with unrelated data.
 func preflightTestPlansSeed(ctx context.Context, db *mongo.Database) error {
 	featureIDs := []string{
 		TestSeedFeatureTranscriptionID,
@@ -776,6 +788,9 @@ func preflightTestPlansSeed(ctx context.Context, db *mongo.Database) error {
 	return nil
 }
 
+// cleanupPartialTestPlansSeed deletes only seed-owned plan and feature
+// documents by ID and creator, joining plan and feature deletion errors for the
+// caller to inspect.
 func cleanupPartialTestPlansSeed(ctx context.Context, db *mongo.Database) error {
 	planIDs := []string{
 		TestSeedPlanFreeID,

@@ -22,10 +22,26 @@ const Collection = "votes"
 // MongoDbStore is the shared-helper adapter port. Only the repository knows
 // Mongo types; helpers preserve native failures and metadata-only telemetry.
 type MongoDbStore interface {
+	// InitialiseClient creates the underlying MongoDB client for the MongoDbStore
+	// adapter port; it returns the client or an error, and only the repository
+	// knows Mongo types.
 	InitialiseClient(context.Context) (*mongo.Client, error)
+	// GetDatabase returns the named mongo.Database handle for the MongoDbStore
+	// adapter port, or an error; helpers preserve native failures per the owning
+	// contract.
 	GetDatabase(context.Context, string) (*mongo.Database, error)
+	// ExecuteUpdateOneCommandResult applies a single-document update on the given
+	// collection for the MongoDbStore adapter port, returning the
+	// mongo.UpdateResult receipt with acknowledgement and counts, or an error.
 	ExecuteUpdateOneCommandResult(context.Context, *mongo.Collection, any, any, ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	// ExecuteDeleteOneCommandResult applies a single-document delete on the given
+	// collection for the MongoDbStore adapter port, returning the
+	// mongo.DeleteResult receipt with acknowledgement and deleted count, or an
+	// error.
 	ExecuteDeleteOneCommandResult(context.Context, *mongo.Collection, any, ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
+	// ExecuteAggregateCommand runs the given aggregation pipeline stages on the
+	// collection for the MongoDbStore adapter port and returns a cursor over the
+	// results, or an error.
 	ExecuteAggregateCommand(context.Context, *mongo.Collection, []bson.D) (*mongo.Cursor, error)
 }
 

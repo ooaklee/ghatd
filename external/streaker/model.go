@@ -250,6 +250,10 @@ func IsConsecutivePeriod(previousPeriodKey, currentPeriodKey string, periodType 
 	return next == currentPeriodKey
 }
 
+// parsePeriodKey parses a period key into its starting time for the given
+// period type, supporting daily "2006-01-02", weekly "YYYY-wWW" and monthly
+// "2006-01" formats; it returns false for malformed keys or unknown period
+// types.
 func parsePeriodKey(periodKey string, periodType StreakPeriodType) (time.Time, bool) {
 	switch periodType {
 	case StreakPeriodTypeDaily:
@@ -270,11 +274,15 @@ func parsePeriodKey(periodKey string, periodType StreakPeriodType) (time.Time, b
 	}
 }
 
+// buildWeekPeriodKey converts a UTC instant into the ISO week key "YYYY-wWW",
+// zero-padding the week number to two digits.
 func buildWeekPeriodKey(value time.Time) string {
 	year, week := value.UTC().ISOWeek()
 	return strconv.Itoa(year) + "-w" + leftPadInt(week, 2)
 }
 
+// buildWeekPeriodKeyForLocation builds the ISO week key after resolving the
+// instant in the given location; a nil location falls back to UTC.
 func buildWeekPeriodKeyForLocation(value time.Time, location *time.Location) string {
 	if location == nil {
 		location = time.UTC
@@ -283,6 +291,8 @@ func buildWeekPeriodKeyForLocation(value time.Time, location *time.Location) str
 	return strconv.Itoa(year) + "-w" + leftPadInt(week, 2)
 }
 
+// firstDayOfISOWeek returns the UTC Monday that starts the given ISO year and
+// week, anchored on January 4 which is always in ISO week 1.
 func firstDayOfISOWeek(year int, week int) time.Time {
 	date := time.Date(year, 1, 4, 0, 0, 0, 0, time.UTC)
 	isoWeekday := int(date.Weekday())
@@ -293,6 +303,8 @@ func firstDayOfISOWeek(year int, week int) time.Time {
 	return monday.AddDate(0, 0, (week-1)*7)
 }
 
+// leftPadInt formats an integer as a decimal string zero-padded to at least the
+// requested length.
 func leftPadInt(value int, length int) string {
 	asString := strconv.Itoa(value)
 	for len(asString) < length {

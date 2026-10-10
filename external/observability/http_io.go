@@ -12,8 +12,12 @@ import (
 // message. A per-call carrier also keeps concurrent reads and writes independent.
 type httpIOError struct{ original error }
 
+// Error returns a constant message so instrumentation never sees the original
+// stream error text.
 func (*httpIOError) Error() string { return "HTTP stream failed" }
 
+// sanitiseHTTPIOError leaves nil and io.EOF unchanged and wraps every other
+// error in a safe carrier for telemetry.
 func sanitiseHTTPIOError(err error) error {
 	if err == nil || err == io.EOF {
 		return err
@@ -21,6 +25,8 @@ func sanitiseHTTPIOError(err error) error {
 	return &httpIOError{original: err}
 }
 
+// restoreHTTPIOError returns the original error carried by a sanitised I/O
+// error, passing other errors through unchanged.
 func restoreHTTPIOError(err error) error {
 	if safe, ok := err.(*httpIOError); ok {
 		return safe.original
@@ -28,25 +34,32 @@ func restoreHTTPIOError(err error) error {
 	return err
 }
 
+// errorTransformBody wraps a ReadCloser and applies an error transform to every
+// Read and Close result.
 type errorTransformBody struct {
 	io.ReadCloser
 	transform func(error) error
 }
 
+// Read delegates to the wrapped body and transforms the returned error.
 func (body *errorTransformBody) Read(buffer []byte) (int, error) {
 	n, err := body.ReadCloser.Read(buffer)
 	return n, body.transform(err)
 }
 
+// Close closes the wrapped body and transforms any resulting error.
 func (body *errorTransformBody) Close() error {
 	return body.transform(body.ReadCloser.Close())
 }
 
+// errorTransformWriter wraps a Writer and transforms the error returned by each
+// Write.
 type errorTransformWriter struct {
 	io.Writer
 	transform func(error) error
 }
 
+// Write delegates to the wrapped writer and transforms the returned error.
 func (writer errorTransformWriter) Write(buffer []byte) (int, error) {
 	n, err := writer.Writer.Write(buffer)
 	return n, writer.transform(err)

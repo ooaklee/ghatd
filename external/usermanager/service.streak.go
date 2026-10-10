@@ -150,6 +150,8 @@ func (s *Service) GetNumberOfStreaks(ctx context.Context, r *GetNumberOfStreaksR
 	return &GetNumberOfStreaksResponse{GetNumberOfStreaksResponse: response}, nil
 }
 
+// ensureStreakService returns ErrStreakServiceNotEnabled when streaks are not
+// wired, letting streak endpoints fail cleanly instead of panicking.
 func (s *Service) ensureStreakService() error {
 	if s.StreakService == nil {
 		return ErrStreakServiceNotEnabled
@@ -157,6 +159,9 @@ func (s *Service) ensureStreakService() error {
 	return nil
 }
 
+// validateStreakRequester resolves the trimmed requester ID through the user
+// service and returns the user with its admin flag; empty IDs, missing wiring,
+// lookup failures and absent users return distinct errors.
 func (s *Service) validateStreakRequester(ctx context.Context, userID string) (*userv2.UniversalUser, bool, error) {
 	logger := logger.AcquirePackageFrom(ctx, "external/usermanager")
 	requestingUserID := strings.TrimSpace(userID)
@@ -182,6 +187,8 @@ func (s *Service) validateStreakRequester(ctx context.Context, userID string) (*
 	return requestingUser.User, requestingUser.User.IsAdmin(), nil
 }
 
+// streakOwnerScopeForRequester picks the filtered target user for admins with
+// an explicit filter, and the requester themselves otherwise.
 func streakOwnerScopeForRequester(requestingUserID string, isAdmin bool, filterUserID string) string {
 	if isAdmin && strings.TrimSpace(filterUserID) != "" {
 		return strings.TrimSpace(filterUserID)

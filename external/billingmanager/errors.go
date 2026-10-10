@@ -36,5 +36,6 @@ var (
 	ErrBillingManagerPortalProviderRequestFailed           = errors.New(ErrKeyBillingManagerPortalProviderRequestFailed)
 	ErrBillingManagerPortalSessionInvalid                  = errors.New(ErrKeyBillingManagerPortalSessionInvalid)
 	ErrBillingManagerPortalCustomerAmbiguous               = errors.New(ErrKeyBillingManagerPortalCustomerAmbiguous)
+	ErrBillingManagerCheckoutStatusUnavailable             = errors.New(ErrKeyBillingManagerCheckoutStatusUnavailable)
 	ErrInvalidBillingManagerRequestPayload                 = errors.New(ErrKeyInvalidBillingManagerRequestPayload)
 )

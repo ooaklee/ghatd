@@ -17,13 +17,20 @@ import (
 
 // managementService is the handler's narrow orchestration port, not persistence.
 type managementService interface {
+	// Preview returns a detached, live-authorized review of applying the supplied
+	// token limits to the selected user, preserving existing policies without
+	// inferring a target.
 	Preview(context.Context, string, accesspolicy.TokenLimits) (accesspolicy.TokenLimitPreview, error)
+	// Apply commits the reviewed token limits at the expected revision after
+	// re-planning and inventory preparation, returning the resulting grant snapshot
+	// on success.
 	Apply(context.Context, string, int64, accesspolicy.TokenLimits) (accesspolicy.Grant, error)
 }
 
 // Handler maps bounded administrative JSON/If-Match requests to the manager.
 // AttachRoutes supplies the required explicit-session middleware. There is no
-// client-supplied actor, system, permission list or executable plan in the body.
+// client-supplied actor, system or executable plan in the body. Optional
+// capability routes accept only explicit administratively reviewed authority.
 type Handler struct {
 	// service performs live authority, stored target and lower-domain checks.
 	service managementService
@@ -33,7 +40,7 @@ type Handler struct {
 
 // ErrorMap contains stable public identities; dependency diagnostics stay private.
 var ErrorMap = reply.ErrorManifest{
-	ErrInvalidRequest:                {Title: "Invalid policy request", Detail: "Provide all five integer token limits and a valid user identifier", StatusCode: 400, Code: "APM0-001"},
+	ErrInvalidRequest:                {Title: "Invalid policy request", Detail: "Provide complete valid policy fields and a valid user identifier", StatusCode: 400, Code: "APM0-001"},
 	ErrUserNotFound:                  {Title: "User not found", Detail: "The selected stored user is unavailable", StatusCode: 404, Code: "APM0-002"},
 	ErrPreconditionRequired:          {Title: "Revision required", Detail: "Review the policy and send its strong ETag in If-Match", StatusCode: 428, Code: "APM0-003"},
 	accesspolicy.ErrConflict:         {Title: "Policy changed", Detail: "Review the current policy before applying a new change", StatusCode: 412, Code: "APM0-004"},

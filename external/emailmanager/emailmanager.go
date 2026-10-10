@@ -18,8 +18,14 @@ import (
 
 // emailTemplater is the interface that represents the templater used to generate email content
 type emailTemplater interface {
+	// GenerateVerificationEmail renders a verification email from req using the
+	// emailTemplater, returning the rendered email or an error.
 	GenerateVerificationEmail(ctx context.Context, req *emailtemplater.GenerateVerificationEmailRequest) (*emailtemplater.RenderedEmail, error)
+	// GenerateLoginEmail renders a login email from req using the emailTemplater,
+	// returning the rendered email or an error.
 	GenerateLoginEmail(ctx context.Context, req *emailtemplater.GenerateLoginEmailRequest) (*emailtemplater.RenderedEmail, error)
+	// GenerateFromBaseTemplate renders an email from a base template and req using
+	// the emailTemplater, returning the rendered email or an error.
 	GenerateFromBaseTemplate(ctx context.Context, req *emailtemplater.GenerateFromBaseTemplateRequest) (*emailtemplater.RenderedEmail, error)
 }
 
@@ -41,7 +47,11 @@ type Config struct {
 	EnableAuditLogging bool
 }
 
+// localOutputProvider marks providers whose output stays local rather than
+// leaving the host, for routing and health decisions.
 type localOutputProvider interface {
+	// IsLocalOutputProvider reports whether output from the provider stays local
+	// rather than leaving the host, informing routing and health decisions.
 	IsLocalOutputProvider() bool
 }
 
@@ -53,6 +63,8 @@ func DefaultConfig() *Config {
 	}
 }
 
+// isLocalOutputProvider reports whether a provider declares itself a local
+// output provider via the optional marker interface.
 func isLocalOutputProvider(provider emailprovider.EmailProvider) bool {
 	localProvider, ok := provider.(localOutputProvider)
 	return ok && localProvider.IsLocalOutputProvider()
@@ -213,6 +225,10 @@ func (m *EmailManager) SendEmailWithResult(ctx context.Context, req *SendEmailRe
 	}
 	return m.sendResult(ctx, &emailprovider.Email{To: req.To, From: req.From, ReplyTo: req.ReplyTo, Subject: req.Subject, HTMLBody: req.HTMLBody, TextBody: req.TextBody, MailType: req.MailType}, &EmailInfo{To: req.To, From: req.From, Subject: req.Subject, UserId: req.UserId, RecipientType: req.RecipientType})
 }
+
+// sendEmailResult assembles a provider email from a rendered template and
+// explicit text body, then forwards to the routed send path with the trusted
+// purpose.
 func (m *EmailManager) sendEmailResult(ctx context.Context, rendered *emailtemplater.RenderedEmail, info *EmailInfo, purpose emailprovider.MailType, text string) (*SendReceipt, error) {
 	return m.sendResult(ctx, &emailprovider.Email{To: rendered.To, From: rendered.From, ReplyTo: rendered.ReplyTo, Subject: rendered.Subject, HTMLBody: rendered.HTMLBody, TextBody: text, MailType: purpose}, info)
 }

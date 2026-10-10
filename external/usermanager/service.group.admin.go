@@ -467,6 +467,9 @@ func enrichedMemberFromUser(userID string, user *userv2.UniversalUser) *Enriched
 	return em
 }
 
+// deriveInitials returns the uppercase first letter of a single-word name, or
+// the first letters of the first and last words otherwise; blank input yields
+// an empty string.
 func deriveInitials(name string) string {
 	trimmed := strings.TrimSpace(name)
 	if trimmed == "" {

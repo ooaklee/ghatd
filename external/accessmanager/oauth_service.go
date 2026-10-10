@@ -17,14 +17,24 @@ var ErrOAuthReauthenticationRequired = errors.New("OAuthReauthenticationRequired
 
 // oauthUserService is an optional persistence capability, preserving existing host interfaces.
 type oauthUserService interface {
+	// GetUserByOAuthIdentity returns the persisted user matching the OAuth
+	// identity, backing the optional persistence capability.
 	GetUserByOAuthIdentity(context.Context, *user.OAuthIdentity) (*user.UniversalUser, error)
+	// CreateOAuthUser persists a new user from the request and returns the creation
+	// result.
 	CreateOAuthUser(context.Context, *user.CreateOAuthUserRequest) (*user.CreateOAuthUserResponse, error)
+	// LinkOAuthIdentity attaches the OAuth identity to the user and returns the
+	// updated user.
 	LinkOAuthIdentity(context.Context, string, *user.OAuthIdentity) (*user.UniversalUser, error)
+	// RecordOAuthLogin records a login at the given time for the user and returns
+	// the updated user.
 	RecordOAuthLogin(context.Context, string, time.Time) (*user.UniversalUser, error)
 }
 
 // authenticationTimeCreator preserves session freshness without changing AuthService.
 type authenticationTimeCreator interface {
+	// CreateTokenWithAuthenticationTime issues session token details for the user
+	// carrying the supplied authentication time, preserving session freshness.
 	CreateTokenWithAuthenticationTime(context.Context, auth.UserModel, time.Time) (*auth.TokenDetails, error)
 }
 
@@ -205,6 +215,7 @@ func (s *Service) OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*
 		}
 		return response, nil
 	}
+	response.AttributionEvidence = s.readSignupEvidence(r.RequestCookies)
 	return s.finalizeOAuthIdentity(ctx, r.Provider, info, result.Transaction.Options.Link, response)
 }
 
@@ -250,7 +261,7 @@ func (s *Service) finalizeOAuthIdentity(ctx context.Context, provider string, in
 		if info.GetUserEmail() == "" || !info.IsUserEmailVerifiedByProvider() {
 			return response, oauth.ErrSecureIDTokenUnverified
 		}
-		created, createErr := repository.CreateOAuthUser(ctx, &user.CreateOAuthUserRequest{Identity: *identity, Email: info.GetUserEmail(), FirstName: info.GetUserFirstName(), LastName: info.GetUserLastName()})
+		created, createErr := repository.CreateOAuthUser(ctx, &user.CreateOAuthUserRequest{Identity: *identity, Email: info.GetUserEmail(), FirstName: info.GetUserFirstName(), LastName: info.GetUserLastName(), AttributionEvidence: response.AttributionEvidence})
 		if createErr != nil {
 			return response, createErr
 		}

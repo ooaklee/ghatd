@@ -24,6 +24,8 @@ type CommsConfig struct {
 	ConsentVersion string
 }
 
+// consentVersion returns the package default when empty, or the supplied value
+// only if it matches the allowed identifier pattern.
 func consentVersion(value string) (string, error) {
 	if value == "" {
 		return ConsentVersion, nil

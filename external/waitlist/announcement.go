@@ -47,6 +47,9 @@ type Announcement struct {
 	RecipientCount int `bson:"recipientCount" json:"recipientCount"`
 }
 
+// validate checks subject and message length, rejects control characters except
+// newlines in the message, and requires an https URL without credentials, query
+// or fragment.
 func (a Announcement) validate() error {
 	for _, field := range []struct {
 		value     string
@@ -141,6 +144,8 @@ type DispatchSummary struct {
 	Mode string `json:"mode"`
 }
 
+// now returns the service's injected clock in UTC, falling back to the real
+// current time; it normalises all campaign timestamps.
 func (s *AnnouncementService) now() time.Time {
 	if s.Now != nil {
 		return s.Now().UTC()
@@ -148,6 +153,9 @@ func (s *AnnouncementService) now() time.Time {
 	return time.Now().UTC()
 }
 
+// mode classifies delivery as "live", "local" or "disabled": it requires an
+// enabled, well-formed sender and frontend URL, permitting plain http only for
+// local providers on loopback hosts.
 func (s *AnnouncementService) mode() string {
 	local := false
 	if provider, ok := s.Provider.(interface{ IsLocalOutputProvider() bool }); ok {
@@ -202,6 +210,9 @@ func (s *AnnouncementService) Prepare(ctx context.Context, a Announcement) (Anno
 	return preview, nil
 }
 
+// preview validates the announcement against the audience, renders its HTML and
+// variants through the presentation pipeline, and tags the result with the
+// current delivery mode using a cloned copy.
 func (s *AnnouncementService) preview(a Announcement, entries []Entry) (AnnouncementPreview, error) {
 	presentation, err := s.presentation(a, entries)
 	if err != nil {
@@ -339,7 +350,11 @@ func (s *AnnouncementService) Summary(ctx context.Context) (DispatchSummary, err
 	return summary, nil
 }
 
+// randomToken returns fresh cryptographically random text for opaque
+// unsubscribe tokens.
 func randomToken() string { return rand.Text() }
+
+// tokenHash hex-encodes the SHA-256 of a token so only its digest is stored.
 func tokenHash(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
@@ -347,6 +362,9 @@ func tokenHash(token string) string {
 
 var announcementTemplate = template.Must(template.New("announcement").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#fdfbf6;color:#0c0b08;font-family:Arial,sans-serif"><main style="max-width:560px;margin:0 auto;padding:40px 24px"><p style="font-size:22px;font-weight:600">{{.BrandName}}</p><h1 style="font-size:32px;line-height:1.15">{{.Subject}}</h1>{{range .Paragraphs}}<p style="font-size:16px;line-height:1.7">{{.}}</p>{{end}}<p style="margin:32px 0"><a href="{{.URL}}" style="display:inline-block;background:#dc4a25;color:#fdfbf6;padding:16px 24px;border-radius:30px;text-decoration:none">Take a first look ↗</a></p><p style="font-size:13px;line-height:1.7;color:#6b6453">You joined the {{.BrandName}} prerelease waitlist. <a href="{{.Unsubscribe}}" style="color:#b6311e">Unsubscribe from waitlist emails</a>.</p></main></body></html>`))
 
+// renderAnnouncement executes the built-in email template with the announcement
+// fields, per-line paragraphs, brand fallback "Early access" and the
+// unsubscribe link; template errors are ignored.
 func (s *AnnouncementService) renderAnnouncement(a Announcement, unsubscribe string) string {
 	brand := s.BrandName
 	if brand == "" {

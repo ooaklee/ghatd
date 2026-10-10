@@ -79,18 +79,42 @@ func (r *Repository) TouchAPIToken(ctx context.Context, tokenID, ownerID string,
 type MongoDbStore interface {
 	// Result-bearing writes preserve matched/deleted counts for ownership checks.
 	ExecuteUpdateOneCommandResult(context.Context, *mongo.Collection, any, any, ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	// ExecuteDeleteOneCommandResult deletes a single document matching the filter
+	// in the collection and returns the driver's delete result.
 	ExecuteDeleteOneCommandResult(context.Context, *mongo.Collection, any, ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
+	// ExecuteCountDocuments returns the count of documents in the collection
+	// matching the supplied filter and options.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes a single document matching the filter in the
+	// collection, using the target object name for diagnostics.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand returns a cursor over collection documents matching the
+	// supplied filter and find options.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the supplied document into the collection and
+	// returns the insert result, naming the object for diagnostics.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand updates a single document matching the filter with
+	// the supplied update document, naming the object for diagnostics.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteDeleteManyCommand deletes all documents matching the filter in the
+	// collection, using the target object name for diagnostics.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult fetches the first matching document and
+	// decodes it into result, mapping not-found per the supplied flags and fallback
+	// error.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 
+	// GetDatabase returns the Mongo database handle for the supplied database name.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes and returns the underlying Mongo client for the
+	// datastore.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every remaining cursor document into the
+	// supplied result slice, naming the object for diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes the next cursor document into the supplied
+	// result, naming the object for diagnostics.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

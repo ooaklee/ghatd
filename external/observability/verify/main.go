@@ -21,11 +21,16 @@ var sources embed.FS
 
 var suites = []string{"collector-compose", "collector-render", "production-render", "dashboards", "production-logs"}
 
+// options holds the verification tool's command-line settings: repository root,
+// profile path, suite selection, Python interpreter, optional Collector
+// foundation checkout and per-suite deadline.
 type options struct {
 	root, profile, suite, python, foundation string
 	timeout                                  time.Duration
 }
 
+// main parses flags and runs the verification; on failure it prints the error
+// to stderr and exits nonzero.
 func main() {
 	var o options
 	flag.StringVar(&o.root, "root", ".", "host repository root")
@@ -41,6 +46,8 @@ func main() {
 	}
 }
 
+// selectedSuites resolves a suite name, or all, to the known suite list and
+// errors on unknown names.
 func selectedSuites(name string) ([]string, error) {
 	if name == "all" {
 		return append([]string(nil), suites...), nil
@@ -53,6 +60,12 @@ func selectedSuites(name string) ([]string, error) {
 	return nil, errors.New("unknown suite; use collector-compose, collector-render, production-render, dashboards, production-logs, or all")
 }
 
+// run validates options, resolves and checks the host root, parses and path-
+// validates the profile, then materialises the embedded Python checks and the
+// canonicalised profile into a scratch directory. Each selected suite runs
+// under its own deadline with a restricted environment; timeouts interrupt
+// first so fixtures can clean up containers. Errors identify the failing suite
+// without embedding command output.
 func run(ctx context.Context, o options, stdout, stderr io.Writer) error {
 	selected, err := selectedSuites(o.suite)
 	if err != nil {
@@ -151,6 +164,9 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) error {
 	return nil
 }
 
+// toolEnvironment returns only tool-required variables from the process
+// environment plus bytecode suppression, so suite subprocesses inherit nothing
+// else.
 func toolEnvironment() []string {
 	allowed := map[string]bool{"PATH": true, "HOME": true, "DOCKER_HOST": true, "DOCKER_CONTEXT": true, "DOCKER_CONFIG": true, "ASDF_HELM_VERSION": true, "TMPDIR": true, "SYSTEMROOT": true}
 	var result []string

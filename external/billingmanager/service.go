@@ -20,6 +20,9 @@ import (
 
 // ProviderRegistry defines the expected methods of a payment provider registry
 type ProviderRegistry interface {
+	// VerifyAndParseWebhookPayload resolves the named provider from the
+	// ProviderRegistry, verifies the authenticity of the webhook carried by req,
+	// and returns its parsed paymentprovider payload. ctx governs cancellation.
 	VerifyAndParseWebhookPayload(ctx context.Context, providerName string, req *http.Request) (*paymentprovider.WebhookPayload, error)
 }
 
@@ -27,18 +30,29 @@ type ProviderRegistry interface {
 // It remains separate from ProviderRegistry so webhook-only custom registries
 // retain source compatibility.
 type CheckoutProviderRegistry interface {
+	// GetCheckoutProvider resolves a checkout capability by provider name from the
+	// CheckoutProviderRegistry, the optional registry kept separate so webhook-only
+	// registries stay source compatible. Returns the named CheckoutProvider or an
+	// error.
 	GetCheckoutProvider(name string) (paymentprovider.CheckoutProvider, error)
 }
 
 // CustomerPortalProviderRegistry resolves optional hosted customer-portal
 // capabilities without widening the webhook registry contract.
 type CustomerPortalProviderRegistry interface {
+	// GetCustomerPortalProvider resolves a hosted customer-portal capability by
+	// name from the CustomerPortalProviderRegistry without widening the webhook
+	// registry contract. Returns the named CustomerPortalProvider or an error.
 	GetCustomerPortalProvider(name string) (paymentprovider.CustomerPortalProvider, error)
 }
 
 // UpcomingInvoicePreviewProviderRegistry resolves optional provider invoice
 // preview capabilities without widening webhook-only custom registries.
 type UpcomingInvoicePreviewProviderRegistry interface {
+	// GetUpcomingInvoicePreviewProvider resolves an invoice preview capability by
+	// name from the UpcomingInvoicePreviewProviderRegistry without widening
+	// webhook-only custom registries. Returns the named
+	// UpcomingInvoicePreviewProvider or an error.
 	GetUpcomingInvoicePreviewProvider(name string) (paymentprovider.UpcomingInvoicePreviewProvider, error)
 }
 
@@ -52,43 +66,97 @@ type CheckoutProviderConfig struct {
 
 // AuditService interface for logging billing events (optional)
 type AuditService interface {
+	// LogAuditEvent records a billing audit event described by r through the
+	// optional AuditService. Returns a non-nil error when the event cannot be
+	// logged; ctx governs cancellation.
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 
 // UserService interface for user operations (optional)
 type UserService interface {
+	// GetUserByEmail looks up a user account by the email in req through the
+	// optional UserService port. Returns the matching user response or an error;
+	// ctx governs cancellation.
 	GetUserByEmail(ctx context.Context, req *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
+	// GetUserByID looks up a user account by the identifier in req through the
+	// optional UserService port. Returns the matching user response or an error;
+	// ctx governs cancellation.
 	GetUserByID(ctx context.Context, req *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error)
 }
 
 // userByEmailFinder is an optional capability implemented by user/v2 for
 // association flows where no matching user is an expected outcome.
 type userByEmailFinder interface {
+	// FindUserByEmail locates a user by the email in req via the optional
+	// userByEmailFinder capability used in association flows where absence is an
+	// expected outcome. Returns the lookup response or an error.
 	FindUserByEmail(ctx context.Context, req *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error)
 }
 
 // BillingService interface for valid billing service
 type BillingService interface {
+	// GetSubscriptions queries subscriptions matching the criteria in req through
+	// the BillingService port. Returns the matching subscription response or an
+	// error; ctx governs cancellation.
 	GetSubscriptions(ctx context.Context, req *billing.GetSubscriptionsRequest) (*billing.GetSubscriptionsResponse, error)
+	// GetBillingEvents queries billing events matching the criteria in req through
+	// the BillingService port. Returns the matching event response or an error; ctx
+	// governs cancellation.
 	GetBillingEvents(ctx context.Context, req *billing.GetBillingEventsRequest) (*billing.GetBillingEventsResponse, error)
+	// GetSubscriptionByIntegratorID fetches the subscription identified by the
+	// integrator ID in req through the BillingService port. Returns the
+	// subscription response or an error; ctx governs cancellation.
 	GetSubscriptionByIntegratorID(ctx context.Context, req *billing.GetSubscriptionByIntegratorIDRequest) (*billing.GetSubscriptionByIntegratorIDResponse, error)
+	// CreateSubscription creates a subscription described by req through the
+	// BillingService port. Returns the created subscription response or an error;
+	// ctx governs cancellation.
 	CreateSubscription(ctx context.Context, req *billing.CreateSubscriptionRequest) (*billing.CreateSubscriptionResponse, error)
+	// UpdateSubscription modifies a subscription described by req through the
+	// BillingService port. Returns the updated subscription response or an error;
+	// ctx governs cancellation.
 	UpdateSubscription(ctx context.Context, req *billing.UpdateSubscriptionRequest) (*billing.UpdateSubscriptionResponse, error)
+	// CreateBillingEvent records a billing event described by req through the
+	// BillingService port. Returns the creation response or an error; ctx governs
+	// cancellation.
 	CreateBillingEvent(ctx context.Context, req *billing.CreateBillingEventRequest) (*billing.CreateBillingEventResponse, error)
+	// GetSubscriptionsByEmail queries subscriptions associated with the email in
+	// req through the BillingService port. Returns the matching subscription
+	// response or an error; ctx governs cancellation.
 	GetSubscriptionsByEmail(ctx context.Context, req *billing.GetSubscriptionsByEmailRequest) (*billing.GetSubscriptionsByEmailResponse, error)
+	// AssociateSubscriptionsWithUser links existing subscriptions to the user
+	// identified in req through the BillingService port. Returns the association
+	// response or an error; ctx governs cancellation.
 	AssociateSubscriptionsWithUser(ctx context.Context, req *billing.AssociateSubscriptionsWithUserRequest) (*billing.AssociateSubscriptionsWithUserResponse, error)
 }
 
 // PricerService defines the pricing operations exposed through billing manager.
 type PricerService interface {
+	// GetPricePlans queries pricing plans matching the criteria in req through the
+	// PricerService port. Returns the matching plan response or an error; ctx
+	// governs cancellation.
 	GetPricePlans(ctx context.Context, req *pricer.GetPricePlansRequest) (*pricer.GetPricePlansResponse, error)
+	// GetPricePlanBySlug fetches the pricing plan identified by the slug in req
+	// through the PricerService port. Returns the plan response or an error; ctx
+	// governs cancellation.
 	GetPricePlanBySlug(ctx context.Context, req *pricer.GetPricePlanBySlugRequest) (*pricer.GetPricePlanBySlugResponse, error)
+	// GetFeatures queries pricing feature catalogue items matching the criteria in
+	// req through the PricerService port. Returns the matching feature response or
+	// an error; ctx governs cancellation.
 	GetFeatures(ctx context.Context, req *pricer.GetFeaturesRequest) (*pricer.GetFeaturesResponse, error)
 }
 
 // Service orchestrates webhook processing and billing operations
 // It uses paymentprovider for webhook verification and billingstore for persistence
 type Service struct {
+	checkoutLifecycleAuthority             CheckoutLifecycleAuthority
+	lifecycleDiscoveryAuthority            LifecycleDiscoveryAuthority
+	subscriptionStatusAuthority            SubscriptionStatusAuthority
+	revenueAuthority                       RevenueReconciliationAuthority
+	revenueRegistry                        RevenueProviderRegistry
+	revenueFeed                            RevenueFeedService
+	revenueAssociation                     RevenueAssociationService
+	checkoutRevenueCapture                 CheckoutRevenueCapture
+	checkoutPayerAuthority                 CheckoutPayerAuthority
 	ProviderRegistry                       ProviderRegistry
 	CheckoutProviderRegistry               CheckoutProviderRegistry
 	CustomerPortalProviderRegistry         CustomerPortalProviderRegistry
@@ -105,6 +173,8 @@ type Service struct {
 	PricerService           PricerService
 }
 
+// webhookAccessAction classifies how strongly a verified webhook may mutate
+// server-owned subscription access versus merely recording ledger evidence.
 type webhookAccessAction uint8
 
 const (
@@ -206,9 +276,16 @@ func (s *Service) ProcessBillingProviderWebhooks(ctx context.Context, req *Proce
 		return ErrInvalidBillingManagerRequestPayload
 	}
 	var subscriptionID string
+	revenueAccepted, revenueErr := s.acceptRevenueWebhook(ctx, req.ProviderName, req.Request)
+	if revenueErr != nil {
+		return revenueErr
+	}
 
 	payload, err := s.ProviderRegistry.VerifyAndParseWebhookPayload(ctx, req.ProviderName, req.Request)
 	if err != nil {
+		if revenueAccepted && errors.Is(err, paymentprovider.ErrPaymentProviderInvalidEventType) {
+			return nil
+		}
 		logger.Error("failed-to-verify-and-parse-webhook-payload", zap.String("provider", req.ProviderName), zap.Error(err))
 		return err
 	}
@@ -427,6 +504,11 @@ func (s *Service) findPlanAccessFromLedger(ctx context.Context, providerName, tr
 	return candidate, nil
 }
 
+// determineWebhookAccessAction decides the access action for a payload from an
+// optional exact association. Subscription lifecycle events drive upserts for
+// recurring subscriptions, refunds revoke one-time access, and other events
+// remain ledger-only; non-exact associations only bootstrap access under
+// provider-specific conditions.
 func determineWebhookAccessAction(providerName string, payload *paymentprovider.WebhookPayload, association *webhookAccessAssociation) webhookAccessAction {
 	if payload == nil {
 		return webhookAccessLedgerOnly
@@ -468,6 +550,10 @@ func determineWebhookAccessAction(providerName string, payload *paymentprovider.
 	return webhookAccessLedgerOnly
 }
 
+// isStripeOwnedRecurringBootstrap reports whether a Stripe recurring payload
+// carries enough owned identity fields to bootstrap access before a
+// subscription lifecycle event arrives; recurring invoice events without a
+// status remain excluded.
 func isStripeOwnedRecurringBootstrap(payload *paymentprovider.WebhookPayload) bool {
 	if payload == nil || !payload.IsRecurring() || strings.TrimSpace(payload.SubscriptionID) == "" ||
 		strings.TrimSpace(payload.UserReference) == "" || strings.TrimSpace(payload.PlanID) == "" ||
@@ -483,6 +569,8 @@ func isStripeOwnedRecurringBootstrap(payload *paymentprovider.WebhookPayload) bo
 	return payload.EventType == paymentprovider.EventTypePaymentSucceeded && strings.TrimSpace(payload.Status) != ""
 }
 
+// isSubscriptionLifecycleEvent reports whether the event type is a subscription
+// lifecycle event, including donation variants.
 func isSubscriptionLifecycleEvent(eventType string) bool {
 	switch eventType {
 	case paymentprovider.EventTypeSubscriptionCreated,
@@ -501,6 +589,8 @@ func isSubscriptionLifecycleEvent(eventType string) bool {
 	}
 }
 
+// isPaymentLifecycleEvent reports whether the event type concerns payment
+// outcomes such as success, failure, refunds or required actions.
 func isPaymentLifecycleEvent(eventType string) bool {
 	switch eventType {
 	case paymentprovider.EventTypePaymentSucceeded,
@@ -1062,6 +1152,8 @@ func (s *Service) enrichUpcomingInvoiceEstimate(ctx context.Context, detail *Bil
 	}
 }
 
+// validUpcomingInvoicePreview rejects nil previews, negative amounts, invalid
+// three-letter uppercase currencies and unparseable due dates.
 func validUpcomingInvoicePreview(preview *paymentprovider.UpcomingInvoicePreview) bool {
 	if preview == nil || preview.Subtotal < 0 || preview.TaxAmount < 0 || preview.Total < 0 || preview.AmountDue < 0 {
 		return false
@@ -1297,6 +1389,10 @@ func (s *Service) findOrCreateSubscription(ctx context.Context, providerName str
 	return createResp.Subscription, nil
 }
 
+// applyCommercialTermsToCreateRequest copies payload commercial terms onto a
+// create request. For recurring payloads observed terms win, with the legacy
+// non-zero amount as a fallback when terms were not observed; zero remains
+// unknown.
 func applyCommercialTermsToCreateRequest(req *billing.CreateSubscriptionRequest, payload *paymentprovider.WebhookPayload) {
 	if req == nil || payload == nil {
 		return
@@ -1334,6 +1430,9 @@ func applyCommercialTermsToCreateRequest(req *billing.CreateSubscriptionRequest,
 	}
 }
 
+// applyCommercialTermsToUpdateRequest copies payload commercial terms onto an
+// update request using pointer fields. Observed-but-absent recurring amounts
+// are explicitly written as unknown so stale stored values are cleared.
 func applyCommercialTermsToUpdateRequest(req *billing.UpdateSubscriptionRequest, payload *paymentprovider.WebhookPayload) {
 	if req == nil || payload == nil {
 		return
@@ -1385,6 +1484,9 @@ func applyCommercialTermsToUpdateRequest(req *billing.UpdateSubscriptionRequest,
 	}
 }
 
+// authoritativeProviderEventTime returns the parsed provider event time only
+// when the payload declares its subscription state authoritative; otherwise it
+// returns nil.
 func authoritativeProviderEventTime(payload *paymentprovider.WebhookPayload) *time.Time {
 	if payload == nil || !payload.SubscriptionStateAuthoritative {
 		return nil
@@ -1543,6 +1645,10 @@ func (s *Service) updateSubscriptionFromPayload(ctx context.Context, subscriptio
 	return err
 }
 
+// latestSubscriptionLifecycleEventTime reads the most recent stored lifecycle
+// event for a subscription, returning its provider event time in UTC. Absence,
+// a missing integrator subscription ID or zero times yield nil, nil; lookup
+// failures propagate.
 func (s *Service) latestSubscriptionLifecycleEventTime(ctx context.Context, subscription *billing.Subscription) (*time.Time, error) {
 	if s == nil || subscription == nil || strings.TrimSpace(subscription.IntegratorSubscriptionID) == "" {
 		return nil, nil
@@ -1818,6 +1924,9 @@ func (s *Service) generateSubscriptionSummary(sub *billing.Subscription) string 
 	}
 }
 
+// subscriptionCommercialAmountKnown reports whether a subscription records a
+// known commercial amount, treating a non-zero legacy amount as known even when
+// the flag is unset.
 func subscriptionCommercialAmountKnown(sub *billing.Subscription) bool {
 	return sub != nil && (sub.AmountKnown || sub.Amount != 0)
 }

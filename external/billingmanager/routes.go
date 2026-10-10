@@ -9,24 +9,68 @@ import (
 
 // billingmanagerHandler expected methods for valid billingmanager handler
 type billingmanagerHandler interface {
+	// ProcessBillingProviderWebhooks serves the billing provider webhook HTTP
+	// endpoint, mapping the request and delegating processing to the billing
+	// manager service.
 	ProcessBillingProviderWebhooks(w http.ResponseWriter, r *http.Request)
+	// GetUserBillingEvents serves the user billing events HTTP endpoint, mapping
+	// the request and returning the selected user's event summaries with optional
+	// pagination metadata.
 	GetUserBillingEvents(w http.ResponseWriter, r *http.Request)
+	// GetUserSubscriptionStatus serves the user subscription status HTTP endpoint
+	// required by billingmanagerHandler. Implementations validate the request,
+	// delegate to the service, and write the subscription status or an error
+	// response; w receives the HTTP response for request r.
 	GetUserSubscriptionStatus(w http.ResponseWriter, r *http.Request)
+	// GetUserBillingDetail serves the user billing detail HTTP endpoint required by
+	// billingmanagerHandler. Implementations validate the request, delegate to the
+	// service, and write the billing detail or an error response; w receives the
+	// HTTP response for request r.
 	GetUserBillingDetail(w http.ResponseWriter, r *http.Request)
+	// GetPricingPlans serves the pricing plans listing HTTP endpoint required by
+	// billingmanagerHandler. Implementations map and validate the request, delegate
+	// to the service, and write the price plans, optionally enriched with response
+	// metadata, to w.
 	GetPricingPlans(w http.ResponseWriter, r *http.Request)
+	// GetPricePlanBySlug serves the single pricing plan HTTP endpoint required by
+	// billingmanagerHandler. Implementations map and validate the request, delegate
+	// to the service, and write the requested plan or an error response to w.
 	GetPricePlanBySlug(w http.ResponseWriter, r *http.Request)
+	// GetPricingFeatures serves the pricing feature catalogue HTTP endpoint
+	// required by billingmanagerHandler. Implementations map and validate the
+	// request, delegate to the service, and write the feature list, optionally
+	// enriched with response metadata, to w.
 	GetPricingFeatures(w http.ResponseWriter, r *http.Request)
 }
 
 // billingmanagerCheckoutHandler is an optional routing capability so custom
 // legacy route handlers keep satisfying billingmanagerHandler.
 type billingmanagerCheckoutHandler interface {
+	// ProcessBillingProviderCheckout serves the provider checkout creation endpoint
+	// exposed through the optional billingmanagerCheckoutHandler routing
+	// capability. Implementations answer OPTIONS preflight, validate the request,
+	// delegate to the checkout service, and write the created session with 201 to
+	// w.
 	ProcessBillingProviderCheckout(w http.ResponseWriter, r *http.Request)
+}
+
+// billingmanagerCheckoutStatusHandler keeps legacy custom handlers compatible.
+type billingmanagerCheckoutStatusHandler interface {
+	// GetBillingProviderCheckoutStatus serves the checkout status endpoint exposed
+	// through the optional billingmanagerCheckoutStatusHandler compatibility
+	// capability. Implementations bind the actor from authenticated context,
+	// validate provider and session parameters, and write the checkout status or an
+	// error response to w.
+	GetBillingProviderCheckoutStatus(http.ResponseWriter, *http.Request)
 }
 
 // billingmanagerPortalHandler is optional so legacy route handlers remain
 // compatible when hosted customer-portal support is not implemented.
 type billingmanagerPortalHandler interface {
+	// ProcessBillingProviderPortal serves the hosted billing portal endpoint
+	// exposed through the optional billingmanagerPortalHandler routing capability.
+	// Implementations answer OPTIONS preflight, validate the request, delegate to
+	// the portal service, and write the created portal session with 201 to w.
 	ProcessBillingProviderPortal(w http.ResponseWriter, r *http.Request)
 }
 
@@ -71,6 +115,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	billingmanagerActiveOnlyRoutes := request.Router.NewRouteGroup(APIBillingManagerV1Prefix, router.ActiveSessionOrAPI, request.MiddlewareActiveValidApiTokenOrJWTMiddleware)
 	if checkoutHandler, ok := request.Handler.(billingmanagerCheckoutHandler); ok {
 		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/checkout", Operation: "billingmanager.ProcessBillingProviderCheckout", Methods: []string{http.MethodPost, http.MethodOptions}}, checkoutHandler.ProcessBillingProviderCheckout)
+	}
+	if statusHandler, ok := request.Handler.(billingmanagerCheckoutStatusHandler); ok {
+		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/checkout/status", Operation: "billingmanager.GetBillingProviderCheckoutStatus", Methods: []string{http.MethodGet, http.MethodOptions}}, statusHandler.GetBillingProviderCheckoutStatus)
 	}
 	if portalHandler, ok := request.Handler.(billingmanagerPortalHandler); ok {
 		billingmanagerActiveOnlyRoutes.Handle(router.RouteDefinition{Path: "/billings/{providerName}/portal", Operation: "billingmanager.ProcessBillingProviderPortal", Methods: []string{http.MethodPost, http.MethodOptions}}, portalHandler.ProcessBillingProviderPortal)

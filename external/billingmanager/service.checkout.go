@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/ooaklee/ghatd/external/pricer"
@@ -33,6 +34,8 @@ const (
 var checkoutBracePlaceholderPattern = regexp.MustCompile(`\{[^{}\s]+\}`)
 var checkoutProviderNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// checkoutSelection carries the resolved plan, cost and checkout mode chosen
+// from the published catalogue for one checkout request.
 type checkoutSelection struct {
 	plan pricer.PricePlan
 	cost pricer.PriceCost
@@ -43,6 +46,12 @@ type checkoutSelection struct {
 // the published catalogue and delegates session creation to the named payment
 // provider. Provider webhooks remain authoritative for access fulfilment.
 func (s *Service) ProcessBillingProviderCheckout(ctx context.Context, req *ProcessBillingProviderCheckoutRequest) (*ProcessBillingProviderCheckoutResponse, error) {
+	if ctx == nil {
+		return nil, ErrInvalidBillingManagerRequestPayload
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	log := logger.AcquireOperationFrom(ctx, "external/billingmanager", "process-billing-provider-checkout")
 	if s == nil || req == nil {
 		return nil, ErrInvalidBillingManagerRequestPayload
@@ -91,11 +100,6 @@ func (s *Service) ProcessBillingProviderCheckout(ctx context.Context, req *Proce
 		return nil, ErrBillingManagerCheckoutOriginRejected
 	}
 
-	selection, err := s.resolvePublishedCheckoutPrice(ctx, providerName, priceID)
-	if err != nil {
-		return nil, err
-	}
-
 	userResponse, err := s.UserService.GetUserByID(ctx, &user.GetUserByIDRequest{ID: userID})
 	if err != nil || userResponse == nil || userResponse.User == nil ||
 		strings.TrimSpace(userResponse.User.ID) != userID || strings.TrimSpace(userResponse.User.GetUserEmail()) == "" {
@@ -108,37 +112,80 @@ func (s *Service) ProcessBillingProviderCheckout(ctx context.Context, req *Proce
 		log.Error("checkout-idempotency-key-generation-failed", zap.String("provider", providerName), zap.String("user-id", userID), zap.Error(err))
 		return nil, ErrBillingManagerCheckoutIdempotencyFailed
 	}
-	returnURL, err = enrichCheckoutReturnURL(returnURL, selection)
-	if err != nil {
-		log.Error("checkout-return-url-enrichment-failed", zap.String("provider", providerName), zap.Error(err))
-		return nil, ErrBillingManagerCheckoutConfigurationInvalid
+	var scope billing.RevenueScope
+	var intent billing.CheckoutIntent
+	var revenueProvider paymentprovider.RevenueCheckoutProvider
+	var frozen *paymentprovider.CheckoutSessionRequest
+	if s.checkoutRevenueCapture != nil {
+		if nilRevenueDependency(s.checkoutPayerAuthority) {
+			return nil, billing.ErrRevenueUnavailable
+		}
+		if err := s.checkoutPayerAuthority.AuthorizeCheckoutPayer(ctx, userID); err != nil {
+			return nil, err
+		}
+		capability, ok := checkoutProvider.(paymentprovider.RevenueCheckoutProvider)
+		if !ok || isNilCheckoutCapability(capability) {
+			return nil, billing.ErrRevenueUnavailable
+		}
+		revenueProvider = capability
+		providerScope, err := capability.CheckoutRevenueScope(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if providerScope.Provider != providerName {
+			return nil, billing.ErrRevenueInvalid
+		}
+		scope = billingRevenueScope(providerScope)
+		intent, err = s.checkoutRevenueCapture.FindCheckoutIntent(ctx, scope, idempotencyKey)
+		if err == nil {
+			if err := validateCapturedCheckoutIntent(intent, userID, priceID, idempotencyKey, scope, allowedOrigin); err != nil {
+				return nil, err
+			}
+			if intent.SessionID != "" {
+				return s.recoverCapturedCheckout(ctx, capability, providerScope, intent, userID)
+			}
+			if err := s.checkoutRevenueCapture.CanSubmitCheckout(ctx, intent); err != nil {
+				return nil, err
+			}
+			frozen = &intent.Request
+		} else if !singleRevenueAbsence(err) {
+			return nil, err
+		}
 	}
-
-	session, err := checkoutProvider.CreateCheckoutSession(ctx, &paymentprovider.CheckoutSessionRequest{
-		PriceID:                priceID,
-		PlanID:                 selection.plan.ID,
-		PlanSlug:               selection.plan.Slug,
-		PlanName:               selection.plan.Name,
-		CostID:                 selection.cost.ID,
-		UserID:                 userID,
-		UserReference:          userID,
-		CustomerEmail:          strings.TrimSpace(userResponse.User.GetUserEmail()),
-		Mode:                   selection.mode,
-		ReturnURL:              returnURL,
-		ExpectedAmount:         selection.cost.Amount,
-		ExpectedCurrency:       selection.cost.Currency,
-		ExpectedBillingCadence: string(selection.cost.BillingCadence),
-		TrialPeriodDays:        selection.cost.TrialPeriodDays,
-		IdempotencyKey:         idempotencyKey,
-		Metadata: map[string]string{
-			"plan_id":           selection.plan.ID,
-			"plan_slug":         selection.plan.Slug,
-			"plan_name":         selection.plan.Name,
-			"cost_id":           selection.cost.ID,
-			"provider_price_id": priceID,
-			"user_reference":    userID,
-		},
-	})
+	if frozen == nil {
+		selection, err := s.resolvePublishedCheckoutPrice(ctx, providerName, priceID)
+		if err != nil {
+			return nil, err
+		}
+		returnURL, err = enrichCheckoutReturnURL(returnURL, selection)
+		if err != nil {
+			return nil, ErrBillingManagerCheckoutConfigurationInvalid
+		}
+		request := paymentprovider.CheckoutSessionRequest{
+			PriceID: priceID, PlanID: selection.plan.ID, PlanSlug: selection.plan.Slug, PlanName: selection.plan.Name, CostID: selection.cost.ID,
+			UserID: userID, UserReference: userID, CustomerEmail: strings.TrimSpace(userResponse.User.GetUserEmail()), Mode: selection.mode, ReturnURL: returnURL,
+			ExpectedAmount: selection.cost.Amount, ExpectedCurrency: selection.cost.Currency, ExpectedBillingCadence: string(selection.cost.BillingCadence), TrialPeriodDays: selection.cost.TrialPeriodDays, IdempotencyKey: idempotencyKey,
+			Metadata: map[string]string{"plan_id": selection.plan.ID, "plan_slug": selection.plan.Slug, "plan_name": selection.plan.Name, "cost_id": selection.cost.ID, "provider_price_id": priceID, "user_reference": userID},
+		}
+		if s.checkoutRevenueCapture != nil {
+			intent, err = s.checkoutRevenueCapture.PrepareCheckout(ctx, scope, request)
+			if err != nil {
+				return nil, err
+			}
+			if err := validateCapturedCheckoutIntent(intent, userID, priceID, idempotencyKey, scope, allowedOrigin); err != nil {
+				return nil, err
+			}
+			if intent.SessionID != "" {
+				return s.recoverCapturedCheckout(ctx, revenueProvider, paymentprovider.RevenueScope{Provider: scope.Provider, AccountID: scope.AccountID, LiveMode: scope.LiveMode}, intent, userID)
+			}
+			if err := s.checkoutRevenueCapture.CanSubmitCheckout(ctx, intent); err != nil {
+				return nil, err
+			}
+			request = intent.Request
+		}
+		frozen = &request
+	}
+	session, err := checkoutProvider.CreateCheckoutSession(ctx, frozen)
 	if err != nil {
 		log.Warn("checkout-provider-session-creation-failed", zap.String("provider", providerName), zap.String("user-id", userID), zap.Error(err))
 		if errors.Is(err, paymentprovider.ErrPaymentProviderPriceMismatch) {
@@ -152,6 +199,16 @@ func (s *Service) ProcessBillingProviderCheckout(ctx context.Context, req *Proce
 		return nil, ErrBillingManagerCheckoutSessionInvalid
 	}
 
+	if s.checkoutRevenueCapture != nil {
+		if err := s.checkoutRevenueCapture.AcknowledgeCheckout(ctx, intent, session.ID); err != nil {
+			return nil, err
+		}
+		// Preserve the provider receipt even if current authority changed during
+		// submission, then withhold browser credentials from the revoked caller.
+		if err := s.checkoutPayerAuthority.AuthorizeCheckoutPayer(ctx, userID); err != nil {
+			return nil, err
+		}
+	}
 	return &ProcessBillingProviderCheckoutResponse{Session: session}, nil
 }
 
@@ -356,6 +413,8 @@ func enrichCheckoutReturnURL(rawURL string, selection *checkoutSelection) (strin
 	return result, nil
 }
 
+// checkoutURLPlaceholder pairs a URL placeholder token with the value that
+// replaces it during return-URL processing.
 type checkoutURLPlaceholder struct {
 	token string
 	value string
@@ -452,4 +511,33 @@ func hasValidHTTPPort(parsed *url.URL) bool {
 	}
 	port, err := strconv.Atoi(parsed.Port())
 	return err == nil && port >= 1 && port <= 65535
+}
+
+// validateCapturedCheckoutIntent confirms a retained intent still matches the
+// caller, price, idempotency key, scope and prior return-URL origin exactly;
+// any drift returns ErrRevenueConflict.
+func validateCapturedCheckoutIntent(intent billing.CheckoutIntent, userID, priceID, key string, scope billing.RevenueScope, allowedOrigin string) error {
+	priorOrigin, err := checkoutReturnURLOrigin(intent.Request.ReturnURL)
+	if intent.ID == "" || intent.Request.Metadata["checkout_intent_id"] != intent.ID || intent.Request.UserID != userID || intent.Request.UserReference != userID || intent.Request.PriceID != priceID || intent.Request.IdempotencyKey != key || intent.Scope != scope || err != nil || priorOrigin != allowedOrigin {
+		return billing.ErrRevenueConflict
+	}
+	return nil
+}
+
+// recoverCapturedCheckout re-retrieves a previously captured session from the
+// provider and re-runs payer authority for the current user before returning
+// it. A session that is missing, mismatched or lacks both client secret and URL
+// is invalid.
+func (s *Service) recoverCapturedCheckout(ctx context.Context, provider paymentprovider.RevenueCheckoutProvider, scope paymentprovider.RevenueScope, intent billing.CheckoutIntent, userID string) (*ProcessBillingProviderCheckoutResponse, error) {
+	recovered, err := provider.RetrieveRevenueCheckoutSession(ctx, scope, intent.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	if recovered == nil || recovered.ID != intent.SessionID || (strings.TrimSpace(recovered.ClientSecret) == "" && strings.TrimSpace(recovered.URL) == "") {
+		return nil, ErrBillingManagerCheckoutSessionInvalid
+	}
+	if err := s.checkoutPayerAuthority.AuthorizeCheckoutPayer(ctx, userID); err != nil {
+		return nil, err
+	}
+	return &ProcessBillingProviderCheckoutResponse{Session: recovered}, nil
 }

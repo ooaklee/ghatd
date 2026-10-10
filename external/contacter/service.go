@@ -14,11 +14,22 @@ import (
 // contacterRepository is the expected methods needed to
 // interact with the database
 type contacterRepository interface {
+	// GetTotalComms counts comms in the repository matching the same filter facets
+	// used by listing, returning the total for pagination.
 	GetTotalComms(ctx context.Context, req *GetTotalCommsRequest) (int64, error)
+	// GetComms fetches comms from the repository matching the request's filter
+	// facets with pagination and requested ordering applied.
 	GetComms(ctx context.Context, req *GetCommsRequest) ([]Comms, error)
+	// CreateComms inserts a new comms document into the comms collection,
+	// defaulting timestamps and identifiers before persisting.
 	CreateComms(ctx context.Context, newComms *Comms) (*Comms, error)
+	// UpdateComms persists changes to an existing comms document by ID, setting the
+	// updated-at timestamp before writing.
 	UpdateComms(ctx context.Context, comms *Comms) (*Comms, error)
+	// GetCommsByIds fetches the comms documents whose IDs are in the supplied list.
 	GetCommsByIds(ctx context.Context, commsIds []string) ([]Comms, error)
+	// GetCommsStatsCounts computes aggregated comms statistics in a single
+	// aggregation round-trip, optionally scoped by an email regex filter.
 	GetCommsStatsCounts(ctx context.Context, req *GetCommsStatsRequest) (*CommsStats, error)
 }
 

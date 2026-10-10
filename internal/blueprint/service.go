@@ -11,12 +11,33 @@ import (
 // preserve native failures and return the selected record, not a nil success.
 // Callers and adapters treat nested Metadata values as read-only during a call.
 type BlueprintRepository interface {
+	// CreateBlueprint persists the supplied Blueprint and returns the stored record
+	// via the BlueprintRepository port; nested Metadata is treated as read-only
+	// during the call and native failures are preserved.
 	CreateBlueprint(ctx context.Context, blueprint *Blueprint) (*Blueprint, error)
+	// DeleteBlueprintByID removes the blueprint selected by id through the
+	// BlueprintRepository port, preserving native failures from the underlying
+	// delete operation.
 	DeleteBlueprintByID(ctx context.Context, id string) error
+	// GetBlueprintByID loads the blueprint selected by id via the
+	// BlueprintRepository port, returning the stored record while treating nested
+	// Metadata as read-only.
 	GetBlueprintByID(ctx context.Context, id string) (*Blueprint, error)
+	// GetBlueprintByNameAndKind loads a blueprint by its natural name and kind key
+	// through the BlueprintRepository port, returning the matched record with
+	// nested Metadata read-only.
 	GetBlueprintByNameAndKind(ctx context.Context, name, kind string) (*Blueprint, error)
+	// GetBlueprints lists blueprints matching the scalar filters in req through the
+	// BlueprintRepository port, returning the selected page of records with nested
+	// Metadata read-only.
 	GetBlueprints(ctx context.Context, req *GetBlueprintsRequest) ([]Blueprint, error)
+	// GetTotalBlueprints counts blueprints matching the filters in req via the
+	// BlueprintRepository port, returning the total independently of any listing
+	// call.
 	GetTotalBlueprints(ctx context.Context, req *GetBlueprintsRequest) (int64, error)
+	// UpdateBlueprint persists changes to the supplied Blueprint selected by its ID
+	// through the BlueprintRepository port and returns the updated record; nested
+	// Metadata stays read-only.
 	UpdateBlueprint(ctx context.Context, blueprint *Blueprint) (*Blueprint, error)
 }
 

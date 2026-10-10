@@ -27,8 +27,15 @@ import (
 // The Service holds a map of ChannelSenders and dispatches to the right
 // one based on the user's registered addresses and preferences.
 type ChannelSender interface {
+	// Channel reports which notification channel this sender delivers to, letting
+	// the Service dispatch addresses by their registered channel.
 	Channel() NotificationChannel
+	// Enabled reports whether the sender has the configuration it needs to deliver
+	// on its channel, so the Service can skip unavailable senders.
 	Enabled() bool
+	// Send delivers a notification with subject, message and data to every supplied
+	// address on this sender's channel, reporting transient or cleanup failures as
+	// an error.
 	Send(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) error
 }
 
@@ -40,6 +47,9 @@ type ChannelSender interface {
 // automatically cleaned up during delivery without leaking into every
 // sender implementation.
 type InvalidAddressCleanable interface {
+	// SetInvalidAddressHandler registers the callback invoked with an address hash
+	// when delivery reveals the address is permanently invalid, so it can be
+	// disabled or deleted.
 	SetInvalidAddressHandler(handler func(ctx context.Context, hash string) error)
 }
 
@@ -53,6 +63,9 @@ type channelSendReport struct {
 // delivery and cleanup counts without storing mutable result state on the
 // shared sender instance.
 type detailedChannelSender interface {
+	// SendWithReport delivers the notification and returns a per-call report of
+	// delivered and cleaned counts, keeping result state local to the call for
+	// shared senders.
 	SendWithReport(ctx context.Context, subject, message string, addresses []NotificationAddress, data map[string]interface{}) (channelSendReport, error)
 }
 
@@ -304,6 +317,8 @@ func isPermanentWebPushError(err error) bool {
 	return false
 }
 
+// unwrapJoinedErrors returns the wrapped errors when err is a multi-error with
+// an Unwrap() []error method, and nil otherwise.
 func unwrapJoinedErrors(err error) []error {
 	type joinedError interface {
 		Unwrap() []error

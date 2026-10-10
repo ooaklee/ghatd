@@ -1,0 +1,15 @@
+Telephone catalogue provenance
+
+This catalogue was generated from nyaruka/phonenumbers v1.7.5 supported regions
+and country codes, with reviewed display names and literal dial-prefix hints.
+It is a transformed catalogue, not an unmodified upstream metadata file.
+Original definition bytes are retained; library validation currently uses the
+module's independently pinned phonenumbers version.
+
+Go port: Copyright (c) 2017-2022 Trey Tacon, Nyaruka.
+MIT licence: LICENSE.phonenumbers.
+
+Upstream numbering metadata: Copyright (C) 2009 The Libphonenumber Authors.
+Apache License, Version 2.0: LICENSE.libphonenumber.
+Source: https://github.com/google/libphonenumber/blob/master/resources/PhoneNumberMetadata.xml
+No messaging, residency or contact-ownership evidence is inferred from this data.

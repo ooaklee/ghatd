@@ -9,18 +9,57 @@ import (
 
 // PriceHandler interface defines expected methods for valid pricer handler.
 type PriceHandler interface {
+	// CreatePricePlan serves HTTP price plan creation for PriceHandler: it maps and
+	// validates the request, delegates to the service, and writes the created plan
+	// with status 201 or an error response.
 	CreatePricePlan(w http.ResponseWriter, r *http.Request)
+	// UpdatePricePlan serves HTTP price plan updates for PriceHandler: it maps and
+	// validates the request, delegates to the service, and writes the updated plan
+	// or an error response.
 	UpdatePricePlan(w http.ResponseWriter, r *http.Request)
+	// GetPricePlanByID serves HTTP retrieval of a price plan by ID for
+	// PriceHandler: it maps the request, delegates to the service, and writes the
+	// plan or an error response.
 	GetPricePlanByID(w http.ResponseWriter, r *http.Request)
+	// GetPricePlanBySlug serves HTTP retrieval of a price plan by slug for
+	// PriceHandler: it maps the request, delegates to the service, and writes the
+	// plan or an error response.
 	GetPricePlanBySlug(w http.ResponseWriter, r *http.Request)
+	// GetPricePlans serves HTTP listing of price plans for PriceHandler: it maps
+	// the request, delegates to the service, and writes the plans, including
+	// pagination metadata when requested.
 	GetPricePlans(w http.ResponseWriter, r *http.Request)
+	// ValidatePriceSlug serves HTTP pricing slug validation for PriceHandler: it
+	// maps the request, delegates to the service, and writes the normalised slug
+	// with availability information without persisting anything.
 	ValidatePriceSlug(w http.ResponseWriter, r *http.Request)
+	// PublishPricePlan serves HTTP price plan publishing for PriceHandler: it maps
+	// the request, delegates to the service, and writes the published plan or an
+	// error response.
 	PublishPricePlan(w http.ResponseWriter, r *http.Request)
+	// ArchivePricePlan serves HTTP price plan archiving for PriceHandler: it maps
+	// the request, delegates to the service, and writes the archived plan or an
+	// error response.
 	ArchivePricePlan(w http.ResponseWriter, r *http.Request)
+	// DeletePricePlan serves HTTP soft deletion of a price plan for PriceHandler:
+	// it maps the request, delegates to the service, and writes the deleted plan or
+	// an error response.
 	DeletePricePlan(w http.ResponseWriter, r *http.Request)
+	// CreateFeature serves HTTP feature creation for PriceHandler: it maps and
+	// validates the request, delegates to the service, and writes the created
+	// feature with status 201 or an error response.
 	CreateFeature(w http.ResponseWriter, r *http.Request)
+	// UpdateFeature serves HTTP feature updates for PriceHandler: it maps and
+	// validates the request, delegates to the service, and writes the updated
+	// feature or an error response.
 	UpdateFeature(w http.ResponseWriter, r *http.Request)
+	// GetFeatures serves HTTP listing of feature catalog items for PriceHandler: it
+	// maps the request, delegates to the service, and writes the features,
+	// including pagination metadata when requested.
 	GetFeatures(w http.ResponseWriter, r *http.Request)
+	// DeleteFeature serves HTTP soft deletion of a feature catalog item for
+	// PriceHandler: it maps the request, delegates to the service, and writes the
+	// deleted feature or an error response.
 	DeleteFeature(w http.ResponseWriter, r *http.Request)
 }
 

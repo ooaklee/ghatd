@@ -2,18 +2,20 @@ package user
 
 // CreateUserRequest holds data for creating a new user
 type CreateUserRequest struct {
-	Email          string                 `json:"email"`
-	Type           string                 `json:"type,omitempty"`
-	FirstName      string                 `json:"first_name,omitempty"`
-	LastName       string                 `json:"last_name,omitempty"`
-	FullName       string                 `json:"full_name,omitempty"`
-	Avatar         string                 `json:"avatar,omitempty"`
-	Phone          string                 `json:"phone,omitempty"`
-	Roles          []string               `json:"roles,omitempty"`
-	Status         string                 `json:"status,omitempty"`
-	Extensions     map[string]interface{} `json:"extensions,omitempty"`
-	GenerateUUID   bool                   `json:"generate_uuid,omitempty"`
-	GenerateNanoID bool                   `json:"generate_nano_id,omitempty"`
+	// AttributionEvidence is server-bound cookie context, never a transport field.
+	AttributionEvidence string                 `json:"-" query:"-" form:"-"`
+	Email               string                 `json:"email"`
+	Type                string                 `json:"type,omitempty"`
+	FirstName           string                 `json:"first_name,omitempty"`
+	LastName            string                 `json:"last_name,omitempty"`
+	FullName            string                 `json:"full_name,omitempty"`
+	Avatar              string                 `json:"avatar,omitempty"`
+	Phone               string                 `json:"phone,omitempty"`
+	Roles               []string               `json:"roles,omitempty"`
+	Status              string                 `json:"status,omitempty"`
+	Extensions          map[string]interface{} `json:"extensions,omitempty"`
+	GenerateUUID        bool                   `json:"generate_uuid,omitempty"`
+	GenerateNanoID      bool                   `json:"generate_nano_id,omitempty"`
 }
 
 // UpdateUserRequest is a legacy broad update for an independently authorized

@@ -1,0 +1,13 @@
+{
+  "numbering_source": "https://github.com/nyaruka/phonenumbers",
+  "version": "v1.7.5",
+  "regions": 245,
+  "calling_codes": "GetCountryCodeForRegion for each two-letter GetSupportedRegions entry",
+  "names": "Reviewed British-English country names; missing names use golang.org/x/text language/display",
+  "dial_prefixes": "Only literal alternatives in reviewed leading-digits metadata are expanded as hints. All validation uses the current library metadata.",
+  "flag_mappings": "Explicit region references; TA maps to SH-TA; AC has no usable artwork in the pinned flag source",
+  "library_licence": "MIT",
+  "library_licence_source": "https://github.com/nyaruka/phonenumbers/blob/v1.7.5/LICENSE",
+  "upstream_metadata_source": "https://github.com/google/libphonenumber",
+  "upstream_metadata_licence": "Apache-2.0"
+}

@@ -17,34 +17,83 @@ import (
 
 // AuditService expected methods of a valid audit service
 type AuditService interface {
+	// LogAuditEvent forwards an audit event request to the audit service for
+	// recording, satisfying the audit capability expected by the billing service.
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 
 // billingEventsRepository is the expected methods needed to
 // interact with the database
 type billingEventsRepository interface {
+	// GetTotalBillingEvents returns the count of billing events matching the
+	// request's filters, such as integrator, customer, user, email, event type,
+	// currency, status and time ranges.
 	GetTotalBillingEvents(ctx context.Context, req *GetTotalBillingEventsRequest) (int64, error)
+	// GetBillingEvents returns billing events matching the request filters, sorted
+	// by the requested order and paginated by page and per-page settings.
 	GetBillingEvents(ctx context.Context, req *GetBillingEventsRequest) ([]BillingEvent, error)
+	// CreateBillingEvent persists a new billing event; implementations reject
+	// duplicates for the same integrator event with ErrBillingEventAlreadyProcessed
+	// and return the stored event.
 	CreateBillingEvent(ctx context.Context, newEvent *BillingEvent) (*BillingEvent, error)
+	// GetBillingEventByID returns the billing event with the given internal
+	// identifier, or ErrBillingEventNotFound when absent.
 	GetBillingEventByID(ctx context.Context, eventID string) (*BillingEvent, error)
+	// GetBillingEventsByEmail returns all billing events for the standardised
+	// lowercase email address, sorted newest first, covering all payment types.
 	GetBillingEventsByEmail(ctx context.Context, email string) ([]BillingEvent, error)
+	// AssociateBillingEventsWithUser sets the user ID on billing events with the
+	// given email that lack a user ID, returning the count of updated events.
 	AssociateBillingEventsWithUser(ctx context.Context, userID, email string) (int, error)
+	// GetUnassociatedBillingEvents returns billing events lacking a user ID,
+	// filtered by optional integrator, event type, email and creation time range,
+	// newest first up to the limit.
 	GetUnassociatedBillingEvents(ctx context.Context, req *GetUnassociatedBillingEventsRequest) ([]BillingEvent, error)
 }
 
 // subscriptionRepository is the expected methods needed to
 // interact with the database
 type subscriptionRepository interface {
+	// GetTotalSubscriptions returns the count of subscriptions matching the
+	// request's filters, such as integrator, user, email, status, plan, currency,
+	// interval and date ranges.
 	GetTotalSubscriptions(ctx context.Context, req *GetTotalSubscriptionsRequest) (int64, error)
+	// GetSubscriptions returns subscriptions matching the request filters, sorted
+	// by the requested order and paginated by page and per-page settings.
 	GetSubscriptions(ctx context.Context, req *GetSubscriptionsRequest) ([]Subscription, error)
+	// CreateSubscription persists a new subscription in the database and returns
+	// the stored subscription record.
 	CreateSubscription(ctx context.Context, newSubscription *Subscription) (*Subscription, error)
+	// GetSubscriptionByID returns the subscription with the given internal
+	// identifier, or ErrBillingSubscriptionNotFound when absent.
 	GetSubscriptionByID(ctx context.Context, subscriptionID string) (*Subscription, error)
+	// GetSubscriptionByIntegratorID returns the subscription for the given
+	// integrator name and integrator subscription ID, or
+	// ErrBillingSubscriptionNotFound when absent.
 	GetSubscriptionByIntegratorID(ctx context.Context, integratorName, integratorSubscriptionID string) (*Subscription, error)
+	// UpdateSubscription persists changes to an existing subscription identified by
+	// its ID and returns the updated record.
 	UpdateSubscription(ctx context.Context, subscription *Subscription) (*Subscription, error)
+	// DeleteSubscription removes the subscription stored under subscriptionID via
+	// the subscriptionRepository database port; the store-backed implementation
+	// deletes the matching document and the in-memory implementation reports
+	// not-found for unknown IDs.
 	DeleteSubscription(ctx context.Context, subscriptionID string) error
+	// GetSubscriptionsByEmail returns all subscriptions whose email matches the
+	// given address, compared case-insensitively via lower-case standardisation;
+	// implementations return them newest-first.
 	GetSubscriptionsByEmail(ctx context.Context, email string) ([]Subscription, error)
+	// AssociateSubscriptionsWithUser sets userID on every subscription matching the
+	// standardised email that has an empty user ID, and returns the count of
+	// subscriptions updated.
 	AssociateSubscriptionsWithUser(ctx context.Context, userID, email string) (int, error)
+	// GetUnassociatedSubscriptions returns subscriptions with no user ID, applying
+	// the request's optional integrator, email and created-at range filters, sorted
+	// newest-first and limited by req.Limit.
 	GetUnassociatedSubscriptions(ctx context.Context, req *GetUnassociatedSubscriptionsRequest) ([]Subscription, error)
+	// UpdateSubscriptionUserID sets userID on the subscription identified by
+	// subscriptionID and returns the updated subscription plus the prior version;
+	// both implementations refresh the updated-at timestamp.
 	UpdateSubscriptionUserID(ctx context.Context, subscriptionID, userID string) (*Subscription, *Subscription, error)
 }
 

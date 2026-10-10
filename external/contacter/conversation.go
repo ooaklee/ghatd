@@ -158,8 +158,17 @@ type CommsConversationPage struct {
 // Insert must atomically deduplicate identity and compare immutable content on
 // replay. Query returns at most limit+1 entries in descending (time, ID) order.
 type ConversationRepository interface {
+	// InsertCommsEntry validates and inserts a comms entry once; on a duplicate-key
+	// error it re-reads the stored entry and reports it as an idempotent replay
+	// only when content matches, flagging divergence as a conflict.
 	InsertCommsEntry(context.Context, *CommsEntry) (*CommsEntry, bool, error)
+	// FindCommsEntry returns the entry whose ID and comms ID both match the
+	// request, distinguishing only absence from other failures via the domain
+	// not-found error.
 	FindCommsEntry(context.Context, string, string) (*CommsEntry, error)
+	// QueryCommsEntries returns entries for a comms ID ordered by recorded time
+	// then ID descending, keyset-paginated after the supplied cursor entry and
+	// limited to the requested page size.
 	QueryCommsEntries(context.Context, string, *CommsEntry, int) ([]CommsEntry, error)
 }
 

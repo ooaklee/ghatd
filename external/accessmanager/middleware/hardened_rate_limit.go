@@ -20,8 +20,15 @@ import (
 // hardenedRateLimitEphemeralStore defines the methods required from ephemeral storage
 // for hardened rate limiting of code verification endpoints.
 type hardenedRateLimitEphemeralStore interface {
+	// TrackHardenedAttempt records a verification attempt for the given IP and code
+	// against the maximum attempt count within the window, as required for hardened
+	// rate limiting.
 	TrackHardenedAttempt(ctx context.Context, ip, code string, maxAttempts int, window time.Duration) error
+	// BlockIP blocks the given IP address in ephemeral storage for the specified
+	// duration as part of hardened rate limiting.
 	BlockIP(ctx context.Context, ip string, duration time.Duration) error
+	// IsIPBlocked reports whether the given IP address is currently blocked in
+	// ephemeral storage.
 	IsIPBlocked(ctx context.Context, ip string) (bool, error)
 }
 

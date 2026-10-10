@@ -34,9 +34,17 @@ type mobileGrantEnvelope struct {
 // browser handoff: an atomic start ticket plus an atomic, proof-checked
 // exchange grant.
 type MobileOAuthStore interface {
+	// SaveStart persists the start-ticket payload once under the ticket key with
+	// the given TTL, supporting the one-use browser handoff contract.
 	SaveStart(ctx context.Context, ticket string, payload []byte, ttl time.Duration) error
+	// ConsumeStart atomically returns and deletes the start payload for the ticket
+	// so it cannot be replayed.
 	ConsumeStart(ctx context.Context, ticket string) ([]byte, error)
+	// SaveGrant persists the exchange grant once, binding the PKCE challenge,
+	// redirect URI, state and payload under the code with the given TTL.
 	SaveGrant(ctx context.Context, code string, challenge string, redirectURI string, state string, payload []byte, ttl time.Duration) error
+	// ConsumeGrant atomically returns and deletes the grant payload only when
+	// challenge, redirect URI and state match; mismatch leaves the grant stored.
 	ConsumeGrant(ctx context.Context, code string, challenge string, redirectURI string, state string) ([]byte, error)
 }
 

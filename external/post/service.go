@@ -17,21 +17,65 @@ import (
 // Mutation errors retain their native cause; a failed write may have an uncertain
 // outcome and must not be retried automatically. Returned objects may be shared.
 type contenterRepository interface {
+	// GetTotalPosts returns the count of stored posts matching the filters in the
+	// given request, such as title, tags, publication and deletion criteria. Part
+	// of the contenterRepository persistence contract for post-domain state.
 	GetTotalPosts(ctx context.Context, req *GetTotalPostsRequest) (int64, error)
+	// GetPosts returns posts matching the filters, ordering and pagination in the
+	// given request, optionally using an aggregation pipeline to enforce unique
+	// types. Part of the contenterRepository persistence contract; returned objects
+	// may be shared.
 	GetPosts(ctx context.Context, req *GetPostsRequest) ([]Post, error)
 
+	// CreatePost persists the supplied new post and returns the stored result. The
+	// repository implementation assigns missing identities to a copy and inserts
+	// once; insert errors may have uncertain outcomes and are never retried
+	// automatically.
 	CreatePost(ctx context.Context, newPost *Post) (*Post, error)
 
+	// GetPostById returns the stored post selected by its _id. Per the
+	// contenterRepository contract, authoritative absence returns
+	// ErrResourceNotFound (optionally wrapped), never for outages; operational
+	// errors retain their native cause.
 	GetPostById(ctx context.Context, id string) (*Post, error)
+	// GetPostByUrlFriendlyId returns the stored post matching the supplied
+	// URL-friendly identifier. Per the contenterRepository contract, absence is
+	// reported as ErrResourceNotFound (optionally wrapped) and operational errors
+	// keep their native cause; returned objects may be shared.
 	GetPostByUrlFriendlyId(ctx context.Context, urlFriendlyId string) (*Post, error)
+	// GetPostByNanoId returns the stored post matching the supplied nano
+	// identifier. Per the contenterRepository contract, single-item reads signal
+	// authoritative absence via ErrResourceNotFound (optionally wrapped) and retain
+	// native operational error causes.
 	GetPostByNanoId(ctx context.Context, postNanoId string) (*Post, error)
 
+	// GetPostsByIds returns stored posts whose _id values match the supplied list
+	// of post IDs. Part of the contenterRepository persistence contract; returned
+	// objects may be shared among callers.
 	GetPostsByIds(ctx context.Context, postIds []string) ([]Post, error)
+	// GetPostsByUrlFriendlyIds returns stored posts whose URL-friendly identifiers
+	// match the supplied list. Part of the contenterRepository persistence
+	// contract; returned objects may be shared among callers.
 	GetPostsByUrlFriendlyIds(ctx context.Context, postUrlFriendlyIds []string) ([]Post, error)
+	// GetPostsByNanoIds returns stored posts whose nano identifiers match the
+	// supplied list. Part of the contenterRepository persistence contract; returned
+	// objects may be shared among callers.
 	GetPostsByNanoIds(ctx context.Context, postNanoIds []string) ([]Post, error)
 
+	// UpdatePost writes the supplied post to storage and returns the updated
+	// result. The repository implementation writes a private snapshot and requires
+	// one matched document; a matched no-op succeeds while missing matches and
+	// malformed receipts are distinguished.
 	UpdatePost(ctx context.Context, post *Post) (*Post, error)
+	// DeletePost permanently removes the post identified by the given ID. The
+	// repository implementation distinguishes a missing match from successful hard
+	// deletion, preserves native errors and does not retry uncertain write
+	// outcomes.
 	DeletePost(ctx context.Context, postId string) error
+	// SoftDeletePost records deletion metadata on a copy of the supplied post
+	// attributed to the given user ID and requires a matched document for the
+	// update. Part of the contenterRepository persistence contract; failed writes
+	// are not retried automatically.
 	SoftDeletePost(ctx context.Context, post *Post, userId string) error
 }
 

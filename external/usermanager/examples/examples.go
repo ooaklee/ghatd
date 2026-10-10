@@ -165,7 +165,7 @@ func Example12_AdminCreateGroup() {
 		CreateGroupRequest: &group.CreateGroupRequest{
 			Name:        "Machine Learning Team",
 			Type:        group.GroupTypeTeam,
-			Description: "Team focused on ML/AI projects and research",
+			Description: "Team focused on engineering projects and research",
 			Visibility:  group.VisibilityPrivate,
 			OwnerID:     "user-123",
 		},
@@ -185,6 +185,9 @@ func Example12_AdminCreateGroup() {
 
 // Helper functions and types
 
+// setupService assembles the example usermanager service from fixture-backed
+// mock dependencies and attaches a group service; it configures the example
+// only, not production wiring.
 func setupService() *usermanager.Service {
 	// Create mock services
 	userSvc := &MockUserService{}
@@ -209,6 +212,8 @@ func setupService() *usermanager.Service {
 
 // Mock services for examples
 
+// MockUserService is the example's fixture user service returning static
+// account data; production wiring supplies a real user service.
 type MockUserService struct{}
 
 // mockLookupRepository feeds the example's fixtures into the real domain
@@ -233,6 +238,8 @@ func (m *MockUserService) GetUsersByIDs(ctx context.Context, req *user.GetUsersB
 	return user.NewService(&mockLookupRepository{service: m}, nil, nil, nil, nil, nil, "").GetUsersByIDs(ctx, req)
 }
 
+// GetUserMicroProfile echoes the requested ID with a static ACTIVE USER micro
+// profile for the example.
 func (m *MockUserService) GetUserMicroProfile(ctx context.Context, r *user.GetUserMicroProfileRequest) (*user.GetUserMicroProfileResponse, error) {
 	return &user.GetUserMicroProfileResponse{
 		MicroProfile: &user.UserMicroProfile{
@@ -243,6 +250,8 @@ func (m *MockUserService) GetUserMicroProfile(ctx context.Context, r *user.GetUs
 	}, nil
 }
 
+// GetUserProfile returns a static verified example profile for the requested
+// ID.
 func (m *MockUserService) GetUserProfile(ctx context.Context, r *user.GetUserProfileRequest) (*user.GetUserProfileResponse, error) {
 	return &user.GetUserProfileResponse{
 		Profile: &user.UserProfile{
@@ -258,6 +267,8 @@ func (m *MockUserService) GetUserProfile(ctx context.Context, r *user.GetUserPro
 	}, nil
 }
 
+// GetUserByID returns a static ACTIVE example user for the requested ID with a
+// creation date thirty days in the past.
 func (m *MockUserService) GetUserByID(ctx context.Context, r *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error) {
 	return &user.GetUserByIDResponse{
 		User: &user.UniversalUser{
@@ -277,6 +288,8 @@ func (m *MockUserService) GetUserByID(ctx context.Context, r *user.GetUserByIDRe
 	}, nil
 }
 
+// GetUsers returns a single static example user with pagination metadata
+// echoing the requested page and per-page.
 func (m *MockUserService) GetUsers(ctx context.Context, r *user.GetUsersRequest) (*user.GetUsersResponse, error) {
 	return &user.GetUsersResponse{
 		Users: []user.UniversalUser{
@@ -301,6 +314,8 @@ func (m *MockUserService) GetUsers(ctx context.Context, r *user.GetUsersRequest)
 	}, nil
 }
 
+// GetUserByEmail returns a static ACTIVE example user whose email echoes the
+// requested address.
 func (m *MockUserService) GetUserByEmail(ctx context.Context, r *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error) {
 	return &user.GetUserByEmailResponse{
 		User: &user.UniversalUser{
@@ -317,6 +332,8 @@ func (m *MockUserService) GetUserByEmail(ctx context.Context, r *user.GetUserByE
 	}, nil
 }
 
+// UpdateUser echoes the requested first and last names back as a fixture
+// user-123 profile; no data is persisted.
 func (m *MockUserService) UpdateUser(ctx context.Context, r *user.UpdateUserRequest) (*user.UpdateUserResponse, error) {
 	return &user.UpdateUserResponse{
 		User: &user.UniversalUser{
@@ -338,32 +355,49 @@ func (m *MockUserService) UpdateProfileNames(ctx context.Context, r *user.Update
 		PersonalInfo: &user.PersonalInfo{FirstName: r.FirstName, LastName: r.LastName, FullName: r.FirstName + " " + r.LastName}}, nil
 }
 
+// DeleteUser accepts any delete request and reports success without touching
+// storage.
 func (m *MockUserService) DeleteUser(ctx context.Context, r *user.DeleteUserRequest) error {
 	return nil
 }
 
+// MockApiTokenService is a stateless example stand-in for the API token domain,
+// returning fixed counts and accepting deletions.
 type MockApiTokenService struct{}
 
+// DeleteApiTokensByOwnerId accepts any owner ID and reports success without
+// deleting anything.
 func (m *MockApiTokenService) DeleteApiTokensByOwnerId(ctx context.Context, ownerId string) error {
 	return nil
 }
 
+// GetTotalApiTokens returns a fixed total of 5 tokens regardless of the request
+// filters.
 func (m *MockApiTokenService) GetTotalApiTokens(ctx context.Context, r *apitoken.GetTotalApiTokensRequest) (int64, error) {
 	return 5, nil
 }
 
+// MockAuditService is a stateless example stand-in for audit logging with fixed
+// event counts.
 type MockAuditService struct{}
 
+// LogAuditEvent accepts the event and reports success without recording it.
 func (m *MockAuditService) LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error {
 	return nil
 }
 
+// GetTotalAuditLogEvents returns a fixed total of 25 events regardless of the
+// request filters.
 func (m *MockAuditService) GetTotalAuditLogEvents(ctx context.Context, r *audit.GetTotalAuditLogEventsRequest) (int64, error) {
 	return 25, nil
 }
 
+// MockContacterService backs example communication flows with canned contact
+// records instead of persistent storage.
 type MockContacterService struct{}
 
+// CreateComms returns the submitted contact details as a stored-looking record
+// with a fixed ID, current timestamp and logged-in flag.
 func (m *MockContacterService) CreateComms(ctx context.Context, req *contacter.CreateCommsRequest) (*contacter.CreateCommsResponse, error) {
 	return &contacter.CreateCommsResponse{
 		Comms: &contacter.Comms{
@@ -380,6 +414,8 @@ func (m *MockContacterService) CreateComms(ctx context.Context, req *contacter.C
 	}, nil
 }
 
+// GetComms returns one hardcoded feedback record attributed to user-123 and a
+// total of 1, ignoring pagination filters.
 func (m *MockContacterService) GetComms(ctx context.Context, req *contacter.GetCommsRequest) (*contacter.GetCommsResponse, error) {
 	return &contacter.GetCommsResponse{
 		Comms: []contacter.Comms{
@@ -398,6 +434,9 @@ func (m *MockContacterService) GetComms(ctx context.Context, req *contacter.GetC
 	}, nil
 }
 
+// UpdateComms builds a fresh record echoing the requested admin notes, reply
+// and linked IDs, and stamps ReachedOutAt only when the reached-out flag is
+// set.
 func (m *MockContacterService) UpdateComms(ctx context.Context, req *contacter.UpdateCommsRequest) (*contacter.UpdateCommsResponse, error) {
 	// Simulate fetching existing comms and updating admin fields
 	comms := &contacter.Comms{
@@ -428,16 +467,25 @@ func (m *MockContacterService) UpdateComms(ctx context.Context, req *contacter.U
 	}, nil
 }
 
+// GetCommsStats returns an empty statistics response; the example does not
+// aggregate any counters.
 func (m *MockContacterService) GetCommsStats(ctx context.Context, req *contacter.GetCommsStatsRequest) (*contacter.GetCommsStatsResponse, error) {
 	return &contacter.GetCommsStatsResponse{}, nil
 }
 
+// GetAvailableCommsTypes returns the contacter package's default communication
+// type map.
 func (m *MockContacterService) GetAvailableCommsTypes(context.Context) (*contacter.GetAvailableCommsTypesResponse, error) {
 	return &contacter.GetAvailableCommsTypesResponse{CommsTypes: contacter.DefaultCommsTypeMap()}, nil
 }
 
+// MockGroupService serves fixture teams and departments with common test users,
+// backing group examples without persistent storage.
 type MockGroupService struct{}
 
+// GetGroups returns fixture teams and departments, honouring type, member and
+// status filters; every group includes user-123, user-456 and user-new-hire as
+// members.
 func (m *MockGroupService) GetGroups(ctx context.Context, r *group.GetGroupsRequest) (*group.GetGroupsResponse, error) {
 	var groups []*group.UniversalGroup
 
@@ -516,6 +564,8 @@ func (m *MockGroupService) GetGroups(ctx context.Context, r *group.GetGroupsRequ
 	}, nil
 }
 
+// GetGroupByID returns a known fixture for recognised IDs, or a generic active
+// team for any other ID, always seeded with the common test users.
 func (m *MockGroupService) GetGroupByID(ctx context.Context, r *group.GetGroupByIDRequest) (*group.GetGroupByIDResponse, error) {
 	// Return specific groups based on ID for better example testing
 	var mockGroup *group.UniversalGroup
@@ -545,6 +595,8 @@ func (m *MockGroupService) GetGroupByID(ctx context.Context, r *group.GetGroupBy
 	}, nil
 }
 
+// GetGroupByNanoID reuses the by-ID lookup, treating the NanoID as the group ID
+// and attaching it to the returned group.
 func (m *MockGroupService) GetGroupByNanoID(ctx context.Context, r *group.GetGroupByNanoIDRequest) (*group.GetGroupByNanoIDResponse, error) {
 	// Reuse GetGroupByID behaviour and attach NanoID for testing
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.NanoID})
@@ -557,6 +609,8 @@ func (m *MockGroupService) GetGroupByNanoID(ctx context.Context, r *group.GetGro
 	return &group.GetGroupByNanoIDResponse{Group: groupResp.Group}, nil
 }
 
+// GetGroupMembers returns the fixture group's members filtered by optional
+// member type and role, with a count of the filtered result.
 func (m *MockGroupService) GetGroupMembers(ctx context.Context, r *group.GetGroupMembersRequest) (*group.GetGroupMembersResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil {
@@ -580,6 +634,8 @@ func (m *MockGroupService) GetGroupMembers(ctx context.Context, r *group.GetGrou
 	}, nil
 }
 
+// AddMember returns a freshly created fixture group containing the requested
+// member; the fixture set is not consulted.
 func (m *MockGroupService) AddMember(ctx context.Context, r *group.AddMemberRequest) (*group.AddMemberResponse, error) {
 	// Return a properly populated group
 	mockGroup := createMockGroup(r.GroupID, "Updated Group", group.GroupTypeTeam, 5)
@@ -592,6 +648,8 @@ func (m *MockGroupService) AddMember(ctx context.Context, r *group.AddMemberRequ
 	}, nil
 }
 
+// RemoveMember loads the fixture group by ID and applies its RemoveMember
+// mutation, returning the updated group or the mutation error.
 func (m *MockGroupService) RemoveMember(ctx context.Context, r *group.RemoveMemberRequest) (*group.RemoveMemberResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil {
@@ -606,6 +664,8 @@ func (m *MockGroupService) RemoveMember(ctx context.Context, r *group.RemoveMemb
 	return &group.RemoveMemberResponse{Group: updatedGroup}, nil
 }
 
+// UpdateMemberRole loads the fixture group by ID and applies its
+// UpdateMemberRole mutation, returning the updated group or the mutation error.
 func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.UpdateMemberRoleRequest) (*group.UpdateMemberRoleResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: r.GroupID})
 	if err != nil {
@@ -620,6 +680,9 @@ func (m *MockGroupService) UpdateMemberRole(ctx context.Context, r *group.Update
 	return &group.UpdateMemberRoleResponse{Group: updatedGroup}, nil
 }
 
+// CreateGroup builds a new fixture group with a timestamp-derived ID, copying
+// display, visibility, owner and extension fields and enrolling the requested
+// initial members.
 func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGroupRequest) (*group.CreateGroupResponse, error) {
 	// Create a new mock group based on the request
 	newGroup := createMockGroup(
@@ -655,6 +718,8 @@ func (m *MockGroupService) CreateGroup(ctx context.Context, req *group.CreateGro
 	}, nil
 }
 
+// UpdateGroup rejects a nil request or empty ID with ErrInvalidGroupID, then
+// applies only the pointer fields that are set to the fixture group.
 func (m *MockGroupService) UpdateGroup(ctx context.Context, req *group.UpdateGroupRequest) (*group.UpdateGroupResponse, error) {
 	if req == nil || req.ID == "" {
 		return nil, group.ErrInvalidGroupID
@@ -685,6 +750,8 @@ func (m *MockGroupService) UpdateGroup(ctx context.Context, req *group.UpdateGro
 	return &group.UpdateGroupResponse{Group: g}, nil
 }
 
+// DeleteGroup validates the ID and reports success; no fixture state is
+// actually removed.
 func (m *MockGroupService) DeleteGroup(ctx context.Context, req *group.DeleteGroupRequest) (*group.DeleteGroupResponse, error) {
 	if req == nil || req.ID == "" {
 		return nil, group.ErrInvalidGroupID
@@ -696,6 +763,8 @@ func (m *MockGroupService) DeleteGroup(ctx context.Context, req *group.DeleteGro
 	}, nil
 }
 
+// UpdateOwner loads the fixture group and replaces OwnerID only when the
+// request supplies a non-nil value.
 func (m *MockGroupService) UpdateOwner(ctx context.Context, req *group.UpdateOwnerRequest) (*group.UpdateOwnerResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.GroupID})
 	if err != nil {
@@ -708,6 +777,8 @@ func (m *MockGroupService) UpdateOwner(ctx context.Context, req *group.UpdateOwn
 	return &group.UpdateOwnerResponse{Group: g}, nil
 }
 
+// GetGroupDescendants returns an empty descendants list; hierarchy walking is
+// not simulated.
 func (m *MockGroupService) GetGroupDescendants(ctx context.Context, req *group.GetGroupDescendantsRequest) (*group.GetGroupDescendantsResponse, error) {
 	// Mock implementation - return empty descendants for now
 	return &group.GetGroupDescendantsResponse{
@@ -715,6 +786,8 @@ func (m *MockGroupService) GetGroupDescendants(ctx context.Context, req *group.G
 	}, nil
 }
 
+// GetGroupsByUserID returns the fixture groups containing the user as member,
+// with an empty descendants map.
 func (m *MockGroupService) GetGroupsByUserID(ctx context.Context, req *group.GetGroupsByUserIDRequest) (*group.GetGroupsByUserIDResponse, error) {
 	groupsResp, err := m.GetGroups(ctx, &group.GetGroupsRequest{MemberID: req.UserID})
 	if err != nil {
@@ -727,6 +800,8 @@ func (m *MockGroupService) GetGroupsByUserID(ctx context.Context, req *group.Get
 	}, nil
 }
 
+// RemoveUserFromAllGroups reports success and counts the distinct root groups
+// (first lineage entry, else group ID) the user belongs to; nothing is removed.
 func (m *MockGroupService) RemoveUserFromAllGroups(ctx context.Context, req *group.RemoveUserFromAllGroupsRequest) (*group.RemoveUserFromAllGroupsResponse, error) {
 	groupsResp, err := m.GetGroupsByUserID(ctx, &group.GetGroupsByUserIDRequest{UserID: req.UserID})
 	if err != nil {
@@ -758,6 +833,8 @@ func (m *MockGroupService) RemoveUserFromAllGroups(ctx context.Context, req *gro
 	}, nil
 }
 
+// GetGroupsAwaitingAnswerForInvitationsByMemberID returns all fixture groups
+// containing the member; invitation state is not actually filtered.
 func (m *MockGroupService) GetGroupsAwaitingAnswerForInvitationsByMemberID(
 	ctx context.Context,
 	req *group.GetGroupsAwaitingAnswerForInvitationsByMemberIDRequest,
@@ -770,6 +847,9 @@ func (m *MockGroupService) GetGroupsAwaitingAnswerForInvitationsByMemberID(
 	return &group.GetGroupsAwaitingAnswerForInvitationsByMemberIDResponse{Groups: groupsResp.Groups}, nil
 }
 
+// GetUserGroupAccessMap derives per-group access summaries from fixture
+// membership: accessible with member role, upgraded to the stored role, owner,
+// or admin-classified roles as applicable.
 func (m *MockGroupService) GetUserGroupAccessMap(ctx context.Context, userID string) (map[string]group.UserGroupAccessSummary, error) {
 	groupsResp, err := m.GetGroups(ctx, &group.GetGroupsRequest{MemberID: userID})
 	if err != nil {
@@ -809,14 +889,18 @@ func (m *MockGroupService) GetUserGroupAccessMap(ctx context.Context, userID str
 	return accessMap, nil
 }
 
+// GetGroupsConfig returns an empty capabilities response for the example.
 func (m *MockGroupService) GetGroupsConfig(_ context.Context, _ *group.GetGroupsConfigRequest) (*group.GetGroupsConfigResponse, error) {
 	return &group.GetGroupsConfigResponse{}, nil
 }
 
+// GetGroupLineage returns an empty lineage list; ancestry is not simulated.
 func (m *MockGroupService) GetGroupLineage(_ context.Context, req *group.GetGroupLineageRequest) (*group.GetGroupLineageResponse, error) {
 	return &group.GetGroupLineageResponse{Lineage: []group.GroupLineageNode{}}, nil
 }
 
+// ValidateGroupName rejects a blank name with ErrValidationFailed and otherwise
+// reports the trimmed name plus a lowercased hyphenated slug as available.
 func (m *MockGroupService) ValidateGroupName(_ context.Context, req *group.ValidateGroupNameRequest) (*group.ValidateGroupNameResponse, error) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -832,6 +916,8 @@ func (m *MockGroupService) ValidateGroupName(_ context.Context, req *group.Valid
 	}, nil
 }
 
+// GetLatestNotificationOverviews returns a single outstanding group-invite
+// overview, defaulting the user to user-123 when the request omits one.
 func (m *MockGroupService) GetLatestNotificationOverviews(
 	_ context.Context,
 	req *common.GetLatestNotificationOverviewsRequest,
@@ -860,6 +946,8 @@ func (m *MockGroupService) GetLatestNotificationOverviews(
 	}, nil
 }
 
+// AcceptInvite echoes the fixture group, invite email and user ID; membership
+// is not actually changed.
 func (m *MockGroupService) AcceptInvite(ctx context.Context, req *group.AcceptInviteRequest) (*group.AcceptInviteResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.GroupID})
 	if err != nil {
@@ -873,6 +961,8 @@ func (m *MockGroupService) AcceptInvite(ctx context.Context, req *group.AcceptIn
 	}, nil
 }
 
+// RejectInvite echoes the fixture group and invite email; no invitation state
+// is changed.
 func (m *MockGroupService) RejectInvite(ctx context.Context, req *group.RejectInviteRequest) (*group.RejectInviteResponse, error) {
 	groupResp, err := m.GetGroupByID(ctx, &group.GetGroupByIDRequest{ID: req.GroupID})
 	if err != nil {
@@ -885,6 +975,9 @@ func (m *MockGroupService) RejectInvite(ctx context.Context, req *group.RejectIn
 	}, nil
 }
 
+// createMockGroup builds an active UniversalGroup with default domain
+// collaborators, a week-old creation time, and generated members whose first
+// member becomes the owner and second becomes an admin.
 func createMockGroup(id, name, groupType string, memberCount int) *group.UniversalGroup {
 	config := group.DefaultGroupConfig()
 	idGen := group.NewDefaultIDGenerator()
@@ -914,6 +1007,7 @@ func createMockGroup(id, name, groupType string, memberCount int) *group.Univers
 	return g
 }
 
+// contains reports whether the string slice includes an exactly equal item.
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {

@@ -221,7 +221,7 @@ resource attributes; resources are attached to all exported signals.
   404/405 responses and redirects as well as matched routes. GHATD routers track
   templates automatically; direct Gorilla Mux users must install
   `routecontext.ObserveMiddleware` before other route middleware. See the
-  [router integration guide](../router/README.md#getting-started).
+  [router integration guide](../router/README.md#example-initialisation).
   Intentional `http.ErrAbortHandler` panics retain Go's abort semantics and omit
   normal request completion logging and duration recording.
 - Construct outbound clients with `NewHTTPClient` or wrap a transport with
