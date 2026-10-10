@@ -75,6 +75,9 @@ type RevenueFact struct {
 func (f RevenueFact) PaymentFactID() string {
 	return revenueID(f.Scope, RevenuePayment, f.PaymentID, f.InvoiceID, f.AllocationID, "")
 }
+
+// revenueID derives the deterministic "revenue_"-prefixed fact identity from
+// scope, kind, payment, invoice, allocation and adjustment components.
 func revenueID(scope RevenueScope, kind, payment, invoice, allocation, adjustment string) string {
 	body, _ := json.Marshal([]any{scope.Provider, scope.AccountID, scope.LiveMode, kind, payment, invoice, allocation, adjustment})
 	sum := sha256.Sum256(body)
@@ -128,9 +131,17 @@ type RevenueAcknowledgement struct {
 // and returns a monotonic durable sequence; callbacks may repeat on transient
 // conflicts, so no external effects are allowed within them.
 type RevenueTx interface {
+	// GetObservation reads a revenue observation by identity within the bound
+	// RevenueTx transaction.
 	GetObservation(context.Context, string) (RevenueObservation, error)
+	// InsertObservation persists a revenue observation within the bound RevenueTx
+	// transaction, committing atomically with other facts and observations.
 	InsertObservation(context.Context, RevenueObservation) error
+	// GetFact reads a revenue fact by identity within the bound RevenueTx
+	// transaction.
 	GetFact(context.Context, string) (RevenueFact, error)
+	// AppendFact appends a revenue fact within the bound transaction, atomically
+	// allocating and returning the fact with a monotonic durable sequence.
 	AppendFact(context.Context, RevenueFact) (RevenueFact, error)
 }
 
@@ -138,12 +149,34 @@ type RevenueTx interface {
 // reads and per-consumer acknowledgement CAS. A failed transaction has no
 // partial observations/facts. Ambiguous commit is ErrRevenueUncertain.
 type RevenueRepository interface {
+	// WithRevenueTransaction runs the callback with a RevenueTx; a failed
+	// transaction leaves no partial observations or facts, and an ambiguous commit
+	// returns ErrRevenueUncertain. Callbacks may repeat on transient conflicts, so
+	// no external effects are allowed within them.
 	WithRevenueTransaction(context.Context, func(RevenueTx) error) error
+	// GetRevenueFact returns the persisted verified revenue fact for the given
+	// identity from the owning repository; the service implementation validates the
+	// identity and rejects invalid revenue contexts before forwarding.
 	GetRevenueFact(context.Context, string) (RevenueFact, error)
+	// PendingRevenueFacts returns up to the requested limit of unacknowledged facts
+	// for a consumer; the service implementation validates the consumer identity
+	// and a 1–200 limit. Poison records may be quarantined independently of later
+	// facts.
 	PendingRevenueFacts(context.Context, string, int) ([]RevenueFact, error)
+	// AcknowledgeRevenueFact records a consumer's durable acknowledgement decision
+	// for a fact; the service implementation validates identities and outcome,
+	// requires the fact to exist, and timestamps acceptance. Unavailable
+	// dependencies must remain pending.
 	AcknowledgeRevenueFact(context.Context, RevenueAcknowledgement) error
 }
-type RevenueClock interface{ Now() time.Time }
+
+// RevenueClock supplies the service's notion of now, allowing tests to control
+// acceptance timing.
+type RevenueClock interface {
+	// Now returns the service's current notion of time for acceptance timing,
+	// allowing tests to control it.
+	Now() time.Time
+}
 
 // RevenueService owns verified fact validation, economic deduplication and
 // durable feed acceptance. The existing billing manager remains the provider
@@ -153,12 +186,17 @@ type RevenueService struct {
 	clock RevenueClock
 }
 
+// NewRevenueService rejects a nil repository or clock with
+// ErrRevenueUnavailable and otherwise returns the wired service.
 func NewRevenueService(repo RevenueRepository, clock RevenueClock) (*RevenueService, error) {
 	if revenueNil(repo) || revenueNil(clock) {
 		return nil, ErrRevenueUnavailable
 	}
 	return &RevenueService{repo, clock}, nil
 }
+
+// revenueNil reports whether v is nil or a nil channel, function, interface,
+// map, pointer or slice; other values are non-nil.
 func revenueNil(v any) bool {
 	if v == nil {
 		return true
@@ -171,18 +209,32 @@ func revenueNil(v any) bool {
 	return false
 }
 
+// revenueContext returns ErrRevenueInvalid for a nil context, otherwise its
+// cancellation or deadline error.
 func revenueContext(ctx context.Context) error {
 	if ctx == nil {
 		return ErrRevenueInvalid
 	}
 	return ctx.Err()
 }
+
+// validRevenueIdentity accepts non-empty IDs of at most 256 characters with no
+// surrounding whitespace.
 func validRevenueIdentity(id string) bool {
 	return id != "" && len(id) <= 256 && strings.TrimSpace(id) == id
 }
+
+// validRevenueScope requires provider and account identifiers that each satisfy
+// validRevenueIdentity.
 func validRevenueScope(s RevenueScope) bool {
 	return validRevenueIdentity(s.Provider) && validRevenueIdentity(s.AccountID)
 }
+
+// canonicalRevenueFact validates field shapes and per-kind rules (payments
+// carry no adjustment or refunds; adjustments require one), then rewrites the
+// deterministic ID, normalizes effective time to UTC, clears sequence and
+// acceptance, and fingerprints the canonical JSON encoding. Violations return
+// ErrRevenueInvalid.
 func canonicalRevenueFact(f RevenueFact) (RevenueFact, error) {
 	if !validRevenueScope(f.Scope) || !validRevenueIdentity(f.PaymentID) || !validRevenueIdentity(f.InvoiceID) || !validRevenueIdentity(f.AllocationID) || !validRevenueIdentity(f.PrincipalID) || !validRevenueIdentity(f.SubscriptionID) || !validRevenueIdentity(f.PlanID) || !validRevenueIdentity(f.CostID) || f.EffectiveAt.IsZero() || !revenueCurrency.MatchString(f.Currency) || f.CurrencyExponent < 0 || f.CurrencyExponent > 3 || f.PaidMinor < 0 || f.CumulativeRefundedMinor < 0 || f.CumulativeRefundedMinor > f.PaidMinor {
 		return RevenueFact{}, ErrRevenueInvalid

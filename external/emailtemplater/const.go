@@ -1,5 +1,7 @@
 package emailtemplater
 
+// EmailTemplateType names a category of email template available to the
+// templater.
 type EmailTemplateType string
 
 const (

@@ -11,21 +11,38 @@ import (
 
 // IDGenerator generates unique identifiers
 type IDGenerator interface {
+	// GenerateUUID returns a newly generated UUIDv4 string from the IDGenerator
+	// port; the default implementation delegates to the toolbox generator.
 	GenerateUUID() string
+	// GenerateNanoID returns a newly generated NanoID string from the IDGenerator
+	// port; the default implementation delegates to the toolbox generator.
 	GenerateNanoID() string
 }
 
 // TimeProvider provides current time (useful for testing)
 type TimeProvider interface {
+	// Now returns the current time from the TimeProvider port, allowing clock
+	// injection for testing; the default implementation reads the host's local
+	// time.
 	Now() time.Time
+	// NowUTC returns the current UTC time as an RFC3339-formatted string from the
+	// TimeProvider port; the default implementation reads the host clock.
 	NowUTC() string
 }
 
 // StringUtils provides string manipulation utilities
 type StringUtils interface {
+	// ToTitleCase converts the supplied string to title case via the StringUtils
+	// port; the default implementation delegates to the toolbox converter.
 	ToTitleCase(s string) string
+	// ToLowerCase returns a standardised lowercase form of the supplied string via
+	// the StringUtils port; the default implementation delegates to the toolbox.
 	ToLowerCase(s string) string
+	// ToUpperCase returns a standardised uppercase form of the supplied string via
+	// the StringUtils port; the default implementation delegates to the toolbox.
 	ToUpperCase(s string) string
+	// InSlice reports whether item equals any element of slice via the StringUtils
+	// port; the default implementation performs a linear equality scan.
 	InSlice(item string, slice []string) bool
 }
 

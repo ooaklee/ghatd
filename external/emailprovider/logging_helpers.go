@@ -7,6 +7,8 @@ import (
 	"go.uber.org/zap"
 )
 
+// emailLogFields builds log fields that expose only sender/recipient domains
+// and body/subject shape; full addresses and message content are never logged.
 func emailLogFields(provider string, email *Email) []zap.Field {
 	fields := []zap.Field{
 		zap.String("provider", provider),

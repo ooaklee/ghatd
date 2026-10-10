@@ -135,6 +135,8 @@ func (p *LoggingEmailProvider) IsLocalOutputProvider() bool {
 	return true
 }
 
+// now returns the current UTC time from the injected time provider, defaulting
+// to time.Now for a nil provider.
 func (p *LoggingEmailProvider) now() time.Time {
 	if p.timeProvider == nil {
 		return time.Now().UTC()
@@ -142,6 +144,8 @@ func (p *LoggingEmailProvider) now() time.Time {
 	return p.timeProvider().UTC()
 }
 
+// nextMessageID mints a capture identifier from the UTC timestamp and an
+// atomically incrementing counter.
 func (p *LoggingEmailProvider) nextMessageID() string {
 	return fmt.Sprintf("local-%d-%06d", p.now().UnixNano(), p.counter.Add(1))
 }

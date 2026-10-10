@@ -23,21 +23,61 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 // require real command receipts so missing matches are not reported as success.
 // Custom stores must preserve driver error identity and transaction contexts.
 type MongoDbStore interface {
+	// ExecuteCountDocuments delegates a count command against the given Mongo
+	// collection and filter, returning the matching document count. Part of the
+	// MongoDbStore contract, which requires delegation to shared Mongo helpers.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommandResult deletes a single document matching the filter
+	// in the given collection and returns the DeleteResult receipt. Per the
+	// MongoDbStore contract, mutations require real command receipts so missing
+	// matches are not reported as success.
 	ExecuteDeleteOneCommandResult(ctx context.Context, collection *mongo.Collection, filter any, opts ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
+	// ExecuteFindCommand runs a find query on the given collection with the
+	// supplied filter and options, returning a Mongo cursor for result iteration.
+	// Part of the MongoDbStore contract delegating to shared Mongo helpers.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the given document into the collection and
+	// returns the InsertOneResult receipt, using resultObjectName for diagnostics.
+	// Per the MongoDbStore contract, driver error identity and transaction contexts
+	// must be preserved.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommandResult updates a single document matching the filter
+	// in the given collection and returns the UpdateResult receipt. Part of the
+	// MongoDbStore contract requiring genuine command receipts for mutations.
 	ExecuteUpdateOneCommandResult(ctx context.Context, collection *mongo.Collection, filter, update any, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	// ExecuteDeleteManyCommand deletes all documents matching the filter in the
+	// given collection, using targetObjectName for diagnostics. Per the
+	// MongoDbStore contract, driver error identity and transaction contexts must be
+	// preserved.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult finds a single matching document in the
+	// collection and decodes it into result, using resultObjectName for
+	// diagnostics, logError to control logging and onFailureErr as the error
+	// returned on failure. Part of the MongoDbStore contract.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteAggregateCommand runs the supplied Mongo aggregation pipeline against
+	// the given collection and returns a cursor over the results. Part of the
+	// MongoDbStore contract delegating to shared Mongo helpers.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
 	// ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
 	// ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 	// ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
 
+	// GetDatabase returns the Mongo database handle for the given database name.
+	// Part of the MongoDbStore contract; custom stores must preserve driver error
+	// identity and transaction contexts.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient creates and returns the Mongo client used by the store. Part
+	// of the MongoDbStore contract delegating client setup to GHATD's shared Mongo
+	// helpers.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every document remaining in the cursor into
+	// result, using resultObjectName for diagnostics, and returns an error if
+	// decoding fails. Part of the MongoDbStore contract.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes a single document from the cursor into result,
+	// using resultObjectName for diagnostics. Part of the MongoDbStore contract; it
+	// is used for single-item query results.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

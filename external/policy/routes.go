@@ -8,7 +8,14 @@ import (
 
 // policyHandler expected methods for valid policy handler
 type policyHandler interface {
+	// GetPolicies handles an HTTP request by writing all stored policies to the
+	// response. The policyHandler implementation maps and validates the request,
+	// then delegates to the policy service and returns the result with a data
+	// response.
 	GetPolicies(w http.ResponseWriter, r *http.Request)
+	// GetPolicyByName handles an HTTP request for a policy with a specific name,
+	// writing it to the response when found. The policyHandler implementation maps
+	// and validates the request, then delegates to the policy service.
 	GetPolicyByName(w http.ResponseWriter, r *http.Request)
 }
 

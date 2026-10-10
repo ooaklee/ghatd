@@ -1,4 +1,4 @@
-# Contributor and agent conventions
+# Contributor conventions
 
 ## Changelog
 
@@ -13,7 +13,7 @@
   unreleased work; document the current owner and name instead. Retain migration
   guidance for interfaces or storage that actually exist on the target branch.
 - If a change needs no entry (for example, a typo or internal-only cleanup), state
-  the reason in the PR. The PR checklist applies to humans and agents alike.
+  the reason in the PR. The PR checklist applies to every contributor.
 - Keep versions/dates factual, omit empty categories, and preserve published
   history. A changelog edit does not authorise a tag, commit, push or release.
 - Apply the public-document hygiene rules to changelog entries too. Keep private

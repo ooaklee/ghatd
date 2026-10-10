@@ -1,19 +1,15 @@
-# [TITLE] <!-- [TITLE] should outline the topic of the how to  -->
+# [TITLE]
 
-
-<!-- This section is used to give an overview of what we're trying achieve in the how-to -->
+<!-- State what this how-to accomplishes and when to use it. -->
 
 ## Prerequisites
 
-<!-- This section references all of the things needed before the how-to can be actioned -->
+<!-- List required packages, access, configuration and prior how-tos. -->
 
 ## Steps
 
-<!-- This section outlines the steps needed to carry out the subject of the how to -->
-
+<!-- Use ordered steps with commands and expected outcomes. -->
 
 ## Additional context
 
-
-<!-- This section lists other resources that can give additional to this how to (internal/external). It should be explicitly stated when an external source is referenced -->
-
+<!-- Link relevant resources and identify external links. -->

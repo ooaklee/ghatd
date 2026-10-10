@@ -125,8 +125,6 @@ commission, using overflow-safe integer math.
   observation requires a new key and the current revision; its opaque
   fingerprint distinguishes its journal source from earlier observations.
   Original keys retain their unchanged receipts and recover the current claim.
-  Existing observations with an empty source reference remain readable; this
-  does not rewrite financial history or require an index migration.
 - `AmendPayment`: corrects a paid claim's method, reference or date with a
   required reason. It appends an amendment and never creates a second debit.
   `ExpectedRevision` is a precondition.
@@ -157,8 +155,7 @@ storage with no expiry.
 Missing required sources fail accrual replay or maturity; contradictory
 identity, deadline or receipt fails validation. An absent source or empty feed
 does not prove no entitlement or a complete ledger. Install the shared indexes
-and run host reconciliation/preflight before admission. These are new schemas
-introduced with this package, not a backfill of previously shipped records.
+and run host reconciliation/preflight before admission.
 
 Discovery is bounded by source count, but each selected source currently reads
 and validates its complete partner history, with the same financial history
@@ -182,18 +179,11 @@ one. Refund and payment replays return their original result rather than
 `ErrDuplicateEvent`; that sentinel is reserved for adapters that journal a
 source event directly.
 
-## Testing
+## Verification
 
-`service_test.go` covers rate math (exact half-up, bounds, overflow), accrual
-and maturity idempotency, frozen-field fingerprint conflicts, cumulative refund
-reversal with replay/conflict/zero-delta anchoring, the claim lifecycle with
-oldest-first allocation and reservation release-once, idempotent claim creation
-and manual payment (replay vs changed-payload and cross-claim conflict),
-`ExpectedRevision` preconditions, audit provenance, overflow-safe derivation,
-driver-callback retry isolation, and the concurrent claims no-double-spend
-guard. A `fakeRepository` implements `Repository` with a
-transactional memory store so the service's guarantees are tested without a
-database.
+Run `go test ./external/partnerearnings ./external/partnerstore`. Native storage
+cases require `GHATD_TEST_MONGO_URI` pointing to an isolated replica set; otherwise
+they skip.
 
 ## Financial evidence and recovery
 

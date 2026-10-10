@@ -30,8 +30,13 @@ func AttachAnnouncementRoutes(router *grouter.Router, service *AnnouncementServi
 	return nil
 }
 
+// announcementHandler binds the shared announcement service to private HTTP
+// endpoint methods.
 type announcementHandler struct{ service *AnnouncementService }
 
+// decodeAnnouncement strictly decodes a JSON request body of at most 10000
+// bytes into value, rejecting non-JSON media types and trailing content; it
+// writes the error response itself and reports success via its boolean.
 func decodeAnnouncement(w http.ResponseWriter, r *http.Request, value any) bool {
 	w.Header().Set("Cache-Control", "no-store")
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -48,6 +53,8 @@ func decodeAnnouncement(w http.ResponseWriter, r *http.Request, value any) bool 
 	return true
 }
 
+// current serves the frozen campaign preview with its delivery summary under a
+// 10-second timeout, returning data: null when no campaign exists.
 func (h *announcementHandler) current(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -69,6 +76,8 @@ func (h *announcementHandler) current(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"preview": preview, "summary": summary}})
 }
 
+// preview validates and persists a proposed announcement from the JSON body via
+// Prepare under a 15-second timeout.
 func (h *announcementHandler) preview(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Data    map[string]string `json:"data"`
@@ -89,6 +98,8 @@ func (h *announcementHandler) preview(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": preview})
 }
 
+// send dispatches a batch for a non-empty preview ID of at most 100 characters
+// under a 2-minute timeout, returning the dispatch summary.
 func (h *announcementHandler) send(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		PreviewID string `json:"previewId"`
@@ -110,6 +121,9 @@ func (h *announcementHandler) send(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"data": summary})
 }
 
+// unsubscribe accepts a 26-character base32-style token, hashes it before
+// storage lookup, and suppresses the matching delivery identity, returning 204
+// on success.
 func (h *announcementHandler) unsubscribe(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Token string `json:"token"`
@@ -130,6 +144,9 @@ func (h *announcementHandler) unsubscribe(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// announcementError maps known announcement errors to client responses: invalid
+// input to 400, expired or frozen state to 409, disabled sending keeps 503 with
+// its message, and unknown errors keep the generic unavailable text.
 func announcementError(w http.ResponseWriter, err error) {
 	status, message := http.StatusServiceUnavailable, "The announcement service is unavailable. Please try again."
 	switch {

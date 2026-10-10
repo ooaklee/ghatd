@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// visitNonce is the signed payload inside a visit dedupe cookie, binding the
+// nonce to one program, audience and link with issue/expiry times.
 type visitNonce struct {
 	ProgramID string    `json:"program_id"`
 	Audience  string    `json:"audience"`
@@ -49,6 +51,9 @@ func (s *EvidenceSigner) IssueVisit(link Link) (string, VisitIdentity, error) {
 	return token, s.visitIdentity(s.config.ActiveKeyID, v), nil
 }
 
+// visitIdentity derives the link-scoped keyed digest retained for analytics
+// from a verified nonce. It uses the signer's configured key and never exposes
+// the raw nonce in the returned identity.
 func (s *EvidenceSigner) visitIdentity(key string, v visitNonce) VisitIdentity {
 	data, _ := json.Marshal([]string{"partner-measured-visit", v.ProgramID, v.LinkID, v.Nonce})
 	mac := hmac.New(sha256.New, s.config.Keys[key])

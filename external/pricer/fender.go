@@ -13,6 +13,9 @@ import (
 
 // PricerValidator interface defines expected methods of a valid validator.
 type PricerValidator interface {
+	// Validate checks whether the supplied value satisfies the PricerValidator's
+	// validation rules and returns an error describing any violation. It is the
+	// expected validation port used by the pricer handler for request mapping.
 	Validate(s interface{}) error
 }
 
@@ -329,6 +332,8 @@ func MapRequestToDeleteFeatureRequest(request *http.Request, validator PricerVal
 	return parsedRequest, nil
 }
 
+// validateParsedRequest delegates validation to the supplied validator,
+// skipping validation entirely when the validator is nil.
 func validateParsedRequest(request interface{}, validator PricerValidator) error {
 	if validator == nil {
 		return nil
@@ -336,6 +341,8 @@ func validateParsedRequest(request interface{}, validator PricerValidator) error
 	return validator.Validate(request)
 }
 
+// decodeQuery decodes the request's URL query into parsedRequest, replacing any
+// decoder failure with ErrInvalidPriceQueryParam.
 func decodeQuery(request *http.Request, parsedRequest interface{}) error {
 	if err := querydecoder.New(request.URL.Query()).Decode(parsedRequest); err != nil {
 		return ErrInvalidPriceQueryParam
@@ -344,6 +351,9 @@ func decodeQuery(request *http.Request, parsedRequest interface{}) error {
 	return nil
 }
 
+// decodeOptionalBody JSON-decodes the request body into parsedRequest only when
+// a non-empty body is present; an empty body or clean EOF leaves the request
+// unchanged.
 func decodeOptionalBody(request *http.Request, parsedRequest interface{}) error {
 	if request.Body == nil || request.ContentLength == 0 {
 		return nil

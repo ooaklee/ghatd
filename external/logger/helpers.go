@@ -47,6 +47,9 @@ func RequestPath(r *http.Request) string {
 	return r.URL.Path
 }
 
+// loggerForCaller returns a logger for the caller at skip frames, attributed to
+// that caller's package via AcquirePackageFrom. When no package name can be
+// derived it falls back to the plain context logger.
 func loggerForCaller(ctx context.Context, skip int) *zap.Logger {
 	if packageName := packageNameFromCaller(skip + 1); packageName != "" {
 		return AcquirePackageFrom(ctx, packageName)
@@ -55,6 +58,10 @@ func loggerForCaller(ctx context.Context, skip int) *zap.Logger {
 	return Get(ctx)
 }
 
+// packageNameFromCaller derives a GHATD package name from the runtime call
+// stack, inspecting up to eight frames starting at skip. It skips logger-
+// package frames and unqualified names, stripping method or receiver suffixes;
+// it returns an empty string when no suitable caller is found.
 func packageNameFromCaller(skip int) string {
 	for i := skip; i < skip+8; i++ {
 		pc, _, _, ok := runtime.Caller(i)

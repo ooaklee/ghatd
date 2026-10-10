@@ -162,7 +162,7 @@ returning its result. A late postcommit revocation returns
 `partnerearnings.ErrUncertain` without a claim; the committed receipt remains
 recoverable under the original key once current authority permits it. Permission
 reads and the financial transaction are separate owner boundaries.
-The earlier `CancelClaim` API performs a conditional one-shot decision; clients
+The alternative `CancelClaim` API performs a conditional one-shot decision; clients
 requiring lost-response recovery should use `CancelClaimWithReceipt`.
 
 `RotateLink(ctx, actor, referral.RotateLinkRequest)` binds actor and partner
@@ -624,3 +624,9 @@ capacity, unavailable source evidence and overdue financial obligations. Queue
 counts alone do not prove the source index covers the ledger. Hosts still own
 startup preflight, source reconciliation, scheduling and restore/rebuild checks.
 Maturity preserves refund/debt/dispute-hold rules and never sends a payout.
+
+## Optional HTTP boundary
+
+Use [partnerhttp](http/README.md) for independently mounted customer/operator JSON
+routes, safe projections and configurable browser protection over the same human
+authority. It owns no financial transactions or additional receipt store.

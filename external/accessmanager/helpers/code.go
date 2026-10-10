@@ -32,7 +32,11 @@ var CodeManagementErrorMap = reply.ErrorManifest{
 
 // CodeStore expects methods required for unique code management in ephemeral storage
 type CodeStore interface {
+	// CodeExists reports whether the given code is currently present in ephemeral
+	// storage, supporting unique code management.
 	CodeExists(ctx context.Context, code string) (bool, error)
+	// StoreCode records the given code in ephemeral storage with the specified
+	// time-to-live for later uniqueness checks.
 	StoreCode(ctx context.Context, code string, ttl time.Duration) error
 }
 
@@ -89,6 +93,8 @@ func GenerateUniqueCode(ctx context.Context, store CodeStore, ttl time.Duration)
 	return "", ErrCodeGenerationFailure
 }
 
+// generateRandomCode produces one codeLength string of uniformly random
+// alphabet characters using crypto/rand; a reader failure aborts with an error.
 func generateRandomCode() (string, error) {
 	code := make([]byte, codeLength)
 	alphabetLen := big.NewInt(int64(len(codeAlphabet)))

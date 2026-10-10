@@ -34,6 +34,9 @@ type SetAccountRolesRequest struct {
 // no-ops, with acknowledged post-images. It must not retry, upsert or replace a
 // user. A concurrent profile update is unrelated and must survive.
 type AccountRolesRepository interface {
+	// SetAccountRoles writes the requested roles for the account guarded by the
+	// previous roles snapshot and returns the acknowledged post-image; it must not
+	// retry, upsert, or replace the user.
 	SetAccountRoles(context.Context, *SetAccountRolesRequest) (*UniversalUser, error)
 }
 

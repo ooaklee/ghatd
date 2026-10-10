@@ -15,6 +15,9 @@ import (
 // AdministratorAuthorizer revalidates a trusted session against live authority.
 // It must reject API, mixed, anonymous, revoked and stale-identity contexts.
 type AdministratorAuthorizer interface {
+	// AuthorizeAdministrator revalidates a trusted session context against live
+	// authority, returning the verified administrator identity; implementers must
+	// reject API, mixed, anonymous, revoked and stale-identity contexts.
 	AuthorizeAdministrator(context.Context) (string, error)
 	// AdministratorErrorMaps preserves the verifier's native error contracts.
 	AdministratorErrorMaps() []reply.ErrorManifest
@@ -23,6 +26,9 @@ type AdministratorAuthorizer interface {
 // AccountStatusService is the narrow configured domain capability. It validates
 // receipts and preserves native errors; a broad UpdateUser is not a fallback.
 type AccountStatusService interface {
+	// UpdateUserStatus applies a status change to the targeted user; the
+	// usermanager Service adapts the domain payload, binding the authenticated
+	// caller as actor before delegating to ChangeAccountStatus.
 	UpdateUserStatus(context.Context, *user.UpdateUserStatusRequest) (*user.UpdateUserStatusResponse, error)
 }
 

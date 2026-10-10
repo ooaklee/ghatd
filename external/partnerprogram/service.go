@@ -58,18 +58,31 @@ var currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
 var paypalEmailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
 // Clock is injectable so tests are deterministic.
-type Clock interface{ Now() time.Time }
+type Clock interface {
+	// Now returns the current time from the injectable Clock, enabling
+	// deterministic tests; implementations return UTC wall-clock or
+	// wrapped-function time.
+	Now() time.Time
+}
 
+// RealClock is the production Clock returning wall-clock time in UTC.
 type RealClock struct{}
 
+// Now returns the current wall-clock time in UTC.
 func (RealClock) Now() time.Time { return time.Now().UTC() }
 
+// ClockFunc adapts an ordinary function to Clock, mainly for tests and simple
+// composition.
 type ClockFunc func() time.Time
 
+// Now calls the wrapped function, preserving Clock semantics.
 func (f ClockFunc) Now() time.Time { return f() }
 
 // IDGenerator produces non-enumerable identifiers.
-type IDGenerator interface{ NewID() string }
+type IDGenerator interface {
+	// NewID returns a fresh non-enumerable identifier produced by the IDGenerator.
+	NewID() string
+}
 
 // Partner is one customer's participation in the program. Status transitions
 // carry reason and audit timestamps; suspension separately gates acquiring new
@@ -209,6 +222,11 @@ type Config struct {
 	EligiblePlanIDs   []string
 }
 
+// validate enforces trusted configuration bounds: rate limits, hold days (zero
+// only when explicitly allowed), an approved three-letter currency with
+// exponent 0..3, terms version, a positive attribution window of at most 180
+// days, and explicit unique eligible plan IDs. Failures return wrapped
+// ErrInvalid and clamp nothing.
 func (c Config) validate() error {
 	if c.DefaultRateBasisPoints < MinRateBasisPoints || c.DefaultRateBasisPoints > MaxRateBasisPoints {
 		return fmt.Errorf("%w: default rate out of bounds", ErrInvalid)
@@ -238,14 +256,27 @@ func (c Config) Validate() error { return c.validate() }
 // Repository is the narrow typed persistence port. Implementations own all
 // datastore I/O; they never choose rates or invent eligibility rules.
 type Repository interface {
+	// GetPartnerByID reads the Partner for the identified partner within the typed
+	// persistence port, returning stored data unchanged.
 	GetPartnerByID(ctx context.Context, id string) (Partner, error)
+	// GetPartnerByCustomer reads the Partner linking the program and customer
+	// identifiers, a datastore lookup owned by the Repository.
 	GetPartnerByCustomer(ctx context.Context, programID, customerID string) (Partner, error)
+	// InsertPartner persists a new Partner, performing the datastore write owned by
+	// the narrow typed persistence port.
 	InsertPartner(ctx context.Context, p Partner) error
+	// ReplacePartner persists the Partner only when its revision matches
+	// expectedRevision, returning the stored result of the guarded replacement.
 	ReplacePartner(ctx context.Context, p Partner, expectedRevision int64) (Partner, error)
+	// ListPolicyVersions returns all PolicyVersion records for the program; the
+	// Service implementation exposes this immutable published history for admin
+	// reads.
 	ListPolicyVersions(ctx context.Context, programID string) ([]PolicyVersion, error)
 	// InsertPolicyVersion atomically checks and advances the exact scope head
 	// and inserts the immutable revision. No partial head/history writes.
 	InsertPolicyVersion(ctx context.Context, v PolicyVersion, expectedRevision int64) error
+	// GetDestination reads the payout Destination for the identified customer, a
+	// datastore lookup within the Repository port.
 	GetDestination(ctx context.Context, customerID string) (Destination, error)
 	// InsertDestination atomically compares the active version and appends the
 	// next one. Older destination records are never overwritten.
@@ -463,6 +494,8 @@ func (s *Service) ValidatePolicy(d PolicyDraft) error {
 	return nil
 }
 
+// validIDs accepts a non-empty list of trimmed, non-empty IDs of at most 128
+// bytes with no duplicates.
 func validIDs(ids []string) bool {
 	seen := make(map[string]bool, len(ids))
 	for _, id := range ids {
@@ -546,6 +579,11 @@ func (s *Service) ResolveReferralTerms(ctx context.Context, partner Partner, gro
 	return s.resolveTerms(ctx, partner, groupIDs, policyAt, signupAt)
 }
 
+// resolveTerms computes the effective snapshot at an event time by selecting,
+// per scope, the latest applicable policy version, then chaining global →
+// highest-priority matching group → individual, with equal-priority group ties
+// rejected as ambiguous. Explicit values override; a recurring window is
+// anchored to recurrenceFrom so reassignment cannot restart it.
 func (s *Service) resolveTerms(ctx context.Context, partner Partner, groupIDs []string, at, recurrenceFrom time.Time) (EffectiveTerms, error) {
 	if err := s.ready(ctx); err != nil {
 		return EffectiveTerms{}, err
@@ -635,6 +673,8 @@ func cloneIDs(ids []string) []string {
 	}
 	return append([]string{}, ids...)
 }
+
+// cloneTime returns a defensive copy of an optional time, preserving nil.
 func cloneTime(v *time.Time) *time.Time {
 	if v == nil {
 		return nil
@@ -642,6 +682,8 @@ func cloneTime(v *time.Time) *time.Time {
 	c := *v
 	return &c
 }
+
+// cloneInt returns a defensive copy of an optional int, preserving nil.
 func cloneInt(v *int) *int {
 	if v == nil {
 		return nil

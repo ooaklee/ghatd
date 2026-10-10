@@ -15,7 +15,14 @@ import (
 // AccountRoleService is the configured domain's narrow role-management port.
 // Its receipts report actual changes, so management does not audit no-ops.
 type AccountRoleService interface {
+	// AddUserRole adds a role to the target user identified by the request and
+	// reports whether the stored user actually changed. The implementation binds
+	// the actor from trusted context and delegates to ChangeAccountRole.
 	AddUserRole(context.Context, *user.AddUserRoleRequest) (*user.AddUserRoleResponse, error)
+	// RemoveUserRole removes a role from the target user identified by the request
+	// and reports whether the stored user actually changed. The implementation
+	// binds the actor from trusted context, never the body, and delegates to
+	// ChangeAccountRole with removal.
 	RemoveUserRole(context.Context, *user.RemoveUserRoleRequest) (*user.RemoveUserRoleResponse, error)
 }
 

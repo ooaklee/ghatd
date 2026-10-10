@@ -10,8 +10,17 @@ import (
 
 // blueprintHandler expected methods for valid blueprint handler
 type blueprintHandler interface {
+	// CreateBlueprint serves the blueprint creation endpoint of the
+	// blueprintHandler route contract; the handler implementation maps the HTTP
+	// request, delegates to the service, and writes a created response to w.
 	CreateBlueprint(w http.ResponseWriter, r *http.Request)
+	// GetBlueprintByID serves the single-blueprint fetch endpoint of the
+	// blueprintHandler route contract; the handler implementation maps the request,
+	// delegates to the service, and writes the blueprint to w.
 	GetBlueprintByID(w http.ResponseWriter, r *http.Request)
+	// GetBlueprints serves the blueprint listing endpoint of the blueprintHandler
+	// route contract; the handler implementation maps the request, delegates to the
+	// service, and writes the matched blueprints to w.
 	GetBlueprints(w http.ResponseWriter, r *http.Request)
 }
 

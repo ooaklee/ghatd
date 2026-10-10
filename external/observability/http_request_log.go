@@ -84,6 +84,8 @@ func NewHTTPRequestLogPolicy(config HTTPRequestLogConfig) (HTTPRequestLogPolicy,
 	return policy, nil
 }
 
+// httpRequestLogPolicyKey is the private context key carrying the active
+// request-log policy.
 type httpRequestLogPolicyKey struct{}
 
 // WithHTTPRequestLogPolicy enables access-log details at an HTTP boundary.
@@ -179,6 +181,9 @@ func (snapshot HTTPRequestLogSnapshot) Fields(route string) []zap.Field {
 	return fields
 }
 
+// boundedRequestLogValue truncates to the byte limit, replaces invalid UTF-8
+// and control characters, then drops trailing runes until the result fits. It
+// returns the bounded value and whether anything was truncated.
 func boundedRequestLogValue(value string, limit int) (string, bool) {
 	// Bound processing as well as output. Replace invalid UTF-8 and controls so
 	// arbitrary headers cannot create misleading multiline console records.
@@ -201,6 +206,9 @@ func boundedRequestLogValue(value string, limit int) (string, bool) {
 	return value, truncated
 }
 
+// boundedRequestLogHeader joins header values with commas, stopping once the
+// combined length reaches the limit, then applies boundedRequestLogValue to the
+// joined result.
 func boundedRequestLogHeader(values []string, limit int) (string, bool) {
 	var joined strings.Builder
 	for index, value := range values {
@@ -222,6 +230,8 @@ func boundedRequestLogHeader(values []string, limit int) (string, bool) {
 	return boundedRequestLogValue(joined.String(), limit)
 }
 
+// requestLogPeer parses RemoteAddr into an unmapped IPv4/IPv6 address,
+// rejecting zones and malformed hosts.
 func requestLogPeer(remote string) (netip.Addr, bool) {
 	host, _, err := net.SplitHostPort(remote)
 	if err != nil {
@@ -231,6 +241,8 @@ func requestLogPeer(remote string) (netip.Addr, bool) {
 	return address.Unmap(), err == nil && address.Zone() == ""
 }
 
+// trusted reports whether an address falls inside one of the configured proxy
+// prefixes.
 func (policy HTTPRequestLogPolicy) trusted(address netip.Addr) bool {
 	for _, prefix := range policy.proxies {
 		if prefix.Contains(address) {
@@ -240,6 +252,10 @@ func (policy HTTPRequestLogPolicy) trusted(address netip.Addr) bool {
 	return false
 }
 
+// forwardedClient walks the forwarded header chain backwards and returns the
+// first address outside the trusted proxy set. Chains exceeding 32 lines, 32
+// addresses, 4096 total bytes, or containing malformed or zoned addresses are
+// rejected entirely rather than truncated.
 func (policy HTTPRequestLogPolicy) forwardedClient(values []string) (netip.Addr, bool) {
 	// Parse every header line in wire order. Reject oversized/malformed chains
 	// instead of truncating them into a different apparent client identity.

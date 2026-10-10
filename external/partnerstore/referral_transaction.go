@@ -14,6 +14,8 @@ type partitionStore struct {
 	partition string
 }
 
+// Read runs fn with the underlying transaction, validating context and callback
+// presence first; it opens no new transaction of its own.
 func (s partitionStore) Read(ctx context.Context, fn func(recordstore.Tx) error) error {
 	if err := validStoreContext(ctx); err != nil {
 		return err
@@ -23,6 +25,10 @@ func (s partitionStore) Read(ctx context.Context, fn func(recordstore.Tx) error)
 	}
 	return fn(s.tx)
 }
+
+// Transact forwards to Read only when the requested partition key matches the
+// store's selected partition; any other key is rejected as ErrInvalid rather
+// than opening a new transaction.
 func (s partitionStore) Transact(ctx context.Context, key string, fn func(recordstore.Tx) error) error {
 	if key != s.partition {
 		return recordstore.ErrInvalid

@@ -16,6 +16,10 @@ import (
 // //go:embed internal/web/ui/static/* internal/web/ui/html/*
 var content embed.FS
 
+// main builds the root cobra command for the ghatd application, registers the
+// server and migrator subcommands, and terminates with a fatal log if execution
+// fails. Errors and usage output are silenced on the root command so
+// subcommands control presentation.
 func main() {
 
 	// Highest Level Command

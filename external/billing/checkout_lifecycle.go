@@ -29,15 +29,25 @@ type CheckoutLifecycleAnchor struct {
 // Later checkouts for the same payer may retain their own receipt but cannot
 // replace the first anchor. All writes use the existing checkout scope guard.
 type CheckoutLifecycleTx interface {
+	// GetCheckoutLifecycleAnchor returns the first subscription anchor retained for
+	// the payer within the supplied revenue scope.
 	GetCheckoutLifecycleAnchor(context.Context, RevenueScope, string) (CheckoutLifecycleAnchor, error)
+	// GetCheckoutLifecycleReceipt returns the immutable per-intent receipt anchor
+	// retained for the supplied checkout intent.
 	GetCheckoutLifecycleReceipt(context.Context, string) (CheckoutLifecycleAnchor, error)
+	// InsertCheckoutLifecycleAnchor atomically inserts the supplied anchor,
+	// refusing disagreement with existing lifecycle or financial ownership.
 	InsertCheckoutLifecycleAnchor(context.Context, CheckoutLifecycleAnchor) error
 }
 
+// lifecycleScope copies the provider, account and live-mode triple from
+// checkout evidence into a RevenueScope.
 func lifecycleScope(e paymentprovider.RevenueCheckoutEvidence) RevenueScope {
 	return RevenueScope{Provider: e.Scope.Provider, AccountID: e.Scope.AccountID, LiveMode: e.Scope.LiveMode}
 }
 
+// lifecycleFingerprint derives the anchor fingerprint from its intent identity,
+// owner, plan/cost selection and evidence.
 func lifecycleFingerprint(a CheckoutLifecycleAnchor) string {
 	return subscriptionDigest([]any{a.IntentID, a.IntentFingerprint, a.PrincipalID, a.PlanID, a.CostID, a.Evidence})
 }
@@ -60,6 +70,10 @@ func (a CheckoutLifecycleAnchor) Validate() error {
 	return nil
 }
 
+// matchesLifecycleIntent reports whether stored intent and provider evidence
+// agree exactly: same session, intent, scope, subscription mode, references,
+// price, currency, amount, cadence, first interval, complete status, and an
+// evidence time not before intent creation.
 func matchesLifecycleIntent(intent CheckoutIntent, e paymentprovider.RevenueCheckoutEvidence) bool {
 	q := intent.Request
 	return validStoredCheckout(intent) && intent.SessionID != "" && intent.SessionID == e.SessionID && intent.ID == e.IntentID && intent.Scope == lifecycleScope(e) && q.Mode == paymentprovider.CheckoutModeSubscription && e.Mode == q.Mode && q.UserReference == e.ClientReferenceID && q.PriceID == e.PriceID && strings.ToUpper(q.ExpectedCurrency) == e.Currency && q.ExpectedAmount == e.UnitAmountMinor && string(q.ExpectedBillingCadence) == e.BillingCadence && e.IntervalCount == 1 && e.Status == "complete" && !e.CreatedAt.IsZero() && !e.CreatedAt.Before(intent.CreatedAt.Truncate(time.Second))
@@ -74,6 +88,11 @@ func lifecycleJoinedError(err error) error {
 	return err
 }
 
+// validateLifecycleStored re-reads and revalidates the anchor's owning intent
+// within the transaction, confirming fingerprint, principal, plan and cost
+// agreement plus full evidence matching; acknowledgement joins are validated
+// when the optional interface is present. Structural or joined failures map to
+// unavailable, disagreement to conflict.
 func validateLifecycleStored(ctx context.Context, tx CheckoutTx, a CheckoutLifecycleAnchor) error {
 	if a.Validate() != nil {
 		return ErrRevenueUnavailable

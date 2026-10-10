@@ -27,6 +27,8 @@ type RevenueHistorySnapshot struct {
 // RevenueHistoryRepository supplies a complete bounded native snapshot using
 // the same revenue owner. It performs no provider I/O or money calculation.
 type RevenueHistoryRepository interface {
+	// ReadRevenueHistory returns a complete bounded native history snapshot from
+	// the same revenue owner; it performs no provider I/O or money calculation.
 	ReadRevenueHistory(context.Context) (RevenueHistorySnapshot, error)
 }
 
@@ -62,6 +64,9 @@ type PaymentRevenueHistory struct {
 	ScopedUnresolvedSources int              `json:"-"`
 }
 
+// Validate accepts a query only with host-validated scopes, one to Capacity
+// unique, well-formed principals; duplicates or malformed entries return
+// ErrRevenueInvalid.
 func (q RevenueHistoryQuery) Validate() error {
 	if ValidateRevenueHistoryScopes(q.Scopes) != nil || len(q.Principals) < 1 || len(q.Principals) > RevenueHistoryCapacity {
 		return ErrRevenueInvalid
@@ -119,6 +124,11 @@ func (p PaymentRevenue) Validate() error {
 	return nil
 }
 
+// canonicalObservation recomputes a delivery or resolution observation's stored
+// fingerprint, enforcing strictly ordered known facts within the same scope
+// accepted no later than the observation, and for resolutions a matching
+// quarantined original of the same envelope with well-formed actor and reason.
+// Empty recovery identities are omitted to preserve legacy hashes.
 func canonicalObservation(v RevenueObservation, facts map[string]RevenueFact, all map[string]RevenueObservation) (string, error) {
 	if !validRevenueScope(v.Scope) || !cleanStatusID(v.ID) || !cleanStatusID(v.EnvelopeID) || v.AcceptedAt.IsZero() || len(v.FactIDs) > 200 || (v.SourceFingerprint != "" && !cleanStatusID(v.SourceFingerprint)) || (v.RecoveryFingerprint != "" && !validRevenueIdentity(v.RecoveryFingerprint)) {
 		return "", ErrRevenueUnassessable
@@ -162,6 +172,12 @@ func canonicalObservation(v RevenueObservation, facts map[string]RevenueFact, al
 	}{Original: original.ID, Fingerprint: original.Fingerprint, Facts: values, Reason: v.ResolutionReason, Actor: v.ResolutionBy, RecoveryFingerprint: v.RecoveryFingerprint}), nil
 }
 
+// validateRevenueHistory accepts a complete snapshot only: capacity-bounded,
+// non-nil facts and observations, sequence head equal to the fact count, unique
+// canonical facts within sequence bounds, every observation fingerprint
+// verified, and every fact created by some observation at its acceptance
+// instant. Cancellation errors pass through; structural failure is
+// unassessable.
 func validateRevenueHistory(ctx context.Context, snapshot RevenueHistorySnapshot, at time.Time) (map[string]RevenueFact, map[string]RevenueObservation, error) {
 	if len(snapshot.Facts)+len(snapshot.Observations) > RevenueHistoryCapacity {
 		return nil, nil, ErrRevenueHistoryTooLarge
@@ -213,6 +229,9 @@ func validateRevenueHistory(ctx context.Context, snapshot RevenueHistorySnapshot
 	return facts, observations, nil
 }
 
+// sameOriginalEconomics reports whether an adjustment fact belongs to exactly
+// the referenced original payment: same scope, provider identities, economics
+// and allocation, and the adjustment's PaymentFactID names the original.
 func sameOriginalEconomics(original, adjustment RevenueFact) bool {
 	return original.Kind == RevenuePayment && original.ID == adjustment.PaymentFactID() && original.Scope == adjustment.Scope && original.PaymentID == adjustment.PaymentID && original.InvoiceID == adjustment.InvoiceID && original.AllocationID == adjustment.AllocationID && original.PrincipalID == adjustment.PrincipalID && original.ProviderCustomerID == adjustment.ProviderCustomerID && original.SubscriptionID == adjustment.SubscriptionID && original.PlanID == adjustment.PlanID && original.CostID == adjustment.CostID && original.ProviderPriceID == adjustment.ProviderPriceID && original.Currency == adjustment.Currency && original.CurrencyExponent == adjustment.CurrencyExponent && original.PaidMinor == adjustment.PaidMinor
 }

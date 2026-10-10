@@ -16,6 +16,10 @@ Here's an overview of the core packages:
 
 For a high-level overview of how this might fit into your project, please [**visit this section**](#high-level-overview).
 
+Resolved Bird/Postmark/local account construction is optionally available in
+[the composition helper](helper/README.md). Core routing and receipt ownership
+remain in this package; hosts retain configuration, consent and templates.
+
 ## Quick Start: Setup and Sending
 
 This section shows how to set up the `emailmanager` and send a verification email. This is the recommended way to use the system for standard operations. For more examples, [check out the reference examples above](#core-packages-overview).
@@ -329,44 +333,6 @@ Application Code
                          │   Logs       │  │          │
                          └──────────────┘  └──────────┘
 ```
-
-## Potential Future Improvements
-
-Here's a list of areas for improvement in future iterations of `emailmanager`, `emailtemplater`, and `emailprovider`. Please note that these suggestions are not prioritised.
-
-### Additional Providers
-- [ ] SendGrid provider
-- [ ] AWS SES provider
-- [ ] Mailgun provider
-- [ ] Brevo provider
-- [ ] SMTP provider
-
-### Advanced Features
-- [x] Dual-channel verification (magic link + 8-character code)
-- [x] Hardened rate limiting for code verification endpoints
-- [x] Brute-force IP blocking on repeated failed attempts
-- [ ] Email templating with layouts
-- [ ] Multi-language support
-- [ ] Email preview generation
-- [ ] Batch sending optimisation
-- [ ] Rate limiting
-- [ ] Retry mechanisms
-- [ ] Email queueing
-
-### Testing
-- [x] Unit tests for unique code generation (`GenerateUniqueCode`)
-- [x] Unit tests for hardened rate limit middleware
-- [ ] Unit tests for templater
-- [ ] Unit tests for emailprovider
-- [ ] Unit tests for emailmanager
-- [ ] Integration tests
-- [ ] Performance benchmarks
-
-### Monitoring
-- [ ] Metrics collection
-- [ ] Provider failover
-- [ ] Send rate tracking
-- [ ] Error rate monitoring
 
 ## Purpose routing and submission receipts
 

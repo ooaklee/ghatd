@@ -16,6 +16,9 @@ import (
 
 var stripeRevenueObjectID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{1,255}$`)
 
+// validStripeRevenueConfig checks account ID shape, connected-account
+// uniqueness and bound (max 100), and uppercase three-letter currencies with
+// exponents 0-3.
 func validStripeRevenueConfig(c *RevenueConfig) bool {
 	if c == nil || !strings.HasPrefix(c.AccountID, "acct_") || !stripeRevenueObjectID.MatchString(c.AccountID) || len(c.ConnectedAccountIDs) > 100 || len(c.CurrencyExponents) == 0 {
 		return false
@@ -40,6 +43,10 @@ func validStripeRevenueConfig(c *RevenueConfig) bool {
 	return true
 }
 
+// revenueScope validates the configured revenue settings and API key, then
+// binds an event account to the platform account or a configured connected
+// account with matching mode. Unallowlisted accounts or mode mismatch return
+// ErrRevenueUnassessable.
 func (s *StripeProvider) revenueScope(account string, live bool) (RevenueScope, error) {
 	if s == nil || s.config == nil || s.config.Revenue == nil {
 		return RevenueScope{}, ErrRevenueNotEnabled
@@ -104,6 +111,11 @@ type stripeRevenueEvent struct {
 	} `json:"data"`
 }
 
+// resolveStripeRevenueEvent builds evidence for one authenticated event by re-
+// fetching the referenced invoice, charge, refund or dispute through the
+// authenticated API and cross-checking mode and identity. Unassessable
+// economics become quarantine reasons on the result rather than failures;
+// unverifiable provider disagreement returns ErrRevenueUnassessable.
 func (s *StripeProvider) resolveStripeRevenueEvent(ctx context.Context, event stripeRevenueEvent) (*RevenueEvidence, error) {
 	if !stripeRevenueObjectID.MatchString(event.ID) || event.LiveMode == nil || event.Created <= 0 || event.Data.Object == nil {
 		return nil, ErrPaymentProviderAPIResponseInvalid
@@ -261,7 +273,12 @@ func (s *StripeProvider) ReconcileRevenueEvent(ctx context.Context, scope Revenu
 	return s.resolveStripeRevenueEvent(ctx, event)
 }
 
+// rawStripeString decodes a raw JSON string field, returning the empty string
+// for absent, null or non-string values.
 func rawStripeString(b json.RawMessage) string { var s string; _ = json.Unmarshal(b, &s); return s }
+
+// rawStripeID extracts an object ID from either a plain string or an expanded
+// object's "id" field, returning the empty string when absent.
 func rawStripeID(b json.RawMessage) string {
 	if s := rawStripeString(b); s != "" {
 		return s
@@ -272,6 +289,9 @@ func rawStripeID(b json.RawMessage) string {
 	}
 	return rawStripeString(o["id"])
 }
+
+// rawStripeInt decodes a raw JSON integer, reporting false for absent, null or
+// non-numeric values.
 func rawStripeInt(b json.RawMessage) (int64, bool) {
 	var n int64
 	if len(b) == 0 || string(b) == "null" || json.Unmarshal(b, &n) != nil {
@@ -279,10 +299,16 @@ func rawStripeInt(b json.RawMessage) (int64, bool) {
 	}
 	return n, true
 }
+
+// rawStripeMode reports whether an object carries a present livemode flag that
+// decodes and equals the scope's mode.
 func rawStripeMode(o map[string]json.RawMessage, scope RevenueScope) bool {
 	var mode bool
 	return len(o["livemode"]) > 0 && string(o["livemode"]) != "null" && json.Unmarshal(o["livemode"], &mode) == nil && mode == scope.LiveMode
 }
+
+// revenueMath sums minor-unit amounts with arbitrary precision and returns
+// ErrRevenueUnassessable when the total overflows int64.
 func revenueMath(values ...int64) (int64, error) {
 	sum := new(big.Int)
 	for _, n := range values {
@@ -294,6 +320,10 @@ func revenueMath(values ...int64) (int64, error) {
 	return sum.Int64(), nil
 }
 
+// revenueGet performs one authenticated bounded GET (1 MiB response cap, no
+// redirect following) against the provider API for an already validated scope,
+// re-checking the scope against current configuration first. Non-2xx or
+// malformed responses return request/response provider errors.
 func (s *StripeProvider) revenueGet(ctx context.Context, scope RevenueScope, path string) (map[string]json.RawMessage, error) {
 	if ctx == nil {
 		return nil, ErrPaymentProviderInvalidPayload
@@ -385,6 +415,13 @@ func (s *StripeProvider) revenueList(ctx context.Context, scope RevenueScope, pa
 	}
 }
 
+// LookupRevenueInvoice retrieves the paid invoice, account, invoice payments,
+// payment intent and line items through the authenticated API within the
+// accepted scope. It requires exactly one matching paid payment intent, a known
+// currency exponent, zero balance/credit/off-Stripe/remaining amounts, and line
+// nets that sum to the invoice net; any mismatch or unsupported shape returns
+// ErrRevenueUnassessable rather than partial evidence. Refunds are included
+// only when requested.
 func (s *StripeProvider) LookupRevenueInvoice(ctx context.Context, req RevenueInvoiceRequest) (*RevenueInvoiceEvidence, error) {
 	if !stripeRevenueObjectID.MatchString(req.InvoiceID) || (req.PaymentID != "" && !stripeRevenueObjectID.MatchString(req.PaymentID)) {
 		return nil, ErrRevenueUnassessable
@@ -536,6 +573,11 @@ func (s *StripeProvider) LookupRevenueInvoice(ctx context.Context, req RevenueIn
 	return result, nil
 }
 
+// stripeRevenueLineNet computes a line's net by subtracting exactly one
+// complete credit representation (pretax credits or legacy discounts) from the
+// subtotal or amount-excluding-tax base. Arithmetic is done with big.Int;
+// missing fields, negative amounts or overflow beyond int64 return
+// ErrRevenueUnassessable.
 func stripeRevenueLineNet(line map[string]json.RawMessage) (int64, error) {
 	base, ok := rawStripeInt(line["subtotal"])
 	if !ok {

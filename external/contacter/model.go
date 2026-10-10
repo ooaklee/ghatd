@@ -198,6 +198,8 @@ func (c *Comms) SetCommsType(providedType string, configuredTypes ...CommsTypeMa
 	return c
 }
 
+// normaliseCommsType converts a provided type to kebab case, falling back to a
+// lowercased, hyphen-joined form when conversion fails.
 func normaliseCommsType(providedType string) CommsType {
 	normalised, err := toolbox.StringConvertToKebabCase(providedType)
 	if err != nil {
@@ -428,6 +430,8 @@ func (s *CommsTypeStats) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// commsTypeStatsKey normalises a comms type and converts it to the snake_case
+// key used in by-type statistics responses.
 func commsTypeStatsKey(commsType CommsType) string {
 	return strings.ReplaceAll(string(normaliseCommsType(string(commsType))), "-", "_")
 }

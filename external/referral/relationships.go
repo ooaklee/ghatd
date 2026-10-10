@@ -24,6 +24,9 @@ func RelationshipReferenceID(program, partner, customer string) string {
 	return v
 }
 
+// RelationshipQuery pages relationships. After is an opaque membership cursor
+// from RelationshipPage.NextAfter; Limit controls page size and is otherwise
+// interpreted by the repository.
 type RelationshipQuery struct {
 	Limit int
 	After string
@@ -51,6 +54,9 @@ type Relationship struct {
 	Periods                  []OwnershipPeriod
 }
 
+// RelationshipPage is one page of a partner's relationships plus continuation
+// evidence. HasMore indicates further pages exist; NextAfter is the cursor for
+// the next request. ProgramID and PartnerID echo the owning partition.
 type RelationshipPage struct {
 	ProgramID, PartnerID string
 	Items                []Relationship

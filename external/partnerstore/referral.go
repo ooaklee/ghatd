@@ -23,6 +23,9 @@ const (
 	kindClick            = "partner_referral_click"
 )
 
+// ReferralRepository persists referral links, corrections, payment attributions
+// and click evidence over the shared transactional store. It stores private
+// correction receipts that transport JSON omits.
 type ReferralRepository struct{ store recordstore.Store }
 
 // storedReferral retains private correction receipts despite the domain
@@ -32,9 +35,14 @@ type storedReferral struct {
 	Receipt *referral.CorrectionReceipt `json:"correction_receipt,omitempty"`
 }
 
+// referralRecord copies a domain Referral into the stored envelope, preserving
+// the correction receipt alongside the transport projection.
 func referralRecord(v referral.Referral) storedReferral {
 	return storedReferral{Referral: v, Receipt: v.Correction}
 }
+
+// value restores the domain Referral from the stored envelope, reinstating the
+// private correction receipt into the Correction field.
 func (v storedReferral) value() referral.Referral {
 	v.Referral.Correction = v.Receipt
 	return v.Referral
@@ -48,18 +56,34 @@ func NewReferralRepository(store recordstore.Store) (*ReferralRepository, error)
 	}
 	return &ReferralRepository{store}, nil
 }
+
+// referralPartition derives the per-customer partition holding a customer's
+// referral revisions and payment bindings.
 func referralPartition(customer string) string {
 	return "partner-referral:" + identity(referral.ProgramID, customer)
 }
+
+// linksPartition derives the per-partner partition holding that partner's
+// referral links and their revision history.
 func linksPartition(partner string) string {
 	return "partner-links:" + identity(referral.ProgramID, partner)
 }
+
+// clicksPartition derives the per-link partition holding click evidence, visit
+// receipts and visit-day buckets for one link.
 func clicksPartition(link string) string {
 	return "partner-clicks:" + identity(referral.ProgramID, link)
 }
+
+// referralProgramPartition derives the program-wide partition holding code
+// reservations, referral heads and payment bindings.
 func referralProgramPartition() string {
 	return "partner-referral-program:" + identity(referral.ProgramID)
 }
+
+// referralError maps storage sentinel causes to referral domain errors,
+// wrapping uncertain, unavailable and invalid causes to preserve
+// classification; other errors pass through.
 func referralError(err error) error {
 	switch {
 	case singleCauseIs(err, recordstore.ErrNotFound):
@@ -76,6 +100,10 @@ func referralError(err error) error {
 		return err
 	}
 }
+
+// GetLinkByCode resolves a case-sensitive code reservation to its link in one
+// read transaction, verifying code, program and partner partition agree. Codes
+// longer than 128 bytes are rejected as ErrInvalid.
 func (r *ReferralRepository) GetLinkByCode(ctx context.Context, code string) (referral.Link, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return referral.Link{}, referralError(err)
@@ -105,6 +133,10 @@ func (r *ReferralRepository) GetLinkByCode(ctx context.Context, code string) (re
 	})
 	return out, referralError(err)
 }
+
+// InsertLink reserves the code, stores the link, its first revision and the
+// partner's active-link head in one transaction. An active head, taken code or
+// racing insert returns ErrAlreadyExists or ErrCodeTaken.
 func (r *ReferralRepository) InsertLink(ctx context.Context, l referral.Link) error {
 	if l.ProgramID != referral.ProgramID || l.ID == "" || l.Code == "" || len(l.Code) > 128 || l.PartnerID == "" || l.CreatedAt.IsZero() || l.RetiredAt != nil {
 		return referral.ErrInvalid
@@ -142,6 +174,11 @@ func (r *ReferralRepository) InsertLink(ctx context.Context, l referral.Link) er
 		return writeReference(ctx, tx, kindLinkHead, headID, partition, l.ID, expected)
 	}))
 }
+
+// RetireLink marks the currently active link retired with reason, actor and UTC
+// timestamp, appending a revision and clearing the head in one transaction.
+// Retrying the same actor/reason is idempotent; other concurrent retires return
+// ErrStaleWrite.
 func (r *ReferralRepository) RetireLink(ctx context.Context, id string, at time.Time, reason, actor string) error {
 	if err := validStoreContext(ctx); err != nil {
 		return referralError(err)
@@ -202,6 +239,10 @@ func (r *ReferralRepository) RetireLink(ctx context.Context, id string, at time.
 		return writeReference(ctx, tx, kindLinkHead, headID, partition, "", head.Revision)
 	}))
 }
+
+// ListLinksByPartner reads every link in the partner's partition, verifying
+// decoded identity, and returns them sorted by creation time then ID. Any
+// inconsistent row fails the whole read.
 func (r *ReferralRepository) ListLinksByPartner(ctx context.Context, program, partner string) ([]referral.Link, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return nil, referralError(err)
@@ -236,6 +277,10 @@ func (r *ReferralRepository) ListLinksByPartner(ctx context.Context, program, pa
 	})
 	return out, referralError(err)
 }
+
+// GetReferralByCustomer reads the customer's referral head, restores its
+// private correction receipt and verifies program, customer, revision and state
+// agreement before returning it.
 func (r *ReferralRepository) GetReferralByCustomer(ctx context.Context, program, customer string) (referral.Referral, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return referral.Referral{}, referralError(err)
@@ -258,6 +303,10 @@ func (r *ReferralRepository) GetReferralByCustomer(ctx context.Context, program,
 	})
 	return out, referralError(err)
 }
+
+// InsertReferral stores a correction revision, retains the partner relationship
+// and CAS-advances the customer's referral head in one transaction. Expected-
+// revision or correction-chain mismatch returns ErrStaleWrite.
 func (r *ReferralRepository) InsertReferral(ctx context.Context, v referral.Referral, expected int64) error {
 	if v.ProgramID != referral.ProgramID || v.ReferredCustomer == "" || v.PartnerID == "" || expected < 0 || expected == math.MaxInt64 || v.Revision != expected+1 {
 		return referral.ErrInvalid
@@ -292,6 +341,10 @@ func (r *ReferralRepository) InsertReferral(ctx context.Context, v referral.Refe
 		return tx.Replace(ctx, row, expected)
 	}))
 }
+
+// ListReferralHistory reads every stored referral revision for a customer,
+// restoring correction receipts, and returns them sorted by revision. An
+// inconsistent row fails the whole list.
 func (r *ReferralRepository) ListReferralHistory(ctx context.Context, program, customer string) ([]referral.Referral, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return nil, referralError(err)
@@ -322,6 +375,10 @@ func (r *ReferralRepository) ListReferralHistory(ctx context.Context, program, c
 	sort.Slice(out, func(i, j int) bool { return out[i].Revision < out[j].Revision })
 	return out, referralError(err)
 }
+
+// ListReferralsByPartner pages current referral heads by partner state with a
+// validated limit of 1-100. The after cursor is itself verified to belong to
+// the partner before it is used.
 func (r *ReferralRepository) ListReferralsByPartner(ctx context.Context, program, partner string, limit int, after string) ([]referral.Referral, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return nil, referralError(err)
@@ -367,6 +424,10 @@ func (r *ReferralRepository) ListReferralsByPartner(ctx context.Context, program
 	})
 	return out, referralError(err)
 }
+
+// GetPaymentAttribution loads the payment binding for a program/payment ID pair
+// and verifies decoded agreement, including that the row state names the owning
+// referred customer.
 func (r *ReferralRepository) GetPaymentAttribution(ctx context.Context, program, payment string) (referral.PaymentAttribution, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return referral.PaymentAttribution{}, referralError(err)
@@ -388,6 +449,10 @@ func (r *ReferralRepository) GetPaymentAttribution(ctx context.Context, program,
 	})
 	return out, referralError(err)
 }
+
+// InsertPaymentAttribution records the globally unique payment binding once
+// inside the referred customer's partition; an existing binding returns
+// ErrAlreadyExists.
 func (r *ReferralRepository) InsertPaymentAttribution(ctx context.Context, v referral.PaymentAttribution) error {
 	if v.ProgramID != referral.ProgramID || v.PaymentID == "" || v.ID == "" || v.ReferredCustomer == "" || v.PartnerID == "" || v.ReferralID == "" {
 		return referral.ErrInvalid
@@ -439,6 +504,10 @@ func (r *ReferralRepository) ListPaymentAttributionsByCustomer(ctx context.Conte
 	}
 	return out, nil
 }
+
+// RecordClick stores one click observation in the link's clicks partition with
+// a 24h-365h expiry window relative to occurrence. A blank user agent or out-
+// of-window expiry is rejected as ErrInvalid.
 func (r *ReferralRepository) RecordClick(ctx context.Context, c referral.Click, expires time.Time) error {
 	if err := validStoreContext(ctx); err != nil {
 		return referralError(err)
@@ -462,6 +531,10 @@ func (r *ReferralRepository) RecordClick(ctx context.Context, c referral.Click, 
 		return tx.Insert(ctx, row)
 	}))
 }
+
+// CountClicks scans the link's clicks and counts occurrences in [from,to). It
+// fails on decode or identity inconsistency and rejects counts that would
+// overflow int64.
 func (r *ReferralRepository) CountClicks(ctx context.Context, link string, from, to time.Time) (int64, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return 0, referralError(err)

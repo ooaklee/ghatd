@@ -18,6 +18,9 @@ type CancelClaimRequest struct {
 	IdempotencyKey   string
 }
 
+// cancelClaimFingerprint derives the idempotency fingerprint for a claim
+// cancellation from program, currency, partner, actor, claim, expected revision
+// and reason.
 func cancelClaimFingerprint(program, currency string, req CancelClaimRequest) string {
 	return fingerprint(program, UseCaseCancel, req.PartnerID, req.ActorID, currency,
 		req.ClaimID, strconv.FormatInt(req.ExpectedRevision, 10), req.Reason)

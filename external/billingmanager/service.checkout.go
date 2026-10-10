@@ -34,6 +34,8 @@ const (
 var checkoutBracePlaceholderPattern = regexp.MustCompile(`\{[^{}\s]+\}`)
 var checkoutProviderNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+// checkoutSelection carries the resolved plan, cost and checkout mode chosen
+// from the published catalogue for one checkout request.
 type checkoutSelection struct {
 	plan pricer.PricePlan
 	cost pricer.PriceCost
@@ -411,6 +413,8 @@ func enrichCheckoutReturnURL(rawURL string, selection *checkoutSelection) (strin
 	return result, nil
 }
 
+// checkoutURLPlaceholder pairs a URL placeholder token with the value that
+// replaces it during return-URL processing.
 type checkoutURLPlaceholder struct {
 	token string
 	value string
@@ -509,6 +513,9 @@ func hasValidHTTPPort(parsed *url.URL) bool {
 	return err == nil && port >= 1 && port <= 65535
 }
 
+// validateCapturedCheckoutIntent confirms a retained intent still matches the
+// caller, price, idempotency key, scope and prior return-URL origin exactly;
+// any drift returns ErrRevenueConflict.
 func validateCapturedCheckoutIntent(intent billing.CheckoutIntent, userID, priceID, key string, scope billing.RevenueScope, allowedOrigin string) error {
 	priorOrigin, err := checkoutReturnURLOrigin(intent.Request.ReturnURL)
 	if intent.ID == "" || intent.Request.Metadata["checkout_intent_id"] != intent.ID || intent.Request.UserID != userID || intent.Request.UserReference != userID || intent.Request.PriceID != priceID || intent.Request.IdempotencyKey != key || intent.Scope != scope || err != nil || priorOrigin != allowedOrigin {
@@ -516,6 +523,11 @@ func validateCapturedCheckoutIntent(intent billing.CheckoutIntent, userID, price
 	}
 	return nil
 }
+
+// recoverCapturedCheckout re-retrieves a previously captured session from the
+// provider and re-runs payer authority for the current user before returning
+// it. A session that is missing, mismatched or lacks both client secret and URL
+// is invalid.
 func (s *Service) recoverCapturedCheckout(ctx context.Context, provider paymentprovider.RevenueCheckoutProvider, scope paymentprovider.RevenueScope, intent billing.CheckoutIntent, userID string) (*ProcessBillingProviderCheckoutResponse, error) {
 	recovered, err := provider.RetrieveRevenueCheckoutSession(ctx, scope, intent.SessionID)
 	if err != nil {

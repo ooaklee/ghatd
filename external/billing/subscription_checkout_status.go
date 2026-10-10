@@ -31,6 +31,10 @@ func (s *RevenueService) validatePaidCheckoutOwner(ctx context.Context, f Revenu
 	})
 }
 
+// checkoutStatusAnchor reads one checkout lifecycle anchor for a
+// scope/subscription through the optional CheckoutRepository. Repositories
+// without checkout capability return unavailable; errors pass through
+// unmodified.
 func (s *RevenueService) checkoutStatusAnchor(ctx context.Context, scope RevenueScope, subscription string) (CheckoutLifecycleAnchor, error) {
 	repo, ok := s.repo.(CheckoutRepository)
 	if !ok || revenueNil(repo) {
@@ -48,6 +52,11 @@ func (s *RevenueService) checkoutStatusAnchor(ctx context.Context, scope Revenue
 	return a, nil
 }
 
+// validateStatusProvenance rechecks immutable billing provenance: fact-sourced
+// preparations must exactly match the stored payment fact, checkout-sourced
+// ones must match the retained anchor including payer, customer and anchoring
+// time. Mismatches conflict; anchor read failures are joined as lifecycle
+// errors.
 func (s *RevenueService) validateStatusProvenance(ctx context.Context, p SubscriptionStatusPreparation) error {
 	if p.Source == "" {
 		f, err := s.statusFact(ctx, p.FactID)

@@ -8,7 +8,11 @@ import (
 	"github.com/ooaklee/ghatd/external/referral"
 )
 
+// relationshipEvidenceService is the narrow capability paid-referral metrics
+// need: relationship evidence for one partner from the referral owner.
 type relationshipEvidenceService interface {
+	// GetRelationshipEvidence returns the referral RelationshipEvidence for one
+	// partner, the narrow read paid-referral metrics need from the referral owner.
 	GetRelationshipEvidence(context.Context, string) (referral.RelationshipEvidence, error)
 }
 
@@ -16,6 +20,8 @@ type relationshipEvidenceService interface {
 // visit cohorts use separate analytics and must not share this denominator.
 type PaidReferralQuery struct{ From, To *time.Time }
 
+// validate rejects a cohort range whose bounds are zero or whose end is not
+// strictly after the start with ErrInvalid; absent bounds are allowed.
 func (q PaidReferralQuery) validate() error {
 	if (q.From != nil && q.From.IsZero()) || (q.To != nil && q.To.IsZero()) || (q.From != nil && q.To != nil && !q.To.After(*q.From)) {
 		return ErrInvalid
@@ -42,6 +48,12 @@ type PaidReferralReport struct {
 	Paid                  ReferralPaidTotals `json:"paid"`
 }
 
+// paidReferralReport builds the partner's complete lifetime paid report from
+// relationship evidence, requiring revenue reporting configuration. It
+// validates strict item ordering and capacity, computes paid evidence over the
+// [From,To) cohort, then rereads the evidence and fails with ErrStaleWrite if
+// the revision changed during billing/status reads; it claims no multi-owner
+// transaction.
 func (m *Manager) paidReferralReport(ctx context.Context, partner string, q PaidReferralQuery) (PaidReferralReport, error) {
 	owner, ok := m.deps.Referral.(relationshipEvidenceService)
 	if !ok || nilManagerDependency(owner) || m.revenueReporting == nil {

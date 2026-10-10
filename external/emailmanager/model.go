@@ -8,6 +8,8 @@ import (
 
 // AuditService defines the interface for audit logging
 type AuditService interface {
+	// LogAuditEvent records the audit event described by r through the
+	// AuditService, returning an error if logging fails.
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 

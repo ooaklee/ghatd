@@ -289,6 +289,8 @@ func DemonstratePrefixNameRequests() {
 	fmt.Println("  - Result: root-prefixed child names, without mutating stored raw names.")
 }
 
+// main runs each example in sequence with a printed heading; it exists for
+// runnable demonstration, not production behaviour.
 func main() {
 	fmt.Println("=== Example 1: Simple Team ===")
 	CreateSimpleTeam()

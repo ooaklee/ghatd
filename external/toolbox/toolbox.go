@@ -32,6 +32,8 @@ const (
 type (
 	// BaseValidator is a base validator
 	BaseValidator interface {
+		// Validate checks the supplied request against validation rules and returns an
+		// error describing any violation; the base validator contract in toolbox.
 		Validate(request interface{}) error
 	}
 )

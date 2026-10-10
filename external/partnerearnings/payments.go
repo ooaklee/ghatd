@@ -43,6 +43,9 @@ type PaymentEarning struct {
 	Amounts                                               PaymentAmounts
 }
 
+// PaymentReport is one owning payment snapshot projection: partner scope,
+// ledger revision, canonical balances and cohort totals, plus a bounded
+// original-payment page with continuation evidence.
 type PaymentReport struct {
 	ProgramID, PartnerID, Currency, Revision string
 	AsOf                                     time.Time
@@ -120,6 +123,10 @@ type paymentSnapshot struct {
 	sequence   int64
 }
 
+// withPaymentSnapshot opens one owning transaction, loads and sorts the full
+// journal and claims, validates lots and derives balances, then passes the
+// shared snapshot to project. The revision fingerprints both entries and claims
+// because reservation changes need not append journal lines.
 func (s *Service) withPaymentSnapshot(ctx context.Context, partner string, project func(paymentSnapshot) error) error {
 	return s.repo.WithTransaction(ctx, s.programID, partner, s.currency, func(tx Repository) error {
 		if isNilInterface(tx) {
@@ -158,7 +165,12 @@ func (s *Service) withPaymentSnapshot(ctx context.Context, partner string, proje
 	})
 }
 
+// claimPaymentKey identifies one (claim, payment) pair during payment-lot
+// validation.
 type claimPaymentKey struct{ claim, payment string }
+
+// disputePaymentKey identifies one (dispute, payment) pair during payment-lot
+// validation.
 type disputePaymentKey struct{ dispute, payment string }
 
 // paymentEarnings validates complete current provenance, including paid claims
@@ -445,6 +457,8 @@ func (s *Service) paymentEarnings(ctx context.Context, partner string, input []E
 	return out, nil
 }
 
+// addSignedAmount adds amount to *target using big-int arithmetic, failing when
+// the sum no longer fits int64.
 func addSignedAmount(target *int64, amount *big.Int) error {
 	value, err := bigToInt64(new(big.Int).Add(big.NewInt(*target), amount))
 	if err != nil {
@@ -454,6 +468,8 @@ func addSignedAmount(target *int64, amount *big.Int) error {
 	return nil
 }
 
+// addPaymentAmounts adds each PaymentAmounts field into target with overflow-
+// checked accumulation.
 func addPaymentAmounts(target *PaymentAmounts, amount PaymentAmounts) error {
 	fields := []struct {
 		target *int64

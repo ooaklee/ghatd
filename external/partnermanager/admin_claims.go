@@ -19,6 +19,12 @@ type ClaimOnBehalfRequest struct {
 	Reason                     string
 }
 
+// AdminRequestClaim creates a payout on behalf of a selected partner after
+// capability authorization. It replays an original receipt only when its frozen
+// partner, actor, reason, amount, currency and destination version match,
+// rechecking authority before and after reads. Fresh requests enforce claim
+// controls, payout admission, minimum amount, a verified individual principal
+// and the expected destination version before delegating.
 func (m *Manager) AdminRequestClaim(ctx context.Context, req ClaimOnBehalfRequest) (partnerearnings.Claim, error) {
 	if err := m.authorize(ctx, req.ActorID, CapabilityCreateClaimOnBehalf, req.PartnerID); err != nil {
 		return partnerearnings.Claim{}, err

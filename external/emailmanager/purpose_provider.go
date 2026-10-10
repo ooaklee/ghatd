@@ -12,12 +12,21 @@ func (m *EmailManager) ProviderForMailType(purpose emailprovider.MailType) email
 	return &purposeProvider{manager: m, purpose: purpose}
 }
 
+// purposeProvider is a synthetic provider view of an EmailManager bound to one
+// trusted mail purpose, used by routed-mode consumers.
 type purposeProvider struct {
 	manager *EmailManager
 	purpose emailprovider.MailType
 }
 
+// Name returns the constant provider name ROUTED for the purpose-bound manager
+// view.
 func (*purposeProvider) Name() string { return "ROUTED" }
+
+// IsHealthy reports whether the underlying selection for the bound purpose is
+// currently usable. When a local router output exists its health decides;
+// otherwise the selected provider is checked, and missing wiring, an expired
+// context or an invalid purpose report unhealthy.
 func (p *purposeProvider) IsHealthy(ctx context.Context) bool {
 	if p.manager == nil || ctx == nil || ctx.Err() != nil || !p.purpose.Valid() {
 		return false
@@ -34,9 +43,19 @@ func (p *purposeProvider) IsHealthy(ctx context.Context) bool {
 	}
 	return selected.Provider.IsHealthy(ctx)
 }
+
+// IsLocalOutputProvider reports whether sends through the bound manager avoid
+// external delivery, either because the router is configured with a local
+// capture provider or the single configured provider is local.
 func (p *purposeProvider) IsLocalOutputProvider() bool {
 	return p.manager != nil && ((p.manager.router != nil && p.manager.router.local != nil) || isLocalOutputProvider(p.manager.provider))
 }
+
+// Send copies the email, forces MailType to the adapter's bound purpose, and
+// forwards to the manager for routing. A nil manager or email fails immediately
+// with ErrEmailMailerSendFailed; the result carries the routed receipt's state,
+// provider and message ID, with Success set only for Accepted or Captured
+// states.
 func (p *purposeProvider) Send(ctx context.Context, email *emailprovider.Email) (*emailprovider.SendResult, error) {
 	if p.manager == nil || email == nil {
 		return &emailprovider.SendResult{State: emailprovider.Failed}, ErrEmailMailerSendFailed

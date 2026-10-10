@@ -15,29 +15,65 @@ import (
 // contentManagerService manages business logic for
 // handling content based requests
 type contentManagerService interface {
+	// CreatePost validates the request, requires an explicit administrator actor,
+	// and forwards content to the post domain, rejecting adapter responses without
+	// a usable created post.
 	CreatePost(ctx context.Context, req *CreatePostRequest) (*CreatePostResponse, error)
+	// UpdatePostById validates the request, resolves an explicit target post ID,
+	// requires an administrator actor, and returns the domain-updated post,
+	// verifying the updated ID matches the target.
 	UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest) (*UpdatePostByIdResponse, error)
+	// DeletePostById validates the request, requires an administrator actor, and
+	// delegates to the post domain's deletion rules for the selected post.
 	DeletePostById(ctx context.Context, req *DeletePostByIdRequest) (*DeletePostByIdResponse, error)
+	// RestorePostById validates the request, requires an administrator actor, and
+	// restores the selected post, rejecting a successful adapter response naming a
+	// different resource.
 	RestorePostById(ctx context.Context, req *RestorePostByIdRequest) (*RestorePostByIdResponse, error)
 
+	// GetChangelogItems returns changelog posts matching the query, applying the
+	// public projection for non-admin viewers and enriching results before
+	// response.
 	GetChangelogItems(ctx context.Context, req *GetChangelogItemsRequest) (*GetChangelogItemsResponse, error)
+	// GetChangelogItemByUrlFriendlyId returns a single changelog post by its
+	// URL-friendly identifier, restricting non-admin viewers to published,
+	// non-deleted content.
 	GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetChangelogItemByUrlFriendlyIdRequest) (*post.Post, error)
 
+	// GetGlossaryItems returns glossary posts matching the query, applying the
+	// public projection for non-admin viewers and enriching results before
+	// response.
 	GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsRequest) (*GetGlossaryItemsResponse, error)
+	// GetFaqItems returns FAQ posts matching the query, applying the public
+	// projection for non-admin viewers and enriching results before response.
 	GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*GetFaqItemsResponse, error)
+	// GetArticles returns article posts matching the query, applying the public
+	// projection for non-admin viewers and enriching results before response.
 	GetArticles(ctx context.Context, req *GetArticlesRequest) (*GetArticlesResponse, error)
+	// GetArticleItemByUrlFriendlyId returns a single article post by its
+	// URL-friendly identifier, restricting non-admin viewers to published,
+	// non-deleted content.
 	GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArticleItemByUrlFriendlyIdRequest) (*post.Post, error)
 
 	// GetArticleSitemapItems returns sitemap-ready article URL entries.
 	GetArticleSitemapItems(ctx context.Context, req *GetArticleSitemapItemsRequest) (*GetArticleSitemapItemsResponse, error)
 
+	// GetLatestPostsByType returns the latest post overviews for a type, hiding
+	// unpublished items from non-admin viewers on a locally owned copy of the
+	// results.
 	GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error)
+	// GetLatestNotificationOverviews retrieves the latest notification overviews
+	// for the contentManagerService, forwarding req to the post service and
+	// returning the wrapped overviews or an error.
 	GetLatestNotificationOverviews(ctx context.Context, req *GetLatestNotificationOverviewsRequest) (*GetLatestNotificationOverviewsResponse, error)
 }
 
 // contentManagerValidator expected methods of a valid
 // validator
 type contentManagerValidator interface {
+	// Validate reports whether the supplied value satisfies
+	// contentManagerValidator's validation rules, returning an error describing any
+	// invalid input.
 	Validate(s interface{}) error
 }
 

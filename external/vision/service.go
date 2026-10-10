@@ -11,13 +11,42 @@ import (
 
 // VisionRepository defines the persistence surface used by Service.
 type VisionRepository interface {
+	// CreateVision persists the given vision as part of the VisionRepository
+	// contract used by Service; it returns the stored vision. The reference
+	// implementation inserts the record and requires the returned identity to match
+	// the pinned ID and NanoID.
 	CreateVision(ctx context.Context, vision *Vision) (*Vision, error)
+	// DeleteVisionByID deletes the vision with the given internal identifier as
+	// part of the VisionRepository contract used by Service; the reference
+	// implementation trims the id and issues a single-document delete.
 	DeleteVisionByID(ctx context.Context, id string) error
+	// GetVisionByNanoID retrieves one vision by its public NanoID as part of the
+	// VisionRepository contract used by Service; the reference implementation
+	// decodes the matching document, normalises it, and reports a not-found error
+	// when absent.
 	GetVisionByNanoID(ctx context.Context, nanoID string) (*Vision, error)
+	// GetVisions retrieves a filtered page of visions as part of the
+	// VisionRepository contract used by Service; the reference implementation sorts
+	// by creation date and title, omits comments from list rows, applies
+	// pagination, and returns the matched rows.
 	GetVisions(ctx context.Context, req *GetVisionsRequest) ([]Vision, error)
+	// GetTotalVisions counts visions matching the list request filter as part of
+	// the VisionRepository contract used by Service; the reference implementation
+	// runs a document count with the same filter used for listing.
 	GetTotalVisions(ctx context.Context, req *GetVisionsRequest) (int64, error)
+	// UpdateVision persists mutable descriptive fields of the given vision as part
+	// of the VisionRepository contract used by Service; the reference
+	// implementation sets title, description, metadata, and update attribution
+	// without touching votes, comments, or status.
 	UpdateVision(ctx context.Context, vision *Vision) error
+	// UpdateVisionStatus stores a roadmap status transition as part of the
+	// VisionRepository contract used by Service; the reference implementation sets
+	// status, update attribution, and timestamp on the document selected by id.
 	UpdateVisionStatus(ctx context.Context, id string, status VisionStatus, updatedByUserID, updatedAt string) error
+	// AddVisionComment appends a comment to the vision identified by id as part of
+	// the VisionRepository contract used by Service; the reference implementation
+	// pushes the comment, increments the comment count, and records update
+	// attribution atomically.
 	AddVisionComment(ctx context.Context, id string, comment *VisionComment) error
 }
 

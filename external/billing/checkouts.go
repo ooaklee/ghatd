@@ -31,6 +31,9 @@ type RevenueAssociationRequest struct {
 	InvoiceID, PaymentID, CustomerID, SubscriptionID, ProviderPriceID, Currency string
 	PaidAt                                                                      time.Time
 }
+
+// RevenueAssociation carries the principal, plan and cost identifiers resolved
+// from an immutable checkout association.
 type RevenueAssociation struct{ PrincipalID, PlanID, CostID string }
 
 // CheckoutAssociation is immutable evidence of one server-authorized checkout.
@@ -47,15 +50,43 @@ type CheckoutAssociation struct {
 // CheckoutTx commits intent, acknowledgement and subscription association under
 // the same scope guard. No provider requests may occur inside a callback.
 type CheckoutTx interface {
+	// GetCheckoutIntent returns the stored checkout intent identified by the
+	// supplied ID, without performing provider requests.
 	GetCheckoutIntent(context.Context, string) (CheckoutIntent, error)
+	// InsertCheckoutIntent persists a checkout intent within the CheckoutTx
+	// transaction, which commits intent, acknowledgement and association under one
+	// scope guard. The intent is committed with other checkout records when the
+	// transaction succeeds.
 	InsertCheckoutIntent(context.Context, CheckoutIntent) error
+	// GetCheckoutAcknowledgement reads the acknowledgement token stored for the
+	// identified checkout within the CheckoutTx transaction, returning it from the
+	// owning checkout persistence.
 	GetCheckoutAcknowledgement(context.Context, string) (string, error)
+	// InsertCheckoutAcknowledgement stores an acknowledgement token for the
+	// identified checkout inside the CheckoutTx transaction so it commits
+	// atomically with intent and association records.
 	InsertCheckoutAcknowledgement(context.Context, string, string) error
+	// GetCheckoutAssociation reads a checkout association for the given revenue
+	// scope and identifiers within the CheckoutTx transaction, returning the
+	// persisted association record.
 	GetCheckoutAssociation(context.Context, RevenueScope, string, string) (CheckoutAssociation, error)
+	// InsertCheckoutAssociation persists a checkout subscription association inside
+	// the CheckoutTx transaction so it commits atomically with intent and
+	// acknowledgement records.
 	InsertCheckoutAssociation(context.Context, CheckoutAssociation) error
 }
+
+// CheckoutRepository opens checkout-scoped transactions and scope-free reads
+// over the owning checkout persistence.
 type CheckoutRepository interface {
+	// WithCheckoutTransaction runs the callback with a CheckoutTx scoped to the
+	// given revenue scope, committing intent, acknowledgement and association
+	// writes under one scope guard; provider requests must not occur in the
+	// callback.
 	WithCheckoutTransaction(context.Context, RevenueScope, func(CheckoutTx) error) error
+	// ReadCheckout runs the callback with a CheckoutTx for scope-free reads over
+	// the owning checkout persistence, without opening a checkout-scoped
+	// transaction.
 	ReadCheckout(context.Context, func(CheckoutTx) error) error
 }
 
@@ -63,30 +94,49 @@ type CheckoutRepository interface {
 // evidence, not an email/current catalogue match. IntentID is only a pointer to
 // a previously persisted authorization; it does not establish payer or terms.
 type CheckoutEvidenceProvider interface {
+	// LookupRevenueCheckout returns authenticated session and complete line-item
+	// evidence for a checkout within the given revenue scope. IntentID only points
+	// to a previously persisted authorization; it does not establish payer or
+	// terms.
 	LookupRevenueCheckout(context.Context, paymentprovider.RevenueScope, string) (paymentprovider.RevenueCheckoutEvidence, error)
 }
+
+// CheckoutService composes the checkout repository, clock and evidence
+// provider; it owns freezing intents and binding acknowledgements, not provider
+// verification.
 type CheckoutService struct {
 	repo     CheckoutRepository
 	clock    RevenueClock
 	provider CheckoutEvidenceProvider
 }
 
+// NewCheckoutService rejects nil repository, clock or provider with
+// ErrRevenueUnavailable; otherwise it returns the wired service.
 func NewCheckoutService(repo CheckoutRepository, clock RevenueClock, provider CheckoutEvidenceProvider) (*CheckoutService, error) {
 	if revenueNil(repo) || revenueNil(clock) || revenueNil(provider) {
 		return nil, ErrRevenueUnavailable
 	}
 	return &CheckoutService{repo, clock, provider}, nil
 }
+
+// checkoutIntentID derives the deterministic "checkout_"-prefixed intent key
+// from scope and idempotency key.
 func checkoutIntentID(scope RevenueScope, key string) string {
 	b, _ := json.Marshal([]any{scope, key})
 	sum := sha256.Sum256(b)
 	return "checkout_" + hex.EncodeToString(sum[:])
 }
+
+// checkoutRequestFingerprint hashes scope plus the full checkout request into a
+// stable identity used to detect changed retries.
 func checkoutRequestFingerprint(scope RevenueScope, r paymentprovider.CheckoutSessionRequest) string {
 	b, _ := json.Marshal([]any{scope, r})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
 }
+
+// cloneCheckoutRequest returns the request with a copied metadata map so
+// callers cannot mutate shared stored metadata.
 func cloneCheckoutRequest(r paymentprovider.CheckoutSessionRequest) paymentprovider.CheckoutSessionRequest {
 	copied := make(map[string]string, len(r.Metadata))
 	for k, v := range r.Metadata {
@@ -95,9 +145,19 @@ func cloneCheckoutRequest(r paymentprovider.CheckoutSessionRequest) paymentprovi
 	r.Metadata = copied
 	return r
 }
+
+// validCheckoutText accepts strings within max length that carry no surrounding
+// whitespace or control/NUL characters; empty values pass only when not
+// required.
 func validCheckoutText(s string, max int, required bool) bool {
 	return (!required || s != "") && len(s) <= max && strings.TrimSpace(s) == s && !strings.ContainsAny(s, "\r\n\x00")
 }
+
+// validCheckoutRequest enforces the frozen request contract: bounded well-
+// formed identities and URLs, matching user reference and user ID, supported
+// mode/cadence pairing, positive amount, valid currency, trials only for
+// subscriptions capped at 730 days, and at most 32 metadata entries with
+// bounded keys/values.
 func validCheckoutRequest(r paymentprovider.CheckoutSessionRequest) bool {
 	if !validCheckoutText(r.IdempotencyKey, 255, true) || !validCheckoutText(r.PriceID, 256, true) || !validCheckoutText(r.PlanID, 256, true) || !validCheckoutText(r.CostID, 256, true) || !validCheckoutText(r.UserID, 256, true) || r.UserReference != r.UserID || !validCheckoutText(r.CustomerEmail, 320, true) || !validCheckoutText(r.ReturnURL, 4096, true) || !validCheckoutText(r.PlanSlug, 256, false) || !validCheckoutText(r.PlanName, 1024, false) || !revenueCurrency.MatchString(strings.ToUpper(r.ExpectedCurrency)) || r.ExpectedAmount <= 0 || r.TrialPeriodDays < 0 || r.TrialPeriodDays > 730 || len(r.Metadata) > 32 {
 		return false
@@ -118,6 +178,10 @@ func validCheckoutRequest(r paymentprovider.CheckoutSessionRequest) bool {
 	}
 	return true
 }
+
+// ready verifies a non-cancelled context and that the service and its
+// repository, clock and provider are populated, returning ErrRevenueUnavailable
+// otherwise.
 func (s *CheckoutService) ready(ctx context.Context) error {
 	if err := revenueContext(ctx); err != nil {
 		return err
@@ -127,9 +191,18 @@ func (s *CheckoutService) ready(ctx context.Context) error {
 	}
 	return nil
 }
+
+// validStoredCheckout recomputes the intent's ID, server-owned metadata slot
+// and request fingerprint, accepting only structurally valid, self-consistent
+// stored intents.
 func validStoredCheckout(v CheckoutIntent) bool {
 	return validRevenueScope(v.Scope) && !v.CreatedAt.IsZero() && validCheckoutRequest(v.Request) && v.ID == checkoutIntentID(v.Scope, v.Request.IdempotencyKey) && v.Request.Metadata["checkout_intent_id"] == v.ID && v.Fingerprint == checkoutRequestFingerprint(v.Scope, v.Request)
 }
+
+// readCheckoutIntent loads a stored intent, rejects any record failing self-
+// consistency as unavailable, joins a well-formed session acknowledgement when
+// present, and returns the request with cloned metadata. Only a conclusive
+// acknowledgement absence is tolerated.
 func readCheckoutIntent(ctx context.Context, tx CheckoutTx, id string) (CheckoutIntent, error) {
 	v, err := tx.GetCheckoutIntent(ctx, id)
 	if err != nil {
@@ -234,6 +307,10 @@ func (s *CheckoutService) AcknowledgeCheckout(ctx context.Context, intent Checko
 		return acknowledgeCheckout(ctx, tx, intent.ID, session)
 	})
 }
+
+// acknowledgeCheckout is idempotent for the identical session and conflicts on
+// a different one; any non-absence read error is returned unchanged before
+// insertion.
 func acknowledgeCheckout(ctx context.Context, tx CheckoutTx, id, session string) error {
 	old, err := tx.GetCheckoutAcknowledgement(ctx, id)
 	if err == nil {
@@ -264,9 +341,18 @@ func (s *CheckoutService) CanSubmitCheckout(ctx context.Context, intent Checkout
 	}
 	return nil
 }
+
+// validAssociationRequest checks scope plus identity-shaped invoice, payment,
+// customer, subscription and price IDs, a supported currency and a nonzero paid
+// time.
 func validAssociationRequest(r RevenueAssociationRequest) bool {
 	return validRevenueScope(r.Scope) && validRevenueIdentity(r.InvoiceID) && validRevenueIdentity(r.PaymentID) && validRevenueIdentity(r.CustomerID) && validRevenueIdentity(r.SubscriptionID) && validRevenueIdentity(r.ProviderPriceID) && revenueCurrency.MatchString(r.Currency) && !r.PaidAt.IsZero()
 }
+
+// associationResult accepts a stored association only when it matches the
+// request's scope, subscription, customer, price and currency with a paid time
+// at or after checkout creation and valid owner identifiers; otherwise it
+// returns ErrRevenueUnassessable.
 func associationResult(a CheckoutAssociation, r RevenueAssociationRequest) (RevenueAssociation, error) {
 	if a.Scope != r.Scope || a.SubscriptionID != r.SubscriptionID || a.CustomerID != r.CustomerID || a.ProviderPriceID != r.ProviderPriceID || a.Currency != r.Currency || a.CheckoutCreatedAt.IsZero() || r.PaidAt.Before(a.CheckoutCreatedAt) || !validRevenueIdentity(a.PrincipalID) || !validRevenueIdentity(a.PlanID) || !validRevenueIdentity(a.CostID) {
 		return RevenueAssociation{}, ErrRevenueUnassessable

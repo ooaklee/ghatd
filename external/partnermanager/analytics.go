@@ -7,6 +7,9 @@ import (
 	"github.com/ooaklee/ghatd/external/referral"
 )
 
+// referralAnalytics forwards the owning analytics read and fails as unavailable
+// when the returned scope or validation does not match the requested partner
+// and query.
 func (m *Manager) referralAnalytics(ctx context.Context, partner string, q referral.AnalyticsQuery) (referral.Analytics, error) {
 	out, err := m.deps.Referral.GetAnalytics(ctx, partner, q)
 	if err != nil {

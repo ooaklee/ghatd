@@ -25,6 +25,8 @@ type LifecycleDiscoveryQuery struct {
 	Limit        int          `json:"-"`
 }
 
+// lifecycleDiscoveryScope hashes a scope into a stable opaque partition
+// component for lifecycle discovery projections.
 func lifecycleDiscoveryScope(scope RevenueScope) string {
 	b, _ := json.Marshal(scope)
 	return subscriptionDigest([]string{string(b)})
@@ -41,6 +43,9 @@ func LifecycleDiscoverySourceID(scope RevenueScope, kind, original string) strin
 	}
 	return ""
 }
+
+// discoveryDigest reports whether s is exactly 64 lowercase hexadecimal
+// characters.
 func discoveryDigest(s string) bool {
 	if len(s) != 64 {
 		return false
@@ -91,13 +96,27 @@ type LifecycleDiscoveryCandidate struct {
 	PaidOwnerIntent                         CheckoutIntent          `json:"-"`
 	HasPaidOwner                            bool                    `json:"-"`
 }
+
+// LifecycleDiscoverySnapshot is one owning discovery read: bounded candidates
+// plus whether the scope's projection has completed preparation. Neither field
+// is serialized.
 type LifecycleDiscoverySnapshot struct {
 	Items    []LifecycleDiscoveryCandidate `json:"-"`
 	Prepared bool                          `json:"-"`
 }
+
+// LifecycleDiscoveryRepository performs owning bounded discovery reads against
+// the native projection within a single snapshot.
 type LifecycleDiscoveryRepository interface {
+	// ReadLifecycleDiscovery executes a bounded discovery read against the native
+	// lifecycle projection within a single snapshot, returning the snapshot
+	// matching the supplied query.
 	ReadLifecycleDiscovery(context.Context, LifecycleDiscoveryQuery) (LifecycleDiscoverySnapshot, error)
 }
+
+// LifecycleDiscoveryPage is one validated page of candidates with a
+// continuation cursor. ReachedEnd applies only to this prepared projection's
+// current sweep; repeat full sweeps to observe late inserts behind cursors.
 type LifecycleDiscoveryPage struct {
 	Items      []LifecycleDiscoveryCandidate `json:"-"`
 	NextCursor string                        `json:"-"`
@@ -145,6 +164,11 @@ func (p LifecycleDiscoveryPage) Validate(q LifecycleDiscoveryQuery) error {
 	return nil
 }
 
+// validateDiscoveryCandidate revalidates one candidate against its owning
+// query: binding ID, scope, revision and principal, plus per-kind checks of the
+// stored intent (checkout sources) or paid owner, canonical fact,
+// anchor/receipt and joined intents (subscription sources). Malformed joins are
+// unavailable; ownership disagreement is a conflict.
 func validateDiscoveryCandidate(q LifecycleDiscoveryQuery, c LifecycleDiscoveryCandidate) error {
 	if c.Scope != q.Scope || c.Revision < 1 || !cleanStatusID(c.PrincipalID) {
 		return ErrRevenueUnavailable

@@ -86,6 +86,10 @@ func (s *EvidenceSigner) IssueMeasured(link Link, click Click) (string, Evidence
 	return s.issue(link, click.ID, &at)
 }
 
+// issue signs evidence for an active, non-retired link in this program,
+// refusing zero clocks and invalid measured origins with ErrDenied. The token
+// is the active key ID, base64 payload and HMAC-SHA256 tag; expiry is set by
+// the configured window.
 func (s *EvidenceSigner) issue(link Link, measured string, occurred *time.Time) (string, Evidence, error) {
 	if link.ProgramID != s.config.ProgramID || link.ID == "" || len(link.ID) > 128 || link.Code == "" || len(link.Code) > 128 || link.RetiredAt != nil {
 		return "", Evidence{}, ErrDenied
@@ -155,6 +159,9 @@ func (s *EvidenceSigner) VerifyCurrent(token string) (Evidence, error) {
 // independent of signup attribution and does not certify reporting coverage.
 func (s *EvidenceSigner) VisitMeasurementEnabled() bool { return s.config.VisitWindow > 0 }
 
+// validMeasuredOrigin allows an empty measured ID only without a timestamp;
+// otherwise the ID must be bounded, the timestamp present, non-zero and not
+// after issuance.
 func validMeasuredOrigin(id string, at *time.Time, issued time.Time) bool {
 	if id == "" {
 		return at == nil

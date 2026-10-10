@@ -13,10 +13,24 @@ import (
 // It reuses session-bound account verification with exact return addresses;
 // native requests do not fabricate a browser Origin.
 type mobileOAuthConnectionsService interface {
+	// OAuthConnections returns the session's linked providers, availability and
+	// Settings capability flags for the native Settings capability.
 	OAuthConnections(context.Context, string) (*OAuthConnectionsResponse, error)
+	// MobileOAuthDisconnectRedirectAllowed reports whether the redirect URI is
+	// allowlisted for native disconnect, requiring configured connections and
+	// proof-read storage.
 	MobileOAuthDisconnectRedirectAllowed(string) bool
+	// StartMobileOAuthDisconnect starts session-bound email verification for the
+	// provider and email, bound to an exact allowlisted native return URI,
+	// returning the start response.
 	StartMobileOAuthDisconnect(context.Context, string, string, string, string) (*OAuthDisconnectStartResponse, error)
+	// ConfirmMobileOAuthDisconnect consumes native proof for the provider at the
+	// exact allowlisted return URI, returning the next challenge or a replacement
+	// session.
 	ConfirmMobileOAuthDisconnect(context.Context, string, *OAuthDisconnectConfirmRequest, string, string) (*OAuthDisconnectResponse, error)
+	// ReviewMobileOAuthDisconnectChallenge returns pending native challenge
+	// metadata after validating session, return URI and account snapshot; it
+	// consumes no proof.
 	ReviewMobileOAuthDisconnectChallenge(context.Context, string, string, string, string) (*OAuthDisconnectStartResponse, error)
 }
 

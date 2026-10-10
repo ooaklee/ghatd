@@ -38,8 +38,12 @@ type VisitDay struct {
 	Counts    VisitMetrics `json:"counts"`
 }
 
+// utcDay truncates a timestamp to the start of its UTC day.
 func utcDay(at time.Time) time.Time { return at.UTC().Truncate(24 * time.Hour) }
 
+// Validate checks an anonymous VisitDay aggregate: program identity, bounded
+// link ID, exact UTC day alignment, positive revision and non-derived metric
+// constraints. Invalid or not-yet-computed days return ErrUnavailable.
 func (d VisitDay) Validate() error {
 	if d.ProgramID != ProgramID || !analyticsID(d.LinkID, 128) || d.Day.IsZero() || !d.Day.Equal(utcDay(d.Day)) || d.Revision < 1 || !validVisitMetrics(d.Counts) || d.Counts.Observations < 1 || d.Counts.ConvertedMeasuredVisits != 0 || d.Counts.SignupsFromVisitCohort != 0 {
 		return ErrUnavailable
@@ -47,6 +51,11 @@ func (d VisitDay) Validate() error {
 	return nil
 }
 
+// recordObservation increments a link's UTC-day counters inside the caller's
+// tx, classifying the click as eligible, duplicate, known-bot or unmeasured. It
+// enforces optimistic revision checks, rejects counter overflow with
+// ErrCapacity and unknown classifications with ErrInvalid, then writes the raw
+// observation with its retention deadline. Requires configured analytics.
 func (s *Service) recordObservation(ctx context.Context, tx Repository, c Click) error {
 	if s.analytics == nil {
 		return ErrUnavailable

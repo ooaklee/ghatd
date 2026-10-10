@@ -50,6 +50,8 @@ func NewHTTPTracePolicy(exactPaths, pathPrefixes []string) (HTTPTracePolicy, err
 	return policy, nil
 }
 
+// canonicalHTTPTracePath accepts absolute unreserved ASCII paths of bounded
+// length without repeated slashes, escapes or dot segments.
 func canonicalHTTPTracePath(path string) bool {
 	if len(path) < 2 || len(path) > httpTracePolicyMaxPathBytes || path[0] != '/' || strings.Contains(path, "//") {
 		return false
@@ -68,6 +70,9 @@ func canonicalHTTPTracePath(path string) bool {
 	return true
 }
 
+// matches reports whether a canonicalised GET or HEAD request path equals an
+// exact policy path or starts with a configured prefix. Non-canonical, escaped
+// or other-method requests never match.
 func (policy HTTPTracePolicy) matches(request *http.Request) bool {
 	if len(policy.exact) == 0 && len(policy.prefixes) == 0 {
 		return false
@@ -89,15 +94,23 @@ func (policy HTTPTracePolicy) matches(request *http.Request) bool {
 // HTTPServerOption configures an outer HTTP telemetry boundary. Options do not
 // bypass otelhttp, so its request metrics and normal completion remain active.
 type HTTPServerOption interface {
+	// applyHTTPServer applies this option's configuration changes to the outer HTTP
+	// telemetry server configuration.
 	applyHTTPServer(*httpServerConfiguration)
 }
 
+// httpServerConfiguration holds the trace and request-log policies assembled
+// from HTTP server options.
 type httpServerConfiguration struct {
 	tracePolicy      HTTPTracePolicy
 	requestLogPolicy HTTPRequestLogPolicy
 }
+
+// httpServerOptionFunc adapts a plain function to the HTTPServerOption
+// interface.
 type httpServerOptionFunc func(*httpServerConfiguration)
 
+// applyHTTPServer invokes the option function on the configuration.
 func (option httpServerOptionFunc) applyHTTPServer(config *httpServerConfiguration) { option(config) }
 
 // WithHTTPTracePolicy installs an immutable path policy. Repeated options use
@@ -107,8 +120,13 @@ func WithHTTPTracePolicy(policy HTTPTracePolicy) HTTPServerOption {
 	return httpServerOptionFunc(func(config *httpServerConfiguration) { config.tracePolicy = policy })
 }
 
+// httpTraceSuppressionKey is the private context key marking a request whose
+// local spans may be dropped.
 type httpTraceSuppressionKey struct{}
 
+// contextWithHTTPTracePolicy marks the context for local span suppression when
+// the request matches the policy; unmatched requests keep any inherited
+// suppression marker.
 func contextWithHTTPTracePolicy(ctx context.Context, policy HTTPTracePolicy, request *http.Request) context.Context {
 	if policy.matches(request) {
 		return context.WithValue(ctx, httpTraceSuppressionKey{}, true)
@@ -117,6 +135,8 @@ func contextWithHTTPTracePolicy(ctx context.Context, policy HTTPTracePolicy, req
 	return ctx
 }
 
+// httpTraceSampler decorates a base sampler with the private HTTP suppression
+// marker.
 type httpTraceSampler struct{ base sdktrace.Sampler }
 
 // HTTPTraceSampler decorates a sampler to honor WithHTTPTracePolicy's private
@@ -135,6 +155,9 @@ func HTTPTraceSampler(base sdktrace.Sampler) sdktrace.Sampler {
 	return httpTraceSampler{base: base}
 }
 
+// ShouldSample drops the span, preserving tracestate, when the suppression
+// marker is present and there is no valid sampled parent; otherwise it
+// delegates to the base sampler.
 func (sampler httpTraceSampler) ShouldSample(parameters sdktrace.SamplingParameters) sdktrace.SamplingResult {
 	parent := trace.SpanContextFromContext(parameters.ParentContext)
 	if parameters.ParentContext != nil {
@@ -145,6 +168,7 @@ func (sampler httpTraceSampler) ShouldSample(parameters sdktrace.SamplingParamet
 	return sampler.base.ShouldSample(parameters)
 }
 
+// Description names the decorator and its base sampler.
 func (sampler httpTraceSampler) Description() string {
 	return "HTTPTraceSampler(" + sampler.base.Description() + ")"
 }

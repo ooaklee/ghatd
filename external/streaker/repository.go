@@ -15,14 +15,31 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore methods needed by streaker.
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given MongoDB collection
+	// matching the filter, applying any count options, and returns the count.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteFindCommand runs a find query on the given collection with the
+	// supplied filter and options, returning a cursor over matching documents.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the document into the given collection, using
+	// resultObjectName for error reporting, and returns the insert result.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteFindOneCommandDecodeResult finds one document matching the filter and
+	// decodes it into result, optionally logging errors and returning onFailureErr
+	// on failure.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
 
+	// GetDatabase resolves the named database handle from the underlying client for
+	// datastore access.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes the underlying MongoDB client connection and
+	// returns it for subsequent operations.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult iterates the cursor and decodes every document into
+	// result, using resultObjectName for error reporting.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes the single document held by the cursor into
+	// result, using resultObjectName for error reporting.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
@@ -86,6 +103,9 @@ func (r *Repository) GetStreakCollection(ctx context.Context) (*mongo.Collection
 	return nil, fmt.Errorf("%w: unable to initialise %s collection after %d attempts: %w", ErrDatabaseError, StreakCollection, collectionInitMaxAttemptsLimit, lastErr)
 }
 
+// insertStreak resolves the streak collection, stamps CreatedAt with the
+// current time when unset, inserts the entry, and returns the streak as
+// persisted or the insert error.
 func (r *Repository) insertStreak(ctx context.Context, streak *Streak) (*Streak, error) {
 	collection, err := r.GetStreakCollection(ctx)
 	if err != nil {
@@ -267,6 +287,9 @@ func (r *Repository) ListStreaks(ctx context.Context, req *ListStreaksRequest) (
 	return streaks, nil
 }
 
+// buildStreakQueryFilter converts a stats request into a MongoDB filter, adding
+// exact matches only for non-empty scope and period-type fields; a nil request
+// yields a filter matching any document with an _id.
 func buildStreakQueryFilter(req *StreakStatsRequest) bson.M {
 	queryFilter := bson.M{"_id": bson.M{"$exists": true}}
 
@@ -297,6 +320,10 @@ func buildStreakQueryFilter(req *StreakStatsRequest) bson.M {
 	return queryFilter
 }
 
+// addStreakListFilter adds list-specific period constraints to a query filter
+// in place. An exact PeriodKey overrides any range; otherwise PeriodKeyFrom/To
+// and OccurredAtFrom/To become inclusive bounds. A nil request leaves the
+// filter unchanged.
 func addStreakListFilter(queryFilter bson.M, req *ListStreaksRequest) {
 	if req == nil {
 		return

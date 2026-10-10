@@ -15,6 +15,8 @@ import (
 // MockAuditService for examples
 type MockAuditService struct{}
 
+// LogAuditEvent prints the audit event to stdout for example purposes,
+// implementing the audit service for the example wiring.
 func (m *MockAuditService) LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error {
 	fmt.Printf("Audit: %s - %s (User: %s)\n", r.Action, r.Domain, r.TargetId)
 	return nil

@@ -10,6 +10,9 @@ import (
 // preparation requires it to validate the acknowledgement's reverse-session
 // owner. Legacy checkout adapters remain compatible with existing methods.
 type CheckoutAcknowledgementTx interface {
+	// ValidateCheckoutAcknowledgement validates the acknowledgement's
+	// reverse-session owner against the supplied checkout intent for new lifecycle
+	// preparation.
 	ValidateCheckoutAcknowledgement(context.Context, CheckoutIntent) error
 }
 
@@ -66,6 +69,11 @@ func (a CheckoutLifecycleAnchor) ValidateCapturedEvidence(i CheckoutIntent, e pa
 	return nil
 }
 
+// readAcknowledgedLifecycleIntent loads the stored original for a supplied
+// intent and requires exact scope, fingerprint, session and creation-time
+// equality. When the optional acknowledgement join is unavailable it fails only
+// if requireReverse is set; context cancellation is surfaced before returning
+// the original.
 func readAcknowledgedLifecycleIntent(ctx context.Context, tx CheckoutTx, supplied CheckoutIntent, requireReverse bool) (CheckoutIntent, error) {
 	original, err := readCheckoutIntent(ctx, tx, supplied.ID)
 	if err != nil {

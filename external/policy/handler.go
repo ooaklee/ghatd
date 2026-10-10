@@ -12,12 +12,22 @@ import (
 
 // policyService manages business logic around policy request
 type policyService interface {
+	// GetPolicies returns the policy list held by the policyService store for the
+	// given request. The service implementation reads all policies from the store
+	// and returns them without modification.
 	GetPolicies(ctx context.Context, r *GetPoliciesRequest) ([]WebAppPolicy, error)
+	// GetPolicyByName returns the policy matching the request's name, with names
+	// normalized to lowercase and spaces replaced by hyphens for consistent
+	// matching. The policyService implementation returns an error when no matching
+	// policy exists.
 	GetPolicyByName(ctx context.Context, r *GetPolicyByNameRequest) (*WebAppPolicy, error)
 }
 
 // policyValidator expected methods of a valid
 type policyValidator interface {
+	// Validate checks whether the supplied value satisfies the policyValidator's
+	// validation rules and returns an error describing any violation. It is the
+	// expected validation port for policy request mapping.
 	Validate(s interface{}) error
 }
 

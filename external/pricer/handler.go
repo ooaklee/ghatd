@@ -12,18 +12,53 @@ import (
 
 // PriceService interface defines expected methods of a valid pricer service.
 type PriceService interface {
+	// CreatePricePlan persists and returns a newly created price plan from the
+	// given request. The service implementation validates the payload and actor,
+	// applies defaults and publishing rules, and delegates storage to the pricer
+	// repository.
 	CreatePricePlan(ctx context.Context, r *CreatePricePlanRequest) (*CreatePricePlanResponse, error)
+	// UpdatePricePlan updates a price plan identified in the request and returns
+	// the updated plan. The service applies editable fields or a trusted
+	// replacement, validates before persisting, and attributes the update to the
+	// request's ActorID matched against context.
 	UpdatePricePlan(ctx context.Context, r *UpdatePricePlanRequest) (*UpdatePricePlanResponse, error)
+	// GetPricePlanByID returns the price plan selected by the request ID in a
+	// response; the request controls whether features, costs, and providers are
+	// included in the retrieved plan.
 	GetPricePlanByID(ctx context.Context, r *GetPricePlanByIDRequest) (*GetPricePlanByIDResponse, error)
+	// GetPricePlanBySlug returns the price plan matching the request slug after
+	// normalization; the request controls inclusion of features, costs, and
+	// providers in the result.
 	GetPricePlanBySlug(ctx context.Context, r *GetPricePlanBySlugRequest) (*GetPricePlanBySlugResponse, error)
+	// GetPricePlans returns a paginated, filtered list of price plans with total
+	// counts and pagination metadata derived from the request.
 	GetPricePlans(ctx context.Context, r *GetPricePlansRequest) (*GetPricePlansResponse, error)
+	// ValidatePriceSlug checks slug availability for a plan or feature without
+	// persisting anything, returning the normalized slug, availability, existing
+	// identifier, and a hint.
 	ValidatePriceSlug(ctx context.Context, r *ValidatePriceSlugRequest) (*ValidatePriceSlugResponse, error)
+	// PublishPricePlan marks the selected plan published after validation,
+	// recording the request's ActorID as publisher, and returns the persisted
+	// published plan.
 	PublishPricePlan(ctx context.Context, r *PublishPricePlanRequest) (*PublishPricePlanResponse, error)
+	// ArchivePricePlan archives the selected plan, attributing the change to the
+	// request's ActorID, and returns the archived plan.
 	ArchivePricePlan(ctx context.Context, r *ArchivePricePlanRequest) (*ArchivePricePlanResponse, error)
+	// DeletePricePlan soft-deletes the selected plan, attributing deletion to the
+	// request's ActorID, and returns the stored plan afterwards.
 	DeletePricePlan(ctx context.Context, r *DeletePricePlanRequest) (*DeletePricePlanResponse, error)
+	// CreateFeature creates a feature catalog item from the request, attributing
+	// creation to the request's ActorID, and returns the persisted feature.
 	CreateFeature(ctx context.Context, r *CreateFeatureRequest) (*CreateFeatureResponse, error)
+	// UpdateFeature updates a selected feature, applying optional fields or a
+	// trusted replacement that must match the target ID, and returns the updated
+	// feature attributed to ActorID.
 	UpdateFeature(ctx context.Context, r *UpdateFeatureRequest) (*UpdateFeatureResponse, error)
+	// GetFeatures returns a paginated, filtered list of feature catalog items with
+	// total counts and pagination metadata derived from the request.
 	GetFeatures(ctx context.Context, r *GetFeaturesRequest) (*GetFeaturesResponse, error)
+	// DeleteFeature soft-deletes the selected feature catalog item, attributing
+	// deletion to the request's ActorID, and returns the stored feature afterwards.
 	DeleteFeature(ctx context.Context, r *DeleteFeatureRequest) (*DeleteFeatureResponse, error)
 }
 
@@ -313,6 +348,8 @@ func (h *Handler) DeleteFeature(w http.ResponseWriter, r *http.Request) {
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, response.Feature)
 }
 
+// getBaseResponseHandler builds a fresh Replier from the handler's current
+// response manifests.
 func (h *Handler) getBaseResponseHandler() *reply.Replier {
 	return reply.NewReplier(h.responseManifests())
 }

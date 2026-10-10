@@ -7,6 +7,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// main builds the root ghatdcli command with its new, create-detail, template,
+// version and telemetry subcommands, then executes it and exits nonzero on
+// failure.
 func main() {
 
 	// Highest Level Command

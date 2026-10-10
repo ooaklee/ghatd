@@ -22,15 +22,35 @@ const (
 
 // MongoDbStore represents the datastore methods needed by vision.
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given MongoDB collection
+	// matching the filter, applying any count options.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes the single document matching the filter in
+	// the given collection, using targetObjectName for diagnostics.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand runs a find query on the given collection with the filter
+	// and find options, returning a cursor of matching documents.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteFindOneCommandDecodeResult fetches one document matching the filter
+	// and decodes it into result, returning onFailureErr when absent, with logging
+	// controlled by logError.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteInsertOneCommand inserts the document into the given collection and
+	// returns the Mongo insert result; resultObjectName identifies it in
+	// diagnostics.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand updates the single document matching the filter with
+	// the provided update document; resultObjectName identifies it in diagnostics.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 
+	// GetDatabase returns the Mongo database handle for the given name,
+	// establishing it via the context.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient creates and returns the underlying Mongo client for the
+	// store.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes all remaining cursor documents into result;
+	// resultObjectName identifies the target in diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

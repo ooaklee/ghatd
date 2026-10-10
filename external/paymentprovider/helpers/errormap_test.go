@@ -6,9 +6,12 @@ import (
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 )
 
-// TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree verifies every helper error has a unique manifest entry.
+// This single manifest-wide uniqueness audit accumulates codes across named
+// cases; isolating the set per case would miss collisions between helper errors.
 func TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree(t *testing.T) {
 	errors := []error{
+		ErrStripePaidServicePeriodConfigInvalid,
+		ErrStripePaidServicePeriodInvalid,
 		ErrStripeSettingsRequired,
 		ErrStripeSettingsNotConfigured,
 		ErrStripeEnvironmentRequired,
@@ -20,6 +23,7 @@ func TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree(t *testing.T) {
 		ErrStripeHTTPSRequired,
 		ErrStripeAPIBaseURLUnsafe,
 		ErrStripeProviderConfigurationInvalid,
+		ErrStripeRetainedSnapshotInvalid,
 	}
 	baseCodes := make(map[string]struct{}, len(paymentprovider.PaymentProviderErrorMap))
 	for _, item := range paymentprovider.PaymentProviderErrorMap {
@@ -27,26 +31,31 @@ func TestPaymentProviderHelperErrorMapIsCompleteAndCollisionFree(t *testing.T) {
 	}
 	seenCodes := make(map[string]struct{}, len(errors))
 	for _, err := range errors {
-		item, ok := PaymentProviderHelperErrorMap[err]
-		if !ok {
-			t.Errorf("PaymentProviderHelperErrorMap is missing %v", err)
-			continue
-		}
-		if item.StatusCode != 500 {
-			t.Errorf("PaymentProviderHelperErrorMap[%v].StatusCode = %d, want 500", err, item.StatusCode)
-		}
-		if item.Code == "" {
-			t.Errorf("PaymentProviderHelperErrorMap[%v].Code is empty", err)
-			continue
-		}
-		if _, exists := seenCodes[item.Code]; exists {
-			t.Errorf("duplicate helper error code %q", item.Code)
-		}
-		if _, exists := baseCodes[item.Code]; exists {
-			t.Errorf("helper error code %q collides with PaymentProviderErrorMap", item.Code)
-		}
-		seenCodes[item.Code] = struct{}{}
+		t.Run(err.Error(), func(t *testing.T) {
+			item, ok := PaymentProviderHelperErrorMap[err]
+			if !ok {
+				t.Fatalf("PaymentProviderHelperErrorMap is missing %v", err)
+			}
+			wantStatus := 500
+			if err == ErrStripeRetainedSnapshotInvalid || err == ErrStripePaidServicePeriodInvalid {
+				wantStatus = 400
+			}
+			if item.StatusCode != wantStatus {
+				t.Errorf("PaymentProviderHelperErrorMap[%v].StatusCode = %d, want %d", err, item.StatusCode, wantStatus)
+			}
+			if item.Code == "" {
+				t.Fatal("helper error code is empty")
+			}
+			if _, exists := seenCodes[item.Code]; exists {
+				t.Errorf("duplicate helper error code %q", item.Code)
+			}
+			if _, exists := baseCodes[item.Code]; exists {
+				t.Errorf("helper error code %q collides with PaymentProviderErrorMap", item.Code)
+			}
+			seenCodes[item.Code] = struct{}{}
+		})
 	}
+
 	if len(PaymentProviderHelperErrorMap) != len(errors) {
 		t.Fatalf("PaymentProviderHelperErrorMap has %d entries, want %d", len(PaymentProviderHelperErrorMap), len(errors))
 	}

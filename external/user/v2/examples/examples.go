@@ -157,43 +157,65 @@ func ExampleTesting() {
 
 // Custom implementations for example 4
 
+// CustomIDGenerator is an example ID generator showing how a host injects its
+// own identifier formats into the example configuration.
 type CustomIDGenerator struct{}
 
+// GenerateUUID returns the example's fixed placeholder UUID string,
+// illustrating the injection point rather than a real generator.
 func (g *CustomIDGenerator) GenerateUUID() string {
 	return "custom-uuid-format"
 }
 
+// GenerateNanoID returns the example's fixed placeholder nano ID string,
+// illustrating the injection point rather than a real generator.
 func (g *CustomIDGenerator) GenerateNanoID() string {
 	return "custom-nano-id"
 }
 
+// CustomTimeProvider is an example clock showing how a host can supply its own
+// time source to the example configuration.
 type CustomTimeProvider struct{}
 
+// Now returns the current wall-clock time; the example marks the spot where
+// hosts would apply custom time logic.
 func (t *CustomTimeProvider) Now() time.Time {
 	// Custom time logic
 	return time.Now()
 }
 
+// NowUTC returns the current time formatted as a UTC millisecond-precision
+// RFC3339 string; the example marks the spot for custom formatting.
 func (t *CustomTimeProvider) NowUTC() string {
 	// Custom format
 	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 }
 
+// CustomStringUtils is an example string-utility implementation showing how a
+// host injects its own transformations into the example configuration.
 type CustomStringUtils struct{}
 
+// ToTitleCase upper-cases the first character and lower-cases the remainder; it
+// illustrates a custom implementation of the model's string utility contract.
 func (s *CustomStringUtils) ToTitleCase(str string) string {
 	// Custom title case logic
 	return strings.ToUpper(str[:1]) + strings.ToLower(str[1:])
 }
 
+// ToLowerCase lower-cases the input, illustrating the example's custom string
+// utility contract.
 func (s *CustomStringUtils) ToLowerCase(str string) string {
 	return strings.ToLower(str)
 }
 
+// ToUpperCase upper-cases the input, illustrating the example's custom string
+// utility contract.
 func (s *CustomStringUtils) ToUpperCase(str string) string {
 	return strings.ToUpper(str)
 }
 
+// InSlice reports whether item equals any element of slice, illustrating the
+// example's custom string utility contract.
 func (s *CustomStringUtils) InSlice(item string, slice []string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -205,36 +227,58 @@ func (s *CustomStringUtils) InSlice(item string, slice []string) bool {
 
 // Mock implementations for testing (example 6)
 
+// MockIDGenerator is an example generator that always returns the same
+// identifiers, making example output deterministic.
 type MockIDGenerator struct {
 	fixedUUID string
 }
 
+// GenerateUUID returns the fixed UUID supplied to the example mock.
 func (m *MockIDGenerator) GenerateUUID() string {
 	return m.fixedUUID
 }
 
+// GenerateNanoID returns the example mock's constant nano ID.
 func (m *MockIDGenerator) GenerateNanoID() string {
 	return "mock-nano-id"
 }
 
+// MockTimeProvider is an example clock frozen at a fixed RFC3339 timestamp for
+// deterministic example output.
 type MockTimeProvider struct {
 	fixedTime string
 }
 
+// Now returns the mock's fixed time parsed as RFC3339; parse failures yield the
+// zero time.
 func (m *MockTimeProvider) Now() time.Time {
 	t, _ := time.Parse(time.RFC3339, m.fixedTime)
 	return t
 }
 
+// NowUTC returns the mock's fixed timestamp string verbatim.
 func (m *MockTimeProvider) NowUTC() string {
 	return m.fixedTime
 }
 
+// MockStringUtils is an example pass-through string utility that performs no
+// transformation.
 type MockStringUtils struct{}
 
+// ToTitleCase returns the input unchanged, demonstrating a no-op example
+// implementation.
 func (m *MockStringUtils) ToTitleCase(str string) string { return str }
+
+// ToLowerCase returns the input unchanged, demonstrating a no-op example
+// implementation.
 func (m *MockStringUtils) ToLowerCase(str string) string { return str }
+
+// ToUpperCase returns the input unchanged, demonstrating a no-op example
+// implementation.
 func (m *MockStringUtils) ToUpperCase(str string) string { return str }
+
+// InSlice reports whether item equals any element of slice, mirroring the
+// utility contract without transformation.
 func (m *MockStringUtils) InSlice(item string, slice []string) bool {
 	for _, s := range slice {
 		if s == item {

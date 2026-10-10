@@ -8,7 +8,9 @@ import (
 	"github.com/ooaklee/ghatd/external/toolbox"
 )
 
-// Store holds policy data
+// Store is the in-memory holder for web app policies plus the business entity's
+// display name, email, website and legal name used when rendering them.
+// Policies are exposed directly for reading and mutation.
 type Store struct {
 	Policies []WebAppPolicy
 

@@ -199,6 +199,8 @@ func Example7_WithUserService() {
 
 // Helper functions and types
 
+// setupService builds a billing manager configured with a mock Paddle provider
+// and in-memory billing repository for the surrounding examples.
 func setupService() *billingmanager.Service {
 	registry := paymentprovider.NewProviderRegistry()
 	mockProvider := paymentprovider.NewMockProvider("paddle")
@@ -213,6 +215,8 @@ func setupService() *billingmanager.Service {
 // SimpleAuditService implements billingmanager.AuditService for examples
 type SimpleAuditService struct{}
 
+// LogAuditEvent prints the audit event to stdout for example purposes. It
+// implements billingmanager.AuditService for the example configuration.
 func (s *SimpleAuditService) LogAuditEvent(ctx context.Context, req *audit.LogAuditEventRequest) error {
 	fmt.Printf("[AUDIT] %s: %s (Actor: %s, Target: %s)\n",
 		req.Action, req.Domain, req.ActorId, req.TargetId)
@@ -222,6 +226,8 @@ func (s *SimpleAuditService) LogAuditEvent(ctx context.Context, req *audit.LogAu
 // SimpleUserService implements billingmanager.UserService for examples
 type SimpleUserService struct{}
 
+// GetUserByEmail echoes the requested email back as a synthetic user for
+// example wiring; a real deployment queries its user database instead.
 func (s *SimpleUserService) GetUserByEmail(ctx context.Context, req *user.GetUserByEmailRequest) (*user.GetUserByEmailResponse, error) {
 	// In production, query your user database
 	return &user.GetUserByEmailResponse{
@@ -232,6 +238,8 @@ func (s *SimpleUserService) GetUserByEmail(ctx context.Context, req *user.GetUse
 	}, nil
 }
 
+// GetUserByID returns a synthetic user with the requested ID for example
+// wiring; a real deployment queries its user database instead.
 func (s *SimpleUserService) GetUserByID(ctx context.Context, req *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error) {
 	// In production, query your user database
 	return &user.GetUserByIDResponse{

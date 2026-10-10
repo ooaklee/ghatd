@@ -18,15 +18,34 @@ import (
 // This is a subset of the full data store interface – only the read, write,
 // and collection-management methods that notifier actually uses.
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given MongoDB collection
+	// matching the filter, returning the count for the notifier repository's needs.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteFindCommand runs a MongoDB find on the collection with the given
+	// filter and options, returning a cursor over matching documents.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteDeleteOneCommand deletes a single document matching the filter from
+	// the collection, using the target object name for diagnostics.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteDeleteManyCommand deletes all documents matching the filter from the
+	// collection, using the target object name for diagnostics.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult finds the first matching document and
+	// decodes it into result, using the object name, logging flag and onFailureErr
+	// to shape failures.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteUpdateOneCommand applies the update to the first document matching the
+	// filter in the collection, using the target object name for diagnostics.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, targetObjectName string) error
 
+	// GetDatabase returns the MongoDB database handle for the named database, used
+	// by the notifier repository to reach its collections.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes and returns the underlying MongoDB client for
+	// the store.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult consumes the cursor and decodes every document into
+	// the provided result slice, naming the result object for diagnostics.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
@@ -275,6 +294,9 @@ func (r *Repository) CountAddresses(ctx context.Context, req *ListNotificationAd
 	return total, nil
 }
 
+// buildAddressListFilter converts a list request into a MongoDB filter,
+// including only the non-empty user ID, channel and status fields. A nil
+// request yields an empty filter matching all addresses.
 func buildAddressListFilter(req *ListNotificationAddressesRequest) bson.M {
 	filter := bson.M{}
 	if req != nil {
@@ -292,6 +314,9 @@ func buildAddressListFilter(req *ListNotificationAddressesRequest) bson.M {
 	return filter
 }
 
+// buildAddressListOptions returns find options sorted by descending updated_at,
+// applying the request's per-page limit with a skip derived from its page
+// (defaulting to page 1). A nil request returns the sort only.
 func buildAddressListOptions(req *ListNotificationAddressesRequest) *options.FindOptionsBuilder {
 	findOptions := options.Find().SetSort(bson.D{{Key: "metadata.updated_at", Value: -1}})
 	if req == nil {

@@ -18,6 +18,10 @@ type AttributionChange struct {
 	ActorID                                             string `json:"-"`
 	ReferredCustomer, PartnerID, SignupID, Reason, Mode string
 }
+
+// ApplyAttributionRequest extends AttributionChange with optimistic revision,
+// referred-identity, snapshot and preview fingerprints, and the durable replay
+// idempotency key.
 type ApplyAttributionRequest struct {
 	AttributionChange
 	ExpectedRevision                                                            int64
@@ -40,6 +44,9 @@ type AttributionPreview struct {
 	AsOf                                                       time.Time
 }
 
+// attributionSources holds the owning principals, partner and immutable signup
+// fact collected during preview; the embedded signup struct is the frozen
+// creation evidence.
 type attributionSources struct {
 	Referred Principal
 	Owner    Principal
@@ -51,6 +58,8 @@ type attributionSources struct {
 	}
 }
 
+// attributionHash hashes the JSON encoding of v with SHA-256, failing with
+// ErrInvalid when the value cannot be marshaled.
 func attributionHash(v any) (string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -59,6 +68,9 @@ func attributionHash(v any) (string, error) {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+// validAttributionChange requires bounded referred customer, partner, signup
+// and reason text, and only the prospective correction mode.
 func validAttributionChange(r AttributionChange) bool {
 	return validWorkText(r.ReferredCustomer, 256) && validWorkText(r.PartnerID, 256) && validWorkText(r.SignupID, 256) && validWorkText(r.Reason, 1000) && r.Mode == referral.CorrectionProspective
 }
@@ -85,6 +97,12 @@ func (m *Manager) PreviewAttribution(ctx context.Context, req AttributionChange)
 	return out, nil
 }
 
+// previewAttribution resolves the signup fact, referred and owner principals,
+// partner admission, the current attribution snapshot and approved terms,
+// cross-checking every owning record's scope. It shortens proposed terms to
+// honor any earlier promised recurrence end, then fingerprints the change,
+// sources, snapshot and terms; AsOf and the actor are deliberately excluded
+// from the economic fingerprint.
 func (m *Manager) previewAttribution(ctx context.Context, req AttributionChange) (AttributionPreview, attributionSources, error) {
 	var sources attributionSources
 	at := m.deps.Clock.Now().UTC()

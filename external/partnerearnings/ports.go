@@ -46,21 +46,31 @@ var (
 
 // Clock supplies the current instant. Financial maturity and payment timestamps
 // always come from the injected clock, never the system wall clock.
-type Clock interface{ Now() time.Time }
+type Clock interface {
+	// Now returns the current instant from the injected clock, used for financial
+	// maturity and payment timestamps rather than the system wall clock.
+	Now() time.Time
+}
 
 // RealClock is the production UTC clock.
 type RealClock struct{}
 
+// Now returns the current wall-clock time in UTC.
 func (RealClock) Now() time.Time { return time.Now().UTC() }
 
 // ClockFunc adapts a function to Clock for tests and composition.
 type ClockFunc func() time.Time
 
+// Now calls the wrapped function, adapting it to Clock.
 func (f ClockFunc) Now() time.Time { return f() }
 
 // IDGenerator mints the IDs the service assigns to entries, claims and receipts.
 // Implementations must return unique, stable, non-enumerable identifiers.
-type IDGenerator interface{ NewID() string }
+type IDGenerator interface {
+	// NewID mints a unique, stable, non-enumerable identifier for entries, claims
+	// and receipts.
+	NewID() string
+}
 
 // ReceiptKey scopes one idempotency receipt. It is the actor/use-case/partner/
 // currency identity required for claim creation and manual payment recording.

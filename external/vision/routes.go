@@ -8,18 +8,59 @@ import (
 	"github.com/ooaklee/ghatd/external/router"
 )
 
+// visionHandler is the HTTP handler surface the route registrar depends on, one
+// method per vision endpoint.
 type visionHandler interface {
+	// CreateVision serves the vision creation HTTP endpoint, mapping the request
+	// and responding with the created vision or an error response.
 	CreateVision(w http.ResponseWriter, r *http.Request)
+	// GetVisionByNanoID serves the HTTP endpoint that fetches a single vision by
+	// its public NanoID, responding with the vision or an error response.
 	GetVisionByNanoID(w http.ResponseWriter, r *http.Request)
+	// GetVisions serves the vision listing endpoint of the visionHandler route
+	// contract; the handler implementation maps the HTTP request, calls the service
+	// for a filtered page with metadata, and writes the results to w.
 	GetVisions(w http.ResponseWriter, r *http.Request)
+	// UpdateVision serves the vision descriptive-update endpoint of the
+	// visionHandler route contract; the handler implementation maps the request,
+	// delegates to the service, and writes the updated vision to w.
 	UpdateVision(w http.ResponseWriter, r *http.Request)
+	// UpdateVisionStatus serves the roadmap status transition endpoint of the
+	// visionHandler route contract; the handler implementation maps the request,
+	// delegates validation and persistence to the service, and writes the updated
+	// vision to w.
 	UpdateVisionStatus(w http.ResponseWriter, r *http.Request)
+	// SetVisionVote serves the endpoint of the visionHandler route contract that
+	// sets or changes the requestor's vote on a vision; the handler implementation
+	// maps the request, delegates to the service, and writes the updated vision to
+	// w.
 	SetVisionVote(w http.ResponseWriter, r *http.Request)
+	// RemoveVisionVote serves the endpoint of the visionHandler route contract that
+	// removes the requestor's vote on a vision; the handler implementation maps the
+	// request, delegates to the service, and writes the updated vision to w.
 	RemoveVisionVote(w http.ResponseWriter, r *http.Request)
+	// AddVisionComment serves the endpoint of the visionHandler route contract that
+	// appends a comment to a vision; the handler implementation maps the request,
+	// delegates to the service, and writes a created response to w.
 	AddVisionComment(w http.ResponseWriter, r *http.Request)
+	// SetVisionCommentVote serves the endpoint of the visionHandler route contract
+	// that sets or changes the requestor's vote on a vision comment; the handler
+	// implementation maps the request, delegates to the service, and writes the
+	// updated vision to w.
 	SetVisionCommentVote(w http.ResponseWriter, r *http.Request)
+	// RemoveVisionCommentVote serves the endpoint of the visionHandler route
+	// contract that removes the requestor's vote on a vision comment; the handler
+	// implementation maps the request, delegates to the service, and writes the
+	// updated vision to w.
 	RemoveVisionCommentVote(w http.ResponseWriter, r *http.Request)
+	// DeleteVision serves the vision deletion endpoint of the visionHandler route
+	// contract; the handler implementation maps the request, delegates
+	// NanoID-addressed deletion to the service, and writes the deletion response to
+	// w.
 	DeleteVision(w http.ResponseWriter, r *http.Request)
+	// GetVisionConfig serves the endpoint of the visionHandler route contract
+	// returning client-safe vision configuration; the handler implementation calls
+	// the service and writes the capabilities payload to w.
 	GetVisionConfig(w http.ResponseWriter, r *http.Request)
 }
 

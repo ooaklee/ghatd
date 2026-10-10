@@ -2,7 +2,11 @@ package settings
 
 import "github.com/kelseyhightower/envconfig"
 
-// Settings for server
+// Settings holds server configuration populated from environment variables via
+// envconfig, covering server environment, host/port and graceful shutdown
+// timeout, cache behaviour (TTL, refresh parameter key, skip header and URI-
+// path regex), CORS allow-origins, and business entity details used in outward-
+// facing output. Consult tag defaults for each field's fallback value.
 type Settings struct {
 	Environment           string `default:"local"`
 	GracefulServerTimeout int    `envconfig:"graceful_server_timeout" default:"15"`

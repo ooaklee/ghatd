@@ -13,12 +13,29 @@ import (
 
 // StreakRepository is the expected repository surface for streaker.
 type StreakRepository interface {
+	// CreateStreak persists a streak entry, generating its id and nano id when
+	// missing, and returns the stored streak.
 	CreateStreak(ctx context.Context, streak *Streak) (*Streak, error)
+	// CreateRawStreak persists a precomputed streak entry without generating
+	// identifiers; the service layer requires id, nano id, positive count and a
+	// valid scope before delegating.
 	CreateRawStreak(ctx context.Context, streak *Streak) (*Streak, error)
+	// GetStreakByScopeAndPeriod retrieves a streak entry matching the request's
+	// counter scope filters plus its period key, returning ErrResourceNotFound when
+	// absent.
 	GetStreakByScopeAndPeriod(ctx context.Context, req *GetLatestStreakRequest) (*Streak, error)
+	// GetLatestStreak retrieves the most recent streak entry matching the request
+	// filters, sorted by occurred_at then created_at, returning ErrResourceNotFound
+	// when none match.
 	GetLatestStreak(ctx context.Context, req *GetLatestStreakRequest) (*Streak, error)
+	// GetLongestStreak retrieves the matching streak entry with the highest current
+	// count, sorted by current_count, occurred_at and created_at, returning
+	// ErrResourceNotFound when absent.
 	GetLongestStreak(ctx context.Context, req *GetLongestStreakRequest) (*Streak, error)
+	// GetTotalStreaks counts streak entries matching the request's stats filters.
 	GetTotalStreaks(ctx context.Context, req *GetNumberOfStreaksRequest) (int64, error)
+	// ListStreaks retrieves streak entries matching filters with sort direction,
+	// page and per-page controls, returning an empty slice when nothing matches.
 	ListStreaks(ctx context.Context, req *ListStreaksRequest) ([]*Streak, error)
 }
 
@@ -27,6 +44,9 @@ type Service struct {
 	StreakRepository StreakRepository
 }
 
+// resolvedRecordStreakRequest carries a record-streak request after validation
+// and normalisation: trimmed scope, resolved occurrence time, derived period
+// key and timezone, plus the stats request used for lookups.
 type resolvedRecordStreakRequest struct {
 	scope           StreakScope
 	createdByUserId string
@@ -413,6 +433,9 @@ func normaliseStatsRequest(req *StreakStatsRequest) (*StreakStatsRequest, error)
 	}, nil
 }
 
+// normaliseListStreaksRequest validates and returns a trimmed copy of a list
+// request. It requires an owner ID and period type, kebab-cases type fields,
+// and clamps page to >=1 and per-page to 1..200 (default 100).
 func normaliseListStreaksRequest(req *ListStreaksRequest) (*ListStreaksRequest, error) {
 	if req == nil {
 		return nil, ErrOwnerIdIsRequired

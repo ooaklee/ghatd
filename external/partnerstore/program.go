@@ -27,17 +27,27 @@ const (
 // commercial precedence or choose eligibility.
 type ProgramRepository struct{ store recordstore.Store }
 
+// NewProgramRepository returns a program repository over the shared
+// transactional store, or ErrUnavailable when the store dependency is nil.
 func NewProgramRepository(store recordstore.Store) (*ProgramRepository, error) {
 	if nilStoreDependency(store) {
 		return nil, partnerprogram.ErrUnavailable
 	}
 	return &ProgramRepository{store}, nil
 }
+
+// programPartition derives the single program-wide partition used for partner
+// and policy records.
 func programPartition() string { return "partner-program:" + identity(partnerprogram.ProgramID) }
+
+// participantPartition derives the per-customer partition guarding partner
+// history and destination heads.
 func participantPartition(customer string) string {
 	return "partner-program-customer:" + identity(partnerprogram.ProgramID, customer)
 }
 
+// singleCauseIs reports whether target appears in err's Unwrap chain, bounded
+// to 32 levels, without matching wrapped multi-cause errors.
 func singleCauseIs(err, target error) bool {
 	for depth := 0; err != nil && depth < 32; depth++ {
 		if err == target {
@@ -47,6 +57,10 @@ func singleCauseIs(err, target error) bool {
 	}
 	return false
 }
+
+// programError maps storage sentinel causes to program domain errors, wrapping
+// uncertain/unavailable/invalid causes so callers can distinguish outcomes;
+// other errors pass through unchanged.
 func programError(err error) error {
 	switch {
 	case singleCauseIs(err, recordstore.ErrNotFound):
@@ -63,12 +77,19 @@ func programError(err error) error {
 		return err
 	}
 }
+
+// validStoreContext rejects a nil context with ErrInvalid and otherwise returns
+// the context's current cancellation error.
 func validStoreContext(ctx context.Context) error {
 	if ctx == nil {
 		return recordstore.ErrInvalid
 	}
 	return ctx.Err()
 }
+
+// loadRecord fetches a record by kind and ID, verifies its partition, and
+// decodes it into T. A mismatched envelope returns ErrUnavailable without
+// decoding.
 func loadRecord[T any](ctx context.Context, tx recordstore.Tx, kind, id, partition string) (T, recordstore.Record, error) {
 	var value T
 	row, err := tx.Get(ctx, kind, id)
@@ -81,6 +102,9 @@ func loadRecord[T any](ctx context.Context, tx recordstore.Tx, kind, id, partiti
 	err = row.Decode(&value)
 	return value, row, err
 }
+
+// insertRecord builds a first-revision record for value and inserts it via the
+// transaction.
 func insertRecord(ctx context.Context, tx recordstore.Tx, kind, id, partition string, revision int64, value any) error {
 	row, err := recordstore.NewRecord(kind, id, partition, revision, value)
 	if err != nil {
@@ -88,6 +112,9 @@ func insertRecord(ctx context.Context, tx recordstore.Tx, kind, id, partition st
 	}
 	return tx.Insert(ctx, row)
 }
+
+// replaceRecord rewrites a record at the given revision using a compare-and-
+// swap on revision-1.
 func replaceRecord(ctx context.Context, tx recordstore.Tx, kind, id, partition string, revision int64, value any) error {
 	row, err := recordstore.NewRecord(kind, id, partition, revision, value)
 	if err != nil {
@@ -95,6 +122,10 @@ func replaceRecord(ctx context.Context, tx recordstore.Tx, kind, id, partition s
 	}
 	return tx.Replace(ctx, row, revision-1)
 }
+
+// writeReference inserts a reference head at revision 1 when expected is zero,
+// otherwise CAS-replaces it at expected+1. Revision overflow and egative
+// expectations are rejected as ErrInvalid.
 func writeReference(ctx context.Context, tx recordstore.Tx, kind, id, partition, target string, expected int64) error {
 	if expected == math.MaxInt64 || expected < 0 {
 		return recordstore.ErrInvalid
@@ -105,6 +136,8 @@ func writeReference(ctx context.Context, tx recordstore.Tx, kind, id, partition,
 	return replaceRecord(ctx, tx, kind, id, partition, expected+1, recordReference{target})
 }
 
+// GetPartnerByID loads a partner and verifies its program and decoded revision
+// agree with the stored row before returning it.
 func (r *ProgramRepository) GetPartnerByID(ctx context.Context, id string) (partnerprogram.Partner, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return partnerprogram.Partner{}, programError(err)
@@ -123,6 +156,10 @@ func (r *ProgramRepository) GetPartnerByID(ctx context.Context, id string) (part
 	})
 	return out, programError(err)
 }
+
+// GetPartnerByCustomer resolves the customer's reference head to its partner in
+// one read transaction and cross-checks customer, program and revision. Missing
+// references surface as ErrNotFound.
 func (r *ProgramRepository) GetPartnerByCustomer(ctx context.Context, program, customer string) (partnerprogram.Partner, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return partnerprogram.Partner{}, programError(err)
@@ -148,6 +185,11 @@ func (r *ProgramRepository) GetPartnerByCustomer(ctx context.Context, program, c
 	})
 	return out, programError(err)
 }
+
+// InsertPartner enrolls a first-revision partner plus its revision history and
+// customer reference in one transaction guarded by the customer partition. An
+// existing enrollment returns ErrAlreadyEnrolled and a racing insert maps to
+// ErrAlreadyExists.
 func (r *ProgramRepository) InsertPartner(ctx context.Context, p partnerprogram.Partner) error {
 	if p.ProgramID != partnerprogram.ProgramID || p.ID == "" || p.CustomerID == "" || p.Revision != 1 {
 		return partnerprogram.ErrInvalid
@@ -174,6 +216,11 @@ func (r *ProgramRepository) InsertPartner(ctx context.Context, p partnerprogram.
 	}
 	return programError(err)
 }
+
+// ReplacePartner advances a partner from expected revision via CAS, keeping
+// customer, accepted terms version and enrollment time immutable; violations
+// return ErrInvalid. The new immutable revision copy is written in the same
+// transaction.
 func (r *ProgramRepository) ReplacePartner(ctx context.Context, p partnerprogram.Partner, expected int64) (partnerprogram.Partner, error) {
 	if p.ProgramID != partnerprogram.ProgramID || p.CustomerID == "" || expected < 1 || expected == math.MaxInt64 || p.Revision != expected+1 {
 		return partnerprogram.Partner{}, partnerprogram.ErrInvalid
@@ -200,6 +247,10 @@ func (r *ProgramRepository) ReplacePartner(ctx context.Context, p partnerprogram
 	}
 	return p, nil
 }
+
+// ListPolicyVersions reads all policy records in the program partition, failing
+// on any row whose decoded identity disagrees, and returns them sorted by
+// effective time then ID.
 func (r *ProgramRepository) ListPolicyVersions(ctx context.Context, program string) ([]partnerprogram.PolicyVersion, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return nil, programError(err)
@@ -234,6 +285,10 @@ func (r *ProgramRepository) ListPolicyVersions(ctx context.Context, program stri
 	})
 	return out, programError(err)
 }
+
+// InsertPolicyVersion appends a policy version and CAS-advances the scoped
+// policy head in one transaction; a head revision other than expected returns
+// ErrStaleWrite.
 func (r *ProgramRepository) InsertPolicyVersion(ctx context.Context, v partnerprogram.PolicyVersion, expected int64) error {
 	if v.ProgramID != partnerprogram.ProgramID || expected < 0 || expected == math.MaxInt64 || v.Revision != expected+1 {
 		return partnerprogram.ErrInvalid
@@ -256,6 +311,10 @@ func (r *ProgramRepository) InsertPolicyVersion(ctx context.Context, v partnerpr
 		return writeReference(ctx, tx, kindPolicyHead, scope, programPartition(), v.ID, expected)
 	}))
 }
+
+// GetDestination follows the customer's destination head in one read
+// transaction and verifies the referenced destination's version matches the
+// head revision.
 func (r *ProgramRepository) GetDestination(ctx context.Context, customer string) (partnerprogram.Destination, error) {
 	if err := validStoreContext(ctx); err != nil {
 		return partnerprogram.Destination{}, programError(err)
@@ -278,6 +337,10 @@ func (r *ProgramRepository) GetDestination(ctx context.Context, customer string)
 	})
 	return out, programError(err)
 }
+
+// InsertDestination stores a new destination version and CAS-advances the
+// customer's destination head in the same transaction. A missing head with
+// nonzero expectation, or head revision mismatch, returns ErrStaleWrite.
 func (r *ProgramRepository) InsertDestination(ctx context.Context, d partnerprogram.Destination, expected int64) error {
 	if d.CustomerID == "" || expected < 0 || expected == math.MaxInt64 || d.Version != expected+1 {
 		return partnerprogram.ErrInvalid

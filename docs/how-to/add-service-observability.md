@@ -158,7 +158,7 @@ authentication and other matched-route middleware there. Wrapping only with
 
 GHATD's router records route templates automatically. A plain Gorilla Mux router
 needs `routecontext.ObserveMiddleware` installed before its other middleware;
-see the [router guide](../../external/router/README.md#getting-started).
+see the [router guide](../../external/router/README.md#example-initialisation).
 
 The completion log's `route` is the matched template, not necessarily the
 requested path. A SPA catch-all can correctly report `/` for many page paths.

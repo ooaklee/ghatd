@@ -87,6 +87,8 @@ func roundedRatio(commission, refunded, paid int64) (int64, error) {
 	return bigToInt64(roundHalfUp(num, paid))
 }
 
+// bigToInt64 converts v to int64, returning ErrInvalid when the value exceeds
+// int64 minor units.
 func bigToInt64(v *big.Int) (int64, error) {
 	if !v.IsInt64() {
 		return 0, errWrap(ErrInvalid, "amount overflows minor units")
@@ -599,11 +601,18 @@ func (s *Service) DecideClaim(ctx context.Context, req ClaimDecision) (Claim, er
 	return out, nil
 }
 
+// decisionResult carries the next claim state from applyDecision and whether
+// the transition releases the claim's reservation.
 type decisionResult struct {
 	claim        Claim
 	needsRelease bool
 }
 
+// applyDecision computes the state machine for one claim decision without
+// writing: it enforces actor ownership, required reasons, confirmed-unsent for
+// releasing an in-flight claim, and rejects paying outside RecordPayment.
+// Releasing decisions are flagged so the caller journals the reservation
+// release.
 func (s *Service) applyDecision(claim Claim, req ClaimDecision) (decisionResult, error) {
 	now := s.clock.Now()
 	next := claim
@@ -1028,6 +1037,9 @@ func (s *Service) ListJournal(ctx context.Context, partnerID string) ([]Entry, e
 
 // ---- Internal helpers ----
 
+// checkContext fails closed with ErrUnavailable when the service or its
+// required dependencies are nil or the context is nil, then reports context
+// cancellation.
 func (s *Service) checkContext(ctx context.Context) error {
 	if s == nil || s.repo == nil || s.ids == nil || ctx == nil {
 		return ErrUnavailable
@@ -1069,6 +1081,8 @@ func (s *Service) validateLedgerRepresentable(ctx context.Context, tx Repository
 	return err
 }
 
+// errWrap wraps a sentinel error with a formatted message, preserving errors.Is
+// matching.
 func errWrap(err error, format string, args ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{err}, args...)...)
 }
@@ -1267,12 +1281,15 @@ func derive(entries []Entry, claims []Claim) (Balances, []creditAllocation, erro
 	}, credits, nil
 }
 
+// creditAllocation is one payment's allocatable matured credit with its
+// availability and aging order.
 type creditAllocation struct {
 	paymentID string
 	available int64
 	order     int64
 }
 
+// allocationPart is one payment portion of a claim allocation.
 type allocationPart struct {
 	paymentID string
 	amount    int64
@@ -1298,6 +1315,10 @@ func allocate(credits []creditAllocation, amount int64) []allocationPart {
 
 // ---- Validation ----
 
+// validateAccrual checks partner/payment identity, non-negative amount, bounded
+// rate and hold, required occurred-at, program currency match, and bounded
+// optional referral, plan, terms, policy and source fields. Plan IDs must
+// already be canonical.
 func validateAccrual(currency string, req AccrualRequest) error {
 	if _, ok := cleanPlain(req.PartnerID, maxIDLength); !ok {
 		return errWrap(ErrInvalid, "partner required")
@@ -1353,6 +1374,9 @@ func boundedOptional(s string, maxLen int) bool {
 	return ok
 }
 
+// validateReversal requires partner, refund and payment identifiers, non-
+// negative cumulative refund, an occurred-at time and a currency matching the
+// program currency.
 func validateReversal(currency string, req ReversalRequest) error {
 	if strings.TrimSpace(req.PartnerID) == "" || strings.TrimSpace(req.RefundID) == "" || strings.TrimSpace(req.PaymentID) == "" {
 		return errWrap(ErrInvalid, "partner, refund and payment required")
@@ -1369,6 +1393,9 @@ func validateReversal(currency string, req ReversalRequest) error {
 	return nil
 }
 
+// validateClaimRequest checks bounded reason, plain identity fields,
+// destination snapshot size and content limits, positive amount, program
+// currency match, destination presence and a non-empty plain idempotency key.
 func validateClaimRequest(currency string, req ClaimRequest) error {
 	if !boundedOptional(req.Reason, maxReasonLength) {
 		return ErrInvalid
@@ -1484,6 +1511,8 @@ func paymentReviewReason(state string) string {
 	}
 }
 
+// cleanPlain trims surrounding whitespace and accepts the result only when non-
+// empty, within maxLen, valid UTF-8 and free of control characters.
 func cleanPlain(s string, maxLen int) (string, bool) {
 	t := strings.TrimSpace(s)
 	if t == "" || len(t) > maxLen || !utf8.ValidString(t) {
@@ -1497,6 +1526,7 @@ func cleanPlain(s string, maxLen int) (string, bool) {
 	return t, true
 }
 
+// isUpperAlpha reports whether s is non-empty ASCII uppercase letters only.
 func isUpperAlpha(s string) bool {
 	for _, r := range s {
 		if r < 'A' || r > 'Z' {
@@ -1506,6 +1536,8 @@ func isUpperAlpha(s string) bool {
 	return len(s) > 0
 }
 
+// copyMap returns a shallow copy of m, preserving nil as nil so callers can
+// distinguish an absent map.
 func copyMap(m map[string]string) map[string]string {
 	if m == nil {
 		return nil
@@ -1584,6 +1616,9 @@ func reversalFingerprint(programID string, req ReversalRequest) string {
 	)
 }
 
+// canonicalSnapshot marshals a string map with encoding/json, whose sorted keys
+// and delimiter escaping keep structurally different snapshots from aliasing
+// the same replay evidence.
 func canonicalSnapshot(m map[string]string) string {
 	// encoding/json sorts string map keys and escapes delimiters, so structurally
 	// different destination snapshots cannot alias the same replay evidence.

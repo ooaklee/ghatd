@@ -12,13 +12,27 @@ import (
 
 // blueprintService manages business logic around blueprint request
 type blueprintService interface {
+	// CreateBlueprint creates a blueprint through the blueprintService
+	// business-logic port; the service implementation validates the request,
+	// generates identity and creation attribution for the actor, persists via the
+	// repository, and returns the created record.
 	CreateBlueprint(ctx context.Context, r *CreateBlueprintRequest) (*BlueprintResponse, error)
+	// GetBlueprintByID reads one blueprint through the blueprintService
+	// business-logic port; the service implementation requires a non-empty ID,
+	// verifies the actor against context without inferring ownership, and returns
+	// the selected record.
 	GetBlueprintByID(ctx context.Context, r *GetBlueprintByIDRequest) (*BlueprintResponse, error)
+	// GetBlueprints lists blueprints through the blueprintService business-logic
+	// port; the service implementation performs independent list and count reads,
+	// returns rows plus a total, and treats a nil request as an unfiltered query.
 	GetBlueprints(ctx context.Context, r *GetBlueprintsRequest) (*GetBlueprintsResponse, error)
 }
 
 // blueprintValidator expected methods of a valid
 type blueprintValidator interface {
+	// Validate reports whether the given value passes blueprint validation through
+	// the blueprintValidator contract; it inspects s and returns an error
+	// describing any validation failure.
 	Validate(s interface{}) error
 }
 

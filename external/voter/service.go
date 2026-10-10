@@ -14,8 +14,20 @@ import (
 // for one actor/target. Implementations must not fabricate successful receipts
 // or retry uncertain writes. Summaries includes every requested target.
 type VoteRepository interface {
+	// SetVote atomically sets one actor's vote value for a target through the
+	// VoteRepository persistence port; the reference implementation upserts by
+	// deterministic identity and fails closed on inconsistent or unacknowledged
+	// receipts.
 	SetVote(context.Context, string, Target, Value) error
+	// RemoveVote atomically removes one actor's vote for a target through the
+	// VoteRepository persistence port; the reference implementation treats an
+	// already absent vote as success, deletes only that actor's vote, and never
+	// retries uncertain results.
 	RemoveVote(context.Context, string, Target) error
+	// GetSummaries returns per-target vote counts and the viewer's own vote through
+	// the VoteRepository persistence port, covering every requested target; the
+	// reference implementation aggregates totals with the caller's vote in one
+	// query and fails closed on malformed stored values.
 	GetSummaries(context.Context, string, []Target) (map[Target]Summary, error)
 }
 

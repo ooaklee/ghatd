@@ -59,6 +59,11 @@ type WorkDecision struct {
 	Fingerprint                           string `json:"-"`
 	RecordedAt                            time.Time
 }
+
+// WorkItem is one durable queue record. JSON-hidden fields carry the private
+// source identity, fingerprint, fencing lease token and InitialDueAt, which
+// survives retries and cannot be retimed except by maturity deadlines.
+// Decision, when present, is the recorded acceptance or refusal receipt.
 type WorkItem struct {
 	ID, ProgramID, Kind, State string
 	SourceID                   string `json:"-"`
@@ -77,14 +82,33 @@ type WorkItem struct {
 // Lease tokens fence stale workers. Decision receipt replay cannot advance an
 // owning feed; CompleteWork is called only after that feed confirms acceptance.
 type WorkRepository interface {
+	// GetDiscoveryCursor returns the DiscoveryCursor for the identified work kind
+	// within a program, reading discovery progress owned by WorkRepository.
 	GetDiscoveryCursor(context.Context, string, string) (DiscoveryCursor, error)
+	// EnqueueWorkPage stores a discovered page of WorkItems between the prior and
+	// new cursors, atomically advancing guarded discovery within WorkRepository.
 	EnqueueWorkPage(context.Context, string, string, DiscoveryCursor, DiscoveryCursor, []WorkItem) error
+	// GetWorkItem reads the WorkItem for the identified program and item, a lookup
+	// owned by the work repository.
 	GetWorkItem(context.Context, string, string) (WorkItem, error)
+	// LeaseWork grants a lease on pending WorkItems from the given time for the
+	// duration, count and token, fencing stale workers per the repository's
+	// contract.
 	LeaseWork(context.Context, string, string, time.Time, time.Duration, string, int) ([]WorkItem, error)
+	// RecordWorkDecision records a WorkDecision for the item at the given time,
+	// returning the stored receipt; replay cannot advance an owning feed per the
+	// contract.
 	RecordWorkDecision(context.Context, WorkItem, WorkDecision, time.Time) (WorkDecision, error)
+	// RetryWork schedules the given WorkItem for retry with the supplied reason and
+	// times, a mutation owned by WorkRepository.
 	RetryWork(context.Context, WorkItem, string, time.Time, time.Time) error
+	// CompleteWork marks the identified WorkItem complete at the given time;
+	// callers invoke it only after the owning feed confirms acceptance.
 	CompleteWork(context.Context, WorkItem, string, time.Time) error
 }
+
+// WorkQueueConfig bounds queue behavior: program identity, lease duration
+// (1s..10m) and exponential retry timing capped at RetryMax.
 type WorkQueueConfig struct {
 	ProgramID                          string
 	LeaseDuration, RetryBase, RetryMax time.Duration
@@ -99,6 +123,8 @@ type WorkQueue struct {
 	config WorkQueueConfig
 }
 
+// NewWorkQueue validates repository, clock and configuration bounds, failing
+// with ErrUnavailable or ErrInvalid; it performs no I/O or seeding.
 func NewWorkQueue(repo WorkRepository, clock Clock, cfg WorkQueueConfig) (*WorkQueue, error) {
 	if nilManagerDependency(repo) || nilManagerDependency(clock) {
 		return nil, ErrUnavailable
@@ -108,17 +134,27 @@ func NewWorkQueue(repo WorkRepository, clock Clock, cfg WorkQueueConfig) (*WorkQ
 	}
 	return &WorkQueue{repo, clock, cfg}, nil
 }
+
+// validWorkText accepts a non-empty trimmed string of at most max bytes
+// containing no CR, LF or NUL.
 func validWorkText(value string, max int) bool {
 	return value != "" && len(value) <= max && strings.TrimSpace(value) == value && !strings.ContainsAny(value, "\r\n\x00")
 }
+
+// validWorkKind accepts exactly the four supported work kinds.
 func validWorkKind(kind string) bool {
 	return kind == WorkSignup || kind == WorkRevenue || kind == WorkRevenueSource || kind == WorkMaturity
 }
 
+// validWorkDeadline requires a deadline exactly for maturity work and its
+// absence for all other kinds.
 func validWorkDeadline(kind string, at time.Time) bool {
 	return (kind == WorkMaturity) != at.IsZero()
 }
 
+// workDecisionDigest fingerprints a decision's immutable fields; maturity
+// decisions additionally include the retained InitialDueAt so replay cannot
+// retiming the deadline.
 func workDecisionDigest(item WorkItem, actor, outcome, acceptance, reason string) (string, error) {
 	fields := []string{item.ID, item.SourceFingerprint, actor, outcome, acceptance, reason}
 	if item.Kind == WorkMaturity {
@@ -126,11 +162,17 @@ func workDecisionDigest(item WorkItem, actor, outcome, acceptance, reason string
 	}
 	return sourceDigest(fields)
 }
+
+// workID derives the deterministic work-item identity from program, kind and
+// source, so the same source always maps to one queue record.
 func workID(program, kind, source string) string {
 	body, _ := json.Marshal([]string{program, kind, source})
 	sum := sha256.Sum256(body)
 	return "work_" + hex.EncodeToString(sum[:])
 }
+
+// validWorkCursor accepts non-negative positions with a clean AfterID; revenue
+// cursors use only AfterID while all other kinds use only AfterSequence.
 func validWorkCursor(kind string, c DiscoveryCursor) bool {
 	if c.Revision < 0 || c.AfterSequence < 0 || len(c.AfterID) > 256 || strings.TrimSpace(c.AfterID) != c.AfterID || strings.ContainsAny(c.AfterID, "\r\n\x00") {
 		return false
@@ -140,6 +182,9 @@ func validWorkCursor(kind string, c DiscoveryCursor) bool {
 	}
 	return c.AfterSequence == 0
 }
+
+// ready rejects a nil context, an expired context, and a queue with nil
+// repository or clock.
 func (q *WorkQueue) ready(ctx context.Context) error {
 	if ctx == nil {
 		return ErrInvalid
@@ -152,6 +197,10 @@ func (q *WorkQueue) ready(ctx context.Context) error {
 	}
 	return nil
 }
+
+// Cursor returns the durable discovery position for a kind, treating not-found
+// as an empty cursor and rejecting a persisted malformed cursor with
+// ErrUnavailable.
 func (q *WorkQueue) Cursor(ctx context.Context, kind string) (DiscoveryCursor, error) {
 	if err := q.ready(ctx); err != nil {
 		return DiscoveryCursor{}, err
@@ -198,6 +247,9 @@ func (q *WorkQueue) EnqueuePage(ctx context.Context, kind string, expected, next
 	}
 	return q.repo.EnqueueWorkPage(ctx, q.config.ProgramID, kind, expected, next, items)
 }
+
+// Get returns the work item for a kind and source, addressing it by the derived
+// work ID.
 func (q *WorkQueue) Get(ctx context.Context, kind, source string) (WorkItem, error) {
 	if err := q.ready(ctx); err != nil {
 		return WorkItem{}, err
@@ -223,6 +275,10 @@ func (q *WorkQueue) Lease(ctx context.Context, kind string, limit int) ([]WorkIt
 	}
 	return q.repo.LeaseWork(ctx, q.config.ProgramID, kind, at, q.config.LeaseDuration, rand.Text(), limit)
 }
+
+// validateLease checks that an item belongs to this queue's program, carries a
+// well-formed identity, fingerprint and fencing lease, and has been attempted
+// at least once.
 func (q *WorkQueue) validateLease(item WorkItem) bool {
 	return item.ProgramID == q.config.ProgramID && validWorkKind(item.Kind) && validWorkDeadline(item.Kind, item.InitialDueAt) && validWorkText(item.SourceID, 256) && item.ID == workID(item.ProgramID, item.Kind, item.SourceID) && validWorkText(item.SourceFingerprint, 256) && validWorkText(item.LeaseToken, 128) && item.Attempts > 0 && !item.LeasedUntil.IsZero()
 }
@@ -255,6 +311,10 @@ func (q *WorkQueue) decide(ctx context.Context, item WorkItem, actor, outcome, a
 	decision := WorkDecision{ID: "decision_" + fp, Outcome: outcome, AcceptanceID: acceptance, ReasonCode: reason, ActorID: actor, Fingerprint: fp, RecordedAt: now}
 	return q.repo.RecordWorkDecision(ctx, item, decision, now)
 }
+
+// Retry reschedules a leased item with exponential backoff capped at RetryMax,
+// never earlier than its InitialDueAt or CreatedAt, and records the validated
+// error code.
 func (q *WorkQueue) Retry(ctx context.Context, item WorkItem, errorCode string) error {
 	if err := q.ready(ctx); err != nil {
 		return err
@@ -286,6 +346,9 @@ func (q *WorkQueue) Retry(ctx context.Context, item WorkItem, errorCode string) 
 	}
 	return q.repo.RetryWork(ctx, item, errorCode, now, next)
 }
+
+// Complete acknowledges the work item's decision receipt using the fencing
+// lease and a sample of the shared clock.
 func (q *WorkQueue) Complete(ctx context.Context, item WorkItem, decisionID string) error {
 	if err := q.ready(ctx); err != nil {
 		return err

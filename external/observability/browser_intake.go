@@ -136,6 +136,10 @@ func NewBrowserTraceIntake(config BrowserTraceIntakeConfig) (*BrowserTraceIntake
 	return &BrowserTraceIntake{origins: origins, routes: routes, apis: apis, resource: resource, timeout: config.Timeout, maxConcurrent: config.MaxConcurrent, rate: float64(config.BatchesPerMinute) / 60, burst: float64(config.Burst), tokens: float64(config.Burst), lastToken: time.Now(), sender: sender, count: count, ctx: ctx, cancel: cancel, done: make(chan struct{})}, nil
 }
 
+// browserTraceTransportConfiguration resolves the browser intake's OTLP
+// transport from the standard trace OTLP environment. It requires
+// OTEL_TRACES_EXPORTER to be unset or otlp and returns an error when any
+// inspected configuration issue has error severity.
 func browserTraceTransportConfiguration() (resolvedSignalConfiguration, error) {
 	settings := resolvedSignalConfiguration{signal: "traces", exporter: "otlp"}
 	if exporter := os.Getenv("OTEL_TRACES_EXPORTER"); exporter != "" && exporter != "otlp" {
@@ -152,6 +156,10 @@ func browserTraceTransportConfiguration() (resolvedSignalConfiguration, error) {
 	return settings, nil
 }
 
+// browserCanonicalOrigin reports whether origin is an exact canonical
+// http/https origin suitable for CORS comparison. It rejects lengths over 256,
+// non-canonical hosts, credentials, paths, queries, fragments, default ports,
+// malformed IPv6 zones and hostnames that are purely numeric.
 func browserCanonicalOrigin(origin string) bool {
 	if len(origin) > 256 || !configurationTextSafe(origin) {
 		return false
@@ -190,6 +198,9 @@ func browserCanonicalOrigin(origin string) bool {
 var browserGroupPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 var browserHostLabelPattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
+// browserGroupSet builds the allowed route/API group set with "other" pre-
+// seeded, rejecting more than 32 entries, entries failing the group pattern, or
+// configurations whose extra entries would exceed the bound.
 func browserGroupSet(values []string) (map[string]struct{}, error) {
 	groups := map[string]struct{}{"other": {}}
 	if len(values) > 32 {
@@ -207,10 +218,16 @@ func browserGroupSet(values []string) (map[string]struct{}, error) {
 	return groups, nil
 }
 
+// browserStringAttribute builds an OTLP key/value attribute carrying a string
+// value.
 func browserStringAttribute(key, value string) *commonpb.KeyValue {
 	return &commonpb.KeyValue{Key: key, Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: value}}}
 }
 
+// admit applies the intake's token bucket and concurrency limits for a request
+// at time now. It returns whether the request is admitted, and whether the
+// intake is closed (which always denies). Admission consumes a token and
+// increments the in-flight count.
 func (intake *BrowserTraceIntake) admit(now time.Time) (bool, bool) {
 	intake.mu.Lock()
 	defer intake.mu.Unlock()
@@ -227,6 +244,8 @@ func (intake *BrowserTraceIntake) admit(now time.Time) (bool, bool) {
 	return true, false
 }
 
+// release decrements the in-flight count after a handler completes, closing the
+// intake's done channel once a closed intake has no handlers left.
 func (intake *BrowserTraceIntake) release() {
 	intake.mu.Lock()
 	defer intake.mu.Unlock()

@@ -7,6 +7,11 @@ import (
 	"github.com/ooaklee/ghatd/external/partnerprogram"
 )
 
+// paymentReport forwards the query to the earnings owner and strictly validates
+// the returned report: program/partner/currency identity, non-empty revision,
+// ledger bounds, strictly descending unique accrual sequences within the
+// requested window, and cursor/limit/HasMore consistency. Malformed projections
+// fail with ErrUnavailable rather than partial output.
 func (m *Manager) paymentReport(ctx context.Context, partner string, q partnerearnings.PaymentQuery) (partnerearnings.PaymentReport, error) {
 	report, err := m.deps.Earnings.GetPaymentReport(ctx, partner, q)
 	if err != nil {

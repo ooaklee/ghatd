@@ -77,12 +77,17 @@ func AttachRoutesWithConfig(router *grouter.Router, store Store, rateLimit, admi
 	return nil
 }
 
+// handler serves public signup and admin CSV export using the configured
+// columns, store and download filename.
 type handler struct {
 	columns        []CSVColumn
 	store          Store
 	exportFilename string
 }
 
+// canonicalEmail lowercases and validates an address shape, enforcing length
+// limits and restricting the domain to lowercase letters, digits and hyphens;
+// it returns the canonical form only when fully valid.
 func canonicalEmail(raw string) (string, bool) {
 	email := strings.ToLower(strings.TrimSpace(raw))
 	if len(email) > 254 || strings.ContainsAny(email, "\r\n\t ") {
@@ -109,6 +114,9 @@ func canonicalEmail(raw string) (string, bool) {
 	return email, true
 }
 
+// join strictly decodes a small JSON signup, requires a canonical email,
+// consent and the "landing" source, and returns an identical accepted response
+// for new and existing addresses so membership is never revealed.
 func (h *handler) join(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -150,6 +158,9 @@ func (h *handler) join(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"data": map[string]string{"status": "accepted"}})
 }
 
+// export streams the audience as CSV under a 30-second timeout, using
+// configured columns or the default projection, with every cell passed through
+// csvCell escaping; write errors end the response silently.
 func (h *handler) export(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -197,6 +208,9 @@ func (h *handler) export(w http.ResponseWriter, r *http.Request) {
 	writer.Flush()
 }
 
+// csvCell neutralises spreadsheet formula injection by prefixing a single quote
+// when the value starts with a tab/newline or, after leading whitespace, with
+// =, +, - or @.
 func csvCell(value string) string {
 	trimmed := strings.TrimLeftFunc(value, unicode.IsSpace)
 	if strings.ContainsAny(value[:min(1, len(value))], "\t\r\n") || strings.ContainsAny(trimmed[:min(1, len(trimmed))], "=+-@") {
@@ -205,6 +219,8 @@ func csvCell(value string) string {
 	return value
 }
 
+// writeJSON sets the JSON content type, writes the status and encodes the
+// value, ignoring encoding errors.
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

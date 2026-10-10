@@ -117,6 +117,9 @@ func WithOperation(ctx context.Context, packageName string, operation string, fi
 	return TransitWith(ctx, AcquireOperationFrom(ctx, packageName, operation, fields...))
 }
 
+// packageFields builds log fields for GHATD attribution: a fixed source field
+// plus trimmed package and operation fields when non-empty, followed by the
+// caller-supplied fields.
 func packageFields(packageName string, operation string, fields ...zap.Field) []zap.Field {
 	result := []zap.Field{zap.String(FieldSource, SourceGHATD)}
 

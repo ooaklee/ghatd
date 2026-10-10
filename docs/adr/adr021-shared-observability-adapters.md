@@ -63,9 +63,9 @@ carrier. Shutdown deadlines do not imply exactly-once effects or guaranteed
 delivery. Exporter selection, sampling, credentials, deployment identities,
 retention and budget remain explicit host policy.
 
-Adoption should pin a branch commit, preserve metric identity, remove local
-replacement directives before publication, and validate one host before wider
-propagation. Package tests, host integration tests and deployment observation
+Adoption should pin an exact reviewed module revision, preserve metric identity
+and validate one host before wider propagation. Remove development-only local
+replacement directives before publishing the host dependency update. Package tests, host integration tests and deployment observation
 provide different evidence; none substitutes for the others.
 
 ## Alternatives considered

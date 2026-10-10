@@ -68,8 +68,14 @@ func (s *Service) OAuthConnectionsOrigin() string {
 // oauthConnectionsUsers is the optional user-service capability for atomic,
 // snapshot-checked disconnection and revision-checked linking.
 type oauthConnectionsUsers interface {
+	// SupportsOAuthConnections reports whether the user service implements the
+	// optional atomic, snapshot-checked OAuth connection capability.
 	SupportsOAuthConnections() bool
+	// DisconnectOAuthProvider atomically removes the provider described by the
+	// request, snapshot-checked, and returns the updated user.
 	DisconnectOAuthProvider(context.Context, *user.DisconnectOAuthProviderRequest) (*user.UniversalUser, error)
+	// LinkOAuthIdentityAtRevision attaches the OAuth identity to the named user
+	// only when the account matches the given revision, returning the updated user.
 	LinkOAuthIdentityAtRevision(context.Context, string, *user.OAuthIdentity, int64) (*user.UniversalUser, error)
 }
 

@@ -12,6 +12,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+// Event identifies a cache decision recorded by an Observer, such as a hit,
+// miss or store.
 type Event string
 
 const (
@@ -34,6 +36,8 @@ type Config struct {
 	Names         []string
 }
 
+// Observer records bounded cache event counts for a startup-configured set of
+// logical cache names.
 type Observer struct {
 	events metric.Int64Counter
 	names  map[string]struct{}
@@ -41,6 +45,9 @@ type Observer struct {
 
 var cacheName = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,63}$`)
 
+// New validates and snapshots at most 64 cache names, defaulting to the HTTP
+// response cache, and creates the event counter using the configured or global
+// meter provider. Errors never include supplied values.
 func New(config Config) (*Observer, error) {
 	if len(config.Names) == 0 {
 		config.Names = []string{HTTPResponse}

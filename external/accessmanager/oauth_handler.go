@@ -20,7 +20,12 @@ import (
 
 // oauthLinkService keeps the existing AccessmanagerService interface compatible.
 type oauthLinkService interface {
+	// OAuthProviders lists provider names whose required host capabilities and
+	// secure configuration are present, exposing availability without credentials.
 	OAuthProviders() []string
+	// OAuthLink starts provider linking for the request's provider and return path
+	// using the signed session cookie, returning the authorization redirect and
+	// cookie core.
 	OAuthLink(context.Context, *OauthLoginRequest, string) (*OauthLoginResponse, error)
 }
 

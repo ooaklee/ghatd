@@ -45,6 +45,10 @@ func EmailDomainForLog(value string) string {
 	return strings.ToLower(parts[1])
 }
 
+// safeValue reduces an arbitrary reflected value to a loggable form. Times are
+// formatted as RFC3339 UTC, strings truncated, scalars passed through, and
+// composites summarised or recursed up to depth 2 before falling back to a
+// type-only summary. Invalid values return nil.
 func safeValue(value reflect.Value, depth int) any {
 	value = indirectValue(value)
 	if !value.IsValid() {
@@ -84,6 +88,10 @@ func safeValue(value reflect.Value, depth int) any {
 	}
 }
 
+// safeStructValue renders a struct as a map keyed by converted field names.
+// Exported sensitive fields are reduced to presence summaries, explicitly safe
+// fields recurse through safeFieldValue, and other exported fields are omitted
+// and counted under omitted-fields. Unexported fields are skipped.
 func safeStructValue(value reflect.Value, depth int) map[string]any {
 	result := map[string]any{
 		"type": shortTypeName(value.Type()),
@@ -115,6 +123,10 @@ func safeStructValue(value reflect.Value, depth int) map[string]any {
 	return result
 }
 
+// safeFieldValue reduces a single known-safe field value for logging. Times are
+// formatted, strings truncated, scalars kept, and maps or sequences summarised
+// without contents; structs delegate to safeValue. Unlike safeValue it applies
+// no depth cutoff.
 func safeFieldValue(fieldName string, value reflect.Value, depth int) any {
 	value = indirectValue(value)
 	if !value.IsValid() {
@@ -150,6 +162,8 @@ func safeFieldValue(fieldName string, value reflect.Value, depth int) any {
 	}
 }
 
+// safeMapSummary describes a map by type and entry count, plus a sorted,
+// truncated list of string keys when present. Map values are never included.
 func safeMapSummary(value reflect.Value) map[string]any {
 	value = indirectValue(value)
 	if !value.IsValid() {
@@ -172,6 +186,8 @@ func safeMapSummary(value reflect.Value) map[string]any {
 	return result
 }
 
+// safeSequenceSummary describes a slice or array by type and element count
+// only; elements are never included.
 func safeSequenceSummary(value reflect.Value) map[string]any {
 	value = indirectValue(value)
 	if !value.IsValid() {
@@ -184,6 +200,9 @@ func safeSequenceSummary(value reflect.Value) map[string]any {
 	}
 }
 
+// addPresenceSummary records that a sensitive field exists without its value,
+// adding a -present flag plus coarse shape for non-zero values: entry count and
+// truncated keys for maps, length for sequences and strings.
 func addPresenceSummary(result map[string]any, key string, value reflect.Value) {
 	value = indirectValue(value)
 	present := value.IsValid() && !value.IsZero()
@@ -209,6 +228,9 @@ func addPresenceSummary(result map[string]any, key string, value reflect.Value) 
 	}
 }
 
+// safeMapKeys returns the map's keys sorted and individually truncated. When
+// more than maxSafeMapKeys exist, only that many are returned and the second
+// result reports truncation.
 func safeMapKeys(value reflect.Value) ([]string, bool) {
 	keys := make([]string, 0, value.Len())
 	for _, key := range value.MapKeys() {
@@ -231,6 +253,9 @@ func safeMapKeys(value reflect.Value) ([]string, bool) {
 	return keys[:maxSafeMapKeys], true
 }
 
+// isSensitiveFieldName reports whether a field name contains a sensitive marker
+// such as token, password, body or message, making its value unsuitable for
+// logging.
 func isSensitiveFieldName(name string) bool {
 	normalized := strings.ToLower(name)
 	sensitiveParts := []string{
@@ -264,6 +289,9 @@ func isSensitiveFieldName(name string) bool {
 	return false
 }
 
+// isSafeFieldName reports whether a field value may be logged by name or shape:
+// identifiers, timestamps, a fixed vocabulary of benign names, count/size/total
+// suffixes, booleans, and is/has/can prefixes qualify.
 func isSafeFieldName(name string, value reflect.Value) bool {
 	normalized := strings.ToLower(name)
 	if normalized == "id" || strings.HasSuffix(name, "ID") || strings.HasSuffix(name, "Id") {
@@ -314,6 +342,8 @@ func isSafeFieldName(name string, value reflect.Value) bool {
 	return strings.HasPrefix(normalized, "is") || strings.HasPrefix(normalized, "has") || strings.HasPrefix(normalized, "can")
 }
 
+// indirectValue follows interface and pointer indirections to the underlying
+// value, returning the zero Value when a nil pointer or interface is reached.
 func indirectValue(value reflect.Value) reflect.Value {
 	for value.IsValid() && (value.Kind() == reflect.Interface || value.Kind() == reflect.Pointer) {
 		if value.IsNil() {
@@ -325,6 +355,8 @@ func indirectValue(value reflect.Value) reflect.Value {
 	return value
 }
 
+// formatTime renders a time.Time value as UTC RFC3339, returning an empty
+// string for zero times, non-times or values that cannot be interfaced.
 func formatTime(value reflect.Value) string {
 	if !value.CanInterface() {
 		return ""
@@ -336,6 +368,8 @@ func formatTime(value reflect.Value) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
+// shortTypeName returns a type's name qualified by its package's last path
+// element, falling back to the full type string for unnamed types.
 func shortTypeName(valueType reflect.Type) string {
 	valueType = indirectType(valueType)
 	if valueType.Name() == "" {
@@ -353,6 +387,9 @@ func shortTypeName(valueType reflect.Type) string {
 	return pkg + "." + valueType.Name()
 }
 
+// typeSummary returns a minimal description of a value containing only its full
+// type string, used when contents must not be logged. Invalid values return
+// nil.
 func typeSummary(value reflect.Value) map[string]any {
 	value = indirectValue(value)
 	if !value.IsValid() {
@@ -364,6 +401,8 @@ func typeSummary(value reflect.Value) map[string]any {
 	}
 }
 
+// indirectType strips pointer levels from a type, returning the underlying
+// element type.
 func indirectType(valueType reflect.Type) reflect.Type {
 	for valueType.Kind() == reflect.Pointer {
 		valueType = valueType.Elem()
@@ -371,6 +410,9 @@ func indirectType(valueType reflect.Type) reflect.Type {
 	return valueType
 }
 
+// fieldLogKey converts an exported Go field name to a kebab-case log key,
+// inserting hyphens at lower-to-upper and upper-run boundaries (e.g. UserID
+// becomes user-id).
 func fieldLogKey(name string) string {
 	runes := []rune(name)
 	result := make([]rune, 0, len(runes)+4)
@@ -388,6 +430,9 @@ func fieldLogKey(name string) string {
 	return string(result)
 }
 
+// truncateString returns value unchanged when within maxSafeStringLength,
+// otherwise the first maxSafeStringLength bytes followed by a truncation
+// marker.
 func truncateString(value string) string {
 	if len(value) <= maxSafeStringLength {
 		return value

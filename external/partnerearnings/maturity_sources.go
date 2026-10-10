@@ -58,10 +58,14 @@ type MaturityRepository interface {
 	PendingMaturitySourcesAfter(ctx context.Context, programID, currency, afterID string, limit int) ([]MaturitySource, error)
 }
 
+// maturityID derives the deterministic maturity source ID from program,
+// currency, partner and payment.
 func maturityID(program, currency, partner, payment string) string {
 	return "maturity_" + financialFingerprint([]string{program, currency, partner, payment})
 }
 
+// validMaturityID accepts only the maturity_ prefix followed by exactly 64
+// lowercase hex characters.
 func validMaturityID(id string) bool {
 	if !strings.HasPrefix(id, "maturity_") || len(id) != len("maturity_")+64 {
 		return false
@@ -70,6 +74,9 @@ func validMaturityID(id string) bool {
 	return err == nil && strings.ToLower(id) == id
 }
 
+// maturityFingerprint computes the canonical fingerprint of a maturity source's
+// frozen identity, accrual evidence, sequence, amount and UTC timestamps, so
+// any later change to accepted evidence is detectable as a conflict.
 func maturityFingerprint(source MaturitySource) string {
 	return financialFingerprint(struct {
 		ID, Program, Partner, Currency, Payment, Entry, AccrualFingerprint string
@@ -78,6 +85,9 @@ func maturityFingerprint(source MaturitySource) string {
 	}{source.ID, source.ProgramID, source.PartnerID, source.Currency, source.PaymentID, source.AccruedEntryID, source.AccruedFingerprint, source.AccruedSequence, source.AccruedAmountMinor, source.AvailableAt.UTC().Format(time.RFC3339Nano), source.CreatedAt.UTC().Format(time.RFC3339Nano)})
 }
 
+// sourceFromAccrual builds the pending maturity source recorded for an accepted
+// accrual entry, carrying the entry's ID, fingerprint, sequence and amount, and
+// freezing its computed fingerprint.
 func sourceFromAccrual(entry Entry) MaturitySource {
 	source := MaturitySource{ID: maturityID(entry.ProgramID, entry.Currency, entry.PartnerID, entry.SourceEventID), ProgramID: entry.ProgramID, PartnerID: entry.PartnerID, Currency: entry.Currency, PaymentID: entry.SourceEventID, AccruedEntryID: entry.ID, AccruedFingerprint: entry.Fingerprint, AccruedSequence: entry.Sequence, AccruedAmountMinor: entry.AmountMinor, CreatedAt: entry.CreatedAt.UTC(), State: MaturityPending, Revision: 1}
 	if entry.AvailableAt != nil {
@@ -157,6 +167,11 @@ func (s *Service) verifyMaturitySource(source MaturitySource, entries []Entry) e
 	return nil
 }
 
+// completeMaturitySource marks a pending source completed inside a transaction
+// after re-reading it, re-validating it and matching its fingerprint against
+// the accrued entry. Missing evidence is unavailability; validation,
+// fingerprint or state mismatch is a conflict. Completion is replaced expecting
+// revision 1.
 func (s *Service) completeMaturitySource(ctx context.Context, tx Repository, accrued, matured Entry) error {
 	source, err := tx.GetMaturitySource(ctx, s.programID, maturityID(s.programID, s.currency, accrued.PartnerID, accrued.SourceEventID))
 	if strictFinancialAbsence(err) {

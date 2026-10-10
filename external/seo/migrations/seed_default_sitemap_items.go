@@ -112,6 +112,9 @@ func InitDefaultSitemapItemsDownWithPaths(paths Paths) func(db *mongo.Database) 
 	}
 }
 
+// initDefaultSitemapItemsUp seeds each default sitemap URI via upsert,
+// inserting IDs, timestamps and starter priority/frequency only on first
+// creation, and logs progress. The first failed write aborts the migration.
 func initDefaultSitemapItemsUp(db *mongo.Database, paths Paths) error {
 	ctx := context.Background()
 	collection := db.Collection(seo.SitemapItemsCollection)
@@ -146,6 +149,8 @@ func initDefaultSitemapItemsUp(db *mongo.Database, paths Paths) error {
 	return nil
 }
 
+// initDefaultSitemapItemsDown deletes the resolved default sitemap entries by
+// URI, returning early when the list is empty and failing on delete errors.
 func initDefaultSitemapItemsDown(db *mongo.Database, paths Paths) error {
 	ctx := context.Background()
 	collection := db.Collection(seo.SitemapItemsCollection)
@@ -167,6 +172,8 @@ func initDefaultSitemapItemsDown(db *mongo.Database, paths Paths) error {
 	return nil
 }
 
+// normaliseSitemapSeedPath trims a seed path, ensures a leading slash and
+// removes trailing slashes except on the root path; blank input stays blank.
 func normaliseSitemapSeedPath(uri string) string {
 	uri = strings.TrimSpace(uri)
 	if uri == "" {

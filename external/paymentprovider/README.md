@@ -1,3 +1,17 @@
+# Payment provider
+
+
+## Stripe promotion-code entry
+
+`Config.AllowPromotionCodes` is a trusted host opt-in, captured at construction,
+for Stripe payment and subscription checkout. Its default omits the parameter;
+enabling it emits `allow_promotion_codes=true` when building the checkout form.
+It is not a checkout-request field and must never come from browser input.
+Provider coupon eligibility and host commercial policy remain separate from
+paid-access and revenue evidence. The option changes neither Price validation
+nor request metadata, idempotency or other provider endpoints. Hosts can use
+the [construction helper](helpers/README.md#provider-construction-options) to
+bind this option, an HTTP client and revenue configuration to one instance.
 
 ## Authenticated paid-revenue evidence
 

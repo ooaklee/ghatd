@@ -10,16 +10,26 @@ import (
 // UserIdentityService is the identity owner's service capability. The adapter
 // does not query collections, match email addresses or read browser bodies.
 type UserIdentityService interface {
+	// GetUserByID retrieves the identity owner's account record for the requested
+	// user ID.
 	GetUserByID(context.Context, *user.GetUserByIDRequest) (*user.GetUserByIDResponse, error)
+	// GetSignupAttribution returns the immutable signup attribution captured for
+	// the given user ID.
 	GetSignupAttribution(context.Context, string) (user.SignupAttribution, error)
 }
 
 // RegionEligibility resolves the host's approved participation rules from
 // verified owning account information. It must not infer consent from GeoIP.
 type RegionEligibility interface {
+	// IsPartnerRegionEligible reports whether the user's verified owning account
+	// information satisfies the host's approved participation rules for the partner
+	// region.
 	IsPartnerRegionEligible(context.Context, string) (bool, error)
 }
 
+// UserIdentityConfig is trusted adapter configuration: the owning program
+// identifier plus the account type and status values the host treats as
+// individual and active. Choices are validated and copied by the constructor.
 type UserIdentityConfig struct {
 	ProgramID              string
 	IndividualAccountTypes []string
@@ -36,6 +46,10 @@ type UserIdentityAdapter struct {
 	config UserIdentityConfig
 }
 
+// NewUserIdentityAdapter validates the owning identity service, region
+// eligibility resolver and configuration without I/O, copies the choice slices
+// defensively, and returns ErrUnavailable for nil capabilities or ErrInvalid
+// for malformed configuration.
 func NewUserIdentityAdapter(owner UserIdentityService, region RegionEligibility, config UserIdentityConfig) (*UserIdentityAdapter, error) {
 	if nilManagerDependency(owner) || nilManagerDependency(region) {
 		return nil, ErrUnavailable
@@ -47,9 +61,15 @@ func NewUserIdentityAdapter(owner UserIdentityService, region RegionEligibility,
 	config.ActiveAccountStatuses = append([]string(nil), config.ActiveAccountStatuses...)
 	return &UserIdentityAdapter{owner: owner, region: region, config: config}, nil
 }
+
+// identityValue reports whether a value is non-empty, within limit bytes and
+// free of leading/trailing whitespace.
 func identityValue(value string, limit int) bool {
 	return value != "" && value == strings.TrimSpace(value) && len(value) <= limit
 }
+
+// identityChoices reports whether values form a usable non-empty choice set:
+// between 1 and 100 entries, each a valid bounded non-duplicate identifier.
 func identityChoices(values []string) bool {
 	if len(values) < 1 || len(values) > 100 {
 		return false
@@ -63,6 +83,8 @@ func identityChoices(values []string) bool {
 	}
 	return true
 }
+
+// identityContains reports exact membership of value in values.
 func identityContains(values []string, value string) bool {
 	for _, v := range values {
 		if v == value {
@@ -71,12 +93,22 @@ func identityContains(values []string, value string) bool {
 	}
 	return false
 }
+
+// identityContext rejects a nil context or an id that is empty, padded or
+// longer than 256 bytes with ErrInvalid, then returns any already-cancelled
+// context error.
 func identityContext(ctx context.Context, id string) error {
 	if ctx == nil || !identityValue(id, 256) {
 		return ErrInvalid
 	}
 	return ctx.Err()
 }
+
+// GetPartnerPrincipal resolves current account facts from the owning user
+// service. It returns ErrUnavailable when the response is missing or refers to
+// a different user; Active/Individual/EmailVerified come from configured
+// choices, and region eligibility is only consulted for otherwise-admitted
+// accounts, with its failure propagated.
 func (a *UserIdentityAdapter) GetPartnerPrincipal(ctx context.Context, id string) (Principal, error) {
 	if err := identityContext(ctx, id); err != nil {
 		return Principal{}, err
@@ -100,6 +132,11 @@ func (a *UserIdentityAdapter) GetPartnerPrincipal(ctx context.Context, id string
 	principal.RegionEligible = eligible
 	return principal, nil
 }
+
+// GetSignupFact returns the signup capture for an account, requiring the
+// capture to match the requested customer and configured program, have a
+// creation time and bounded evidence; otherwise ErrUnavailable. NewAccount is
+// true from this creation capture and empty attribution evidence stays empty.
 func (a *UserIdentityAdapter) GetSignupFact(ctx context.Context, id string) (SignupFact, error) {
 	if err := identityContext(ctx, id); err != nil {
 		return SignupFact{}, err

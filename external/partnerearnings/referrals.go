@@ -28,6 +28,9 @@ type ReferralAmountQuery struct {
 	From, To *time.Time
 }
 
+// ReferralAmounts is one requested group's aggregate: accepted journal payment
+// count and bounds, whether review is required, and the group's PaymentAmounts
+// portions.
 type ReferralAmounts struct {
 	ID                            string
 	AcceptedPayments              int

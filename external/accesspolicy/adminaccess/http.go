@@ -46,12 +46,20 @@ const (
 // PolicyManager retains all domain validation, live authorization, inventory,
 // audited Mongo CAS and uncertain-outcome semantics in GHATD.
 type PolicyManager interface {
+	// Preview returns the manager-produced proposal for applying the supplied token
+	// limits to the target, recording it as a review handle without authorizing any
+	// policy change.
 	Preview(context.Context, string, accesspolicy.TokenLimits) (accesspolicy.TokenLimitPreview, error)
+	// Apply commits the reviewed token limits for the target at the matching
+	// revision, consuming prior authorization before dispatch; failure does not
+	// restore it.
 	Apply(context.Context, string, int64, accesspolicy.TokenLimits) (accesspolicy.Grant, error)
 }
 
 // EmailSender uses the existing provider/template pipeline; no mailbox is opened.
 type EmailSender interface {
+	// SendCustomEmail delivers the described custom email through the existing
+	// provider/template pipeline; no mailbox is opened.
 	SendCustomEmail(context.Context, *emailmanager.SendCustomEmailRequest) error
 }
 
@@ -302,8 +310,13 @@ func (b *Bridge) policy(w http.ResponseWriter, r *http.Request, apply bool) {
 		h.PreviewTokenLimits(w, r)
 	}
 }
+
+// preview forwards the request to the shared policy handler in preview (read-
+// only) mode.
 func (b *Bridge) preview(w http.ResponseWriter, r *http.Request) { b.policy(w, r, false) }
-func (b *Bridge) apply(w http.ResponseWriter, r *http.Request)   { b.policy(w, r, true) }
+
+// apply forwards the request to the shared policy handler in applying mode.
+func (b *Bridge) apply(w http.ResponseWriter, r *http.Request) { b.policy(w, r, true) }
 
 // bound validates the current page context and exact review before proof I/O.
 func (b *Bridge) bound(r *http.Request) (string, review, error) {
@@ -456,6 +469,9 @@ func readCode(r *http.Request) (string, error) {
 func (b *Bridge) fail(w http.ResponseWriter, err error) {
 	_ = reply.NewReplier(b.manifests).NewHTTPErrorResponse(w, errormanifest.CanonicalError(err, b.manifests))
 }
+
+// respond writes data with HTTP 200 using the shared reply envelope; write
+// failures are deliberately ignored.
 func (b *Bridge) respond(w http.ResponseWriter, data any) {
 	_ = reply.NewReplier(b.manifests).NewHTTPDataResponse(w, http.StatusOK, data)
 }

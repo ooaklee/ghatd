@@ -2,6 +2,9 @@ package templates
 
 import "fmt"
 
+// NewBaseHtmlEmailTemplateRequest describes one composed HTML email: preview
+// text, subject, <td>-wrapped main content and optional footer fields. All
+// content is caller-supplied HTML.
 type NewBaseHtmlEmailTemplateRequest struct {
 	// EmailPreview is the text that will be shown in the email preview
 	EmailPreview string
@@ -57,6 +60,10 @@ type NewBaseHtmlEmailTemplateRequest struct {
 	FooterEntityUrl string
 }
 
+// NewBaseHtmlEmailTemplate renders a responsive HTML shell around the caller's
+// <td>-wrapped main content, embedding the preview text in a hidden preheader
+// and the optional footer. It performs no escaping; the content must already be
+// safe HTML.
 func NewBaseHtmlEmailTemplate(emailPreview, emailSubject, emailMainContent string, footerEnabled bool, footerYear int, footerEntityName, footerEntityUrl string) string {
 	var baseEmailTemplate string
 

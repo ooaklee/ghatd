@@ -18,8 +18,8 @@ Hosts not using starter can pass the providers to
 The host owns Redis lifecycle, environment parsing and key loading:
 
 - Map [.env.example](.env.example) through your own configuration loader. GHATD
-  does not read these variable names automatically. Bedrock uses
-  `FRONTEND_BASE_URL` for the example's `OAUTH_ORIGIN` concept.
+  does not read these variable names automatically. Map your host's
+  frontend-origin setting to the example's `OAUTH_ORIGIN` concept.
 - All-empty provider fields map to `nil`. A partial configuration must not be
   silently converted to `nil`: fail startup. A supplied request with missing
   credentials is rejected by the secure constructor.
@@ -27,7 +27,8 @@ The host owns Redis lifecycle, environment parsing and key loading:
   Apple input supplies `ClientID` (Services ID), `TeamID`, `KeyID`,
   `PrivateKeyPEM` and optionally `HTTPClient`. Read the PEM bytes through your
   secret store or a narrowly mounted file outside Git.
-  [LoadAppleSigningKey](apple_key.go) demonstrates a file/base64 adapter: the host
+  [oauthhelper.LoadAppleSigningKey](../../external/oauth/helper/README.md) is an
+  optional shared file/base64 adapter: the host
   supplies `APPLE_OAUTH_PRIVATE_KEY_B64` and `APPLE_OAUTH_PRIVATE_KEY_PATH`,
   receives decoded bytes, then passes them to `PrivateKeyPEM`. A non-empty
   encoded value wins, even if the file is unreadable. Invalid encoding fails
@@ -52,8 +53,8 @@ Check the example against the framework's current API without provider calls,
 using the Go version pinned in the repository's `.tool-versions`:
 
 ```sh
-go test ./examples/oauth
-go vet ./examples/oauth
+go test ./examples/oauth ./external/oauth/helper
+go vet ./examples/oauth ./external/oauth/helper
 ```
 
 For asdf-managed toolchains, prefix these commands with `asdf exec`.

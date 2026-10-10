@@ -13,17 +13,47 @@ import (
 
 // ReminderRepository describes the persistence operations needed by the reminder service.
 type ReminderRepository interface {
+	// CreateReminder persists a new reminder declaration and returns it; the
+	// repository implementation generates missing IDs, timestamps and defaults the
+	// status to active.
 	CreateReminder(ctx context.Context, reminder *Reminder) (*Reminder, error)
+	// GetReminderByID retrieves one reminder declaration by its platform ID from
+	// persistence.
 	GetReminderByID(ctx context.Context, id string) (*Reminder, error)
+	// ListReminders returns reminder declarations matching the supplied user,
+	// status and target filters, paginated by page and perPage.
 	ListReminders(ctx context.Context, userID string, status string, targetType string, targetId string, page, perPage int) ([]*Reminder, error)
+	// GetRemindersForTargetTypeByUserID returns a user's reminders for a required
+	// target type and optional target ID, paginated by page and perPage.
 	GetRemindersForTargetTypeByUserID(ctx context.Context, userID string, targetType string, targetId string, page, perPage int) ([]*Reminder, error)
+	// GetActiveRemindersForTargetTypeByUserID returns only active reminders for a
+	// user's target type and optional target ID, paginated by page and perPage.
 	GetActiveRemindersForTargetTypeByUserID(ctx context.Context, userID string, targetType string, targetId string, page, perPage int) ([]*Reminder, error)
+	// UpdateReminderByID replaces one reminder declaration identified by its ID,
+	// returning the stored reminder; the repository implementation stamps the
+	// update time.
 	UpdateReminderByID(ctx context.Context, reminder *Reminder) (*Reminder, error)
+	// PatchReminder applies a partial field update, given as a map, to one reminder
+	// declaration by ID; the repository implementation adds the update timestamp
+	// before persisting.
 	PatchReminder(ctx context.Context, id string, update map[string]interface{}) error
+	// DeleteReminderByID removes one reminder declaration by its platform ID from
+	// persistence.
 	DeleteReminderByID(ctx context.Context, id string) error
+	// CountReminders returns the number of reminder declarations matching the
+	// supplied filter.
 	CountReminders(ctx context.Context, filter *ReminderFilter) (int64, error)
+	// GetDueReminders returns reminders whose next due time falls on or before the
+	// filter's timestamp, sorted by due time, limited by the supplied limit; the
+	// repository returns an empty slice when none match.
 	GetDueReminders(ctx context.Context, filter *ReminderFilter, limit int64) ([]*Reminder, error)
+	// CreateReminderExecution persists one scheduler or notification attempt
+	// record; the repository implementation fills missing IDs, timestamp, pending
+	// status and first attempt number.
 	CreateReminderExecution(ctx context.Context, execution *ReminderExecution) (*ReminderExecution, error)
+	// ListReminderExecutions returns execution tracking records matching the
+	// filter, paginated by page and perPage and sorted newest first by scheduled
+	// time.
 	ListReminderExecutions(ctx context.Context, filter *ReminderExecutionFilter, page, perPage int) ([]*ReminderExecution, error)
 }
 
@@ -485,6 +515,8 @@ func (s *Service) GetActiveRemindersForTargetTypeByUserID(ctx context.Context, r
 	}, nil
 }
 
+// normaliseReminderPagination defaults non-positive page to 1 and per-page to
+// 25.
 func normaliseReminderPagination(page, perPage int) (int, int) {
 	if page <= 0 {
 		page = 1
@@ -495,6 +527,9 @@ func normaliseReminderPagination(page, perPage int) (int, int) {
 	return page, perPage
 }
 
+// normaliseReminderUserIDs merges a single user ID and a list, splitting comma-
+// separated values, dropping empties and removing duplicates while preserving
+// first-seen order.
 func normaliseReminderUserIDs(userID string, userIDs []string) []string {
 	seen := map[string]struct{}{}
 	normalised := []string{}
@@ -516,6 +551,8 @@ func normaliseReminderUserIDs(userID string, userIDs []string) []string {
 	return normalised
 }
 
+// reminderPaginationMeta builds the page/per_page metadata map returned with
+// paginated reminder lists.
 func reminderPaginationMeta(page, perPage int) map[string]interface{} {
 	return map[string]interface{}{
 		"page":     page,

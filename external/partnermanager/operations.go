@@ -9,6 +9,9 @@ import (
 // WorkBacklogService is an optional owning-service read capability. Managers
 // neither access its repository nor perform discovery or leases to report it.
 type WorkBacklogService interface {
+	// GetBacklog reports the aggregate WorkBacklog snapshot; the WorkQueue
+	// implementation performs no mutation or discovery and discards the entire
+	// aggregate on any failed scope instead of returning zero.
 	GetBacklog(context.Context) (WorkBacklog, error)
 }
 

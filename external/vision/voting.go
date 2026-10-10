@@ -9,8 +9,18 @@ import (
 // VoterService is the lower-domain port; vision retains target validation and
 // downvote policy. Implementations return all requested summaries or an error.
 type VoterService interface {
+	// SetVote sets or replaces one actor's vote on a target through the
+	// VoterService port owned by vision; vision retains target validation and
+	// downvote policy, while implementations record the vote described by the
+	// voter.SetVoteRequest.
 	SetVote(context.Context, *voter.SetVoteRequest) error
+	// RemoveVote removes one actor's vote on a target through the VoterService port
+	// owned by vision; vision validates the target before delegating, and
+	// implementations remove the vote described by the voter.RemoveVoteRequest.
 	RemoveVote(context.Context, *voter.RemoveVoteRequest) error
+	// GetSummaries requests vote summaries keyed by target through the VoterService
+	// port owned by vision; implementations return all requested summaries or an
+	// error, as stated in the owning contract.
 	GetSummaries(context.Context, *voter.GetSummariesRequest) (map[voter.Target]voter.Summary, error)
 }
 

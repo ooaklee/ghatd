@@ -63,6 +63,9 @@ const CommsEntriesCollection = "comms_entries"
 // conversationMongoReader is the additional shared-helper capability required
 // by conversation storage. Older stores continue to satisfy MongoDbStore.
 type conversationMongoReader interface {
+	// ExecuteFindOneCommandDecodeResult is the shared-helper single-document
+	// find-and-decode capability required by conversation storage, mirroring
+	// MongoDbStore semantics for reading one entry.
 	ExecuteFindOneCommandDecodeResult(context.Context, *mongo.Collection, interface{}, interface{}, string, bool, error) error
 }
 

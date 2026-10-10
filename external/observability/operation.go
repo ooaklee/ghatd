@@ -197,6 +197,8 @@ func (operation *Operation) complete(classification Classification) {
 	operation.span.End()
 }
 
+// validOperationScope accepts 1–255 byte UTF-8 scopes without surrounding
+// whitespace or control characters.
 func validOperationScope(scope string) bool {
 	if len(scope) == 0 || len(scope) > 255 || !utf8.ValidString(scope) || strings.TrimSpace(scope) != scope {
 		return false
@@ -209,6 +211,9 @@ func validOperationScope(scope string) bool {
 	return true
 }
 
+// validOperationPrefix accepts 1–246 byte metric prefixes starting with a
+// letter and containing only letters, digits, dots, underscores, hyphens and
+// slashes.
 func validOperationPrefix(prefix string) bool {
 	if len(prefix) == 0 || len(prefix) > 246 || !operationIdentifierLetter(prefix[0]) {
 		return false
@@ -222,6 +227,7 @@ func validOperationPrefix(prefix string) bool {
 	return true
 }
 
+// validOperationBuckets accepts 1–128 strictly increasing finite boundaries.
 func validOperationBuckets(buckets []float64) bool {
 	if len(buckets) == 0 || len(buckets) > 128 {
 		return false

@@ -14,19 +14,48 @@ import (
 
 // AuditService expected methods of a valid audit service
 type AuditService interface {
+	// LogAuditEvent records an audit event described by r within the audit service
+	// contract. It returns an error when the event cannot be logged.
 	LogAuditEvent(ctx context.Context, r *audit.LogAuditEventRequest) error
 }
 
 // UserRepository expected methods of a valid user repository
 type UserRepository interface {
+	// CreateUser persists a new user in the user repository and returns the stored
+	// UniversalUser. The repository implementation rejects nil input and taken
+	// handles while returning other persistence failures as errors.
 	CreateUser(ctx context.Context, user *UniversalUser) (*UniversalUser, error)
+	// GetUserByID loads a single user from the repository by persistent ID,
+	// returning the found UniversalUser. The repository implementation signals a
+	// missing account with ErrUserNotFound.
 	GetUserByID(ctx context.Context, id string) (*UniversalUser, error)
+	// GetUserByNanoID loads a single user from the repository by its public nano ID
+	// identifier, returning the found UniversalUser. The repository implementation
+	// signals a missing account with ErrUserNotFound.
 	GetUserByNanoID(ctx context.Context, nanoID string) (*UniversalUser, error)
+	// GetUserByEmail loads a single user from the repository by normalized email
+	// address; logError controls error logging during lookup. The repository
+	// implementation validates input and signals a missing account with
+	// ErrUserNotFound.
 	GetUserByEmail(ctx context.Context, email string, logError bool) (*UniversalUser, error)
+	// UpdateUser persists changes to an existing UniversalUser and returns the
+	// acknowledged post-image. The repository implementation filters on ID, email
+	// and email revision, never writes protected identity fields, and does not
+	// retry or upsert.
 	UpdateUser(ctx context.Context, user *UniversalUser) (*UniversalUser, error)
+	// DeleteUserByID removes the user with the given persistent ID from the
+	// repository, returning an error when the deletion cannot be executed.
 	DeleteUserByID(ctx context.Context, id string) error
+	// GetUsers queries the repository for users matching the filters in req,
+	// applying the request's ordering and pagination, and returns the matching
+	// UniversalUser slice.
 	GetUsers(ctx context.Context, req *GetUsersRequest) ([]UniversalUser, error)
+	// GetTotalUsers returns the count of users matching the filters in req,
+	// supporting an email regex filter, as an int64.
 	GetTotalUsers(ctx context.Context, req *GetTotalUsersRequest) (int64, error)
+	// GetUserStatsCounts returns per-status user counts for the stats request,
+	// optionally scoped by an email regex. The repository implementation computes
+	// all statuses in a single $facet aggregation for a consistent snapshot.
 	GetUserStatsCounts(ctx context.Context, req *GetUserStatsRequest) (*UserStats, error)
 }
 
@@ -1027,6 +1056,9 @@ func (s *Service) availableConfigs() []*UserConfig {
 	return s.Configs
 }
 
+// resolveRequestedConfig returns the registered config whose type matches, or
+// the service default when the requested type is empty; unknown types yield
+// ErrInvalidUserConfigType.
 func (s *Service) resolveRequestedConfig(configType string) (*UserConfig, error) {
 	if configType == "" {
 		return s.defaultConfig(), nil
@@ -1041,6 +1073,8 @@ func (s *Service) resolveRequestedConfig(configType string) (*UserConfig, error)
 	return nil, ErrInvalidUserConfigType
 }
 
+// resolveStoredConfig maps a stored config type to its registered config,
+// falling back to the service default for unknown or legacy values.
 func (s *Service) resolveStoredConfig(configType string) *UserConfig {
 	config, err := s.resolveRequestedConfig(configType)
 	if err != nil {
@@ -1050,6 +1084,8 @@ func (s *Service) resolveStoredConfig(configType string) *UserConfig {
 	return config
 }
 
+// setUserDependencies attaches the service's ID generator, time provider and
+// string utilities plus the config resolved from the user's stored type.
 func (s *Service) setUserDependencies(user *UniversalUser) *UniversalUser {
 	config := s.resolveStoredConfig(user.Type)
 	return user.SetDependencies(config, s.IDGenerator, s.TimeProvider, s.StringUtils)

@@ -1,0 +1,20 @@
+{
+  "binding_parts": [
+    "member",
+    "fixture-actor",
+    "fixture-session-secret",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
+  "cookie": "eyJub25jZSI6Im1RLWVCeko4bUN6RVBZd0ZKNm5lV0VDcmN1UVkzbnZVd0RKbnk1aXJQS00iLCJiaW5kaW5nIjoiMTFjOGUxOWU4MzEzMDIzOTk1N2RmZjBjNmUwNTJjY2FmMzVjNzAyMGMxOWYxZmVhMzkxNzY5NzA0ZTdlNmNlMSIsImV4cGlyZXNfYXQiOjE3OTE1NTA4MDB9.tVXFDSWHqeEgGXXCVRzNlrxI68W9p8i3ld_HknGU9h8",
+  "cookie_name": "__Host-fixture-csrf",
+  "key": "0123456789abcdef0123456789abcdef",
+  "now": 1791547200,
+  "origin": "https://fixture.example",
+  "public_identity": "public_GIwzUmj-iXkSL1tfRUgZ3TeeOhsddsGd9W3RODYau0I",
+  "rate_identity": "member:-Fge_BHIXn1awH8CFpayufflpr1c8DXubqJSGVGltQ4",
+  "token": "b1H4KZWLqklXApv56iGRamYX1zXQzvMURUW5XmgG0pU"
+}

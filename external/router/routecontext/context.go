@@ -9,8 +9,11 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// contextKey is the unexported type used to store shared route state in a
+// request context.
 type contextKey struct{}
 
+// routeState carries the route template shared across middleware layers.
 type routeState struct{ template string }
 
 // Begin returns a request carrying shared route state. Call it outside the
@@ -51,6 +54,8 @@ func Template(request *http.Request) string {
 	return matchedTemplate(request)
 }
 
+// matchedTemplate returns the Mux current route's path template, falling back
+// to the request's Pattern field when no current route is available.
 func matchedTemplate(request *http.Request) string {
 	if route := mux.CurrentRoute(request); route != nil {
 		if template, err := route.GetPathTemplate(); err == nil {

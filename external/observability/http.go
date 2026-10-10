@@ -18,7 +18,12 @@ import (
 
 const redactedURLPath = "/"
 
+// clientRequestStateKey is the private context key carrying client request
+// state between the privacy wrapper and its restore layer.
 type clientRequestStateKey struct{}
+
+// serverRequestTargetKey is the private context key marking a request whose
+// server telemetry is already owned by an outer boundary.
 type serverRequestTargetKey struct{}
 
 // requestTarget contains the request fields that can hold a raw path or query.
@@ -29,6 +34,8 @@ type requestTarget struct {
 	pattern    string
 }
 
+// clientRequestState carries the captured request target and the original
+// transport error for the client-side privacy wrapper.
 type clientRequestState struct {
 	target       requestTarget
 	transportErr error
@@ -85,6 +92,8 @@ func newRoundTripper(base http.RoundTripper, options ...otelhttp.Option) http.Ro
 	}
 }
 
+// privacySafeRoundTripper wraps an instrumented transport and owns the
+// redaction and restoration of request-target data around it.
 type privacySafeRoundTripper struct {
 	instrumented http.RoundTripper
 }
@@ -190,6 +199,12 @@ func httpServerMiddleware(serviceName string, options ...otelhttp.Option) func(h
 	return httpServerMiddlewareWithPolicy(serviceName, HTTPTracePolicy{}, options...)
 }
 
+// httpServerMiddlewareWithPolicy builds the privacy-safe server middleware. It
+// sanitises a clone for otelhttp, restores the original target and metadata to
+// the application handler, transfers the matched route template and parsed
+// multipart form back for span attributes and cleanup, and rewraps body and
+// writer I/O errors in each direction. An existing outer installation keeps
+// ownership of the request's telemetry.
 func httpServerMiddlewareWithPolicy(serviceName string, policy HTTPTracePolicy, options ...otelhttp.Option) func(http.Handler) http.Handler {
 	instrument := otelhttp.NewMiddleware(
 		serviceName,

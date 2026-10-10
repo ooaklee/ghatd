@@ -50,8 +50,19 @@ type SignupConsumption struct {
 // SignupEvidenceRepository is optional for existing identity integrations but
 // required before enabling durable signup attribution in a host.
 type SignupEvidenceRepository interface {
+	// GetSignupAttribution loads a customer's stored signup attribution for the
+	// given program. The repository implementation returns ErrUserNotFound when the
+	// account or matching attribution is absent and restores stored creation times
+	// to UTC.
 	GetSignupAttribution(context.Context, string, string) (SignupAttribution, error)
+	// PendingSignupAttributions returns up to limit pending signup attributions for
+	// the given program. The repository implementation reads from the beginning of
+	// the feed; there is no global cursor across calls.
 	PendingSignupAttributions(context.Context, string, int) ([]SignupAttribution, error)
+	// ConsumeSignupAttribution durably records a consumer's acceptance decision for
+	// a customer's signup evidence within a program, moving pending attribution to
+	// consumed with the supplied receipt. The Service validates bounded inputs and
+	// stamps RecordedAt before forwarding to the repository.
 	ConsumeSignupAttribution(context.Context, string, string, SignupConsumption) error
 }
 
@@ -59,6 +70,10 @@ type SignupEvidenceRepository interface {
 // Workers persist/reset their sweep position independently from each source's
 // durable owning acceptance; late lower IDs remain visible on the next sweep.
 type SignupEvidencePagingRepository interface {
+	// PendingSignupAttributionsAfter returns up to the requested limit of pending
+	// signup attributions for a program with customer IDs strictly after the
+	// cursor, ordered by ID. It supports bounded discovery sweeps that never
+	// consume creation evidence.
 	PendingSignupAttributionsAfter(context.Context, string, string, int) ([]SignupAttribution, error)
 }
 
@@ -85,6 +100,11 @@ func (s *Service) WithSignupAttribution(config SignupAttributionConfig) (*Servic
 	s.signupAttribution = &config
 	return s, nil
 }
+
+// captureSignup attaches pending signup evidence to a freshly created user when
+// attribution is enabled. It rejects missing identity, unparseable creation
+// timestamps or evidence over 2048 bytes, and flags individual account types
+// from the trusted configuration.
 func (s *Service) captureSignup(user *UniversalUser, evidence string) error {
 	if s.signupAttribution == nil {
 		return nil
@@ -111,6 +131,10 @@ func (s *Service) captureSignup(user *UniversalUser, evidence string) error {
 	user.SignupAttribution = &SignupAttribution{ProgramID: s.signupAttribution.ProgramID, CustomerID: user.ID, CreatedAt: at.UTC(), CreatedAtUTC: at.UTC().Format(time.RFC3339Nano), Individual: individual, Evidence: evidence, State: "pending"}
 	return nil
 }
+
+// signupPort validates the context and configured attribution dependencies,
+// then exposes the repository's signup-evidence port; a repository that does
+// not implement it yields ErrSignupEvidenceUnavailable.
 func (s *Service) signupPort(ctx context.Context) (SignupEvidenceRepository, error) {
 	if ctx == nil {
 		return nil, ErrSignupEvidenceInvalid
@@ -153,6 +177,10 @@ func (s *Service) PendingSignupAttributions(ctx context.Context, limit int) ([]S
 	}
 	return port.PendingSignupAttributions(ctx, s.signupAttribution.ProgramID, limit)
 }
+
+// ConsumeSignupAttribution records the trusted consumer's acceptance decision
+// for a customer's signup evidence. It validates bounded actor, receipt and
+// outcome values, stamps RecordedAt, and forwards to the evidence repository.
 func (s *Service) ConsumeSignupAttribution(ctx context.Context, customer string, consumption SignupConsumption) error {
 	port, err := s.signupPort(ctx)
 	if err != nil {

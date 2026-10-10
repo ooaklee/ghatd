@@ -10,7 +10,11 @@ import (
 
 // AuditRespository expected methods of a valid audit repository
 type AuditRespository interface {
+	// CreateAuditLogEvent persists the supplied audit entry, stamping its action
+	// time and generating its identifier before insertion.
 	CreateAuditLogEvent(ctx context.Context, event *AuditLogEntry) error
+	// GetTotalAuditLogEvents returns the count of stored audit entries matching the
+	// supplied actor, time-range, domain, action and target filters.
 	GetTotalAuditLogEvents(ctx context.Context, userId string, to string, from string, domains string, actions []AuditAction, targetId string, targetTypes []TargetType) (int64, error)
 }
 

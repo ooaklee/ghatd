@@ -18,27 +18,80 @@ import (
 
 // AccessmanagerService manages business logic around accessmanager request
 type AccessmanagerService interface {
+	// DeleteAuth removes the ephemeral auth record with the matching token ID from
+	// storage and returns the number of deleted records. Part of the
+	// AccessmanagerService business-logic contract.
 	DeleteAuth(ctx context.Context, tokenID string) (int64, error)
+	// TokenAsStringValidator verifies a signed access-family token string and its
+	// live stored owner without consuming it, returning the token's user type, use,
+	// email revision and identifiers for callers to enforce.
 	TokenAsStringValidator(ctx context.Context, r *TokenAsStringValidatorRequest) (*TokenAsStringValidatorResponse, error)
+	// CreateUser creates a new user from the request via the user service, records
+	// an audit event, and initiates a verification email unless disabled, returning
+	// the created user.
 	CreateUser(ctx context.Context, r *CreateUserRequest) (*CreateUserResponse, error)
+	// ValidateEmailVerificationCode resolves a code or token to an
+	// email-verification proof, consumes it, activates the provisioned account, and
+	// returns newly issued access and refresh tokens with expiry times.
 	ValidateEmailVerificationCode(ctx context.Context, r *ValidateEmailVerificationCodeRequest) (*ValidateEmailVerificationCodeResponse, error)
+	// CreateInitalLoginOrVerificationTokenEmail selects and delivers the
+	// appropriate initial proof email for an existing account; it never creates an
+	// account or session and returns native errors to the caller.
 	CreateInitalLoginOrVerificationTokenEmail(ctx context.Context, r *CreateInitalLoginOrVerificationTokenEmailRequest) error
+	// LoginUser resolves a login or email-verification token or code, consumes the
+	// proof, activates provisioned accounts, and returns newly minted access and
+	// refresh session tokens with expiry times.
 	LoginUser(ctx context.Context, r *LoginUserRequest) (*LoginUserResponse, error)
+	// RefreshToken validates the current refresh credential, deletes it, and
+	// rotates a new access/refresh token pair, returning the replacement tokens and
+	// expiry times; concurrent replays may receive the same pair.
 	RefreshToken(ctx context.Context, r *RefreshTokenRequest) (*RefreshTokenResponse, error)
+	// LogoutUser verifies the supplied deletion-only access and refresh
+	// credentials, removes their matching ephemeral records for the derived actor,
+	// and reports native errors from any failed or partial removal.
 	LogoutUser(ctx context.Context, r *LogoutUserRequest) error
+	// CreateUserAPIToken issues an API token credential for a verified session's
+	// live owner within role or policy limits, returning the created token only
+	// after a successful adapter outcome.
 	CreateUserAPIToken(ctx context.Context, r *CreateUserAPITokenRequest) (*CreateUserAPITokenResponse, error)
+	// DeleteUserAPIToken deletes the specified owner-bound API token after
+	// verifying the session caller and current active owner; cancellation after the
+	// write does not undo deletion.
 	DeleteUserAPIToken(ctx context.Context, r *DeleteUserAPITokenRequest) error
+	// UpdateUserAPITokenStatus transitions the specified owner's API token to
+	// Active or Revoked after binding the session caller to the owner; other status
+	// values are rejected.
 	UpdateUserAPITokenStatus(ctx context.Context, r *UserAPITokenStatusRequest) error
+	// GetSpecificUserAPITokens returns the authorized owner's API tokens as
+	// secret-free display rows matching the supplied pagination and filters.
 	GetSpecificUserAPITokens(ctx context.Context, r *GetSpecificUserAPITokensRequest) (*GetSpecificUserAPITokensResponse, error)
+	// GetUserAPITokenThreshold returns the current owner's display limits for
+	// permanent and ephemeral tokens from configured policy or role thresholds;
+	// values are observational only.
 	GetUserAPITokenThreshold(ctx context.Context, r *GetUserAPITokenThresholdRequest) (*GetUserAPITokenThresholdResponse, error)
+	// OauthLogin begins a secure OAuth transaction for the requested provider,
+	// validating any linking proof, and returns the provider authorization URL plus
+	// a transaction cookie for the redirect.
 	OauthLogin(ctx context.Context, r *OauthLoginRequest) (*OauthLoginResponse, error)
+	// OauthCallback completes a secure OAuth transaction using the provider state
+	// cookie, resolving signed issuer/subject identity, and returns session tokens,
+	// linking outcome, or a mobile grant response.
 	OauthCallback(ctx context.Context, r *OauthCallbackRequest) (*OauthCallbackResponse, error)
+	// LogoutUserOthers authorizes the current self-service session owner,
+	// revalidates the retained access and refresh records, and deletes all of the
+	// owner's other stored tokens.
 	LogoutUserOthers(ctx context.Context, r *LogoutUserOthersRequest) error
+	// UpdateUserEmail authorizes the caller, conditionally changes the target
+	// account's email with revision checks, then performs best-effort session
+	// cleanup, verification email, notification and audit, reporting each outcome
+	// via flags.
 	UpdateUserEmail(ctx context.Context, r *UpdateUserEmailRequest) (*UpdateUserEmailResponse, error)
 }
 
 // AccessmanagerValidator expected methods of a valid
 type AccessmanagerValidator interface {
+	// Validate checks whether the supplied value satisfies the validator's rules,
+	// returning a non-nil error describing the first validation failure.
 	Validate(s interface{}) error
 }
 

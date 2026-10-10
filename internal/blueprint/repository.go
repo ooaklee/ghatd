@@ -23,14 +23,40 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 // must retain acknowledgement and counts; an error-only adapter cannot prove
 // the selected record existed. Implementations preserve native dependency errors.
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents matching the filter on the given
+	// collection through the MongoDbStore persistence port, applying optional count
+	// options, and returns the count or an error.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommandResult deletes at most one matching document through
+	// the MongoDbStore persistence port; the returned mongo.DeleteResult must
+	// retain acknowledgement and counts so the selected record's existence is
+	// provable.
 	ExecuteDeleteOneCommandResult(ctx context.Context, collection *mongo.Collection, filter any, opts ...options.Lister[options.DeleteOneOptions]) (*mongo.DeleteResult, error)
+	// ExecuteFindCommand runs a query on the given collection with optional find
+	// options through the MongoDbStore persistence port and returns a cursor over
+	// matching documents, or an error.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteFindOneCommandDecodeResult fetches one matching document and decodes
+	// it into result through the MongoDbStore persistence port; logError controls
+	// error logging and onFailureErr is returned when no document matches.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteInsertOneCommand inserts one document into the given collection
+	// through the MongoDbStore persistence port, using resultObjectName for
+	// telemetry, and returns the insertion receipt or an error.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommandResult applies a single-document update through the
+	// MongoDbStore persistence port; the returned mongo.UpdateResult must retain
+	// acknowledgement and counts, and native dependency errors are preserved.
 	ExecuteUpdateOneCommandResult(ctx context.Context, collection *mongo.Collection, filter, update any, opts ...options.Lister[options.UpdateOneOptions]) (*mongo.UpdateResult, error)
+	// GetDatabase returns the mongo.Database handle for the given database name
+	// through the MongoDbStore persistence port, or an error.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient creates the underlying MongoDB client for the MongoDbStore
+	// persistence port and returns it, or an error.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes all remaining cursor documents into result
+	// through the MongoDbStore persistence port, using resultObjectName for
+	// telemetry, and reports decoding failures as an error.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

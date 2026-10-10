@@ -16,6 +16,8 @@ import (
 // unavailable initialization. Enrollment never guesses or reuses an ordinal.
 var ErrSequenceState = errors.New("waitlist sequence state is unavailable or inconsistent")
 
+// transaction runs fn inside a MongoDB session transaction with snapshot reads
+// and majority writes, returning the first error encountered.
 func (s *MongoStore) transaction(ctx context.Context, fn func(context.Context) error) error {
 	session, err := s.signups.Database().Client().StartSession()
 	if err != nil {
@@ -53,6 +55,9 @@ func (s *MongoStore) sequenceState(ctx context.Context) (int64, bool, error) {
 	return *counter.Value, true, nil
 }
 
+// initializeSequence creates the unique partial sequence index, ensures the
+// counter collection exists, then seeds or verifies the counter inside a
+// transaction and marks sequencing ready only on success.
 func (s *MongoStore) initializeSequence(ctx context.Context) error {
 	_, err := s.signups.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "sequence", Value: 1}},
@@ -87,6 +92,10 @@ func (s *MongoStore) initializeSequence(ctx context.Context) error {
 	return err
 }
 
+// joinSequenced idempotently enrolls an entry inside a transaction: existing
+// IDs succeed without change, otherwise the counter is conditionally
+// incremented and the entry inserted with its allocated sequence, failing with
+// ErrSequenceState on drift or exhaustion.
 func (s *MongoStore) joinSequenced(ctx context.Context, entry Entry) error {
 	if !s.sequenceReady.Load() {
 		return ErrSequenceState

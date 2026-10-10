@@ -153,3 +153,28 @@ func TestDeclaredDomainSentinelsHaveManifestEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestMembershipAndSignupEvidenceHTTPOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		handler mappedHTTPHandler
+		err     error
+		status  int
+		code    string
+	}{
+		{"membership_unavailable", &group.Handler{}, group.ErrDirectMembershipUnavailable, http.StatusServiceUnavailable, "GRP0-041"},
+		{"membership_capacity_cannot_be_partial_success", &group.Handler{}, group.ErrDirectMembershipCapacity, http.StatusServiceUnavailable, "GRP0-042"},
+		{"signup_evidence_unavailable", &user.Handler{}, user.ErrSignupEvidenceUnavailable, http.StatusServiceUnavailable, "USV2-046"},
+		{"signup_evidence_invalid", &user.Handler{}, user.ErrSignupEvidenceInvalid, http.StatusBadRequest, "USV2-047"},
+		{"signup_evidence_conflict", &user.Handler{}, user.ErrSignupEvidenceConflict, http.StatusConflict, "USV2-048"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			require.NoError(t, tc.handler.NewHTTPErrorResponse(w, fmt.Errorf("private original evidence: %w", tc.err)))
+			require.Equal(t, tc.status, w.Code)
+			require.Contains(t, w.Body.String(), tc.code)
+			require.NotContains(t, w.Body.String(), "private original evidence")
+			require.NotContains(t, w.Body.String(), tc.err.Error())
+		})
+	}
+}

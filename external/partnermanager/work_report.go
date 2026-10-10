@@ -26,6 +26,9 @@ type WorkSnapshot struct {
 // WorkReportingRepository returns complete owning evidence without mutation.
 // A failed page or scope must return an empty snapshot, never partial counts.
 type WorkReportingRepository interface {
+	// ReadWorkSnapshot returns the complete WorkSnapshot of pending work for the
+	// program without mutation; failed pages must yield an empty snapshot, never
+	// partial counts.
 	ReadWorkSnapshot(context.Context, string) (WorkSnapshot, error)
 }
 
@@ -65,6 +68,8 @@ type WorkBacklog struct {
 	Kinds     []KindWorkBacklog `json:"kinds"`
 }
 
+// earliest returns a UTC copy of value when it precedes at, or at unchanged,
+// treating nil as unbounded.
 func earliest(at *time.Time, value time.Time) *time.Time {
 	if at == nil || value.Before(*at) {
 		copy := value.UTC()
@@ -73,6 +78,9 @@ func earliest(at *time.Time, value time.Time) *time.Time {
 	return at
 }
 
+// countPending classifies one pending item into disjoint scheduling states at
+// time at (leased, delayed, backoff or ready) and updates overlapping
+// attempted/decision subsets and oldest timestamps.
 func countPending(c *WorkBacklogCounts, item WorkItem, at time.Time) {
 	c.Pending++
 	c.OldestCreatedAt = earliest(c.OldestCreatedAt, item.CreatedAt)
@@ -97,6 +105,9 @@ func countPending(c *WorkBacklogCounts, item WorkItem, at time.Time) {
 	}
 }
 
+// validatePending rejects malformed persisted items: identity, state, timing,
+// lease pairing, error codes and, for decisions, outcome, timing and recomputed
+// digest must all agree.
 func validatePending(item WorkItem, program string, at time.Time) bool {
 	if item.ProgramID != program || !validWorkKind(item.Kind) || !validWorkDeadline(item.Kind, item.InitialDueAt) || item.NextAttemptAt.Before(item.InitialDueAt) || item.State != WorkPending || !validWorkText(item.SourceID, 256) || item.ID != workID(program, item.Kind, item.SourceID) || !validWorkText(item.SourceFingerprint, 256) || item.CreatedAt.IsZero() || item.CreatedAt.After(at) || item.NextAttemptAt.Before(item.CreatedAt) || item.NextAttemptAt.IsZero() || item.Attempts < 0 || (item.Attempts == 0 && item.LastErrorCode != "") || (item.LastErrorCode != "" && !workCode.MatchString(item.LastErrorCode)) {
 		return false
@@ -189,18 +200,26 @@ func (q *WorkQueue) GetBacklog(ctx context.Context) (WorkBacklog, error) {
 	return out, nil
 }
 
+// persistedWorkRevision is the private comparison copy of a work item plus its
+// source, lease and decision fields used to detect concurrent mutation between
+// reads.
 type persistedWorkRevision struct {
 	Item                                                           WorkItem
 	Source, Fingerprint, Lease, DecisionActor, DecisionFingerprint string
 	InitialDueAt                                                   time.Time
 }
 
+// decisionActor returns the decision's actor ID, or "" when the item has no
+// decision.
 func decisionActor(item WorkItem) string {
 	if item.Decision != nil {
 		return item.Decision.ActorID
 	}
 	return ""
 }
+
+// decisionFingerprint returns the decision's fingerprint, or "" when the item
+// has no decision.
 func decisionFingerprint(item WorkItem) string {
 	if item.Decision != nil {
 		return item.Decision.Fingerprint
@@ -208,6 +227,10 @@ func decisionFingerprint(item WorkItem) string {
 	return ""
 }
 
+// validBacklogCounts enforces non-negative counts within report capacity,
+// disjoint-state sums equal to Pending, subset constraints, and
+// presence/consistency of oldest timestamps relative to the classification
+// time.
 func validBacklogCounts(c WorkBacklogCounts, at time.Time) bool {
 	if c.Pending < 0 || c.Pending > WorkReportCapacity || c.Ready < 0 || c.Delayed < 0 || c.Backoff < 0 || c.Leased < 0 || c.AttemptedPending < 0 || c.DecisionAwaitingCompletion < 0 || c.Ready > c.Pending || c.Delayed > c.Pending || c.Backoff > c.Pending || c.Leased > c.Pending || c.AttemptedPending > c.Pending || c.Delayed > c.Pending-c.AttemptedPending || c.Backoff+c.Leased > c.AttemptedPending || c.DecisionAwaitingCompletion > c.AttemptedPending || c.Ready+c.Delayed+c.Backoff+c.Leased != c.Pending {
 		return false
@@ -268,9 +291,15 @@ func (r WorkBacklog) Validate() error {
 	}
 	return nil
 }
+
+// sameBacklogCounts compares all counts and oldest timestamps, treating nil and
+// non-nil times as unequal.
 func sameBacklogCounts(a, b WorkBacklogCounts) bool {
 	return a.Pending == b.Pending && a.Ready == b.Ready && a.Delayed == b.Delayed && a.Backoff == b.Backoff && a.Leased == b.Leased && a.AttemptedPending == b.AttemptedPending && a.DecisionAwaitingCompletion == b.DecisionAwaitingCompletion && sameTime(a.OldestCreatedAt, b.OldestCreatedAt) && sameTime(a.OldestReadyAt, b.OldestReadyAt) && sameTime(a.OldestDecisionAt, b.OldestDecisionAt)
 }
+
+// sameTime compares two optional times, equal only when both are present and
+// equal or both absent.
 func sameTime(a, b *time.Time) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && a.Equal(*b))
 }

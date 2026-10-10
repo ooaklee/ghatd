@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// signupDigest hashes the canonical JSON encoding of an Evidence value into a
+// base64url digest; unencodable evidence yields ErrInvalid.
 func signupDigest(e Evidence) (string, error) {
 	encoded, err := json.Marshal(e)
 	if err != nil {

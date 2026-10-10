@@ -17,6 +17,10 @@ const providerNeutralStarterCostsReconciliation = "provider_neutral_costs_v1"
 // operator-managed or structurally unexpected data and refused to overwrite it.
 var ErrPricingSeedConflict = errors.New("pricing seed conflict")
 
+// starterSeedProjection is the partial stored shape of the starter seed plan
+// used by reconciliation: identity, ownership, costs and the seed
+// reconciliation markers. Only these fields are decoded when classifying the
+// seed.
 type starterSeedProjection struct {
 	ID          string             `bson:"_id"`
 	Slug        string             `bson:"slug"`
@@ -124,6 +128,9 @@ func InitPricingSeedProviderNeutralReconcileDown(db *mongo.Database) error { //D
 	return nil
 }
 
+// loadStarterSeedProjection finds the starter plan by its fixed seed ID and
+// decodes the reconciliation projection; a nil database is a conflict error and
+// storage misses are returned to the caller.
 func loadStarterSeedProjection(db *mongo.Database) (*starterSeedProjection, error) {
 	if db == nil {
 		return nil, fmt.Errorf("%w: database is nil", ErrPricingSeedConflict)
@@ -135,6 +142,10 @@ func loadStarterSeedProjection(db *mongo.Database) (*starterSeedProjection, erro
 	return &plan, err
 }
 
+// classifyStarterSeedProjection verifies the plan is the owned starter seed
+// with the expected two costs, then reports whether both trial periods are
+// still 14 days (legacy) or 0 (target). Mixed or unexpected shapes return
+// ErrPricingSeedConflict.
 func classifyStarterSeedProjection(plan *starterSeedProjection) (legacy bool, target bool, err error) {
 	if plan.ID != seedPlanStarterID || plan.Slug != "starter" || plan.CreatedByID != "seed-migration" || len(plan.Costs) != 2 {
 		return false, false, fmt.Errorf("%w: starter seed ownership or shape differs", ErrPricingSeedConflict)
@@ -156,6 +167,8 @@ func classifyStarterSeedProjection(plan *starterSeedProjection) (legacy bool, ta
 	return legacy, target, nil
 }
 
+// starterSeedCostByID returns the seed cost with the given ID, or false when no
+// cost matches.
 func starterSeedCostByID(costs []pricer.PriceCost, id string) (pricer.PriceCost, bool) {
 	for _, cost := range costs {
 		if cost.ID == id {
@@ -165,6 +178,9 @@ func starterSeedCostByID(costs []pricer.PriceCost, id string) (pricer.PriceCost,
 	return pricer.PriceCost{}, false
 }
 
+// starterSeedCostMatches reports whether a cost is an unambiguous owned seed
+// cost: free USD with the expected cadence, no setup fee, and exactly one
+// manual provider ref carrying only the expected price ID.
 func starterSeedCostMatches(cost pricer.PriceCost, cadence pricer.PriceBillingCadence, priceID string) bool {
 	return cost.Amount == 0 &&
 		cost.Currency == "USD" &&
@@ -177,6 +193,9 @@ func starterSeedCostMatches(cost pricer.PriceCost, cadence pricer.PriceBillingCa
 		cost.ProviderRefs[0].ProviderProductID == ""
 }
 
+// starterSeedReconciliationFilter builds the conditional update guard for the
+// starter seed, pinning ownership and cost shape while matching legacy (14-day)
+// or target (0/nil) trial days and the required migration-marker state.
 func starterSeedReconciliationFilter(legacy, migrated bool) bson.M {
 	var trialDays interface{} = bson.M{"$in": []interface{}{0, nil}}
 	if legacy {
@@ -201,6 +220,9 @@ func starterSeedReconciliationFilter(legacy, migrated bool) bson.M {
 	}
 }
 
+// starterSeedCostReconciliationFilter returns the $elemMatch guard for one
+// owned seed cost, including its ID, free USD amount, cadence, trial days,
+// absent setup fee and single manual provider ref with the expected price ID.
 func starterSeedCostReconciliationFilter(
 	id string,
 	cadence pricer.PriceBillingCadence,

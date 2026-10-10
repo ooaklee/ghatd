@@ -292,33 +292,19 @@ and does not enable the host's `TokenPolicy` automatically. Retire the
 legacy role fallback only after source review, provisioning, host wiring and
 rollback verification are complete.
 
-### Test coverage
-
-Table-driven unit tests cover encoding, identifiers, validation and window
-boundaries. Real-Mongo tests use `GHATD_TEST_MONGO_URI` and allocate/drop only their
-own uniquely named databases. They cover CAS/auditing, rollback, current-policy
-replay, concurrent admission and inventory, resource checks on replay, transient
-callback retry, revocation, cancellation and session boundaries.
-Migration cases additionally cover field preservation, disabled/expired grants,
-read-only planning, independent preview/receipt snapshots, concurrent plans,
-no-op and stale review, audit rollback, concurrent permission edits at the CAS
-boundary, lost commit responses and retention of usage receipts across apply
-and rollback. Cancellation before CAS, write-time audit identity, revision
-exhaustion and rollback racing a policy edit are also covered. The lost-response case wraps a real committed write; it is not
-replica-set failover or driver commit-result fault injection.
+### Verification
 
 ```sh
-go test ./external/accesspolicy
 # Set GHATD_TEST_MONGO_URI to an isolated transaction-capable test server first.
 go test -race -count=1 -v ./external/accesspolicy
 ```
 
-Without the environment variable, database cases skip. A normal green unit run
-is not proof of transactional behavior. Commit-result uncertainty/failover fault
-injection, production load and host-specific integration remain separate gates.
+Without the environment variable, database cases skip. The suite covers CAS/audit,
+replay, concurrent admission, rollback and explicit grant migration. Lost-response
+cases wrap successful commits; they do not simulate replica-set failover.
+Commit-result uncertainty, production load and host-specific integration require
+separate verification.
 
-Before replacing legacy tier rules, explicitly migrate reviewed grants, wire
-route guards and token inventory through the shared store, validate the same
-client/transaction boundary, and test rollback to the prior application version.
-Do not seed blanket administrator privileges or keep a missing-grant fallback to
-old role thresholds: either would defeat default-deny enforcement.
+Before replacing legacy tier rules, migrate reviewed grants, wire route guards
+and token inventory through the same managed client, and verify rollback. Do not
+seed blanket administrator privileges or retain a missing-grant role fallback.

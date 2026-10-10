@@ -10,6 +10,9 @@ import (
 // configured owning status service. Existing payment-only adapters need not
 // implement it; no second owner or provider fallback is accepted.
 type SubscriptionStatusResolutionService interface {
+	// ResolveSubscriptionStatus inspects one retained preparation under current
+	// refresh authority via the optional SubscriptionStatusResolutionService
+	// capability of the owning status service. Returns the resolution or an error.
 	ResolveSubscriptionStatus(context.Context, billing.SubscriptionStatusPreparation) (billing.SubscriptionStatusResolution, error)
 }
 

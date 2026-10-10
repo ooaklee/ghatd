@@ -13,11 +13,18 @@ import (
 // millisecond-to-duration conversion below time.Duration overflow.
 const configurationMaxInteger int64 = 1<<31 - 1
 
+// configurationInteger parses a base-10 int64 and reports whether it lies
+// within the inclusive bounds.
 func configurationInteger(raw string, minimum, maximum int64) (int64, bool) {
 	value, err := strconv.ParseInt(raw, 10, 64)
 	return value, err == nil && value >= minimum && value <= maximum
 }
 
+// inspectIdentity fills the report's identity section, parsing
+// OTEL_RESOURCE_ATTRIBUTES and OTEL_SERVICE_NAME and resolving each identity
+// field's source as application, environment, resource, default or process.
+// Malformed values produce fixed error issues without echoing content; only
+// presence and sources are recorded.
 func (report *ConfigurationReport) inspectIdentity(config Config, getenv func(string) string) {
 	identity := IdentityConfiguration{Sources: make(map[string]string, 5)}
 	resourceValues := make(map[string]string)
@@ -71,6 +78,10 @@ func (report *ConfigurationReport) inspectIdentity(config Config, getenv func(st
 	report.Identity = identity
 }
 
+// inspectSampler validates OTEL_TRACES_SAMPLER against the supported sampler
+// names, defaulting to parentbased_always_on. Ratio samplers additionally
+// require a finite OTEL_TRACES_SAMPLER_ARG between zero and one, recorded on
+// the report.
 func (report *ConfigurationReport) inspectSampler(getenv func(string) string) {
 	name := strings.ToLower(strings.TrimSpace(getenv("OTEL_TRACES_SAMPLER")))
 	if name == "" {
@@ -93,6 +104,12 @@ func (report *ConfigurationReport) inspectSampler(getenv func(string) string) {
 	}
 }
 
+// inspectSDK validates SDK-wide settings: limit integers (with the SDK's
+// zero/negative semantics), cardinality, exemplar filter, batching periods per
+// enabled non-metrics signal, metric export interval, timeout, batch size and
+// producers, temporality and histogram aggregation preferences, and Prometheus
+// host/port. It records effective values on the report and fixed error or
+// warning issues for malformed settings.
 func (report *ConfigurationReport) inspectSDK(getenv func(string) string) {
 	// These providers are constructed even when their exporter is disabled.
 	// Retain the SDK's zero/negative limit semantics, but reject malformed
@@ -159,6 +176,9 @@ func (report *ConfigurationReport) inspectSDK(getenv func(string) string) {
 	}
 }
 
+// inspectInteger reads an integer setting within bounds, returning its value,
+// or the fallback when unset; malformed or out-of-range values record an
+// invalid_integer error and still return the fallback.
 func (report *ConfigurationReport) inspectInteger(getenv func(string) string, key string, minimum, maximum, fallback int64) int64 {
 	if raw := getenv(key); raw != "" {
 		if value, valid := configurationInteger(raw, minimum, maximum); valid {
@@ -169,6 +189,9 @@ func (report *ConfigurationReport) inspectInteger(getenv func(string) string, ke
 	return fallback
 }
 
+// inspectEnum reads a lower-cased enum setting, returning it when it matches an
+// allowed value, the fallback when unset, and "invalid" with an error issue
+// otherwise.
 func (report *ConfigurationReport) inspectEnum(getenv func(string) string, key, fallback string, allowed ...string) string {
 	if raw := getenv(key); raw != "" {
 		value := strings.ToLower(raw)

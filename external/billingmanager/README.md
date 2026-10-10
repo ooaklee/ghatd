@@ -906,61 +906,6 @@ func TestSubscriptionLifecycle(t *testing.T) {
 }
 ```
 
-## Potential Future Improvements
-
-Here's a list of areas for improvement in future iterations of `billingmanager`, `billing`, and `paymentprovider`. Please note that these suggestions are not prioritised.
-
-### Additional Providers
-- [ ] Paddle provider
-- [ ] PayPal provider
-- [ ] Chargebee provider
-- [ ] Recurly provider
-- [ ] Braintree provider
-
-### Advanced Features
-- [ ] Subscription plan upgrades/downgrades
-- [ ] Proration calculations
-- [ ] Usage-based billing support
-- [ ] Multi-currency support
-- [ ] Tax calculation integration
-- [ ] Invoice generation
-- [ ] Payment retry logic
-- [ ] Dunning management
-- [ ] Subscription trial extensions
-- [ ] Coupon/discount support
-- [ ] Metered billing
-- [ ] Subscription pausing/resuming
-
-### Data & Analytics
-- [ ] Revenue analytics
-- [ ] Churn rate tracking
-- [ ] MRR/ARR calculations
-- [ ] Cohort analysis
-- [ ] Subscription metrics dashboard
-- [ ] Export functionality
-
-### Testing
-- [ ] Unit tests for billing service
-- [ ] Unit tests for paymentprovider
-- [ ] Unit tests for billingmanager
-- [ ] Integration tests with real providers
-- [ ] Webhook simulation tools
-- [ ] Performance benchmarks
-
-### Monitoring & Observability
-- [ ] Webhook processing metrics
-- [ ] Failed payment alerting
-- [ ] Provider health monitoring
-- [ ] Subscription status dashboard
-- [ ] Audit trail query interface
-
-### Developer Experience
-- [ ] CLI tool for testing webhooks
-- [ ] Provider migration utilities
-- [ ] Data export/import tools
-- [ ] Subscription reconciliation tools
-- [ ] Webhook replay functionality
-
 ## Optional verified-revenue orchestration
 
 `WithRevenueServices` supplies an optional `RevenueProviderRegistry`, owning
@@ -1241,3 +1186,10 @@ explicit nonnegative session total and reports zero-total completion as
 `no_payment_required`, only when the frozen intent authorizes a subscription
 trial. A positive total is required for `paid`; an unknown total fails closed.
 This completion read is not a refund-adjusted balance or a revenue receipt.
+
+
+## Optional evidence composition
+
+[Scoped checkout evidence helpers](helper/README.md) forward retained sessions
+to the explicit provider registry. Native checkout owns frozen-intent verification;
+the adapter creates no financial fact and supplies no subscription fallback.

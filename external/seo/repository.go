@@ -17,15 +17,39 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore methods needed by seo.
 type MongoDbStore interface {
+	// ExecuteCountDocuments returns the number of documents in collection matching
+	// filter, honouring optional driver count options, as the datastore counting
+	// facility required by seo.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteManyCommand removes all documents in collection matching filter;
+	// targetObjectName names the affected object for diagnostics, per the
+	// MongoDbStore contract.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand returns a cursor over collection documents matching filter
+	// with optional find options, per the MongoDbStore contract.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteFindOneCommandDecodeResult runs a findOne on collection with filter
+	// and decodes the result; logError controls error logging and onFailureErr
+	// substitutes for absence, per the MongoDbStore contract.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteInsertOneCommand inserts document into collection and returns the
+	// native InsertOneResult; resultObjectName names the object for diagnostics,
+	// per the MongoDbStore contract.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand applies updateFilter to a single document in
+	// collection matching filter; resultObjectName names the affected object, per
+	// the MongoDbStore contract.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
 
+	// GetDatabase returns the named mongo.Database for repository operations, per
+	// the MongoDbStore contract.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient establishes and returns the MongoDB client used by the seo
+	// repository, per the MongoDbStore contract.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes all remaining cursor documents into result;
+	// resultObjectName names the object for diagnostics, per the MongoDbStore
+	// contract.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 
@@ -245,6 +269,8 @@ func (r *Repository) DeleteSitemapItemsByURIs(ctx context.Context, uris []string
 	return r.Store.ExecuteDeleteManyCommand(ctx, collection, bson.M{"uri": bson.M{"$in": uris}}, "sitemap items")
 }
 
+// buildSitemapItemListFilter adds a case-insensitive, regex-escaped URI
+// substring match when a query is present; nil requests match all documents.
 func buildSitemapItemListFilter(req *GetSitemapItemsRequest) bson.M {
 	filter := bson.M{"_id": bson.M{"$exists": true}}
 	if req == nil {
@@ -258,6 +284,8 @@ func buildSitemapItemListFilter(req *GetSitemapItemsRequest) bson.M {
 	return filter
 }
 
+// normalisePagination clamps page to at least 1 and negative page sizes to 0,
+// which the driver treats as no limit.
 func normalisePagination(req *GetSitemapItemsRequest) (int64, int64) {
 	if req == nil {
 		return 1, 0

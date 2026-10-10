@@ -23,14 +23,21 @@ type persistedMaturity struct {
 	MaturedAt                                     time.Time
 }
 
+// maturityPartition derives the per program/currency storage partition for
+// maturity sources; partner identity is kept inside the record, not the key.
 func maturityPartition(program, currency string) string {
 	return "partner-maturity:" + identity(program, currency)
 }
 
+// maturityEnvelope copies a MaturitySource into the persisted encrypted
+// envelope, preserving all financial and source identity fields.
 func maturityEnvelope(v partnerearnings.MaturitySource) persistedMaturity {
 	return persistedMaturity{ID: v.ID, ProgramID: v.ProgramID, PartnerID: v.PartnerID, Currency: v.Currency, PaymentID: v.PaymentID, AccruedEntryID: v.AccruedEntryID, AccruedFingerprint: v.AccruedFingerprint, AccruedSequence: v.AccruedSequence, AccruedAmountMinor: v.AccruedAmountMinor, AvailableAt: v.AvailableAt, CreatedAt: v.CreatedAt, Fingerprint: v.Fingerprint, State: v.State, Revision: v.Revision, MaturedEntryID: v.MaturedEntryID, MaturedAt: v.MaturedAt}
 }
 
+// decodeMaturity decodes a persisted maturity envelope and re-validates model
+// constraints plus row kind, ID, partition, state and revision agreement.
+// Corrupt or inconsistent rows return ErrUnavailable, never a partial value.
 func decodeMaturity(row recordstore.Record) (partnerearnings.MaturitySource, error) {
 	var stored persistedMaturity
 	if err := row.Decode(&stored); err != nil {
@@ -43,6 +50,8 @@ func decodeMaturity(row recordstore.Record) (partnerearnings.MaturitySource, err
 	return v, nil
 }
 
+// maturityRecord builds the storage row for a maturity source, carrying the
+// service state in the row envelope and the source's own revision.
 func maturityRecord(v partnerearnings.MaturitySource) (recordstore.Record, error) {
 	row, err := recordstore.NewRecord(kindMaturitySource, v.ID, maturityPartition(v.ProgramID, v.Currency), v.Revision, maturityEnvelope(v))
 	row.State = v.State

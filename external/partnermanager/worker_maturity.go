@@ -11,11 +11,20 @@ import (
 // a separate feed could acknowledge a different ledger. Config binds one
 // program/currency, and missing source evidence is an error, never caught-up proof.
 type MaturityFeed interface {
+	// Config returns the partnerearnings.Config binding this feed to one program
+	// and currency, identifying the ledger the feed serves.
 	Config() partnerearnings.Config
+	// GetMaturitySource returns the MaturitySource for the identified item from the
+	// earnings owner's verified private feed.
 	GetMaturitySource(context.Context, string) (partnerearnings.MaturitySource, error)
+	// PendingMaturitySourcesAfter returns pending MaturitySources after the cursor
+	// bounded by the count, feeding maturity discovery from the earnings owner.
 	PendingMaturitySourcesAfter(context.Context, string, int) ([]partnerearnings.MaturitySource, error)
 }
 
+// maturityCandidate converts a validated maturity source for the pinned program
+// and currency into queue input, deriving DueAt from the source's availability
+// time.
 func maturityCandidate(source partnerearnings.MaturitySource, program, currency string) (WorkCandidate, error) {
 	if source.Validate() != nil || source.ProgramID != program || source.Currency != currency {
 		return WorkCandidate{}, ErrUnavailable
@@ -23,6 +32,10 @@ func maturityCandidate(source partnerearnings.MaturitySource, program, currency 
 	return WorkCandidate{SourceID: source.ID, SourceFingerprint: source.Fingerprint, DueAt: source.AvailableAt.UTC()}, nil
 }
 
+// readMaturity revalidates the lease, kind, program-wide maturity authority and
+// source fingerprint/deadline agreement before returning the maturity source;
+// partner-scoped authority is checked against the source's own partner. Any
+// mismatch fences with ErrWorkConflict.
 func (w *Worker) readMaturity(ctx context.Context, item WorkItem) (partnerearnings.MaturitySource, error) {
 	if item.Kind != WorkMaturity || !w.queue.validateLease(item) {
 		return partnerearnings.MaturitySource{}, ErrWorkConflict

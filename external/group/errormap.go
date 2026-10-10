@@ -9,6 +9,18 @@ import (
 // GroupErrorMap holds Error keys, their corresponding human-friendly message, and response status code
 // nolint will be used later
 var GroupErrorMap reply.ErrorManifest = reply.ErrorManifest{
+	ErrDirectMembershipUnavailable: {
+		Title:      "Membership unavailable",
+		StatusCode: http.StatusServiceUnavailable,
+		Code:       "GRP0-041",
+		Detail:     "Complete current membership could not be established",
+	},
+	ErrDirectMembershipCapacity: {
+		Title:      "Membership unavailable",
+		StatusCode: http.StatusServiceUnavailable,
+		Code:       "GRP0-042",
+		Detail:     "Complete current membership exceeds the supported capacity",
+	},
 	ErrBothAutoJoinAndAutoInviteEnabled: {
 		Title:      "Invalid Group Settings",
 		StatusCode: http.StatusBadRequest,

@@ -6,6 +6,8 @@ import (
 	"reflect"
 )
 
+// nilReferralDependency reports whether value is nil or a nil pointer,
+// interface, function, map, slice or channel.
 func nilReferralDependency(value any) bool {
 	if value == nil {
 		return true
@@ -29,6 +31,8 @@ func singleReferralCause(err, target error) bool {
 	return false
 }
 
+// ready rejects nil or cancelled contexts with their error, and a service
+// missing its repository, clock or ID generator with ErrUnavailable.
 func (s *Service) ready(ctx context.Context) error {
 	if ctx == nil {
 		return ErrInvalid

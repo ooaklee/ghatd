@@ -14,6 +14,9 @@ import (
 	"unicode/utf8"
 )
 
+// otlpConfigurationLayer holds one level (generic or signal-specific) of parsed
+// OTLP environment settings, with separate set flags distinguishing unset from
+// zero-valued configuration, plus loaded CA and client certificate material.
 type otlpConfigurationLayer struct {
 	prefix                        string
 	endpoint                      *url.URL
@@ -31,10 +34,18 @@ type otlpConfigurationLayer struct {
 	caSet, certificateSet, keySet bool
 }
 
+// configurationTextSafe reports whether the value is valid UTF-8 without
+// control characters.
 func configurationTextSafe(value string) bool {
 	return utf8.ValidString(value) && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
+// inspectOTLP resolves one signal's OTLP settings from generic and signal-
+// prefixed environment layers, recording sanitized endpoint, header, timeout
+// and TLS details on item and effective values on settings. It validates
+// protocol, endpoint-scheme consistency, gRPC origins and headers, HTTP path
+// derivation and certificate presence, reporting issues through report rather
+// than echoing raw values.
 func (report *ConfigurationReport) inspectOTLP(getenv func(string) string, item *SignalConfiguration, settings *resolvedSignalConfiguration) {
 	prefix := "OTEL_EXPORTER_OTLP_" + strings.ToUpper(item.Signal)
 	protocol, source := configurationValue(getenv, prefix+"_PROTOCOL", "OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
@@ -190,6 +201,9 @@ func (report *ConfigurationReport) inspectOTLP(getenv func(string) string, item 
 	}
 }
 
+// configurationValue resolves a setting from the signal-specific key, then the
+// generic key, then the fallback, returning the value and which source supplied
+// it.
 func configurationValue(getenv func(string) string, signalKey, genericKey, fallback string) (string, string) {
 	if value := getenv(signalKey); value != "" {
 		return value, "signal"
@@ -200,6 +214,10 @@ func configurationValue(getenv func(string) string, signalKey, genericKey, fallb
 	return fallback, "default"
 }
 
+// inspectOTLPLayer parses one OTLP environment prefix into a layer, reading
+// endpoint, headers, timeout, compression, insecure flag and certificate files
+// and recording a fixed error issue for each malformed value. Files are read
+// here; parse failures leave the corresponding value unset.
 func (report *ConfigurationReport) inspectOTLPLayer(getenv func(string) string, prefix string) otlpConfigurationLayer {
 	layer := otlpConfigurationLayer{prefix: prefix, timeout: 10 * time.Second, compression: "none"}
 	if raw := getenv(prefix + "_ENDPOINT"); raw != "" {
@@ -271,6 +289,9 @@ func (report *ConfigurationReport) inspectOTLPLayer(getenv func(string) string, 
 	return layer
 }
 
+// configurationReadTLSFile reads a TLS file for configuration inspection,
+// rejecting names that are unsafe or padded, non-regular files such as FIFOs,
+// and files over 4 MiB so inspection cannot block indefinitely.
 func configurationReadTLSFile(filename string) ([]byte, error) {
 	if !configurationTextSafe(filename) || strings.TrimSpace(filename) != filename {
 		return nil, os.ErrInvalid
@@ -284,6 +305,10 @@ func configurationReadTLSFile(filename string) ([]byte, error) {
 	return os.ReadFile(filename)
 }
 
+// configurationEndpoint parses an OTLP endpoint URL, accepting only absolute
+// http/https URLs with valid hosts, optional ports in range, and no
+// credentials, query, fragment, opaque data, whitespace or control characters.
+// Invalid input returns nil.
 func configurationEndpoint(raw string) *url.URL {
 	if !configurationTextSafe(raw) || strings.TrimSpace(raw) != raw {
 		return nil
@@ -311,6 +336,9 @@ func configurationEndpoint(raw string) *url.URL {
 	return endpoint
 }
 
+// configurationHeaders parses comma-separated key=value pairs with percent-
+// encoded values into a header map, rejecting unsafe text, invalid header names
+// and duplicate keys (case-insensitively). The second result reports validity.
 func configurationHeaders(raw string) (map[string]string, bool) {
 	if !configurationTextSafe(raw) {
 		return nil, false
@@ -331,6 +359,8 @@ func configurationHeaders(raw string) (map[string]string, bool) {
 	return headers, true
 }
 
+// configurationHeaderName reports whether name is a non-empty HTTP token:
+// alphanumerics and the RFC token punctuation characters.
 func configurationHeaderName(name string) bool {
 	if name == "" {
 		return false
@@ -344,6 +374,9 @@ func configurationHeaderName(name string) bool {
 	return true
 }
 
+// configurationGRPCHeaders reports whether every header key uses only gRPC-safe
+// metadata characters and every non-binary value is printable ASCII; keys
+// ending in -bin skip value checks.
 func configurationGRPCHeaders(headers map[string]string) bool {
 	for key, value := range headers {
 		for _, char := range key {

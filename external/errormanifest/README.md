@@ -6,6 +6,10 @@ explicit overrides. Later
 entries for the **same error identity** win. Matching error messages do not make
 two distinct errors interchangeable.
 
+Hosts adopting the integration should pin a reviewed module revision and remove
+development-only replacement directives before publishing; see
+[ADR021's adoption guidance](../../docs/adr/adr021-shared-observability-adapters.md#compatibility-and-consequences).
+
 ```go
 manifests := errormanifest.NewComposer().
     Add(PackageErrorMap).
@@ -26,11 +30,9 @@ into the appropriate domain classification. A generic fallback is not a
 substitute for those mappings. Keep original causes available for internal
 inspection without putting their text in public manifest fields.
 
-Direct mapped sentinels work in the pinned `reply/v2` integration version.
-Ordinary `%w` wrappers were not resolved consistently by `v2.0.0`, and its joined-error handling
-could discard unknown branches. GHATD now pins the reply integration branch's
-structural resolver for validation collections. Use the shared writer for domain
-HTTP responses:
+`WriteHTTPError` resolves wrapped errors and joined validation collections
+structurally; classification never depends on error text or newlines. Use the
+shared writer for domain HTTP responses:
 
 ```go
 return errormanifest.WriteHTTPError(w, err, manifests,

@@ -113,6 +113,9 @@ type UserRepository struct {
 	repo RepositoryHelper // Use interface for testability
 }
 
+// NewUserRepository returns an example user repository delegating MongoDB
+// operations to the supplied helper. It exists to demonstrate the migration
+// pattern, not production use.
 func NewUserRepository(repo RepositoryHelper) *UserRepository {
 	return &UserRepository{repo: repo}
 }
@@ -154,81 +157,141 @@ func (r *UserRepository) FindUsers(ctx context.Context) ([]User, error) {
 // Testing Example: Easy to mock with interfaces
 type MockRepositoryHelper struct{}
 
+// GetClient is a mock example implementation returning no client; it satisfies
+// the helper interface for demonstration purposes.
 func (m *MockRepositoryHelper) GetClient(ctx context.Context) (*mongo.Client, error) {
 	// Return mock client or error for testing
 	return nil, nil
 }
 
+// GetDatabase is a mock example implementation returning no database; it
+// satisfies the helper interface for demonstration purposes.
 func (m *MockRepositoryHelper) GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error) {
 	// Return mock database
 	return nil, nil
 }
 
+// MapAllToResult is a mock example implementation that performs no cursor
+// mapping; it satisfies the helper interface for demonstration purposes.
 func (m *MockRepositoryHelper) MapAllToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, objectName string) error {
 	// Mock cursor mapping
 	return nil
 }
 
+// MapOneToResult is a mock example implementation that performs no single-
+// result mapping; it satisfies the helper interface for demonstration purposes.
 func (m *MockRepositoryHelper) MapOneToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, objectName string) error {
 	return nil
 }
 
+// LogError is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) LogError(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// LogWarn is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) LogWarn(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// LogInfo is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) LogInfo(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// LogDebug is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) LogDebug(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// Error is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) Error(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// Warn is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) Warn(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// Info is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) Info(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// Debug is a no-op mock satisfying the helper interface in examples.
 func (m *MockRepositoryHelper) Debug(ctx context.Context, message string, err error, fields ...Field) {
 }
+
+// Health is a mock example implementation reporting no health information.
 func (m *MockRepositoryHelper) Health(ctx context.Context) map[string]interface{} { return nil }
+
+// Stats is a mock example implementation returning empty connection stats.
 func (m *MockRepositoryHelper) Stats() repositoryhelpers.ConnectionStats {
 	return repositoryhelpers.ConnectionStats{}
 }
 
+// ExecuteCountDocuments is a mock example implementation always reporting count
+// zero and no error.
 func (m *MockRepositoryHelper) ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error) {
 	return 0, nil
 }
+
+// ExecuteDeleteManyCommand is a mock example implementation that deletes
+// nothing and reports success.
 func (m *MockRepositoryHelper) ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
 	return nil
 }
+
+// ExecuteUpdateManyCommand is a mock example implementation that updates
+// nothing and reports success.
 func (m *MockRepositoryHelper) ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error {
 	return nil
 }
+
+// ExecuteUpdateOneCommand is a mock example implementation that updates nothing
+// and reports success.
 func (m *MockRepositoryHelper) ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error {
 	return nil
 }
+
+// ExecuteDeleteOneCommand is a mock example implementation that deletes nothing
+// and reports success.
 func (m *MockRepositoryHelper) ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error {
 	return nil
 }
+
+// ExecuteFindOneCommandDecodeResult is a mock example implementation that
+// decodes nothing and reports success.
 func (m *MockRepositoryHelper) ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error {
 	return nil
 }
+
+// ExecuteReplaceOneCommand is a mock example implementation that replaces
+// nothing and reports success.
 func (m *MockRepositoryHelper) ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error {
 	return nil
 }
+
+// ExecuteFindCommand is a mock example implementation returning no cursor and
+// no error.
 func (m *MockRepositoryHelper) ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error) {
 	return nil, nil
 }
+
+// ExecuteAggregateCommand is a mock example implementation returning no cursor
+// and no error.
 func (m *MockRepositoryHelper) ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error) {
 	return nil, nil
 }
 
+// ExecuteInsertOneCommand is a mock example implementation returning no insert
+// result and no error.
 func (m *MockRepositoryHelper) ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error) {
 	return nil, nil
 }
+
+// ExecuteInsertManyCommand is a mock example implementation returning no insert
+// result and no error.
 func (m *MockRepositoryHelper) ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error) {
 	return nil, nil
 }
 
+// ExampleTestingWithMocks shows configuring a repository with the no-op mock
+// helper so example code paths run without a database.
 func ExampleTestingWithMocks() {
 	// Easy to create mocks for testing
 	mockHelper := &MockRepositoryHelper{}
@@ -297,7 +360,8 @@ func ExampleEnvironmentConfigs() {
 	_, _ = testRepo()
 }
 
-// User struct for examples
+// User is a minimal example document used in the migration examples in this
+// file, mapping _id and name fields for BSON round-tripping.
 type User struct {
 	ID   string `bson:"_id"`
 	Name string `bson:"name"`

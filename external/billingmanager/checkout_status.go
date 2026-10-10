@@ -29,7 +29,13 @@ type GetBillingProviderCheckoutStatusResponse struct {
 	ProviderPriceID string `json:"provider_price_id"`
 }
 
+// acknowledgedCheckoutReader is the revenue-feed capability that retrieves a
+// retained checkout intent by scope and session, used to verify an acknowledged
+// checkout without provider I/O.
 type acknowledgedCheckoutReader interface {
+	// FindAcknowledgedCheckout retrieves the retained checkout intent by revenue
+	// scope and session identifier from the revenue feed, verifying an acknowledged
+	// checkout without provider I/O.
 	FindAcknowledgedCheckout(context.Context, billing.RevenueScope, string) (billing.CheckoutIntent, error)
 }
 
@@ -103,7 +109,12 @@ func (s *Service) GetBillingProviderCheckoutStatus(ctx context.Context, req *Get
 	return &GetBillingProviderCheckoutStatusResponse{State: state, SessionID: intent.SessionID, PlanID: intent.Request.PlanID, CostID: intent.Request.CostID, ProviderPriceID: intent.Request.PriceID}, nil
 }
 
+// billingManagerCheckoutStatusService mirrors the public
+// GetBillingProviderCheckoutStatus signature for internal capability dispatch.
 type billingManagerCheckoutStatusService interface {
+	// GetBillingProviderCheckoutStatus returns the current provider-side status of
+	// a retained checkout session for the paying actor's request, without creating
+	// checkouts or granting access.
 	GetBillingProviderCheckoutStatus(context.Context, *GetBillingProviderCheckoutStatusRequest) (*GetBillingProviderCheckoutStatusResponse, error)
 }
 

@@ -11,6 +11,9 @@ package migrations
 // 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 // )
 
+// init is a placeholder whose body is entirely commented out; it currently
+// performs no migration registration and exists to hold a template for future
+// Mongo index migrations.
 func init() {
 
 	// log.SetFlags(0)

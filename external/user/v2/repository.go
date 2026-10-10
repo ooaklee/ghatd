@@ -18,21 +18,58 @@ const defaultCollectionInitMaxAttemptsLimit = 3
 
 // MongoDbStore represents the datastore to hold user data
 type MongoDbStore interface {
+	// ExecuteCountDocuments counts documents in the given collection matching the
+	// filter, applying any count options, and returns the count.
 	ExecuteCountDocuments(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.CountOptions]) (int64, error)
+	// ExecuteDeleteOneCommand deletes a single document matching the filter from
+	// the given collection; the target object name identifies the entity for
+	// store-level handling.
 	ExecuteDeleteOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindCommand runs a find query against the given collection with the
+	// supplied filter and options, returning a cursor over matching documents.
 	ExecuteFindCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, opts ...options.Lister[options.FindOptions]) (*mongo.Cursor, error)
+	// ExecuteInsertOneCommand inserts the supplied document into the given
+	// collection and returns the insert result; the result object name identifies
+	// the entity for store-level handling.
 	ExecuteInsertOneCommand(ctx context.Context, collection *mongo.Collection, document interface{}, resultObjectName string) (*mongo.InsertOneResult, error)
+	// ExecuteUpdateOneCommand applies the supplied update filter to a single
+	// document matching the query filter in the given collection.
 	ExecuteUpdateOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteDeleteManyCommand deletes all documents matching the filter from the
+	// given collection; the target object name identifies the entity for
+	// store-level handling.
 	ExecuteDeleteManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, targetObjectName string) error
+	// ExecuteFindOneCommandDecodeResult finds the first document matching the
+	// filter and decodes it into the supplied result, using the flags to control
+	// error logging and the error returned on failure.
 	ExecuteFindOneCommandDecodeResult(ctx context.Context, collection *mongo.Collection, filter interface{}, result interface{}, resultObjectName string, logError bool, onFailureErr error) error
+	// ExecuteAggregateCommand runs the supplied aggregation pipeline against the
+	// given collection and returns a cursor over the results.
 	ExecuteAggregateCommand(ctx context.Context, collection *mongo.Collection, mongoPipeline []bson.D) (*mongo.Cursor, error)
+	// ExecuteReplaceOneCommand replaces a single document matching the filter with
+	// the supplied replacement object in the given collection.
 	ExecuteReplaceOneCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, replacementObject interface{}, resultObjectName string) error
+	// ExecuteUpdateManyCommand applies the supplied update filter to all documents
+	// matching the query filter in the given collection.
 	ExecuteUpdateManyCommand(ctx context.Context, collection *mongo.Collection, filter interface{}, updateFilter interface{}, resultObjectName string) error
+	// ExecuteInsertManyCommand inserts the supplied documents into the given
+	// collection and returns the insert result; the result object name identifies
+	// the entity for store-level handling.
 	ExecuteInsertManyCommand(ctx context.Context, collection *mongo.Collection, documents []interface{}, resultObjectName string) (*mongo.InsertManyResult, error)
 
+	// GetDatabase returns the Mongo database handle for the given database name
+	// from the underlying client.
 	GetDatabase(ctx context.Context, dbName string) (*mongo.Database, error)
+	// InitialiseClient creates and returns the underlying Mongo client for the
+	// store.
 	InitialiseClient(ctx context.Context) (*mongo.Client, error)
+	// MapAllInCursorToResult decodes every document remaining in the supplied
+	// cursor into the result object; the result object name identifies the entity
+	// for store-level handling.
 	MapAllInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
+	// MapOneInCursorToResult decodes a single document from the supplied cursor
+	// into the result object; the result object name identifies the entity for
+	// store-level handling.
 	MapOneInCursorToResult(ctx context.Context, cursor *mongo.Cursor, result interface{}, resultObjectName string) error
 }
 

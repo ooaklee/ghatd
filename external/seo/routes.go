@@ -9,13 +9,34 @@ import (
 
 // sitemapHandler expected methods for valid sitemap handler.
 type sitemapHandler interface {
+	// CreateSitemapItem serves the HTTP endpoint for sitemap item creation, writing
+	// a 201 data response or an error response after delegating to the service's
+	// create-if-absent logic.
 	CreateSitemapItem(w http.ResponseWriter, r *http.Request)
+	// DeleteEntriesWithUriRegex serves the HTTP endpoint that deletes sitemap
+	// entries whose URI matches a request-supplied regex, writing a data or error
+	// response from the service result.
 	DeleteEntriesWithUriRegex(w http.ResponseWriter, r *http.Request)
+	// DownloadSitemapByPath serves the admin HTTP endpoint that downloads the
+	// sitemap file at the requested path.
 	DownloadSitemapByPath(w http.ResponseWriter, r *http.Request)
+	// GenerateSitemap serves the HTTP endpoint for XML generation with optional
+	// file saves, writing a data or error response from the service result.
 	GenerateSitemap(w http.ResponseWriter, r *http.Request)
+	// GetSitemap serves the public HTTP endpoint returning the sitemap file, per
+	// the sitemapHandler contract.
 	GetSitemap(w http.ResponseWriter, r *http.Request)
+	// GetSitemapItems serves the HTTP endpoint listing sitemap items, writing a
+	// data or error response from the service result.
 	GetSitemapItems(w http.ResponseWriter, r *http.Request)
+	// MassSitemapItemCreationByBatch serves HTTP batch sitemap item creation,
+	// mapping the request and delegating to the service; the implementation creates
+	// items sequentially with optional override, responding 201 with the
+	// created/updated/skipped summary.
 	MassSitemapItemCreationByBatch(w http.ResponseWriter, r *http.Request)
+	// UpdateSitemapItemByUri serves HTTP updates of sitemap items by URI,
+	// delegating to the service which patches mutable fields and validates before
+	// persisting, responding 200 with the updated item.
 	UpdateSitemapItemByUri(w http.ResponseWriter, r *http.Request)
 }
 

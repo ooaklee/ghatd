@@ -110,6 +110,8 @@ type Config struct {
 	Currency string
 }
 
+// validate requires a plain bounded program ID and exactly one approved three-
+// letter uppercase currency, returning ErrInvalid otherwise.
 func (c Config) validate() error {
 	if _, ok := cleanPlain(c.ProgramID, maxIDLength); !ok {
 		return errWrap(ErrInvalid, "program id required")

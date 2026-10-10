@@ -17,7 +17,13 @@ import (
 
 // managementService is the handler's narrow orchestration port, not persistence.
 type managementService interface {
+	// Preview returns a detached, live-authorized review of applying the supplied
+	// token limits to the selected user, preserving existing policies without
+	// inferring a target.
 	Preview(context.Context, string, accesspolicy.TokenLimits) (accesspolicy.TokenLimitPreview, error)
+	// Apply commits the reviewed token limits at the expected revision after
+	// re-planning and inventory preparation, returning the resulting grant snapshot
+	// on success.
 	Apply(context.Context, string, int64, accesspolicy.TokenLimits) (accesspolicy.Grant, error)
 }
 

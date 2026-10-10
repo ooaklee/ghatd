@@ -22,6 +22,9 @@ var (
 	seedPlanStarterCostYearID  = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 )
 
+// InitPricingSeedUp inserts the five starter feature catalog documents and the
+// published, provider-neutral Starter plan with two free manual USD costs.
+// Provider-backed checkout fixtures are deliberately kept out of this seed.
 func InitPricingSeedUp(db *mongo.Database) error { //Up
 
 	log.SetFlags(0)
@@ -187,6 +190,8 @@ func InitPricingSeedUp(db *mongo.Database) error { //Up
 
 }
 
+// InitPricingSeedDown deletes all feature and plan documents attributed to the
+// seed-migration creator, which is exactly what InitPricingSeedUp inserted.
 func InitPricingSeedDown(db *mongo.Database) error { //Down
 	log.SetFlags(0)
 

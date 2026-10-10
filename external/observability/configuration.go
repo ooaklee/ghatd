@@ -74,10 +74,15 @@ type ConfigurationIssue struct {
 	Message  string `json:"message"`
 }
 
+// resolvedConfiguration holds the resolved per-signal exporter settings for the
+// observability runtime.
 type resolvedConfiguration struct {
 	signals []resolvedSignalConfiguration
 }
 
+// resolvedSignalConfiguration carries the effective transport settings for one
+// signal: exporter, protocol, endpoint, headers, compression, timeout, TLS
+// material and the insecure flag, snapshotted from the OTLP environment.
 type resolvedSignalConfiguration struct {
 	signal, exporter, protocol string
 	endpoint                   *url.URL
@@ -98,6 +103,10 @@ func InspectConfiguration(config Config) (ConfigurationReport, error) {
 	return report, err
 }
 
+// resolveConfiguration inspects identity, sampler, per-signal exporters and SDK
+// settings through getenv, producing both the sanitized ConfigurationReport and
+// the resolved runtime configuration. Any error-severity issue causes a non-nil
+// error listing the offending fields, with a nil resolved configuration.
 func resolveConfiguration(config Config, getenv func(string) string) (ConfigurationReport, *resolvedConfiguration, error) {
 	report := ConfigurationReport{Signals: make([]SignalConfiguration, 0, 3), Issues: []ConfigurationIssue{}}
 	resolved := &resolvedConfiguration{signals: make([]resolvedSignalConfiguration, 0, 3)}
@@ -135,6 +144,9 @@ func resolveConfiguration(config Config, getenv func(string) string) (Configurat
 	return report, resolved, nil
 }
 
+// issue appends a ConfigurationIssue unless one with the same code, field and
+// severity already exists, keeping generic settings diagnostics from repeating
+// across signals.
 func (report *ConfigurationReport) issue(code, field, severity, message string) {
 	// Generic settings are checked for every applicable signal. Report each
 	// fixed diagnostic once rather than repeating it three times.

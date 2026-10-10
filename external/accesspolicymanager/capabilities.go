@@ -8,7 +8,12 @@ import (
 // capabilityManagementService keeps optional authority management independent
 // of existing token-only handler implementations.
 type capabilityManagementService interface {
+	// ReviewCapabilities returns the selected stored user's current grant snapshot,
+	// including disabled or expired grants, after target authorization.
 	ReviewCapabilities(context.Context, string) (*accesspolicy.Grant, error)
+	// ApplyCapabilities replaces explicit authority fields for the selected user
+	// under the reviewed revision; it neither provisions tokens nor derives
+	// permission from a role.
 	ApplyCapabilities(context.Context, string, int64, accesspolicy.Capabilities) (accesspolicy.Grant, error)
 }
 

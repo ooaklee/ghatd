@@ -9,10 +9,18 @@ import (
 // TokenDetailsAuth holds methods for a passing valid
 // auth token
 type TokenDetailsAuth interface {
+	// GetTokenAccessUuid returns the access token's UUID from a valid token,
+	// exposing TokenDetailsAuth's access identifier.
 	GetTokenAccessUuid() string
+	// GetTokenRefreshUuid returns the refresh token's UUID from a valid token,
+	// exposing TokenDetailsAuth's refresh identifier.
 	GetTokenRefreshUuid() string
 
+	// GetTokenAccessTimeToLive returns the access token's remaining time to live as
+	// a duration from a valid token.
 	GetTokenAccessTimeToLive() time.Duration
+	// GetTokenRefreshTimeToLive returns the refresh token's remaining time to live
+	// as a duration from a valid token.
 	GetTokenRefreshTimeToLive() time.Duration
 }
 
@@ -32,9 +40,20 @@ type RefreshTokenRotationResult struct {
 // TokenDetailsAccess holds methods for a passing valid
 // token access details
 type TokenDetailsAccess interface {
+	// GetTokenAccessUuid returns the access token's UUID from valid token access
+	// details, exposing TokenDetailsAccess's access identifier.
 	GetTokenAccessUuid() string
+	// GetUserId returns the user id of the token's owner held in the access
+	// details. Part of TokenDetailsAccess, implemented by TokenAccessDetails
+	// returning its stored UserId field.
 	GetUserId() string
+	// IsUserAdmin returns whether the token's owner is flagged as an admin. Part of
+	// TokenDetailsAccess, implemented by TokenAccessDetails returning its stored
+	// IsAdmin field.
 	IsUserAdmin() bool
+	// IsUserAuthorized returns whether the owner's account is in an active state.
+	// Part of TokenDetailsAccess, implemented by TokenAccessDetails returning its
+	// stored IsAuthorized field.
 	IsUserAuthorized() bool
 }
 

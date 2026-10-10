@@ -56,84 +56,235 @@ type SignupFact struct {
 	CreatedAt                           time.Time
 	NewAccount, Individual              bool
 }
+
+// Identity is the owning identity capability Manager depends on: current
+// principal eligibility and immutable signup facts, both keyed by customer ID.
 type Identity interface {
+	// GetPartnerPrincipal returns the current principal eligibility for the
+	// customer ID, including active, individual, email-verified and region-eligible
+	// status resolved from owning services.
 	GetPartnerPrincipal(context.Context, string) (Principal, error)
+	// GetSignupFact returns the immutable signup capture for the customer ID,
+	// including creation time and attribution evidence, from the owning identity
+	// service.
 	GetSignupFact(context.Context, string) (SignupFact, error)
 }
 
 // Authority checks current scoped permission for every use case, including
 // replay. A generic administrator flag does not confer manual payout authority.
 type Authority interface {
+	// CheckPartners checks the actor's current scoped permission for the given
+	// partners use case, including replay; a generic administrator flag does not
+	// confer authority.
 	CheckPartners(context.Context, string, string, string) error
 }
+
+// Groups resolves a customer's partner group memberships, used only for terms
+// resolution.
 type Groups interface {
+	// PartnerGroupIDs returns the customer's partner group memberships, used only
+	// for terms resolution.
 	PartnerGroupIDs(context.Context, string) ([]string, error)
 }
-type Clock interface{ Now() time.Time }
+
+// Clock supplies the current time, allowing hosts to inject deterministic
+// clocks.
+type Clock interface {
+	// Now returns the current time, allowing hosts to inject deterministic clocks.
+	Now() time.Time
+}
 
 // Controls are independent host admission switches. ManualRecording admits new
 // manual payment handling (entering processing), never attestation or recovery
 // of an external transfer already attempted. Pauses preserve current-authority
 // reads, financial receipts and existing obligations.
 type Controls struct{ Enrollment, Attribution, Accrual, Claims, ManualRecording bool }
+
+// ProgramService is the program-owning capability: partner enrollment, status,
+// policy publication and versions, effective/referral terms resolution, and
+// payout destination reads and updates. Manager treats it as the authority for
+// program state, not a transport.
 type ProgramService interface {
+	// Config returns the program-owning capability's current partner program
+	// configuration.
 	Config() partnerprogram.Config
+	// Enroll enrolls a partner in the program per the request, returning the
+	// resulting partner from the program-owning service.
 	Enroll(context.Context, partnerprogram.EnrollRequest) (partnerprogram.Partner, error)
+	// GetPartnerForCustomer returns the program partner record associated with the
+	// customer ID from the program-owning service.
 	GetPartnerForCustomer(context.Context, string) (partnerprogram.Partner, error)
+	// GetPartner reads the partner identified by the string ID for ProgramService,
+	// the authority on program state, returning the stored partnerprogram.Partner
+	// record.
 	GetPartner(context.Context, string) (partnerprogram.Partner, error)
+	// ChangeStatus applies a StatusChangeRequest transition to a partner and
+	// returns the resulting updated Partner, as the program-owning capability's
+	// status mutation.
 	ChangeStatus(context.Context, partnerprogram.StatusChangeRequest) (partnerprogram.Partner, error)
+	// PublishPolicy publishes a new policy version from the PublishPolicyRequest
+	// and returns the created PolicyVersion, exercising ProgramService's policy
+	// publication ownership.
 	PublishPolicy(context.Context, partnerprogram.PublishPolicyRequest) (partnerprogram.PolicyVersion, error)
+	// ListPolicyVersions returns all published PolicyVersion records for the
+	// program, exposing the immutable policy history owned by ProgramService.
 	ListPolicyVersions(context.Context) ([]partnerprogram.PolicyVersion, error)
+	// ResolveTerms computes EffectiveTerms for the given Partner, rule selectors
+	// and evaluation time, resolving program terms as the program-owning
+	// capability.
 	ResolveTerms(context.Context, partnerprogram.Partner, []string, time.Time) (partnerprogram.EffectiveTerms, error)
+	// ResolveReferralTerms computes EffectiveTerms for the given Partner, rule
+	// selectors, and the referral and event times, resolving referral-specific
+	// program terms.
 	ResolveReferralTerms(context.Context, partnerprogram.Partner, []string, time.Time, time.Time) (partnerprogram.EffectiveTerms, error)
+	// UpdatePayoutDestination applies a DestinationRequest and returns the
+	// resulting Destination, updating the payout destination owned by
+	// ProgramService.
 	UpdatePayoutDestination(context.Context, partnerprogram.DestinationRequest) (partnerprogram.Destination, error)
+	// GetPayoutDestination reads the payout destination for the identified partner,
+	// returning the stored Destination record held by ProgramService.
 	GetPayoutDestination(context.Context, string) (partnerprogram.Destination, error)
 }
+
+// ReferralService is the referral-owning capability: signup lookup and payment
+// binding, link issue/rotate/lookup, click and visit observation, analytics,
+// attribution lock/assign/correction and snapshot access, plus per-partner and
+// relationship listings. Manager projects its outputs without re-deriving
+// attribution.
 type ReferralService interface {
+	// LookupSignup resolves a Referral for the given identifiers, supplied Evidence
+	// and time, performing the signup lookup owned by ReferralService.
 	LookupSignup(context.Context, string, string, referral.Evidence, time.Time) (referral.Referral, error)
+	// BindPayment binds a payment to its referral attribution at the given time,
+	// returning the PaymentAttribution produced by the referral-owning capability.
 	BindPayment(context.Context, string, string, time.Time) (referral.PaymentAttribution, error)
+	// IssueLink creates a new referral Link from the partner's PartnerState,
+	// exercising ReferralService's link issuance ownership.
 	IssueLink(context.Context, referral.PartnerState) (referral.Link, error)
+	// RotateLink rotates a referral link from the RotateLinkRequest, returning the
+	// new Link; the Manager implementation binds identity and permission each
+	// attempt, withholding results on late revocation via ErrUncertain while
+	// preserving original-key recovery.
 	RotateLink(context.Context, referral.RotateLinkRequest) (referral.Link, error)
+	// GetLinkByCode reads the referral Link matching the supplied code, a lookup
+	// owned by ReferralService.
 	GetLinkByCode(context.Context, string) (referral.Link, error)
+	// ObserveClick records a click observation for the identified link and click
+	// value, returning the stored Click owned by ReferralService.
 	ObserveClick(context.Context, string, string) (referral.Click, error)
+	// ObserveVisit records a visit from the VisitRequest, returning the resulting
+	// VisitObservation as observed by the referral owner.
 	ObserveVisit(context.Context, referral.VisitRequest) (referral.VisitObservation, error)
+	// GetAnalytics returns Analytics for the identified partner filtered by the
+	// AnalyticsQuery, projected from ReferralService's observations.
 	GetAnalytics(context.Context, string, referral.AnalyticsQuery) (referral.Analytics, error)
+	// ClickCount returns the number of clicks for the identified partner between
+	// the two times, as counted by the referral-owning capability.
 	ClickCount(context.Context, string, time.Time, time.Time) (int64, error)
+	// LockAttribution locks a Referral for the given PartnerState, Link and
+	// Eligibility, fixing attribution within the referral owner.
 	LockAttribution(context.Context, referral.PartnerState, referral.Link, referral.Eligibility) (referral.Referral, error)
+	// AssignAttribution applies a CorrectionRequest and returns the corrected
+	// Referral, performing attribution correction owned by ReferralService.
 	AssignAttribution(context.Context, referral.CorrectionRequest) (referral.Referral, error)
+	// FindCorrection locates a prior correction Referral by its three selector
+	// strings, a lookup owned by the referral capability.
 	FindCorrection(context.Context, string, string, string) (referral.Referral, error)
+	// GetAttributionSnapshot returns the AttributionSnapshot for the identified
+	// referral, exposing evidence held by ReferralService.
 	GetAttributionSnapshot(context.Context, string) (referral.AttributionSnapshot, error)
+	// GetReferralForCustomer returns the Referral associated with the identified
+	// customer, a read owned by ReferralService.
 	GetReferralForCustomer(context.Context, string) (referral.Referral, error)
+	// ListByPartner returns referrals for the identified partner, bounded by the
+	// limit and cursor string, from the referral owner's listings.
 	ListByPartner(context.Context, string, int, string) ([]referral.Referral, error)
+	// ListRelationships returns a RelationshipPage for the identified partner
+	// filtered by the RelationshipQuery, projected from ReferralService outputs.
 	ListRelationships(context.Context, string, referral.RelationshipQuery) (referral.RelationshipPage, error)
 }
+
+// EarningsService is the earnings-owning financial capability: accruals,
+// disputes, returns, maturity, balances, journal/statements and financial
+// reports, plus the full claim lifecycle (request, find, cancel, get, list,
+// decide, record and amend payments). Financial state and receipts stay with
+// this owner.
 type EarningsService interface {
+	// AcceptedAccrual returns the earnings Entry for the identified accrual within
+	// a partner scope, a read owned by EarningsService.
 	AcceptedAccrual(context.Context, string, string) (partnerearnings.Entry, error)
+	// Dispute submits a DisputeRequest and returns the resulting DisputeResult,
+	// exercising the dispute handling owned by the earnings capability.
 	Dispute(context.Context, partnerearnings.DisputeRequest) (partnerearnings.DisputeResult, error)
+	// RecordReturnedTransfer records a returned transfer from the ReturnRequest,
+	// returning the ReturnResult as owned by EarningsService.
 	RecordReturnedTransfer(context.Context, partnerearnings.ReturnRequest) (partnerearnings.ReturnResult, error)
+	// Accrue records an earnings Entry from the AccrualRequest, performing accrual
+	// within the earnings-owning financial capability.
 	Accrue(context.Context, partnerearnings.AccrualRequest) (partnerearnings.Entry, error)
+	// Reverse applies a ReversalRequest and returns the resulting Entries,
+	// reversing prior accruals within EarningsService.
 	Reverse(context.Context, partnerearnings.ReversalRequest) ([]partnerearnings.Entry, error)
+	// Mature processes maturity for the identified partner, returning the Entries
+	// produced by the earnings owner's maturity operation.
 	Mature(context.Context, string) ([]partnerearnings.Entry, error)
+	// Balances returns the current Balances for the identified partner as held by
+	// the earnings-owning capability.
 	Balances(context.Context, string) (partnerearnings.Balances, error)
+	// ListJournal returns the journal Entries for the identified partner, exposing
+	// the earnings ledger owned by EarningsService.
 	ListJournal(context.Context, string) ([]partnerearnings.Entry, error)
+	// GetStatement returns the Statement for the identified partner filtered by the
+	// StatementQuery, generated by the earnings owner.
 	GetStatement(context.Context, string, partnerearnings.StatementQuery) (partnerearnings.Statement, error)
+	// GetPaymentReport returns the PaymentReport for the identified partner
+	// filtered by the PaymentQuery, a financial report owned by EarningsService.
 	GetPaymentReport(context.Context, string, partnerearnings.PaymentQuery) (partnerearnings.PaymentReport, error)
+	// GetReferralAmounts returns the ReferralAmountReport for the identified
+	// partner filtered by the ReferralAmountQuery from the earnings owner.
 	GetReferralAmounts(context.Context, string, partnerearnings.ReferralAmountQuery) (partnerearnings.ReferralAmountReport, error)
+	// GetFinancialMetrics returns FinancialMetrics for the identified partner
+	// filtered by the FinancialMetricsQuery, computed by the earnings owner.
 	GetFinancialMetrics(context.Context, string, partnerearnings.FinancialMetricsQuery) (partnerearnings.FinancialMetrics, error)
+	// RequestClaim creates a Claim from the ClaimRequest; the Manager
+	// implementation retains the original owning current-destination selection,
+	// with RequestClaimWithDestination binding observed revisions.
 	RequestClaim(context.Context, partnerearnings.ClaimRequest) (partnerearnings.Claim, error)
+	// FindClaimRequest locates a Claim by its three selector strings, a lookup
+	// within the claim lifecycle owned by EarningsService.
 	FindClaimRequest(context.Context, string, string, string) (partnerearnings.Claim, error)
+	// CancelRequestedClaim cancels a requested claim per the CancelClaimRequest,
+	// returning the updated Claim from the earnings owner.
 	CancelRequestedClaim(context.Context, partnerearnings.CancelClaimRequest) (partnerearnings.Claim, error)
+	// GetClaim reads a Claim by ID; the Manager implementation scopes results to
+	// the current partner, treating foreign claims as not-found and consistency
+	// mismatches as ErrUnavailable.
 	GetClaim(context.Context, string) (partnerearnings.Claim, error)
+	// ListClaims returns claims filtered by states, bounded to one page; the
+	// Manager implementation enforces limit 1..100 and flags mismatched rows as
+	// ErrUnavailable.
 	ListClaims(context.Context, string, []string, int, string) ([]partnerearnings.Claim, error)
+	// DecideClaim applies a ClaimDecision and returns the resulting Claim, deciding
+	// claims within the lifecycle owned by EarningsService.
 	DecideClaim(context.Context, partnerearnings.ClaimDecision) (partnerearnings.Claim, error)
+	// RecordPayment records payment from the RecordPaymentRequest, returning the
+	// updated Claim with its receipt held by the earnings owner.
 	RecordPayment(context.Context, partnerearnings.RecordPaymentRequest) (partnerearnings.Claim, error)
+	// AmendPayment applies an AmendPaymentRequest to a recorded payment, returning
+	// the amended Claim owned by EarningsService.
 	AmendPayment(context.Context, partnerearnings.AmendPaymentRequest) (partnerearnings.Claim, error)
 }
 
 // RevenueFacts is the owning billing service read capability, not a repository.
 type RevenueFacts interface {
+	// GetRevenueFact reads the billing RevenueFact for the identified source, a
+	// read owned by the billing service capability.
 	GetRevenueFact(context.Context, string) (billing.RevenueFact, error)
 }
+
+// Dependencies is the trusted wiring for Manager. Claims gates new withdrawals
+// while receipts recover first; WorkReporting is optional and only disables the
+// backlog read when absent.
 type Dependencies struct {
 	Program   ProgramService
 	Referral  ReferralService
@@ -150,6 +301,11 @@ type Dependencies struct {
 	// WorkReporting is optional. Missing wiring disables only the backlog read.
 	WorkReporting WorkBacklogService
 }
+
+// Manager coordinates the owning program, referral, earnings and identity
+// services with authority and controls. It owns no storage itself; every
+// command re-checks current scoped permission and delegates financial
+// transitions to the owners.
 type Manager struct {
 	deps             Dependencies
 	revenueReporting *RevenueReportingConfig
@@ -166,6 +322,11 @@ func NewManager(deps Dependencies) (*Manager, error) {
 	}
 	return &Manager{deps: deps}, nil
 }
+
+// authorize checks one current scoped capability for an actor and target
+// through the live Authority. Missing wiring yields ErrUnavailable, malformed
+// actor or target yields ErrDenied, and an already-cancelled context error is
+// returned before the check.
 func (m *Manager) authorize(ctx context.Context, actor, capability, target string) error {
 	if m == nil || nilManagerDependency(m.deps.Authority) {
 		return ErrUnavailable
@@ -179,6 +340,8 @@ func (m *Manager) authorize(ctx context.Context, actor, capability, target strin
 	return m.deps.Authority.CheckPartners(ctx, actor, capability, target)
 }
 
+// nilManagerDependency reports whether a dependency port is absent, covering
+// nil interfaces and nil pointers, maps, slices, funcs and channels.
 func nilManagerDependency(value any) bool {
 	if value == nil {
 		return true
@@ -190,6 +353,11 @@ func nilManagerDependency(value any) bool {
 	}
 	return false
 }
+
+// self resolves the actor's own partner record under a self capability. It
+// requires current authority, an active verified individual principal matching
+// the actor, and a program partner for that customer; a sole not-found absence
+// maps to ErrNotPartner while any partner/customer mismatch is a denial.
 func (m *Manager) self(ctx context.Context, actor, capability string) (partnerprogram.Partner, error) {
 	if err := m.authorize(ctx, actor, capability, actor); err != nil {
 		return partnerprogram.Partner{}, err
@@ -213,12 +381,23 @@ func (m *Manager) self(ctx context.Context, actor, capability string) (partnerpr
 	}
 	return p, nil
 }
+
+// referralState projects partner admission into the referral owner's
+// PartnerState, carrying partner/customer identity and referral acquisition
+// permission only.
 func referralState(p partnerprogram.Partner) referral.PartnerState {
 	return referral.PartnerState{PartnerID: p.ID, CustomerID: p.CustomerID, CanAcquireReferrals: p.CanAcquireReferrals}
 }
+
+// snapshot freezes effective terms into the referral owner's TermsSnapshot,
+// copying policy version and eligible plan slices so later changes cannot alter
+// the locked copy.
 func snapshot(t partnerprogram.EffectiveTerms) referral.TermsSnapshot {
 	return referral.TermsSnapshot{RateBasisPoints: t.RateBasisPoints, HoldDurationDays: int(t.HoldDuration / (24 * time.Hour)), Currency: t.Currency, CurrencyExponent: t.CurrencyExponent, TermsVersion: t.TermsVersion, PolicyVersionIDs: append([]string(nil), t.PolicyVersionIDs...), EligiblePlanIDs: append([]string{}, t.EligiblePlanIDs...), RecurrenceEndsAt: t.RecurrenceEndsAt}
 }
+
+// terms resolves a partner's effective terms at a point in time from its group
+// memberships via the program owner.
 func (m *Manager) terms(ctx context.Context, p partnerprogram.Partner, at time.Time) (partnerprogram.EffectiveTerms, error) {
 	groups, err := m.deps.Groups.PartnerGroupIDs(ctx, p.CustomerID)
 	if err != nil {
@@ -246,6 +425,8 @@ func (m *Manager) EnrollSelf(ctx context.Context, actor, acceptedTerms string) (
 	return m.deps.Program.Enroll(ctx, partnerprogram.EnrollRequest{CustomerID: actor, AcceptedTermsVersion: acceptedTerms})
 }
 
+// Overview is the member-facing partner snapshot: partner record, effective
+// terms, balances, optional payout destination and the as-of instant.
 type Overview struct {
 	Partner     partnerprogram.Partner        `json:"partner"`
 	Terms       partnerprogram.EffectiveTerms `json:"terms"`
@@ -254,6 +435,10 @@ type Overview struct {
 	AsOf        time.Time                     `json:"as_of"`
 }
 
+// Overview returns the verified current partner's aggregate snapshot under self
+// capability. A missing destination is absence, not an error; inconsistent
+// destination identity or version yields ErrUnavailable, and current authority
+// is re-checked before returning the assembled result.
 func (m *Manager) Overview(ctx context.Context, actor string) (Overview, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
@@ -283,6 +468,10 @@ func (m *Manager) Overview(ctx context.Context, actor string) (Overview, error) 
 	}
 	return out, nil
 }
+
+// GetOrCreateLink returns the partner's referral link under self capability,
+// issuing one from the referral owner when attribution admission is enabled;
+// disabled attribution control denies the request.
 func (m *Manager) GetOrCreateLink(ctx context.Context, actor string) (referral.Link, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
@@ -360,6 +549,10 @@ func (m *Manager) ConsumeSignup(ctx context.Context, actor, signupID string) (re
 	}
 	return m.deps.Referral.LockAttribution(ctx, referralState(owner), link, referral.Eligibility{ReferredCustomer: fact.CustomerID, SignupID: fact.ID, IsIndividual: fact.Individual, At: fact.CreatedAt, Evidence: evidence, Terms: snapshot(terms)})
 }
+
+// ListReferrals returns one bounded page (limit 1..100) of the current
+// partner's referrals. Rows whose partner or program identity do not match
+// yield ErrUnavailable, and self authority is re-checked after the read.
 func (m *Manager) ListReferrals(ctx context.Context, actor string, limit int, after string) ([]referral.Referral, error) {
 	if limit < 1 || limit > 100 {
 		return nil, ErrInvalid
@@ -382,6 +575,10 @@ func (m *Manager) ListReferrals(ctx context.Context, actor string, limit int, af
 	}
 	return rows, nil
 }
+
+// Ledger returns the current partner's full earnings journal. Entries whose
+// partner or currency do not match the configured program yield ErrUnavailable,
+// and self authority is re-checked after the read.
 func (m *Manager) Ledger(ctx context.Context, actor string) ([]partnerearnings.Entry, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
@@ -401,6 +598,11 @@ func (m *Manager) Ledger(ctx context.Context, actor string) ([]partnerearnings.E
 	}
 	return rows, nil
 }
+
+// ListClaims returns one bounded page (limit 1..100) of the current partner's
+// claims, optionally filtered by states. Rows with mismatched partner or
+// currency yield ErrUnavailable, and self authority is re-checked after the
+// read.
 func (m *Manager) ListClaims(ctx context.Context, actor string, states []string, limit int, after string) ([]partnerearnings.Claim, error) {
 	if limit < 1 || limit > 100 {
 		return nil, ErrInvalid
@@ -423,6 +625,11 @@ func (m *Manager) ListClaims(ctx context.Context, actor string, states []string,
 	}
 	return rows, nil
 }
+
+// GetClaim returns one of the current partner's claims by ID; a claim owned by
+// another partner is a plain not-found. Identifier, currency or consistency
+// mismatches yield ErrUnavailable, and self authority is re-checked before
+// returning.
 func (m *Manager) GetClaim(ctx context.Context, actor, id string) (partnerearnings.Claim, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
@@ -443,6 +650,11 @@ func (m *Manager) GetClaim(ctx context.Context, actor, id string) (partnerearnin
 	}
 	return c, nil
 }
+
+// Destination returns the current partner's payout destination under self
+// capability. Destinations with mismatched ownership, empty ID or non-positive
+// version yield ErrUnavailable rather than being exposed, and authority is re-
+// checked after the read.
 func (m *Manager) Destination(ctx context.Context, actor string) (partnerprogram.Destination, error) {
 	p, err := m.self(ctx, actor, CapabilitySelf)
 	if err != nil {
@@ -460,6 +672,10 @@ func (m *Manager) Destination(ctx context.Context, actor string) (partnerprogram
 	}
 	return d, nil
 }
+
+// UpdateDestination replaces the actor's own PayPal payout destination at the
+// supplied expected version, delegating enforcement of the version precondition
+// to the program owner. It performs only the initial self authorization check.
 func (m *Manager) UpdateDestination(ctx context.Context, actor, email string, expected int64) (partnerprogram.Destination, error) {
 	if _, err := m.self(ctx, actor, CapabilitySelf); err != nil {
 		return partnerprogram.Destination{}, err
@@ -479,6 +695,10 @@ func (m *Manager) CancelClaim(ctx context.Context, actor, id, reason string) (pa
 	}
 	return m.deps.Earnings.DecideClaim(ctx, partnerearnings.ClaimDecision{ClaimID: id, NewState: partnerearnings.ClaimCancelled, Reason: reason, ActorID: actor, ExpectedRevision: claim.Revision})
 }
+
+// AdminQueue lists claims across all partners under processing capability with
+// an empty target, checked before and after the read. Limit must be 1..100;
+// rows with a currency not matching the program yield ErrUnavailable.
 func (m *Manager) AdminQueue(ctx context.Context, actor string, states []string, limit int, after string) ([]partnerearnings.Claim, error) {
 	if limit < 1 || limit > 100 {
 		return nil, ErrInvalid
@@ -500,6 +720,11 @@ func (m *Manager) AdminQueue(ctx context.Context, actor string, states []string,
 	}
 	return rows, nil
 }
+
+// AdminDecideClaim forwards a claim decision under current processing
+// capability for the exact claim, requiring a positive expected revision.
+// Moving a claim into processing additionally requires the ManualRecording
+// admission control; state enforcement stays with the earnings owner.
 func (m *Manager) AdminDecideClaim(ctx context.Context, req partnerearnings.ClaimDecision) (partnerearnings.Claim, error) {
 	if err := m.authorize(ctx, req.ActorID, CapabilityProcessing, req.ClaimID); err != nil {
 		return partnerearnings.Claim{}, err
@@ -532,6 +757,10 @@ func (m *Manager) AdminRecordPayment(ctx context.Context, req partnerearnings.Re
 	}
 	return m.deps.Earnings.RecordPayment(ctx, req)
 }
+
+// AdminAmendPayment forwards a payment amendment under amend-payment capability
+// for the exact claim, requiring a positive expected revision. Amendment
+// semantics and consistency enforcement stay with the earnings owner.
 func (m *Manager) AdminAmendPayment(ctx context.Context, req partnerearnings.AmendPaymentRequest) (partnerearnings.Claim, error) {
 	if err := m.authorize(ctx, req.ActorID, CapabilityAmendPayment, req.ClaimID); err != nil {
 		return partnerearnings.Claim{}, err
@@ -541,12 +770,18 @@ func (m *Manager) AdminAmendPayment(ctx context.Context, req partnerearnings.Ame
 	}
 	return m.deps.Earnings.AmendPayment(ctx, req)
 }
+
+// AdminPublishPolicy forwards a policy draft to the program owner under policy
+// capability targeted at the draft's partner scope.
 func (m *Manager) AdminPublishPolicy(ctx context.Context, req partnerprogram.PublishPolicyRequest) (partnerprogram.PolicyVersion, error) {
 	if err := m.authorize(ctx, req.ActorID, CapabilityPolicy, req.Draft.PartnerCustomer); err != nil {
 		return partnerprogram.PolicyVersion{}, err
 	}
 	return m.deps.Program.PublishPolicy(ctx, req)
 }
+
+// AdminPolicyVersions lists policy versions under policy capability with an
+// empty target, re-checking authority after the read.
 func (m *Manager) AdminPolicyVersions(ctx context.Context, actor string) ([]partnerprogram.PolicyVersion, error) {
 	if err := m.authorize(ctx, actor, CapabilityPolicy, ""); err != nil {
 		return nil, err
@@ -560,6 +795,9 @@ func (m *Manager) AdminPolicyVersions(ctx context.Context, actor string) ([]part
 	}
 	return rows, nil
 }
+
+// AdminChangeStatus forwards a partner status change to the program owner under
+// policy capability for the selected partner.
 func (m *Manager) AdminChangeStatus(ctx context.Context, req partnerprogram.StatusChangeRequest) (partnerprogram.Partner, error) {
 	if err := m.authorize(ctx, req.ActorID, CapabilityPolicy, req.PartnerID); err != nil {
 		return partnerprogram.Partner{}, err
@@ -683,6 +921,8 @@ func (m *Manager) MaturePartner(ctx context.Context, actor, partnerID string) ([
 	return entries, err
 }
 
+// singleManagerAbsence walks up to 32 wrapped errors looking for target,
+// distinguishing a sole sentinel absence from one joined with other failures.
 func singleManagerAbsence(err, target error) bool {
 	for i := 0; err != nil && i < 32; i++ {
 		if err == target {

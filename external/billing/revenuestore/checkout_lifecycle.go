@@ -49,15 +49,26 @@ type persistedCheckoutLifecycle struct {
 	AnchoredAt                                                            time.Time
 }
 
+// persistLifecycle converts an anchor into the private persistence codec
+// carrying all fields, including ones omitted from public JSON.
 func persistLifecycle(a billing.CheckoutLifecycleAnchor) persistedCheckoutLifecycle {
 	return persistedCheckoutLifecycle{a.IntentID, a.IntentFingerprint, a.PrincipalID, a.PlanID, a.CostID, a.Fingerprint, a.Evidence, a.AnchoredAt}
 }
+
+// anchor converts the persisted record back into the public lifecycle anchor.
 func (p persistedCheckoutLifecycle) anchor() billing.CheckoutLifecycleAnchor {
 	return billing.CheckoutLifecycleAnchor{IntentID: p.IntentID, IntentFingerprint: p.IntentFingerprint, PrincipalID: p.PrincipalID, PlanID: p.PlanID, CostID: p.CostID, Fingerprint: p.Fingerprint, Evidence: p.Evidence, AnchoredAt: p.AnchoredAt}
 }
+
+// anchorScope extracts the anchor's owning revenue scope from its embedded
+// evidence.
 func anchorScope(a billing.CheckoutLifecycleAnchor) billing.RevenueScope {
 	return billing.RevenueScope{Provider: a.Evidence.Scope.Provider, AccountID: a.Evidence.Scope.AccountID, LiveMode: a.Evidence.Scope.LiveMode}
 }
+
+// GetCheckoutLifecycleReceipt reads the per-intent anchor receipt, rejecting
+// records whose stored intent ID disagrees, that fail Validate, or whose scope
+// is outside this transaction's binding.
 func (b *checkoutBound) GetCheckoutLifecycleReceipt(ctx context.Context, intent string) (billing.CheckoutLifecycleAnchor, error) {
 	p, _, err := get[persistedCheckoutLifecycle](ctx, b.tx, kindCheckoutLifecycleReceipt, intent, checkoutPartition)
 	if err != nil {
@@ -72,6 +83,10 @@ func (b *checkoutBound) GetCheckoutLifecycleReceipt(ctx context.Context, intent 
 	}
 	return a, nil
 }
+
+// GetCheckoutLifecycleAnchor reads the subscription-keyed first anchor after
+// checking the transaction scope, rejecting records that disagree with the
+// requested scope or subscription or fail Validate.
 func (b *checkoutBound) GetCheckoutLifecycleAnchor(ctx context.Context, scope billing.RevenueScope, sub string) (billing.CheckoutLifecycleAnchor, error) {
 	if err := b.checkScope(scope); err != nil {
 		return billing.CheckoutLifecycleAnchor{}, err
@@ -87,6 +102,11 @@ func (b *checkoutBound) GetCheckoutLifecycleAnchor(ctx context.Context, scope bi
 	return a, nil
 }
 
+// InsertCheckoutLifecycleAnchor writes the first anchor plus its per-intent
+// receipt in one transaction: it retains the subscription source row, requires
+// agreement with any existing paid owner or earlier anchor (exact fingerprint,
+// time, principal and customer), touches the source epoch, and conflicts rather
+// than replacing prior anchors.
 func (b *checkoutBound) InsertCheckoutLifecycleAnchor(ctx context.Context, a billing.CheckoutLifecycleAnchor) error {
 	if a.Validate() != nil {
 		return billing.ErrRevenueInvalid

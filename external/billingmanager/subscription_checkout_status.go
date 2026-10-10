@@ -12,10 +12,21 @@ import (
 // configured revenue feed. Legacy payment-only status adapters need not add it.
 // No second status owner or payment-fact fallback is accepted.
 type CheckoutSubscriptionStatusService interface {
+	// PrepareSubscriptionStatusForCheckout freezes native pre-payment ownership for
+	// the subscription under the given RevenueScope via the optional
+	// CheckoutSubscriptionStatusService capability of the configured revenue feed.
+	// Returns the preparation or an error.
 	PrepareSubscriptionStatusForCheckout(context.Context, string, billing.RevenueScope, string) (billing.SubscriptionStatusPreparation, error)
+	// GetSubscriptionStatusForCheckout reads fresh subscription status for the
+	// subscription under the given RevenueScope within maxAge via the
+	// CheckoutSubscriptionStatusService capability. Returns the status or an error;
+	// missing or stale status yields unknown, not invented results.
 	GetSubscriptionStatusForCheckout(context.Context, billing.RevenueScope, string, time.Duration) (billing.SubscriptionStatus, error)
 }
 
+// checkoutStatusService resolves the shared status owner for an actor and
+// validates the revenue scope and subscription identifier shape, returning
+// ErrRevenueInvalid for malformed inputs.
 func (s *Service) checkoutStatusService(ctx context.Context, actor string, scope billing.RevenueScope, subscription string) (SubscriptionStatusService, error) {
 	owner, err := s.statusService(ctx, actor)
 	if err != nil {

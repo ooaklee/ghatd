@@ -37,15 +37,24 @@ type RoutingConfig struct {
 	LocalCapture      *emailprovider.LoggingEmailProvider
 }
 
+// routingTurn keys rotation counters by mail purpose and whether a campaign-
+// capable provider is required.
 type routingTurn struct {
 	purpose  emailprovider.MailType
 	campaign bool
 }
 
+// registeredProvider pairs a registration identity with copies of the
+// provider's supported mail types and its preference ranking, taken at router
+// construction.
 type registeredProvider struct {
 	ProviderRegistration
 	supported, preferences []emailprovider.MailType
 }
+
+// providerRouter holds the validated provider set, per-purpose explicit routes,
+// a default provider ID and optional local capture. The mutex guards bounded
+// rotation turn counters keyed by routingTurn.
 type providerRouter struct {
 	providers []registeredProvider
 	routes    map[emailprovider.MailType]string
@@ -57,6 +66,8 @@ type providerRouter struct {
 
 var providerIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
+// nilInterface reports whether an interface value is nil or wraps a nil
+// pointer, map, slice, interface or func, catching typed-nil providers.
 func nilInterface(v any) bool {
 	if v == nil {
 		return true
@@ -69,6 +80,8 @@ func nilInterface(v any) bool {
 	return false
 }
 
+// invalidProvider reports whether a provider chain terminates in nil or cycles
+// through repeated PreferredProvider wrappers.
 func invalidProvider(p emailprovider.EmailProvider) bool {
 	seen := map[*emailprovider.PreferredProvider]bool{}
 	for !nilInterface(p) {
@@ -84,6 +97,8 @@ func invalidProvider(p emailprovider.EmailProvider) bool {
 	}
 	return true
 }
+
+// contains reports whether the mail type appears in the slice.
 func contains(types []emailprovider.MailType, t emailprovider.MailType) bool {
 	for _, x := range types {
 		if x == t {
@@ -92,6 +107,8 @@ func contains(types []emailprovider.MailType, t emailprovider.MailType) bool {
 	}
 	return false
 }
+
+// validTypes reports whether every mail type is valid and free of duplicates.
 func validTypes(types []emailprovider.MailType) bool {
 	seen := map[emailprovider.MailType]bool{}
 	for _, t := range types {
@@ -102,6 +119,13 @@ func validTypes(types []emailprovider.MailType) bool {
 	}
 	return true
 }
+
+// newProviderRouter validates routing configuration and returns
+// ErrRoutingInvalid for missing providers, malformed or duplicate IDs,
+// nil/cyclic providers, empty or duplicate mail type lists, preferences outside
+// supported types, unknown or unsupported route targets, and default providers
+// that do not support transactional mail. Supported and preference slices are
+// copied at construction.
 func newProviderRouter(cfg *RoutingConfig) (*providerRouter, error) {
 	if cfg == nil || len(cfg.Providers) == 0 {
 		return nil, ErrRoutingInvalid
@@ -148,6 +172,9 @@ func newProviderRouter(cfg *RoutingConfig) (*providerRouter, error) {
 	}
 	return r, nil
 }
+
+// selectProvider chooses a provider for the purpose, consuming a rotation turn
+// in the process.
 func (r *providerRouter) selectProvider(purpose emailprovider.MailType, campaign bool) (registeredProvider, error) {
 	return r.providerFor(purpose, campaign, true)
 }
@@ -213,6 +240,11 @@ type SendReceipt struct {
 	MessageID  string                  `json:"messageId,omitempty"`
 }
 
+// sendResult routes and submits one email, copying it before mutation. It
+// requires a valid purpose when a router exists, skips (state Skipped) non-
+// local providers when sending is disabled, distinguishes Failed from Uncertain
+// provider outcomes, marks local captures as Captured, and defers an audit log
+// entry for every attempt.
 func (m *EmailManager) sendResult(ctx context.Context, email *emailprovider.Email, info *EmailInfo) (receipt *SendReceipt, err error) {
 	if ctx == nil || ctx.Err() != nil || email == nil {
 		return &SendReceipt{State: emailprovider.Failed}, ErrEmailMailerSendFailed
@@ -282,6 +314,8 @@ func (m *EmailManager) sendResult(ctx context.Context, email *emailprovider.Emai
 	return receipt, nil
 }
 
+// auditReceipt enriches a copy of the send info with receipt outcome and logs
+// it when audit logging is enabled and a non-nil audit service is wired.
 func (m *EmailManager) auditReceipt(ctx context.Context, info *EmailInfo, receipt *SendReceipt) {
 	if info != nil && receipt != nil && m.config.EnableAuditLogging && !nilInterface(m.auditService) {
 		infoCopy := *info

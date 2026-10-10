@@ -28,6 +28,11 @@ const DirectMembershipCapacity = 10000
 // It supplies current reference rows, not business eligibility or permissions.
 // Empty successful results are nonnil; any late read failure discards all rows.
 type DirectMembershipRepository interface {
+	// GetGroupsByReferencedUserIDBounded returns current group rows referencing the
+	// userID, probing at most limit+1 entries so the service can detect more
+	// results, not a truncated page. The Repository implementation validates the
+	// limit against DirectMembershipCapacity and returns nonnil empty slices on
+	// success.
 	GetGroupsByReferencedUserIDBounded(context.Context, string, int) ([]UniversalGroup, error)
 }
 
@@ -105,10 +110,14 @@ func (s *Service) GetActiveDirectGroupIDs(ctx context.Context, userID string) ([
 	return ids, nil
 }
 
+// directMembershipID reports whether a membership identifier is non-empty, at
+// most 256 bytes, valid UTF-8 and free of whitespace or control characters.
 func directMembershipID(value string) bool {
 	return value != "" && len(value) <= 256 && utf8.ValidString(value) && strings.IndexFunc(value, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
 }
 
+// directMembershipNil reports whether an interface value is nil or wraps a nil
+// channel, func, interface, map, pointer or slice.
 func directMembershipNil(value any) bool {
 	if value == nil {
 		return true

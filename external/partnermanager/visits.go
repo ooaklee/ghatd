@@ -32,6 +32,13 @@ type PreparedVisit struct {
 	Measurement       string    `json:"measurement"`
 }
 
+// PrepareVisit prepares measurement and attribution for a consented visit on a
+// live acquiring link. Non-consent returns a non-error result; disabled
+// attribution or ineligible/retired links deny. Known bots record a bot
+// observation only; otherwise the prior visit cookie is verified or reissued,
+// the visit is observed, and evidence tokens (measured or plain) with absolute
+// expiries are returned. Measurement failures degrade to "unavailable" while
+// cancellation aborts.
 func (m *Manager) PrepareVisit(ctx context.Context, req PrepareVisitRequest) (PreparedVisit, error) {
 	if ctx == nil {
 		return PreparedVisit{}, ErrInvalid
@@ -122,6 +129,8 @@ func (m *Manager) PrepareVisit(ctx context.Context, req PrepareVisitRequest) (Pr
 	return out, nil
 }
 
+// cancellationError returns the context or wrapped cancellation/deadline error
+// when the failure is cancellation-related, otherwise nil.
 func cancellationError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()

@@ -25,12 +25,18 @@ type TokenCreationPolicy interface {
 // tokenInventory is the transitional legacy exact-count capability. Policy
 // admission requires fencedTokenInventory instead; neither may use lists.
 type tokenInventory interface {
+	// CountTokenInventory returns the exact token inventory for the identified
+	// owner; this transitional legacy capability must not use lists and policy
+	// admission requires the fenced variant.
 	CountTokenInventory(context.Context, string) (apitoken.Inventory, error)
 }
 
 // fencedTokenInventory serializes the counted inventory independently of the
 // policy's system. A custom adapter must preserve the supplied transaction.
 type fencedTokenInventory interface {
+	// CountTokenInventoryFenced returns the counted token inventory serialized
+	// independently of the policy's system; custom adapters must preserve the
+	// supplied transaction.
 	CountTokenInventoryFenced(context.Context, string) (apitoken.Inventory, error)
 }
 

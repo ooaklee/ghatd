@@ -11,6 +11,8 @@ import (
 // CheckoutSessionTx optionally resolves the existing reverse-session owner.
 // This does not extend CheckoutTx or create a separate ownership catalogue.
 type CheckoutSessionTx interface {
+	// FindCheckoutIntentIDBySession resolves the existing checkout intent
+	// identifier associated with the supplied session within the revenue scope.
 	FindCheckoutIntentIDBySession(context.Context, RevenueScope, string) (string, error)
 }
 
