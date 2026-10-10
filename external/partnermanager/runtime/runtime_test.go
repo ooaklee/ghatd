@@ -47,6 +47,20 @@ func (*sharedPartnersAuthorityFixture) CheckPartners(_ context.Context, actor, c
 
 type sharedPartnersGroupsFixture struct{}
 
+// sharedAcquisitionFixture changes only external admission; native financial
+// owners and their receipt transactions remain real in the composition tests.
+type sharedAcquisitionFixture struct {
+	// eligible is the currently assessed paid-plan decision.
+	eligible bool
+	// failure models temporarily unavailable provider evidence.
+	failure error
+}
+
+// CanAcquirePartnerReferrals supplies the configured commercial observation.
+func (p *sharedAcquisitionFixture) CanAcquirePartnerReferrals(context.Context, string) (bool, error) {
+	return p.eligible, p.failure
+}
+
 func (*sharedPartnersGroupsFixture) PartnerGroupIDs(context.Context, string) ([]string, error) {
 	return []string{}, nil
 }
@@ -79,6 +93,8 @@ func TestSharedPartnersCompositionRejectsInvalidAdmissionBeforeStorage(t *testin
 		{name: "typed_nil_groups", state: "nil-groups", want: partnermanager.ErrUnavailable},
 		{name: "nil_clock_function", state: "nil-clock", want: partnermanager.ErrUnavailable},
 		{name: "missing_id_generator", state: "nil-ids", want: partnermanager.ErrUnavailable},
+		{name: "missing_required_acquisition", state: "missing-acquisition", want: partnermanager.ErrUnavailable},
+		{name: "typed_nil_acquisition", state: "nil-acquisition", want: partnermanager.ErrUnavailable},
 		{name: "no_generated_payload_key", state: "no-key", want: partnermanager.ErrInvalid},
 		{name: "zero_payload_key", state: "zero-key", want: partnermanager.ErrInvalid},
 		{name: "reused_agreement_key", state: "reused-agreement", want: partnermanager.ErrInvalid},
@@ -106,6 +122,11 @@ func TestSharedPartnersCompositionRejectsInvalidAdmissionBeforeStorage(t *testin
 			// rejected cases. A missed precondition would reach an owning error.
 			db := new(mongo.Database)
 			switch tc.state {
+			case "missing-acquisition":
+				cfg.RequireAcquisitionEligibility = true
+			case "nil-acquisition":
+				var missing *sharedAcquisitionFixture
+				deps.AcquisitionEligibility = missing
 			case "nil-context":
 				ctx = nil
 			case "cancelled":
@@ -177,14 +198,16 @@ func TestSharedPartnersCompositionRejectsInvalidAdmissionBeforeStorage(t *testin
 
 func TestSharedPartnersNativeCompositionAndRestart(t *testing.T) {
 	type testCase struct {
-		name             string
-		reopen           bool
-		wrongKey         bool
-		invalidQueue     bool
-		pauseReferral    bool
-		reporting        bool
-		invalidMinimum   bool
-		minimumAdmission bool
+		name              string
+		reopen            bool
+		wrongKey          bool
+		invalidQueue      bool
+		pauseReferral     bool
+		reporting         bool
+		invalidMinimum    bool
+		minimumAdmission  bool
+		paidGate          bool
+		eligibilityOutage bool
 	}
 	for _, tc := range []testCase{
 		{name: "prepared_native_owners"},
@@ -195,6 +218,8 @@ func TestSharedPartnersNativeCompositionAndRestart(t *testing.T) {
 		{name: "reporting_uses_same_real_revenue_owner", reporting: true},
 		{name: "negative_claim_minimum_rejected_before_preparation", invalidMinimum: true},
 		{name: "configured_minimum_reaches_actual_owning_manager", minimumAdmission: true},
+		{name: "paid_lapse_blocks_new_rotation_but_retains_receipt", paidGate: true},
+		{name: "paid_outage_blocks_new_rotation_but_retains_receipt", paidGate: true, eligibilityOutage: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			uri := os.Getenv("GHATD_TEST_MONGO_URI")
@@ -213,6 +238,12 @@ func TestSharedPartnersNativeCompositionAndRestart(t *testing.T) {
 				require.NoError(t, client.Disconnect(cleanup))
 			})
 			cfg, deps := sharedPartnersCompositionFixture()
+			paid := &sharedAcquisitionFixture{eligible: true}
+			if tc.paidGate {
+				cfg.RequireAcquisitionEligibility = true
+				cfg.Program.DefaultHoldDays = 30
+				deps.AcquisitionEligibility = paid
+			}
 			if tc.invalidQueue {
 				cfg.Queue.LeaseDuration = 0
 			}
@@ -266,6 +297,38 @@ func TestSharedPartnersNativeCompositionAndRestart(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+			if tc.paidGate {
+				require.Equal(t, 30, runtime.Manager.MaximumHoldDays())
+				req := referral.RotateLinkRequest{ExpectedLinkCode: link.Code, IdempotencyKey: "original-key", Reason: "reviewed rotation"}
+				original, err := runtime.Manager.RotateLink(ctx, "fixture-customer", req)
+				require.NoError(t, err)
+				paid.eligible = false
+				want := partnermanager.ErrIneligible
+				if tc.eligibilityOutage {
+					paid.failure = partnermanager.ErrUnavailable
+					want = partnermanager.ErrUnavailable
+				}
+				recovered, err := runtime.Manager.RotateLink(ctx, "fixture-customer", req)
+				require.NoError(t, err)
+				require.Equal(t, original, recovered)
+				req.ExpectedLinkCode, req.IdempotencyKey = original.Code, "new-key"
+				_, err = runtime.Manager.RotateLink(ctx, "fixture-customer", req)
+				require.ErrorIs(t, err, want)
+				_, err = runtime.Manager.GetOrCreateLink(ctx, "fixture-customer")
+				require.ErrorIs(t, err, want)
+				// Fixture policy is explicitly published through the real owner;
+				// runtime construction intentionally creates no commercial policy.
+				_, err = runtime.Program.PublishPolicy(ctx, partnerprogram.PublishPolicyRequest{ActorID: "fixture-policy-operator", Draft: partnerprogram.PolicyDraft{Scope: "global", RateBasisPoints: 2000, HoldDays: 30, Currency: "EUR", EligiblePlanIDs: []string{"fixture-plan"}, EffectiveFrom: deps.Clock.Now().Add(-time.Hour), TermsVersion: "fixture-terms"}})
+				require.NoError(t, err)
+				_, err = runtime.Manager.Overview(ctx, "fixture-customer")
+				require.NoError(t, err)
+				workerFacade, err := runtime.ManagerWithAuthority(deps.Authority)
+				require.NoError(t, err)
+				eligible, err := workerFacade.AcquisitionEligible(ctx, "fixture-customer")
+				require.False(t, eligible)
+				require.ErrorIs(t, err, paid.failure)
+				return
+			}
 			if tc.reopen {
 				if tc.wrongKey {
 					cfg.PayloadKey = bytes.Repeat([]byte{0x9a}, 32)

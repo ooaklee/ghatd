@@ -560,7 +560,12 @@ func (s *StripeProvider) LookupRevenueInvoice(ctx context.Context, req RevenueIn
 		if lineSub != "" && (lineSub != subscription || !stripeRevenueObjectID.MatchString(price)) {
 			return nil, ErrRevenueUnassessable
 		}
-		result.Lines = append(result.Lines, RevenueLineEvidence{ID: rawStripeID(line["id"]), SubscriptionID: lineSub, PriceID: price, NetPaidMinor: value})
+		evidence := RevenueLineEvidence{ID: rawStripeID(line["id"]), SubscriptionID: lineSub, PriceID: price, NetPaidMinor: value}
+		var period struct{ Start, End int64 }
+		if json.Unmarshal(line["period"], &period) == nil && period.Start > 0 && period.End > period.Start {
+			evidence.PeriodStart, evidence.PeriodEnd = time.Unix(period.Start, 0).UTC(), time.Unix(period.End, 0).UTC()
+		}
+		result.Lines = append(result.Lines, evidence)
 	}
 	if req.IncludeRefunds {
 		if err := s.populateStripeRevenueRefunds(ctx, req, intent, result); err != nil {

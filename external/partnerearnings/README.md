@@ -221,7 +221,10 @@ debt is `max(0, -MatchedMinor)`. A hold does not reverse revenue. Won releases i
 remaining hold, lost reverses only commission not already refunded/lost, and
 late holds cannot revive a terminal dispute. Refunds before maturity reduce the
 same original obligation exactly once when it later matures. Holds are bounded
-to 28 elapsed days; zero hold requires explicit approval in program composition.
+to the configured program maximum (30 elapsed days by default, at most 365);
+zero hold requires explicit approval in program composition. Retained terms use
+the stable 365-day structural limit so lowering a new-policy maximum does not
+invalidate existing earnings or maturity work.
 
 `RecordReturnedTransfer` preserves original paid evidence and appends a reasoned
 adjustment, capped by original settlement minus prior returns. It credits the

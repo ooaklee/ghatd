@@ -38,6 +38,13 @@ apply the owning worker validation and `billinglifecycle.RuntimeConfig.Validate`
 before installation and enforce the relevant current grants even for empty work.
 Configuration pauses do not discard financial obligations or recovery evidence.
 
+Set `RequireAcquisitionEligibility` and supply `Dependencies.AcquisitionEligibility`
+when the host requires a current paid-partner rule. Missing or typed-nil required
+wiring fails construction. The port is retained by worker facades, so new signup
+attribution checks the same referring-partner policy as interactive enrollment.
+It does not replace worker grants or gate existing financial obligations. See
+[paid-partner acquisition](../README.md#optional-paid-partner-acquisition).
+
 ## Dependency and authority ownership
 
 `Dependencies` supplies identity, authority, groups, clock and identifier

@@ -19,6 +19,16 @@ type ProgramView struct {
 	CurrencyExponent  int    `json:"currency_exponent"`
 	MinimumMinor      int64  `json:"minimum_minor"`
 	ClaimsEnabled     bool   `json:"claims_enabled"`
+	// MaxHoldDays is filled from Manager's owning programme configuration.
+	MaxHoldDays int `json:"max_hold_days"`
+}
+
+// programDisclosure obtains policy bounds from the same owner that validates
+// publication, ignoring an independently supplied transport limit.
+func (m *Service) programDisclosure() ProgramView {
+	view := m.program
+	view.MaxHoldDays = m.manager.MaximumHoldDays()
+	return view
 }
 
 // Enumerate transport fields rather than serializing private owning records.

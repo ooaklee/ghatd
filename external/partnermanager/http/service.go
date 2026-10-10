@@ -103,7 +103,7 @@ func (s *Service) Handle(ctx context.Context, principal Principal, request Reque
 		return Response{}, fail("PARTNERS_DEPENDENCY_UNAVAILABLE", 503)
 	}
 	switch request.Operation {
-	case "partners.program.read", "partners.claim.read", "partners.overview.read", "partners.share-link.read", "partners.referrals.read",
+	case "partners.program.read", "partners.eligibility.read", "partners.claim.read", "partners.overview.read", "partners.share-link.read", "partners.referrals.read",
 		"partners.ledger.read", "partners.claims.read", "partners.destination.read":
 		return s.Read(ctx, principal, request)
 	case "partners.claims.cancel", "partners.enroll", "partners.share-link.rotate", "partners.claims.create", "partners.destination.update":

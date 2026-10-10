@@ -152,6 +152,9 @@ func (m *Manager) previewAttribution(ctx context.Context, req AttributionChange)
 	if sources.Owner.ID != p.CustomerID || !sources.Owner.Active || !sources.Owner.EmailVerified || !sources.Owner.Individual || !sources.Owner.RegionEligible {
 		return AttributionPreview{}, sources, ErrDenied
 	}
+	if err := m.requireAcquisition(ctx, p.CustomerID); err != nil {
+		return AttributionPreview{}, sources, err
+	}
 	state, err := m.deps.Referral.GetAttributionSnapshot(ctx, req.ReferredCustomer)
 	if err != nil {
 		return AttributionPreview{}, sources, err

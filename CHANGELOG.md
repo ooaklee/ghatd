@@ -82,6 +82,14 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Authenticated [paid-subscription evidence](external/paymentprovider/README.md#current-paid-subscription-evidence)
+  and optional [paid-partner acquisition](external/partnermanager/README.md#optional-paid-partner-acquisition).
+  New enrollment and referrals can require a current paid period while existing
+  balances, claims and original receipts remain recoverable. Hosts opt in explicitly.
+- A member eligibility read and configured policy hold maximum in the optional
+  [Partners HTTP transport](external/partnermanager/http/README.md#protocol-and-routes).
+  Strict response decoders must accept the added `max_hold_days` program field.
+
 - Explicit, opt-in [user capability defaults](external/accesspolicy/README.md#explicit-user-defaults)
   for authoritative grant absence. Stored grants fully replace defaults; revocation,
   expiry, missing capabilities and storage failures continue to deny admission.
