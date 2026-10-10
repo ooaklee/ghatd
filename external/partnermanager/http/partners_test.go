@@ -38,6 +38,9 @@ func TestPartnersErrorMappingKeepsOutagesAndUncertainOutcomesHonest(t *testing.T
 		status int
 		code   string
 	}{
+		{"assessed_ineligible", partnermanager.ErrIneligible, 403, "PARTNERS_ACQUISITION_INELIGIBLE"},
+		{"outage_overrides_ineligible", errors.Join(partnermanager.ErrIneligible, partnermanager.ErrUnavailable), 503, "PARTNERS_DEPENDENCY_UNAVAILABLE"},
+		{"unknown_overrides_ineligible", errors.Join(partnermanager.ErrIneligible, errors.New("private-secret-canary")), 500, "PARTNERS_INTERNAL_ERROR"},
 		{"unresolved_source_is_retryable", partnerearnings.ErrUnresolved, 503, "PARTNERS_DEPENDENCY_UNAVAILABLE"},
 		{"currency_mismatch_is_conflict", partnerearnings.ErrCurrencyMismatch, 409, "PARTNERS_CONFLICT"},
 		{"program_uncertain_is_reconciled", partnerprogram.ErrUncertain, 503, "PARTNERS_OUTCOME_UNCERTAIN"},

@@ -46,6 +46,8 @@ func partnerError(err error) error {
 		return fail("PARTNERS_DEPENDENCY_UNAVAILABLE", 503)
 	case partnerUnknownCause(err, 0):
 		return fail("PARTNERS_INTERNAL_ERROR", 500)
+	case errors.Is(err, partnermanager.ErrIneligible):
+		return fail("PARTNERS_ACQUISITION_INELIGIBLE", 403)
 	case errors.Is(err, partnermanager.ErrDenied), errors.Is(err, partnerprogram.ErrDenied), errors.Is(err, partnerearnings.ErrDenied), errors.Is(err, referral.ErrDenied):
 		return fail("PARTNERS_FORBIDDEN", 403)
 	case errors.Is(err, partnermanager.ErrNotPartner), errors.Is(err, partnermanager.ErrNotFound), errors.Is(err, partnerprogram.ErrNotFound), errors.Is(err, partnerearnings.ErrNotFound), errors.Is(err, referral.ErrNotFound):
@@ -227,6 +229,12 @@ func (m *Service) Read(ctx context.Context, p Principal, req Request) (Response,
 // verified actor. Unknown operations are rejected as invalid requests.
 func (m *Service) partnersReadBody(ctx context.Context, svc *partnermanager.Manager, p Principal, req Request) (Response, error) {
 	switch req.Operation {
+	case "partners.eligibility.read":
+		eligible, err := svc.AcquisitionEligible(ctx, p.ActorID)
+		if err != nil {
+			return Response{}, err
+		}
+		return reply(200, map[string]bool{"eligible": eligible}, "")
 	case "partners.program.read":
 		if m.sessions == nil {
 			return Response{}, partnermanager.ErrUnavailable
@@ -234,7 +242,7 @@ func (m *Service) partnersReadBody(ctx context.Context, svc *partnermanager.Mana
 		if err := m.sessions.CheckPartnerSession(ctx, p.ActorID, p.Credential); err != nil {
 			return Response{}, err
 		}
-		return reply(200, m.program, "")
+		return reply(200, m.programDisclosure(), "")
 	case "partners.overview.read":
 		ov, err := svc.Overview(ctx, p.ActorID)
 		if err != nil {
@@ -244,7 +252,7 @@ func (m *Service) partnersReadBody(ctx context.Context, svc *partnermanager.Mana
 		if ov.Destination != nil {
 			destination = destinationView(*ov.Destination)
 		}
-		return reply(200, map[string]any{"partner": partnerView(ov.Partner), "terms": termsView(ov.Terms), "balances": ov.Balances, "destination": destination, "as_of": ov.AsOf, "program": m.program}, "")
+		return reply(200, map[string]any{"partner": partnerView(ov.Partner), "terms": termsView(ov.Terms), "balances": ov.Balances, "destination": destination, "as_of": ov.AsOf, "program": m.programDisclosure()}, "")
 	case "partners.share-link.read":
 		l, err := svc.GetOrCreateLink(ctx, p.ActorID)
 		if err != nil {
@@ -617,7 +625,7 @@ func partnerUnknownCause(err error, depth int) bool {
 	if host, ok := err.(*Error); ok {
 		return !safePartnerHostError(host)
 	}
-	for _, known := range []error{partnermanager.ErrInvalid, partnermanager.ErrDenied, partnermanager.ErrNotFound, partnermanager.ErrNotPartner, partnermanager.ErrUnavailable, partnerprogram.ErrInvalid, partnerprogram.ErrDenied, partnerprogram.ErrNotFound, partnerprogram.ErrAlreadyEnrolled, partnerprogram.ErrAlreadyExists, partnerprogram.ErrUnavailable, partnerprogram.ErrUncertain, partnerprogram.ErrStaleWrite, partnerprogram.ErrAmbiguousPolicy, partnerearnings.ErrInvalid, partnerearnings.ErrDenied, partnerearnings.ErrNotFound, partnerearnings.ErrAlreadyExists, partnerearnings.ErrUnavailable, partnerearnings.ErrUncertain, partnerearnings.ErrReportTooLarge, partnerearnings.ErrUnresolved, partnerearnings.ErrCurrencyMismatch, partnerearnings.ErrStaleWrite, partnerearnings.ErrInsufficient, partnerearnings.ErrConflict, partnerearnings.ErrInvalidState, referral.ErrInvalid, referral.ErrDenied, referral.ErrNotFound, referral.ErrAlreadyExists, referral.ErrUnavailable, referral.ErrUncertain, referral.ErrStaleWrite, referral.ErrCapacity, referral.ErrSelfReferral, referral.ErrAlreadyReferred, referral.ErrCodeRetired, context.Canceled, context.DeadlineExceeded} {
+	for _, known := range []error{partnermanager.ErrInvalid, partnermanager.ErrDenied, partnermanager.ErrIneligible, partnermanager.ErrNotFound, partnermanager.ErrNotPartner, partnermanager.ErrUnavailable, partnerprogram.ErrInvalid, partnerprogram.ErrDenied, partnerprogram.ErrNotFound, partnerprogram.ErrAlreadyEnrolled, partnerprogram.ErrAlreadyExists, partnerprogram.ErrUnavailable, partnerprogram.ErrUncertain, partnerprogram.ErrStaleWrite, partnerprogram.ErrAmbiguousPolicy, partnerearnings.ErrInvalid, partnerearnings.ErrDenied, partnerearnings.ErrNotFound, partnerearnings.ErrAlreadyExists, partnerearnings.ErrUnavailable, partnerearnings.ErrUncertain, partnerearnings.ErrReportTooLarge, partnerearnings.ErrUnresolved, partnerearnings.ErrCurrencyMismatch, partnerearnings.ErrStaleWrite, partnerearnings.ErrInsufficient, partnerearnings.ErrConflict, partnerearnings.ErrInvalidState, referral.ErrInvalid, referral.ErrDenied, referral.ErrNotFound, referral.ErrAlreadyExists, referral.ErrUnavailable, referral.ErrUncertain, referral.ErrStaleWrite, referral.ErrCapacity, referral.ErrSelfReferral, referral.ErrAlreadyReferred, referral.ErrCodeRetired, context.Canceled, context.DeadlineExceeded} {
 		if err == known {
 			return false
 		}

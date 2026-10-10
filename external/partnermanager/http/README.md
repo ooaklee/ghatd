@@ -84,11 +84,21 @@ it is validated but is not forwarded or used for concurrency control. Partners
 revisions remain the explicit body fields documented by their owners.
 
 Paths below are relative to `/api/v1/partners`. `GET /csrf` is the additional
-bootstrap protocol endpoint, outside these 32 operations.
+bootstrap protocol endpoint, outside these 33 operations.
+
+`GET /eligibility` returns `{ "eligible": true }` or an assessed false for the
+verified member; it does not require enrollment. Dependencies that cannot be
+assessed return 503, never a false eligibility result. This read is display
+guidance: enrollment and new acquisition recheck the current rule.
+Program disclosures include `max_hold_days`, derived from the manager's owning
+configuration for new policy drafts. Retained history may use any structurally
+supported hold even if the current draft maximum is lower. Strict clients must
+accept this added field before adopting the updated transport.
 
 | Method | Path | Fixed operation |
 | --- | --- | --- |
 | GET | `/program` | `partners.program.read` |
+| GET | `/eligibility` | `partners.eligibility.read` |
 | GET | `/overview` | `partners.overview.read` |
 | GET | `/share-link` | `partners.share-link.read` |
 | POST | `/share-link/rotate` | `partners.share-link.rotate` |
@@ -165,7 +175,7 @@ generic message. Dependency diagnostics and error strings are never serialized.
 | --- | --- |
 | `INVALID_REQUEST` | 400; oversized body 413 |
 | `AUTH_REQUIRED` | 401 |
-| `VERIFICATION_REQUIRED`, `ACCOUNT_UNAVAILABLE`, `FORBIDDEN` | 403 |
+| `VERIFICATION_REQUIRED`, `ACCOUNT_UNAVAILABLE`, `FORBIDDEN`, `ACQUISITION_INELIGIBLE` | 403 |
 | `NOT_FOUND` | 404 |
 | `METHOD_NOT_ALLOWED` | 405, with Allow |
 | `CONFLICT`, `INSUFFICIENT_FUNDS` | 409 |
@@ -183,7 +193,7 @@ optional transport.
 
 ## Verification scope
 
-The table-driven transport suite covers all 32 route bindings, reserved-looking
+The table-driven transport suite covers all 33 route bindings, reserved-looking
 selected IDs, admission, strict headers/body/query limits, response errors and
 bounded observations. Projection/access suites cover retained evidence,
 revocation and joined failures. Financial concurrency, transaction and durable

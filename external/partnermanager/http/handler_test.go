@@ -62,7 +62,7 @@ func protectTransport(t *testing.T, h *Handler, r *http.Request) {
 
 func TestRegistryDispatchesEveryOperationAndSelectedOpaqueIDs(t *testing.T) {
 	cases := Routes()
-	require.Len(t, cases, 32)
+	require.Len(t, cases, 33)
 	cases = append(cases, Route{"GET", BasePath + "/admin/claims/status", "admin.partners.status.read"}, Route{"GET", BasePath + "/admin/claims/claim-preparation", "admin.partners.claim-preparation.read"}, Route{"GET", BasePath + "/admin/claims/inspect", "admin.partners.inspect"})
 	for _, tc := range cases {
 		t.Run(tc.Method+tc.Path, func(t *testing.T) {

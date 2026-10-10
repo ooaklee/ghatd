@@ -124,6 +124,33 @@ Provider tests use controlled HTTP fixtures; they do not establish live-provider
 operation. Applications must configure webhook event coverage and current
 scoped reconciliation authority explicitly before opting in.
 
+## Current paid subscription evidence
+
+`PaidSubscriptionProvider.LookupPaidSubscription` is an optional, read-only
+admission capability. Its server-only result binds current lifecycle, customer,
+subscription, recurring price and paid service periods to an authenticated
+merchant and mode. It does not grant an entitlement. The caller must bind native
+billing ownership, approve the plan and cadence, and check its clock against
+each inclusive-start, exclusive-end paid period.
+
+Stripe requires the same explicit revenue configuration and pinned authenticated
+lookups as `RevenueProvider`. It reconciles the latest paid invoice and payment,
+matches service periods to current subscription items, checks charge refunds
+and disputes, and rechecks the subscription after those reads. Scheduled
+cancellation preserves an otherwise active paid period; trial, unpaid, paused
+collection, zero-payment, disputed and fully refunded states supply no paid lines.
+Partial refunds require verified line allocation. Missing or contradictory
+evidence returns an error; it must not become a definitive unpaid decision.
+
+The capability inherits the revenue reader's limitations: unsupported split or
+off-provider payments, unapportioned credits/refunds and incomplete evidence
+remain unassessable. A charge still marked disputed cannot prove admission,
+including after a dispute outcome until the provider evidence qualifies again.
+It performs bounded sequential provider reads, with no result cache and no
+external mutations. Hosts should apply request limits and deadlines. This is a
+read-time observation, not a cross-provider transaction or a lease on eligibility.
+Neither webhook capture nor commission ingestion needs to be enabled to use it.
+
 ## Optional checkout evidence for revenue identity
 
 `RevenueCheckoutProvider` adds authenticated merchant scope, acknowledged

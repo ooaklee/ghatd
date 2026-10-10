@@ -296,6 +296,10 @@ type Dependencies struct {
 	Evidence  *referral.EvidenceSigner
 	Clock     Clock
 	Controls  Controls
+	// AcquisitionEligibility gates new enrollment and referrals, never retained earnings.
+	AcquisitionEligibility AcquisitionEligibility
+	// RequireAcquisitionEligibility rejects omitted policy wiring at startup.
+	RequireAcquisitionEligibility bool
 	// Claims sets explicit admission for new withdrawals; receipts recover first.
 	Claims ClaimsConfig
 	// WorkReporting is optional. Missing wiring disables only the backlog read.
@@ -319,6 +323,9 @@ func NewManager(deps Dependencies) (*Manager, error) {
 	}
 	if deps.Claims.MinimumMinor < 0 {
 		return nil, ErrInvalid
+	}
+	if (deps.RequireAcquisitionEligibility || deps.AcquisitionEligibility != nil) && nilManagerDependency(deps.AcquisitionEligibility) {
+		return nil, ErrUnavailable
 	}
 	return &Manager{deps: deps}, nil
 }
@@ -422,6 +429,12 @@ func (m *Manager) EnrollSelf(ctx context.Context, actor, acceptedTerms string) (
 	if p.ID != actor || !p.Active || !p.EmailVerified || !p.Individual || !p.RegionEligible {
 		return partnerprogram.Partner{}, ErrDenied
 	}
+	if err := m.requireAcquisition(ctx, actor); err != nil {
+		return partnerprogram.Partner{}, err
+	}
+	if err := m.authorize(ctx, actor, CapabilityEnroll, actor); err != nil {
+		return partnerprogram.Partner{}, err
+	}
 	return m.deps.Program.Enroll(ctx, partnerprogram.EnrollRequest{CustomerID: actor, AcceptedTermsVersion: acceptedTerms})
 }
 
@@ -480,6 +493,12 @@ func (m *Manager) GetOrCreateLink(ctx context.Context, actor string) (referral.L
 	if !m.deps.Controls.Attribution {
 		return referral.Link{}, ErrDenied
 	}
+	if err := m.requireAcquisition(ctx, actor); err != nil {
+		return referral.Link{}, err
+	}
+	if err := m.authorize(ctx, actor, CapabilitySelf, actor); err != nil {
+		return referral.Link{}, err
+	}
 	return m.deps.Referral.IssueLink(ctx, referralState(p))
 }
 
@@ -494,11 +513,22 @@ func (m *Manager) RotateLink(ctx context.Context, actor string, req referral.Rot
 	req.ActorID = actor
 	req.Partner = referralState(p)
 	req.Partner.CanAcquireReferrals = req.Partner.CanAcquireReferrals && m.deps.Controls.Attribution
+	eligible, eligibilityErr := m.acquisitionEligible(ctx, actor)
+	// The owner recovers an existing original-key receipt before new admission.
+	req.Partner.CanAcquireReferrals = req.Partner.CanAcquireReferrals && eligible && eligibilityErr == nil
 	if err := m.authorize(ctx, actor, CapabilitySelf, actor); err != nil {
 		return referral.Link{}, err
 	}
 	l, err := m.deps.Referral.RotateLink(ctx, req)
 	if err != nil {
+		if singleManagerAbsence(err, referral.ErrDenied) {
+			if eligibilityErr != nil {
+				return referral.Link{}, eligibilityErr
+			}
+			if !eligible {
+				return referral.Link{}, ErrIneligible
+			}
+		}
 		return referral.Link{}, err
 	}
 	if err := m.authorize(ctx, actor, CapabilitySelf, actor); err != nil {
@@ -543,8 +573,14 @@ func (m *Manager) ConsumeSignup(ctx context.Context, actor, signupID string) (re
 	if err != nil {
 		return referral.Referral{}, err
 	}
+	if err := m.requireAcquisition(ctx, owner.CustomerID); err != nil {
+		return referral.Referral{}, err
+	}
 	terms, err := m.terms(ctx, owner, fact.CreatedAt)
 	if err != nil {
+		return referral.Referral{}, err
+	}
+	if err := m.authorize(ctx, actor, CapabilitySignupWorker, signupID); err != nil {
 		return referral.Referral{}, err
 	}
 	return m.deps.Referral.LockAttribution(ctx, referralState(owner), link, referral.Eligibility{ReferredCustomer: fact.CustomerID, SignupID: fact.ID, IsIndividual: fact.Individual, At: fact.CreatedAt, Evidence: evidence, Terms: snapshot(terms)})

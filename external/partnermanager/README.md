@@ -13,6 +13,38 @@ customer or claim. Transport must bind it from authenticated context, enforce
 origin/CSRF/rate policy and project only permitted response data. An ordinary
 administrator role does not grant payout processing or recording authority.
 
+## Optional paid-partner acquisition
+
+`Dependencies.AcquisitionEligibility` supplies a host's current commercial
+admission rule. Set `RequireAcquisitionEligibility` to reject startup when this
+port is absent. Without either option, existing hosts retain their configured
+program admission. Construction never infers a paid requirement or enables it.
+
+The manager checks this port for enrollment, new link issuance or rotation,
+consented visit preparation, new signup attribution and prospective operator
+attribution changes. Signup checks the **referring partner**, not the new
+customer being referred. A customer may sign up free and pay later under the
+existing frozen referral policy. `AcquisitionEligible` exposes the verified
+member's current decision without requiring enrollment. An assessed refusal is
+`ErrIneligible`; dependency failures stay unavailable and retryable.
+
+Existing balances, ledger history, claims and commission processing do not use
+this gate. A subscription lapse does not rewrite frozen referral terms. Original
+signup, rotation and attribution-correction receipts remain recoverable under
+current authority even when new acquisition is denied or unavailable. The gate
+does not grant identity, regional, operator or worker authority.
+
+`NewPaidAcquisition` is the optional adapter for hosts using native billing and
+[`PaidSubscriptionProvider`](../paymentprovider/README.md#current-paid-subscription-evidence).
+Pass the billing owner's `GetSubscriptions` port, provider, explicit clock and
+`PaidAcquisitionConfig` with one merchant/mode, eligible native plan IDs and
+allowed recurring intervals. It reads the complete bounded customer inventory,
+then binds authenticated payment to that record's customer, subscription and
+price. A positive net-paid period must contain the current clock. Local access
+flags, cached status, roles and browser plan labels cannot establish eligibility.
+An unreconciled provider price is unavailable, so delayed billing updates do not
+mislabel a paying customer as unpaid. Historical claims remain independent.
+
 ## Withdrawal admission and recovery
 
 `Dependencies.Claims.MinimumMinor` supplies an explicit host-approved minimum

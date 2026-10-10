@@ -16,6 +16,7 @@ func route(method, path, operation string) Route { return Route{method, BasePath
 func Routes() []Route {
 	return []Route{
 		route("GET", "/program", "partners.program.read"),
+		route("GET", "/eligibility", "partners.eligibility.read"),
 		route("GET", "/overview", "partners.overview.read"),
 		route("GET", "/share-link", "partners.share-link.read"),
 		route("POST", "/share-link/rotate", "partners.share-link.rotate"),

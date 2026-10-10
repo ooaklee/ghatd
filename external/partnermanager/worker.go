@@ -240,7 +240,7 @@ func workerErrorCode(err error) string {
 		return "work_receipt_pending"
 	case singleManagerAbsence(err, ErrWorkConflict), singleManagerAbsence(err, partnerearnings.ErrConflict), singleManagerAbsence(err, billing.ErrRevenueConflict), singleManagerAbsence(err, user.ErrSignupEvidenceConflict):
 		return "source_conflict"
-	case singleManagerAbsence(err, ErrDenied), singleManagerAbsence(err, referral.ErrDenied):
+	case singleManagerAbsence(err, ErrDenied), singleManagerAbsence(err, ErrIneligible), singleManagerAbsence(err, referral.ErrDenied):
 		return "admission_or_evidence_pending"
 	case singleManagerAbsence(err, billing.ErrRevenueUnassessable), singleManagerAbsence(err, partnerearnings.ErrCurrencyMismatch):
 		return "review_pending"

@@ -145,6 +145,9 @@ type RevenueLineEvidence struct {
 	PriceID                 string
 	NetPaidMinor            int64
 	CumulativeRefundedMinor int64
+	// PeriodStart and PeriodEnd are optional authenticated service-period
+	// boundaries. Zero means unavailable; financial allocation does not infer them.
+	PeriodStart, PeriodEnd time.Time
 }
 
 // GetRevenueProvider resolves a registered provider by name and returns it only

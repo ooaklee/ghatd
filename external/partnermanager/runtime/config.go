@@ -28,6 +28,9 @@ type Config struct {
 	RevenueReporting *partnermanager.RevenueReportingConfig
 	RevenueCapture   bool
 	Worker           *WorkerConfig
+	// RequireAcquisitionEligibility refuses runtime construction without the
+	// host's current commercial admission port. Existing receipts are preserved.
+	RequireAcquisitionEligibility bool
 }
 
 // WorkerConfig supplies trusted service identity, batch bounds and host cadence.

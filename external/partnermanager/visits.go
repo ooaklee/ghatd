@@ -63,6 +63,9 @@ func (m *Manager) PrepareVisit(ctx context.Context, req PrepareVisitRequest) (Pr
 	if p.ID != l.PartnerID || p.ProgramID != partnerprogram.ProgramID || l.ProgramID != referral.ProgramID || !p.CanAcquireReferrals || l.RetiredAt != nil {
 		return PreparedVisit{}, ErrDenied
 	}
+	if err := m.requireAcquisition(ctx, p.CustomerID); err != nil {
+		return PreparedVisit{}, err
+	}
 	out := PreparedVisit{}
 	if !req.KnownBot {
 		if old, err := m.deps.Evidence.VerifyCurrent(req.PriorEvidence); err == nil && old.Code == l.Code && old.LinkID == l.ID {

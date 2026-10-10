@@ -28,6 +28,8 @@ type Dependencies struct {
 	Groups    partnermanager.Groups
 	Clock     partnermanager.Clock
 	IDs       partnerprogram.IDGenerator
+	// AcquisitionEligibility verifies current commercial admission for new referrals.
+	AcquisitionEligibility partnermanager.AcquisitionEligibility
 }
 
 // Runtime retains the owning capabilities needed by transport,
@@ -53,6 +55,9 @@ type Runtime struct {
 // Native composition alone does not establish platform delivery.
 func NewRuntime(db *mongo.Database, cfg Config, deps Dependencies) (*Runtime, error) {
 	if db == nil || nilRuntimePort(deps.Identity) || nilRuntimePort(deps.Authority) || nilRuntimePort(deps.Groups) || nilRuntimePort(deps.Clock) || nilRuntimePort(deps.IDs) {
+		return nil, partnermanager.ErrUnavailable
+	}
+	if (cfg.RequireAcquisitionEligibility || deps.AcquisitionEligibility != nil) && nilRuntimePort(deps.AcquisitionEligibility) {
 		return nil, partnermanager.ErrUnavailable
 	}
 	if err := cfg.Program.Validate(); err != nil {
@@ -149,6 +154,8 @@ func NewRuntime(db *mongo.Database, cfg Config, deps Dependencies) (*Runtime, er
 		return nil, err
 	}
 	managerDeps := partnermanager.Dependencies{Program: program, Referral: referrals, Earnings: earnings, Identity: deps.Identity, Authority: deps.Authority, Groups: deps.Groups, Revenue: revenue, Evidence: signer, Clock: deps.Clock, Controls: cfg.Controls, Claims: cfg.Claims, WorkReporting: work}
+	managerDeps.AcquisitionEligibility = deps.AcquisitionEligibility
+	managerDeps.RequireAcquisitionEligibility = cfg.RequireAcquisitionEligibility
 	manager, err := partnermanager.NewManager(managerDeps)
 	if err != nil {
 		return nil, err
