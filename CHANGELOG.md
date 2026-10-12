@@ -146,6 +146,12 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- **Breaking timestamp format:** [User timestamps](external/user/v2/README.md#stored-timestamps) now include an
+  explicit UTC `Z` marker in default clock and OAuth writes. `ParseTimestampUTC`
+  preserves reads of historical zone-free UTC records and respects RFC3339
+  offsets. Readers requiring zone-free strings must adopt it for persisted user
+  timestamps; existing records need no rewrite. Compare parsed instants rather
+  than strings when historical and current formats coexist.
 - [Retained revenue recovery](external/paymentprovider/README.md#versioned-source-fingerprints-and-retained-snapshot-recovery)
   validates economic history while tolerating receipt-URL changes. Original checkout
   status and lifecycle receipts recover without resubmitting provider work.

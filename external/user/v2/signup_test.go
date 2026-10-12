@@ -76,7 +76,7 @@ func TestSignupCapture(t *testing.T) {
 		want                        error
 	}{
 		{"individual signed", "individual", at.Format(time.RFC3339Nano), "signed", true, nil},
-		{"owning legacy UTC format", "individual", at.Format(DefaultTimeFormatRFC3339NanoUTC), "signed", true, nil},
+		{"owning legacy UTC format", "individual", at.Format(legacyTimeFormatRFC3339NanoUTC), "signed", true, nil},
 		{"organization is ineligible", "organization", at.Format(time.RFC3339Nano), "signed", false, nil},
 		{"cookie absent", "individual", at.Format(time.RFC3339Nano), "", true, nil},
 		{"bad owning timestamp", "individual", "browser-time", "signed", false, ErrSignupEvidenceInvalid},

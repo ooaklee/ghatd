@@ -4,6 +4,19 @@
 
 The Universal User Model is designed for reuse across different projects. It features dependency injection for testability, configurable status transitions, optional fields, and extension points for project-specific data.
 
+## Stored timestamps
+
+The default user clock and OAuth timestamp writers emit UTC RFC3339Nano values
+with an explicit `Z` suffix. `DefaultTimeFormatRFC3339NanoUTC` now uses
+`time.RFC3339Nano`. Use `ParseTimestampUTC` when reading persisted user timestamps:
+it respects explicit offsets and interprets the historical zone-free user format
+as UTC. Existing records do not require a rewrite. Missing or malformed values
+still return an error; callers must check zero, future and freshness constraints.
+This UTC convention applies to timestamps written by this package, not arbitrary
+local times supplied by a client. Custom clocks should emit explicit UTC values.
+Consumers requiring zone-free strings must update their readers. Compare parsed
+instants rather than raw strings when historical and current formats coexist.
+
 `Service.GetUserByID` and `GetUserByNanoID` restore model dependencies on a
 successful read. They preserve repository errors and cancellation instead of
 reporting all failures as `ErrUserNotFound`. Expected absence (including an empty
