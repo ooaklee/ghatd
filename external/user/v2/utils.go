@@ -11,9 +11,25 @@ import (
 
 // Default implementations of the interfaces for immediate use
 
-// DefaultTimeFormatRFC3339NanoUTC is the time format we use for all
-// our date time. It will be used for parsing our UTC date time.
-const DefaultTimeFormatRFC3339NanoUTC string = "2006-01-02T15:04:05.999999999"
+// DefaultTimeFormatRFC3339NanoUTC emits RFC3339 timestamps with an explicit
+// UTC marker when used with UTC values. Existing zone-free records remain
+// readable through ParseTimestampUTC.
+const DefaultTimeFormatRFC3339NanoUTC = time.RFC3339Nano
+
+// legacyTimeFormatRFC3339NanoUTC is the historical UTC storage layout. Its
+// absent offset is a property of this package's writer, not arbitrary input.
+const legacyTimeFormatRFC3339NanoUTC = "2006-01-02T15:04:05.999999999"
+
+// ParseTimestampUTC reads current and historical user timestamps as a UTC
+// instant. Explicit RFC3339 offsets are respected; only the historical owning
+// UTC layout may omit an offset. Invalid or empty values return a parse error.
+// Callers retain responsibility for zero, future and freshness checks.
+func ParseTimestampUTC(value string) (time.Time, error) {
+	if stamp, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return stamp.UTC(), nil
+	}
+	return time.ParseInLocation(legacyTimeFormatRFC3339NanoUTC, value, time.UTC)
+}
 
 // DefaultIDGenerator provides default ID generation
 type DefaultIDGenerator struct{}

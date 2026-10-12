@@ -76,10 +76,7 @@ func TestSignupMongoCreationAndImmutableEvidence(t *testing.T) {
 			require.Equal(t, tc.evidence, fact.Evidence)
 			require.Equal(t, created.ID, fact.CustomerID)
 			require.True(t, fact.Individual)
-			stamp, err := time.Parse(time.RFC3339Nano, created.Metadata.CreatedAt)
-			if err != nil {
-				stamp, err = time.ParseInLocation(user.DefaultTimeFormatRFC3339NanoUTC, created.Metadata.CreatedAt, time.UTC)
-			}
+			stamp, err := user.ParseTimestampUTC(created.Metadata.CreatedAt)
 			require.NoError(t, err)
 			require.WithinDuration(t, stamp, fact.CreatedAt, time.Millisecond)
 			public, err := json.Marshal(created)
