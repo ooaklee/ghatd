@@ -1162,6 +1162,10 @@ authority or current storage provenance.
 anchor and original acknowledgements together. Only a missing receipt after
 valid original joins is conclusive absence. Missing joined records are
 unavailable; contradictory ownership or changed original input conflicts.
+Normal first-receipt absence completes its owning read successfully before
+returning not-found, so it does not emit a database-failure log. Snapshot retries
+discard earlier results; read/commit failures and cancellation take precedence
+over absence. Joined errors and custom absence aliases remain failures.
 Later same-owner receipts still depend on the first anchor and its receipt.
 Preparation/recovery does not reset original creation or anchoring times when
 the current clock changes. Native lookup, capture and retained-anchor validation

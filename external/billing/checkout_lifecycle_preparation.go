@@ -138,8 +138,10 @@ func (s *CheckoutService) FindCheckoutLifecycleReceipt(ctx context.Context, inte
 		return CheckoutLifecycleAnchor{}, err
 	}
 	var out CheckoutLifecycleAnchor
+	var absent bool
 	err := s.repo.ReadCheckout(ctx, func(tx CheckoutTx) error {
 		out = CheckoutLifecycleAnchor{}
+		absent = false
 		if _, err := readAcknowledgedLifecycleIntent(ctx, tx, intent, true); err != nil {
 			return err
 		}
@@ -148,6 +150,12 @@ func (s *CheckoutService) FindCheckoutLifecycleReceipt(ctx context.Context, inte
 			return ErrRevenueUnavailable
 		}
 		receipt, err := lifecycle.GetCheckoutLifecycleReceipt(ctx, intent.ID)
+		if singleRevenueCause(err, ErrRevenueNotFound) {
+			// A first receipt is optional after all required owning joins pass.
+			// Keep the read successful; expose absence only after its commit.
+			absent = true
+			return ctx.Err()
+		}
 		if err != nil {
 			return err
 		}
@@ -172,6 +180,9 @@ func (s *CheckoutService) FindCheckoutLifecycleReceipt(ctx context.Context, inte
 	}
 	if err := ctx.Err(); err != nil {
 		return CheckoutLifecycleAnchor{}, err
+	}
+	if absent {
+		return CheckoutLifecycleAnchor{}, ErrRevenueNotFound
 	}
 	return out, nil
 }

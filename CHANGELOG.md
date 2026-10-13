@@ -161,6 +161,10 @@ when the release version has been selected, and remove unused subsections.
   reads no longer emit database error logs for normal absence. The repository
   still returns not-found to callers; unexpected storage and read/commit errors
   retain their original visibility. No cursor seeding or storage migration is required.
+- [Checkout lifecycle receipt recovery](external/billing/README.md#private-acknowledged-checkout-preparation-and-receipt-recovery)
+  no longer logs normal first-receipt absence as a database failure. Required
+  original joins remain strict, and read/commit failures or cancellation take
+  precedence over absence without creating a receipt.
 - **Breaking timestamp format:** [User timestamps](external/user/v2/README.md#stored-timestamps) now include an
   explicit UTC `Z` marker in default clock and OAuth writes. `ParseTimestampUTC`
   preserves reads of historical zone-free UTC records and respects RFC3339
