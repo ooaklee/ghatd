@@ -6,9 +6,12 @@ import (
 	"testing"
 
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/partnermanager"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestWorkerCompositionIdentity(t *testing.T) {
@@ -111,6 +114,45 @@ func TestLifecycleWorkerFinalAuthorityWithholdsCounts(t *testing.T) {
 				require.NotErrorIs(t, err, recordstore.ErrUncertain)
 				require.NotErrorIs(t, err, billing.ErrRevenueUncertain)
 			}
+		})
+	}
+}
+
+func TestLifecycleExecutionDiagnosticPreservesAuthorityFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"denied", partnermanager.ErrDenied, "authority_denied"},
+		{"unknown", errors.New("provider-private user@example.test"), "unclassified"},
+		{"joined_unknown_commit", errors.Join(partnermanager.ErrDenied, recordstore.ErrUncertain), "unclassified"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.code, lifecycleDiagnosticCause(tc.err))
+		})
+	}
+	for _, name := range []string{"missing_worker_authority", "revoked_worker_authority"} {
+		t.Run(name, func(t *testing.T) {
+			s, r, a, _ := schedulerServiceFixture(t)
+			a.denyStage = ""
+			a.selected = true
+			core, logs := observer.New(zap.DebugLevel)
+			ctx := logger.TransitWith(t.Context(), zap.New(core))
+			w := &Worker{scheduler: s}
+			job := r.snapshot.Jobs[0]
+			if name == "missing_worker_authority" {
+				w.scheduler = nil
+			}
+			got, count, err := w.execute(ctx, job)
+			require.Error(t, err)
+			require.Equal(t, job, got)
+			require.Zero(t, count)
+			entries := logs.FilterMessage("billing-lifecycle-execution-failed").All()
+			require.Len(t, entries, 1)
+			require.Equal(t, "execution_authority", entries[0].ContextMap()["stage"])
+			require.NotContains(t, entries[0].ContextMap(), "error")
+			require.Zero(t, r.acquireCalls)
 		})
 	}
 }

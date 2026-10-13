@@ -304,3 +304,9 @@ func (r *UserRepository) FindUsers(ctx context.Context) ([]User, error) {
 	return users, nil  
 }
 ```
+
+### Mongo failure diagnostics
+
+`WithMongoErrorClassifier(ctx, classifier)` attaches an immutable `observability.ErrorClassifier` built from trusted static sentinel/code pairs. Logs add `error_identity`; this is a registry match, not proof of harmlessness. Joined failures may match one registered identity alongside another failure. Unknown errors classify as `internal`. Raw error messages, queries and documents remain excluded.
+
+Transactions add `callback_attempts` and `last_callback_error_identity` (`not_run`, `success`, or a classified code). These describe the last callback attempt, not the final failure phase: a successful callback followed by a native error does not prove an uncertain commit. Native `mongo.CommandError` matches add its numeric `mongo_error_code` and fixed label booleans. These are diagnostic matches in the error tree, not authority to retry. Existing `operation`, `outcome`, severity and returned errors are unchanged.

@@ -592,3 +592,7 @@ deployment and restore procedures require host-level verification.
 explicitly prepared owners and current worker authority. Startup validates
 bounded owning discovery and grants without preparing history or starting work.
 Hosts retain scheduling, per-pass deadlines and resource lifetime.
+
+### Execution failure diagnostics
+
+`billing-lifecycle-execution-failed` emits static `owner_operation`, `stage` and conservative `cause_code` fields for execution authority, checkout observation/completion, history inspection, original status resolution and status observation/completion. Joined or unknown failure trees remain `unclassified`. No source, scope, lease or provider data is emitted. Failed public reports still withhold every progress count. This event covers execution failures; admission, scan and final authority failures retain their existing boundary logs.

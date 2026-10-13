@@ -292,7 +292,8 @@ func TestFindOneAndUpdateImagesAndErrors(t *testing.T) {
 			require.Len(t, log.entries, 1)
 			entry := log.entries[0]
 			require.Nil(t, entry.err, "raw driver/decode errors must not reach custom loggers")
-			require.Equal(t, []Field{{Key: "operation", Value: "find_one_and_update_decode"}, {Key: "outcome", Value: tc.outcome}}, entry.fields)
+			require.Equal(t, []Field{{Key: "operation", Value: "find_one_and_update_decode"}, {Key: "outcome", Value: tc.outcome}}, entry.fields[:2])
+			requireNativeMongoDiagnosticFields(t, entry.fields)
 			require.NotContains(t, fmt.Sprint(entry), "private")
 			count, err := collection.CountDocuments(ctx, bson.M{})
 			require.NoError(t, err)

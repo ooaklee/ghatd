@@ -53,6 +53,8 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add opt-in owning error identity classification and transaction callback telemetry to Mongo logs, plus bounded revenue reconciliation, historical checkout refusal and lifecycle execution diagnostics. These fields preserve existing error severity, return values and financial behavior. See the [repository](external/repository/README.md), [billing manager](external/billingmanager/README.md) and [partner store](external/partnerstore/README.md) guides.
+
 - Describe the new capability and any opt-in requirements.
 
 ### Changed

@@ -11,8 +11,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ooaklee/ghatd/external/logger"
+	"github.com/ooaklee/ghatd/external/observability"
 	"github.com/ooaklee/ghatd/external/partnermanager"
+	"github.com/ooaklee/ghatd/external/repository"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
+	"go.uber.org/zap"
 )
 
 const (
@@ -192,6 +196,10 @@ func getCursor(ctx context.Context, tx recordstore.Tx, program, kind string) (pa
 // GetDiscoveryCursor reads the current discovery cursor for a program and work
 // kind in one owning read transaction.
 func (r *WorkRepository) GetDiscoveryCursor(ctx context.Context, program, kind string) (partnermanager.DiscoveryCursor, error) {
+	if ctx != nil {
+		ctx = logger.WithPackage(ctx, "external/partnerstore", zap.String("owner_operation", "partners.discovery_cursor.read"), zap.String("work_kind", diagnosticWorkKind(kind)))
+		ctx = repository.WithMongoErrorClassifier(ctx, discoveryCursorErrorClassifier)
+	}
 	var result partnermanager.DiscoveryCursor
 	err := r.store.Read(ctx, func(tx recordstore.Tx) error {
 		var err error
@@ -436,3 +444,26 @@ func (r *WorkRepository) CompleteWork(ctx context.Context, lease partnermanager.
 }
 
 var _ partnermanager.WorkRepository = (*WorkRepository)(nil)
+
+// Only registered work kinds may reach telemetry; identifiers are never logged.
+func diagnosticWorkKind(kind string) string {
+	switch kind {
+	case partnermanager.WorkSignup, partnermanager.WorkRevenue, partnermanager.WorkRevenueSource, partnermanager.WorkMaturity:
+		return kind
+	default:
+		return "unknown"
+	}
+}
+
+var discoveryCursorErrorClassifier = func() *observability.ErrorClassifier {
+	classifier, err := observability.NewErrorClassifier(
+		observability.ErrorRule{Err: partnermanager.ErrNotFound, Code: "partner.not_found", Outcome: observability.OutcomeError},
+		observability.ErrorRule{Err: partnermanager.ErrWorkUncertain, Code: "partner.work_uncertain", Outcome: observability.OutcomeError},
+		observability.ErrorRule{Err: partnermanager.ErrUnavailable, Code: "partner.unavailable", Outcome: observability.OutcomeError},
+		observability.ErrorRule{Err: partnermanager.ErrInvalid, Code: "partner.invalid", Outcome: observability.OutcomeError},
+	)
+	if err != nil {
+		panic("partnerstore: invalid static diagnostics registry")
+	}
+	return classifier
+}()

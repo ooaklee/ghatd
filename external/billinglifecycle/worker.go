@@ -7,8 +7,10 @@ import (
 	"sync"
 
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/partnermanager"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
+	"go.uber.org/zap"
 )
 
 // WorkerReport exposes operational counts only. An error withholds every count:
@@ -185,24 +187,36 @@ func (w *Worker) inspectHistory(ctx context.Context, j ScheduledJob) error {
 // directly; subscription jobs inspect history, resolve any retained original,
 // then observe and complete. The returned superseded count reflects a resolved
 // original; errors preserve the most recent job state.
-func (w *Worker) execute(ctx context.Context, j ScheduledJob) (ScheduledJob, int, error) {
+func (w *Worker) execute(ctx context.Context, j ScheduledJob) (result ScheduledJob, count int, resultErr error) {
+	stage := "execution_authority"
+	if ctx != nil {
+		defer func() {
+			if resultErr != nil {
+				logger.AcquirePackageFrom(ctx, "external/billinglifecycle").Warn("billing-lifecycle-execution-failed", zap.String("owner_operation", "billing.lifecycle.execute"), zap.String("stage", stage), zap.String("cause_code", lifecycleDiagnosticCause(resultErr)))
+			}
+		}()
+	}
 	current, err := executionStep(ctx, w.scheduler, j, nil)
 	if err != nil {
 		return j, 0, err
 	}
 	if current.Source.Kind == billing.LifecycleCheckoutSources {
+		stage = "checkout_observe"
 		observed, err := w.checkout.Observe(ctx, JobLease(current))
 		if err != nil {
 			return current, 0, err
 		}
+		stage = "checkout_complete"
 		_, err = w.checkoutCompletion.Complete(ctx, observed)
 		return observed.Job, 0, err
 	}
+	stage = "inspect_history"
 	if err = w.inspectHistory(ctx, current); err != nil {
 		return current, 0, err
 	}
 	superseded := 0
 	if current.OriginalStatus != nil {
+		stage = "resolve_original_status"
 		resolved, err := w.resolver.Resolve(ctx, JobLease(current))
 		if err != nil {
 			return current, 0, err
@@ -213,6 +227,7 @@ func (w *Worker) execute(ctx context.Context, j ScheduledJob) (ScheduledJob, int
 			if resolved.Observation == nil {
 				return current, 0, billing.ErrRevenueUnavailable
 			}
+			stage = "status_complete"
 			_, err = w.statusCompletion.Complete(ctx, *resolved.Observation)
 			return current, 0, err
 		case billing.SubscriptionStatusPending:
@@ -224,10 +239,12 @@ func (w *Worker) execute(ctx context.Context, j ScheduledJob) (ScheduledJob, int
 			return current, 0, billing.ErrRevenueUnavailable
 		}
 	}
+	stage = "status_observe"
 	observed, err := w.status.Observe(ctx, JobLease(current))
 	if err != nil {
 		return current, superseded, err
 	}
+	stage = "status_complete"
 	_, err = w.statusCompletion.Complete(ctx, observed)
 	return observed.Job, superseded, err
 }
@@ -300,4 +317,27 @@ func sameWorkerPort(a, b any) bool {
 	}
 	t := reflect.TypeOf(a)
 	return t == reflect.TypeOf(b) && t.Comparable() && a == b
+}
+
+// Telemetry is deliberately conservative for joined and unknown failure trees.
+func lifecycleDiagnosticCause(err error) string {
+	for _, rule := range []struct {
+		err  error
+		code string
+	}{
+		{context.Canceled, "cancelled"}, {context.DeadlineExceeded, "deadline"},
+		{billing.ErrRevenueUncertain, "revenue_uncertain"}, {recordstore.ErrUncertain, "store_uncertain"},
+		{billing.ErrRevenueUnavailable, "revenue_unavailable"}, {recordstore.ErrUnavailable, "store_unavailable"},
+		{billing.ErrRevenueUnassessable, "revenue_unassessable"}, {billing.ErrRevenueInvalid, "revenue_invalid"},
+		{partnermanager.ErrDenied, "authority_denied"}, {recordstore.ErrConflict, "store_conflict"},
+	} {
+		current := err
+		for n := 0; current != nil && n < 32; n++ {
+			if current == rule.err {
+				return rule.code
+			}
+			current = errors.Unwrap(current)
+		}
+	}
+	return "unclassified"
 }

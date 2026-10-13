@@ -114,7 +114,8 @@ func TestFindOneErrorMappingAndPrivateLogs(t *testing.T) {
 			require.Len(t, log.entries, 1)
 			entry := log.entries[0]
 			require.Nil(t, entry.err, "raw errors must not reach a custom logger")
-			require.Equal(t, []Field{{Key: "operation", Value: "find_one_decode"}, {Key: "outcome", Value: tc.class}}, entry.fields)
+			require.Equal(t, []Field{{Key: "operation", Value: "find_one_decode"}, {Key: "outcome", Value: tc.class}}, entry.fields[:2])
+			requireNativeMongoDiagnosticFields(t, entry.fields)
 			require.NotContains(t, entry.message, "private")
 		})
 	}

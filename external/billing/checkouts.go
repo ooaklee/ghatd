@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	"go.uber.org/zap"
 )
 
 // CheckoutIntent retains the authenticated paying account and exact provider
@@ -385,12 +387,12 @@ func (s *CheckoutService) ResolveRevenueAssociation(ctx context.Context, r Reven
 	evidence, err := s.provider.LookupRevenueCheckout(ctx, paymentprovider.RevenueScope{Provider: r.Scope.Provider, AccountID: r.Scope.AccountID, LiveMode: r.Scope.LiveMode}, r.SubscriptionID)
 	if err != nil {
 		if singleRevenueCause(err, paymentprovider.ErrRevenueUnassessable) {
-			return RevenueAssociation{}, ErrRevenueUnassessable
+			return RevenueAssociation{}, checkoutAssociationRefusal(ctx, "provider_checkout_unassessable")
 		}
 		return RevenueAssociation{}, err
 	}
 	if evidence.Scope.Provider != r.Scope.Provider || evidence.Scope.AccountID != r.Scope.AccountID || evidence.Scope.LiveMode != r.Scope.LiveMode || evidence.SubscriptionID != r.SubscriptionID || evidence.CustomerID != r.CustomerID || evidence.PriceID != r.ProviderPriceID || evidence.Currency != r.Currency || evidence.Mode != paymentprovider.CheckoutModeSubscription || evidence.Status != "complete" || evidence.CreatedAt.IsZero() || r.PaidAt.Before(evidence.CreatedAt) || !validCheckoutText(evidence.SessionID, 256, true) || !validCheckoutText(evidence.IntentID, 256, true) {
-		return RevenueAssociation{}, ErrRevenueUnassessable
+		return RevenueAssociation{}, checkoutAssociationRefusal(ctx, "checkout_evidence_mismatch")
 	}
 	var result RevenueAssociation
 	err = s.repo.WithCheckoutTransaction(ctx, r.Scope, func(tx CheckoutTx) error {
@@ -405,14 +407,14 @@ func (s *CheckoutService) ResolveRevenueAssociation(ctx context.Context, r Reven
 		}
 		intent, err := readCheckoutIntent(ctx, tx, evidence.IntentID)
 		if singleRevenueCause(err, ErrRevenueNotFound) {
-			return ErrRevenueUnassessable
+			return checkoutAssociationRefusal(ctx, "checkout_intent_missing")
 		}
 		if err != nil {
 			return err
 		}
 		q := intent.Request
 		if intent.Scope != r.Scope || q.UserReference != evidence.ClientReferenceID || q.PriceID != evidence.PriceID || strings.ToUpper(q.ExpectedCurrency) != evidence.Currency || q.Mode != evidence.Mode || q.ExpectedAmount != evidence.UnitAmountMinor || string(q.ExpectedBillingCadence) != evidence.BillingCadence || evidence.IntervalCount != 1 || evidence.CreatedAt.Before(intent.CreatedAt.Truncate(time.Second)) || (intent.SessionID != "" && intent.SessionID != evidence.SessionID) {
-			return ErrRevenueUnassessable
+			return checkoutAssociationRefusal(ctx, "checkout_intent_mismatch")
 		}
 		a := CheckoutAssociation{IntentID: intent.ID, SessionID: evidence.SessionID, Scope: r.Scope, CustomerID: evidence.CustomerID, SubscriptionID: evidence.SubscriptionID, ProviderPriceID: evidence.PriceID, Currency: evidence.Currency, PrincipalID: q.UserID, PlanID: q.PlanID, CostID: q.CostID, CheckoutCreatedAt: evidence.CreatedAt, LinkedAt: s.clock.Now().UTC()}
 		if err := acknowledgeCheckout(ctx, tx, intent.ID, evidence.SessionID); err != nil {
@@ -425,4 +427,12 @@ func (s *CheckoutService) ResolveRevenueAssociation(ctx context.Context, r Reven
 		return err
 	})
 	return result, err
+}
+
+// Codes are owning branch constants; the original refusal sentinel is returned.
+func checkoutAssociationRefusal(ctx context.Context, code string) error {
+	if ctx != nil {
+		logger.AcquirePackageFrom(ctx, "external/billing").Warn("revenue-association-evidence-refused", zap.String("owner_operation", "billing.revenue_association.resolve"), zap.String("stage", "historical_checkout_association"), zap.String("cause_code", code))
+	}
+	return ErrRevenueUnassessable
 }

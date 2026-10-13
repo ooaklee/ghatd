@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
+	"go.uber.org/zap"
 )
 
 // RevenueProviderRegistry exposes optional authenticated economic evidence.
@@ -332,33 +334,52 @@ type ReconcileRevenueSourceRequest struct {
 // facts, and resolves the quarantine under current authority. Fingerprint or
 // ownership mismatches return ErrRevenueConflict; a matching existing
 // resolution is returned idempotently when actor and reason agree.
-func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileRevenueSourceRequest) (billing.RevenueObservation, error) {
+func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileRevenueSourceRequest) (result billing.RevenueObservation, resultErr error) {
+	stage, originalReason, currentReason := "validate_request", "not_loaded", "not_assessed"
+	if ctx != nil {
+		ctx = logger.WithPackage(ctx, "external/billingmanager", zap.String("owner_operation", "billing.revenue_source.reconcile"))
+		defer func() {
+			if resultErr != nil {
+				logger.AcquirePackageFrom(ctx, "external/billingmanager").Warn("revenue-source-reconciliation-failed", zap.String("stage", stage), zap.String("cause_code", revenueDiagnosticCause(resultErr)), zap.String("original_quarantine_reason", originalReason), zap.String("current_quarantine_reason", currentReason))
+			}
+		}()
+	}
 	if ctx == nil || strings.TrimSpace(req.ActorID) == "" || strings.TrimSpace(req.Reason) == "" || req.ExpectedFingerprint == "" || req.ObservationID == "" {
 		return billing.RevenueObservation{}, billing.ErrRevenueInvalid
 	}
+	stage = "validate_dependencies"
 	if s == nil || nilRevenueDependency(s.revenueAuthority) || nilRevenueDependency(s.revenueFeed) || nilRevenueDependency(s.revenueRegistry) {
 		return billing.RevenueObservation{}, billing.ErrRevenueUnavailable
 	}
+	stage = "authorize"
 	if err := s.revenueAuthority.AuthorizeRevenueReconciliation(ctx, req.ActorID); err != nil {
 		return billing.RevenueObservation{}, err
 	}
+	stage = "load_observation"
 	source, err := s.revenueFeed.GetRevenueObservation(ctx, req.ObservationID)
 	if err != nil {
 		return billing.RevenueObservation{}, err
 	}
+	originalReason = diagnosticQuarantineReason(source.QuarantineReason)
+	stage = "validate_observation"
 	if source.Fingerprint != req.ExpectedFingerprint || source.QuarantineReason == "" || source.ResolutionOf != "" {
 		return billing.RevenueObservation{}, billing.ErrRevenueConflict
 	}
+	stage = "load_resolution"
 	old, err := s.revenueFeed.GetRevenueSourceResolution(ctx, source.ID)
 	if err == nil {
+		stage = "validate_resolution"
 		if !boundRevenueResolution(source, old) || old.ResolutionBy != req.ActorID || old.ResolutionReason != req.Reason {
 			return billing.RevenueObservation{}, billing.ErrRevenueConflict
 		}
+		stage = "verify_original_snapshot"
 		if len(req.OriginalSnapshot) > 0 {
+			stage = "resolve_provider"
 			provider, err := s.revenueRegistry.GetRevenueProvider(source.Scope.Provider)
 			if err != nil {
 				return billing.RevenueObservation{}, err
 			}
+			stage = "verify_original_snapshot"
 			identity, err := verifyRevenueOriginalSnapshot(ctx, provider, source, req.OriginalSnapshot)
 			if err != nil {
 				return billing.RevenueObservation{}, err
@@ -372,38 +393,47 @@ func (s *Service) ReconcileRevenueSource(ctx context.Context, req ReconcileReven
 	if !singleRevenueAbsence(err) {
 		return billing.RevenueObservation{}, err
 	}
+	stage = "resolve_provider"
 	provider, err := s.revenueRegistry.GetRevenueProvider(source.Scope.Provider)
 	if err != nil {
 		return billing.RevenueObservation{}, err
 	}
 	expectedSource := source.SourceFingerprint
+	stage = "verify_original_snapshot"
 	if len(req.OriginalSnapshot) > 0 {
 		expectedSource, err = verifyRevenueOriginalSnapshot(ctx, provider, source, req.OriginalSnapshot)
 		if err != nil {
 			return billing.RevenueObservation{}, err
 		}
 	}
+	stage = "provider_capability"
 	reconciliation, ok := provider.(paymentprovider.RevenueReconciliationProvider)
 	if !ok || nilRevenueDependency(reconciliation) {
 		return billing.RevenueObservation{}, billing.ErrRevenueUnavailable
 	}
+	stage = "retrieve_provider_event"
 	evidence, err := reconciliation.ReconcileRevenueEvent(ctx, paymentprovider.RevenueScope{Provider: source.Scope.Provider, AccountID: source.Scope.AccountID, LiveMode: source.Scope.LiveMode}, source.EnvelopeID)
 	if err != nil {
 		return billing.RevenueObservation{}, err
 	}
+	stage = "validate_provider_identity"
 	if evidence == nil || billingRevenueScope(evidence.Scope) != source.Scope || evidence.EnvelopeID != source.EnvelopeID {
 		return billing.RevenueObservation{}, billing.ErrRevenueInvalid
 	}
 	if expectedSource != "" && evidence.SourceFingerprint != expectedSource && !(len(req.OriginalSnapshot) == 0 && evidence.LegacySourceFingerprint != "" && evidence.LegacySourceFingerprint == expectedSource) {
 		return billing.RevenueObservation{}, billing.ErrRevenueInvalid
 	}
+	stage = "rebuild_revenue_facts"
 	verified, err := s.revenueRequest(ctx, provider, evidence)
 	if err != nil {
 		return billing.RevenueObservation{}, err
 	}
+	currentReason = diagnosticQuarantineReason(verified.QuarantineReason)
+	stage = "assess_current_evidence"
 	if verified.QuarantineReason != "" && verified.QuarantineReason != "no_subscription_revenue" {
 		return billing.RevenueObservation{}, billing.ErrRevenueUnassessable
 	}
+	stage = "commit_resolution"
 	return s.revenueFeed.ResolveQuarantinedRevenue(ctx, billing.ResolveRevenueRequest{ObservationID: source.ID, ExpectedFingerprint: source.Fingerprint, RecoveryFingerprint: evidence.SourceFingerprint, Facts: verified.Facts, Reason: req.Reason, ActorID: req.ActorID})
 }
 

@@ -8,8 +8,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // Fresh authenticated HTTP fixtures prove read-only scope/evidence boundaries,
@@ -132,7 +135,8 @@ func TestStripeRetainedCheckoutSessionEvidence(t *testing.T) {
 			if input == "" {
 				input = "cs_original"
 			}
-			ctx := context.Background()
+			core, logs := observer.New(zap.DebugLevel)
+			ctx := logger.TransitWith(context.Background(), zap.New(core))
 			if tc.context == "nil" {
 				ctx = nil
 			} else if tc.context == "cancelled" {
@@ -151,6 +155,17 @@ func TestStripeRetainedCheckoutSessionEvidence(t *testing.T) {
 			if tc.want != nil {
 				require.ErrorIs(t, err, tc.want)
 				require.Empty(t, evidence.IntentID)
+				expectedCause := map[string]string{"missing_intent_pointer": "checkout_intent_reference_missing", "incomplete_checkout": "checkout_session_shape_or_scope_invalid", "merchant_mismatch": "merchant_scope_mismatch", "multiple_original_lines_not_guessed": "checkout_line_count_not_one"}[tc.name]
+				if expectedCause != "" {
+					entries := logs.FilterMessage("stripe-checkout-revenue-evidence-refused").All()
+					require.Len(t, entries, 1)
+					require.Equal(t, expectedCause, entries[0].ContextMap()["cause_code"])
+				}
+				for _, entry := range logs.FilterMessage("stripe-checkout-revenue-evidence-refused").All() {
+					require.NotContains(t, entry.ContextMap(), "error")
+					require.NotContains(t, entry.ContextMap(), "intent_id")
+					require.NotContains(t, entry.ContextMap(), "session_id")
+				}
 				return
 			}
 			require.NoError(t, err)

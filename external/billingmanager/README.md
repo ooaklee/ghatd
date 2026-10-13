@@ -1193,3 +1193,9 @@ This completion read is not a refund-adjusted balance or a revenue receipt.
 [Scoped checkout evidence helpers](helper/README.md) forward retained sessions
 to the explicit provider registry. Native checkout owns frozen-intent verification;
 the adapter creates no financial fact and supplies no subscription fallback.
+
+### Revenue recovery failure diagnostics
+
+`revenue-source-reconciliation-failed` records the owning operation, current stage and bounded `cause_code`, with separate `original_quarantine_reason` and `current_quarantine_reason`. The latter comes from freshly rebuilt evidence, never from the immutable original observation. `not_loaded` and `not_assessed` indicate unavailable observations; unregistered stored/provider reason strings become `unknown`. Strict single-chain sentinel matches provide cause codes; joined or unknown errors become `unclassified`. Error identities, authority checks, persistence and retries are unchanged.
+
+Historical checkout owners emit `revenue-association-evidence-refused` and `stripe-checkout-revenue-evidence-refused`, naming static validation branches such as a missing checkout intent reference, missing owning intent or mismatched original authorization. No raw errors, provider identifiers, payer information or payloads are included. A host-supplied contextual logger can correlate these records with its worker pass.

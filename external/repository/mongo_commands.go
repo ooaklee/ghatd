@@ -5,6 +5,8 @@ import (
 	"errors"
 	"reflect"
 
+	"github.com/ooaklee/ghatd/external/observability"
+
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -22,7 +24,7 @@ var ErrUnacknowledgedMongoWrite = errors.New("repository/unacknowledged-mongo-wr
 // observeMongo logs only fixed operation and error-class metadata. Driver error
 // messages (including duplicate-key values), queries and documents are private.
 // The original error is returned by the caller, never reconstructed from text.
-func observeMongo(ctx context.Context, log RepositoryLogger, operation string, err error) {
+func observeMongo(ctx context.Context, log RepositoryLogger, operation string, err error, diagnostics ...Field) {
 	if nilRepositoryLogger(log) || ctx == nil {
 		return
 	}
@@ -54,6 +56,14 @@ func observeMongo(ctx context.Context, log RepositoryLogger, operation string, e
 		class = "unacknowledged"
 	}
 	fields := []Field{{Key: "operation", Value: operation}, {Key: "outcome", Value: class}}
+	if classifier, ok := ctx.Value(mongoErrorClassifierKey{}).(*observability.ErrorClassifier); ok {
+		fields = append(fields, Field{Key: "error_identity", Value: classifier.Classify(err).Code})
+	}
+	var commandError mongo.CommandError
+	if errors.As(err, &commandError) {
+		fields = append(fields, Field{Key: "mongo_error_code", Value: commandError.Code}, Field{Key: "mongo_transient_transaction", Value: commandError.HasErrorLabel("TransientTransactionError")}, Field{Key: "mongo_unknown_commit_result", Value: commandError.HasErrorLabel("UnknownTransactionCommitResult")})
+	}
+	fields = append(fields, diagnostics...)
 	if err == nil || noDocument {
 		log.Debug(ctx, "mongo-operation", nil, fields...)
 	} else {

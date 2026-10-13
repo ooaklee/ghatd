@@ -662,3 +662,7 @@ Maturity preserves refund/debt/dispute-hold rules and never sends a payout.
 Use [partnerhttp](http/README.md) for independently mounted customer/operator JSON
 routes, safe projections and configurable browser protection over the same human
 authority. It owns no financial transactions or additional receipt store.
+
+### Worker diagnostic context
+
+Worker passes add the current registered `work_kind` to their contextual logger so downstream owning failure records can identify the lane. Reports, issue codes, authority checks, retry decisions and financial behavior remain unchanged. Hosts can supply an opaque pass correlation identifier through the existing contextual logger.

@@ -202,3 +202,7 @@ explicit nonnegative session total and reports zero-total completion as
 `no_payment_required`, only when the frozen intent authorizes a subscription
 trial. A positive total is required for `paid`; an unknown total fails closed.
 This completion read is not a refund-adjusted balance or a revenue receipt.
+
+### Checkout revenue evidence diagnostics
+
+`stripe-checkout-revenue-evidence-refused` identifies static validation branches, including merchant scope mismatch, invalid session evidence, missing checkout intent reference, line count and price shape/economics/cadence. These diagnostics neither change the original error sentinel nor weaken evidence validation. Raw provider errors, URLs, identifiers, metadata and payloads are excluded.
