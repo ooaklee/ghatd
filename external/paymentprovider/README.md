@@ -206,3 +206,22 @@ This completion read is not a refund-adjusted balance or a revenue receipt.
 ### Checkout revenue evidence diagnostics
 
 `stripe-checkout-revenue-evidence-refused` identifies static validation branches, including merchant scope mismatch, invalid session evidence, missing checkout intent reference, line count and price shape/economics/cadence. These diagnostics neither change the original error sentinel nor weaken evidence validation. Raw provider errors, URLs, identifiers, metadata and payloads are excluded.
+
+## Explicit historical checkout migration proof
+
+`RevenueCheckoutInspector` returns the existing complete scoped checkout evidence
+without requiring an application intent metadata pointer. Strict ordinary lookup
+retains that requirement. `RevenueSnapshotInspector` verifies trusted retained
+source bytes in existing legacy/current fingerprint formats; it authenticates no
+new delivery. Neither capability alone grants application ownership or revenue.
+An explicitly invoked host migration combines these facts with reviewed original
+identity and current scoped authority. GHATD installs no historical recovery
+policy or migration runner in host services.
+
+`RevenuePaymentSafetyVerifier.VerifyUnadjustedRevenuePayment` is a narrow
+migration preflight over the existing invoice evidence. Stripe retrieves the
+matching payment intent/charge and complete refund/credit-note lists via GETs,
+refusing unpaid, refunded, disputed or unresolved-adjustment states. It does not
+change ordinary financial acceptance. `RevenuePaymentSafetyError` preserves its
+owning sentinel with a static refusal code; source JSON, identifiers, API keys
+and provider response bodies are not rendered in the error.

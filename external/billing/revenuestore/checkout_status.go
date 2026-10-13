@@ -17,6 +17,12 @@ func (b *checkoutBound) FindCheckoutIntentIDBySession(ctx context.Context, scope
 	if err != nil {
 		return "", err
 	}
+	if reverse.LegacyMigrationID != "" {
+		if _, err := b.GetLegacyCheckoutMigration(ctx, scope, session); err != nil {
+			return "", err
+		}
+		return "", billing.ErrRevenueConflict
+	}
 	if reverse.SessionID != session || reverse.IntentID == "" {
 		return "", billing.ErrRevenueUnavailable
 	}

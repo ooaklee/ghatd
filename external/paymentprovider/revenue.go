@@ -45,6 +45,13 @@ type RevenueSnapshotVerifier interface {
 	VerifyRetainedRevenueSnapshot(context.Context, RevenueSnapshotRequest) (RevenueSnapshotIdentity, error)
 }
 
+// RevenueSnapshotInspector checks a retained snapshot against a trusted stored
+// legacy or current source fingerprint. It authenticates no new delivery and
+// supplies no permission to accept revenue or change a source.
+type RevenueSnapshotInspector interface {
+	InspectRetainedRevenueSnapshot(context.Context, RevenueSnapshotRequest) (RevenueSnapshotIdentity, error)
+}
+
 // RevenueSnapshotRequest binds private recovery material to one owning source.
 // Hosts must obtain the original snapshot through a trusted recovery procedure;
 // raw payloads must not be exposed through customer/operator HTTP contracts.

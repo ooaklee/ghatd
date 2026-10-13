@@ -12,6 +12,20 @@ import (
 // creates no delivery signature and changes no source or financial record.
 // Authenticated event retrieval must separately match the derived identity.
 func (s *StripeProvider) VerifyRetainedRevenueSnapshot(ctx context.Context, req RevenueSnapshotRequest) (RevenueSnapshotIdentity, error) {
+	return s.verifyRetainedRevenueSnapshot(ctx, req, false)
+}
+
+// InspectRetainedRevenueSnapshot supports both existing source formats for
+// private read-only proof checks. The returned OriginalFingerprint is the exact
+// legacy digest; CanonicalFingerprint is the versioned digest. No provider I/O
+// or financial acceptance occurs, and the legacy recovery verifier stays strict.
+func (s *StripeProvider) InspectRetainedRevenueSnapshot(ctx context.Context, req RevenueSnapshotRequest) (RevenueSnapshotIdentity, error) {
+	return s.verifyRetainedRevenueSnapshot(ctx, req, true)
+}
+
+var _ RevenueSnapshotInspector = (*StripeProvider)(nil)
+
+func (s *StripeProvider) verifyRetainedRevenueSnapshot(ctx context.Context, req RevenueSnapshotRequest, allowVersioned bool) (RevenueSnapshotIdentity, error) {
 	if ctx == nil {
 		return RevenueSnapshotIdentity{}, ErrPaymentProviderInvalidPayload
 	}
@@ -21,10 +35,15 @@ func (s *StripeProvider) VerifyRetainedRevenueSnapshot(ctx context.Context, req 
 	if s == nil || s.config == nil || s.config.Revenue == nil {
 		return RevenueSnapshotIdentity{}, ErrRevenueNotEnabled
 	}
-	if len(req.OriginalSnapshot) == 0 || int64(len(req.OriginalSnapshot)) > s.maxWebhookBodySize || len(req.OriginalFingerprint) != 64 || strings.ToLower(req.OriginalFingerprint) != req.OriginalFingerprint {
+	fingerprint := req.OriginalFingerprint
+	versioned := allowVersioned && strings.HasPrefix(fingerprint, stripeRevenueDigestV2)
+	if versioned {
+		fingerprint = strings.TrimPrefix(fingerprint, stripeRevenueDigestV2)
+	}
+	if len(req.OriginalSnapshot) == 0 || int64(len(req.OriginalSnapshot)) > s.maxWebhookBodySize || len(fingerprint) != 64 || strings.ToLower(fingerprint) != fingerprint {
 		return RevenueSnapshotIdentity{}, ErrPaymentProviderInvalidPayload
 	}
-	if _, err := hex.DecodeString(req.OriginalFingerprint); err != nil {
+	if _, err := hex.DecodeString(fingerprint); err != nil {
 		return RevenueSnapshotIdentity{}, ErrPaymentProviderInvalidPayload
 	}
 	var event stripeRevenueEvent
@@ -47,12 +66,15 @@ func (s *StripeProvider) VerifyRetainedRevenueSnapshot(ctx context.Context, req 
 	if err != nil {
 		return RevenueSnapshotIdentity{}, err
 	}
-	if legacy != req.OriginalFingerprint {
+	if !versioned && legacy != req.OriginalFingerprint {
 		return RevenueSnapshotIdentity{}, ErrRevenueUnassessable
 	}
 	canonical, err := canonicalStripeRevenueDigest(event)
 	if err != nil {
 		return RevenueSnapshotIdentity{}, err
+	}
+	if versioned && canonical != req.OriginalFingerprint {
+		return RevenueSnapshotIdentity{}, ErrRevenueUnassessable
 	}
 	return RevenueSnapshotIdentity{Scope: scope, EnvelopeID: event.ID, OriginalFingerprint: legacy, CanonicalFingerprint: canonical}, nil
 }

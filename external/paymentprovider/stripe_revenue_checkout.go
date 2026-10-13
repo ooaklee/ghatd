@@ -45,6 +45,10 @@ func (s *StripeProvider) verifyCheckoutMerchant(ctx context.Context, scope Reven
 // complete pagination. Multiple sessions, missing intent pointers, mismatched
 // scope or incomplete original line evidence are never guessed from metadata.
 func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope RevenueScope, subscription string) (RevenueCheckoutEvidence, error) {
+	return s.lookupRevenueCheckout(ctx, scope, subscription, true)
+}
+
+func (s *StripeProvider) lookupRevenueCheckout(ctx context.Context, scope RevenueScope, subscription string, requireIntent bool) (RevenueCheckoutEvidence, error) {
 	if !stripeRevenueObjectID.MatchString(subscription) || !strings.HasPrefix(subscription, "sub_") {
 		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "subscription_reference_invalid")
 	}
@@ -58,7 +62,7 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 	if len(sessions) != 1 {
 		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_count_not_one")
 	}
-	return s.checkoutSessionEvidence(ctx, scope, sessions[0], "", subscription)
+	return s.checkoutSessionEvidenceMode(ctx, scope, sessions[0], "", subscription, requireIntent)
 }
 
 // LookupRevenueCheckoutSessionEvidence retrieves the exact retained checkout
@@ -66,6 +70,10 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 // subscription or payment. It makes authenticated GETs only; the billing owner
 // must still bind the returned evidence to its original server authorization.
 func (s *StripeProvider) LookupRevenueCheckoutSessionEvidence(ctx context.Context, scope RevenueScope, id string) (RevenueCheckoutEvidence, error) {
+	return s.lookupRevenueCheckoutSessionEvidence(ctx, scope, id, true)
+}
+
+func (s *StripeProvider) lookupRevenueCheckoutSessionEvidence(ctx context.Context, scope RevenueScope, id string, requireIntent bool) (RevenueCheckoutEvidence, error) {
 	if !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") {
 		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_reference_invalid")
 	}
@@ -76,8 +84,22 @@ func (s *StripeProvider) LookupRevenueCheckoutSessionEvidence(ctx context.Contex
 	if err != nil {
 		return RevenueCheckoutEvidence{}, err
 	}
-	return s.checkoutSessionEvidence(ctx, scope, session, id, "")
+	return s.checkoutSessionEvidenceMode(ctx, scope, session, id, "", requireIntent)
 }
+
+// InspectRevenueCheckout reads complete scoped provider facts for diagnostics;
+// a missing application metadata pointer is retained as an empty IntentID.
+func (s *StripeProvider) InspectRevenueCheckout(ctx context.Context, scope RevenueScope, subscription string) (RevenueCheckoutEvidence, error) {
+	return s.lookupRevenueCheckout(ctx, scope, subscription, false)
+}
+
+// InspectRevenueCheckoutSession performs authenticated GET-only inspection of
+// an exact provider session. It supplies no application ownership authority.
+func (s *StripeProvider) InspectRevenueCheckoutSession(ctx context.Context, scope RevenueScope, id string) (RevenueCheckoutEvidence, error) {
+	return s.lookupRevenueCheckoutSessionEvidence(ctx, scope, id, false)
+}
+
+var _ RevenueCheckoutInspector = (*StripeProvider)(nil)
 
 // checkoutSessionEvidence validates a checkout session against the scope,
 // expected session/subscription IDs, subscription mode, complete status and a
@@ -86,14 +108,21 @@ func (s *StripeProvider) LookupRevenueCheckoutSessionEvidence(ctx context.Contex
 // supported weekly/monthly/yearly cadence and returns ErrRevenueUnassessable
 // for any other shape instead of guessing.
 func (s *StripeProvider) checkoutSessionEvidence(ctx context.Context, scope RevenueScope, session map[string]json.RawMessage, expectedSession, expectedSubscription string) (RevenueCheckoutEvidence, error) {
+	return s.checkoutSessionEvidenceMode(ctx, scope, session, expectedSession, expectedSubscription, true)
+}
+
+func (s *StripeProvider) checkoutSessionEvidenceMode(ctx context.Context, scope RevenueScope, session map[string]json.RawMessage, expectedSession, expectedSubscription string, requireIntent bool) (RevenueCheckoutEvidence, error) {
 	id := rawStripeID(session["id"])
 	subscription := rawStripeID(session["subscription"])
 	if rawStripeString(session["object"]) != "checkout.session" || !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") || (expectedSession != "" && id != expectedSession) || !stripeRevenueObjectID.MatchString(subscription) || !strings.HasPrefix(subscription, "sub_") || (expectedSubscription != "" && subscription != expectedSubscription) || !rawStripeMode(session, scope) || rawStripeString(session["mode"]) != CheckoutModeSubscription || rawStripeString(session["status"]) != "complete" {
 		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_shape_or_scope_invalid")
 	}
 	var metadata map[string]string
-	if json.Unmarshal(session["metadata"], &metadata) != nil || strings.TrimSpace(metadata["checkout_intent_id"]) == "" {
+	if requireIntent && (json.Unmarshal(session["metadata"], &metadata) != nil || strings.TrimSpace(metadata["checkout_intent_id"]) == "") {
 		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_intent_reference_missing")
+	}
+	if !requireIntent && len(session["metadata"]) != 0 && json.Unmarshal(session["metadata"], &metadata) != nil {
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_metadata_invalid")
 	}
 	created, known := rawStripeInt(session["created"])
 	customer := rawStripeID(session["customer"])

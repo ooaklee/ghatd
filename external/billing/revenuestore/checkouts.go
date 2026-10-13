@@ -34,7 +34,12 @@ type persistedCheckout struct {
 }
 
 // checkoutAcknowledgement persists the immutable intent-to-session binding.
-type checkoutAcknowledgement struct{ IntentID, SessionID string }
+type checkoutAcknowledgement struct {
+	IntentID, SessionID string
+	// Historical reservations share the existing unique reverse key, but are
+	// never forward acknowledgements or pointers to a fabricated intent.
+	LegacyMigrationID string `json:"legacy_migration_id,omitempty"`
+}
 
 // checkoutScopeKey hashes a scope into a stable storage key component.
 func checkoutScopeKey(s billing.RevenueScope) string { b, _ := json.Marshal(s); return key(string(b)) }
@@ -112,7 +117,7 @@ func (b *checkoutBound) GetCheckoutAcknowledgement(ctx context.Context, id strin
 	if err != nil {
 		return "", err
 	}
-	if v.IntentID != id || v.SessionID == "" {
+	if v.IntentID != id || v.SessionID == "" || v.LegacyMigrationID != "" {
 		return "", billing.ErrRevenueUnavailable
 	}
 	return v.SessionID, nil
@@ -133,17 +138,26 @@ func (b *checkoutBound) InsertCheckoutAcknowledgement(ctx context.Context, id, s
 	sessionKey := associationKey(intent.Scope, session, "")
 	owner, _, err := get[checkoutAcknowledgement](ctx, b.tx, kindCheckoutSession, sessionKey, checkoutPartition)
 	if err == nil {
+		if owner.LegacyMigrationID != "" {
+			if owner.IntentID != "" || owner.SessionID != session {
+				return billing.ErrRevenueUnavailable
+			}
+			if _, err := b.GetLegacyCheckoutMigration(ctx, intent.Scope, session); err != nil {
+				return err
+			}
+			return billing.ErrRevenueConflict
+		}
 		if owner.IntentID != id || owner.SessionID != session {
 			return billing.ErrRevenueConflict
 		}
 	} else if singleCause(err, billing.ErrRevenueNotFound) {
-		if err := insert(ctx, b.tx, kindCheckoutSession, sessionKey, checkoutPartition, checkoutAcknowledgement{id, session}); err != nil {
+		if err := insert(ctx, b.tx, kindCheckoutSession, sessionKey, checkoutPartition, checkoutAcknowledgement{IntentID: id, SessionID: session}); err != nil {
 			return err
 		}
 	} else {
 		return err
 	}
-	if err := insert(ctx, b.tx, kindCheckoutAck, id, checkoutPartition, checkoutAcknowledgement{id, session}); err != nil {
+	if err := insert(ctx, b.tx, kindCheckoutAck, id, checkoutPartition, checkoutAcknowledgement{IntentID: id, SessionID: session}); err != nil {
 		return err
 	}
 	if err := retainLifecycleCheckout(ctx, b.tx, intent, session); err != nil {
