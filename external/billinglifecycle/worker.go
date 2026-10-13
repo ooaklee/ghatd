@@ -17,6 +17,7 @@ import (
 // committed work remains recoverable, but partial output grants no permission.
 type WorkerReport struct {
 	Discovered, Examined, Conflicts, Completed, Retried, Superseded int `json:"-"`
+	Pending, Expired                                                int `json:"-"`
 }
 
 // Worker composes one bounded sequential discovery/execution pass. All services
@@ -132,10 +133,17 @@ func (w *Worker) RunOnce(ctx context.Context) (WorkerReport, error) {
 			report.Conflicts += batch.Conflicts
 			for _, job := range batch.Jobs {
 				sources = append(sources, job.Source)
-				latest, superseded, err := w.execute(ctx, job)
+				latest, superseded, outcome, err := w.execute(ctx, job)
 				report.Superseded += superseded
 				if err == nil {
-					report.Completed++
+					switch outcome {
+					case "pending":
+						report.Pending++
+					case "expired":
+						report.Expired++
+					default:
+						report.Completed++
+					}
 					continue
 				}
 				issues = errors.Join(issues, err)
@@ -187,7 +195,7 @@ func (w *Worker) inspectHistory(ctx context.Context, j ScheduledJob) error {
 // directly; subscription jobs inspect history, resolve any retained original,
 // then observe and complete. The returned superseded count reflects a resolved
 // original; errors preserve the most recent job state.
-func (w *Worker) execute(ctx context.Context, j ScheduledJob) (result ScheduledJob, count int, resultErr error) {
+func (w *Worker) execute(ctx context.Context, j ScheduledJob) (result ScheduledJob, count int, outcome string, resultErr error) {
 	stage := "execution_authority"
 	if ctx != nil {
 		defer func() {
@@ -198,55 +206,63 @@ func (w *Worker) execute(ctx context.Context, j ScheduledJob) (result ScheduledJ
 	}
 	current, err := executionStep(ctx, w.scheduler, j, nil)
 	if err != nil {
-		return j, 0, err
+		return j, 0, "", err
 	}
 	if current.Source.Kind == billing.LifecycleCheckoutSources {
 		stage = "checkout_observe"
-		observed, err := w.checkout.Observe(ctx, JobLease(current))
+		disposition, err := w.checkoutCompletion.runDisposition(ctx, JobLease(current))
+		stage = disposition.stage
 		if err != nil {
-			return current, 0, err
+			if disposition.Job.Revision != 0 {
+				current = disposition.Job
+			}
+			return current, 0, "", err
 		}
-		stage = "checkout_complete"
-		_, err = w.checkoutCompletion.Complete(ctx, observed)
-		return observed.Job, 0, err
+		if disposition.Pending {
+			return disposition.Job, 0, "pending", nil
+		}
+		if disposition.Expired {
+			return disposition.Job, 0, "expired", nil
+		}
+		return disposition.Job, 0, "", nil
 	}
 	stage = "inspect_history"
 	if err = w.inspectHistory(ctx, current); err != nil {
-		return current, 0, err
+		return current, 0, "", err
 	}
 	superseded := 0
 	if current.OriginalStatus != nil {
 		stage = "resolve_original_status"
 		resolved, err := w.resolver.Resolve(ctx, JobLease(current))
 		if err != nil {
-			return current, 0, err
+			return current, 0, "", err
 		}
 		current = resolved.Job
 		switch resolved.State {
 		case billing.SubscriptionStatusCaptured:
 			if resolved.Observation == nil {
-				return current, 0, billing.ErrRevenueUnavailable
+				return current, 0, "", billing.ErrRevenueUnavailable
 			}
 			stage = "status_complete"
 			_, err = w.statusCompletion.Complete(ctx, *resolved.Observation)
-			return current, 0, err
+			return current, 0, "", err
 		case billing.SubscriptionStatusPending:
 			// Pending has not yet captured: progress using the exact original, not
 			// a new preparation. Stopping here would permanently strand first work.
 		case billing.SubscriptionStatusSuperseded:
 			superseded = 1
 		default:
-			return current, 0, billing.ErrRevenueUnavailable
+			return current, 0, "", billing.ErrRevenueUnavailable
 		}
 	}
 	stage = "status_observe"
 	observed, err := w.status.Observe(ctx, JobLease(current))
 	if err != nil {
-		return current, superseded, err
+		return current, superseded, "", err
 	}
 	stage = "status_complete"
 	_, err = w.statusCompletion.Complete(ctx, observed)
-	return observed.Job, superseded, err
+	return observed.Job, superseded, "", err
 }
 
 // retryCurrent inspects durable stage progress before a known-failure backoff.

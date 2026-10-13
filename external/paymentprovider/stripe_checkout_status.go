@@ -1,6 +1,7 @@
 package paymentprovider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/url"
@@ -33,6 +34,7 @@ func (s *StripeProvider) LookupCheckoutStatus(ctx context.Context, scope Revenue
 		return CheckoutStatusEvidence{}, ErrRevenueUnassessable
 	}
 	e := CheckoutStatusEvidence{Scope: scope, SessionID: id, Mode: mode, SessionStatus: rawStripeString(session["status"]), PaymentStatus: rawStripeString(session["payment_status"]), ClientReferenceID: rawStripeString(session["client_reference_id"]), Currency: strings.ToUpper(rawStripeString(session["currency"]))}
+	e.SubscriptionAbsent = bytes.Equal(bytes.TrimSpace(session["subscription"]), []byte("null"))
 	e.AmountTotalMinor, e.AmountTotalKnown = rawStripeInt(session["amount_total"])
 	if _, err := e.State(); err != nil {
 		return CheckoutStatusEvidence{}, err

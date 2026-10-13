@@ -20,6 +20,7 @@ func TestStripeCheckoutStatusRead(t *testing.T) {
 		failure                                  string
 		badPage                                  bool
 		cancel                                   bool
+		absent                                   bool
 	}{
 		{name: "paid_subscription", sessionStatus: "complete", paymentStatus: "paid", want: "paid"},
 		{name: "paid_one_time", sessionStatus: "complete", paymentStatus: "paid", want: "paid", paymentMode: true},
@@ -31,6 +32,11 @@ func TestStripeCheckoutStatusRead(t *testing.T) {
 		{name: "negative_total_is_not_paid", sessionStatus: "complete", paymentStatus: "paid", mutate: func(s, l map[string]any) { s["amount_total"] = -1 }},
 		{name: "positive_total_cannot_require_no_payment", sessionStatus: "complete", paymentStatus: "no_payment_required", mutate: func(s, l map[string]any) { s["amount_total"] = 1000 }},
 		{name: "expired_unpaid", sessionStatus: "expired", paymentStatus: "unpaid", want: "expired"},
+		{name: "expired_explicit_null_subscription", sessionStatus: "expired", paymentStatus: "unpaid", want: "expired", absent: true, mutate: func(s, l map[string]any) { s["subscription"] = nil }},
+		{name: "expired_missing_subscription_is_unknown", sessionStatus: "expired", paymentStatus: "unpaid", want: "expired", mutate: func(s, l map[string]any) { delete(s, "subscription") }},
+		{name: "expired_empty_subscription_is_unknown", sessionStatus: "expired", paymentStatus: "unpaid", want: "expired", mutate: func(s, l map[string]any) { s["subscription"] = "" }},
+		{name: "expired_string_null_is_unknown", sessionStatus: "expired", paymentStatus: "unpaid", want: "expired", mutate: func(s, l map[string]any) { s["subscription"] = "null" }},
+		{name: "expired_malformed_subscription_is_unknown", sessionStatus: "expired", paymentStatus: "unpaid", want: "expired", mutate: func(s, l map[string]any) { s["subscription"] = map[string]any{"wrong": true} }},
 		{name: "open_cannot_be_paid", sessionStatus: "open", paymentStatus: "paid"},
 		{name: "missing_payment_status", sessionStatus: "complete"},
 		{name: "wrong_session", sessionStatus: "complete", paymentStatus: "paid", mutate: func(s, l map[string]any) { s["id"] = "cs_other" }},
@@ -116,6 +122,7 @@ func TestStripeCheckoutStatusRead(t *testing.T) {
 			state, err := out.State()
 			require.NoError(t, err)
 			require.Equal(t, tc.want, state)
+			require.Equal(t, tc.absent || tc.paymentMode, out.SubscriptionAbsent)
 			require.Equal(t, "price_frozen", out.PriceID)
 			require.Equal(t, int64(1000), out.UnitAmountMinor)
 			require.Equal(t, 3, calls)

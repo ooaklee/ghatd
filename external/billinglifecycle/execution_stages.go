@@ -171,19 +171,18 @@ func soleRevenueNotFound(err error) bool {
 	return false
 }
 
-// Observe inspects the owning receipt before any fresh provider lookup. It binds
-// preparation before lookup and evidence before capture. Replacement executions
-// reuse retained evidence verbatim. It does not retire the job or spawn work.
-func (x *CheckoutExecution) Observe(ctx context.Context, h LeaseHandle) (CheckoutObservation, error) {
+// prepareObservation inspects the owning receipt and binds the original before
+// any fresh provider lookup. Retained complete evidence stays authoritative.
+func (x *CheckoutExecution) prepareObservation(ctx context.Context, h LeaseHandle) (CheckoutObservation, bool, error) {
 	if x == nil || x.scheduler == nil || x.binder == nil || x.outbox == nil || nilPort(x.owner) {
-		return CheckoutObservation{}, billing.ErrRevenueUnavailable
+		return CheckoutObservation{}, false, billing.ErrRevenueUnavailable
 	}
 	j, err := executionStage(ctx, x.scheduler, h, nil)
 	if err != nil {
-		return CheckoutObservation{}, err
+		return CheckoutObservation{}, false, err
 	}
 	if j.Source.Kind != billing.LifecycleCheckoutSources {
-		return CheckoutObservation{}, billing.ErrRevenueInvalid
+		return CheckoutObservation{}, false, billing.ErrRevenueInvalid
 	}
 	i := *j.Source.Checkout
 	receipt, receiptErr := x.owner.FindCheckoutLifecycleReceipt(ctx, x.scheduler.cfg.ActorID, i)
@@ -193,39 +192,54 @@ func (x *CheckoutExecution) Observe(ctx context.Context, h LeaseHandle) (Checkou
 		receiptStageErr = nil
 	}
 	if _, err = executionStep(ctx, x.scheduler, j, receiptStageErr); err != nil {
-		return CheckoutObservation{}, err
+		return CheckoutObservation{}, false, err
 	}
 	captured := receiptErr == nil
 	if receiptErr != nil && !soleRevenueNotFound(receiptErr) {
-		return CheckoutObservation{}, receiptErr
+		return CheckoutObservation{}, false, receiptErr
 	}
 	if captured && receipt.ValidateForCheckout(i) != nil {
-		return CheckoutObservation{}, billing.ErrRevenueUnavailable
+		return CheckoutObservation{}, false, billing.ErrRevenueUnavailable
 	}
 	var input CheckoutInput
 	if !j.CheckoutPrepared {
 		original, e := x.owner.PrepareCheckoutLifecycle(ctx, x.scheduler.cfg.ActorID, i)
 		if _, err = executionStep(ctx, x.scheduler, j, e); err != nil {
-			return CheckoutObservation{}, err
+			return CheckoutObservation{}, false, err
 		}
 		if original.ValidateAcknowledgedInput(i) != nil {
-			return CheckoutObservation{}, billing.ErrRevenueUnavailable
+			return CheckoutObservation{}, false, billing.ErrRevenueUnavailable
 		}
 		bound, e := x.binder.Bind(ctx, h, CheckoutInput{Intent: original})
 		if e != nil {
-			return CheckoutObservation{}, e
+			return CheckoutObservation{}, false, e
 		}
 		j, input = bound.Job, bound.Input
-		h = JobLease(j)
 	} else {
 		input, err = x.outbox.Find(ctx, x.scheduler.cfg.ActorID, i)
 		if _, e := executionStep(ctx, x.scheduler, j, err); e != nil {
 			if soleNotFound(e) {
 				e = errors.Join(recordstore.ErrUnavailable, e)
 			}
-			return CheckoutObservation{}, e
+			return CheckoutObservation{}, false, e
 		}
 	}
+	return CheckoutObservation{j, input, receipt}, captured, nil
+}
+
+// Observe recovers retained inputs before complete-evidence lookup/capture.
+func (x *CheckoutExecution) Observe(ctx context.Context, h LeaseHandle) (CheckoutObservation, error) {
+	prepared, captured, err := x.prepareObservation(ctx, h)
+	if err != nil {
+		return CheckoutObservation{}, err
+	}
+	return x.observePrepared(ctx, prepared, captured)
+}
+
+func (x *CheckoutExecution) observePrepared(ctx context.Context, prepared CheckoutObservation, captured bool) (CheckoutObservation, error) {
+	j, input, receipt := prepared.Job, prepared.Input, prepared.Receipt
+	h := JobLease(j)
+	var err error
 	if captured {
 		if input.Evidence == nil {
 			e := receipt.Evidence

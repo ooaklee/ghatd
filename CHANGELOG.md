@@ -84,6 +84,8 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add authenticated unpaid checkout dispositions: open sessions use bounded pending backoff, while strictly verified expired sessions retire atomically with explicit nonpayment proof. Paid and trial completion still use their existing strict evidence path. **Breaking storage compatibility:** expiry history uses explicit variants rejected by older captured readers; drain older writers and retain expiry-aware readers for rollback inspection. Existing job and captured schemas are unchanged. See the [lifecycle host guide](external/billinglifecycle/README.md#checkout-pending-and-expiry-dispositions).
+
 - Optional encrypted [historical checkout receipts and session reservations](external/billing/revenuestore/README.md#historical-checkout-migration-receipts)
   for explicitly reviewed host migrations. Shared native reservations prevent
   conflicting modern acknowledgements without fabricating checkout intents.

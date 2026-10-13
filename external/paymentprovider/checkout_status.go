@@ -15,7 +15,11 @@ type CheckoutStatusEvidence struct {
 	UnitAmountMinor, IntervalCount                                  int64
 	AmountTotalMinor                                                int64
 	AmountTotalKnown                                                bool
-	CreatedAt                                                       time.Time
+	// SubscriptionAbsent is true only when an authenticated response explicitly
+	// contains a JSON-null subscription. Omission or an unknown custom-provider
+	// field is not evidence that a subscription is absent.
+	SubscriptionAbsent bool
+	CreatedAt          time.Time
 }
 
 // CheckoutStatusProvider is optional and read-only. Implementations must never
@@ -25,6 +29,13 @@ type CheckoutStatusProvider interface {
 	// the RevenueScope; the Stripe implementation authenticates the merchant, reads
 	// only, and rejects unsupported shapes as unassessable.
 	LookupCheckoutStatus(context.Context, RevenueScope, string) (CheckoutStatusEvidence, error)
+}
+
+// CheckoutStatusCapability optionally reports whether a routing adapter's exact
+// selected scope supports status reads. It performs no provider HTTP request;
+// a false result preserves the legacy complete-evidence flow for that provider.
+type CheckoutStatusCapability interface {
+	SupportsCheckoutStatus(RevenueScope) bool
 }
 
 // State distinguishes completed checkout from payment. A trial or zero-payment

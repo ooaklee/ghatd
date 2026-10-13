@@ -83,6 +83,9 @@ func completionAuthority(ctx context.Context, s *Scheduler, source ScheduledSour
 // times/fingerprints and optional original status presence/content, ignoring
 // incidental field differences.
 func sameCompletion(a, b CompletedExecution) bool {
+	if (a.Expiry == nil) != (b.Expiry == nil) || (a.Expiry != nil && digest(expiryProof(*a.Expiry)) != digest(expiryProof(*b.Expiry))) {
+		return false
+	}
 	if !sameExecutionJob(a.Job, b.Job) || a.Receipt.NativeCaptureID != b.Receipt.NativeCaptureID || a.Receipt.NativeFingerprint != b.Receipt.NativeFingerprint || !a.Receipt.NativeRequestedAt.Equal(b.Receipt.NativeRequestedAt) || !a.Receipt.NativeObservedAt.Equal(b.Receipt.NativeObservedAt) || !a.Receipt.CompletedAt.Equal(b.Receipt.CompletedAt) || (a.OriginalStatus == nil) != (b.OriginalStatus == nil) {
 		return false
 	}
@@ -200,6 +203,9 @@ func (c *CheckoutCompletion) InspectLast(ctx context.Context, source ScheduledSo
 	}
 	if !completedShape(out, CompletionKey{source, source.Checkout.ID}) {
 		return CompletedExecution{}, billing.ErrRevenueUnavailable
+	}
+	if out.Expiry != nil {
+		return c.inspectExpiry(ctx, out)
 	}
 	native, err := x.owner.FindCheckoutLifecycleReceipt(ctx, x.scheduler.cfg.ActorID, *source.Checkout)
 	if err = completionAuthority(ctx, x.scheduler, source, err); err != nil {

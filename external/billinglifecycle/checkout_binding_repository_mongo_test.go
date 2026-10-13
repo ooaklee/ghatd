@@ -21,9 +21,14 @@ var _ CheckoutBindingRepository = (*RecordExecutionRepository)(nil)
 
 // Actual acknowledged native checkout and encrypted storage; source admission
 // here is explicit fixture setup, not owning discovery or platform runtime.
-func nativeCheckoutBindingFixture(t *testing.T) (*inputNativeFixture, *RecordExecutionRepository, *executionTestClock, ScheduledJob) {
+func nativeCheckoutBindingFixture(t *testing.T, supplied ...*inputNativeFixture) (*inputNativeFixture, *RecordExecutionRepository, *executionTestClock, ScheduledJob) {
 	t.Helper()
-	f := nativeInputFixture(t)
+	var f *inputNativeFixture
+	if len(supplied) == 1 {
+		f = supplied[0]
+	} else {
+		f = nativeInputFixture(t)
+	}
 	clock := &executionTestClock{at: f.clock.at}
 	r, err := NewRecordExecutionRepository(f.reply, clock)
 	require.NoError(t, err)

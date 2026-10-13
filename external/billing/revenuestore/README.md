@@ -245,6 +245,22 @@ conclusive absence. The host-owned migration supplies
 current authority and complete retained/provider proof before invoking this
 trusted persistence surface. No source or financial history is deleted.
 
+### Borrowed checkout expiry transaction
+
+`BindCheckoutTransaction` borrows an already active `recordstore.Tx` and native
+revenue scope. It supplies the existing checkout codecs without nesting a
+transaction or creating caller authority. Its optional `CheckoutExpiryTx`
+validates the frozen original and bidirectional acknowledgement, then reserves
+the existing unique per-intent lifecycle receipt key with an explicit
+`expired_unpaid` schema-2 variant. Any captured or terminal receipt already
+present prevents a competing outcome. It creates no lifecycle anchor.
+
+The caller must atomically fence proof freshness, exact host lease, retained
+checkout input, completion and job retirement in that same transaction. This
+low-level adapter cannot replace service authority checks. Existing captured
+schema-1 codecs remain unchanged; captured readers reject expiry variants.
+See the [host compatibility contract](../../billinglifecycle/README.md#checkout-pending-and-expiry-dispositions) before enabling or rolling back writers.
+
 ## Native optional-read verification
 
 Replica-set tests use `GHATD_TEST_MONGO_URI` and fixture-only encryption keys.

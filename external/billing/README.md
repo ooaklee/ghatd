@@ -1247,3 +1247,21 @@ or entitlement. See [authenticated status recovery](../billingmanager/README.md#
 ### Historical association refusal diagnostics
 
 Historical checkout association validation emits `revenue-association-evidence-refused` with a static owning operation, stage and branch cause code. Missing intents and intent/evidence mismatches retain the original refusal sentinel and transaction behavior. No historical identity or authorization contents are logged.
+
+### Explicit unpaid checkout expiry
+
+`SupportsCheckoutLifecycleStatus(scope)` resolves optional capability for the
+exact selected scope, including registry wrappers and custom providers.
+`LookupCheckoutLifecycleStatus` is an optional owning read of the same original
+and both acknowledgement directions, followed by authenticated provider status.
+`CheckoutLifecycleStatus` retains the observation time separately from provider
+creation time. New dispositions require exact frozen checkout terms, no future
+observation and a maximum five-minute proof age.
+
+`CheckoutLifecycleExpiry` represents only `expired` / `unpaid` with an explicitly
+known absent subscription. It creates no subscription anchor, access or financial
+evidence. A status field omitted by an older custom adapter cannot prove absence.
+`FindCheckoutLifecycleExpiry` recovers immutable expiry under the same original
+joins; it does not refresh historical proof or query a provider. The optional
+`CheckoutExpiryTx` reservation must share the host's exact lease transaction and
+retained-input compare-and-swap. See the [lifecycle host](../billinglifecycle/README.md#checkout-pending-and-expiry-dispositions) for the atomic contract and compatibility requirements.

@@ -1,6 +1,7 @@
 package billinglifecycle
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/billing/revenuestore"
 	"github.com/ooaklee/ghatd/external/billingmanager"
+	billingmanagerhelper "github.com/ooaklee/ghatd/external/billingmanager/helper"
 	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/stretchr/testify/require"
@@ -38,65 +40,8 @@ func TestCheckoutExecutionProviderStatesEncrypted(t *testing.T) {
 		{name: "missing_reverse_prevents_provider", missingKind: "billing_checkout_session", want: billing.ErrRevenueUnavailable},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f, r, clock, job := nativeCheckoutBindingFixture(t)
-			i := f.intent
-			session := map[string]any{
-				"object": "checkout.session", "id": i.SessionID, "livemode": tc.wrongMode,
-				"mode": "subscription", "status": tc.status, "payment_status": tc.payment,
-				"subscription": "sub_original", "customer": "cus_original", "created": i.CreatedAt.Unix(),
-				"client_reference_id": i.Request.UserReference, "currency": "gbp",
-				"metadata": map[string]string{"checkout_intent_id": i.ID},
-			}
-			if tc.noSubscription {
-				session["subscription"], session["customer"] = nil, nil
-			}
-			line := map[string]any{
-				"id": "li_original", "object": "item", "quantity": 1, "currency": "gbp",
-				"price": map[string]any{
-					"object": "price", "id": i.Request.PriceID, "livemode": false, "type": "recurring",
-					"currency": "gbp", "unit_amount": i.Request.ExpectedAmount,
-					"recurring": map[string]any{"interval": "month", "interval_count": 1},
-				},
-			}
-			var calls, writes atomic.Int64
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-				calls.Add(1)
-				if req.Method != http.MethodGet {
-					writes.Add(1)
-					w.WriteHeader(http.StatusMethodNotAllowed)
-					return
-				}
-				if req.Header.Get("Authorization") != "Bearer sk_fixture" || req.Header.Get("Stripe-Version") != paymentprovider.StripeDefaultAPIVersion || req.Header.Get("Stripe-Account") != "" {
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-				var out any
-				switch req.URL.Path {
-				case "/v1/account":
-					out = map[string]any{"id": i.Scope.AccountID}
-				case "/v1/checkout/sessions/" + i.SessionID:
-					out = session
-				case "/v1/checkout/sessions/" + i.SessionID + "/line_items":
-					out = map[string]any{"object": "list", "has_more": false, "data": []any{line}}
-				default:
-					w.WriteHeader(http.StatusNotFound)
-					return
-				}
-				_ = json.NewEncoder(w).Encode(out)
-			}))
-			t.Cleanup(server.Close)
-			provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{APIKey: "sk_fixture", WebhookSecret: "whsec_fixture", APIBaseURL: server.URL, Revenue: &paymentprovider.RevenueConfig{AccountID: i.Scope.AccountID, CurrencyExponents: map[string]int{"GBP": 2}}})
-			require.NoError(t, err)
-			repo, err := revenuestore.NewRepository(f.reply)
-			require.NoError(t, err)
-			f.native, err = billing.NewCheckoutService(repo, f.clock, provider)
-			require.NoError(t, err)
-			binder, ctx := nativeCheckoutBinder(t, f, r, clock, "worker-original")
-			owner := binder.validator.(*billingmanager.Service)
-			outbox, err := NewCheckoutOutbox(f.reply, owner)
-			require.NoError(t, err)
-			execution, err := NewCheckoutExecution(binder.scheduler, r, outbox)
-			require.NoError(t, err)
+			fixture := nativeCheckoutHTTPFixture(t, tc.status, tc.payment, tc.noSubscription, tc.wrongMode)
+			f, r, job, i, outbox, execution, ctx, calls, writes := fixture.f, fixture.repo, fixture.job, fixture.f.intent, fixture.outbox, fixture.execution, fixture.ctx, fixture.calls, fixture.writes
 			if tc.missingKind != "" {
 				deleted, err := f.db.Collection("ghatd_owned_records").DeleteOne(ctx, bson.M{"kind": tc.missingKind})
 				require.NoError(t, err)
@@ -143,4 +88,98 @@ func TestCheckoutExecutionProviderStatesEncrypted(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Fresh local HTTP and encrypted native fixtures are shared by strict capture
+// and explicit disposition tests, never mutable state between table cases.
+type checkoutHTTPFixture struct {
+	f             *inputNativeFixture
+	repo          *RecordExecutionRepository
+	clock         *executionTestClock
+	job           ScheduledJob
+	outbox        *CheckoutOutbox
+	execution     *CheckoutExecution
+	ctx           context.Context
+	calls, writes *atomic.Int64
+	registry      *checkoutHTTPRegistry
+}
+
+func nativeCheckoutHTTPFixture(t *testing.T, status, payment string, noSubscription, wrongMode bool, supplied ...*inputNativeFixture) checkoutHTTPFixture {
+	t.Helper()
+	f, r, clock, job := nativeCheckoutBindingFixture(t, supplied...)
+	i := f.intent
+	session := map[string]any{
+		"object": "checkout.session", "id": i.SessionID, "livemode": wrongMode,
+		"mode": "subscription", "status": status, "payment_status": payment, "amount_total": i.Request.ExpectedAmount,
+		"subscription": "sub_original", "customer": "cus_original", "created": i.CreatedAt.Unix(),
+		"client_reference_id": i.Request.UserReference, "currency": "gbp",
+		"metadata": map[string]string{"checkout_intent_id": i.ID},
+	}
+	if payment == "no_payment_required" {
+		session["amount_total"] = 0
+	}
+	if noSubscription {
+		session["subscription"], session["customer"] = nil, nil
+	}
+	line := map[string]any{
+		"id": "li_original", "object": "item", "quantity": 1, "currency": "gbp",
+		"price": map[string]any{
+			"object": "price", "id": i.Request.PriceID, "livemode": false, "type": "recurring",
+			"currency": "gbp", "unit_amount": i.Request.ExpectedAmount,
+			"recurring": map[string]any{"interval": "month", "interval_count": 1},
+		},
+	}
+	calls, writes := new(atomic.Int64), new(atomic.Int64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		calls.Add(1)
+		if req.Method != http.MethodGet {
+			writes.Add(1)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if req.Header.Get("Authorization") != "Bearer sk_fixture" || req.Header.Get("Stripe-Version") != paymentprovider.StripeDefaultAPIVersion || req.Header.Get("Stripe-Account") != "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var out any
+		switch req.URL.Path {
+		case "/v1/account":
+			out = map[string]any{"id": i.Scope.AccountID}
+		case "/v1/checkout/sessions/" + i.SessionID:
+			out = session
+		case "/v1/checkout/sessions/" + i.SessionID + "/line_items":
+			out = map[string]any{"object": "list", "has_more": false, "data": []any{line}}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(out)
+	}))
+	t.Cleanup(server.Close)
+	provider, err := paymentprovider.NewStripeProvider(&paymentprovider.Config{APIKey: "sk_fixture", WebhookSecret: "whsec_fixture", APIBaseURL: server.URL, Revenue: &paymentprovider.RevenueConfig{AccountID: i.Scope.AccountID, CurrencyExponents: map[string]int{"GBP": 2}}})
+	require.NoError(t, err)
+	repo, err := revenuestore.NewRepository(f.reply)
+	require.NoError(t, err)
+	registry := &checkoutHTTPRegistry{provider}
+	f.native, err = billing.NewCheckoutService(repo, f.clock, billingmanagerhelper.NewCheckoutEvidence(registry))
+	require.NoError(t, err)
+	binder, ctx := nativeCheckoutBinder(t, f, r, clock, "worker-original")
+	owner := binder.validator.(*billingmanager.Service)
+	outbox, err := NewCheckoutOutbox(f.reply, owner)
+	require.NoError(t, err)
+	execution, err := NewCheckoutExecution(binder.scheduler, r, outbox)
+	require.NoError(t, err)
+	return checkoutHTTPFixture{f, r, clock, job, outbox, execution, ctx, calls, writes, registry}
+}
+
+// Use the same scope-dispatching provider adapter as the native runtime helper.
+type checkoutHTTPRegistry struct {
+	provider paymentprovider.CheckoutProvider
+}
+
+func (r checkoutHTTPRegistry) GetCheckoutProvider(name string) (paymentprovider.CheckoutProvider, error) {
+	if name != "stripe" {
+		return nil, billing.ErrRevenueUnavailable
+	}
+	return r.provider, nil
 }

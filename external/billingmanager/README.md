@@ -1199,3 +1199,18 @@ the adapter creates no financial fact and supplies no subscription fallback.
 `revenue-source-reconciliation-failed` records the owning operation, current stage and bounded `cause_code`, with separate `original_quarantine_reason` and `current_quarantine_reason`. The latter comes from freshly rebuilt evidence, never from the immutable original observation. `not_loaded` and `not_assessed` indicate unavailable observations; unregistered stored/provider reason strings become `unknown`. Strict single-chain sentinel matches provide cause codes; joined or unknown errors become `unclassified`. Error identities, authority checks, persistence and retries are unchanged.
 
 Historical checkout owners emit `revenue-association-evidence-refused` and `stripe-checkout-revenue-evidence-refused`, naming static validation branches such as a missing checkout intent reference, missing owning intent or mismatched original authorization. No raw errors, provider identifiers, payer information or payloads are included. A host-supplied contextual logger can correlate these records with its worker pass.
+
+### Optional checkout disposition status
+
+The configured lifecycle owner may additionally implement
+`CheckoutLifecycleStatusService`. `LookupCheckoutLifecycleStatus` checks current
+selected refresh authority before native original validation, before provider
+lookup and after its result. `FindCheckoutLifecycleExpiry` applies the same
+authority to immutable nonpayment recovery. Neither API grants permission to
+retire a host job or treats expiry as a captured subscription. Unsupported
+custom providers retain the existing complete-evidence path.
+
+Authority is checked before and after foreign operations; this is not an atomic
+policy epoch within native transactions. Revocation after a possible commit
+withholds disclosure and preserves uncertain outcomes for later authorized
+recovery. See the [lifecycle host](../billinglifecycle/README.md#checkout-pending-and-expiry-dispositions).

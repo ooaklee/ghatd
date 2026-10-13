@@ -29,6 +29,9 @@ type CompletionReceipt struct {
 // CompletedExecution is an immutable historical snapshot, NEVER a live lease.
 // Current jobs may have progressed through later cycles when this is inspected.
 type CompletedExecution struct {
+	// Expiry explicitly distinguishes nonpayment retirement from captured
+	// lifecycle completion. It never supplies a subscription anchor or revenue.
+	Expiry         *billing.CheckoutLifecycleExpiry       `json:"-"`
 	OriginalStatus *billing.SubscriptionStatusPreparation `json:"-"`
 	Job            ScheduledJob                           `json:"-"`
 	Receipt        CompletionReceipt                      `json:"-"`
@@ -68,6 +71,7 @@ type CompletionRepository interface {
 // native receipt timestamps and optional original status preparation that
 // public JSON tags omit.
 type completionPayload struct {
+	Expiry                                           *expiryProofPayload `json:",omitempty"`
 	OriginalStatus                                   *statusPreparationPayload
 	Schema                                           int
 	JobRevision                                      int64
@@ -102,9 +106,12 @@ func completedShape(v CompletedExecution, k CompletionKey) bool {
 		return false
 	}
 	if j.Source.Kind == billing.LifecycleCheckoutSources {
-		return v.OriginalStatus == nil && j.CadenceAnchor.IsZero() && j.Lane == RetiredLane && j.CheckoutPrepared && j.Attempts > 0 && c.NativeRequestedAt.Equal(j.Source.Checkout.CreatedAt)
+		if v.OriginalStatus != nil || !j.CadenceAnchor.IsZero() || j.Lane != RetiredLane || !j.CheckoutPrepared || j.Attempts < 1 || !c.NativeRequestedAt.Equal(j.Source.Checkout.CreatedAt) {
+			return false
+		}
+		return v.Expiry == nil || (v.Expiry.ValidateForCheckout(*j.Source.Checkout) == nil && v.Expiry.Fingerprint == c.NativeFingerprint && v.Expiry.Status.ObservedAt.Equal(c.NativeObservedAt))
 	}
-	return v.OriginalStatus != nil && v.OriginalStatus.Validate() == nil && v.OriginalStatus.CaptureID == k.NativeCaptureID && statusMatchesSource(*v.OriginalStatus, j.Source) && v.OriginalStatus.RequestedAt.Equal(c.NativeRequestedAt) && !j.CadenceAnchor.IsZero() && !c.NativeRequestedAt.Before(j.CadenceAnchor) && j.Lane == RefreshLane && !j.CheckoutPrepared && j.Attempts == 0 && j.NextAttemptAt.After(c.CompletedAt)
+	return v.Expiry == nil && v.OriginalStatus != nil && v.OriginalStatus.Validate() == nil && v.OriginalStatus.CaptureID == k.NativeCaptureID && statusMatchesSource(*v.OriginalStatus, j.Source) && v.OriginalStatus.RequestedAt.Equal(c.NativeRequestedAt) && !j.CadenceAnchor.IsZero() && !c.NativeRequestedAt.Before(j.CadenceAnchor) && j.Lane == RefreshLane && !j.CheckoutPrepared && j.Attempts == 0 && j.NextAttemptAt.After(c.CompletedAt)
 }
 
 // encodeCompletion builds the immutable completion record, first requiring
@@ -116,6 +123,10 @@ func encodeCompletion(v CompletedExecution) (recordstore.Record, error) {
 	}
 	c := v.Receipt
 	p := completionPayload{Schema: 1, JobRevision: v.Job.Revision, Job: scheduleJob(v.Job), NativeCaptureID: c.NativeCaptureID, NativeFingerprint: c.NativeFingerprint, NativeRequestedAt: c.NativeRequestedAt, NativeObservedAt: c.NativeObservedAt, CompletedAt: c.CompletedAt}
+	if v.Expiry != nil {
+		proof := expiryProof(*v.Expiry)
+		p.Schema, p.Expiry = 2, &proof
+	}
 	if v.OriginalStatus != nil {
 		original := statusPreparation(*v.OriginalStatus)
 		p.OriginalStatus = &original
@@ -135,10 +146,14 @@ func decodeCompletion(row recordstore.Record, k CompletionKey) (CompletedExecuti
 		return CompletedExecution{}, recordstore.ErrUnavailable
 	}
 	var p completionPayload
-	if strictScheduleDecode(row.Data, &p) != nil || p.Schema != 1 || p.Job.Schema != 1 {
+	if strictScheduleDecode(row.Data, &p) != nil || p.Job.Schema != 1 || (p.Schema != 1 && p.Schema != 2) || (p.Schema == 1) != (p.Expiry == nil) {
 		return CompletedExecution{}, recordstore.ErrUnavailable
 	}
 	out := CompletedExecution{Job: p.Job.job(p.JobRevision), Receipt: CompletionReceipt{p.NativeCaptureID, p.NativeFingerprint, p.NativeRequestedAt, p.NativeObservedAt, p.CompletedAt}}
+	if p.Expiry != nil {
+		proof := p.Expiry.proof()
+		out.Expiry = &proof
+	}
 	if p.OriginalStatus != nil {
 		original := p.OriginalStatus.input()
 		out.OriginalStatus = &original
