@@ -34,7 +34,7 @@ func (b *checkoutBound) ValidateCheckoutAcknowledgement(ctx context.Context, int
 	if err != nil {
 		return discoveryJoinedError(err)
 	}
-	if reverse.IntentID != intent.ID || reverse.SessionID != session {
+	if reverse.IntentID != intent.ID || reverse.SessionID != session || reverse.LegacyMigrationID != "" {
 		return billing.ErrRevenueConflict
 	}
 	return ctx.Err()

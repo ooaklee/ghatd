@@ -1,5 +1,10 @@
 # Billing
 
+For host-owned historical checkout recovery, see the optional
+[receipt and session reservation contract](revenuestore/README.md#historical-checkout-migration-receipts).
+It preserves original sources without inventing checkout intents. Hosts own the
+evidence review, authorization policy and explicit migration runner.
+
 The `billing` package (`external/billing`) gives you the tools for core subscription and billing event management, with MongoDB persistence. It acts as the data layer for your billing system, handling how you store, retrieve, and manage subscriptions and billing events, using optimised indexes for better performance.
 
 ## Table of Contents

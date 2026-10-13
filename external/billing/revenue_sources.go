@@ -199,7 +199,7 @@ func (s *RevenueService) GetRevenueSourceResolution(ctx context.Context, id stri
 	if err != nil {
 		return RevenueObservation{}, err
 	}
-	return s.GetRevenueObservation(ctx, revenueID(original.Scope, "resolution", original.ID, "", "", ""))
+	return s.GetRevenueObservation(ctx, original.ResolutionID())
 }
 
 // GetRevenueDelivery reads one owning immutable reception record by its verified

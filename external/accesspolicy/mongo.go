@@ -61,6 +61,50 @@ func NewMongoStore(ctx context.Context, repo *repository.MongoDbRepository) (*Mo
 	return &MongoStore{database: db, core: repo}, nil
 }
 
+// NewMongoReadStore borrows already prepared policy collections for explicit
+// read/enforce-only processes. It checks collection presence without creating
+// indexes, running a write probe or seeding grants. Mutation/fenced callback
+// methods are unavailable; normal startup still uses NewMongoStore/Initialize.
+func NewMongoReadStore(ctx context.Context, repo *repository.MongoDbRepository) (Store, error) {
+	s, err := NewMongoStore(ctx, repo)
+	if err != nil {
+		return nil, err
+	}
+	names, err := s.database.ListCollectionNames(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	present := map[string]bool{}
+	for _, name := range names {
+		present[name] = true
+	}
+	for _, name := range []string{grantCollection, auditCollection, counterCollection, receiptCollection} {
+		if !present[name] {
+			return nil, ErrConfiguration
+		}
+	}
+	s.ready.Store(true)
+	return mongoReadStore{s}, nil
+}
+
+type mongoReadStore struct{ store *MongoStore }
+
+func (r mongoReadStore) Read(ctx context.Context, subject Subject) (Grant, error) {
+	return r.store.Read(ctx, subject)
+}
+func (mongoReadStore) Replace(context.Context, Grant, int64, string, time.Time) (Grant, error) {
+	return Grant{}, ErrConfiguration
+}
+func (mongoReadStore) WithGrant(context.Context, Subject, time.Time, func(context.Context, Grant) error) error {
+	return ErrConfiguration
+}
+func (mongoReadStore) Consume(context.Context, Consumption, time.Time) (Usage, error) {
+	return Usage{}, ErrConfiguration
+}
+func (mongoReadStore) WithConsumption(context.Context, Consumption, time.Time, ConsumptionAction) (Usage, error) {
+	return Usage{}, ErrConfiguration
+}
+
 // Initialize idempotently creates the four collections and verifies transactional
 // read/write/commit support. Setup requires create/read/write/delete privileges;
 // it seeds no policy and its atomic probe leaves no committed document behind.

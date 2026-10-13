@@ -84,6 +84,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Optional encrypted [historical checkout receipts and session reservations](external/billing/revenuestore/README.md#historical-checkout-migration-receipts)
+  for explicitly reviewed host migrations. Shared native reservations prevent
+  conflicting modern acknowledgements without fabricating checkout intents.
+  Hosts own recovery policy and runners; normal financial reconciliation still
+  accepts revenue. Optional [provider proof capabilities](external/paymentprovider/README.md#explicit-historical-checkout-migration-proof)
+  verify retained snapshots and complete current unadjusted payment evidence.
+- A borrowed read/enforce-only [policy store](external/accesspolicy/README.md)
+  for prepared databases, without startup write probes or policy mutation.
+
 - Authenticated [paid-subscription evidence](external/paymentprovider/README.md#current-paid-subscription-evidence)
   and optional [paid-partner acquisition](external/partnermanager/README.md#optional-paid-partner-acquisition).
   New enrollment and referrals can require a current paid period while existing

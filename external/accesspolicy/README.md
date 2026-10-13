@@ -335,3 +335,14 @@ separate verification.
 Before replacing legacy tier rules, migrate reviewed grants, wire route guards
 and token inventory through the same managed client, and verify rollback. Do not
 seed blanket administrator privileges or retain a missing-grant role fallback.
+
+## Borrowed policy reader
+
+`NewMongoReadStore(ctx, core)` is for explicit read/enforce-only operator
+processes borrowing already prepared policy collections. It checks their
+presence without startup write probes, index creation or seeded grants.
+`NewService(reader, nil)` can resolve/authorize current grants, including
+revocation. Mutation, quota consumption and fenced business callbacks return
+`ErrConfiguration` before executing callbacks. Normal application startup still
+uses `NewMongoStore` followed by `Initialize`; this reader is not a replacement
+for transactional policy management or preparation.

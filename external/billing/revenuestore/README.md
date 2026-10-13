@@ -218,3 +218,17 @@ validates its joined intent and original forward acknowledgement before returnin
 a result. This read adds no document kind, migration or index, and does not write
 checkout, revenue or lifecycle records. Missing or inconsistent joins fail closed.
 See [original checkout status](../README.md#original-acknowledged-checkout-status).
+
+## Historical checkout migration receipts
+
+The optional `billing.LegacyCheckoutMigrationTx` stores an encrypted immutable
+`billing_legacy_checkout_migration` receipt and reserves the existing unique
+`billing_checkout_session` scope/session key with empty `IntentID` and explicit
+`legacy_migration_id`. This is historical ownership, not a forward
+acknowledgement. Older/new acknowledgement writers conflict on the same key.
+Reservation, association and native principal/lifecycle projections commit under
+one checkout scope transaction guard. Replays validate all those records and
+the immutable original source; orphaned or unreadable records never become
+conclusive absence. The host-owned migration supplies
+current authority and complete retained/provider proof before invoking this
+trusted persistence surface. No source or financial history is deleted.
