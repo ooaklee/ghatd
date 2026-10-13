@@ -193,11 +193,27 @@ func getCursor(ctx context.Context, tx recordstore.Tx, program, kind string) (pa
 // kind in one owning read transaction.
 func (r *WorkRepository) GetDiscoveryCursor(ctx context.Context, program, kind string) (partnermanager.DiscoveryCursor, error) {
 	var result partnermanager.DiscoveryCursor
+	absent := false
 	err := r.store.Read(ctx, func(tx recordstore.Tx) error {
+		// A transaction callback can be retried; only its final snapshot may
+		// decide whether the cursor exists.
+		result = partnermanager.DiscoveryCursor{}
+		absent = false
 		var err error
 		result, _, err = getCursor(ctx, tx, program, kind)
+		if singleCauseIs(err, partnermanager.ErrNotFound) {
+			// Fresh discovery normally has no cursor. Finish the read normally
+			// so this domain absence is not observed as a database failure.
+			absent = true
+			return nil
+		}
 		return err
 	})
+	// Preserve the public not-found result only after an acknowledged read;
+	// authoritative read/commit errors must take precedence over absence.
+	if err == nil && absent {
+		return result, partnermanager.ErrNotFound
+	}
 	return result, workMapped(err)
 }
 

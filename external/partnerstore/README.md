@@ -174,6 +174,12 @@ independent due time, attempt count, fencing token and decision. Discovery does
 not acknowledge signup or revenue sources. Later input remains discoverable
 while earlier queued failures stay pending.
 
+`GetDiscoveryCursor` returns `partnermanager.ErrNotFound` for fresh discovery.
+The owning read transaction handles that exact absence as a normal outcome,
+so empty discovery does not emit database failure logs or create a cursor.
+Unexpected callback errors and failed reads/commits remain visible and take
+precedence over a captured absence; a retried read uses its final snapshot.
+
 Lease, decision, retry and completion mutations use scope guards and revisioned
 records. A decision is preserved during retry; completion cannot occur without
 its exact committed receipt. Expired/superseded leases cannot mutate another
