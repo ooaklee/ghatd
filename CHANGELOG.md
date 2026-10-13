@@ -87,7 +87,9 @@ when the release version has been selected, and remove unused subsections.
 - Opt-in [checkout evidence inspection](external/paymentprovider/README.md#checkout-evidence-inspection)
   and [saved binding inspection](external/billing/README.md#checkout-binding-inspection)
   return existing provider facts and redacted owning states without repairing,
-  acknowledging or associating a checkout. Existing financial readers remain strict.
+  acknowledging or associating a checkout. Local snapshot inspection supports
+  existing legacy and versioned source fingerprints. Existing financial readers
+  and legacy recovery verification remain strict.
 
 - Authenticated [paid-subscription evidence](external/paymentprovider/README.md#current-paid-subscription-evidence)
   and optional [paid-partner acquisition](external/partnermanager/README.md#optional-paid-partner-acquisition).

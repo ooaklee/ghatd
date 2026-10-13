@@ -190,6 +190,13 @@ This result establishes no application ownership, payment acceptance or access.
 Normal revenue and lifecycle checkout readers retain their strict requirements.
 Hosts must authorize private inspection and avoid displaying its identifiers.
 
+`RevenueSnapshotInspector` also checks an original retained snapshot against
+the trusted owning source's legacy or current fingerprint, using native provider
+canonicalization. The Stripe versioned refund digest excludes only rendered
+receipt URLs; all other economic fields remain bound. This local comparison
+provides no fresh delivery authentication, API verification or recovery authority.
+The existing legacy recovery `RevenueSnapshotVerifier` remains unchanged.
+
 ## Optional original checkout status
 
 `CheckoutStatusProvider` supplies a fresh read for an already retained session;
