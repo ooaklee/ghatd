@@ -96,6 +96,11 @@ replica set. They create uniquely named databases and drop only their own
 fixtures. Production migration, restore, provider evidence and host UI acceptance
 are separate from these repository tests.
 
+Cursor commit-failure tests additionally require `GHATD_TEST_MONGO_FAILPOINT_URI`
+pointing to a dedicated disposable replica set with `enableTestCommands`.
+They scope the failpoint to a unique client application name and disable it
+during cleanup; run them without other failpoint users on that server.
+
 Native financial tests also overlap a claim request or processing assignment
 with a full refund of its backing payment. They verify coherent cancellation or
 retained in-flight reservation, one reversal and unchanged replay. Cumulative
@@ -174,6 +179,12 @@ independent due time, attempt count, fencing token and decision. Discovery does
 not acknowledge signup or revenue sources. Later input remains discoverable
 while earlier queued failures stay pending.
 
+`GetDiscoveryCursor` returns `partnermanager.ErrNotFound` for fresh discovery.
+The owning read transaction handles that exact absence as a normal outcome,
+so empty discovery does not emit database failure logs or create a cursor.
+Unexpected callback errors and failed reads/commits remain visible and take
+precedence over a captured absence; a retried read uses its final snapshot.
+
 Lease, decision, retry and completion mutations use scope guards and revisioned
 records. A decision is preserved during retry; completion cannot occur without
 its exact committed receipt. Expired/superseded leases cannot mutate another
@@ -195,4 +206,11 @@ for scheduling subsets, privacy, authorization and coverage limitations.
 
 ### Discovery cursor diagnostics
 
-Discovery cursor reads attach `owner_operation=partners.discovery_cursor.read`, an allowlisted `work_kind`, and a Mongo error classifier. A missing cursor retains the existing outward `partnermanager.ErrNotFound` and callback error behavior; this diagnostic change does not normalize absence, seed cursors or suppress logs. `error_identity=partner.not_found` is a sentinel registry match; consult the callback result and full owning outcome before attributing a failure. Unknown work-kind text becomes `unknown`; program/source identifiers are not emitted.
+Discovery cursor reads attach `owner_operation=partners.discovery_cursor.read`,
+an allowlisted `work_kind`, and a Mongo error classifier. A conclusive missing
+cursor completes the owning read normally and returns
+`partnermanager.ErrNotFound` only after that read succeeds. Unexpected lookup,
+decoding, cancellation and commit failures retain their error telemetry.
+`error_identity=partner.not_found` is a sentinel registry match; consult the
+callback result and full owning outcome before attributing a failure. Unknown
+work-kind text becomes `unknown`; program/source identifiers are not emitted.

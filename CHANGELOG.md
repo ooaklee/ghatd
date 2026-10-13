@@ -157,6 +157,10 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Fresh [Partners discovery cursor](external/partnerstore/README.md#workflow-discovery-and-decisions)
+  reads no longer emit database error logs for normal absence. The repository
+  still returns not-found to callers; unexpected storage and read/commit errors
+  retain their original visibility. No cursor seeding or storage migration is required.
 - **Breaking timestamp format:** [User timestamps](external/user/v2/README.md#stored-timestamps) now include an
   explicit UTC `Z` marker in default clock and OAuth writes. `ParseTimestampUTC`
   preserves reads of historical zone-free UTC records and respects RFC3339

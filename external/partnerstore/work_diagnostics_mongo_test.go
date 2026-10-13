@@ -59,6 +59,11 @@ func mongoCursorFixture(t *testing.T, failFind bool) (*WorkRepository, *partnerm
 	if uri == "" {
 		t.Skip("set GHATD_TEST_MONGO_URI to an isolated replica set")
 	}
+	return mongoCursorFixtureAtURI(t, uri, "", failFind)
+}
+
+func mongoCursorFixtureAtURI(t *testing.T, uri, appName string, failFind bool) (*WorkRepository, *partnermanager.WorkQueue, *mongo.Database, context.Context, *cursorRecordingLogger, *cursorCommandResults) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	t.Cleanup(cancel)
 	commands := &cursorCommandResults{succeeded: map[string]int{}}
@@ -74,7 +79,11 @@ func mongoCursorFixture(t *testing.T, failFind bool) (*WorkRepository, *partnerm
 			commands.failed++
 		},
 	}
-	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetMonitor(monitor))
+	clientOptions := options.Client().ApplyURI(uri).SetMonitor(monitor)
+	if appName != "" {
+		clientOptions.SetAppName(appName)
+	}
+	client, err := mongo.Connect(clientOptions)
 	require.NoError(t, err)
 	db := client.Database("ghatd_cursor_test_" + strings.ToLower(rand.Text()))
 	t.Cleanup(func() {
@@ -116,7 +125,7 @@ func (p cursorFailedFindPort) ExecuteFindOneCommandDecodeResult(ctx context.Cont
 	return p.MongoPort.ExecuteFindOneCommandDecodeResult(ctx, collection, filter, result, name, logError, onFailure)
 }
 
-func TestMongoDiscoveryCursorDiagnosticsPreserveAbsenceBehavior(t *testing.T) {
+func TestMongoDiscoveryCursorAbsenceTelemetry(t *testing.T) {
 	cases := []struct {
 		name, kind string
 	}{
@@ -128,6 +137,7 @@ func TestMongoDiscoveryCursorDiagnosticsPreserveAbsenceBehavior(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo, queue, db, ctx, log, commands := mongoCursorFixture(t, false)
+			beforeCommits := commands.succeeded["commitTransaction"]
 			for pass := 0; pass < 3; pass++ {
 				cursor, err := queue.Cursor(ctx, tc.kind)
 				require.NoError(t, err)
@@ -138,29 +148,23 @@ func TestMongoDiscoveryCursorDiagnosticsPreserveAbsenceBehavior(t *testing.T) {
 			count, err := db.Collection("ghatd_owned_records").CountDocuments(ctx, bson.M{"kind": kindWorkCursor})
 			require.NoError(t, err)
 			require.Zero(t, count, "normal cursor reads must not seed durable state")
-			t.Logf("six absent cursor reads: repository errors=%d, successful finds=%d, successful aborts=%d, native command failures=%d", len(log.errors), commands.succeeded["find"], commands.succeeded["abortTransaction"], commands.failed)
+			t.Logf("six absent cursor reads: repository errors=%d, successful finds=%d, successful aborts=%d, successful commits=%d, native command failures=%d, cursor rows=%d", len(log.errors), commands.succeeded["find"], commands.succeeded["abortTransaction"], commands.succeeded["commitTransaction"]-beforeCommits, commands.failed, count)
 			require.Zero(t, commands.failed)
-			require.Len(t, log.errors, 6, "diagnostics must retain the existing error severity and count")
-			require.Equal(t, 6, commands.succeeded["abortTransaction"], "absence must still abort; the behavior fix is separate")
-			for _, entry := range log.observed.FilterMessage("mongo-operation-failed").All() {
-				fields := entry.ContextMap()
-				require.Equal(t, "partners.discovery_cursor.read", fields["owner_operation"])
-				require.Equal(t, tc.kind, fields["work_kind"])
-				require.Equal(t, "partner.not_found", fields["error_identity"])
-				require.Equal(t, "partner.not_found", fields["last_callback_error_identity"])
-				require.EqualValues(t, 1, fields["callback_attempts"])
-				require.NotContains(t, fields, "error")
-			}
+			require.Empty(t, log.errors, "expected absence must not become a database error")
+			require.Zero(t, commands.succeeded["abortTransaction"], "a confirmed absent read must finish normally")
+			require.Equal(t, 6, commands.succeeded["commitTransaction"]-beforeCommits, "each owning read must be acknowledged")
+			require.Empty(t, log.observed.FilterMessage("mongo-operation-failed").All())
 		})
 	}
 }
 
 func TestMongoDiscoveryCursorDiagnosticsPreserveFailures(t *testing.T) {
 	cases := []struct {
-		name                         string
-		seed, corrupt, driverFailure bool
+		name                                    string
+		seed, malformed, corrupt, driverFailure bool
 	}{
 		{name: "existing_cursor", seed: true},
+		{name: "malformed_cursor", seed: true, malformed: true},
 		{name: "unreadable_cursor", seed: true, corrupt: true},
 		{name: "native_database_error", driverFailure: true},
 	}
@@ -174,8 +178,21 @@ func TestMongoDiscoveryCursorDiagnosticsPreserveFailures(t *testing.T) {
 				_, err := db.Collection("ghatd_owned_records").UpdateOne(ctx, bson.M{"kind": kindWorkCursor}, bson.M{"$set": bson.M{"payload": []byte("unreadable")}})
 				require.NoError(t, err)
 			}
+			if tc.malformed {
+				require.NoError(t, repo.store.Transact(ctx, workPartition("fixture-program", partnermanager.WorkSignup), func(tx recordstore.Tx) error {
+					row, err := tx.Get(ctx, kindWorkCursor, workDigest("fixture-program", partnermanager.WorkSignup))
+					if err != nil {
+						return err
+					}
+					malformed, err := recordstore.NewRecord(row.Kind, row.ID, row.Partition, row.Revision+1, partnermanager.DiscoveryCursor{Revision: row.Revision, AfterID: "source"})
+					if err != nil {
+						return err
+					}
+					return tx.Replace(ctx, malformed, row.Revision)
+				}))
+			}
 			cursor, err := repo.GetDiscoveryCursor(ctx, "fixture-program", partnermanager.WorkSignup)
-			if !tc.corrupt && !tc.driverFailure {
+			if !tc.malformed && !tc.corrupt && !tc.driverFailure {
 				require.NoError(t, err)
 				require.Equal(t, "source", cursor.AfterID)
 				require.Empty(t, log.errors)
@@ -188,6 +205,12 @@ func TestMongoDiscoveryCursorDiagnosticsPreserveFailures(t *testing.T) {
 			require.Equal(t, "mongo-operation-failed", last.message)
 			require.Contains(t, last.fields, repository.Field{Key: "operation", Value: "transaction"})
 			require.Contains(t, last.fields, repository.Field{Key: "outcome", Value: "database"})
+			identity := "internal"
+			if tc.malformed {
+				require.ErrorIs(t, err, partnermanager.ErrUnavailable)
+				identity = "partner.unavailable"
+			}
+			requireCursorDiagnosticFields(t, log, partnermanager.WorkSignup, identity, identity, 1)
 			if tc.driverFailure {
 				var server mongo.ServerError
 				require.ErrorAs(t, err, &server)
@@ -195,4 +218,19 @@ func TestMongoDiscoveryCursorDiagnosticsPreserveFailures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func requireCursorDiagnosticFields(t *testing.T, log *cursorRecordingLogger, kind, identity, callbackIdentity string, attempts int) {
+	t.Helper()
+	entries := log.observed.FilterMessage("mongo-operation-failed").All()
+	require.NotEmpty(t, entries)
+	entry := entries[len(entries)-1]
+	require.Equal(t, zap.ErrorLevel, entry.Level)
+	fields := entry.ContextMap()
+	require.Equal(t, "partners.discovery_cursor.read", fields["owner_operation"])
+	require.Equal(t, kind, fields["work_kind"])
+	require.Equal(t, identity, fields["error_identity"])
+	require.Equal(t, callbackIdentity, fields["last_callback_error_identity"])
+	require.EqualValues(t, attempts, fields["callback_attempts"])
+	require.NotContains(t, fields, "error")
 }
