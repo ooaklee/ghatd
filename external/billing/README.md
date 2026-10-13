@@ -1221,3 +1221,7 @@ subscription or one-time checkout. This evidence is separate from persisted
 revenue and lifecycle evidence: existing hashes and subscription validators are
 unchanged. Neither method creates an acknowledgement, payment fact, status record
 or entitlement. See [authenticated status recovery](../billingmanager/README.md#original-checkout-status-recovery).
+
+### Historical association refusal diagnostics
+
+Historical checkout association validation emits `revenue-association-evidence-refused` with a static owning operation, stage and branch cause code. Missing intents and intent/evidence mismatches retain the original refusal sentinel and transaction behavior. No historical identity or authorization contents are logged.

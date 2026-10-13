@@ -192,3 +192,7 @@ Pending work and cursors cannot have expiry metadata. Query order, scope and
 payload checks fail closed, and repeated callbacks reset both output and budget.
 See [backlog semantics](../partnermanager/README.md#worker-backlog-reporting)
 for scheduling subsets, privacy, authorization and coverage limitations.
+
+### Discovery cursor diagnostics
+
+Discovery cursor reads attach `owner_operation=partners.discovery_cursor.read`, an allowlisted `work_kind`, and a Mongo error classifier. A missing cursor retains the existing outward `partnermanager.ErrNotFound` and callback error behavior; this diagnostic change does not normalize absence, seed cursors or suppress logs. `error_identity=partner.not_found` is a sentinel registry match; consult the callback result and full owning outcome before attributing a failure. Unknown work-kind text becomes `unknown`; program/source identifiers are not emitted.

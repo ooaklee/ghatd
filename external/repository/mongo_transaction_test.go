@@ -106,7 +106,13 @@ func TestMongoTransactionAtomicity(t *testing.T) {
 			require.Equal(t, tc.count, count)
 			for _, entry := range log.entries {
 				require.Nil(t, entry.err)
-				require.Len(t, entry.fields, 2)
+				if entry.fields[0].Value == "transaction" {
+					require.Len(t, entry.fields, 4)
+					require.Equal(t, "callback_attempts", entry.fields[2].Key)
+					require.Equal(t, "last_callback_error_identity", entry.fields[3].Key)
+				} else {
+					require.Len(t, entry.fields, 2)
+				}
 				require.Equal(t, "operation", entry.fields[0].Key)
 				require.Equal(t, "outcome", entry.fields[1].Key)
 				require.NotContains(t, fmt.Sprint(entry), "private")

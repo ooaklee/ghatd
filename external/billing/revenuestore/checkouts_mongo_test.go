@@ -9,9 +9,12 @@ import (
 	"time"
 
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // Audit disposition: new named replica-set cases cover immutable checkout
@@ -82,6 +85,8 @@ func TestMongoCheckoutHistoricalBinding(t *testing.T) {
 			if tc.request != nil {
 				tc.request(&r)
 			}
+			core, logs := observer.New(zap.DebugLevel)
+			ctx = logger.TransitWith(ctx, zap.New(core))
 			association, err := svc.ResolveRevenueAssociation(ctx, r)
 			count, countErr := db.Collection("ghatd_owned_records").CountDocuments(ctx, bson.M{"kind": kindCheckoutAssociation})
 			require.NoError(t, countErr)
@@ -89,6 +94,21 @@ func TestMongoCheckoutHistoricalBinding(t *testing.T) {
 				require.ErrorIs(t, err, tc.want)
 				require.Empty(t, association.PrincipalID)
 				require.Zero(t, count)
+				expected := map[string]string{
+					"legacy_subscription_without_owning_intent_is_not_backfilled":     "checkout_intent_missing",
+					"another_paying_principal_is_not_inferred_from_provider_metadata": "checkout_intent_mismatch",
+					"wrong_original_amount_does_not_link":                             "checkout_intent_mismatch",
+					"wrong_original_cadence_does_not_link":                            "checkout_intent_mismatch",
+					"wrong_customer_is_not_joined_by_email":                           "checkout_evidence_mismatch",
+					"conclusive_unassessable_provider_evidence_is_normalized":         "provider_checkout_unassessable",
+				}[tc.name]
+				if expected != "" {
+					entries := logs.FilterMessage("revenue-association-evidence-refused").All()
+					require.Len(t, entries, 1)
+					require.Equal(t, expected, entries[0].ContextMap()["cause_code"])
+					require.NotContains(t, entries[0].ContextMap(), "error")
+					require.NotContains(t, entries[0].ContextMap(), "intent_id")
+				}
 				return
 			}
 			require.NoError(t, err)

@@ -3,9 +3,13 @@ package billingmanager
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/paymentprovider"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"testing"
 	"time"
 )
@@ -68,6 +72,7 @@ func TestRevenueSourceScopedRecovery(t *testing.T) {
 		providerError      error
 		sourceError        error
 		associationError   error
+		providerReason     string
 		wrongScope         bool
 		changedFingerprint bool
 		want               error
@@ -81,6 +86,8 @@ func TestRevenueSourceScopedRecovery(t *testing.T) {
 		{name: "source_receipt_lookup_outage_keeps_pending", sourceError: billing.ErrRevenueUnavailable, want: billing.ErrRevenueUnavailable},
 		{name: "joined_absence_and_outage_cannot_create_resolution", sourceError: errors.Join(billing.ErrRevenueNotFound, billing.ErrRevenueUnavailable), want: billing.ErrRevenueUnavailable},
 		{name: "unresolved_historical_payer_has_no_false_completion", associationError: billing.ErrRevenueNotFound, want: billing.ErrRevenueUnassessable},
+		{name: "current_reason_differs_from_immutable_original", providerReason: "original_payment_pending", want: billing.ErrRevenueUnassessable},
+		{name: "private_current_provider_reason_is_not_logged", providerReason: "signed-provider-payload user@example.test", want: billing.ErrRevenueUnassessable},
 		{name: "refetched_scope_must_match_persisted_source", wrongScope: true, want: billing.ErrRevenueInvalid},
 		{name: "stale_original_fingerprint_is_denied", changedFingerprint: true, want: billing.ErrRevenueConflict},
 	}
@@ -90,6 +97,7 @@ func TestRevenueSourceScopedRecovery(t *testing.T) {
 			at := time.Now().UTC()
 			invoice := &paymentprovider.RevenueInvoiceEvidence{Scope: scope, InvoiceID: "in_paid", PaymentID: "pi_paid", CustomerID: "cus_payer", SubscriptionID: "sub_recurring", Currency: "GBP", CurrencyExponent: 2, PaidAt: at, GrossPaidMinor: 1200, Lines: []paymentprovider.RevenueLineEvidence{{ID: "il_one", SubscriptionID: "sub_recurring", PriceID: "price_snapshot", NetPaidMinor: 1000}}}
 			p := &recoveryRevenueProvider{revenueBoundaryProvider: &revenueBoundaryProvider{e: &paymentprovider.RevenueEvidence{Scope: scope, EnvelopeID: "evt_pending", Kind: billing.RevenuePayment, PaymentID: "pi_paid", Invoice: invoice}, err: tc.providerError}}
+			p.e.QuarantineReason = tc.providerReason
 			if tc.wrongScope {
 				p.e.Scope.AccountID = "acct_other"
 			}
@@ -106,15 +114,41 @@ func TestRevenueSourceScopedRecovery(t *testing.T) {
 			require.NoError(t, err)
 			_, err = s.WithRevenueReconciliationAuthority(auth)
 			require.NoError(t, err)
-			result, err := s.ReconcileRevenueSource(context.Background(), req)
+			core, logs := observer.New(zap.DebugLevel)
+			ctx := logger.TransitWith(context.Background(), zap.New(core))
+			result, err := s.ReconcileRevenueSource(ctx, req)
 			require.Equal(t, 1, auth.calls)
 			if tc.want != nil {
 				require.ErrorIs(t, err, tc.want)
 				require.Empty(t, result.ID)
 				require.Empty(t, feed.resolved)
+				entries := logs.FilterMessage("revenue-source-reconciliation-failed").All()
+				require.Len(t, entries, 1)
+				fields := entries[0].ContextMap()
+				require.Equal(t, "billing.revenue_source.reconcile", fields["owner_operation"])
+				require.NotContains(t, fields, "error")
+				require.NotContains(t, fields, "observation_id")
+				if tc.associationError != nil {
+					require.Equal(t, "assess_current_evidence", fields["stage"])
+					require.Equal(t, "historical_payer_plan_pending", fields["current_quarantine_reason"])
+					require.Equal(t, "revenue_unassessable", fields["cause_code"])
+				}
+				if tc.providerReason != "" {
+					require.Equal(t, "historical_payer_plan_pending", fields["original_quarantine_reason"])
+					require.Equal(t, diagnosticQuarantineReason(tc.providerReason), fields["current_quarantine_reason"])
+					require.Equal(t, "historical_payer_plan_pending", feed.source.QuarantineReason, "diagnostics must preserve original evidence")
+					require.NotContains(t, fields, "signed-provider-payload")
+					require.NotContains(t, fmt.Sprint(fields), "user@example.test")
+				}
+				if tc.providerError != nil {
+					require.Equal(t, "retrieve_provider_event", fields["stage"])
+					require.Equal(t, "not_assessed", fields["current_quarantine_reason"])
+				}
+				require.NotContains(t, fields, "actor_id")
 				return
 			}
 			require.NoError(t, err)
+			require.Empty(t, logs.FilterMessage("revenue-source-reconciliation-failed").All())
 			if tc.existing {
 				require.Equal(t, "already-committed", result.ID)
 				require.Zero(t, p.calls)

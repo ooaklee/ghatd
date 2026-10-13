@@ -10,10 +10,12 @@ import (
 
 	"github.com/ooaklee/ghatd/external/billing"
 	"github.com/ooaklee/ghatd/external/billingmanager"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/partnerearnings"
 	"github.com/ooaklee/ghatd/external/partnerprogram"
 	"github.com/ooaklee/ghatd/external/referral"
 	"github.com/ooaklee/ghatd/external/user/v2"
+	"go.uber.org/zap"
 )
 
 // SignupFeed is the owning identity creation/consumption capability. Discovery
@@ -153,7 +155,9 @@ func (w *Worker) RunOnce(ctx context.Context) (WorkerReport, error) {
 		return report, ErrUnavailable
 	}
 	var failures []error
+	passCtx := ctx
 	for _, kind := range []string{WorkSignup, WorkRevenueSource, WorkRevenue, WorkMaturity} {
+		ctx = logger.WithPackage(passCtx, "external/partnermanager", zap.String("work_kind", kind))
 		if err := w.authorize(ctx, kind, ""); err != nil {
 			return report, err
 		}

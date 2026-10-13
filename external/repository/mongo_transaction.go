@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"crypto/rand"
+	"github.com/ooaklee/ghatd/external/observability"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -43,7 +44,17 @@ func (r *MongoDbRepository) WithMongoTransaction(ctx context.Context, db *mongo.
 		defer cancel()
 		session.EndSession(cleanup)
 	}()
-	_, err = session.WithTransaction(ctx, func(tx context.Context) (any, error) {
+	callbackAttempts := 0
+	lastCallbackIdentity := "not_run"
+	_, err = session.WithTransaction(ctx, func(tx context.Context) (result any, callbackErr error) {
+		callbackAttempts++
+		defer func() {
+			classifier, _ := tx.Value(mongoErrorClassifierKey{}).(*observability.ErrorClassifier)
+			lastCallbackIdentity = classifier.Classify(callbackErr).Code
+			if callbackErr == nil {
+				lastCallbackIdentity = "success"
+			}
+		}()
 		if err := tx.Err(); err != nil {
 			return nil, err
 		}
@@ -55,7 +66,7 @@ func (r *MongoDbRepository) WithMongoTransaction(ctx context.Context, db *mongo.
 		}
 		return nil, tx.Err()
 	}, options.Transaction().SetReadConcern(readconcern.Snapshot()).SetWriteConcern(writeconcern.Majority()).SetReadPreference(readpref.Primary()))
-	observeMongo(ctx, r.helper, "transaction", err)
+	observeMongo(ctx, r.helper, "transaction", err, Field{Key: "callback_attempts", Value: callbackAttempts}, Field{Key: "last_callback_error_identity", Value: lastCallbackIdentity})
 	return err
 }
 

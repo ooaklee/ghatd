@@ -3,6 +3,8 @@ package paymentprovider
 import (
 	"context"
 	"encoding/json"
+	"github.com/ooaklee/ghatd/external/logger"
+	"go.uber.org/zap"
 	"net/url"
 	"strings"
 	"time"
@@ -34,7 +36,7 @@ func (s *StripeProvider) verifyCheckoutMerchant(ctx context.Context, scope Reven
 		return err
 	}
 	if rawStripeID(account["id"]) != scope.AccountID {
-		return ErrRevenueUnassessable
+		return checkoutEvidenceRefusal(ctx, "merchant_scope_mismatch")
 	}
 	return nil
 }
@@ -44,7 +46,7 @@ func (s *StripeProvider) verifyCheckoutMerchant(ctx context.Context, scope Reven
 // scope or incomplete original line evidence are never guessed from metadata.
 func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope RevenueScope, subscription string) (RevenueCheckoutEvidence, error) {
 	if !stripeRevenueObjectID.MatchString(subscription) || !strings.HasPrefix(subscription, "sub_") {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "subscription_reference_invalid")
 	}
 	if err := s.verifyCheckoutMerchant(ctx, scope); err != nil {
 		return RevenueCheckoutEvidence{}, err
@@ -54,7 +56,7 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 		return RevenueCheckoutEvidence{}, err
 	}
 	if len(sessions) != 1 {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_count_not_one")
 	}
 	return s.checkoutSessionEvidence(ctx, scope, sessions[0], "", subscription)
 }
@@ -65,7 +67,7 @@ func (s *StripeProvider) LookupRevenueCheckout(ctx context.Context, scope Revenu
 // must still bind the returned evidence to its original server authorization.
 func (s *StripeProvider) LookupRevenueCheckoutSessionEvidence(ctx context.Context, scope RevenueScope, id string) (RevenueCheckoutEvidence, error) {
 	if !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_reference_invalid")
 	}
 	if err := s.verifyCheckoutMerchant(ctx, scope); err != nil {
 		return RevenueCheckoutEvidence{}, err
@@ -87,45 +89,45 @@ func (s *StripeProvider) checkoutSessionEvidence(ctx context.Context, scope Reve
 	id := rawStripeID(session["id"])
 	subscription := rawStripeID(session["subscription"])
 	if rawStripeString(session["object"]) != "checkout.session" || !stripeRevenueObjectID.MatchString(id) || !strings.HasPrefix(id, "cs_") || (expectedSession != "" && id != expectedSession) || !stripeRevenueObjectID.MatchString(subscription) || !strings.HasPrefix(subscription, "sub_") || (expectedSubscription != "" && subscription != expectedSubscription) || !rawStripeMode(session, scope) || rawStripeString(session["mode"]) != CheckoutModeSubscription || rawStripeString(session["status"]) != "complete" {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_shape_or_scope_invalid")
 	}
 	var metadata map[string]string
 	if json.Unmarshal(session["metadata"], &metadata) != nil || strings.TrimSpace(metadata["checkout_intent_id"]) == "" {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_intent_reference_missing")
 	}
 	created, known := rawStripeInt(session["created"])
 	customer := rawStripeID(session["customer"])
 	reference := rawStripeString(session["client_reference_id"])
 	currency := strings.ToUpper(rawStripeString(session["currency"]))
 	if !known || created <= 0 || !stripeRevenueObjectID.MatchString(customer) || !strings.HasPrefix(customer, "cus_") || reference == "" || !validCheckoutEvidenceCurrency(currency) {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_session_economics_invalid")
 	}
 	lines, err := s.revenueList(ctx, scope, "/v1/checkout/sessions/"+url.PathEscape(id)+"/line_items")
 	if err != nil {
 		return RevenueCheckoutEvidence{}, err
 	}
 	if len(lines) != 1 {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_line_count_not_one")
 	}
 	line := lines[0]
 	quantity, known := rawStripeInt(line["quantity"])
 	var price map[string]json.RawMessage
 	if !known || quantity != 1 || json.Unmarshal(line["price"], &price) != nil || rawStripeString(price["object"]) != "price" || !rawStripeMode(price, scope) || rawStripeString(price["type"]) != "recurring" || strings.ToUpper(rawStripeString(price["currency"])) != currency || strings.ToUpper(rawStripeString(line["currency"])) != currency {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_price_shape_or_scope_invalid")
 	}
 	amount, amountKnown := rawStripeInt(price["unit_amount"])
 	var recurring map[string]json.RawMessage
 	if !amountKnown || amount <= 0 || json.Unmarshal(price["recurring"], &recurring) != nil {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_price_amount_invalid")
 	}
 	count, countKnown := rawStripeInt(recurring["interval_count"])
 	cadence := rawStripeString(recurring["interval"])
 	if !countKnown || count != 1 || (cadence != "week" && cadence != "month" && cadence != "year") {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_price_cadence_invalid")
 	}
 	priceID := rawStripeID(price["id"])
 	if !stripeRevenueObjectID.MatchString(priceID) || !strings.HasPrefix(priceID, "price_") {
-		return RevenueCheckoutEvidence{}, ErrRevenueUnassessable
+		return RevenueCheckoutEvidence{}, checkoutEvidenceRefusal(ctx, "checkout_price_reference_invalid")
 	}
 	return RevenueCheckoutEvidence{Scope: scope, SessionID: id, IntentID: metadata["checkout_intent_id"], ClientReferenceID: reference, CustomerID: customer, SubscriptionID: subscription, PriceID: priceID, Currency: currency, Mode: CheckoutModeSubscription, Status: "complete", CreatedAt: time.Unix(created, 0).UTC(), UnitAmountMinor: amount, IntervalCount: count, BillingCadence: cadence}, nil
 }
@@ -169,3 +171,11 @@ func (s *StripeProvider) RetrieveRevenueCheckoutSession(ctx context.Context, sco
 
 var _ RevenueCheckoutProvider = (*StripeProvider)(nil)
 var _ RevenueCheckoutSessionEvidenceProvider = (*StripeProvider)(nil)
+
+// Refusal codes identify the owning validation branch without provider data.
+func checkoutEvidenceRefusal(ctx context.Context, code string) error {
+	if ctx != nil {
+		logger.AcquirePackageFrom(ctx, "external/paymentprovider").Warn("stripe-checkout-revenue-evidence-refused", zap.String("owner_operation", "stripe.checkout_revenue_evidence"), zap.String("stage", "historical_checkout_evidence"), zap.String("cause_code", code))
+	}
+	return ErrRevenueUnassessable
+}
