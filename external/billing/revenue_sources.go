@@ -27,6 +27,15 @@ type RevenueSourceRepository interface {
 	FindPaymentRevenueFacts(context.Context, RevenueScope, string) ([]RevenueFact, error)
 }
 
+// RevenueSourceResolutionRepository optionally reads a required original
+// observation and its optional resolution in one owning snapshot. Only a
+// conclusive missing resolution is a normal read outcome; the public
+// ErrRevenueNotFound is returned after that read succeeds. Missing originals,
+// unreadable records and failed reads/commits remain failures.
+type RevenueSourceResolutionRepository interface {
+	GetRevenueSourceResolution(context.Context, string) (RevenueObservation, error)
+}
+
 // GetRevenueObservation validates the observation ID, requires the optional
 // source-reconciliation extension, and forwards the owning read by identity.
 func (s *RevenueService) GetRevenueObservation(ctx context.Context, id string) (RevenueObservation, error) {
@@ -195,6 +204,17 @@ func singleRevenueCause(err, target error) bool {
 // GetRevenueSourceResolution reads the immutable owning acceptance for recovery
 // before calling a provider again. Absence and outage remain distinct.
 func (s *RevenueService) GetRevenueSourceResolution(ctx context.Context, id string) (RevenueObservation, error) {
+	if err := revenueContext(ctx); err != nil {
+		return RevenueObservation{}, err
+	}
+	if !validRevenueIdentity(id) {
+		return RevenueObservation{}, ErrRevenueInvalid
+	}
+	if repo, ok := s.repo.(RevenueSourceResolutionRepository); ok {
+		return repo.GetRevenueSourceResolution(ctx, id)
+	}
+	// Retain the existing source-repository contract for custom repositories
+	// that do not expose the optional owning snapshot capability.
 	original, err := s.GetRevenueObservation(ctx, id)
 	if err != nil {
 		return RevenueObservation{}, err

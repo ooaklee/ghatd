@@ -3,7 +3,9 @@ package revenuestore
 import (
 	"context"
 	"github.com/ooaklee/ghatd/external/billing"
+	"github.com/ooaklee/ghatd/external/logger"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
+	"go.uber.org/zap"
 	"sort"
 )
 
@@ -23,6 +25,46 @@ func (r *Repository) GetRevenueObservation(ctx context.Context, id string) (bill
 	})
 	if err != nil {
 		return billing.RevenueObservation{}, mapped(err)
+	}
+	return result, nil
+}
+
+// GetRevenueSourceResolution reads the required original and its optional
+// resolution together. Expected resolution absence finishes the transaction
+// normally; no record is created, and read/commit failures take precedence.
+func (r *Repository) GetRevenueSourceResolution(ctx context.Context, id string) (billing.RevenueObservation, error) {
+	if ctx != nil {
+		ctx = logger.WithPackage(ctx, "external/billing/revenuestore", zap.String("lookup_site", "billing.revenue_source.resolution"))
+	}
+	var result billing.RevenueObservation
+	absent := false
+	err := r.store.Read(ctx, func(tx recordstore.Tx) error {
+		// A repeated callback must publish only its final snapshot.
+		result = billing.RevenueObservation{}
+		absent = false
+		reader := &bound{tx}
+		original, err := reader.GetObservation(ctx, id)
+		if err != nil {
+			// The original is required; its absence is never normalized.
+			return err
+		}
+		result, err = reader.GetObservation(ctx, original.ResolutionID())
+		if singleCause(err, billing.ErrRevenueNotFound) {
+			absent = true
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return billing.RevenueObservation{}, mapped(err)
+	}
+	if ctx != nil {
+		if err := ctx.Err(); err != nil {
+			return billing.RevenueObservation{}, err
+		}
+	}
+	if absent {
+		return billing.RevenueObservation{}, billing.ErrRevenueNotFound
 	}
 	return result, nil
 }
@@ -123,3 +165,4 @@ func (r *Repository) FindPaymentRevenueFacts(ctx context.Context, scope billing.
 }
 
 var _ billing.RevenuePagingRepository = (*Repository)(nil)
+var _ billing.RevenueSourceResolutionRepository = (*Repository)(nil)

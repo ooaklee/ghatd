@@ -862,6 +862,14 @@ the original quarantine remains available. Lost acknowledgement is recovered by
 reading/replaying the immutable resolution. Source digests and actor identity
 are private JSON fields, retained explicitly in encrypted persistence.
 
+Optional `RevenueSourceResolutionRepository` reads the required original and its
+optional resolution in one owning snapshot. The native adapter returns normal
+resolution absence only after that read is acknowledged; missing originals,
+corrupt records, cancellation and read/commit failures remain errors. Each retry
+uses its own snapshot. `GetRevenueObservation` retains its required-read contract.
+Custom repositories without this capability retain the two-getter compatibility
+path; opting in requires preserving the complete owning-read contract.
+
 An optional private `ResolveRevenueRequest.RecoveryFingerprint` binds the
 immutable resolution to the independently authenticated stable provider
 snapshot. It participates in changed-replay detection, while the original
@@ -899,6 +907,11 @@ session for one intent within provider/account/live scope. A lost POST response
 leaves the intent unresolved; it is not evidence that submission failed.
 
 `ResolveRevenueAssociation` first reads immutable subscription/price history.
+The initial association may be absent. Only a conclusive single-cause not-found
+is normal within that owning read; provider lookup starts after the read succeeds.
+Joined errors, corrupt records, cancellation and commit failures remain visible,
+and retries discard earlier results. This does not make missing checkout intent
+or acknowledgement evidence eligible for revenue recovery.
 For new history, it requires authenticated complete checkout-session/line-item
 evidence and a matching pre-existing intent. Provider metadata supplies only the
 opaque intent pointer; principal and plan/cost come from the owning record.

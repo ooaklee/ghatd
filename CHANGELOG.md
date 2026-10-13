@@ -157,6 +157,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Normal [revenue source resolution](external/billing/README.md#verified-revenue-feed)
+  and initial checkout association absence no longer emit database error logs
+  through the native optional reads. Required observations, genuine read/commit
+  failures and historical checkout quarantine remain visible. No financial record
+  or migration is changed.
 - Fresh [Partners discovery cursor](external/partnerstore/README.md#workflow-discovery-and-decisions)
   reads no longer emit database error logs for normal absence. The repository
   still returns not-found to callers; unexpected storage and read/commit errors

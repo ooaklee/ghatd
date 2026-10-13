@@ -41,6 +41,18 @@ observations are separate from consumer fact acknowledgements. Original payment
 lookups collect complete owning history and isolate provider/account/mode;
 future indexed projections may optimize this without returning partial data.
 
+`GetRevenueSourceResolution` implements the optional owning snapshot: the original
+observation is required, and only its derived resolution may be absent. A strict
+single-cause not-found on the second read completes the transaction before the
+adapter returns not-found to its caller. Required absence, malformed metadata,
+decode failure, cancellation and read/commit failure retain their diagnostic
+causes. Callback retries reset result and absence state. This read creates no
+source, resolution or financial record; `GetRevenueObservation` remains required.
+Bounded `lookup_site=billing.revenue_source.resolution` context identifies this
+snapshot without replacing an existing `owner_operation`. The owning checkout
+service similarly marks its optional initial association read with
+`lookup_site=billing.revenue_association.stored`; genuine failures remain visible.
+
 The encrypted observation envelope optionally retains the private
 `RecoveryFingerprint` alongside the original `SourceFingerprint`. Existing
 rows without this field continue to decode. A present recovery fingerprint is
@@ -232,3 +244,14 @@ the immutable original source; orphaned or unreadable records never become
 conclusive absence. The host-owned migration supplies
 current authority and complete retained/provider proof before invoking this
 trusted persistence surface. No source or financial history is deleted.
+
+## Native optional-read verification
+
+Replica-set tests use `GHATD_TEST_MONGO_URI` and fixture-only encryption keys.
+Commit-fault tests additionally require `GHATD_TEST_MONGO_FAILPOINT_URI` pointing
+to a dedicated disposable Mongo server with `enableTestCommands=1`. Do not set
+this to production or a server shared with other failpoint tests. Faults are
+scoped to a unique client application name, removed on cleanup, and cover commit
+failure, commit retry, callback retry and cancellation without masking real errors.
+Native worker tests retain the historical checkout refusal and quarantine while
+checking that its optional misses emit no transaction-error logs.
