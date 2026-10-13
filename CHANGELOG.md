@@ -84,6 +84,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [checkout evidence inspection](external/paymentprovider/README.md#checkout-evidence-inspection)
+  and [saved binding inspection](external/billing/README.md#checkout-binding-inspection)
+  return existing provider facts and redacted owning states without repairing,
+  acknowledging or associating a checkout. Existing financial readers remain strict.
+
 - Authenticated [paid-subscription evidence](external/paymentprovider/README.md#current-paid-subscription-evidence)
   and optional [paid-partner acquisition](external/partnermanager/README.md#optional-paid-partner-acquisition).
   New enrollment and referrals can require a current paid period while existing

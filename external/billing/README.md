@@ -16,6 +16,21 @@ The `billing` package (`external/billing`) gives you the tools for core subscrip
 - [Verified revenue feed](#verified-revenue-feed)
 - [Bounded lifecycle source discovery](#bounded-lifecycle-source-discovery)
 
+## Checkout binding inspection
+
+`CheckoutService.InspectCheckoutBinding` is a private diagnostic read over the
+existing owning repository. Hosts authorize the inspection before supplying
+provider evidence. The method reads the scoped reverse session record, frozen
+intent and forward acknowledgement in one snapshot and returns only states and
+term comparisons. It creates no record or financial association.
+
+`missing` means a completed owning lookup returned sole absence. `not_located`
+means no intent identifier was available for lookup; it does not mean the intent
+was proved absent. Decryption, store and joined failures return an error and no
+partial report. A metadata/reference disagreement is reported as a conflict,
+and matching terms do not grant access or prove paid revenue. No existing
+checkout authorization or revenue acceptance rule is relaxed.
+
 ## Key Features
 
 ### 1. **Email-Based Subscriptions**

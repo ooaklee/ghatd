@@ -50,3 +50,11 @@ type RevenueCheckoutSessionEvidenceProvider interface {
 	// intent; completed checkout evidence never establishes paid revenue.
 	LookupRevenueCheckoutSessionEvidence(context.Context, RevenueScope, string) (RevenueCheckoutEvidence, error)
 }
+
+// RevenueCheckoutInspector is an optional diagnostic reader. It returns the
+// existing evidence shape even when the application intent pointer is absent.
+// Its results must never establish revenue, access or checkout ownership.
+type RevenueCheckoutInspector interface {
+	InspectRevenueCheckout(context.Context, RevenueScope, string) (RevenueCheckoutEvidence, error)
+	InspectRevenueCheckoutSession(context.Context, RevenueScope, string) (RevenueCheckoutEvidence, error)
+}

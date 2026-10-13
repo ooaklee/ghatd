@@ -179,6 +179,17 @@ captured checkout submissions also check price/session live mode and returned
 intent/reference correlation. Managers retrieve known sessions via GET instead
 of recreating a POST after idempotency retention expires.
 
+## Checkout evidence inspection
+
+`RevenueCheckoutInspector` is an optional private diagnostic capability. Stripe
+implements authenticated GET-only lookup by a known session ID or a subscription
+with one completed checkout. It returns the existing `RevenueCheckoutEvidence`
+shape while permitting an absent application `checkout_intent_id` pointer.
+Malformed metadata and invalid merchant, mode or economic evidence still fail.
+This result establishes no application ownership, payment acceptance or access.
+Normal revenue and lifecycle checkout readers retain their strict requirements.
+Hosts must authorize private inspection and avoid displaying its identifiers.
+
 ## Optional original checkout status
 
 `CheckoutStatusProvider` supplies a fresh read for an already retained session;
