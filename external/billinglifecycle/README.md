@@ -595,4 +595,51 @@ Hosts retain scheduling, per-pass deadlines and resource lifetime.
 
 ### Execution failure diagnostics
 
-`billing-lifecycle-execution-failed` emits static `owner_operation`, `stage` and conservative `cause_code` fields for execution authority, checkout observation/completion, history inspection, original status resolution and status observation/completion. Joined or unknown failure trees remain `unclassified`. No source, scope, lease or provider data is emitted. Failed public reports still withhold every progress count. This event covers execution failures; admission, scan and final authority failures retain their existing boundary logs.
+`billing-lifecycle-execution-failed` emits static `owner_operation`, `stage` and conservative `cause_code` fields for execution authority, checkout observation/completion, pending/expiry disposition, history inspection, original status resolution and status observation/completion. Joined or unknown failure trees remain `unclassified`. No source, scope, lease or provider data is emitted. Failed public reports still withhold every progress count. This event covers execution failures; admission, scan and final authority failures retain their existing boundary logs.
+
+## Checkout pending and expiry dispositions
+
+When the same configured owner supports authenticated lifecycle status and the
+repository supports atomic expiry, `Worker.RunOnce` reads fresh status after
+retaining the original. Existing captured receipts and retained complete evidence
+keep priority and avoid a new status lookup. A fresh complete checkout still
+passes the original strict complete-evidence lookup/capture path; this adds one
+status lookup to that path. Unsupported custom ports retain the original flow. The runtime registry wrapper checks
+capability for the selected scope, so another provider having status support
+cannot enable this path for a legacy provider.
+
+An exact `open` / `unpaid` checkout stays prepared and uses the existing bounded
+acquisition backoff. It increments `WorkerReport.Pending`, without a fabricated
+receipt or an error. An exact `expired` / `unpaid` checkout is eligible for
+nonpayment retirement only with an authenticated explicit absent-subscription
+field, exact frozen terms and original/bidirectional acknowledgements. New proof
+must be no more than five minutes old; future proof and backward clocks refuse.
+Other status combinations remain genuine failures. `CheckoutExecution.Observe`
+continues to require complete evidence when invoked directly.
+
+`CheckoutExpiryRepository.ExpireCheckout` commits four linked changes in one
+native transaction: an explicit expiry at the shared unique native per-intent
+receipt key; a terminal compare-and-swap of the existing prepared checkout
+outbox; immutable operational completion; and exact leased-job retirement.
+It rechecks native originals, both acknowledgements, retained input, revision,
+fence, lease and clock on every callback attempt. The shared receipt key excludes
+concurrent native capture; the outbox compare-and-swap excludes standalone
+complete-evidence retention. A complete outcome that wins first remains
+recoverable. There is no paid anchor, revenue fact, entitlement or provider write.
+
+Expiry increments `WorkerReport.Expired`, not captured `Completed`. The existing
+`LastCompletionID` denotes operational history; inspect `CompletedExecution.Expiry`
+to distinguish unpaid retirement. `InspectLast` rejoins the immutable native
+expiry and terminal original without provider I/O. Lost replies and uncertain
+commits require durable inspection. Consumed leases cannot repeat writes.
+Current authority is checked before and after the operation, not through an
+atomic cross-domain policy epoch; late denial/cancellation withholds output and
+conserves committed proof for authorized recovery.
+
+**Storage compatibility:** scheduled-job schema and captured schema-1 bytes are
+unchanged. Expiry uses explicit schema-2 completion/native receipt/outbox variants
+that older captured readers reject. Older job scanners can still decode retired
+jobs and skip them. Drain older writers before enabling this behavior; rollback
+readers must retain expiry support to inspect terminal history. Do not rewrite
+expiry as capture or clear a terminal marker to make older code proceed. No
+seeding or data migration is required to read existing records.

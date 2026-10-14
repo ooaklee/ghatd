@@ -144,7 +144,7 @@ func TestLifecycleExecutionDiagnosticPreservesAuthorityFailure(t *testing.T) {
 			if name == "missing_worker_authority" {
 				w.scheduler = nil
 			}
-			got, count, err := w.execute(ctx, job)
+			got, count, _, err := w.execute(ctx, job)
 			require.Error(t, err)
 			require.Equal(t, job, got)
 			require.Zero(t, count)

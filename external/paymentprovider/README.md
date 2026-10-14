@@ -225,3 +225,15 @@ refusing unpaid, refunded, disputed or unresolved-adjustment states. It does not
 change ordinary financial acceptance. `RevenuePaymentSafetyError` preserves its
 owning sentinel with a static refusal code; source JSON, identifiers, API keys
 and provider response bodies are not rendered in the error.
+
+`CheckoutStatusEvidence.SubscriptionAbsent` is true only when the authenticated
+Stripe session contains an explicit JSON `null` subscription field. A missing
+field, empty string, string `"null"`, malformed reference or non-null subscription
+never proves absence. The flag supports an owning nonpayment expiry decision;
+it does not weaken complete checkout evidence or confer payment/access. Older
+custom adapters leave the flag unknown (`false`) and cannot authorize expiry.
+
+Routing adapters can additionally implement `CheckoutStatusCapability` to
+report optional status support for the exact selected revenue scope without
+provider HTTP. Consumers must honor a false scoped result even though the
+router exposes a forwarding `LookupCheckoutStatus` method.

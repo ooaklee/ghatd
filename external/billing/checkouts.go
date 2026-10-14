@@ -373,16 +373,27 @@ func (s *CheckoutService) ResolveRevenueAssociation(ctx context.Context, r Reven
 		return RevenueAssociation{}, ErrRevenueInvalid
 	}
 	var found CheckoutAssociation
-	err := s.repo.ReadCheckout(ctx, func(tx CheckoutTx) error {
+	absent := false
+	readCtx := logger.WithPackage(ctx, "external/billing", zap.String("lookup_site", "billing.revenue_association.stored"))
+	err := s.repo.ReadCheckout(readCtx, func(tx CheckoutTx) error {
+		found = CheckoutAssociation{}
+		absent = false
 		var err error
-		found, err = tx.GetCheckoutAssociation(ctx, r.Scope, r.SubscriptionID, r.ProviderPriceID)
+		found, err = tx.GetCheckoutAssociation(readCtx, r.Scope, r.SubscriptionID, r.ProviderPriceID)
+		if singleRevenueCause(err, ErrRevenueNotFound) {
+			absent = true
+			return nil
+		}
 		return err
 	})
-	if err == nil {
-		return associationResult(found, r)
-	}
-	if !singleRevenueCause(err, ErrRevenueNotFound) {
+	if err != nil {
 		return RevenueAssociation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return RevenueAssociation{}, err
+	}
+	if !absent {
+		return associationResult(found, r)
 	}
 	evidence, err := s.provider.LookupRevenueCheckout(ctx, paymentprovider.RevenueScope{Provider: r.Scope.Provider, AccountID: r.Scope.AccountID, LiveMode: r.Scope.LiveMode}, r.SubscriptionID)
 	if err != nil {

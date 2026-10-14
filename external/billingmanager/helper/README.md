@@ -28,3 +28,12 @@ checkout, err := billing.NewCheckoutService(repository, clock,
 The named fixture tables test retained-scope/session forwarding, missing
 capabilities, errors, cancellation and refusal to use subscription fallback.
 These are adapter tests, not live authenticated-provider delivery evidence.
+
+`CheckoutEvidence` also forwards optional `LookupCheckoutStatus` through the
+exact scope-selected registry provider. Its `SupportsCheckoutStatus(scope)`
+checks that selected provider's capability without provider HTTP. A wrapper
+method alone does not enable status for all registered providers: legacy,
+missing and typed-nil providers report unsupported, and nested scope-specific
+capabilities are honored. Owning billing/lifecycle status detection uses this
+scoped check so legacy providers keep their original complete-evidence flow.
+Lookup failures remain errors; they are never reclassified as unsupported status.

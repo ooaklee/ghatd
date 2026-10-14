@@ -21,6 +21,7 @@ import (
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/event"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -110,13 +111,23 @@ type inputNativeFixture struct {
 
 func nativeInputFixture(t *testing.T) *inputNativeFixture {
 	t.Helper()
+	return nativeInputFixtureWithMonitor(t, nil)
+}
+
+func nativeInputFixtureWithMonitor(t *testing.T, monitor *event.CommandMonitor) *inputNativeFixture {
+	t.Helper()
 	uri := os.Getenv("GHATD_TEST_MONGO_URI")
 	if uri == "" {
 		t.Skip("set GHATD_TEST_MONGO_URI to an isolated native replica set")
 	}
+	return nativeInputFixtureAtURI(t, uri, "", monitor)
+}
+
+func nativeInputFixtureAtURI(t *testing.T, uri, appName string, monitor *event.CommandMonitor) *inputNativeFixture {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	t.Cleanup(cancel)
-	client, err := mongo.Connect(options.Client().ApplyURI(uri))
+	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetAppName(appName).SetMonitor(monitor))
 	require.NoError(t, err)
 	db := client.Database(fmt.Sprintf("hostapp_lifecycle_input_%d", time.Now().UnixNano()))
 	t.Cleanup(func() {

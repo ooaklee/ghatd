@@ -862,6 +862,14 @@ the original quarantine remains available. Lost acknowledgement is recovered by
 reading/replaying the immutable resolution. Source digests and actor identity
 are private JSON fields, retained explicitly in encrypted persistence.
 
+Optional `RevenueSourceResolutionRepository` reads the required original and its
+optional resolution in one owning snapshot. The native adapter returns normal
+resolution absence only after that read is acknowledged; missing originals,
+corrupt records, cancellation and read/commit failures remain errors. Each retry
+uses its own snapshot. `GetRevenueObservation` retains its required-read contract.
+Custom repositories without this capability retain the two-getter compatibility
+path; opting in requires preserving the complete owning-read contract.
+
 An optional private `ResolveRevenueRequest.RecoveryFingerprint` binds the
 immutable resolution to the independently authenticated stable provider
 snapshot. It participates in changed-replay detection, while the original
@@ -899,6 +907,11 @@ session for one intent within provider/account/live scope. A lost POST response
 leaves the intent unresolved; it is not evidence that submission failed.
 
 `ResolveRevenueAssociation` first reads immutable subscription/price history.
+The initial association may be absent. Only a conclusive single-cause not-found
+is normal within that owning read; provider lookup starts after the read succeeds.
+Joined errors, corrupt records, cancellation and commit failures remain visible,
+and retries discard earlier results. This does not make missing checkout intent
+or acknowledgement evidence eligible for revenue recovery.
 For new history, it requires authenticated complete checkout-session/line-item
 evidence and a matching pre-existing intent. Provider metadata supplies only the
 opaque intent pointer; principal and plan/cost come from the owning record.
@@ -1162,6 +1175,10 @@ authority or current storage provenance.
 anchor and original acknowledgements together. Only a missing receipt after
 valid original joins is conclusive absence. Missing joined records are
 unavailable; contradictory ownership or changed original input conflicts.
+Normal first-receipt absence completes its owning read successfully before
+returning not-found, so it does not emit a database-failure log. Snapshot retries
+discard earlier results; read/commit failures and cancellation take precedence
+over absence. Joined errors and custom absence aliases remain failures.
 Later same-owner receipts still depend on the first anchor and its receipt.
 Preparation/recovery does not reset original creation or anchoring times when
 the current clock changes. Native lookup, capture and retained-anchor validation
@@ -1230,3 +1247,21 @@ or entitlement. See [authenticated status recovery](../billingmanager/README.md#
 ### Historical association refusal diagnostics
 
 Historical checkout association validation emits `revenue-association-evidence-refused` with a static owning operation, stage and branch cause code. Missing intents and intent/evidence mismatches retain the original refusal sentinel and transaction behavior. No historical identity or authorization contents are logged.
+
+### Explicit unpaid checkout expiry
+
+`SupportsCheckoutLifecycleStatus(scope)` resolves optional capability for the
+exact selected scope, including registry wrappers and custom providers.
+`LookupCheckoutLifecycleStatus` is an optional owning read of the same original
+and both acknowledgement directions, followed by authenticated provider status.
+`CheckoutLifecycleStatus` retains the observation time separately from provider
+creation time. New dispositions require exact frozen checkout terms, no future
+observation and a maximum five-minute proof age.
+
+`CheckoutLifecycleExpiry` represents only `expired` / `unpaid` with an explicitly
+known absent subscription. It creates no subscription anchor, access or financial
+evidence. A status field omitted by an older custom adapter cannot prove absence.
+`FindCheckoutLifecycleExpiry` recovers immutable expiry under the same original
+joins; it does not refresh historical proof or query a provider. The optional
+`CheckoutExpiryTx` reservation must share the host's exact lease transaction and
+retained-input compare-and-swap. See the [lifecycle host](../billinglifecycle/README.md#checkout-pending-and-expiry-dispositions) for the atomic contract and compatibility requirements.

@@ -84,6 +84,8 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add authenticated unpaid checkout dispositions: open sessions use bounded pending backoff, while strictly verified expired sessions retire atomically with explicit nonpayment proof. Paid and trial completion still use their existing strict evidence path. **Breaking storage compatibility:** expiry history uses explicit variants rejected by older captured readers; drain older writers and retain expiry-aware readers for rollback inspection. Existing job and captured schemas are unchanged. See the [lifecycle host guide](external/billinglifecycle/README.md#checkout-pending-and-expiry-dispositions).
+
 - Optional encrypted [historical checkout receipts and session reservations](external/billing/revenuestore/README.md#historical-checkout-migration-receipts)
   for explicitly reviewed host migrations. Shared native reservations prevent
   conflicting modern acknowledgements without fabricating checkout intents.
@@ -157,10 +159,19 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- Normal [revenue source resolution](external/billing/README.md#verified-revenue-feed)
+  and initial checkout association absence no longer emit database error logs
+  through the native optional reads. Required observations, genuine read/commit
+  failures and historical checkout quarantine remain visible. No financial record
+  or migration is changed.
 - Fresh [Partners discovery cursor](external/partnerstore/README.md#workflow-discovery-and-decisions)
   reads no longer emit database error logs for normal absence. The repository
   still returns not-found to callers; unexpected storage and read/commit errors
   retain their original visibility. No cursor seeding or storage migration is required.
+- [Checkout lifecycle receipt recovery](external/billing/README.md#private-acknowledged-checkout-preparation-and-receipt-recovery)
+  no longer logs normal first-receipt absence as a database failure. Required
+  original joins remain strict, and read/commit failures or cancellation take
+  precedence over absence without creating a receipt.
 - **Breaking timestamp format:** [User timestamps](external/user/v2/README.md#stored-timestamps) now include an
   explicit UTC `Z` marker in default clock and OAuth writes. `ParseTimestampUTC`
   preserves reads of historical zone-free UTC records and respects RFC3339
