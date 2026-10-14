@@ -154,8 +154,14 @@ One `recordstore.Query` selects the source kind and opaque scope partition,
 sorts by ID, and limits input to 1–200 rows using the existing partition index.
 It never substitutes `ReadRevenueHistory` or `FindAll` for this bounded scan.
 Original source pointers and joined receipt/intent/payment evidence, including
-any paid checkout owner's original acknowledgement/session reservation, are
-read in one snapshot; native billing validates their business provenance. Repeated
+any paid checkout owner's original acknowledgement/session reservation or
+reviewed historical migration receipt, are read in one snapshot; native billing
+validates their business provenance. Historical owners require the existing
+receipt, historical reservation, price association, principal/source projection
+and immutable retained source. Missing historical proof fails the page directly
+without invoking the migration's global absence scan. Binding-only historical
+rows advance the cursor only after those joins validate; a later accepted payment
+can make the same owner refreshable. Repeated
 read callbacks reset both their page position and result, while late errors
 return no partially joined page.
 
@@ -210,6 +216,15 @@ an independent replacement. Existing encrypted receipt codecs/hashes remain
 compatible. These joins do not prepare source-discovery coverage or install a
 manager, host worker, recovery outbox or refresh schedule.
 
+
+### Current subscription status snapshots
+
+`ReadSubscriptionStatus` treats only a conclusively absent first head as an
+optional read outcome: the native snapshot completes before returning not-found,
+so normal initial lifecycle work emits no transaction failure. Every repeated
+callback resets its result. Cancellation and read/commit failures take precedence
+over absence, and an existing head's missing or unreadable capture remains a
+required-join error. The read creates no head, receipt or freshness evidence.
 
 ### Original status resolution snapshot
 

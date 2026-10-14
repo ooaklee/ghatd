@@ -1087,8 +1087,12 @@ to both selections; they are read positions, not authorization credentials.
 The adapter reads one indexed bounded page and joins original records in the
 same snapshot. Billing validates canonical accepted payments, frozen checkout
 intent/acknowledgement/session reservations, first lifecycle anchor and receipt,
-and any paid checkout owner with its original acknowledged intent before
-returning the whole page. Missing joins,
+and any paid checkout owner with either its original acknowledged intent or a
+validated reviewed historical migration receipt before returning the whole page.
+Historical receipts join their original retained source, session reservation and
+native association/projections in the same snapshot; they create no synthetic
+intent. An accepted payment can later make that historical owner refreshable.
+Missing joins,
 contradictions, malformed ordering, cancellation and late failure withhold all
 items. A binding without paid or anchored lifecycle evidence is not refreshable,
 but still contributes to cursor progress so it cannot block later sources.

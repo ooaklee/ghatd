@@ -159,6 +159,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- [Lifecycle source discovery](external/billing/README.md#bounded-lifecycle-source-discovery)
+  now validates reviewed historical checkout owners through their retained
+  migration receipts instead of requiring a modern checkout intent. Binding-only
+  rows advance after provenance checks, and later accepted payments remain
+  discoverable. Missing or inconsistent proof still withholds the whole page;
+  no stored history or synthetic intent is created.
+- Initial [subscription status](external/billing/README.md#scoped-current-subscription-status)
+  head absence no longer logs a transaction failure during successful first
+  lifecycle work. Not-found is returned only after the owning read completes;
+  cancellation, read/commit failure and missing required capture receipts remain
+  errors without returning partial evidence.
 - Normal [revenue source resolution](external/billing/README.md#verified-revenue-feed)
   and initial checkout association absence no longer emit database error logs
   through the native optional reads. Required observations, genuine read/commit
