@@ -33,6 +33,12 @@ var opaqueID = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 // review is a private, immutable proposal. Redis alone owns its lifecycle state;
 // neither a browser field nor a freshly-issued session establishes approval.
 type review struct {
+	// Purpose is empty only for the original deployed token format. Capability
+	// reviews require their explicit purpose and a present complete payload.
+	Purpose      string                     `json:"purpose,omitempty"`
+	Capabilities *accesspolicy.Capabilities `json:"capabilities,omitempty"`
+	// BeforeCapabilities supplies a detached explanatory diff for the email only.
+	BeforeCapabilities *accesspolicy.Capabilities `json:"before_capabilities,omitempty"`
 	// ID prevents a response from an older preview authorizing its replacement.
 	ID string `json:"id"`
 	// Target is a stored user ID, never the requesting administrator.

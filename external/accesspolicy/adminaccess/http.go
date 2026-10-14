@@ -43,6 +43,29 @@ const (
 	ReviewHeader = "X-Admin-Review"
 )
 
+// ReviewKind selects one fixed browser purpose from trusted host composition.
+// The empty value preserves the deployed token allowance contract.
+type ReviewKind string
+
+const (
+	// TokenLimits preserves the existing token-allowance namespace and proof format.
+	TokenLimits ReviewKind = "token-limits"
+	// Capabilities opts in to separately bound capability grant review and apply.
+	Capabilities       ReviewKind = "capabilities"
+	CapabilityBasePath            = "/api/v1/admin-capabilities"
+)
+
+// CapabilityManager is the optional owner port for capability review and CAS.
+// Token-only consumers need not implement it.
+type CapabilityManager interface {
+	// ReviewCapabilities reads a live-authorized stored target grant.
+	ReviewCapabilities(context.Context, string) (*accesspolicy.Grant, error)
+	// PreviewCapabilities returns detached current/proposed policy fields without writes.
+	PreviewCapabilities(context.Context, string, accesspolicy.Capabilities) (accesspolicy.CapabilityPreview, error)
+	// ApplyCapabilities rechecks authority and replaces only reviewed fields under audited CAS.
+	ApplyCapabilities(context.Context, string, int64, accesspolicy.Capabilities) (accesspolicy.Grant, error)
+}
+
 // PolicyManager retains all domain validation, live authorization, inventory,
 // audited Mongo CAS and uncertain-outcome semantics in GHATD.
 type PolicyManager interface {
@@ -65,6 +88,8 @@ type EmailSender interface {
 
 // Config is trusted host composition, never populated from HTTP inputs.
 type Config struct {
+	// ReviewKind selects a fixed route namespace and approval purpose, never a request field.
+	ReviewKind ReviewKind
 	// Origin is the single exact browser origin, HTTPS except loopback development.
 	Origin string
 	// System and Environment identify the verified deployment in the UI and binding.
@@ -103,6 +128,17 @@ var ErrorMap = reply.ErrorManifest{
 // New validates the origin and mandatory security ports without I/O. Missing
 // configuration never enables a permissive transport or a default grant.
 func New(c Config) (*Bridge, error) {
+	if c.ReviewKind == "" {
+		c.ReviewKind = TokenLimits
+	}
+	if c.ReviewKind != TokenLimits && c.ReviewKind != Capabilities {
+		return nil, ErrUnavailable
+	}
+	if c.ReviewKind == Capabilities {
+		if _, ok := c.Manager.(CapabilityManager); !ok {
+			return nil, ErrUnavailable
+		}
+	}
 	u, err := url.Parse(c.Origin)
 	if err != nil || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || u.String() != c.Origin {
 		return nil, ErrUnavailable
@@ -123,7 +159,21 @@ func (b *Bridge) Attach(r *router.Router) error {
 	if r == nil {
 		return ErrUnavailable
 	}
-	g := r.NewRouteGroup(BasePath, router.AdminSession, b.browserSession)
+	g := r.NewRouteGroup(b.basePath(), router.AdminSession, b.browserSession)
+	if b.config.ReviewKind == Capabilities {
+		for _, route := range []struct {
+			path, operation string
+			handler         http.HandlerFunc
+		}{
+			{"/session", "Session", b.session}, {"/users/{userID}/review", "ReviewCapabilities", b.reviewCapabilities},
+			{"/users/{userID}/preview", "PreviewCapabilities", b.previewCapabilities},
+			{"/challenge", "Challenge", b.challenge}, {"/confirm", "Confirm", b.confirm}, {"/cancel", "Cancel", b.cancel},
+		} {
+			g.Handle(router.RouteDefinition{Path: route.path, Methods: []string{http.MethodPost}, Operation: "admincapabilities." + route.operation}, route.handler)
+		}
+		g.Handle(router.RouteDefinition{Path: "/users/{userID}", Methods: []string{http.MethodPut}, Operation: "admincapabilities.Apply", Policy: router.RoutePolicy{RevisionRequired: true}}, b.applyCapabilities)
+		return r.ValidateRoutePolicies()
+	}
 	for _, route := range []struct {
 		path, operation string
 		handler         http.HandlerFunc
@@ -172,7 +222,7 @@ func (b *Bridge) browserSession(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Del("Access-Control-Allow-Origin")
 		w.Header().Del("Access-Control-Allow-Credentials")
-		if !strings.HasPrefix(r.URL.Path, BasePath+"/") || (r.Method != http.MethodPost && r.Method != http.MethodPut) || r.URL.RawQuery != "" ||
+		if !strings.HasPrefix(r.URL.Path, b.basePath()+"/") || (r.Method != http.MethodPost && r.Method != http.MethodPut) || r.URL.RawQuery != "" ||
 			one(r, "Origin") != b.config.Origin || one(r, "Sec-Fetch-Site") != "same-origin" || one(r, "Sec-Fetch-Dest") != "empty" || one(r, "X-Admin-Access") != "1" ||
 			len(r.Header.Values("Authorization")) != 0 || len(r.Header.Values("X-Api-Token")) != 0 || len(r.Header.Values("Cookie")) != 1 {
 			b.fail(w, accesspolicy.ErrDenied)
@@ -208,7 +258,11 @@ func (b *Bridge) identity(ctx context.Context) (string, error) {
 	if session == nil || account == nil || actor != account.ID || session.UserID != actor || account.Status != user.AccountStatusKeyActive || !account.IsAdmin() || account.Email == "" || account.Verification == nil || !account.Verification.EmailVerified {
 		return "", accesspolicy.ErrDenied
 	}
-	snapshot, _ := json.Marshal([]any{"token-allowance", b.config.System, b.config.Environment, b.config.Origin, actor, session.AccessUUID, account.Email, account.EmailRevision})
+	purpose := "token-allowance"
+	if b.config.ReviewKind == Capabilities {
+		purpose = "capability-grant-v1"
+	}
+	snapshot, _ := json.Marshal([]any{purpose, b.config.System, b.config.Environment, b.config.Origin, actor, session.AccessUUID, account.Email, account.EmailRevision})
 	return digest(string(snapshot)), nil
 }
 
@@ -243,6 +297,9 @@ type command struct {
 // handle in a header. A no-op never becomes authorization to change a policy.
 func (c *command) Preview(ctx context.Context, target string, limits accesspolicy.TokenLimits) (accesspolicy.TokenLimitPreview, error) {
 	b := c.bridge
+	if b.config.ReviewKind != TokenLimits {
+		return accesspolicy.TokenLimitPreview{}, ErrReview
+	}
 	binding, err := b.identity(ctx)
 	if err != nil {
 		return accesspolicy.TokenLimitPreview{}, err
@@ -272,6 +329,9 @@ func (c *command) Preview(ctx context.Context, target string, limits accesspolic
 // the manager may have committed even when the browser cannot confirm the result.
 func (c *command) Apply(ctx context.Context, target string, revision int64, limits accesspolicy.TokenLimits) (accesspolicy.Grant, error) {
 	b := c.bridge
+	if b.config.ReviewKind != TokenLimits {
+		return accesspolicy.Grant{}, ErrReview
+	}
 	binding, err := b.identity(ctx)
 	if err != nil {
 		return accesspolicy.Grant{}, err
@@ -281,7 +341,7 @@ func (c *command) Apply(ctx context.Context, target string, revision int64, limi
 	if err != nil {
 		return accesspolicy.Grant{}, err
 	}
-	if r.Target != target || r.Revision != revision || r.Limits != limits {
+	if r.Purpose != "" || r.Capabilities != nil || r.Target != target || r.Revision != revision || r.Limits != limits {
 		return accesspolicy.Grant{}, ErrReview
 	}
 	if _, err = b.config.Store.run(ctx, id, binding, "consume", rid, "", "", 0); err != nil {
@@ -325,6 +385,9 @@ func (b *Bridge) bound(r *http.Request) (string, review, error) {
 		return "", review{}, err
 	}
 	rv, err := b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "read", one(r, ReviewHeader), "", "", 0)
+	if err == nil && !b.validReview(rv) {
+		err = ErrReview
+	}
 	return binding, rv, err
 }
 
@@ -345,14 +408,20 @@ func (b *Bridge) challenge(w http.ResponseWriter, r *http.Request) {
 	_, _ = rand.Read(raw[:])
 	code := strings.ToUpper(hex.EncodeToString(raw[:]))
 	account := helpers.AcquireUserFrom(r.Context())
-	_, err = b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "challenge", rv.ID, codeHash(rv.ID, code), account.ID, 0)
+	_, err = b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "challenge", rv.ID, b.codeHash(rv.ID, code), account.ID, 0)
 	if err != nil {
 		b.fail(w, err)
 		return
 	}
 	b.record(r.Context(), "code_requested", rv)
 	body := fmt.Sprintf(`<p>Confirm one token-allowance change in %s (%s) for user %s.</p><p>Permanent: %d; ephemeral: %d; TTL: %d–%d seconds; increment: %d seconds; reviewed revision: %d.</p><p>Code: <strong>%s</strong></p><p>Enter this code only in the Admin Access page where you started. It expires with your review, within five minutes. It does not sign you in, change your email or grant an administrator role. If you did not request this, ignore the email.</p>`, html.EscapeString(b.config.System), html.EscapeString(b.config.Environment), html.EscapeString(rv.Target), rv.Limits.Permanent, rv.Limits.Ephemeral, rv.Limits.MinimumTTL, rv.Limits.MaximumTTL, rv.Limits.TTLIncrement, rv.Revision, code)
-	err = b.config.Email.SendCustomEmail(r.Context(), &emailmanager.SendCustomEmailRequest{MailType: emailprovider.Transactional, EmailSubject: "Confirm token allowance change", EmailPreview: "One reviewed administrator action", EmailBody: body, EmailTo: account.Email, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
+	subject := "Confirm token allowance change"
+	if b.config.ReviewKind == Capabilities {
+		subject = "Confirm capability grant change"
+		proposal, _ := json.Marshal(rv.Capabilities)
+		body = fmt.Sprintf(`<p>Confirm one capability grant change in %s (%s) for user %s.</p><p>Complete replacement (enabled, expiry, scopes and permissions): <code>%s</code>; changes: <code>%s</code>; reviewed revision: %d.</p><p>Code: <strong>%s</strong></p><p>Enter this code only in the Admin Access page where you started. It expires with your review, within five minutes. This is a policy change, not a login or administrator role grant. If you did not request this, ignore the email.</p>`, html.EscapeString(b.config.System), html.EscapeString(b.config.Environment), html.EscapeString(rv.Target), html.EscapeString(string(proposal)), html.EscapeString(capabilityChanges(rv)), rv.Revision, code)
+	}
+	err = b.config.Email.SendCustomEmail(r.Context(), &emailmanager.SendCustomEmailRequest{MailType: emailprovider.Transactional, EmailSubject: subject, EmailPreview: "One reviewed administrator action", EmailBody: body, EmailTo: account.Email, WithFooter: true, UserId: account.ID, RecipientType: "USER"})
 	if err != nil {
 		_, _ = b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "cancel", rv.ID, "", "", 0)
 		b.fail(w, ErrUnavailable)
@@ -374,7 +443,7 @@ func (b *Bridge) confirm(w http.ResponseWriter, r *http.Request) {
 		b.fail(w, err)
 		return
 	}
-	_, err = b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "confirm", rv.ID, codeHash(rv.ID, code), "", 0)
+	_, err = b.config.Store.run(r.Context(), one(r, ContextHeader), binding, "confirm", rv.ID, b.codeHash(rv.ID, code), "", 0)
 	if err != nil {
 		b.record(r.Context(), "code_rejected", rv)
 		b.fail(w, err)

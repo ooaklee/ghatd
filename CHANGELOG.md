@@ -84,6 +84,8 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add separately opted-in browser capability grant review and email-confirmed CAS replacement through the existing owning policy manager. Token allowance approvals retain their deployed namespace and proof format; capability approval uses a distinct purpose and namespace while sharing actor throttles. Both preserve bearer-only APIs, live authority and accounting fields. See the [browser policy approval guide](external/accesspolicy/adminaccess/README.md#explicit-capability-grant-approval).
+
 - Add authenticated unpaid checkout dispositions: open sessions use bounded pending backoff, while strictly verified expired sessions retire atomically with explicit nonpayment proof. Paid and trial completion still use their existing strict evidence path. **Breaking storage compatibility:** expiry history uses explicit variants rejected by older captured readers; drain older writers and retain expiry-aware readers for rollback inspection. Existing job and captured schemas are unchanged. See the [lifecycle host guide](external/billinglifecycle/README.md#checkout-pending-and-expiry-dispositions).
 
 - Optional encrypted [historical checkout receipts and session reservations](external/billing/revenuestore/README.md#historical-checkout-migration-receipts)

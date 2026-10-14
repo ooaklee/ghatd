@@ -63,3 +63,21 @@ func (s *Service) capabilityTarget(ctx context.Context, userID string) error {
 	}
 	return nil
 }
+
+// capabilityPreviewService is optional so existing capability/token consumers
+// keep their current narrow interfaces and opt in explicitly to proposal reads.
+type capabilityPreviewService interface {
+	PreviewCapabilities(context.Context, string, accesspolicy.Capabilities) (accesspolicy.CapabilityPreview, error)
+}
+
+// PreviewCapabilities verifies the stored target and delegates a read-only
+// detached proposal to the owning policy; no inventory is provisioned.
+func (s *Service) PreviewCapabilities(ctx context.Context, userID string, patch accesspolicy.Capabilities) (accesspolicy.CapabilityPreview, error) {
+	if accesspolicy.ValidateCapabilities(patch) != nil {
+		return accesspolicy.CapabilityPreview{}, ErrInvalidRequest
+	}
+	if err := s.capabilityTarget(ctx, userID); err != nil {
+		return accesspolicy.CapabilityPreview{}, err
+	}
+	return s.policy.PreviewCapabilities(ctx, accesspolicy.Subject{System: s.system, Kind: accesspolicy.UserSubject, ID: userID}, patch)
+}

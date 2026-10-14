@@ -183,3 +183,14 @@ go test -race -count=1 ./external/accesspolicymanager ./external/accessmanager/.
 Database cases skip without that variable. Production migration, load, failover
 fault injection and complete host route coverage are separate gates. Retire legacy
 rules only after explicit host migration and rollback decisions are verified.
+
+## Capability proposals for browser approval
+
+`Service.PreviewCapabilities` authorizes the selected stored user and delegates a
+read-only `accesspolicy.CapabilityPreview` to the owning domain. It returns detached
+before/after snapshots with a semantic `changed` flag, preserving token allowances
+and usage budgets. `Handler.PreviewCapabilities` shares the complete four-field
+bounded JSON codec and strong revision ETag with capability apply. These proposal
+ports are optional; existing token-only and capability review/apply implementations
+are unchanged. The browser approval adapter is documented in
+[adminaccess](../accesspolicy/adminaccess/README.md#explicit-capability-grant-approval).

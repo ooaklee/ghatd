@@ -31,7 +31,9 @@ import (
 	"github.com/ooaklee/ghatd/external/user/v2/migrations"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/event"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // capturedMail retains synthetic proof in this test process only; production
@@ -50,6 +52,10 @@ func (m *capturedMail) SendCustomEmail(_ context.Context, r *emailmanager.SendCu
 }
 
 type bridgeFixture struct {
+	routeRegistry  *router.Router
+	owningPolicy   *accesspolicy.Service
+	mutationMu     sync.Mutex
+	mutations      []string
 	ctx            context.Context
 	db             *mongo.Database
 	redis          *redis.Client
@@ -65,7 +71,9 @@ type bridgeFixture struct {
 
 // newBridgeFixture owns one randomly named Mongo database and Redis namespace.
 // Cleanup targets only those generated identities; shared development data stays intact.
-func newBridgeFixture(t *testing.T) *bridgeFixture {
+func newBridgeFixture(t *testing.T) *bridgeFixture { return newBridgeFixtureKind(t, TokenLimits) }
+
+func newBridgeFixtureKind(t *testing.T, kind ReviewKind) *bridgeFixture {
 	t.Helper()
 	uri, addr := os.Getenv("GHATD_TEST_MONGO_URI"), os.Getenv("GHATD_TEST_REDIS_ADDR")
 	if uri == "" || addr == "" {
@@ -73,7 +81,16 @@ func newBridgeFixture(t *testing.T) *bridgeFixture {
 	}
 	ctx := context.Background()
 	namespace := "admin_access_test_" + strings.ReplaceAll(toolbox.GenerateUuidV4(), "-", "")
-	h, err := repositoryhelpers.NewHandler(repositoryhelpers.DefaultConfig(uri, namespace))
+	f := &bridgeFixture{}
+	monitor := &event.CommandMonitor{Started: func(_ context.Context, e *event.CommandStartedEvent) {
+		switch e.CommandName {
+		case "insert", "update", "delete", "findAndModify", "create", "createIndexes", "drop", "dropDatabase", "collMod":
+			f.mutationMu.Lock()
+			f.mutations = append(f.mutations, e.CommandName)
+			f.mutationMu.Unlock()
+		}
+	}}
+	h, err := repositoryhelpers.NewHandlerWithOptions(uri, namespace, repositoryhelpers.WithCustomOptions(options.Client().SetMonitor(monitor)))
 	require.NoError(t, err)
 	core := repository.NewMongoDbRepositoryWithDefaults(h, namespace)
 	db, err := core.GetDatabase(ctx, "")
@@ -115,7 +132,7 @@ func newBridgeFixture(t *testing.T) *bridgeFixture {
 		}
 	})
 	mail := &capturedMail{}
-	b, err := New(Config{Origin: "https://app.example.test", System: "examplehost", Environment: "local", CookieName: "access", Window: 5 * time.Minute, Store: store, Manager: manager, Authorize: authorize, BearerSession: suite.BearerSession, Email: mail})
+	b, err := New(Config{ReviewKind: kind, Origin: "https://app.example.test", System: "examplehost", Environment: "local", CookieName: "access", Window: 5 * time.Minute, Store: store, Manager: manager, Authorize: authorize, BearerSession: suite.BearerSession, Email: mail})
 	require.NoError(t, err)
 	routes := router.NewRouter(nil, nil)
 	policyService, err := accesspolicy.NewService(policy, nil)
@@ -124,11 +141,15 @@ func newBridgeFixture(t *testing.T) *bridgeFixture {
 	require.NoError(t, err)
 	require.NoError(t, guard.Install(routes))
 	require.NoError(t, b.Attach(routes))
-	return &bridgeFixture{ctx: ctx, db: db, redis: runtime.Client, auth: signing, runtime: runtime, actor: created.User, tokens: tokens, bridge: b, routes: routes.GetRouter(), mail: mail}
+	f.routeRegistry = routes
+	f.owningPolicy, err = accesspolicy.NewService(policy, authorize)
+	require.NoError(t, err)
+	f.ctx, f.db, f.redis, f.auth, f.runtime, f.actor, f.tokens, f.bridge, f.routes, f.mail = ctx, db, runtime.Client, signing, runtime, created.User, tokens, b, routes.GetRouter(), mail
+	return f
 }
 
 func (f *bridgeFixture) request(method, path, body string) *http.Request {
-	r := httptest.NewRequest(method, BasePath+path, strings.NewReader(body))
+	r := httptest.NewRequest(method, f.bridge.basePath()+path, strings.NewReader(body))
 	r.Header.Set("Origin", "https://app.example.test")
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	r.Header.Set("Sec-Fetch-Dest", "empty")
@@ -318,4 +339,36 @@ func TestReviewedCommandBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+func TestCapabilityBrowserBoundaryWithRealSignedSession(t *testing.T) {
+	f := newBridgeFixtureKind(t, Capabilities)
+	for _, tc := range []struct {
+		name, header, value, action string
+		status                      int
+	}{
+		{"missing origin", "Origin", "", "delete", 403}, {"null origin", "Origin", "null", "set", 403}, {"cross origin", "Origin", "https://evil.example", "set", 403},
+		{"duplicate origin", "Origin", "https://app.example.test", "add", 403}, {"same site is not same origin", "Sec-Fetch-Site", "same-site", "set", 403}, {"missing metadata", "Sec-Fetch-Site", "", "delete", 403},
+		{"navigation", "Sec-Fetch-Dest", "document", "set", 403}, {"simple form", "X-Admin-Access", "", "delete", 403}, {"duplicate gate", "X-Admin-Access", "1", "add", 403},
+		{"explicit bearer rejected", "Authorization", "Bearer ignored", "set", 403}, {"API header rejected", "X-Api-Token", "ignored", "set", 403},
+		{"missing cookie", "Cookie", "", "delete", 403}, {"duplicate cookie", "Cookie", "access=other", "add", 403}, {"duplicate auth name", "Cookie", "access=other; access=again", "set", 401},
+		{"forged cookie", "Cookie", "access=forged", "set", 401},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := f.request("POST", "/session", "")
+			switch tc.action {
+			case "delete":
+				r.Header.Del(tc.header)
+			case "add":
+				r.Header.Add(tc.header, tc.value)
+			default:
+				r.Header.Set(tc.header, tc.value)
+			}
+			w := f.call(r)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+			require.Empty(t, w.Header().Values("Set-Cookie"))
+		})
+	}
+	f.start(t)
+	require.NotEmpty(t, f.page)
 }
