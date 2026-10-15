@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"time"
+
+	"github.com/ooaklee/ghatd/external/paymentprovider"
 )
 
 // Discovery is unavailable until the owning migration has established coverage.
@@ -94,7 +97,11 @@ type LifecycleDiscoveryCandidate struct {
 	AnchorIntent                            CheckoutIntent          `json:"-"`
 	PaidOwner                               CheckoutAssociation     `json:"-"`
 	PaidOwnerIntent                         CheckoutIntent          `json:"-"`
-	HasPaidOwner                            bool                    `json:"-"`
+	// LegacyPaidOwner supplies reviewed historical provenance when PaidOwner has
+	// no modern intent. Its source and reservation are joined in the same owning
+	// snapshot; the receipt grants neither status freshness nor authority.
+	LegacyPaidOwner *LegacyCheckoutMigrationReceipt `json:"-"`
+	HasPaidOwner    bool                            `json:"-"`
 }
 
 // LifecycleDiscoverySnapshot is one owning discovery read: bounded candidates
@@ -170,6 +177,9 @@ func (p LifecycleDiscoveryPage) Validate(q LifecycleDiscoveryQuery) error {
 // anchor/receipt and joined intents (subscription sources). Malformed joins are
 // unavailable; ownership disagreement is a conflict.
 func validateDiscoveryCandidate(q LifecycleDiscoveryQuery, c LifecycleDiscoveryCandidate) error {
+	if c.LegacyPaidOwner != nil && (q.Kind != LifecycleSubscriptionSources || !c.HasPaidOwner) {
+		return ErrRevenueUnavailable
+	}
 	if c.Scope != q.Scope || c.Revision < 1 || !cleanStatusID(c.PrincipalID) {
 		return ErrRevenueUnavailable
 	}
@@ -186,7 +196,15 @@ func validateDiscoveryCandidate(q LifecycleDiscoveryQuery, c LifecycleDiscoveryC
 		if c.HasPaidOwner && (c.PaidOwner.Scope != q.Scope || c.PaidOwner.SubscriptionID != c.SubscriptionID || c.PaidOwner.PrincipalID != c.PrincipalID || c.PaidOwner.CustomerID != c.CustomerID || c.PaidOwner.LinkedAt.IsZero()) {
 			return ErrRevenueConflict
 		}
-		if c.HasPaidOwner {
+		if c.HasPaidOwner && c.PaidOwner.IntentID == "" {
+			r := c.LegacyPaidOwner
+			if r == nil || r.Validate() != nil || r.Association != c.PaidOwner || !reflect.DeepEqual(c.PaidOwnerIntent, CheckoutIntent{}) {
+				return ErrRevenueUnavailable
+			}
+		} else if c.HasPaidOwner {
+			if c.LegacyPaidOwner != nil {
+				return ErrRevenueUnavailable
+			}
 			b, i := c.PaidOwner, c.PaidOwnerIntent
 			if !validStoredCheckout(i) || i.Scope != q.Scope || i.Request.Mode != "subscription" || i.ID != b.IntentID || i.SessionID == "" || i.SessionID != b.SessionID || i.Request.UserID != b.PrincipalID || i.Request.PlanID != b.PlanID || i.Request.CostID != b.CostID || i.Request.PriceID != b.ProviderPriceID || strings.ToUpper(i.Request.ExpectedCurrency) != b.Currency || b.CheckoutCreatedAt.IsZero() || b.CheckoutCreatedAt.Before(i.CreatedAt.Truncate(time.Second)) {
 				return ErrRevenueUnavailable
@@ -263,7 +281,14 @@ func (s *RevenueService) DiscoverLifecycleSources(ctx context.Context, q Lifecyc
 		if q.Kind == LifecycleCheckoutSources || c.Fact.ID != "" || c.Anchor.IntentID != "" {
 			c.Intent.Request = cloneCheckoutRequest(c.Intent.Request)
 			c.AnchorIntent.Request = cloneCheckoutRequest(c.AnchorIntent.Request)
-			c.PaidOwnerIntent.Request = cloneCheckoutRequest(c.PaidOwnerIntent.Request)
+			if c.PaidOwnerIntent.ID != "" {
+				c.PaidOwnerIntent.Request = cloneCheckoutRequest(c.PaidOwnerIntent.Request)
+			}
+			if c.LegacyPaidOwner != nil {
+				r := *c.LegacyPaidOwner
+				r.Invoice.Lines = append([]paymentprovider.RevenueLineEvidence(nil), r.Invoice.Lines...)
+				c.LegacyPaidOwner = &r
+			}
 			out.Items = append(out.Items, c)
 		}
 	}

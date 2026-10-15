@@ -152,15 +152,70 @@ func joinDiscoverySubscription(ctx context.Context, tx recordstore.Tx, row recor
 		if !discoveryMetadata(paidRow, kindCheckoutPrincipal, paidID, checkoutPartition, true) {
 			return billing.LifecycleDiscoveryCandidate{}, billing.ErrRevenueUnavailable
 		}
-		original, err := discoveryIntent(ctx, tx, paid.IntentID)
-		if err != nil {
-			return billing.LifecycleDiscoveryCandidate{}, err
+		if paid.IntentID == "" {
+			receipt, err := discoveryLegacyPaidOwner(ctx, tx, scope, paid)
+			if err != nil {
+				return billing.LifecycleDiscoveryCandidate{}, err
+			}
+			c.LegacyPaidOwner = &receipt
+		} else {
+			original, err := discoveryIntent(ctx, tx, paid.IntentID)
+			if err != nil {
+				return billing.LifecycleDiscoveryCandidate{}, err
+			}
+			c.PaidOwnerIntent = original
 		}
-		c.PaidOwner, c.PaidOwnerIntent, c.HasPaidOwner = paid, original, true
+		c.PaidOwner, c.HasPaidOwner = paid, true
 	} else if !singleCause(err, billing.ErrRevenueNotFound) {
 		return billing.LifecycleDiscoveryCandidate{}, err
 	}
 	return c, nil
+}
+
+// discoveryLegacyPaidOwner proves an intentless paid owner through its native
+// reviewed receipt in this same snapshot. It first requires the known receipt,
+// so missing historical proof cannot trigger the migration absence/history
+// scan. Even binding-only rows require complete metadata-valid provenance.
+func discoveryLegacyPaidOwner(ctx context.Context, tx recordstore.Tx, scope billing.RevenueScope, paid billing.CheckoutAssociation) (billing.LegacyCheckoutMigrationReceipt, error) {
+	id := billing.LegacyCheckoutMigrationID(scope, paid.SessionID)
+	row, err := tx.Get(ctx, kindLegacyCheckoutMigration, id)
+	if err != nil {
+		return billing.LegacyCheckoutMigrationReceipt{}, discoveryJoinedError(err)
+	}
+	if !discoveryMetadata(row, kindLegacyCheckoutMigration, id, checkoutPartition, true) {
+		return billing.LegacyCheckoutMigrationReceipt{}, billing.ErrRevenueUnavailable
+	}
+	r, err := (&checkoutBound{tx: tx}).GetLegacyCheckoutMigration(ctx, scope, paid.SessionID)
+	if err != nil {
+		return billing.LegacyCheckoutMigrationReceipt{}, discoveryJoinedError(err)
+	}
+	if r.Association != paid {
+		return billing.LegacyCheckoutMigrationReceipt{}, billing.ErrRevenueConflict
+	}
+	for _, ref := range []struct {
+		kind, id, part string
+		immutable      bool
+	}{
+		{kindCheckoutSession, associationKey(scope, paid.SessionID, ""), checkoutPartition, true},
+		{kindCheckoutAssociation, associationKey(scope, paid.SubscriptionID, paid.ProviderPriceID), checkoutPartition, true},
+		{kindLifecycleSubscriptionSource, lifecycleSubscriptionKey(scope, paid.SubscriptionID), lifecycleSourcePartition(scope), false},
+	} {
+		row, err := tx.Get(ctx, ref.kind, ref.id)
+		if err != nil {
+			return billing.LegacyCheckoutMigrationReceipt{}, discoveryJoinedError(err)
+		}
+		if !discoveryMetadata(row, ref.kind, ref.id, ref.part, ref.immutable) {
+			return billing.LegacyCheckoutMigrationReceipt{}, billing.ErrRevenueUnavailable
+		}
+	}
+	row, err = tx.Get(ctx, kindObservation, r.SourceID)
+	if err != nil {
+		return billing.LegacyCheckoutMigrationReceipt{}, discoveryJoinedError(err)
+	}
+	if row.Kind != kindObservation || row.ID != r.SourceID || row.Partition != partition || row.Revision != 1 || row.Sequence != 0 || row.State != "quarantined" || row.ExpiresAt != nil {
+		return billing.LegacyCheckoutMigrationReceipt{}, billing.ErrRevenueUnavailable
+	}
+	return r, nil
 }
 
 // ReadLifecycleDiscovery performs ONE bounded indexed projection query followed
