@@ -56,3 +56,30 @@ func (h *Handler) ApplyCapabilities(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", revisionTag(grant.Revision))
 	_ = reply.NewReplier(h.manifests).NewHTTPDataResponse(w, http.StatusOK, grant)
 }
+
+// PreviewCapabilities uses the same complete strict codec as apply and returns
+// detached before/after fields with the current strong revision ETag.
+func (h *Handler) PreviewCapabilities(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	service, ok := h.service.(capabilityPreviewService)
+	if !ok {
+		h.fail(w, accesspolicy.ErrConfiguration)
+		return
+	}
+	patch, err := readCapabilities(r)
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	preview, err := service.PreviewCapabilities(r.Context(), mux.Vars(r)["userID"], patch)
+	if err != nil {
+		h.fail(w, err)
+		return
+	}
+	revision := int64(0)
+	if preview.Before != nil {
+		revision = preview.Before.Revision
+	}
+	w.Header().Set("ETag", revisionTag(revision))
+	_ = reply.NewReplier(h.manifests).NewHTTPDataResponse(w, http.StatusOK, preview)
+}
