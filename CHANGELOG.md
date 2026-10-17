@@ -215,6 +215,11 @@ when the release version has been selected, and remove unused subsections.
 
 ### Changed
 
+- Internationalisation catalogue lists accept up to 300 records per page on
+  public and administrator routes. Requests that omit `limit` continue to use
+  200, and existing cursors retain their page-size binding. See the
+  [internationalisation manager](external/internationalisationmanager/README.md#composition-and-operations).
+
 - [Partner policy hold limits](external/partnerprogram/README.md) are configurable,
   defaulting to 30 days with an explicit maximum up to 365 days. New-policy
   validation stays separate from retained referral and financial evidence, so

@@ -57,8 +57,10 @@ type RecordView struct {
 	LocalTime     string     `json:"local_time,omitempty"`
 }
 
+const maxListLimit = 300
+
 // ListQuery carries a page size and optional opaque continuation cursor for
-// list requests.
+// list requests. Limit must be between 1 and 300; HTTP requests default to 200.
 type ListQuery struct {
 	Cursor string
 	Limit  int
@@ -312,7 +314,7 @@ func (h *Handler) serve(w http.ResponseWriter, r *http.Request) error {
 		}
 		if raw := params.Get("limit"); raw != "" {
 			query.Limit, err = strconv.Atoi(raw)
-			if err != nil || query.Limit < 1 || query.Limit > 200 {
+			if err != nil || query.Limit < 1 || query.Limit > maxListLimit {
 				return invalidHTTP()
 			}
 		}

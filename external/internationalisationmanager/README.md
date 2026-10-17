@@ -17,7 +17,10 @@ manager constructors, which perform no storage or provider I/O.
 
 `List` and `Get` project catalogue records. Public views expose selectable
 records; administrator views may include unavailable/deleted records and audit
-actors. Lists are bounded to 200 records per HTTP page. Cursors bind the kind,
+actors. Public and administrator lists accept page sizes from 1 to 300 records;
+HTTP requests that omit `limit` retain the default of 200. Go callers must set
+`ListQuery.Limit` explicitly. Out-of-range limits return HTTP 400 rather than
+being clamped. Cursors bind the kind,
 admin/public view and page size; they are continuation positions, not authority
 or a stable snapshot across concurrent catalogue edits.
 
@@ -37,7 +40,7 @@ send SMS or perform a WhatsApp registration check.
 
 Currency, phone-country and timezone lists accept `include_flags=false` on
 both public and administrator routes, for example
-`GET /api/v1/i18n/currencies?limit=200&include_flags=false`. This skips all
+`GET /api/v1/i18n/currencies?limit=300&include_flags=false`. This skips all
 referenced-flag service/storage calls, omits `flag_url` and preserves `flag_id`
 and the catalogue's selection, precision, calling-code and timezone fields.
 Consequently, flag-storage failure cannot block these list responses. Errors

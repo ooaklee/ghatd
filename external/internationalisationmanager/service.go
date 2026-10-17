@@ -155,7 +155,7 @@ type cursor struct {
 // 10000; otherwise it returns an invalid request. Admin queries include
 // deleted, hidden and disabled records.
 func pageQuery(kind Kind, admin bool, q ListQuery) (catalogue.ListQuery, error) {
-	if !kind.valid() || q.Limit < 1 || q.Limit > 200 || (kind == Flags && q.OmitFlagURLs) {
+	if !kind.valid() || q.Limit < 1 || q.Limit > maxListLimit || (kind == Flags && q.OmitFlagURLs) {
 		return catalogue.ListQuery{}, invalidHTTP()
 	}
 	page := 1
