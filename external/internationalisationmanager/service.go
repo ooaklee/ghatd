@@ -155,7 +155,7 @@ type cursor struct {
 // 10000; otherwise it returns an invalid request. Admin queries include
 // deleted, hidden and disabled records.
 func pageQuery(kind Kind, admin bool, q ListQuery) (catalogue.ListQuery, error) {
-	if !kind.valid() || q.Limit < 1 || q.Limit > 200 {
+	if !kind.valid() || q.Limit < 1 || q.Limit > maxListLimit || (kind == Flags && q.OmitFlagURLs) {
 		return catalogue.ListQuery{}, invalidHTTP()
 	}
 	page := 1
@@ -187,8 +187,9 @@ func nextCursor(kind Kind, admin bool, q catalogue.ListQuery, total int64) strin
 }
 
 // List returns one page of the requested kind. Flags use the public listing for
-// non-admin callers; other kinds attach flag URLs via a bounded index. Failures
-// are mapped through domainError and an empty page is always non-nil.
+// non-admin callers; other kinds attach flag URLs via a bounded index unless
+// OmitFlagURLs skips flag service calls entirely. Failures are mapped through
+// domainError and an empty page is always non-nil.
 func (s *Service) List(ctx context.Context, kind Kind, admin bool, query ListQuery) (result ListResult, err error) {
 	defer func() { err = domainError(err) }()
 	q, err := pageQuery(kind, admin, query)
@@ -245,7 +246,7 @@ func (s *Service) List(ctx context.Context, kind Kind, admin bool, query ListQue
 			result.Records = append(result.Records, flagView(r, admin, false))
 		}
 	}
-	if kind != Flags && len(result.Records) > 0 {
+	if kind != Flags && !query.OmitFlagURLs && len(result.Records) > 0 {
 		flags, e := s.flagIndex(ctx, admin)
 		if e != nil {
 			return result, e

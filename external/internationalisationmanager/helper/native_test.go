@@ -105,16 +105,21 @@ func TestInitialiseNativeCataloguePreservation(t *testing.T) {
 			require.NoError(t, err)
 			require.Zero(t, calls, "setup must not contact the optional provider")
 			for _, tc := range []struct {
-				kind i18n.Kind
-				want int
-			}{{i18n.Currencies, 165}, {i18n.PhoneCodes, 245}, {i18n.Timezones, 519}, {i18n.Flags, 270}} {
-				t.Run(string(tc.kind), func(t *testing.T) {
-					query := i18n.ListQuery{Limit: 200}
+				kind        i18n.Kind
+				want, limit int
+			}{
+				{i18n.Currencies, 165, 200}, {i18n.PhoneCodes, 245, 200},
+				{i18n.Timezones, 519, 200}, {i18n.Flags, 270, 200},
+				{i18n.Currencies, 165, 300}, {i18n.PhoneCodes, 245, 300},
+				{i18n.Timezones, 519, 300}, {i18n.Flags, 270, 300},
+			} {
+				t.Run(fmt.Sprintf("%s/limit_%d", tc.kind, tc.limit), func(t *testing.T) {
+					query := i18n.ListQuery{Limit: tc.limit}
 					seen := map[string]bool{}
 					for {
 						page, err := service.List(ctx, tc.kind, false, query)
 						require.NoError(t, err)
-						require.LessOrEqual(t, len(page.Records), 200)
+						require.Len(t, page.Records, min(tc.limit, tc.want-len(seen)))
 						for _, row := range page.Records {
 							require.False(t, seen[row.Code])
 							seen[row.Code] = true

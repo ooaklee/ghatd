@@ -17,7 +17,10 @@ manager constructors, which perform no storage or provider I/O.
 
 `List` and `Get` project catalogue records. Public views expose selectable
 records; administrator views may include unavailable/deleted records and audit
-actors. Lists are bounded to 200 records per HTTP page. Cursors bind the kind,
+actors. Public and administrator lists accept page sizes from 1 to 300 records;
+HTTP requests that omit `limit` retain the default of 200. Go callers must set
+`ListQuery.Limit` explicitly. Out-of-range limits return HTTP 400 rather than
+being clamped. Cursors bind the kind,
 admin/public view and page size; they are continuation positions, not authority
 or a stable snapshot across concurrent catalogue edits.
 
@@ -32,6 +35,33 @@ policy at new-choice boundaries. `NormalisePhone` delegates to
 [telenumcoder](../telenumcoder/README.md) without invoking reachability.
 `CheckPhone` is the separate legacy SMS reachability operation; it does not
 send SMS or perform a WhatsApp registration check.
+
+### Optional flag enrichment
+
+Currency, phone-country and timezone lists accept `include_flags=false` on
+both public and administrator routes, for example
+`GET /api/v1/i18n/currencies?limit=300&include_flags=false`. This skips all
+referenced-flag service/storage calls, omits `flag_url` and preserves `flag_id`
+and the catalogue's selection, precision, calling-code and timezone fields.
+Consequently, flag-storage failure cannot block these list responses. Errors
+from the requested catalogue itself still propagate normally.
+
+Omitting the parameter or using `include_flags=true` preserves the existing
+revisioned URLs and flag visibility checks. Only the exact values `true` and
+`false` are accepted; empty, malformed or repeated values return HTTP 400.
+The parameter is not supported on `/flags` lists or individual-record reads.
+Go callers opt out with `ListQuery.OmitFlagURLs = true`; its zero value keeps
+enrichment, and enabling it for a flag list returns an invalid-request error.
+
+Repeat `include_flags=false` on every cursor request. Cursors remain compatible
+with either projection and do not retain the enrichment preference. Consumers
+can render text immediately and load selected/visible images independently from
+`GET /api/v1/i18n/flags/{flag_id}/svg` (URL-escape the identifier), without a
+revision parameter. That existing endpoint rechecks public flag availability;
+hidden, disabled, deleted or missing flags remain unavailable even though a
+catalogue may retain their `flag_id`. The corresponding administrator endpoint
+requires live administrator admission. Keep image failures independent of form
+selection and submission; loading images must not reset user-entered values.
 
 ## HTTP and failure semantics
 
