@@ -181,26 +181,53 @@ func (b *subscriptionStatusBound) PutCurrent(ctx context.Context, v billing.Subs
 }
 
 // ReadSubscriptionStatus joins head and immutable receipt in one snapshot.
-// A failed/repeated callback never returns partially observed evidence.
+// A conclusively absent first head completes the native read before returning
+// not-found. Required receipt loss remains unavailable. Failed/repeated reads
+// never return partial evidence or hide commit/cancellation outcomes as absence.
 func (r *Repository) ReadSubscriptionStatus(ctx context.Context, scope billing.RevenueScope, sub string) (billing.SubscriptionStatusSnapshot, error) {
 	if ctx == nil || !statusScopeValid(scope, sub) {
 		return billing.SubscriptionStatusSnapshot{}, billing.ErrRevenueInvalid
+	}
+	if err := ctx.Err(); err != nil {
+		return billing.SubscriptionStatusSnapshot{}, err
 	}
 	if r == nil || r.store == nil {
 		return billing.SubscriptionStatusSnapshot{}, billing.ErrRevenueUnavailable
 	}
 	var out billing.SubscriptionStatusSnapshot
+	found, completed := false, false
 	err := r.store.Read(ctx, func(tx recordstore.Tx) error {
 		out = billing.SubscriptionStatusSnapshot{}
+		found, completed = false, false
 		var err error
 		out, err = statusBound(tx, scope, sub).GetCurrent(ctx)
-		return err
+		if singleCause(err, billing.ErrRevenueNotFound) {
+			completed = true
+			return ctx.Err()
+		}
+		if err != nil {
+			return errors.Join(ctx.Err(), err)
+		}
+		found, completed = true, true
+		return ctx.Err()
 	})
 	if err != nil {
-		return billing.SubscriptionStatusSnapshot{}, mapped(err)
+		classified := mapped(err)
+		if singleCause(classified, billing.ErrRevenueNotFound) {
+			// Only the completed owning head lookup above establishes absence.
+			// A store-level not-found failure is an unavailable snapshot.
+			classified = errors.Join(billing.ErrRevenueUnavailable, err)
+		}
+		return billing.SubscriptionStatusSnapshot{}, errors.Join(ctx.Err(), classified)
 	}
 	if err := ctx.Err(); err != nil {
 		return billing.SubscriptionStatusSnapshot{}, err
+	}
+	if !completed {
+		return billing.SubscriptionStatusSnapshot{}, billing.ErrRevenueUnavailable
+	}
+	if !found {
+		return billing.SubscriptionStatusSnapshot{}, billing.ErrRevenueNotFound
 	}
 	return out, nil
 }

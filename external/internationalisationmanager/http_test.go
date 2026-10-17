@@ -16,10 +16,12 @@ type httpFixture struct {
 	code, actor string
 	revision    int64
 	err         error
+	query       ListQuery
 }
 
-func (f *httpFixture) List(context.Context, Kind, bool, ListQuery) (ListResult, error) {
+func (f *httpFixture) List(_ context.Context, _ Kind, _ bool, query ListQuery) (ListResult, error) {
 	f.calls++
+	f.query = query
 	return ListResult{}, f.err
 }
 func (f *httpFixture) Get(_ context.Context, _ Kind, code string, _ bool) (RecordView, error) {

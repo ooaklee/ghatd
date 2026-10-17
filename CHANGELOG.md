@@ -86,6 +86,13 @@ when the release version has been selected, and remove unused subsections.
 
 - Add separately opted-in browser capability grant review and email-confirmed CAS replacement through the existing owning policy manager. Token allowance approvals retain their deployed namespace and proof format; capability approval uses a distinct purpose and namespace while sharing actor throttles. Both preserve bearer-only APIs, live authority and accounting fields. See the [browser policy approval guide](external/accesspolicy/adminaccess/README.md#explicit-capability-grant-approval).
 
+- Currency, phone-country and timezone lists can opt out of flag enrichment
+  with `include_flags=false`, preserving flag IDs while skipping flag-service
+  lookups. Consumers can load SVGs separately without blocking catalogue
+  selection on flag availability. Existing requests retain revisioned flag
+  URLs; no storage migration is required. See the
+  [internationalisation manager](external/internationalisationmanager/README.md#optional-flag-enrichment).
+
 - Add authenticated unpaid checkout dispositions: open sessions use bounded pending backoff, while strictly verified expired sessions retire atomically with explicit nonpayment proof. Paid and trial completion still use their existing strict evidence path. **Breaking storage compatibility:** expiry history uses explicit variants rejected by older captured readers; drain older writers and retain expiry-aware readers for rollback inspection. Existing job and captured schemas are unchanged. See the [lifecycle host guide](external/billinglifecycle/README.md#checkout-pending-and-expiry-dispositions).
 
 - Optional encrypted [historical checkout receipts and session reservations](external/billing/revenuestore/README.md#historical-checkout-migration-receipts)
@@ -161,6 +168,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Fixed
 
+- [Lifecycle source discovery](external/billing/README.md#bounded-lifecycle-source-discovery)
+  now validates reviewed historical checkout owners through their retained
+  migration receipts instead of requiring a modern checkout intent. Binding-only
+  rows advance after provenance checks, and later accepted payments remain
+  discoverable. Missing or inconsistent proof still withholds the whole page;
+  no stored history or synthetic intent is created.
+- Initial [subscription status](external/billing/README.md#scoped-current-subscription-status)
+  head absence no longer logs a transaction failure during successful first
+  lifecycle work. Not-found is returned only after the owning read completes;
+  cancellation, read/commit failure and missing required capture receipts remain
+  errors without returning partial evidence.
 - Normal [revenue source resolution](external/billing/README.md#verified-revenue-feed)
   and initial checkout association absence no longer emit database error logs
   through the native optional reads. Required observations, genuine read/commit
@@ -198,6 +216,11 @@ when the release version has been selected, and remove unused subsections.
   provider uncertainty is retained through later revocation or cancellation.
 
 ### Changed
+
+- Internationalisation catalogue lists accept up to 300 records per page on
+  public and administrator routes. Requests that omit `limit` continue to use
+  200, and existing cursors retain their page-size binding. See the
+  [internationalisation manager](external/internationalisationmanager/README.md#composition-and-operations).
 
 - [Partner policy hold limits](external/partnerprogram/README.md) are configurable,
   defaulting to 30 days with an explicit maximum up to 365 days. New-policy
