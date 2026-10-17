@@ -62,6 +62,10 @@ type RecordView struct {
 type ListQuery struct {
 	Cursor string
 	Limit  int
+	// OmitFlagURLs skips all referenced-flag lookups for currency, phone-country
+	// and timezone lists while preserving FlagID. The zero value keeps enrichment;
+	// this option is invalid for flag lists and is not carried in cursors.
+	OmitFlagURLs bool
 }
 
 // ListResult returns one page of record views plus the next cursor, empty at
@@ -98,7 +102,7 @@ type PhoneCheck struct {
 type HTTPService interface {
 	// List returns one page of records for the requested Kind, shaped by the admin
 	// flag and ListQuery; flags use the public listing for non-admin callers and
-	// other kinds attach flag URLs and a next cursor.
+	// other kinds optionally attach flag URLs and a next cursor.
 	List(context.Context, Kind, bool, ListQuery) (ListResult, error)
 	// Get returns the RecordView for a Kind and code, restricting non-admin callers
 	// to selectable records without raw SVG and attaching a referenced flag's URL
@@ -287,16 +291,26 @@ func (h *Handler) serve(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != http.MethodGet {
 			return methodError(w, "GET")
 		}
-		query := ListQuery{Limit: 200, Cursor: r.URL.Query().Get("cursor")}
-		for key, values := range r.URL.Query() {
-			if (key != "limit" && key != "cursor") || len(values) != 1 {
+		params, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			return invalidHTTP()
+		}
+		query := ListQuery{Limit: 200, Cursor: params.Get("cursor")}
+		for key, values := range params {
+			if (key != "limit" && key != "cursor" && key != "include_flags") || len(values) != 1 {
 				return invalidHTTP()
 			}
+		}
+		if values, present := params["include_flags"]; present {
+			if kind == Flags || (values[0] != "true" && values[0] != "false") {
+				return invalidHTTP()
+			}
+			query.OmitFlagURLs = values[0] == "false"
 		}
 		if len(query.Cursor) > 256 {
 			return invalidHTTP()
 		}
-		if raw := r.URL.Query().Get("limit"); raw != "" {
+		if raw := params.Get("limit"); raw != "" {
 			query.Limit, err = strconv.Atoi(raw)
 			if err != nil || query.Limit < 1 || query.Limit > 200 {
 				return invalidHTTP()
