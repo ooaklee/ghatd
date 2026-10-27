@@ -1,12 +1,14 @@
-# Browser token-allowance approval
+# Browser policy approval
 
-`adminaccess` provides an **opt-in, token-allowance-only** browser adapter for
+`adminaccess` provides two **opt-in, purpose-separated** browser adapters for
 [accesspolicymanager](../../accesspolicymanager/README.md). It privately verifies
 an existing HttpOnly access cookie through the real bearer-session middleware.
 No JWT is returned to JavaScript, no general administrator role is granted, and
 the original bearer-only policy API remains unchanged.
 
-This is not a generic step-up framework or a general permissions-management API.
+The default token adapter remains unchanged. A separately configured capability
+adapter supports explicit grant review and replacement through the owning manager.
+Neither adapter is a generic step-up framework.
 Email confirmation is purpose-bound approval, not independent MFA: compromise
 of both the initiating browser session and its verified mailbox is outside this
 assurance boundary.
@@ -94,8 +96,7 @@ changed proposals, expired reviews and replay fail closed.
 
 Stable local errors are `ADA0-001` (428 review required), `ADA0-002` (422 invalid
 proof), `ADA0-003` (429 cooldown) and `ADA0-004` (503 unavailable). Existing shared
-authentication and policy errors retain their own manifests. The bridge creates
-neither a browser UI nor broader permission/scopes grant-management endpoints.
+authentication and policy errors retain their own manifests. The bridge creates no browser UI, administrator account, implicit grant or token.
 
 ## Verification
 
@@ -108,3 +109,54 @@ For signed-session, Redis and Mongo CAS integration, provide isolated
 `GHATD_TEST_REDIS_ADDR`. Tests use generated database/key namespaces and synthetic
 email capture; no mailbox or live send is required. Without both, integration
 tests skip explicitly.
+
+## Explicit capability grant approval
+
+Keep the existing token bridge at `/api/v1/admin-access`. To opt in to capability
+approval, create a second bridge using the **same RedisStore**, authorization,
+manager, real bearer-session middleware and email sender, with trusted
+`ReviewKind: adminaccess.Capabilities`. The manager must additionally implement
+`CapabilityManager`; missing ports or unknown kinds fail construction. Empty
+`ReviewKind` means `TokenLimits` for existing callers. Do not derive the kind,
+origin, system or route prefix from a request.
+
+The capability bridge attaches only `/api/v1/admin-capabilities`:
+
+| Method/path | Purpose |
+| --- | --- |
+| `POST /session` | Create a purpose-bound page context |
+| `POST /users/{userID}/review` | Read current grant and strong ETag; no body |
+| `POST /users/{userID}/preview` | Review a complete four-field replacement |
+| `POST /challenge`, `/confirm`, `/cancel` | Purpose-specific email proof and cancellation |
+| `PUT /users/{userID}` | Consume one approved review and delegate owner CAS |
+
+Review and preview have no Mongo writes or index/inventory preparation. Preview
+returns detached `before` (absent for a missing grant), `after` and `changed`, plus
+the current strong ETag. A semantic no-op invalidates the old review and returns
+no `X-Admin-Review`; it cannot authorize apply. Proposal/apply JSON must contain
+all four fields: `enabled`, `expires_at`, `scopes`, `permissions`. Null expiry
+means none. Arrays must be present, may be empty, and reject duplicate names and
+wildcards. The manager owns the strict bounded parser. Sets compare in sorted
+order, and expiry uses UTC millisecond precision, matching Mongo storage.
+
+The immutable review binds purpose, complete replacement, selected target and
+current revision to the existing verified actor/session/email/page context.
+Capability bindings and code hashes use a different domain from the unchanged
+legacy token encoding. An older token bridge cannot consume a capability review
+by ignoring its new JSON fields, even when token limits are zero. Named fields
+and revision must match before consumption; the owner then rechecks current
+administrative authority and audited revision CAS. Account-wide context limits,
+email cooldown and hourly ceilings are shared across both bridge instances.
+
+Email describes enabled state, expiry, the complete sets and exact additions and
+removals. Confirmation approves that replacement only; it grants no administrator
+role. Apply preserves token allowances and usage budgets, never seeds privileges,
+changes account status or issues credentials. The original bearer-only endpoints
+remain unchanged. Capability routes require the same exact-origin cookie/CSRF
+headers as token routes; browser review uses POST to require Origin reliably.
+
+Both adapters consume approval before manager dispatch. An error or lost response
+can leave an unknown committed outcome. Read current authoritative state before
+creating another proposal; never automatically retry or restore the consumed
+review. Cleanup is another fresh reviewed CAS operation, not cancellation or
+restoration of a stale policy snapshot.

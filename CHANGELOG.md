@@ -84,6 +84,8 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Add separately opted-in browser capability grant review and email-confirmed CAS replacement through the existing owning policy manager. Token allowance approvals retain their deployed namespace and proof format; capability approval uses a distinct purpose and namespace while sharing actor throttles. Both preserve bearer-only APIs, live authority and accounting fields. See the [browser policy approval guide](external/accesspolicy/adminaccess/README.md#explicit-capability-grant-approval).
+
 - Currency, phone-country and timezone lists can opt out of flag enrichment
   with `include_flags=false`, preserving flag IDs while skipping flag-service
   lookups. Consumers can load SVGs separately without blocking catalogue

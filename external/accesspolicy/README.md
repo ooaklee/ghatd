@@ -346,3 +346,13 @@ revocation. Mutation, quota consumption and fenced business callbacks return
 `ErrConfiguration` before executing callbacks. Normal application startup still
 uses `NewMongoStore` followed by `Initialize`; this reader is not a replacement
 for transactional policy management or preparation.
+
+### Read-only capability proposals
+
+`Service.PreviewCapabilities` returns detached `CapabilityPreview` before/after
+snapshots and a semantic changed flag. It performs only authorized reads, never
+initializes storage or prepares token inventory, and preserves all token/budget
+fields in the proposed policy. `CanonicalCapabilities` validates and detaches
+exact named sets, sorts them and normalizes expiry to UTC milliseconds. Duplicate
+names and wildcards remain invalid. A preview is not reusable write authority;
+apply rechecks the current policy and audited CAS revision.

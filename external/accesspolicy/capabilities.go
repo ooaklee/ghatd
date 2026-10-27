@@ -37,6 +37,68 @@ func ValidateCapabilities(patch Capabilities) error {
 	return nil
 }
 
+// CapabilityPreview is a detached before/after review, never write authority.
+// After preserves token allowances and usage budgets; Changed is semantic.
+type CapabilityPreview struct {
+	// Before is nil only for an absent stored grant, never an implicit grant.
+	Before *Grant `json:"before,omitempty"`
+	// After is the detached complete proposed policy, including preserved accounting fields.
+	After Grant `json:"after"`
+	// Changed reports semantic authority changes after canonical set/expiry normalization.
+	Changed bool `json:"changed"`
+}
+
+// CanonicalCapabilities validates and detaches authority fields. Named sets are
+// sorted and expiry uses Mongo's millisecond UTC precision for review equality.
+func CanonicalCapabilities(patch Capabilities) (Capabilities, error) {
+	if ValidateCapabilities(patch) != nil {
+		return Capabilities{}, ErrConfiguration
+	}
+	patch.Scopes = slices.Clone(patch.Scopes)
+	patch.Permissions = slices.Clone(patch.Permissions)
+	slices.Sort(patch.Scopes)
+	slices.Sort(patch.Permissions)
+	patch.ExpiresAt = patch.ExpiresAt.UTC().Truncate(time.Millisecond)
+	return patch, nil
+}
+
+// PreviewCapabilities performs current authorized reads only. It proposes one
+// complete authority replacement without initializing storage or inventory.
+func (s *Service) PreviewCapabilities(ctx context.Context, subject Subject, patch Capabilities) (CapabilityPreview, error) {
+	patch, err := CanonicalCapabilities(patch)
+	if err != nil || subject.Kind != UserSubject {
+		return CapabilityPreview{}, ErrConfiguration
+	}
+	proposed := Grant{Subject: subject, Enabled: patch.Enabled, ExpiresAt: patch.ExpiresAt, Scopes: patch.Scopes, Permissions: patch.Permissions}
+	if validateGrant(proposed) != nil {
+		return CapabilityPreview{}, ErrConfiguration
+	}
+	before, err := s.ReviewGrant(ctx, subject)
+	if err != nil {
+		return CapabilityPreview{}, err
+	}
+	changed := true
+	if before != nil {
+		current, e := CanonicalCapabilities(Capabilities{Enabled: before.Enabled, ExpiresAt: before.ExpiresAt, Scopes: before.Scopes, Permissions: before.Permissions})
+		if e != nil {
+			return CapabilityPreview{}, e
+		}
+		changed = current.Enabled != patch.Enabled || !current.ExpiresAt.Equal(patch.ExpiresAt) || !slices.Equal(current.Scopes, patch.Scopes) || !slices.Equal(current.Permissions, patch.Permissions)
+		proposed = copyMigrationGrant(*before)
+		proposed.Enabled, proposed.ExpiresAt, proposed.Scopes, proposed.Permissions = patch.Enabled, patch.ExpiresAt, patch.Scopes, patch.Permissions
+	}
+	if changed {
+		if proposed.Revision >= 9007199254740991 {
+			return CapabilityPreview{}, ErrConfiguration
+		}
+		proposed.Revision++
+	}
+	if validateGrant(proposed) != nil {
+		return CapabilityPreview{}, ErrConfiguration
+	}
+	return CapabilityPreview{Before: copyMigrationBefore(before), After: copyMigrationGrant(proposed), Changed: changed}, nil
+}
+
 // ReviewGrant reads an administratively authorized snapshot, including disabled
 // or expired policies. Nil means known absence, not an enabled empty grant.
 // This is a review operation, not enforcement or reusable write authority.

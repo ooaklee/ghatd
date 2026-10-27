@@ -83,3 +83,39 @@ func TestCapabilityManagementSelectedAuthority(t *testing.T) {
 		})
 	}
 }
+
+func TestCapabilityManagerPreviewUsesStoredTargetAndNoInventory(t *testing.T) {
+	for _, variant := range []string{"allowed", "denied", "missing", "duplicate"} {
+		t.Run(variant, func(t *testing.T) {
+			store := &managementStore{}
+			inventory := &preparedInventory{}
+			users := &selectedUser{user: &user.UniversalUser{ID: "selected"}}
+			if variant == "missing" {
+				users.err = user.ErrUserNotFound
+			}
+			service, err := NewService(Config{System: "example", Store: store, Users: users, Inventory: inventory, Authorize: func(context.Context, string) (string, error) {
+				if variant == "denied" {
+					return "", accesspolicy.ErrDenied
+				}
+				return "operator", nil
+			}})
+			require.NoError(t, err)
+			patch := accesspolicy.Capabilities{Enabled: true, Scopes: []string{"scope"}, Permissions: []string{"action"}}
+			if variant == "duplicate" {
+				patch.Scopes = []string{"scope", "scope"}
+			}
+			result, err := service.PreviewCapabilities(context.Background(), "selected", patch)
+			if variant == "allowed" {
+				require.NoError(t, err)
+				require.True(t, result.Changed)
+				require.Nil(t, result.Before)
+				require.EqualValues(t, 1, result.After.Revision)
+			} else {
+				require.Error(t, err)
+				require.Zero(t, result)
+			}
+			require.Zero(t, store.writes)
+			require.Empty(t, inventory.owners)
+		})
+	}
+}
