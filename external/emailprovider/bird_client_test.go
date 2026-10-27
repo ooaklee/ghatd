@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -250,47 +251,60 @@ func TestBirdResponses(t *testing.T) {
 	}
 }
 
+// Fake time advances only after the mock transport blocks, so an in-flight
+// deadline cannot race client setup or dispatch on a slow scheduler.
 func TestBirdCancellation(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		before, deadline bool
+		expired          bool // deadline already elapsed before dispatch
 	}{
-		{"before dispatch", true, false}, {"in flight", false, false}, {"deadline", false, true},
+		{"before dispatch", true, false, false},
+		{"in flight", false, false, false},
+		{"deadline in flight", false, true, false},
+		{"deadline expired before dispatch", false, true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			if tc.deadline {
-				var stop context.CancelFunc
-				ctx, stop = context.WithTimeout(ctx, 10*time.Millisecond)
-				defer stop()
-			}
-			if tc.before {
-				cancel()
-			}
-			calls := 0
-			client, err := NewBirdClient(&NewBirdClientRequest{APIKey: birdTestKey, Transport: birdTestTransport(func(r *http.Request) (*http.Response, error) {
-				calls++
-				if !tc.deadline {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				if tc.deadline {
+					var stop context.CancelFunc
+					ctx, stop = context.WithTimeout(ctx, 10*time.Millisecond)
+					defer stop()
+				}
+				if tc.before {
 					cancel()
 				}
-				<-r.Context().Done()
-				return nil, errors.New("private cancellation cause")
-			})})
-			require.NoError(t, err)
-			_, err = client.SendContext(ctx, birdTestEmail())
-			require.ErrorIs(t, err, ErrEmailProviderSendFailed)
-			if tc.deadline {
-				require.ErrorIs(t, err, context.DeadlineExceeded)
-			} else {
-				require.ErrorIs(t, err, context.Canceled)
-			}
-			require.NotContains(t, err.Error(), "private")
-			if tc.before {
-				require.Zero(t, calls)
-			} else {
-				require.Equal(t, 1, calls)
-			}
+				if tc.expired {
+					// Advance fake time past the deadline before any dispatch,
+					// exercising the pre-dispatch expiry boundary deterministically.
+					time.Sleep(11 * time.Millisecond)
+				}
+				calls := 0
+				client, err := NewBirdClient(&NewBirdClientRequest{APIKey: birdTestKey, Transport: birdTestTransport(func(r *http.Request) (*http.Response, error) {
+					calls++
+					if !tc.deadline {
+						cancel()
+					}
+					<-r.Context().Done()
+					return nil, errors.New("private cancellation cause")
+				})})
+				require.NoError(t, err)
+				_, err = client.SendContext(ctx, birdTestEmail())
+				require.ErrorIs(t, err, ErrEmailProviderSendFailed)
+				if tc.deadline {
+					require.ErrorIs(t, err, context.DeadlineExceeded)
+				} else {
+					require.ErrorIs(t, err, context.Canceled)
+				}
+				require.NotContains(t, err.Error(), "private")
+				if tc.before || tc.expired {
+					require.Zero(t, calls)
+				} else {
+					require.Equal(t, 1, calls)
+				}
+			})
 		})
 	}
 }
