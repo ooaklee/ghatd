@@ -3,6 +3,10 @@ package seo
 import "errors"
 
 var (
+	// ErrPublicSitemapUnavailable wraps failures to read, filter or render the
+	// live public sitemap. HTTP responses omit the diagnostic cause.
+	ErrPublicSitemapUnavailable = errors.New("public-sitemap-unavailable")
+
 	// ErrSitemapItemError is returned for general sitemap item failures.
 	ErrSitemapItemError = errors.New("sitemap-item-request-is-invalid")
 

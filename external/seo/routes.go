@@ -23,8 +23,8 @@ type sitemapHandler interface {
 	// GenerateSitemap serves the HTTP endpoint for XML generation with optional
 	// file saves, writing a data or error response from the service result.
 	GenerateSitemap(w http.ResponseWriter, r *http.Request)
-	// GetSitemap serves the public HTTP endpoint returning the sitemap file, per
-	// the sitemapHandler contract.
+	// GetSitemap serves the configured public sitemap source, per the
+	// sitemapHandler contract.
 	GetSitemap(w http.ResponseWriter, r *http.Request)
 	// GetSitemapItems serves the HTTP endpoint listing sitemap items, writing a
 	// data or error response from the service result.

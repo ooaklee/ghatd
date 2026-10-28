@@ -1,5 +1,10 @@
 # Post
 
+Paginated repository queries sort by the requested timestamp and then `_id` in
+the same direction. The ID tiebreaker keeps records with equal timestamps stable
+across pages. Pagination is not a database snapshot: concurrent edits can still
+change membership between requests.
+
 The `post` package is the core content domain used by the CMS layer. It provides strongly-typed models, business rules, and MongoDB-backed persistence for post types such as changelog entries, glossary items, FAQs, and articles.
 
 This guide covers a quick start for service setup, write/read flows, and migration-based seeding.

@@ -4,6 +4,7 @@ import "github.com/ooaklee/reply/v2"
 
 // SitemapErrorMap maps SEO errors to HTTP responses.
 var SitemapErrorMap = reply.ErrorManifest{
+	ErrPublicSitemapUnavailable:          {Title: "Service Unavailable", Detail: "The sitemap is temporarily unavailable", StatusCode: 503, Code: "SEO0-011"},
 	ErrSitemapItemError:                  {Title: "Bad Request", Detail: "Sitemap request is invalid", StatusCode: 400, Code: "SEO0-001"},
 	ErrSitemapItemDatabaseError:          {Title: "Internal Server Error", Detail: "Unable to complete sitemap database operation", StatusCode: 500, Code: "SEO0-002"},
 	ErrSitemapItemResourceNotFound:       {Title: "Sitemap item not found", StatusCode: 404, Code: "SEO0-003"},

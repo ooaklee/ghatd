@@ -58,6 +58,12 @@ type Service struct {
 	EmbeddedPathPrefix string
 	WritableRootPath   string
 	DefaultPath        string
+	// PublicSitemapMode selects file serving (the zero value) or current storage
+	// for public requests. Administrative exports remain explicit file operations.
+	PublicSitemapMode PublicSitemapMode
+	// PublicSitemapItemsFilter applies host publication/crawler policy only to
+	// database-backed public responses. Set before serving concurrent requests.
+	PublicSitemapItemsFilter PublicSitemapItemsFilter
 
 	writeMutex sync.Mutex
 }
@@ -70,6 +76,11 @@ type NewServiceRequest struct {
 	EmbeddedPathPrefix string
 	WritableRootPath   string
 	DefaultPath        string
+	// PublicSitemapMode defaults to PublicSitemapModeFile for existing consumers.
+	PublicSitemapMode PublicSitemapMode
+	// PublicSitemapItemsFilter optionally restricts live public candidates. It is
+	// not applied to administrator generation, downloads, or persisted entries.
+	PublicSitemapItemsFilter PublicSitemapItemsFilter
 }
 
 // NewService creates a sitemap service.
@@ -89,12 +100,14 @@ func NewService(req *NewServiceRequest) *Service {
 	}
 
 	return &Service{
-		SitemapRepository:  req.SitemapRepository,
-		FrontendDomain:     strings.TrimRight(strings.TrimSpace(req.FrontendDomain), "/"),
-		FileSystem:         req.FileSystem,
-		EmbeddedPathPrefix: strings.Trim(strings.TrimSpace(req.EmbeddedPathPrefix), "/"),
-		WritableRootPath:   writableRootPath,
-		DefaultPath:        defaultPath,
+		SitemapRepository:        req.SitemapRepository,
+		FrontendDomain:           strings.TrimRight(strings.TrimSpace(req.FrontendDomain), "/"),
+		FileSystem:               req.FileSystem,
+		EmbeddedPathPrefix:       strings.Trim(strings.TrimSpace(req.EmbeddedPathPrefix), "/"),
+		WritableRootPath:         writableRootPath,
+		DefaultPath:              defaultPath,
+		PublicSitemapMode:        req.PublicSitemapMode,
+		PublicSitemapItemsFilter: req.PublicSitemapItemsFilter,
 	}
 }
 

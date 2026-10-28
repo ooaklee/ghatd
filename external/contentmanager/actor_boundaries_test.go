@@ -12,7 +12,7 @@ import (
 )
 
 func TestContentServiceEntryGuards(t *testing.T) {
-	for _, method := range []string{"CreatePost", "UpdatePostById", "DeletePostById", "RestorePostById", "GetChangelogItems", "GetGlossaryItems", "GetFaqItems", "GetArticles", "GetChangelogItemByUrlFriendlyId", "GetArticleItemByUrlFriendlyId", "GetLatestPostsByType", "GetLatestNotificationOverviews", "GetArticleSitemapItems"} {
+	for _, method := range []string{"CreatePost", "UpdatePostById", "DeletePostById", "RestorePostById", "GetChangelogItems", "GetGlossaryItems", "GetFaqItems", "GetArticles", "GetChangelogItemByUrlFriendlyId", "GetArticleItemByUrlFriendlyId", "GetLatestPostsByType", "GetLatestNotificationOverviews", "GetArticleSitemapItems", "GetChangelogSitemapItems"} {
 		for _, tc := range []struct {
 			name string
 			want error
@@ -20,7 +20,7 @@ func TestContentServiceEntryGuards(t *testing.T) {
 			{"nil context", post.ErrPostBadRequest}, {"nil request", post.ErrPostBadRequest}, {"canceled", context.Canceled}, {"nil service", ErrContentManagerUnavailable}, {"nil port", ErrContentManagerUnavailable}, {"typed nil port", ErrContentManagerUnavailable}, {"nil embedded request", post.ErrPostBadRequest},
 		} {
 			t.Run(method+"/"+tc.name, func(t *testing.T) {
-				if tc.name == "nil embedded request" && (method == "GetArticleSitemapItems" || method == "GetChangelogItemByUrlFriendlyId" || method == "GetArticleItemByUrlFriendlyId") {
+				if tc.name == "nil embedded request" && (method == "GetArticleSitemapItems" || method == "GetChangelogSitemapItems" || method == "GetChangelogItemByUrlFriendlyId" || method == "GetArticleItemByUrlFriendlyId") {
 					return
 				}
 				var ctx context.Context = context.Background()

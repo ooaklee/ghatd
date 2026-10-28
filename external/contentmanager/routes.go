@@ -88,6 +88,9 @@ func AttachRoutes(request *AttachRoutesRequest) {
 	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/posts/{postId}", Operation: "contentmanager.DeletePostById", Methods: []string{http.MethodDelete, http.MethodOptions}}, request.Handler.DeletePostById)
 	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/posts/{postId}/restore", Operation: "contentmanager.RestorePostById", Methods: []string{http.MethodPatch, http.MethodOptions}}, request.Handler.RestorePostById)
 	contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/seo/posts/articles/sitemap-items", Operation: "contentmanager.GetArticleSitemapItems", Methods: []string{http.MethodGet, http.MethodPost, http.MethodOptions}}, request.Handler.GetArticleSitemapItems)
+	if handler, ok := request.Handler.(ChangelogSitemapHandler); ok {
+		contentManagerAdminOnlyRoutes.Handle(router.RouteDefinition{Path: "/seo/posts/changelogs/sitemap-items", Operation: "contentmanager.GetChangelogSitemapItems", Methods: []string{http.MethodGet, http.MethodPost, http.MethodOptions}}, handler.GetChangelogSitemapItems)
+	}
 
 	contentManagerOpenRoutes := request.Router.NewRouteGroup("/api/v1/cms", router.OptionalActive, request.RateLimitOrActiveMiddleware)
 	contentManagerOpenRoutes.Handle(router.RouteDefinition{Path: "/changelog", Operation: "contentmanager.GetChangelogItems", Methods: []string{http.MethodGet, http.MethodOptions}}, request.Handler.GetChangelogItems)
