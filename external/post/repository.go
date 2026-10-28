@@ -792,6 +792,10 @@ func (r *Repository) GetPosts(ctx context.Context, req *GetPostsRequest) ([]Post
 		requestFilter = append(requestFilter, bson.E{Key: "created_at", Value: -1})
 	}
 
+	// Equal timestamps need a stable tiebreaker across offset-based pages.
+	// Match the requested direction so reverse chronological queries reverse
+	// the complete ordering rather than arbitrarily reshuffling tied records.
+	requestFilter = append(requestFilter, bson.E{Key: "_id", Value: requestFilter[0].Value})
 	// Sort by request field
 	findOptions.SetSort(requestFilter)
 

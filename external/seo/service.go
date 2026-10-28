@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // SitemapRepository defines the repository surface used by the service.
@@ -50,6 +51,17 @@ type SitemapRepository interface {
 	UpsertSitemapItemByURI(ctx context.Context, item *SitemapItem) (*SitemapItem, bool, error)
 }
 
+// SitemapPublicationRepository supports atomic metadata and publication updates.
+// A nil publishedAt leaves the stored field untouched, including concurrent
+// changes. A non-nil value sets the field, including an explicit empty clear.
+// Implementations must apply both parts in one write and return stored values.
+// Legacy repositories remain source compatible; explicit publication writes
+// and edits of known scheduled records require this capability.
+type SitemapPublicationRepository interface {
+	UpdateSitemapItemWithPublication(ctx context.Context, item *SitemapItem, publishedAt *string) (*SitemapItem, error)
+	UpsertSitemapItemWithPublication(ctx context.Context, item *SitemapItem, publishedAt *string) (*SitemapItem, bool, error)
+}
+
 // Service holds and manages sitemap business logic.
 type Service struct {
 	SitemapRepository  SitemapRepository
@@ -58,6 +70,17 @@ type Service struct {
 	EmbeddedPathPrefix string
 	WritableRootPath   string
 	DefaultPath        string
+	// PublicSitemapMode selects file serving (the zero value) or current storage
+	// for public requests. Administrative exports remain explicit file operations.
+	PublicSitemapMode PublicSitemapMode
+	// PublicSitemapItemsFilter applies host publication/crawler policy only to
+	// database-backed public responses. Set before serving concurrent requests.
+	PublicSitemapItemsFilter PublicSitemapItemsFilter
+
+	// now supplies the evaluation instant for publication eligibility. It is
+	// captured once per generated output. The zero value defaults to time.Now
+	// via s.clock().
+	now func() time.Time
 
 	writeMutex sync.Mutex
 }
@@ -70,6 +93,16 @@ type NewServiceRequest struct {
 	EmbeddedPathPrefix string
 	WritableRootPath   string
 	DefaultPath        string
+	// PublicSitemapMode defaults to PublicSitemapModeFile for existing consumers.
+	PublicSitemapMode PublicSitemapMode
+	// PublicSitemapItemsFilter optionally restricts live public candidates. It is
+	// not applied to administrator generation, downloads, or persisted entries.
+	PublicSitemapItemsFilter PublicSitemapItemsFilter
+	// Now optionally injects the clock used for publication eligibility. Each
+	// generated output captures one evaluation instant. nil defaults to
+	// time.Now. Hosts sharing a clock across services should supply the same
+	// function.
+	Now func() time.Time
 }
 
 // NewService creates a sitemap service.
@@ -89,13 +122,24 @@ func NewService(req *NewServiceRequest) *Service {
 	}
 
 	return &Service{
-		SitemapRepository:  req.SitemapRepository,
-		FrontendDomain:     strings.TrimRight(strings.TrimSpace(req.FrontendDomain), "/"),
-		FileSystem:         req.FileSystem,
-		EmbeddedPathPrefix: strings.Trim(strings.TrimSpace(req.EmbeddedPathPrefix), "/"),
-		WritableRootPath:   writableRootPath,
-		DefaultPath:        defaultPath,
+		SitemapRepository:        req.SitemapRepository,
+		FrontendDomain:           strings.TrimRight(strings.TrimSpace(req.FrontendDomain), "/"),
+		FileSystem:               req.FileSystem,
+		EmbeddedPathPrefix:       strings.Trim(strings.TrimSpace(req.EmbeddedPathPrefix), "/"),
+		WritableRootPath:         writableRootPath,
+		DefaultPath:              defaultPath,
+		PublicSitemapMode:        req.PublicSitemapMode,
+		PublicSitemapItemsFilter: req.PublicSitemapItemsFilter,
+		now:                      req.Now,
 	}
+}
+
+// clock returns the service evaluation clock, defaulting to time.Now.
+func (s *Service) clock() time.Time {
+	if s.now != nil {
+		return s.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // DefaultSitemapPath returns the configured default sitemap path.
@@ -108,6 +152,15 @@ func (s *Service) DefaultSitemapPath() string {
 
 // CreateSitemapItemIfDoesNotAlreadyExist creates a sitemap item unless the URI already exists.
 func (s *Service) CreateSitemapItemIfDoesNotAlreadyExist(ctx context.Context, req *CreateSitemapItemRequest) (*SitemapItemResponse, error) {
+	if req == nil {
+		return nil, ErrSitemapItemError
+	}
+	if _, err := normaliseSitemapItemPublishedAtInput(req.PublishedAt); err != nil {
+		return nil, err
+	}
+	if _, supported := s.SitemapRepository.(SitemapPublicationRepository); !supported && req.PublishedAt != nil {
+		return nil, ErrSitemapItemPublicationScheduleUnsupported
+	}
 	item := NewSitemapItem(req)
 	if item.CreatedByID == "" {
 		item.CreatedByID = defaultIdentityTagSystem
@@ -139,8 +192,15 @@ func (s *Service) MassSitemapItemCreationByBatch(ctx context.Context, req *MassS
 		return nil, ErrSitemapItemError
 	}
 
+	publicationRepository, supportsPublication := s.SitemapRepository.(SitemapPublicationRepository)
 	prepared := make([]*SitemapItem, 0, len(req.Items))
 	for _, raw := range req.Items {
+		if _, err := normaliseSitemapItemPublishedAtInput(raw.PublishedAt); err != nil {
+			return nil, err
+		}
+		if !supportsPublication && raw.PublishedAt != nil {
+			return nil, ErrSitemapItemPublicationScheduleUnsupported
+		}
 		item := NewSitemapItem(&raw)
 		if item.CreatedByID == "" {
 			item.CreatedByID = defaultIdentityTagSystem
@@ -148,14 +208,34 @@ func (s *Service) MassSitemapItemCreationByBatch(ctx context.Context, req *MassS
 		if err := validateSitemapItem(item); err != nil {
 			return nil, err
 		}
+		if req.OverrideIfExists && !supportsPublication {
+			existing, err := s.SitemapRepository.GetSitemapItemByURI(ctx, item.URI)
+			if err != nil && !errors.Is(err, ErrSitemapItemResourceNotFound) {
+				return nil, err
+			}
+			if existing != nil && existing.PublishedAt != "" {
+				return nil, ErrSitemapItemPublicationScheduleUnsupported
+			}
+		}
 		prepared = append(prepared, item)
 	}
 
 	response := &MassSitemapItemCreationByBatchResponse{}
-	for _, item := range prepared {
+	for i, item := range prepared {
 		if req.OverrideIfExists {
 			item.GenerateID().SetCreatedAtTimeToNow().SetUpdatedAtTimeToNow()
-			upserted, created, err := s.SitemapRepository.UpsertSitemapItemByURI(ctx, item)
+			var upserted *SitemapItem
+			var created bool
+			var err error
+			if supportsPublication {
+				var publication *string
+				if req.Items[i].PublishedAt != nil {
+					publication = &item.PublishedAt
+				}
+				upserted, created, err = publicationRepository.UpsertSitemapItemWithPublication(ctx, item, publication)
+			} else {
+				upserted, created, err = s.SitemapRepository.UpsertSitemapItemByURI(ctx, item)
+			}
 			if err != nil {
 				return nil, err
 			}
@@ -174,6 +254,7 @@ func (s *Service) MassSitemapItemCreationByBatch(ctx context.Context, req *MassS
 			Priority:        &item.Priority,
 			ChangeFrequency: item.ChangeFrequency,
 			CreatedByID:     item.CreatedByID,
+			PublishedAt:     req.Items[i].PublishedAt,
 		})
 		if err != nil {
 			return nil, err
@@ -232,9 +313,25 @@ func (s *Service) UpdateSitemapItemByUri(ctx context.Context, req *UpdateSitemap
 		return nil, ErrSitemapItemURIIsRequired
 	}
 
-	current, err := s.SitemapRepository.GetSitemapItemByURI(ctx, req.URI)
+	publication, err := normaliseSitemapItemPublishedAtInput(req.PublishedAt)
 	if err != nil {
 		return nil, err
+	}
+	publicationRepository, supportsPublication := s.SitemapRepository.(SitemapPublicationRepository)
+	if !supportsPublication && req.PublishedAt != nil {
+		return nil, ErrSitemapItemPublicationScheduleUnsupported
+	}
+	stored, err := s.SitemapRepository.GetSitemapItemByURI(ctx, req.URI)
+	if err != nil {
+		return nil, err
+	}
+	if !supportsPublication && stored.PublishedAt != "" {
+		return nil, ErrSitemapItemPublicationScheduleUnsupported
+	}
+	copyOfStored := *stored
+	current := &copyOfStored
+	if req.PublishedAt != nil {
+		current.PublishedAt = publication
 	}
 
 	if req.LastMod != "" {
@@ -253,7 +350,16 @@ func (s *Service) UpdateSitemapItemByUri(ctx context.Context, req *UpdateSitemap
 		return nil, err
 	}
 
-	updated, err := s.SitemapRepository.UpdateSitemapItemByURI(ctx, current)
+	var updated *SitemapItem
+	if supportsPublication {
+		var publicationPatch *string
+		if req.PublishedAt != nil {
+			publicationPatch = &current.PublishedAt
+		}
+		updated, err = publicationRepository.UpdateSitemapItemWithPublication(ctx, current, publicationPatch)
+	} else {
+		updated, err = s.SitemapRepository.UpdateSitemapItemByURI(ctx, current)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -328,12 +434,25 @@ func (s *Service) GenerateSitemap(ctx context.Context, req *GenerateSitemapReque
 	return response, nil
 }
 
-// GenerateXML renders sitemap XML for the provided items.
+// GenerateXML renders sitemap XML for the provided items. Items scheduled via
+// a valid future PublishedAt are excluded until that instant, evaluated
+// against a single instant captured at the start of this call. Items with
+// malformed stored PublishedAt values fail generation with
+// ErrSitemapItemInvalidPublishedAt so no partially filtered output is
+// produced. Stored validation runs before any file write in GenerateSitemap.
 func (s *Service) GenerateXML(items []SitemapItem) (string, error) {
+	evaluation := s.clock()
 	urls := make([]sitemapURLEntry, 0, len(items))
 	seenLocs := map[string]struct{}{}
 	for _, item := range items {
 		if shouldExcludeSitemapURI(item.URI) {
+			continue
+		}
+		published, err := item.isPublishedForEligibility(evaluation)
+		if err != nil {
+			return "", err
+		}
+		if !published {
 			continue
 		}
 		if err := validateSitemapItem(&item); err != nil {

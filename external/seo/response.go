@@ -32,6 +32,9 @@ type DownloadSitemapByPathResponse struct {
 	FileName    string
 	ContentType string
 	Content     []byte
+	// CacheControl is set for live public responses. File downloads leave it
+	// empty so existing host cache policy remains unchanged.
+	CacheControl string
 }
 
 // MassSitemapItemCreationByBatchResponse describes batch creation results.

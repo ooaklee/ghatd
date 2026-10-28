@@ -84,6 +84,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in database-backed public sitemaps reflect stored entries without generated-file
+  publication. Optional independent `published_at` dates delay inclusion until the
+  specified instant; empty or missing dates retain immediate eligibility. Hosts can
+  apply additional crawler policy; file-backed delivery remains the default and
+  generated exports remain snapshots. Mongo updates preserve omitted schedules
+  atomically; custom repositories need the optional publication capability for
+  scheduling writes. See the [SEO guide](external/seo/README.md).
+- Administrative changelog sitemap discovery preserves stored changelog slugs and
+  checks parsed publication times before applying limits. See the
+  [content manager guide](external/contentmanager/README.md).
+
 - Currency, phone-country and timezone lists can opt out of flag enrichment
   with `include_flags=false`, preserving flag IDs while skipping flag-service
   lookups. Consumers can load SVGs separately without blocking catalogue
@@ -165,6 +176,9 @@ when the release version has been selected, and remove unused subsections.
   inputs. Hosts retain cache bypass, process lifetime and deployment policy.
 
 ### Fixed
+
+- Post pagination uses a stable ID tiebreaker for equal sort values, preventing
+  duplicate or missing candidates while traversing unchanged content.
 
 - [Lifecycle source discovery](external/billing/README.md#bounded-lifecycle-source-discovery)
   now validates reviewed historical checkout owners through their retained

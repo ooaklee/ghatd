@@ -4,6 +4,7 @@ import "github.com/ooaklee/reply/v2"
 
 // SitemapErrorMap maps SEO errors to HTTP responses.
 var SitemapErrorMap = reply.ErrorManifest{
+	ErrPublicSitemapUnavailable:          {Title: "Service Unavailable", Detail: "The sitemap is temporarily unavailable", StatusCode: 503, Code: "SEO0-011"},
 	ErrSitemapItemError:                  {Title: "Bad Request", Detail: "Sitemap request is invalid", StatusCode: 400, Code: "SEO0-001"},
 	ErrSitemapItemDatabaseError:          {Title: "Internal Server Error", Detail: "Unable to complete sitemap database operation", StatusCode: 500, Code: "SEO0-002"},
 	ErrSitemapItemResourceNotFound:       {Title: "Sitemap item not found", StatusCode: 404, Code: "SEO0-003"},
@@ -12,6 +13,12 @@ var SitemapErrorMap = reply.ErrorManifest{
 	ErrSitemapItemInvalidChangeFrequency: {Title: "Bad Request", Detail: "Sitemap item change frequency is invalid", StatusCode: 400, Code: "SEO0-006"},
 	ErrSitemapItemInvalidPriority:        {Title: "Bad Request", Detail: "Sitemap item priority is invalid", StatusCode: 400, Code: "SEO0-007"},
 	ErrSitemapItemInvalidLastMod:         {Title: "Bad Request", Detail: "Sitemap item last_mod is invalid", StatusCode: 400, Code: "SEO0-008"},
-	ErrSitemapPathIsInvalid:              {Title: "Bad Request", Detail: "Sitemap path is invalid", StatusCode: 400, Code: "SEO0-009"},
-	ErrSitemapFrontendDomainIsRequired:   {Title: "Bad Request", Detail: "Sitemap frontend domain is required", StatusCode: 400, Code: "SEO0-010"},
+	ErrSitemapItemInvalidPublishedAt:     {Title: "Bad Request", Detail: "Sitemap item published_at is invalid", StatusCode: 400, Code: "SEO0-012"},
+	ErrSitemapItemPublicationScheduleUnsupported: {
+		Title:      "Internal Server Error",
+		Detail:     "The configured sitemap store cannot apply publication schedules atomically",
+		StatusCode: 500, Code: "SEO0-013",
+	},
+	ErrSitemapPathIsInvalid:            {Title: "Bad Request", Detail: "Sitemap path is invalid", StatusCode: 400, Code: "SEO0-009"},
+	ErrSitemapFrontendDomainIsRequired: {Title: "Bad Request", Detail: "Sitemap frontend domain is required", StatusCode: 400, Code: "SEO0-010"},
 }

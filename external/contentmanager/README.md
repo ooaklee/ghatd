@@ -64,6 +64,53 @@ contentmanager.AttachRoutes(&contentmanager.AttachRoutesRequest{
   - `GET /api/v1/cms/articles/{urlFriendlyId}`
   - `GET /api/v1/cms/latest`
 
+- **Administrator ingestion sources** (`AdminSessionOrAPI`, read-only):
+  - `GET` or `POST /api/v1/cms/seo/posts/articles/sitemap-items`
+  - `GET` or `POST /api/v1/cms/seo/posts/changelogs/sitemap-items`
+
+### Changelog sitemap candidates
+
+The changelog source returns candidates for the separate SEO batch-ingestion
+operation; it does not write sitemap records or generate a public sitemap.
+`GetChangelogSitemapItemsRequest` and `GetChangelogSitemapItemsResponse` alias the
+article request/response types so existing ingestion clients can reuse their
+decoder. The wire counters remain `processed_articles`, `seedable_articles` and
+`skipped_missing_url_friendly_id`; they count changelog sources for this route.
+
+```http
+GET /api/v1/cms/seo/posts/changelogs/sitemap-items?per_page=100&uri_path_prefix=/whats-new/
+X-Api-Token: <admin-api-token>
+```
+
+The default URI prefix is `/whats-new/`; hosts can supply a clean absolute path
+such as `/updates/` or `/news/releases/`. A trailing slash is optional. URL
+schemes/hosts, query strings, fragments, backslashes, traversal, escaped aliases
+and repeated separators are rejected. Full `changelog-` slugs are retained. Only canonical
+lowercase, hyphen-separated slugs are returned. Invalid or missing slugs count
+toward `skipped_missing_url_friendly_id`.
+
+Publication and optional `created_at_from` filters compare parsed instants,
+accepting platform UTC timestamps and RFC3339 timestamps with offsets. Drafts,
+future-dated, soft-deleted, restricted-visibility, zero-date and malformed-date
+posts are excluded. The source deliberately avoids lexical repository date
+filters. `limit` counts only eligible public source posts, including those later
+skipped for invalid slugs. Zero means no limit; negative limits are invalid.
+`per_page` accepts 1–100, with zero using 100. Page size stays fixed across the
+scan, and the post repository uses an ID tiebreaker for equal timestamps.
+Concurrent content edits can still change a paginated catalogue; run ingestion
+against stable content when exact batch completeness is required.
+
+The HTTP mapper preserves query-over-body precedence, binds `ActorID` from
+verified context, and rejects malformed or oversized bodies above 8 KiB. The
+route uses the existing administrator authentication adapter. Trusted in-process
+jobs can call the service without a viewer; `ActorID` is never a credential.
+
+`ChangelogSitemapHandler` and `ChangelogSitemapService` are optional capabilities.
+The built-in handler and service implement both. Custom handlers without the
+new capability retain their existing route inventory; the built-in handler with
+a custom service lacking the capability returns unavailable for the new route.
+Existing article ingestion behaviour is unchanged.
+
 ## Request Patterns
 
 ### Create a Post (Admin)
@@ -132,9 +179,11 @@ back to the public projection without logging private lookup diagnostics.
 Public list restrictions operate on a request-local copy, clearing contradictory
 visibility flags. Public single-item reads also exclude soft-deleted posts.
 Latest-post filtering copies the adapter's overview slice. These changes do not
-introduce a new publication scheduling policy. Sitemap jobs still request only
-published, non-deleted content; direct jobs need no viewer, while the HTTP route
-remains administrator-protected.
+introduce a new publication scheduling policy. Article sitemap jobs retain their
+existing published/non-deleted repository filters. The changelog source applies
+parsed-time and public-visibility eligibility after paging so offset-formatted
+timestamps are compared correctly. Direct jobs need no viewer, while ingestion
+HTTP routes remain administrator-protected.
 
 HTTP updates accept individual editable fields, not an embedded `post` full
 replacement. Previously that replacement could override the URI-selected post

@@ -2,6 +2,7 @@ package seo
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/ooaklee/ghatd/external/errormanifest"
@@ -164,9 +165,43 @@ func (h *Handler) DownloadSitemapByPath(w http.ResponseWriter, r *http.Request) 
 	h.writeSitemapFileResponse(w, r, true)
 }
 
-// GetSitemap handles the public sitemap endpoint.
+// GetSitemap serves the configured public source. Services implementing the
+// additive GetPublicSitemap capability can opt into current database storage;
+// legacy custom services keep their existing file-download implementation.
 func (h *Handler) GetSitemap(w http.ResponseWriter, r *http.Request) {
-	h.writeSitemapFileResponse(w, r, false)
+	public, ok := h.service.(interface {
+		GetPublicSitemap(context.Context, *DownloadSitemapByPathRequest) (*DownloadSitemapByPathResponse, error)
+	})
+	if !ok {
+		h.writeSitemapFileResponse(w, r, false)
+		return
+	}
+	request, err := MapRequestToDownloadSitemapByPathRequest(r, h.validator)
+	if err != nil {
+		_ = h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	response, err := public.GetPublicSitemap(r.Context(), request)
+	if err != nil || response == nil {
+		if err == nil {
+			err = ErrPublicSitemapUnavailable
+		}
+		if errors.Is(err, ErrPublicSitemapUnavailable) {
+			w.Header().Set("Cache-Control", "no-store")
+			// Preserve diagnostic causes for service callers, but classify the
+			// public response solely as unavailable, never as a joined cause.
+			err = ErrPublicSitemapUnavailable
+		}
+		_ = h.NewHTTPErrorResponse(w, err)
+		return
+	}
+	if response.CacheControl != "" {
+		w.Header().Set("Cache-Control", response.CacheControl)
+	}
+	w.Header().Set("Content-Type", response.ContentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(response.Content)
 }
 
 // writeSitemapFileResponse maps the download request, fetches sitemap content

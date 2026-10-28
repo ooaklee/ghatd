@@ -3,6 +3,10 @@ package seo
 import "errors"
 
 var (
+	// ErrPublicSitemapUnavailable wraps failures to read, filter or render the
+	// live public sitemap. HTTP responses omit the diagnostic cause.
+	ErrPublicSitemapUnavailable = errors.New("public-sitemap-unavailable")
+
 	// ErrSitemapItemError is returned for general sitemap item failures.
 	ErrSitemapItemError = errors.New("sitemap-item-request-is-invalid")
 
@@ -26,6 +30,16 @@ var (
 
 	// ErrSitemapItemInvalidLastMod is returned when last_mod cannot be parsed.
 	ErrSitemapItemInvalidLastMod = errors.New("sitemap-item-last-mod-is-invalid")
+
+	// ErrSitemapItemInvalidPublishedAt is returned when a supplied or stored
+	// published_at value is malformed or a zero timestamp.
+	ErrSitemapItemInvalidPublishedAt = errors.New("sitemap-item-published-at-is-invalid")
+
+	// ErrSitemapItemPublicationScheduleUnsupported is returned when an explicit
+	// publication mutation (set, clear or schedule-preserving override) cannot
+	// be honoured atomically by the configured repository. Mutations fail
+	// closed instead of risking overwriting a known scheduled state.
+	ErrSitemapItemPublicationScheduleUnsupported = errors.New("sitemap-item-publication-schedule-unsupported")
 
 	// ErrSitemapPathIsInvalid is returned when a sitemap file path is unsafe.
 	ErrSitemapPathIsInvalid = errors.New("sitemap-path-is-invalid")

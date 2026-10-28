@@ -209,37 +209,89 @@ func (r *Repository) GetTotalSitemapItems(ctx context.Context, req *GetSitemapIt
 	return r.Store.ExecuteCountDocuments(ctx, collection, buildSitemapItemListFilter(req))
 }
 
-// UpdateSitemapItemByURI updates an existing sitemap item by URI.
+// UpdateSitemapItemByURI preserves an omitted publication field for older
+// callers. Explicit clearing requires UpdateSitemapItemWithPublication.
 func (r *Repository) UpdateSitemapItemByURI(ctx context.Context, item *SitemapItem) (*SitemapItem, error) {
+	var publication *string
+	if item.PublishedAt != "" {
+		publication = &item.PublishedAt
+	}
+	return r.UpdateSitemapItemWithPublication(ctx, item, publication)
+}
+
+// UpsertSitemapItemByURI preserves an omitted publication field for older
+// callers. Explicit clearing requires UpsertSitemapItemWithPublication.
+func (r *Repository) UpsertSitemapItemByURI(ctx context.Context, item *SitemapItem) (*SitemapItem, bool, error) {
+	var publication *string
+	if item.PublishedAt != "" {
+		publication = &item.PublishedAt
+	}
+	return r.UpsertSitemapItemWithPublication(ctx, item, publication)
+}
+
+// UpdateSitemapItemWithPublication updates the existing sitemap item selected
+// by URI in a single atomic write. publishedAt controls the stored
+// publication schedule within the same command: nil omits published_at from
+// the write so a concurrently changed schedule is never overwritten (any
+// stale item.PublishedAt is ignored); a non-nil pointer writes that exact
+// value, where an empty string clears the gate for legacy inclusion and a
+// normalised UTC timestamp schedules inclusion. The returned item is the
+// post-write stored record read back by URI.
+func (r *Repository) UpdateSitemapItemWithPublication(ctx context.Context, item *SitemapItem, publishedAt *string) (*SitemapItem, error) {
 	collection, err := r.GetSitemapItemsCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"uri": item.URI}, bson.M{"$set": item}, "sitemap item"); err != nil {
+	changes := bson.M{
+		"uri":              item.URI,
+		"last_mod":         item.LastMod,
+		"priority":         item.Priority,
+		"change_frequency": item.ChangeFrequency,
+		"created_by_id":    item.CreatedByID,
+		"updated_at":       item.UpdatedAt,
+		"updated_by_id":    item.UpdatedByID,
+	}
+	if publishedAt != nil {
+		changes["published_at"] = *publishedAt
+	}
+
+	if err = r.Store.ExecuteUpdateOneCommand(ctx, collection, bson.M{"uri": item.URI}, bson.M{"$set": changes}, "sitemap item"); err != nil {
 		return nil, err
 	}
 
-	return item, nil
+	return r.GetSitemapItemByURI(ctx, item.URI)
 }
 
-// UpsertSitemapItemByURI creates or replaces a sitemap item by URI.
-func (r *Repository) UpsertSitemapItemByURI(ctx context.Context, item *SitemapItem) (*SitemapItem, bool, error) {
+// UpsertSitemapItemWithPublication creates or replaces the sitemap item
+// selected by URI in a single atomic upsert. publishedAt controls the stored
+// publication schedule within the same command: nil omits published_at so an
+// existing concurrently scheduled value survives (stale item.PublishedAt is
+// ignored); a non-nil pointer writes that exact value, where an empty string
+// clears the gate and a normalised UTC timestamp schedules inclusion. The
+// bool reports whether a new document was created; the returned item is the
+// post-write stored record read back by URI.
+func (r *Repository) UpsertSitemapItemWithPublication(ctx context.Context, item *SitemapItem, publishedAt *string) (*SitemapItem, bool, error) {
 	collection, err := r.GetSitemapItemsCollection(ctx)
 	if err != nil {
 		return nil, false, err
 	}
 
+	changes := bson.M{
+		"uri":              item.URI,
+		"last_mod":         item.LastMod,
+		"priority":         item.Priority,
+		"change_frequency": item.ChangeFrequency,
+		"created_by_id":    item.CreatedByID,
+		"updated_at":       item.UpdatedAt,
+		"updated_by_id":    item.UpdatedByID,
+	}
+	if publishedAt != nil {
+		changes["published_at"] = *publishedAt
+	}
+
 	update := bson.M{
-		"$set": bson.M{
-			"uri":              item.URI,
-			"last_mod":         item.LastMod,
-			"priority":         item.Priority,
-			"change_frequency": item.ChangeFrequency,
-			"created_by_id":    item.CreatedByID,
-			"updated_at":       item.UpdatedAt,
-			"updated_by_id":    item.UpdatedByID,
-		},
+		"$set": changes,
 		"$setOnInsert": bson.M{
 			"_id":        item.ID,
 			"created_at": item.CreatedAt,
@@ -251,8 +303,12 @@ func (r *Repository) UpsertSitemapItemByURI(ctx context.Context, item *SitemapIt
 		return nil, false, err
 	}
 
-	created := result.UpsertedCount > 0
-	return item, created, nil
+	stored, err := r.GetSitemapItemByURI(ctx, item.URI)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return stored, result.UpsertedCount > 0, nil
 }
 
 // DeleteSitemapItemsByURIs deletes sitemap items matching exact URIs.

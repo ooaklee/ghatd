@@ -56,6 +56,7 @@ func TestContentActorMappers(t *testing.T) {
 		{"faq", false, "ActorID", contentMapper(mapRequestToGetFaqItemsRequest)},
 		{"glossary", false, "ActorID", contentMapper(mapRequestToGetGlossaryItemsRequest)},
 		{"sitemap", false, "ActorID", contentMapper(mapRequestToGetArticleSitemapItemsRequest)},
+		{"changelog sitemap", false, "ActorID", contentMapper(mapRequestToGetChangelogSitemapItemsRequest)},
 		{"latest", false, "ActorID", contentMapper(mapRequestToGetLatestPostsByTypeRequest)},
 		{"notifications", false, "UserID", contentMapper(mapRequestToGetLatestNotificationOverviewsRequest)},
 	} {

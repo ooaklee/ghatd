@@ -6,7 +6,13 @@ type CreateSitemapItemRequest struct {
 	LastMod         string          `json:"last_mod"`
 	Priority        *float64        `json:"priority,omitempty"`
 	ChangeFrequency ChangeFrequency `json:"change_frequency"`
-	CreatedByID     string          `json:"created_by_id,omitempty"`
+	// PublishedAt is triple-state: nil (or absent) omits the publication
+	// schedule for legacy immediate inclusion, an empty or whitespace-only
+	// string clears the gate, and a valid RFC3339Nano timestamp (with an
+	// explicit zone offset) or a zone-less platform UTC timestamp schedules
+	// inclusion from that instant. Invalid non-empty values are rejected.
+	PublishedAt *string `json:"published_at,omitempty"`
+	CreatedByID string  `json:"created_by_id,omitempty"`
 }
 
 // UpdateSitemapItemRequest holds data needed to update a sitemap item by URI.
@@ -15,7 +21,12 @@ type UpdateSitemapItemRequest struct {
 	LastMod         string           `json:"last_mod,omitempty"`
 	Priority        *float64         `json:"priority,omitempty"`
 	ChangeFrequency *ChangeFrequency `json:"change_frequency,omitempty"`
-	UpdatedByID     string           `json:"updated_by_id,omitempty"`
+	// PublishedAt is triple-state: nil (or absent) preserves the existing
+	// stored schedule, an empty or whitespace-only string clears the gate for
+	// legacy immediate inclusion, and a valid timestamp reschedules inclusion.
+	// Invalid non-empty values are rejected before any write.
+	PublishedAt *string `json:"published_at,omitempty"`
+	UpdatedByID string  `json:"updated_by_id,omitempty"`
 }
 
 // GetSitemapItemsRequest holds filters for listing sitemap items.
