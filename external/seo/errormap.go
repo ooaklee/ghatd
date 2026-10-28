@@ -13,6 +13,12 @@ var SitemapErrorMap = reply.ErrorManifest{
 	ErrSitemapItemInvalidChangeFrequency: {Title: "Bad Request", Detail: "Sitemap item change frequency is invalid", StatusCode: 400, Code: "SEO0-006"},
 	ErrSitemapItemInvalidPriority:        {Title: "Bad Request", Detail: "Sitemap item priority is invalid", StatusCode: 400, Code: "SEO0-007"},
 	ErrSitemapItemInvalidLastMod:         {Title: "Bad Request", Detail: "Sitemap item last_mod is invalid", StatusCode: 400, Code: "SEO0-008"},
-	ErrSitemapPathIsInvalid:              {Title: "Bad Request", Detail: "Sitemap path is invalid", StatusCode: 400, Code: "SEO0-009"},
-	ErrSitemapFrontendDomainIsRequired:   {Title: "Bad Request", Detail: "Sitemap frontend domain is required", StatusCode: 400, Code: "SEO0-010"},
+	ErrSitemapItemInvalidPublishedAt:     {Title: "Bad Request", Detail: "Sitemap item published_at is invalid", StatusCode: 400, Code: "SEO0-012"},
+	ErrSitemapItemPublicationScheduleUnsupported: {
+		Title:      "Internal Server Error",
+		Detail:     "The configured sitemap store cannot apply publication schedules atomically",
+		StatusCode: 500, Code: "SEO0-013",
+	},
+	ErrSitemapPathIsInvalid:            {Title: "Bad Request", Detail: "Sitemap path is invalid", StatusCode: 400, Code: "SEO0-009"},
+	ErrSitemapFrontendDomainIsRequired: {Title: "Bad Request", Detail: "Sitemap frontend domain is required", StatusCode: 400, Code: "SEO0-010"},
 }

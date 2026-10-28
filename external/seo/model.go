@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,10 +22,15 @@ type SitemapItem struct {
 	LastMod         string          `json:"last_mod" bson:"last_mod"`
 	Priority        float64         `json:"priority" bson:"priority"`
 	ChangeFrequency ChangeFrequency `json:"change_frequency" bson:"change_frequency"`
-	CreatedByID     string          `json:"created_by_id,omitempty" bson:"created_by_id,omitempty"`
-	CreatedAt       string          `json:"created_at,omitempty" bson:"created_at,omitempty"`
-	UpdatedAt       string          `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
-	UpdatedByID     string          `json:"updated_by_id,omitempty" bson:"updated_by_id,omitempty"`
+	// PublishedAt optionally schedules public sitemap inclusion. Empty values
+	// keep the legacy behaviour of immediate inclusion. Non-empty values must
+	// hold a valid timestamp; entries become eligible for generated output only
+	// at or after that instant. It is independent from LastMod and CreatedAt.
+	PublishedAt string `json:"published_at,omitempty" bson:"published_at,omitempty"`
+	CreatedByID string `json:"created_by_id,omitempty" bson:"created_by_id,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty" bson:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
+	UpdatedByID string `json:"updated_by_id,omitempty" bson:"updated_by_id,omitempty"`
 }
 
 // NewSitemapItem returns a normalised sitemap item with defaults.
@@ -41,13 +47,106 @@ func NewSitemapItem(req *CreateSitemapItemRequest) *SitemapItem {
 		priority = *req.Priority
 	}
 
+	// A nil PublishedAt request field omits scheduling entirely (legacy
+	// inclusion). An empty or whitespace-only string clears the gate. Any
+	// other value is preserved raw: validateSitemapItem normalises valid
+	// timestamps and rejects invalid ones, so invalid caller input can never
+	// become an immediately eligible record.
+	publishedAt := ""
+	if req.PublishedAt != nil {
+		publishedAt = strings.TrimSpace(*req.PublishedAt)
+	}
+
 	return &SitemapItem{
 		URI:             normaliseSitemapURI(req.URI),
 		LastMod:         strings.TrimSpace(req.LastMod),
 		Priority:        priority,
 		ChangeFrequency: NormaliseChangeFrequency(req.ChangeFrequency),
+		PublishedAt:     publishedAt,
 		CreatedByID:     strings.TrimSpace(req.CreatedByID),
 	}
+}
+
+// normaliseSitemapItemPublishedAtInput interprets the triple-state request
+// field: nil (omitted or JSON null) means no publication intent and returns
+// empty; an empty or whitespace-only string clears the gate for legacy
+// inclusion; any other value is normalised to a precise UTC timestamp or
+// rejected with ErrSitemapItemInvalidPublishedAt.
+func normaliseSitemapItemPublishedAtInput(value *string) (string, error) {
+	if value == nil {
+		return "", nil
+	}
+	return normaliseSitemapItemPublishedAt(*value)
+}
+
+// normaliseSitemapItemPublishedAt normalises a stored or requested
+// publication value: empty stays empty (legacy inclusion), and a valid value
+// is re-rendered as a precise UTC timestamp. It rejects zero instants, year
+// zero/out-of-range results and offsets Go's parser would otherwise accept
+// (for example +24:00 or +00:60), returning ErrSitemapItemInvalidPublishedAt.
+// Whitespace is trimmed; JSON null decodes to a nil request pointer which
+// callers treat as omission before reaching this function.
+func normaliseSitemapItemPublishedAt(value string) (string, error) {
+	instant, err := parseSitemapPublishedTimestamp(value)
+	if err != nil {
+		return "", err
+	}
+	if instant.IsZero() {
+		return "", nil
+	}
+	return instant.UTC().Format(time.RFC3339Nano), nil
+}
+
+// Keep the wire grammar strict: time.Parse alone accepts malformed offsets,
+// comma fractions and excess precision. Zone-less platform timestamps are UTC.
+var sitemapPublicationTimestamp = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?$`)
+
+func parseSitemapPublishedTimestamp(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+	if !sitemapPublicationTimestamp.MatchString(value) || strings.HasPrefix(value, "0000-") {
+		return time.Time{}, ErrSitemapItemInvalidPublishedAt
+	}
+	instant, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		instant, err = time.Parse("2006-01-02T15:04:05.999999999", value)
+	}
+	instant = instant.UTC()
+	if err != nil || instant.IsZero() || instant.Year() < 1 || instant.Year() > 9999 {
+		return time.Time{}, ErrSitemapItemInvalidPublishedAt
+	}
+	return instant, nil
+}
+
+// publishedAtInstant returns the parsed publication instant for a stored
+// value. Missing or empty values report a zero instant with no error and keep
+// the legacy inclusion rules. Invalid non-empty values return
+// ErrSitemapItemInvalidPublishedAt so generation never silently includes a
+// malformed schedule.
+func (s SitemapItem) publishedAtInstant() (time.Time, error) {
+	instant, err := parseSitemapPublishedTimestamp(s.PublishedAt)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return instant, nil
+}
+
+// isPublishedForEligibility reports whether the item is eligible for generated
+// public output at the captured evaluation instant. Items with an absent,
+// empty or invalid stored publication value are discussed by the caller: this
+// method only compares a parsed valid instant. Items whose publication instant
+// is in the future relative to the evaluation time are excluded.
+func (s SitemapItem) isPublishedForEligibility(evaluation time.Time) (bool, error) {
+	instant, err := s.publishedAtInstant()
+	if err != nil {
+		return false, err
+	}
+	if instant.IsZero() {
+		return true, nil
+	}
+	return !instant.After(evaluation), nil
 }
 
 // GenerateID creates a UUID for the sitemap item.
@@ -154,6 +253,14 @@ func validateSitemapItem(item *SitemapItem) error {
 	if _, err := formatSitemapTimestamp(item.LastMod); err != nil {
 		return ErrSitemapItemInvalidLastMod
 	}
+	// Publication scheduling is independent from last_mod: valid values are
+	// normalised to precise UTC, empty values keep legacy inclusion, and
+	// invalid values (including zero instants) reject the item.
+	normalisedPublishedAt, err := normaliseSitemapItemPublishedAt(item.PublishedAt)
+	if err != nil {
+		return err
+	}
+	item.PublishedAt = normalisedPublishedAt
 
 	return nil
 }

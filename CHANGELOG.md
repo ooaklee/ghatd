@@ -85,8 +85,12 @@ when the release version has been selected, and remove unused subsections.
 ### Added
 
 - Opt-in database-backed public sitemaps reflect stored entries without generated-file
-  publication. Hosts can apply publication policy; file-backed delivery remains the
-  default. See the [SEO guide](external/seo/README.md).
+  publication. Optional independent `published_at` dates delay inclusion until the
+  specified instant; empty or missing dates retain immediate eligibility. Hosts can
+  apply additional crawler policy; file-backed delivery remains the default and
+  generated exports remain snapshots. Mongo updates preserve omitted schedules
+  atomically; custom repositories need the optional publication capability for
+  scheduling writes. See the [SEO guide](external/seo/README.md).
 - Administrative changelog sitemap discovery preserves stored changelog slugs and
   checks parsed publication times before applying limits. See the
   [content manager guide](external/contentmanager/README.md).
