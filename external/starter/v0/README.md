@@ -492,3 +492,14 @@ See the cross-package [adoption guide](../../../docs/how-to/add-google-apple-sig
 [compile-checked composition example](../../../examples/oauth/README.md),
 [provider reference](../../oauth/README.md) and
 [access-manager routes](../../accessmanager/README.md).
+
+### Optional content notifications
+
+`NewServicesRequest.ContentManagerOptions` forwards explicit
+`contentmanager.ServiceOption` values to the shared CMS service. For example,
+pass `contentmanager.WithIndexNow` with the host's canonical origin, public URL
+policy and `Repositories.Post.GetPostById` lookup. Configure these options before
+serving requests. Nil preserves the standard composition. Ownership verification
+routes and scheduled publication reconciliation remain explicit host wiring; see
+[Content Manager](../../contentmanager/README.md) and the
+[IndexNow composition guide](../../../docs/how-to/configure-indexnow-seo.md).

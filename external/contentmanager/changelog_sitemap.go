@@ -2,6 +2,7 @@ package contentmanager
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -32,12 +33,17 @@ func (s *Service) GetChangelogSitemapItems(ctx context.Context, req *GetChangelo
 	if err := s.validateOperation(ctx, req); err != nil {
 		return nil, err
 	}
-	return getChangelogSitemapItems(ctx, s.postService, req, time.Now().UTC())
+	return getChangelogSitemapItems(ctx, s.postService, req, s.publicationTime().UTC())
 }
 
 // parseChangelogSitemapTime supports the stored platform UTC format and
 // explicit RFC3339 offsets, without treating a malformed date as published.
+var publicPublicationTimestamp = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?$`)
+
 func parseChangelogSitemapTime(value string) (time.Time, error) {
+	if !publicPublicationTimestamp.MatchString(value) {
+		return time.Time{}, errors.New("invalid publication timestamp")
+	}
 	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
 		return parsed, nil
 	}

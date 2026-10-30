@@ -92,6 +92,9 @@ type NewServicesRequest struct {
 	// ValidPostTags uses post.DefaultValidPostTags when nil. Pass an empty
 	// slice to intentionally disable starter's default changelog tag set.
 	ValidPostTags []string
+	// ContentManagerOptions supplies explicit host integrations such as IndexNow
+	// notifications. Nil retains the standard CMS behavior; configure before use.
+	ContentManagerOptions []contentmanager.ServiceOption
 
 	NotifierSenders []notifier.ChannelSender
 	// ReminderService overrides the reminder service attached to UserManager.
@@ -235,7 +238,7 @@ func NewServices(r *NewServicesRequest) (*Services, error) {
 	}).WithBillingService(billingService).WithGroupService(groupService)
 	userManagerService.WithAdministratorAuthorizer(accessManagerService)
 
-	contentManagerService := contentmanager.NewService(postService, userService)
+	contentManagerService := contentmanager.NewService(postService, userService, r.ContentManagerOptions...)
 	billingManagerService := billingmanager.NewService(paymentProviderRegistry, billingService)
 	billingManagerService.WithAuditService(auditService).WithUserService(userService).WithPricerService(pricerService)
 

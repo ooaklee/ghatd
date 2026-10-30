@@ -84,6 +84,17 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- Opt-in [IndexNow](external/indexnow/README.md) ownership verification,
+  single and bulk URL-change notifications, classified receipts and optional
+  MongoDB or in-memory attempt history. [CMS integration](external/contentmanager/README.md)
+  notifies after successful mutations, retains prior public URLs for removals
+  and moves, and provides explicit publication-window reconciliation. Hosts own
+  scheduling, checkpoints and retries; receipts do not guarantee indexing.
+- [Starter composition](external/starter/v0/README.md#optional-content-notifications)
+  accepts explicit CMS service options. See the
+  [IndexNow and SEO guide](docs/how-to/configure-indexnow-seo.md) for canonical
+  URL policy, independent sitemap schedules and crawler-visible content.
+
 - Opt-in database-backed public sitemaps reflect stored entries without generated-file
   publication. Optional independent `published_at` dates delay inclusion until the
   specified instant; empty or missing dates retain immediate eligibility. Hosts can
@@ -222,6 +233,15 @@ when the release version has been selected, and remove unused subsections.
 - Complete HTTP mappings for bounded membership and referral-evidence failures.
 
 ### Security
+
+- Public [CMS reads](external/contentmanager/README.md) and sitemap candidates
+  reject future, malformed, deleted or restricted posts while preserving verified
+  administrator previews. Public timestamps are evaluated as instants, including
+  historical zone-less UTC values. Hosts serving article HTML must use the public
+  projection and return appropriate unavailable-page statuses.
+- Public [latest-content feeds](external/post/README.md#public-latest-content-projections)
+  filter restricted records before projecting titles and links, including for
+  authenticated callers. No stored visibility values are changed.
 
 - Partner reads and worker stages recheck current caller, selected target and exact
   scoped grants. Human sessions cannot create instance-bound worker invocations;

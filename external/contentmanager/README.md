@@ -219,3 +219,139 @@ If you are implementing a web client for this API:
 
 - [Post Getting Started](../post/README.md)
 - [Router Getting Started](../router/README.md)
+
+## Optional IndexNow notifications
+
+Existing `NewService(postService, userService)` callers retain their mutation
+I/O. Opt in with additive service options after constructing an
+[IndexNow service](../indexnow/README.md):
+
+```go
+cms := contentmanager.NewService(postService, userService,
+    contentmanager.WithIndexNow(indexNowService, contentmanager.IndexNowConfig{
+        CanonicalOrigin: "https://example.com",
+        LookupPost:      postRepository.GetPostById,
+        URLForPost: func(item post.Post) string {
+            switch item.Type {
+            case post.PostTypeArticle:
+                return "/blog/" + strings.TrimPrefix(item.UrlFriendlyId, "article-")
+            case post.PostTypeChangelog:
+                return "/whats-new/" + item.UrlFriendlyId
+            default:
+                return "" // The host has not exposed a public URL for this type.
+            }
+        },
+        // Optional, concurrency-safe build/crawler/independent SEO policy.
+        // Returning false omits a URL; an error records a safe warning.
+        AllowURL: allowCanonicalURL,
+    }),
+)
+```
+
+The host supplies the fixed canonical origin, public type-to-path mapping and
+persisted lookup. Invalid wiring fails closed for notifications with a
+`configuration_invalid` receipt. A nil notifier disables the option. Configure
+services before concurrent use. URL mapping accepts clean site-relative paths,
+rejects queries/fragments, encoded aliases, traversal and standard private
+surfaces, then resolves against the configured origin. No request `Host` value,
+caller-selected author or actor is used to infer a URL.
+
+An authorized, successfully acknowledged create/update/delete/restore can send
+one notification containing its public URL changes. Updates and deletions first
+snapshot the persisted target by ID after authorization. A pre-write public URL
+is retained for deletion, unpublication, rescheduling or slug changes even when
+it no longer passes the current public sitemap policy. Slug changes notify both
+old and new URLs, deduplicated within the request. A host remains responsible
+for an actual redirect when old slugs move. A restored draft is not announced
+until explicitly published. Future, malformed, zero-date, deleted, restricted
+and unmapped posts do not become new public notifications.
+
+`AllowURL` runs on the previous URL before mutation and on the new URL after
+mutation. It can reuse host build or independent SEO policy; it must not rewrite
+SEO storage or depend on request-supplied identities. SEO publication dates,
+modification dates and editor overrides remain independently managed. CMS
+notifications do not ingest or delete sitemap rows. Public sitemap eligibility
+and removed-URL notification eligibility have different purposes.
+
+A notification failure never turns an acknowledged content mutation into an
+apparent failed write. In-process mutation responses have an optional `IndexNow`
+receipt: `skipped`, `acknowledged` (HTTP 200), `pending` (HTTP 202 ownership
+validation) or `failed`. The HTTP handlers preserve their existing bodies and
+expose `X-IndexNow-Status` plus a bounded `X-IndexNow-Warning` category when needed.
+No raw dependency errors, ownership keys or transport diagnostics are included.
+The IndexNow package owns persistent attempt history. A received notification
+whose final audit update fails retains its acknowledged/pending status with an
+`audit_unavailable` warning, so a storage problem is not mistaken for proof that
+the search engine received nothing. Neither a receipt nor a
+sitemap entry guarantees crawling or indexing.
+
+A failed prior-state lookup does not prevent the authorized content write. Its
+receipt warns `snapshot_unavailable`; a valid new URL can still be notified,
+but the missing old URL requires an explicit operator notification. Notification
+calls use the request context, so cancellation may prevent delivery after a
+successful write. There is no automatic retry, transactional outbox or atomic
+commit across content storage and the remote endpoint. Invoke these mutations
+after any host-managed transaction boundary; this service has no transaction
+commit callback. Concurrent edits can make a snapshot stale. Hosts requiring
+strong delivery guarantees should introduce their own transaction-aware outbox
+and explicit replay policy rather than treating a failed receipt as a failed
+content mutation.
+
+### Scheduled publication checkpoints
+
+A future publication has no write at the instant it becomes due. A trusted host
+job must call `ReconcileIndexNowPublications` explicitly:
+
+```go
+result, err := cms.ReconcileIndexNowPublications(ctx,
+    &contentmanager.ReconcileIndexNowPublicationsRequest{
+        After:   lastSuccessfulCheckpoint,
+        Through: runStartedAt,
+        Limit:   10000,
+    })
+if err == nil && result.Complete {
+    // Persist result.Checkpoint in the host's durable job state.
+}
+```
+
+The `(After, Through]` window must be explicit, nonzero, no longer than 24 hours
+and not in the future. Set the initial checkpoint when enabling notifications;
+do not backfill unchanged historical content. `Limit` bounds catalogue records
+inspected (maximum/default 10,000). The scan keeps a fixed page size of 100,
+compares publication instants rather than lexical timestamp filters, and
+completes all reads before submitting a deduplicated batch. An exhausted bound,
+source/policy failure or failed submission leaves `Complete` false and the
+checkpoint unchanged. Increase the explicit limit within its bound or provide
+a narrower host-owned source/outbox if the catalogue exceeds this API's scope.
+Replaying a window may notify URLs again; multiple processes need host-owned
+coordination. No distributed exactly-once scheduler is provided, and concurrent
+catalogue edits can change pagination. Run against stable source state when
+exact scan completeness is required. A pending HTTP 202 receipt confirms
+notification receipt with ownership validation pending, not completed indexing.
+
+## Public publication eligibility
+
+Public single-article/changelog reads and all four full-post lists recheck that
+the returned post is due, non-deleted and unrestricted. Malformed/zero publication
+values fail closed even when a custom domain adapter returns them. Verified
+administrator previews retain unpublished and deleted records. Latest overview
+and notification feeds also reject future or malformed publication timestamps.
+`IsPublicPostAt` exposes the same predicate to host article renderers and sitemap
+filters. `WithPublicationClock` can inject one shared clock for deterministic
+host behavior. Standard stored platform UTC timestamps and RFC3339 offsets are
+supported; a date without a time is not a publication timestamp. Source totals
+remain source totals if defensive filtering shortens a returned page, because
+one page cannot establish a corrected global count.
+
+These rules provide publication eligibility, not HTML rendering. Hosts should
+serve real article content, canonical metadata, standard links and meaningful
+404/503 responses before JavaScript runs, use the same output for readers and
+crawlers, bypass stale response caches, and check current public CMS availability
+when filtering independently stored sitemap rows. See the
+[cross-package workflow](../../docs/how-to/configure-indexnow-seo.md).
+
+An independent SEO gate can become due after its post's CMS publication window
+has already been reconciled. That later SEO transition requires a separate host
+notification or SEO eligibility job using the IndexNow service. CMS publication
+reconciliation only scans CMS publication dates; it does not monitor later SEO
+schedule changes or replay old content automatically.

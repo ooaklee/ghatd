@@ -227,3 +227,22 @@ For most HTTP/API use-cases, call the `contentmanager` package and let it orches
 - lower-level service composition
 
 See: [Content Manager Getting Started](../contentmanager/README.md)
+
+## Public latest-content projections
+
+`GetLatestPostsByType` and `GetLatestNotificationOverviews` are public discovery
+feeds, including for authenticated or administrator callers. Their full source
+records must be due, non-deleted and have an empty `Visibility` list before any
+title, slug, URL or notification metadata is projected. Empty, zero or malformed
+publication timestamps fail closed; platform UTC timestamps and strict RFC3339
+offsets are accepted. One instant is used to check every returned record.
+Recipient IDs in notification requests select feed context and grant no preview
+permission. Protected CMS single-item and full-post list operations continue to
+own administrator previews.
+
+Repository publication/deletion filters remain useful query bounds, but are not
+sufficient authorization evidence for an adapter response. The service rechecks
+full records before discarding their visibility fields. Defensive filtering can
+shorten a feed; it does not issue extra reads to backfill a hidden result or
+rewrite source records. Hosts must apply their own canonical route and build
+policy when exposing the resulting public links.

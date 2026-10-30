@@ -2,6 +2,7 @@ package post
 
 import (
 	"context"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -759,9 +760,9 @@ func (s *Service) parsePostPublishTime(publishAtUtc string, logger *zap.Logger) 
 	return publishedAt, nil
 }
 
-// GetLatestPostsByType returns the latest posts by the given types
-// This is a convenience method to get the latest PUBLISHED posts for multiple types in one call, allowing for more efficient retrieval of content
-// The posts should not be soft deleted either and not published in the future
+// GetLatestPostsByType returns public, due, non-deleted post overviews. This
+// feed never grants a preview based on caller identity; protected CMS full-post
+// reads own administrator previews. Defensive filtering may shorten the feed.
 func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsByTypeRequest) (*GetLatestPostsByTypeResponse, error) {
 	if err := s.validateOperation(ctx, req); err != nil {
 		return nil, err
@@ -811,8 +812,12 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	}
 
 	var postOverviews []PostOverview
+	evaluation := time.Now().UTC()
 
 	for _, post := range retrievedPosts.Posts {
+		if !publicOverviewPostAt(&post, evaluation) {
+			continue
+		}
 		postOverviews = append(postOverviews, *post.ToOverview())
 	}
 
@@ -825,7 +830,9 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	}, nil
 }
 
-// GetLatestNotificationOverviews returns the latest notification overviews for the given notification kinds
+// GetLatestNotificationOverviews returns public notification overviews for the
+// selected kinds. Recipient fields do not authorize restricted content; full
+// publication/visibility checks run before projecting titles, slugs and links.
 func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *common.GetLatestNotificationOverviewsRequest) (*common.GetLatestNotificationOverviewsResponse, error) {
 	if err := s.validateOperation(ctx, req); err != nil {
 		return nil, err
@@ -890,7 +897,11 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *commo
 	}
 
 	overviews := make([]common.NotificationOverview, 0, len(retrievedPosts.Posts))
+	evaluation := time.Now().UTC()
 	for _, post := range retrievedPosts.Posts {
+		if !publicOverviewPostAt(&post, evaluation) {
+			continue
+		}
 		overview := post.ToNotificationOverview()
 		if overview == nil {
 			continue
@@ -900,6 +911,23 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *commo
 	}
 
 	return &common.GetLatestNotificationOverviewsResponse{Overviews: overviews}, nil
+}
+
+// publicOverviewTimestamp accepts the platform UTC format and strict RFC3339
+// offsets. A parser alone also accepts offset overflows and comma fractions.
+var publicOverviewTimestamp = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])?$`)
+
+// publicOverviewPostAt checks the full record before projection discards
+// visibility/deletion fields. It does not mutate or confer administrator access.
+func publicOverviewPostAt(item *Post, now time.Time) bool {
+	if item == nil || item.DeletedAt != "" || len(item.Visibility) != 0 || !publicOverviewTimestamp.MatchString(item.PublishedAt) {
+		return false
+	}
+	when, err := time.Parse(time.RFC3339Nano, item.PublishedAt)
+	if err != nil {
+		when, err = time.Parse(common.RFC3339NanoUTC, item.PublishedAt)
+	}
+	return err == nil && !when.IsZero() && !when.After(now)
 }
 
 // DeletePostById loads the selected target and requests soft or hard deletion.
