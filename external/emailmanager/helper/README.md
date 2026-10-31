@@ -1,6 +1,6 @@
 # Email manager composition
 
-`BuildServices(Config)` constructs resolved Bird/Postmark/local accounts for the
+`BuildServices(Config)` constructs resolved Bird/Postmark/SparkPost/local accounts for the
 owning [EmailManager](../README.md). Hosts choose capture policy, load secrets,
 resolve per-account defaults and supply a borrowed instrumented HTTP client.
 The helper reads no environment or files and makes no network request.
@@ -30,6 +30,9 @@ accounts select local capture or the explicit `FallbackBird` account; there is
 no implicit credential discovery. Registry-free fallback ignores route/default-ID
 settings because no named account routing is enabled. Hosts distinguish an absent registry from an
 invalid empty serialized registry when decoding their own configuration.
+Explicit SparkPost registrations use `SparkPostBaseURL` and the resolved token;
+SparkPost is never selected as an implicit fallback. In local capture its token
+is inert and an omitted endpoint uses the EU API origin for construction only.
 Postmark stream names must be resolved before construction; an empty transactional
 stream uses its owning default. Neither stream syntax nor a valid key proves
 provider access/readiness. Credentials and raw configuration must never be logged.

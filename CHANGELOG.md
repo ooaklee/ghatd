@@ -84,6 +84,15 @@ when the release version has been selected, and remove unused subsections.
 
 ### Added
 
+- [Server composition helpers](external/serverhelpers/README.md) centralize typed
+  access/HTTP/provider/publication/Partners assembly while keeping configuration,
+  identity admission and product policy in applications. Explicit lifecycle cleanup
+  drains borrowers before releasing resources and shuts telemetry down last.
+  The [offline example](examples/serverhelpers/README.md) demonstrates startup and
+  cleanup without external services. Existing domain APIs remain the owners.
+- Explicit SparkPost accounts in [email composition](external/emailmanager/helper/README.md),
+  alongside Bird/Postmark and local capture; Bird remains the configured default fallback.
+
 - Opt-in [IndexNow](external/indexnow/README.md) ownership verification,
   single and bulk URL-change notifications, classified receipts and optional
   MongoDB or in-memory attempt history. [CMS integration](external/contentmanager/README.md)
