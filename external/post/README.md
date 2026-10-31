@@ -123,6 +123,23 @@ before the next operation prevents dispatch; cancellation after a valid successf
 write receipt does not erase that success. These changes do not add optimistic
 concurrency, transactionally guard deletion state, or alter publication scheduling.
 
+## Bounded publication inventory
+
+`Repository.ListIndexNowPosts` and its service counterpart implement the additive
+`PostPublicationSource` capability for trusted publication jobs. Requests carry
+an `AfterID` string cursor and `Limit` from one to 100. Records include all
+publication, deletion and visibility states so a shared reconciler can apply
+public eligibility without letting a separate SEO row bypass CMS restrictions.
+There is no HTTP endpoint or authorization bypass for reader requests.
+
+Pages sort by native string `_id`, fetch at most one lookahead record and return
+`NextID` only when another record was observed. Malformed/non-string IDs fail
+rather than disappearing from a type-bracketed query. Existing required adapter
+interfaces are unchanged; service adapters without the optional capability fail
+closed instead of falling back to an unbounded query. These are current reads,
+not a transactional catalogue snapshot. See
+[combined CMS/SEO reconciliation](../contentmanager/README.md#combined-cms-and-seo-eligibility).
+
 ## Mongo Collection
 
 Posts are stored in MongoDB collection:

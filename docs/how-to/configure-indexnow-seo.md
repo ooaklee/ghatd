@@ -151,17 +151,55 @@ Do not send the entire historical inventory when enabling notifications. Begin
 with content changes since activation, and use deliberate, scoped operator
 actions when a reconciliation is necessary. Submit to one participating
 IndexNow endpoint; the protocol shares notifications with other participants.
-The host remains responsible for persistent scheduling and reconciliation when
-future content becomes due without another CMS write. Use
-`cms.ReconcileIndexNowPublications` with an explicit
-`ReconcileIndexNowPublicationsRequest{After, Through, Limit}` for this work. The
-window is `(After, Through]`, no more than 24 hours, and cannot extend into the
-future. `Limit` bounds inspected catalogue records to at most 10,000. Persist the
-initial activation instant and advance the checkpoint only after a response with
-`Complete: true`; an incomplete scan or failed submission leaves the previous
-checkpoint in place. The method does not rewrite SEO rows or create a persistent
-scheduler, distributed claim or exactly-once delivery guarantee. Deliberate
-replays can duplicate a prior notification.
+Future content becomes due without another CMS write. For automatic operation,
+compose `cms.ReconcileIndexNowEligibility` with the optional shared IndexNow
+runner. Supply the native bounded `PublicationSource` and `SitemapSource`, plus
+the host's `EligibleURL(ctx, url, at)` callback. This checks current public
+availability for dynamic routes at the completed window boundary; a missing
+target is ineligible and a source outage is an error. Keep this separate from
+the mutation `AllowURL` policy so removal notifications remain possible.
+
+The combined scan covers both CMS and independently scheduled SEO entries. A
+URL represented by both sources becomes eligible after the later applicable
+publication gate; valid creation/update timestamps also identify cleared or
+retroactively edited schedules. Static SEO-only routes remain supported when
+the host policy permits them. Neither source's dates or metadata are rewritten.
+
+```go
+runner, err := indexnow.NewRunner(indexnow.RunnerConfig{
+    Scope: publicationPolicySHA256, // stable lowercase hash, not the API key
+    Interval: 5 * time.Minute,
+    ScanLimit: 10000,
+}, indexnow.NewJobRepository(store), func(ctx context.Context, after, through time.Time, limit int) (bool, error) {
+    result, err := cms.ReconcileIndexNowEligibility(ctx,
+        &contentmanager.ReconcileIndexNowPublicationsRequest{
+            After: after, Through: through, Limit: limit,
+        })
+    return result != nil && result.Complete, err
+})
+if err != nil {
+    return err
+}
+return runner.Run(ctx) // separately operated worker with bounded shutdown
+```
+
+The host supplies the managed store and a stable scope hash of the application,
+canonical origin and compiled publication policy. Do not include the build
+commit or API key: ordinary rollouts and key rotation must resume existing
+progress. The first durable activation seeds its checkpoint at activation time,
+without historical submissions. Later passes resume Mongo state, acquire a
+server-time lease, scan one consecutive window of at most 24 hours, and advance
+only after a complete, acknowledged result. The combined scan limit counts CMS
+and SEO records together, up to 10,000, plus bounded native page lookahead.
+
+Lease tokens fence completion and release across replicas and rolling updates.
+Failures retain the checkpoint; retry deferrals respect endpoint delays.
+Mongo state contains hashed scope identities, tokens and timestamps, not keys or
+URL lists. Keep it private and preserve it during rollback. Source reads are not
+cross-source transactional snapshots, and a crash or uncertain external/audit
+completion can cause replay. This is not an exactly-once or transactional outbox
+guarantee. The legacy CMS-only `ReconcileIndexNowPublications` remains available
+for existing explicit callers.
 
 ## Keep audit and retry expectations explicit
 
@@ -179,9 +217,10 @@ blindly treating them as unsent can replay already received notifications.
 Likewise, a successfully committed content change cannot be undone by an engine
 failure. Surface and reconcile delivery failures separately from content state.
 
-The IndexNow service performs no automatic retries, deduplication or background
-scheduling. A host retry worker must persist its own work, respect `RetryAfter`
-and retryability, bound backoff and reconcile uncertain completions. Correct
+The protocol service performs one dispatch and adds no automatic retries or
+deduplication. The separately opted-in reconciliation runner retries incomplete
+windows after its interval and any durable `RetryAfter` deferral; it does not
+replay arbitrary CMS mutation receipts or replace an outbox. Correct
 invalid requests or ownership failures before replaying them. Use a durable
 outbox when notification delivery must survive a process exit after content
 commit; attempt history alone is not that outbox.
@@ -207,8 +246,7 @@ postings and livestream pages; do not use it as a general-purpose notification
 API for ordinary CMS pages. See the
 [Google Indexing API scope](https://developers.google.com/search/apis/indexing-api/v3/using-api).
 
-When an independent SEO gate opens after CMS publication, arrange a separate
-host notification or SEO eligibility job. A later CMS publication window does
-not include that older post solely because its SEO entry became due. Keep both
-schedules intact and call the IndexNow service explicitly for the resulting URL
-change; the CMS reconciliation method does not observe SEO transitions.
+Use the combined eligibility method for every derived application that schedules
+CMS content or SEO entries. The legacy CMS-only method cannot discover an older
+post solely because its independent SEO gate became due. SEO row deletion has
+no remaining source event and still needs an explicit removal notification.

@@ -297,10 +297,10 @@ strong delivery guarantees should introduce their own transaction-aware outbox
 and explicit replay policy rather than treating a failed receipt as a failed
 content mutation.
 
-### Scheduled publication checkpoints
+### Legacy CMS publication checkpoints
 
-A future publication has no write at the instant it becomes due. A trusted host
-job must call `ReconcileIndexNowPublications` explicitly:
+A future publication has no write at the instant it becomes due. Existing hosts
+can still call the CMS-only `ReconcileIndexNowPublications` explicitly:
 
 ```go
 result, err := cms.ReconcileIndexNowPublications(ctx,
@@ -329,6 +329,63 @@ catalogue edits can change pagination. Run against stable source state when
 exact scan completeness is required. A pending HTTP 202 receipt confirms
 notification receipt with ownership validation pending, not completed indexing.
 
+### Combined CMS and SEO eligibility
+
+New scheduled workers should call `ReconcileIndexNowEligibility` with the same
+request/response types. Configure three additional ports before concurrent use:
+
+```go
+config.PublicationSource = postRepository // post.PostPublicationSource
+config.SitemapSource = seoRepository      // seo.SitemapPublicationSource
+config.EligibleURL = func(ctx context.Context, canonicalURL string, at time.Time) (bool, error) {
+    // Check the host's current public/build policy at at, including actual CMS
+    // availability for dynamic paths. Missing targets return false; outages error.
+    return publicURLAvailableAt(ctx, canonicalURL, at)
+}
+```
+
+The native post/SEO repositories and their services expose these additive bounded
+source capabilities. Legacy/custom adapters remain source-compatible, but the
+combined job fails closed unless both capabilities and `EligibleURL` are supplied.
+It never falls back to an unbounded inventory read. Keep immutable build/crawler
+policy in `AllowURL`; `EligibleURL` is separate so a public-only due check cannot
+accidentally suppress mutation notifications for deleted or unpublished URLs.
+
+Both catalogues are read in stable string-ID keyset pages of at most 100 entries.
+The shared `Limit` counts returned CMS plus SEO records (default/maximum 10,000);
+native reads fetch at most one extra lookahead record per page to prove whether
+another page exists. Invalid IDs, inconsistent cursors, exhausted bounds and
+source/policy errors abort before any submission. CMS records include drafts,
+future, restricted and deleted states so a matching SEO entry cannot override
+their denial. The host callback additionally rejects independently stored SEO
+rows whose dynamic content is missing. Static SEO routes remain supported.
+
+For a canonical URL represented in both sources, eligibility starts at the later
+CMS or SEO publication instant. A later SEO gate is therefore found even after an
+earlier CMS checkpoint, and vice versa. Blank SEO dates add no gate. Strictly
+parsed creation/update dates also identify new immediate entries, cleared gates
+and retroactive schedule edits. Missing/malformed creation/update dates add no
+event, `LastMod` never supplies one, and undated historical rows do not create an
+activation-time inventory blast. Malformed nonempty SEO publication dates fail
+the entire pass; invalid CMS publication dates remain nonpublic. Unsafe or
+noncanonical SEO aliases are omitted, never normalized into notification URLs.
+
+One deduplicated, sorted batch follows a complete scan. A delivery or completion
+audit failure keeps the checkpoint unchanged. HTTP 200/202 receipts permit
+progress, with 202 still meaning ownership validation pending. A deliberate retry
+can notify a URL again. Positive protocol `Retry-After` delays survive through
+`IndexNowReconciliationRetryError.RetryDelay()` for durable worker deferral, even
+when completion auditing failed. They do not change mutation JSON/headers or
+make a successfully received 200/202 an instruction to retry. These current
+reads are not a cross-source transactional
+snapshot: concurrent changes after a record was read may require another explicit
+notification or an outbox. SEO deletion has no remaining row to scan and needs a
+separate removal notification; this job does not add SEO mutation hooks, an
+outbox, exactly-once semantics, or ingestion/storage rewrites.
+
+Use the [IndexNow runner](../indexnow/README.md) to operate durable checkpoints
+and singleton leases rather than storing progress in environment variables.
+
 ## Public publication eligibility
 
 Public single-article/changelog reads and all four full-post lists recheck that
@@ -350,8 +407,5 @@ crawlers, bypass stale response caches, and check current public CMS availabilit
 when filtering independently stored sitemap rows. See the
 [cross-package workflow](../../docs/how-to/configure-indexnow-seo.md).
 
-An independent SEO gate can become due after its post's CMS publication window
-has already been reconciled. That later SEO transition requires a separate host
-notification or SEO eligibility job using the IndexNow service. CMS publication
-reconciliation only scans CMS publication dates; it does not monitor later SEO
-schedule changes or replay old content automatically.
+The legacy `ReconcileIndexNowPublications` remains CMS-only. Use combined
+`ReconcileIndexNowEligibility` for independently scheduled CMS and SEO entries.

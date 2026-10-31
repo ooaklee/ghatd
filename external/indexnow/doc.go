@@ -20,7 +20,12 @@
 // NewMemoryRepository offers a non-durable single-process option, and a nil
 // repository disables persistence entirely.
 //
+// A separately opted-in Runner operates a host-supplied due scan with durable
+// Mongo checkpoints, server-time leases and retry deferrals. First activation
+// seeds progress without a historical scan. The protocol Service itself still
+// performs one dispatch and does not replay arbitrary mutation attempts.
+//
 // See the package README for configuration details, the key verification
-// endpoint, status mapping, and limitations (no queue, dedupe, exactly-once,
-// scheduler, or indexing guarantee; Google is not reachable via IndexNow).
+// endpoint, status mapping, and limitations (no queue, outbox, dedupe,
+// exactly-once or indexing guarantee; Google is not reachable via IndexNow).
 package indexnow

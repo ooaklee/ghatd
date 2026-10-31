@@ -86,8 +86,9 @@ Every response carries `Outcome`, `StatusCode`, `Success`, `AttemptID`,
 | 429  | `rate_limited` | Too many requests; `RetryAfter` exposed for the caller |
 | 5xx  | `server_error` | Endpoint error; `Retryable` |
 
-`RetryAfter` is parsed from seconds or an HTTP-date. **The package never
-automatically retries or re-sends** — retry decisions belong to the caller.
+`RetryAfter` is parsed from seconds or an HTTP-date. The protocol `Service`
+never automatically retries a dispatch. A separately opted-in reconciliation
+runner may retry a complete eligibility window as described below.
 
 ## Audit trail
 
@@ -114,7 +115,7 @@ service, err := indexnow.NewService(key, indexnow.Config{
   final state (status, outcome, retry fields) *after* the outcome is known.
 - **Crash windows are honest**: a retained `in_flight` record means the
   outcome is *unknown* — the request may or may not have reached the
-  endpoint. The package never automatically replays such attempts.
+  endpoint. The protocol service never automatically replays such attempts.
 - Audit failures never masquerade as submission results: an `AuditError` with
   `Dispatched: false` means the pre-send record failed and nothing was sent;
   `Dispatched: true` means the HTTP call was attempted and completion persistence
@@ -137,10 +138,64 @@ Original URLs, method and start time cannot be replaced during completion.
 MongoDB stores timestamps at millisecond precision. Its built-in `_id` index
 provides identity uniqueness; hosts own timeline indexes and retention policy.
 
+## Optional durable reconciliation runner
+
+`NewRunner(RunnerConfig, JobRepository, DueScan)` builds an opt-in worker around
+a host-supplied `DueScan(ctx, after, through, limit) (complete, error)`. Use the
+shared [combined CMS/SEO eligibility scan](../contentmanager/README.md#combined-cms-and-seo-eligibility)
+for applications with independently scheduled content and sitemap entries. The
+host owns command/lifecycle and deployment wiring; constructing the protocol
+service or enabling CMS mutation notifications does not start this runner.
+
+`RunnerConfig.Scope` must be a stable lowercase SHA-256 hash of the application,
+canonical origin and publication policy. The host must not put keys, raw URLs or
+customer data in this identity. Exclude Git commits and key values so ordinary
+rollouts and rotations resume progress. A changed publication policy intentionally
+creates a separate activation scope; stop and drain the old worker first.
+
+`Interval` defaults to five minutes, `ScanLimit` to 10,000 total candidate rows,
+`Lease` to two minutes, and `PassTimeout` to 90 seconds. Timeout must be shorter
+than the lease. The callback must honor cancellation and report every incomplete
+source scan, dispatch or audit result as incomplete or an error. A 200/202 receipt
+may permit progress; 202 remains pending key validation, not indexed content.
+
+`NewJobRepository(store)` reuses the managed Mongo store and persists private job
+state in `indexnow_jobs`. The first atomic activation seeds the checkpoint at
+activation time without invoking a historical scan. Later `RunOnce` calls acquire
+one lease and process at most one consecutive 24-hour window; `Run` waits the
+configured interval after each outcome. Progress advances only after the callback
+returns complete without error and storage acknowledges the fenced completion.
+Incomplete/error/canceled passes retain progress. Retry-delay errors exposing
+`RetryDelay() time.Duration` persist a server-time deferral, so a restart or another
+replica cannot bypass an endpoint's requested delay.
+
+Mongo server time governs lease ownership. Unique tokens and the prior checkpoint
+fence completion and release; a stale holder cannot alter a successor's state.
+Cancellation uses a bounded independent cleanup context. Multiple replicas and
+rolling-update overlap still require this coordination even if the deployment
+normally declares one replica. Keep Mongo state across process restarts and
+rollback; no destructive migration or local progress file is required.
+
+Only hashed scope, opaque lease tokens and timestamps enter job state. Optional
+`Report` receives fixed outcome enums and bounded window counts; callbacks must
+return promptly. No keys, URL lists, request bodies or raw diagnostics enter these
+reports. The separate attempt collection retains the existing private delivery
+audit. Mongo stores progress at millisecond precision.
+
+Lease/checkpoint fencing is not an exactly-once external side-effect guarantee.
+A stopped process can outlive its lease, and an uncertain remote or audit result
+can lead to a repeated batch on a later pass. The callback's inventories are
+current reads rather than a transactional snapshot. Use an application outbox and
+explicit operational reconciliation when stronger post-commit guarantees are
+required; the runner neither rewrites content/SEO rows nor replays arbitrary
+mutation receipts. Stop the automatic worker before a manual reconciliation to
+avoid competing sends.
+
 ## Limitations
 
-- No queue, outbox, dedupe, exactly-once semantics, or scheduling. The service
-  makes one client dispatch; custom transports must uphold its timeout,
+- No queue, outbox, dedupe or exactly-once semantics. The protocol service
+  makes one client dispatch; the optional runner requires explicit host wiring.
+  Custom transports must uphold its timeout,
   credential and retry policy.
 - IndexNow acceptance ≠ indexing. No search engine guarantees indexing or
   timing.

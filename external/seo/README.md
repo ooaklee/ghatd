@@ -172,6 +172,25 @@ download reads the saved snapshot without reevaluating dates; regenerate it when
 a current export is required. File export failures do not change the source of
 database-backed public output.
 
+## Bounded publication inventory
+
+`Repository.ListIndexNowSitemapItems` and the service capability of the same name
+provide read-only string-ID keyset pages for shared publication reconciliation.
+Requests select `AfterID` and a `Limit` from one to 100; `NextID` is empty only
+when the read observed no next record. One lookahead record beyond the page is
+allowed. Invalid/non-string IDs fail instead of silently shortening the scan.
+These are internal trusted-host APIs, with no new HTTP route or publication
+write. Services require the optional `SitemapPublicationSource` adapter capability
+and never fall back to an unbounded list. Existing CRUD interfaces are unchanged.
+
+`SitemapItem.PublicationTime()` exposes the renderer's strict parser: blank means
+no gate and malformed nonempty values fail closed. The combined
+[Content Manager reconciliation](../contentmanager/README.md#combined-cms-and-seo-eligibility)
+merges this gate with CMS publication and host availability, also recognizing
+valid creation/update transition times. It preserves independently managed
+SEO rows and supports static routes. Inventory reads are not transactional
+snapshots, and deleting an SEO row needs a separate removal notification.
+
 ## Migrations
 
 The `migrations` subpackage provides the sitemap-item index and a configurable

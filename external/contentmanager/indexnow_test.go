@@ -65,11 +65,12 @@ func (p *cmsIndexNowPostPort) GetPosts(_ context.Context, r *post.GetPostsReques
 }
 
 type cmsIndexNowSubmitter struct {
-	t       *testing.T
-	source  *cmsIndexNowPostPort
-	calls   [][]string
-	failure error
-	status  int
+	t          *testing.T
+	source     *cmsIndexNowPostPort
+	calls      [][]string
+	failure    error
+	status     int
+	retryAfter time.Duration
 }
 
 func (s *cmsIndexNowSubmitter) SubmitURLs(_ context.Context, r *indexnow.SubmitURLsRequest) (*indexnow.SubmitURLsResponse, error) {
@@ -78,7 +79,7 @@ func (s *cmsIndexNowSubmitter) SubmitURLs(_ context.Context, r *indexnow.SubmitU
 		s.source.events = append(s.source.events, "notify")
 	}
 	s.calls = append(s.calls, append([]string(nil), r.URLs...))
-	return &indexnow.SubmitURLsResponse{AttemptID: "attempt-1", StatusCode: s.status, Success: s.status == 200 || s.status == 202}, s.failure
+	return &indexnow.SubmitURLsResponse{AttemptID: "attempt-1", StatusCode: s.status, Success: s.status == 200 || s.status == 202, RetryAfter: s.retryAfter}, s.failure
 }
 func cmsIndexNowTime() time.Time { return time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC) }
 func cmsIndexNowPost(slug string) *post.Post {

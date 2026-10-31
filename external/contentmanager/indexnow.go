@@ -12,6 +12,7 @@ import (
 
 	"github.com/ooaklee/ghatd/external/indexnow"
 	"github.com/ooaklee/ghatd/external/post"
+	"github.com/ooaklee/ghatd/external/seo"
 )
 
 // IndexNowSubmitter is the notification port implemented by indexnow.Service.
@@ -19,6 +20,9 @@ import (
 type IndexNowSubmitter interface {
 	SubmitURLs(context.Context, *indexnow.SubmitURLsRequest) (*indexnow.SubmitURLsResponse, error)
 }
+
+// IndexNowSitemapSource is the bounded read-only SEO inventory capability.
+type IndexNowSitemapSource = seo.SitemapPublicationSource
 
 // IndexNowConfig supplies trusted host URL and storage policy. Configure callbacks
 // before serving; they must be concurrency safe and must not mutate their inputs.
@@ -35,6 +39,18 @@ type IndexNowConfig struct {
 	// Returning false excludes the URL; an error produces a safe warning.
 	// Existing public URLs are checked before mutation so removal events survive.
 	AllowURL func(context.Context, string) (bool, error)
+	// PublicationSource supplies bounded current CMS inventory for combined due
+	// reconciliation. It includes drafts, deletions and restricted records so a
+	// matching SEO entry cannot bypass their public eligibility rules.
+	PublicationSource post.PostPublicationSource
+	// SitemapSource supplies independently scheduled SEO entries. It is required
+	// only by ReconcileIndexNowEligibility; mutation notifications are unchanged.
+	SitemapSource IndexNowSitemapSource
+	// EligibleURL checks current host availability at the captured Through time.
+	// It is required only by combined reconciliation, and must reject missing or
+	// unavailable dynamic targets while permitting supported static routes.
+	// Keep removal-aware mutation policy in AllowURL, not this callback.
+	EligibleURL func(context.Context, string, time.Time) (bool, error)
 	// Now optionally supplies the same clock used by public CMS visibility.
 	Now func() time.Time
 }
@@ -77,6 +93,10 @@ type IndexNowNotificationReceipt struct {
 	URLCount int `json:"url_count"`
 	// Warning is a fixed safe category; it never contains dependency diagnostics.
 	Warning string `json:"warning,omitempty"`
+	// RetryAfter retains a positive protocol-requested delay for trusted job
+	// composition, including when completion auditing failed. It is not part of
+	// mutation response JSON/headers, and does not make a successful 202 a retry.
+	RetryAfter time.Duration `json:"-"`
 }
 
 type indexNowSnapshot struct{ url string }
@@ -99,7 +119,14 @@ func (s *Service) indexNowSnapshot(ctx context.Context, id string) (*indexNowSna
 var indexNowPostSlug = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 func (s *Service) indexNowURL(ctx context.Context, item *post.Post, now time.Time) (string, string) {
-	if !IsPublicPostAt(item, now) || item.Id == "" || item.Type == "" || !strings.HasPrefix(item.UrlFriendlyId, string(item.Type)+"-") || !indexNowPostSlug.MatchString(item.UrlFriendlyId) {
+	if !IsPublicPostAt(item, now) {
+		return "", ""
+	}
+	return s.indexNowPublicURL(ctx, item)
+}
+
+func (s *Service) indexNowPublicURL(ctx context.Context, item *post.Post) (string, string) {
+	if item == nil || item.Id == "" || item.Type == "" || !strings.HasPrefix(item.UrlFriendlyId, string(item.Type)+"-") || !indexNowPostSlug.MatchString(item.UrlFriendlyId) {
 		return "", ""
 	}
 	// Clone mutable slices before handing persisted data to host callbacks.
@@ -171,6 +198,9 @@ func (s *Service) submitIndexNow(ctx context.Context, urls []string, warning str
 	}
 	if response != nil {
 		receipt.AttemptID = response.AttemptID
+		if response.RetryAfter > 0 {
+			receipt.RetryAfter = response.RetryAfter
+		}
 		if (err == nil || acknowledgedWithAuditWarning) && response.StatusCode == http.StatusOK && response.Success {
 			receipt.Status = "acknowledged"
 		}
@@ -211,7 +241,9 @@ type ReconcileIndexNowPublicationsRequest struct {
 	After time.Time
 	// Through is the inclusive upper bound, no later than the current clock.
 	Through time.Time
-	// Limit bounds catalogue records inspected, at most 10000; zero uses 10000.
+	// Limit bounds returned catalogue records, at most 10000; zero uses 10000.
+	// Combined eligibility counts both CMS and SEO rows. Native keyset sources
+	// may read one additional lookahead document per page to establish completion.
 	Limit int
 }
 
@@ -223,7 +255,8 @@ type ReconcileIndexNowPublicationsResponse struct {
 	Complete bool
 	// Checkpoint remains After on incomplete results, otherwise advances to Through.
 	Checkpoint time.Time
-	// Inspected counts catalogue records, including unpublished or unmapped records.
+	// Inspected counts returned source records, including unpublished/unmapped
+	// records and both CMS/SEO sources when using combined eligibility.
 	Inspected int
 	// IndexNow carries the batch delivery receipt; it is nil before dispatch.
 	IndexNow *IndexNowNotificationReceipt
