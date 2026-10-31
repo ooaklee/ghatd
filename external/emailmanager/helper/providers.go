@@ -29,6 +29,8 @@ type ProviderConfig struct {
 	Token       string
 	// BirdBaseURL optionally asserts the region of Token. Ignored for local capture.
 	BirdBaseURL string
+	// SparkPostBaseURL selects the explicitly configured SparkPost region.
+	SparkPostBaseURL string
 	// Streams are resolved host policy; empty transactional uses the vendor default.
 	TransactionalStream string
 	MarketingStream     string
@@ -43,7 +45,7 @@ type Config struct {
 	MaxStoredEmails int
 	// FallbackBird is used only without Providers and without local capture.
 	FallbackBird BirdConfig
-	// Providers may contain up to 16 resolved bird/postmark/local accounts.
+	// Providers may contain up to 16 resolved bird/postmark/sparkpost/local accounts.
 	Providers         []ProviderConfig
 	DefaultProviderID string
 	Routes            map[emailprovider.MailType]string
@@ -118,6 +120,12 @@ func BuildServices(cfg Config) (Services, error) {
 				return Services{}, ErrConfiguration
 			}
 			provider = emailprovider.NewPostmarkEmailProvider(client)
+		case "sparkpost":
+			var err error
+			provider, err = buildSparkPost(entry.Token, entry.SparkPostBaseURL, cfg.CaptureLocally, cfg.HTTPClient)
+			if err != nil {
+				return Services{}, err
+			}
 		case "local":
 			if !cfg.CaptureLocally {
 				return Services{}, ErrConfiguration
@@ -131,4 +139,20 @@ func BuildServices(cfg Config) (Services, error) {
 	services.Routing = routing
 	services.Default = routing.Providers[0].Provider
 	return services, nil
+}
+
+func buildSparkPost(token, endpoint string, capture bool, client *http.Client) (emailprovider.EmailProvider, error) {
+	if capture {
+		token = "local-preview-token"
+		if endpoint == "" {
+			endpoint = "https://api.eu.sparkpost.com"
+		}
+	}
+	providerClient, err := emailprovider.NewSparkPostClient((&emailprovider.NewSparkPostClientRequest{
+		APIKey: token, BaseURL: endpoint, APIVersion: 1,
+	}).WithHTTPClient(client))
+	if err != nil {
+		return nil, ErrConfiguration
+	}
+	return emailprovider.NewSparkPostEmailProvider(providerClient), nil
 }

@@ -47,6 +47,11 @@ and the [OAuth package guide](./external/oauth/README.md).
 - **[Browser Approval Bridge](./external/accesspolicy/adminaccess/README.md)** - Opt-in email-confirmed browser approval for token-allowance changes
 - **[Access Proof](./external/accessproof/README.md)** - Request-local admission for explicitly verified capabilities and resource-bound evidence
 
+### Server Composition
+
+- **[Server helpers](./external/serverhelpers/README.md)** — Typed composition for lifecycle, access, HTTP, providers, public content and Partners; host policy stays explicit.
+- **[Offline example](./examples/serverhelpers/README.md)** — A runnable composition and shutdown example without external services.
+
 ### Email System
 A complete email solution split into three composable packages for maximum flexibility and testability.
 

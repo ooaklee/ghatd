@@ -18,3 +18,5 @@ Please use the sections referenced below to locate practical step-by-step guides
 ## Partner programs
 
 - [Configure a partner program](configure-partner-program.md): choose owners, prepare storage, configure current authority and mount optional routes/workers.
+
+- [Shared server composition](../../external/serverhelpers/README.md) and [offline example](../../examples/serverhelpers/README.md).
