@@ -41,7 +41,7 @@ func (s *receiptStore) ExecuteFindOneCommandDecodeResult(_ context.Context, _ *m
 	if s.stored == nil {
 		return mongo.ErrNoDocuments
 	}
-	*result.(*Attempt) = *cloneSubmissionAttempt(s.stored)
+	*result.(*Attempt) = *cloneAttempt(s.stored)
 	return nil
 }
 
@@ -117,7 +117,7 @@ func TestRepositoryCompletionReceipts(t *testing.T) {
 			final := finishedMemoryFixture("one", at)
 			store := &receiptStore{update: tc.receipt, updateErr: tc.cause}
 			if tc.storedFinal || tc.storedConflict {
-				store.stored = cloneSubmissionAttempt(final)
+				store.stored = cloneAttempt(final)
 			}
 			if tc.storedConflict {
 				store.stored.StatusCode = 202

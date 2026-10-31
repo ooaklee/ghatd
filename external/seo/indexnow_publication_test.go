@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type legacyPublicationSourceRepository struct{ SitemapRepository }
+type existingPublicationSourceRepository struct{ SitemapRepository }
 
 func TestPublicationSourceRejectsUnboundedOrInvalidReads(t *testing.T) {
 	for _, tc := range []struct {
@@ -16,7 +16,7 @@ func TestPublicationSourceRejectsUnboundedOrInvalidReads(t *testing.T) {
 		cancelled bool
 		missing   bool
 	}{
-		{name: "legacy adapter has no bounded capability", req: &ListIndexNowSitemapItemsRequest{Limit: 100}},
+		{name: "existing CRUD adapter has no bounded capability", req: &ListIndexNowSitemapItemsRequest{Limit: 100}},
 		{name: "nil repository", req: &ListIndexNowSitemapItemsRequest{Limit: 100}, missing: true},
 		{name: "nil request"},
 		{name: "zero limit", req: &ListIndexNowSitemapItemsRequest{}},
@@ -33,7 +33,7 @@ func TestPublicationSourceRejectsUnboundedOrInvalidReads(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			service := NewService(&NewServiceRequest{SitemapRepository: legacyPublicationSourceRepository{}})
+			service := NewService(&NewServiceRequest{SitemapRepository: existingPublicationSourceRepository{}})
 			if tc.missing {
 				service = NewService(&NewServiceRequest{})
 			}

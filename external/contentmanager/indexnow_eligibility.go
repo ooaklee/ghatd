@@ -2,6 +2,7 @@ package contentmanager
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"path"
 	"sort"
@@ -11,6 +12,44 @@ import (
 	"github.com/ooaklee/ghatd/external/post"
 	"github.com/ooaklee/ghatd/external/seo"
 )
+
+// ErrIndexNowReconciliationInvalid identifies a missing, future or oversized
+// explicit checkpoint window, or invalid scan bound. No notification is sent.
+var ErrIndexNowReconciliationInvalid = errors.New("contentmanager: invalid indexnow reconciliation window")
+
+// ErrIndexNowReconciliationIncomplete means the bounded scan or submission did
+// not complete. Retain the previous checkpoint; a deliberate retry may duplicate
+// a prior notification because no distributed exactly-once scheduler is claimed.
+var ErrIndexNowReconciliationIncomplete = errors.New("contentmanager: indexnow reconciliation incomplete")
+
+// ReconcileIndexNowEligibilityRequest is a trusted host job request, never a
+// transport-decoded actor. Choose After when enabling integration, then persist
+// successful checkpoints. The window is (After,Through], at most 24 hours.
+type ReconcileIndexNowEligibilityRequest struct {
+	// After is the exclusive last successful checkpoint, initialized at activation.
+	After time.Time
+	// Through is the inclusive upper bound, no later than the current clock.
+	Through time.Time
+	// Limit bounds returned catalogue records, at most 10000; zero uses 10000.
+	// Both CMS and SEO rows count. Native keyset sources
+	// may read one additional lookahead document per page to establish completion.
+	Limit int
+}
+
+// ReconcileIndexNowEligibilityResponse reports one completely scanned window.
+// Advance the host checkpoint only when Complete is true. A receipt acknowledges
+// notification delivery, not search-engine indexing or cross-process uniqueness.
+type ReconcileIndexNowEligibilityResponse struct {
+	// Complete is true only after every bounded source read and notification succeeded.
+	Complete bool
+	// Checkpoint remains After on incomplete results, otherwise advances to Through.
+	Checkpoint time.Time
+	// Inspected counts returned source records, including unpublished/unmapped
+	// records from both CMS/SEO sources.
+	Inspected int
+	// IndexNow carries the batch delivery receipt; it is nil before dispatch.
+	IndexNow *IndexNowNotificationReceipt
+}
 
 type indexNowEligibility struct {
 	publication time.Time
@@ -30,7 +69,7 @@ func (e *IndexNowReconciliationRetryError) Error() string {
 	return "contentmanager: indexnow reconciliation incomplete; retry deferred"
 }
 
-// Unwrap preserves the incomplete-pass identity for existing host callers.
+// Unwrap preserves the incomplete-pass identity for host callers.
 func (e *IndexNowReconciliationRetryError) Unwrap() error {
 	return ErrIndexNowReconciliationIncomplete
 }
@@ -47,24 +86,24 @@ func (e *IndexNowReconciliationRetryError) RetryDelay() time.Duration {
 // ReconcileIndexNowEligibility announces current public URLs whose CMS or SEO
 // eligibility changes in (After,Through]. Both inventories are fully read before
 // dispatch, within one shared Limit. Existing independent schedules are read,
-// never rewritten or inferred from LastMod. Legacy records with no timestamped
+// never rewritten or inferred from LastMod. Undated records with no timestamped
 // transition do not create an activation-time inventory notification.
 //
-// Unlike ReconcileIndexNowPublications, this method requires explicit bounded
+// It requires explicit bounded
 // PublicationSource and SitemapSource capabilities plus EligibleURL. The maximum
 // applicable CMS/SEO publication time gates every candidate, even if the earlier
 // source became due before After. Valid creation/update times also identify new,
 // cleared or retroactively edited schedules. These reads are not transactional
 // snapshots, and external post-commit dispatch, retries and locking remain host
 // concerns. A failed pass retains After and never sends a partial source batch.
-func (s *Service) ReconcileIndexNowEligibility(ctx context.Context, req *ReconcileIndexNowPublicationsRequest) (*ReconcileIndexNowPublicationsResponse, error) {
+func (s *Service) ReconcileIndexNowEligibility(ctx context.Context, req *ReconcileIndexNowEligibilityRequest) (*ReconcileIndexNowEligibilityResponse, error) {
 	if err := s.validateOperation(ctx, req); err != nil {
 		return nil, err
 	}
 	if req.After.IsZero() || req.Through.IsZero() || !req.Through.After(req.After) || req.Through.After(s.publicationTime()) || req.Through.Sub(req.After) > 24*time.Hour || req.Limit < 0 || req.Limit > 10000 {
 		return nil, ErrIndexNowReconciliationInvalid
 	}
-	result := &ReconcileIndexNowPublicationsResponse{Checkpoint: req.After}
+	result := &ReconcileIndexNowEligibilityResponse{Checkpoint: req.After}
 	if s.indexNow == nil || !s.indexNow.valid || nilContentDependency(s.indexNow.config.PublicationSource) || nilContentDependency(s.indexNow.config.SitemapSource) || s.indexNow.config.EligibleURL == nil {
 		return result, ErrIndexNowReconciliationIncomplete
 	}
@@ -132,7 +171,7 @@ func indexNowTransitionTimes(values ...string) []time.Time {
 	return result
 }
 
-func (s *Service) scanIndexNowPosts(ctx context.Context, req *ReconcileIndexNowPublicationsRequest, result *ReconcileIndexNowPublicationsResponse, limit int, states map[string]*indexNowEligibility) error {
+func (s *Service) scanIndexNowPosts(ctx context.Context, req *ReconcileIndexNowEligibilityRequest, result *ReconcileIndexNowEligibilityResponse, limit int, states map[string]*indexNowEligibility) error {
 	after := ""
 	for {
 		if err := ctx.Err(); err != nil {
@@ -182,7 +221,7 @@ func (s *Service) scanIndexNowPosts(ctx context.Context, req *ReconcileIndexNowP
 	}
 }
 
-func (s *Service) scanIndexNowSEO(ctx context.Context, result *ReconcileIndexNowPublicationsResponse, limit int, states map[string]*indexNowEligibility) error {
+func (s *Service) scanIndexNowSEO(ctx context.Context, result *ReconcileIndexNowEligibilityResponse, limit int, states map[string]*indexNowEligibility) error {
 	after := ""
 	for {
 		if err := ctx.Err(); err != nil {

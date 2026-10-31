@@ -61,3 +61,12 @@ type AttemptRepository interface {
 	// result; it must not be interpreted as "the submission did not happen".
 	FinishAttempt(ctx context.Context, attempt *Attempt) error
 }
+
+// cloneAttempt keeps the URL slice owned by the caller separate from dispatch,
+// persistence arguments and returned records so mutations cannot rewrite audit
+// history or the authoritative submission receipt.
+func cloneAttempt(a *Attempt) *Attempt {
+	c := *a
+	c.URLs = append([]string(nil), a.URLs...)
+	return &c
+}

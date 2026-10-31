@@ -25,11 +25,7 @@ func (s *Service) GetArticleSitemapItems(ctx context.Context, req *GetArticleSit
 }
 
 // getArticleSitemapItems builds sitemap-ready URLs from published article posts.
-func getArticleSitemapItems(ctx context.Context, postService postService, req *GetArticleSitemapItemsRequest, instants ...time.Time) (*GetArticleSitemapItemsResponse, error) {
-	now := time.Now()
-	if len(instants) > 0 {
-		now = instants[0]
-	}
+func getArticleSitemapItems(ctx context.Context, postService postService, req *GetArticleSitemapItemsRequest, now time.Time) (*GetArticleSitemapItemsResponse, error) {
 	if req == nil || ctx == nil {
 		return nil, post.ErrPostBadRequest
 	}

@@ -231,8 +231,6 @@ func classifyTransportError(err error) *Error {
 	}
 	return e
 }
-func wrapContextError(err error) *Error { return classifyTransportError(err) }
-
 func parseRetryAfter(v string) time.Duration {
 	v = strings.TrimSpace(v)
 	if v == "" {

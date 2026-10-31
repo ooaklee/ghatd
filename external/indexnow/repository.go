@@ -16,29 +16,6 @@ import (
 // AttemptCollection is the MongoDB collection name for attempt records.
 const AttemptCollection = "indexnow_attempts"
 
-// Mongo persistence errors. Messages carry no attempt content, API key, or
-// driver diagnostics.
-var (
-	// ErrAttemptUnavailable reports missing wiring or an unusable dependency
-	// result. It does not imply a failed write was rolled back or is safe to
-	// retry.
-	ErrAttemptUnavailable = errors.New("indexnow: attempt storage unavailable")
-
-	// ErrAttemptInvalidPayload reports a rejected attempt record before any
-	// database interaction.
-	ErrAttemptInvalidPayload = errors.New("indexnow: invalid attempt record")
-
-	// ErrAttemptNotFound reports a confirmed absent attempt ID.
-	ErrAttemptNotFound = errors.New("indexnow: attempt not found")
-
-	// ErrAttemptAlreadyFinished reports a conflicting completion of an attempt
-	// that is already final.
-	ErrAttemptAlreadyFinished = errors.New("indexnow: attempt already finished")
-
-	// ErrAttemptDuplicateID reports a rejected reuse of an existing attempt ID.
-	ErrAttemptDuplicateID = errors.New("indexnow: duplicate attempt id")
-)
-
 const defaultCollectionInitMaxAttemptsLimit = 3
 const repositoryListLimit = 1000
 

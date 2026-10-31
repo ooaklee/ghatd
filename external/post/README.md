@@ -138,7 +138,7 @@ rather than disappearing from a type-bracketed query. Existing required adapter
 interfaces are unchanged; service adapters without the optional capability fail
 closed instead of falling back to an unbounded query. These are current reads,
 not a transactional catalogue snapshot. See
-[combined CMS/SEO reconciliation](../contentmanager/README.md#combined-cms-and-seo-eligibility).
+[combined CMS/SEO reconciliation](../contentmanager/README.md#scheduled-cms-and-seo-eligibility).
 
 ## Mongo Collection
 

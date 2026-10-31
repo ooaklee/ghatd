@@ -22,7 +22,7 @@ type recordingAttemptStore struct {
 }
 
 func (r *recordingAttemptStore) RecordAttempt(_ context.Context, a *Attempt) error {
-	r.recorded = cloneSubmissionAttempt(a)
+	r.recorded = cloneAttempt(a)
 	if r.mutate {
 		a.ID = "changed"
 		a.URLs[0] = "https://attacker.test"
@@ -30,7 +30,7 @@ func (r *recordingAttemptStore) RecordAttempt(_ context.Context, a *Attempt) err
 	return r.recordErr
 }
 func (r *recordingAttemptStore) FinishAttempt(_ context.Context, a *Attempt) error {
-	r.finished = cloneSubmissionAttempt(a)
+	r.finished = cloneAttempt(a)
 	return r.finishErr
 }
 

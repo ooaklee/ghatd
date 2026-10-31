@@ -297,42 +297,12 @@ strong delivery guarantees should introduce their own transaction-aware outbox
 and explicit replay policy rather than treating a failed receipt as a failed
 content mutation.
 
-### Legacy CMS publication checkpoints
+### Scheduled CMS and SEO eligibility
 
-A future publication has no write at the instant it becomes due. Existing hosts
-can still call the CMS-only `ReconcileIndexNowPublications` explicitly:
-
-```go
-result, err := cms.ReconcileIndexNowPublications(ctx,
-    &contentmanager.ReconcileIndexNowPublicationsRequest{
-        After:   lastSuccessfulCheckpoint,
-        Through: runStartedAt,
-        Limit:   10000,
-    })
-if err == nil && result.Complete {
-    // Persist result.Checkpoint in the host's durable job state.
-}
-```
-
-The `(After, Through]` window must be explicit, nonzero, no longer than 24 hours
-and not in the future. Set the initial checkpoint when enabling notifications;
-do not backfill unchanged historical content. `Limit` bounds catalogue records
-inspected (maximum/default 10,000). The scan keeps a fixed page size of 100,
-compares publication instants rather than lexical timestamp filters, and
-completes all reads before submitting a deduplicated batch. An exhausted bound,
-source/policy failure or failed submission leaves `Complete` false and the
-checkpoint unchanged. Increase the explicit limit within its bound or provide
-a narrower host-owned source/outbox if the catalogue exceeds this API's scope.
-Replaying a window may notify URLs again; multiple processes need host-owned
-coordination. No distributed exactly-once scheduler is provided, and concurrent
-catalogue edits can change pagination. Run against stable source state when
-exact scan completeness is required. A pending HTTP 202 receipt confirms
-notification receipt with ownership validation pending, not completed indexing.
-
-### Combined CMS and SEO eligibility
-
-New scheduled workers should call `ReconcileIndexNowEligibility` with the same
-request/response types. Configure three additional ports before concurrent use:
+Scheduled workers call `ReconcileIndexNowEligibility` with
+`ReconcileIndexNowEligibilityRequest` and receive
+`ReconcileIndexNowEligibilityResponse`. Configure these ports before concurrent
+use:
 
 ```go
 config.PublicationSource = postRepository // post.PostPublicationSource
@@ -345,11 +315,29 @@ config.EligibleURL = func(ctx context.Context, canonicalURL string, at time.Time
 ```
 
 The native post/SEO repositories and their services expose these additive bounded
-source capabilities. Legacy/custom adapters remain source-compatible, but the
-combined job fails closed unless both capabilities and `EligibleURL` are supplied.
+source capabilities. Existing post and SEO CRUD repository interfaces remain
+unchanged. This job fails closed unless both bounded capabilities and
+`EligibleURL` are supplied.
 It never falls back to an unbounded inventory read. Keep immutable build/crawler
 policy in `AllowURL`; `EligibleURL` is separate so a public-only due check cannot
 accidentally suppress mutation notifications for deleted or unpublished URLs.
+
+The `(After, Through]` window must be explicit, nonzero, at most 24 hours and not
+in the future. Initialize `After` at activation to avoid an automatic historical
+inventory notification. Advance to the returned checkpoint only when `Complete`
+is true.
+
+```go
+result, err := cms.ReconcileIndexNowEligibility(ctx,
+    &contentmanager.ReconcileIndexNowEligibilityRequest{
+        After:   lastSuccessfulCheckpoint,
+        Through: runStartedAt,
+        Limit:   10000,
+    })
+if err == nil && result.Complete {
+    // Persist result.Checkpoint through the runner's durable job repository.
+}
+```
 
 Both catalogues are read in stable string-ID keyset pages of at most 100 entries.
 The shared `Limit` counts returned CMS plus SEO records (default/maximum 10,000);
@@ -406,6 +394,3 @@ serve real article content, canonical metadata, standard links and meaningful
 crawlers, bypass stale response caches, and check current public CMS availability
 when filtering independently stored sitemap rows. See the
 [cross-package workflow](../../docs/how-to/configure-indexnow-seo.md).
-
-The legacy `ReconcileIndexNowPublications` remains CMS-only. Use combined
-`ReconcileIndexNowEligibility` for independently scheduled CMS and SEO entries.

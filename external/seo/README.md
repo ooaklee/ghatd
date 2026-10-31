@@ -185,7 +185,7 @@ and never fall back to an unbounded list. Existing CRUD interfaces are unchanged
 
 `SitemapItem.PublicationTime()` exposes the renderer's strict parser: blank means
 no gate and malformed nonempty values fail closed. The combined
-[Content Manager reconciliation](../contentmanager/README.md#combined-cms-and-seo-eligibility)
+[Content Manager reconciliation](../contentmanager/README.md#scheduled-cms-and-seo-eligibility)
 merges this gate with CMS publication and host availability, also recognizing
 valid creation/update transition times. It preserves independently managed
 SEO rows and supports static routes. Inventory reads are not transactional

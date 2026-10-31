@@ -172,7 +172,7 @@ runner, err := indexnow.NewRunner(indexnow.RunnerConfig{
     ScanLimit: 10000,
 }, indexnow.NewJobRepository(store), func(ctx context.Context, after, through time.Time, limit int) (bool, error) {
     result, err := cms.ReconcileIndexNowEligibility(ctx,
-        &contentmanager.ReconcileIndexNowPublicationsRequest{
+        &contentmanager.ReconcileIndexNowEligibilityRequest{
             After: after, Through: through, Limit: limit,
         })
     return result != nil && result.Complete, err
@@ -198,8 +198,7 @@ Mongo state contains hashed scope identities, tokens and timestamps, not keys or
 URL lists. Keep it private and preserve it during rollback. Source reads are not
 cross-source transactional snapshots, and a crash or uncertain external/audit
 completion can cause replay. This is not an exactly-once or transactional outbox
-guarantee. The legacy CMS-only `ReconcileIndexNowPublications` remains available
-for existing explicit callers.
+guarantee.
 
 ## Keep audit and retry expectations explicit
 
@@ -246,7 +245,8 @@ postings and livestream pages; do not use it as a general-purpose notification
 API for ordinary CMS pages. See the
 [Google Indexing API scope](https://developers.google.com/search/apis/indexing-api/v3/using-api).
 
-Use the combined eligibility method for every derived application that schedules
-CMS content or SEO entries. The legacy CMS-only method cannot discover an older
-post solely because its independent SEO gate became due. SEO row deletion has
-no remaining source event and still needs an explicit removal notification.
+Use `ReconcileIndexNowEligibility` for both explicit windows and automatic
+workers in every derived application that schedules CMS content or SEO entries.
+It observes either source becoming due, including an older post whose independent
+SEO gate became eligible later. SEO row deletion has no remaining source event
+and still needs an explicit removal notification.

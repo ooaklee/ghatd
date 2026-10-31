@@ -54,6 +54,18 @@ var (
 	ErrInvalidConfiguration = errors.New("indexnow: invalid configuration")
 	// ErrAuditUnavailable means attempt persistence could not be confirmed.
 	ErrAuditUnavailable = errors.New("indexnow: audit unavailable")
+
+	// ErrAttemptUnavailable reports missing audit storage wiring or an unusable
+	// dependency result. It never confirms rollback or authorizes a blind retry.
+	ErrAttemptUnavailable = errors.New("indexnow: attempt storage unavailable")
+	// ErrAttemptInvalidPayload rejects invalid audit input before persistence.
+	ErrAttemptInvalidPayload = errors.New("indexnow: invalid attempt record")
+	// ErrAttemptNotFound reports a confirmed absent attempt ID.
+	ErrAttemptNotFound = errors.New("indexnow: attempt not found")
+	// ErrAttemptAlreadyFinished rejects a conflicting final audit completion.
+	ErrAttemptAlreadyFinished = errors.New("indexnow: attempt already finished")
+	// ErrAttemptDuplicateID rejects reuse of an existing attempt identity.
+	ErrAttemptDuplicateID = errors.New("indexnow: duplicate attempt id")
 )
 
 // Outcome classifies the result of one submission attempt.

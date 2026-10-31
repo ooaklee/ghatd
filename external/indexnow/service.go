@@ -201,7 +201,7 @@ func (s *Service) submit(ctx context.Context, urls []string, method string) (*Su
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, wrapContextError(err)
+		return nil, classifyTransportError(err)
 	}
 
 	attempt := &Attempt{
@@ -213,7 +213,7 @@ func (s *Service) submit(ctx context.Context, urls []string, method string) (*Su
 	}
 
 	if s.repository != nil {
-		if err := s.repository.RecordAttempt(ctx, cloneSubmissionAttempt(attempt)); err != nil {
+		if err := s.repository.RecordAttempt(ctx, cloneAttempt(attempt)); err != nil {
 			return nil, &AuditError{}
 		}
 	}
@@ -232,7 +232,7 @@ func (s *Service) submit(ctx context.Context, urls []string, method string) (*Su
 
 	var auditErr error
 	if s.repository != nil {
-		if ferr := s.repository.FinishAttempt(ctx, cloneSubmissionAttempt(attempt)); ferr != nil {
+		if ferr := s.repository.FinishAttempt(ctx, cloneAttempt(attempt)); ferr != nil {
 			// The submission result above remains authoritative; this error
 			// only reports failed audit persistence.
 			auditErr = &AuditError{Dispatched: true}
@@ -257,14 +257,6 @@ func (s *Service) submit(ctx context.Context, urls []string, method string) (*Su
 		return resp, auditErr
 	}
 	return resp, nil
-}
-
-// cloneSubmissionAttempt keeps repository argument ownership separate from the
-// request used for dispatch and the authoritative result used for its receipt.
-func cloneSubmissionAttempt(a *Attempt) *Attempt {
-	c := *a
-	c.URLs = append([]string(nil), a.URLs...)
-	return &c
 }
 
 // send performs the outbound request under a bounded per-request timeout and

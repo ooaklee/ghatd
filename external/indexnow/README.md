@@ -132,8 +132,9 @@ service, err := indexnow.NewService(key, indexnow.Config{
 `GetAttempt(ctx, id)` and `ListAttempts(ctx, limit)` (start time descending,
 ID ascending tiebreak, capped at 1000) read records. `FinishAttempt` is
 idempotent for an identical replay and returns
-`ErrAttemptAlreadyFinished` for a conflicting one in MongoDB
-(`ErrMemoryRepositoryFinished` in memory); unknown IDs are never upserted.
+`ErrAttemptAlreadyFinished` for a conflicting one in either storage adapter;
+unknown IDs are never upserted. Both adapters use the same `ErrAttempt*` domain
+errors for invalid records, missing records and duplicate identities.
 Original URLs, method and start time cannot be replaced during completion.
 MongoDB stores timestamps at millisecond precision. Its built-in `_id` index
 provides identity uniqueness; hosts own timeline indexes and retention policy.
@@ -142,7 +143,7 @@ provides identity uniqueness; hosts own timeline indexes and retention policy.
 
 `NewRunner(RunnerConfig, JobRepository, DueScan)` builds an opt-in worker around
 a host-supplied `DueScan(ctx, after, through, limit) (complete, error)`. Use the
-shared [combined CMS/SEO eligibility scan](../contentmanager/README.md#combined-cms-and-seo-eligibility)
+shared [combined CMS/SEO eligibility scan](../contentmanager/README.md#scheduled-cms-and-seo-eligibility)
 for applications with independently scheduled content and sitemap entries. The
 host owns command/lifecycle and deployment wiring; constructing the protocol
 service or enabling CMS mutation notifications does not start this runner.

@@ -120,7 +120,7 @@ func TestIndexNowNativeIndependentSchedulesRemainReadOnly(t *testing.T) {
 				return true, nil
 			}
 			service := NewService(post.NewService(posts, nil), nil, WithIndexNow(notifier, config))
-			result, err := service.ReconcileIndexNowEligibility(ctx, &ReconcileIndexNowPublicationsRequest{After: now.Add(-time.Hour), Through: now})
+			result, err := service.ReconcileIndexNowEligibility(ctx, &ReconcileIndexNowEligibilityRequest{After: now.Add(-time.Hour), Through: now})
 			require.NoError(t, err)
 			require.True(t, result.Complete)
 			require.Equal(t, tc.want, len(notifier.calls) == 1)

@@ -2,29 +2,9 @@ package indexnow
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"slices"
 	"sort"
 	"sync"
-)
-
-// In-memory repository errors. They carry no attempt content.
-var (
-	// ErrMemoryRepositoryInvalid is returned for nil contexts, nil records, or
-	// records missing identity/timing fields.
-	ErrMemoryRepositoryInvalid = errors.New("indexnow: invalid memory repository request")
-
-	// ErrMemoryRepositoryDuplicate is returned when RecordAttempt reuses an
-	// existing attempt ID.
-	ErrMemoryRepositoryDuplicate = errors.New("indexnow: duplicate attempt id")
-
-	// ErrMemoryRepositoryNotFound is returned when an attempt ID is unknown.
-	ErrMemoryRepositoryNotFound = errors.New("indexnow: attempt not found")
-
-	// ErrMemoryRepositoryFinished is returned when FinishAttempt completes an
-	// attempt that was already completed with a different final state.
-	ErrMemoryRepositoryFinished = errors.New("indexnow: attempt already finished")
 )
 
 // memoryListLimit bounds ListAttempts results.
@@ -59,16 +39,16 @@ func (m *MemoryRepository) RecordAttempt(ctx context.Context, attempt *Attempt) 
 		return err
 	}
 	if !attempt.FinishedAt.IsZero() || attempt.Outcome != OutcomeInFlight || attempt.StatusCode != 0 || attempt.Success || attempt.Retryable || attempt.RetryAfter != 0 || attempt.FailureMessage != "" {
-		return ErrMemoryRepositoryInvalid
+		return ErrAttemptInvalidPayload
 	}
 	if m.attempts == nil {
 		m.attempts = make(map[string]*Attempt)
 	}
 
 	if _, exists := m.attempts[attempt.ID]; exists {
-		return fmt.Errorf("%w: %s", ErrMemoryRepositoryDuplicate, "id already recorded")
+		return ErrAttemptDuplicateID
 	}
-	m.attempts[attempt.ID] = copyAttempt(attempt)
+	m.attempts[attempt.ID] = cloneAttempt(attempt)
 	return nil
 }
 
@@ -88,31 +68,31 @@ func (m *MemoryRepository) FinishAttempt(ctx context.Context, attempt *Attempt) 
 		return err
 	}
 	if attempt.FinishedAt.IsZero() || attempt.FinishedAt.Before(attempt.StartedAt) || attempt.Outcome == OutcomeInFlight || attempt.Outcome == "" {
-		return ErrMemoryRepositoryInvalid
+		return ErrAttemptInvalidPayload
 	}
 
 	stored, exists := m.attempts[attempt.ID]
 	if !exists {
-		return ErrMemoryRepositoryNotFound
+		return ErrAttemptNotFound
 	}
 	if !stored.StartedAt.Equal(attempt.StartedAt) || stored.Method != attempt.Method || !slices.Equal(stored.URLs, attempt.URLs) {
-		return ErrMemoryRepositoryInvalid
+		return ErrAttemptInvalidPayload
 	}
 	if !stored.FinishedAt.IsZero() {
 		if sameFinalState(stored, attempt) {
 			return nil
 		}
-		return ErrMemoryRepositoryFinished
+		return ErrAttemptAlreadyFinished
 	}
-	m.attempts[attempt.ID] = copyAttempt(attempt)
+	m.attempts[attempt.ID] = cloneAttempt(attempt)
 	return nil
 }
 
 // GetAttempt returns a copy of the attempt selected by id, or
-// ErrMemoryRepositoryNotFound.
+// ErrAttemptNotFound.
 func (m *MemoryRepository) GetAttempt(ctx context.Context, id string) (*Attempt, error) {
 	if m == nil || ctx == nil || id == "" {
-		return nil, ErrMemoryRepositoryInvalid
+		return nil, ErrAttemptInvalidPayload
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -125,9 +105,9 @@ func (m *MemoryRepository) GetAttempt(ctx context.Context, id string) (*Attempt,
 
 	stored, exists := m.attempts[id]
 	if !exists {
-		return nil, ErrMemoryRepositoryNotFound
+		return nil, ErrAttemptNotFound
 	}
-	result := copyAttempt(stored)
+	result := cloneAttempt(stored)
 	return result, nil
 }
 
@@ -137,7 +117,7 @@ func (m *MemoryRepository) GetAttempt(ctx context.Context, id string) (*Attempt,
 // records are copies.
 func (m *MemoryRepository) ListAttempts(ctx context.Context, limit int) ([]Attempt, error) {
 	if m == nil || ctx == nil {
-		return nil, ErrMemoryRepositoryInvalid
+		return nil, ErrAttemptInvalidPayload
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -153,7 +133,7 @@ func (m *MemoryRepository) ListAttempts(ctx context.Context, limit int) ([]Attem
 	}
 	records := make([]Attempt, 0, len(m.attempts))
 	for _, stored := range m.attempts {
-		records = append(records, *copyAttempt(stored))
+		records = append(records, *cloneAttempt(stored))
 	}
 	m.mutex.RUnlock()
 
@@ -173,23 +153,15 @@ func (m *MemoryRepository) ListAttempts(ctx context.Context, limit int) ([]Attem
 // validateAttempt rejects nil wiring and records before taking the lock.
 func (m *MemoryRepository) validateAttempt(ctx context.Context, attempt *Attempt) error {
 	if m == nil || ctx == nil {
-		return ErrMemoryRepositoryInvalid
+		return ErrAttemptInvalidPayload
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if attempt == nil || attempt.ID == "" || attempt.StartedAt.IsZero() {
-		return ErrMemoryRepositoryInvalid
+		return ErrAttemptInvalidPayload
 	}
 	return nil
-}
-
-// copyAttempt returns a deep-enough copy: the URL slice is duplicated so the
-// stored history cannot be mutated through the caller's slice.
-func copyAttempt(a *Attempt) *Attempt {
-	result := *a
-	result.URLs = append([]string(nil), a.URLs...)
-	return &result
 }
 
 // sameFinalState compares the completion-relevant fields of two attempts.

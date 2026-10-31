@@ -95,12 +95,12 @@ func TestIndexNowCombinedEligibilityTransitions(t *testing.T) {
 		{name: "retrospective CMS publication edit", cmsDate: old, cmsUpdated: due, noSEO: true, want: true},
 		{name: "new backdated CMS", cmsDate: old, cmsCreated: due, noSEO: true, want: true},
 		{name: "old records no event", cmsDate: old, seoDate: old},
-		{name: "blank legacy SEO no synthetic event", cmsDate: old},
+		{name: "blank SEO no synthetic event", cmsDate: old},
 		{name: "future update is not a transition", cmsDate: old, seoUpdated: future},
 		{name: "invalid updated time ignored", cmsDate: old, seoUpdated: "private-invalid"},
 		{name: "static SEO publication", noCMS: true, seoDate: due, uri: "/pricing", want: true},
 		{name: "static immediate SEO creation", noCMS: true, seoCreated: due, uri: "/pricing", want: true},
-		{name: "static legacy no activation blast", noCMS: true, uri: "/pricing"},
+		{name: "undated static SEO no activation blast", noCMS: true, uri: "/pricing"},
 		{name: "missing dynamic target", noCMS: true, seoDate: due, denied: true},
 		{name: "draft CMS blocks SEO", seoDate: due},
 		{name: "restricted CMS blocks SEO", cmsDate: old, seoDate: due, restricted: true},
@@ -158,7 +158,7 @@ func TestIndexNowCombinedEligibilityTransitions(t *testing.T) {
 			if tc.policyError {
 				service.indexNow.config.AllowURL = func(context.Context, string) (bool, error) { return false, errors.New("private policy diagnostic") }
 			}
-			result, err := service.ReconcileIndexNowEligibility(t.Context(), &ReconcileIndexNowPublicationsRequest{After: now.Add(-time.Hour), Through: now})
+			result, err := service.ReconcileIndexNowEligibility(t.Context(), &ReconcileIndexNowEligibilityRequest{After: now.Add(-time.Hour), Through: now})
 			require.ErrorIs(t, err, tc.wantError)
 			require.NotContains(t, fmt.Sprint(err), "private")
 			if tc.wantError != nil {
@@ -178,6 +178,48 @@ func TestIndexNowCombinedEligibilityTransitions(t *testing.T) {
 				require.Equal(t, "pending", result.IndexNow.Status)
 			} else {
 				require.Empty(t, notifier.calls)
+			}
+		})
+	}
+}
+
+func TestIndexNowEligibilityWindowValidation(t *testing.T) {
+	now := cmsIndexNowTime()
+	for _, tc := range []struct {
+		name           string
+		after, through time.Time
+		limit          int
+		nilRequest     bool
+		want           error
+	}{
+		{name: "explicit activation window", after: now.Add(-time.Hour), through: now},
+		{name: "maximum full day", after: now.Add(-24 * time.Hour), through: now},
+		{name: "nil request", nilRequest: true, want: post.ErrPostBadRequest},
+		{name: "missing checkpoint", through: now, want: ErrIndexNowReconciliationInvalid},
+		{name: "missing upper bound", after: now.Add(-time.Hour), want: ErrIndexNowReconciliationInvalid},
+		{name: "empty window", after: now, through: now, want: ErrIndexNowReconciliationInvalid},
+		{name: "reversed window", after: now, through: now.Add(-time.Hour), want: ErrIndexNowReconciliationInvalid},
+		{name: "future upper bound", after: now.Add(-time.Hour), through: now.Add(time.Nanosecond), want: ErrIndexNowReconciliationInvalid},
+		{name: "more than a full day", after: now.Add(-24*time.Hour - time.Nanosecond), through: now, want: ErrIndexNowReconciliationInvalid},
+		{name: "negative scan limit", after: now.Add(-time.Hour), through: now, limit: -1, want: ErrIndexNowReconciliationInvalid},
+		{name: "oversized scan limit", after: now.Add(-time.Hour), through: now, limit: 10001, want: ErrIndexNowReconciliationInvalid},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			posts := &eligibilityPosts{cmsIndexNowPostPort: &cmsIndexNowPostPort{}}
+			notifier := &cmsIndexNowSubmitter{t: t, status: 200}
+			service := eligibilityService(posts, &eligibilitySEO{}, notifier, func(context.Context, string, time.Time) (bool, error) { return true, nil })
+			request := &ReconcileIndexNowEligibilityRequest{After: tc.after, Through: tc.through, Limit: tc.limit}
+			if tc.nilRequest {
+				request = nil
+			}
+			result, err := service.ReconcileIndexNowEligibility(t.Context(), request)
+			require.ErrorIs(t, err, tc.want)
+			require.Empty(t, notifier.calls)
+			if err == nil {
+				require.True(t, result.Complete)
+				require.Equal(t, tc.through, result.Checkpoint)
+			} else {
+				require.Nil(t, result)
 			}
 		})
 	}
@@ -242,7 +284,7 @@ func TestIndexNowCombinedScanBoundsAndFailures(t *testing.T) {
 			case "duplicate":
 				posts.items[1].UrlFriendlyId = posts.items[0].UrlFriendlyId
 			}
-			request := &ReconcileIndexNowPublicationsRequest{After: cmsIndexNowTime().Add(-2 * time.Hour), Through: cmsIndexNowTime(), Limit: tc.limit}
+			request := &ReconcileIndexNowEligibilityRequest{After: cmsIndexNowTime().Add(-2 * time.Hour), Through: cmsIndexNowTime(), Limit: tc.limit}
 			result, err := service.ReconcileIndexNowEligibility(t.Context(), request)
 			if tc.incomplete {
 				require.ErrorIs(t, err, ErrIndexNowReconciliationIncomplete)
@@ -286,7 +328,7 @@ func TestIndexNowCombinedDelayedWindowAndBoundaries(t *testing.T) {
 				require.Equal(t, through, at, "current wall clock cannot replace the pass boundary")
 				return true, nil
 			})
-			result, err := service.ReconcileIndexNowEligibility(t.Context(), &ReconcileIndexNowPublicationsRequest{After: now.Add(-2 * time.Hour), Through: through})
+			result, err := service.ReconcileIndexNowEligibility(t.Context(), &ReconcileIndexNowEligibilityRequest{After: now.Add(-2 * time.Hour), Through: through})
 			require.NoError(t, err)
 			require.True(t, result.Complete)
 			require.Equal(t, tc.want, len(notifier.calls) == 1)
@@ -319,7 +361,7 @@ func TestIndexNowCombinedRetainsProtocolRetryDelay(t *testing.T) {
 				notifier.failure = errors.Join(&indexnow.AuditError{Dispatched: true}, errors.New("private audit diagnostic"))
 			}
 			service := eligibilityService(posts, &eligibilitySEO{}, notifier, func(context.Context, string, time.Time) (bool, error) { return true, nil })
-			req := &ReconcileIndexNowPublicationsRequest{After: cmsIndexNowTime().Add(-2 * time.Hour), Through: cmsIndexNowTime()}
+			req := &ReconcileIndexNowEligibilityRequest{After: cmsIndexNowTime().Add(-2 * time.Hour), Through: cmsIndexNowTime()}
 			result, err := service.ReconcileIndexNowEligibility(t.Context(), req)
 			require.Equal(t, tc.complete, result.Complete)
 			require.Len(t, notifier.calls, 1)

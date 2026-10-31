@@ -29,7 +29,7 @@ func TestMemoryRepositoryRecordValidation(t *testing.T) {
 		nilContext, canceled, nilRecord, missingID, missingTime, finished, wrongOutcome bool
 		want                                                                            error
 	}
-	cases := []testCase{{name: "valid"}, {name: "nil context", nilContext: true, want: ErrMemoryRepositoryInvalid}, {name: "canceled", canceled: true, want: context.Canceled}, {name: "nil record", nilRecord: true, want: ErrMemoryRepositoryInvalid}, {name: "missing ID", missingID: true, want: ErrMemoryRepositoryInvalid}, {name: "missing start", missingTime: true, want: ErrMemoryRepositoryInvalid}, {name: "already complete", finished: true, want: ErrMemoryRepositoryInvalid}, {name: "not in flight", wrongOutcome: true, want: ErrMemoryRepositoryInvalid}}
+	cases := []testCase{{name: "valid"}, {name: "nil context", nilContext: true, want: ErrAttemptInvalidPayload}, {name: "canceled", canceled: true, want: context.Canceled}, {name: "nil record", nilRecord: true, want: ErrAttemptInvalidPayload}, {name: "missing ID", missingID: true, want: ErrAttemptInvalidPayload}, {name: "missing start", missingTime: true, want: ErrAttemptInvalidPayload}, {name: "already complete", finished: true, want: ErrAttemptInvalidPayload}, {name: "not in flight", wrongOutcome: true, want: ErrAttemptInvalidPayload}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewMemoryRepository()
@@ -69,7 +69,7 @@ func TestMemoryRepositoryDuplicateIDs(t *testing.T) {
 		finishFirst bool
 		want        error
 	}
-	cases := []testCase{{name: "duplicate in flight", newID: "one", want: ErrMemoryRepositoryDuplicate}, {name: "duplicate completed", newID: "one", finishFirst: true, want: ErrMemoryRepositoryDuplicate}, {name: "distinct identity", newID: "two"}}
+	cases := []testCase{{name: "duplicate in flight", newID: "one", want: ErrAttemptDuplicateID}, {name: "duplicate completed", newID: "one", finishFirst: true, want: ErrAttemptDuplicateID}, {name: "distinct identity", newID: "two"}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewMemoryRepository()
@@ -90,7 +90,7 @@ func TestMemoryRepositoryCompletion(t *testing.T) {
 		missing, replay, conflict, zeroFinish, changedURLs, changedMethod, changedStart, changedDelay bool
 		want                                                                                          error
 	}
-	cases := []testCase{{name: "first completion"}, {name: "unknown ID", missing: true, want: ErrMemoryRepositoryNotFound}, {name: "identical replay", replay: true}, {name: "conflicting replay", replay: true, conflict: true, want: ErrMemoryRepositoryFinished}, {name: "replay with changed delay", replay: true, changedDelay: true, want: ErrMemoryRepositoryFinished}, {name: "finish missing", zeroFinish: true, want: ErrMemoryRepositoryInvalid}, {name: "original URLs immutable", changedURLs: true, want: ErrMemoryRepositoryInvalid}, {name: "original method immutable", changedMethod: true, want: ErrMemoryRepositoryInvalid}, {name: "original start immutable", changedStart: true, want: ErrMemoryRepositoryInvalid}}
+	cases := []testCase{{name: "first completion"}, {name: "unknown ID", missing: true, want: ErrAttemptNotFound}, {name: "identical replay", replay: true}, {name: "conflicting replay", replay: true, conflict: true, want: ErrAttemptAlreadyFinished}, {name: "replay with changed delay", replay: true, changedDelay: true, want: ErrAttemptAlreadyFinished}, {name: "finish missing", zeroFinish: true, want: ErrAttemptInvalidPayload}, {name: "original URLs immutable", changedURLs: true, want: ErrAttemptInvalidPayload}, {name: "original method immutable", changedMethod: true, want: ErrAttemptInvalidPayload}, {name: "original start immutable", changedStart: true, want: ErrAttemptInvalidPayload}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewMemoryRepository()
@@ -125,7 +125,7 @@ func TestMemoryRepositoryCompletion(t *testing.T) {
 			require.ErrorIs(t, r.FinishAttempt(ctx, a), tc.want)
 			stored, err := r.GetAttempt(ctx, "one")
 			if tc.missing {
-				require.ErrorIs(t, err, ErrMemoryRepositoryNotFound)
+				require.ErrorIs(t, err, ErrAttemptNotFound)
 				return
 			}
 			require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestMemoryRepositoryReadAdmission(t *testing.T) {
 		nilContext, canceled, nilReceiver bool
 		want                              error
 	}
-	cases := []testCase{{name: "nil context", nilContext: true, want: ErrMemoryRepositoryInvalid}, {name: "canceled", canceled: true, want: context.Canceled}, {name: "nil receiver", nilReceiver: true, want: ErrMemoryRepositoryInvalid}}
+	cases := []testCase{{name: "nil context", nilContext: true, want: ErrAttemptInvalidPayload}, {name: "canceled", canceled: true, want: context.Canceled}, {name: "nil receiver", nilReceiver: true, want: ErrAttemptInvalidPayload}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := NewMemoryRepository()

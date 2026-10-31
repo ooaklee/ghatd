@@ -22,8 +22,6 @@ type cmsIndexNowPostPort struct {
 	snapshotFailure   error
 	committed         bool
 	events            []string
-	pages             map[int]*post.GetPostsResponse
-	readFailure       error
 }
 
 func (p *cmsIndexNowPostPort) lookup(_ context.Context, id string) (*post.Post, error) {
@@ -52,16 +50,6 @@ func (p *cmsIndexNowPostPort) DeletePostById(context.Context, *post.DeletePostBy
 func (p *cmsIndexNowPostPort) RestorePostById(context.Context, *post.RestorePostByIdRequest) (*post.RestorePostByIdResponse, error) {
 	err := p.write()
 	return &post.RestorePostByIdResponse{Post: p.current}, err
-}
-func (p *cmsIndexNowPostPort) GetPosts(_ context.Context, r *post.GetPostsRequest) (*post.GetPostsResponse, error) {
-	p.events = append(p.events, fmt.Sprintf("page-%d", r.Page))
-	if p.readFailure != nil {
-		return nil, p.readFailure
-	}
-	if value, ok := p.pages[r.Page]; ok {
-		return value, nil
-	}
-	return &post.GetPostsResponse{}, nil
 }
 
 type cmsIndexNowSubmitter struct {
@@ -290,60 +278,6 @@ func TestIndexNowHostPolicy(t *testing.T) {
 				require.Len(t, submitter.calls, 1)
 			} else {
 				require.Empty(t, submitter.calls)
-			}
-		})
-	}
-}
-
-func TestIndexNowReconciliationWindow(t *testing.T) {
-	now := cmsIndexNowTime()
-	for _, tc := range []struct {
-		name                         string
-		after, through               time.Time
-		limit                        int
-		sourceFailure, notifyFailure bool
-		want                         error
-		urls                         int
-	}{
-		{name: "explicit activation window", after: now.Add(-time.Hour), through: now, urls: 1},
-		{name: "missing checkpoint", through: now, want: ErrIndexNowReconciliationInvalid},
-		{name: "empty window", after: now, through: now, want: ErrIndexNowReconciliationInvalid},
-		{name: "future bound", after: now.Add(-time.Hour), through: now.Add(time.Second), want: ErrIndexNowReconciliationInvalid},
-		{name: "oversized window", after: now.Add(-25 * time.Hour), through: now, want: ErrIndexNowReconciliationInvalid},
-		{name: "negative bound", after: now.Add(-time.Hour), through: now, limit: -1, want: ErrIndexNowReconciliationInvalid},
-		{name: "scan bound exhausted", after: now.Add(-time.Hour), through: now, limit: 1, want: ErrIndexNowReconciliationIncomplete},
-		{name: "source failure", after: now.Add(-time.Hour), through: now, sourceFailure: true, want: ErrIndexNowReconciliationIncomplete},
-		{name: "notification failure", after: now.Add(-time.Hour), through: now, notifyFailure: true, want: ErrIndexNowReconciliationIncomplete, urls: 1},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			old := cmsIndexNowPost("article-old")
-			old.PublishedAt = now.Add(-time.Hour).Format(time.RFC3339)
-			due := cmsIndexNowPost("article-due")
-			due.PublishedAt = "2026-10-30T13:00:00+01:00"
-			future := cmsIndexNowPost("article-future")
-			future.PublishedAt = now.Add(time.Nanosecond).Format(time.RFC3339Nano)
-			private := cmsIndexNowPost("article-private")
-			private.PublishedAt = due.PublishedAt
-			private.Visibility = []string{"private"}
-			p := &cmsIndexNowPostPort{pages: map[int]*post.GetPostsResponse{1: {Posts: []post.Post{*old, *due, *future, *private}, TotalPages: 1}}}
-			if tc.sourceFailure {
-				p.readFailure = errors.New("private source failure")
-			}
-			submitter := &cmsIndexNowSubmitter{t: t, status: 200}
-			if tc.notifyFailure {
-				submitter.failure = errors.New("key=private")
-			}
-			service := NewService(p, nil, WithIndexNow(submitter, cmsIndexNowConfig(p)))
-			result, err := service.ReconcileIndexNowPublications(t.Context(), &ReconcileIndexNowPublicationsRequest{After: tc.after, Through: tc.through, Limit: tc.limit})
-			require.ErrorIs(t, err, tc.want)
-			require.Len(t, submitter.calls, tc.urls)
-			if err == nil {
-				require.True(t, result.Complete)
-				require.Equal(t, tc.through, result.Checkpoint)
-				require.Equal(t, []string{"https://example.com/blog/due"}, submitter.calls[0])
-			} else if result != nil {
-				require.False(t, result.Complete)
-				require.Equal(t, tc.after, result.Checkpoint)
 			}
 		})
 	}

@@ -21,9 +21,6 @@ type IndexNowSubmitter interface {
 	SubmitURLs(context.Context, *indexnow.SubmitURLsRequest) (*indexnow.SubmitURLsResponse, error)
 }
 
-// IndexNowSitemapSource is the bounded read-only SEO inventory capability.
-type IndexNowSitemapSource = seo.SitemapPublicationSource
-
 // IndexNowConfig supplies trusted host URL and storage policy. Configure callbacks
 // before serving; they must be concurrency safe and must not mutate their inputs.
 type IndexNowConfig struct {
@@ -45,7 +42,7 @@ type IndexNowConfig struct {
 	PublicationSource post.PostPublicationSource
 	// SitemapSource supplies independently scheduled SEO entries. It is required
 	// only by ReconcileIndexNowEligibility; mutation notifications are unchanged.
-	SitemapSource IndexNowSitemapSource
+	SitemapSource seo.SitemapPublicationSource
 	// EligibleURL checks current host availability at the captured Through time.
 	// It is required only by combined reconciliation, and must reject missing or
 	// unavailable dynamic targets while permitting supported static routes.
@@ -222,112 +219,4 @@ func writeIndexNowHeaders(w http.ResponseWriter, receipt *IndexNowNotificationRe
 	if receipt.Warning != "" {
 		w.Header().Set("X-IndexNow-Warning", receipt.Warning)
 	}
-}
-
-// ErrIndexNowReconciliationInvalid identifies a missing, future or oversized
-// explicit checkpoint window, or invalid scan bound. No notification is sent.
-var ErrIndexNowReconciliationInvalid = errors.New("contentmanager: invalid indexnow reconciliation window")
-
-// ErrIndexNowReconciliationIncomplete means the bounded scan or submission did
-// not complete. Retain the previous checkpoint; a deliberate retry may duplicate
-// a prior notification because no distributed exactly-once scheduler is claimed.
-var ErrIndexNowReconciliationIncomplete = errors.New("contentmanager: indexnow reconciliation incomplete")
-
-// ReconcileIndexNowPublicationsRequest is a trusted host job request, never a
-// transport-decoded actor. Choose After when enabling integration, then persist
-// successful checkpoints. The window is (After,Through], at most 24 hours.
-type ReconcileIndexNowPublicationsRequest struct {
-	// After is the exclusive last successful checkpoint, initialized at activation.
-	After time.Time
-	// Through is the inclusive upper bound, no later than the current clock.
-	Through time.Time
-	// Limit bounds returned catalogue records, at most 10000; zero uses 10000.
-	// Combined eligibility counts both CMS and SEO rows. Native keyset sources
-	// may read one additional lookahead document per page to establish completion.
-	Limit int
-}
-
-// ReconcileIndexNowPublicationsResponse reports one completely scanned window.
-// Advance the host checkpoint only when Complete is true. A receipt acknowledges
-// notification delivery, not search-engine indexing or cross-process uniqueness.
-type ReconcileIndexNowPublicationsResponse struct {
-	// Complete is true only after every bounded source read and notification succeeded.
-	Complete bool
-	// Checkpoint remains After on incomplete results, otherwise advances to Through.
-	Checkpoint time.Time
-	// Inspected counts returned source records, including unpublished/unmapped
-	// records and both CMS/SEO sources when using combined eligibility.
-	Inspected int
-	// IndexNow carries the batch delivery receipt; it is nil before dispatch.
-	IndexNow *IndexNowNotificationReceipt
-}
-
-// ReconcileIndexNowPublications announces posts becoming public in an explicit
-// window without rewriting SEO rows. There is no implicit scheduler, activation
-// backfill, retry or distributed claim. Source reads finish before any submission.
-func (s *Service) ReconcileIndexNowPublications(ctx context.Context, req *ReconcileIndexNowPublicationsRequest) (*ReconcileIndexNowPublicationsResponse, error) {
-	if err := s.validateOperation(ctx, req); err != nil {
-		return nil, err
-	}
-	now := s.publicationTime()
-	if req.After.IsZero() || req.Through.IsZero() || !req.Through.After(req.After) || req.Through.After(now) || req.Through.Sub(req.After) > 24*time.Hour || req.Limit < 0 || req.Limit > 10000 {
-		return nil, ErrIndexNowReconciliationInvalid
-	}
-	result := &ReconcileIndexNowPublicationsResponse{Checkpoint: req.After}
-	if s.indexNow == nil || !s.indexNow.valid {
-		return result, ErrIndexNowReconciliationIncomplete
-	}
-	limit := req.Limit
-	if limit == 0 {
-		limit = 10000
-	}
-	urls := []string{}
-	seen := map[string]bool{}
-	for page := 1; ; page++ {
-		if err := ctx.Err(); err != nil {
-			return result, err
-		}
-		response, err := s.postService.GetPosts(ctx, &post.GetPostsRequest{Order: "created_at_asc", PerPage: 100, Page: page, Meta: true, IsNotDeleted: true})
-		if err != nil || response == nil {
-			return result, ErrIndexNowReconciliationIncomplete
-		}
-		if len(response.Posts) > 100 || response.TotalPages < 0 || (len(response.Posts) > 0 && response.TotalPages < page) || (len(response.Posts) == 0 && response.TotalPages > page) {
-			return result, ErrIndexNowReconciliationIncomplete
-		}
-		for i := range response.Posts {
-			if result.Inspected >= limit {
-				return result, ErrIndexNowReconciliationIncomplete
-			}
-			result.Inspected++
-			item := &response.Posts[i]
-			publication, parseErr := parseChangelogSitemapTime(item.PublishedAt)
-			if parseErr != nil || !publication.After(req.After) || publication.After(req.Through) {
-				continue
-			}
-			value, warning := s.indexNowURL(ctx, item, now)
-			if warning != "" {
-				return result, ErrIndexNowReconciliationIncomplete
-			}
-			if value != "" && !seen[value] {
-				seen[value] = true
-				urls = append(urls, value)
-			}
-		}
-		if len(response.Posts) == 0 || page >= response.TotalPages {
-			break
-		}
-		if result.Inspected >= limit {
-			return result, ErrIndexNowReconciliationIncomplete
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return result, err
-	}
-	result.IndexNow = s.submitIndexNow(ctx, urls, "")
-	if result.IndexNow.Status == "failed" {
-		return result, ErrIndexNowReconciliationIncomplete
-	}
-	result.Complete = true
-	result.Checkpoint = req.Through
-	return result, nil
 }

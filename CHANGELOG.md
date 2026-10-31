@@ -88,8 +88,8 @@ when the release version has been selected, and remove unused subsections.
   single and bulk URL-change notifications, classified receipts and optional
   MongoDB or in-memory attempt history. [CMS integration](external/contentmanager/README.md)
   notifies after successful mutations, retains prior public URLs for removals
-  and moves. Combined CMS/SEO reconciliation respects independent publication
-  gates and timestamped schedule edits using bounded keyset sources. The opt-in
+  and moves. One CMS/SEO eligibility reconciliation flow respects independent
+  publication gates and timestamped schedule edits using bounded keyset sources. The opt-in
   shared runner persists Mongo checkpoints, server-time leases and retry deferrals;
   hosts choose activation, cadence and public/build policy. Receipts do not
   guarantee indexing, and source reads are not transactional snapshots.

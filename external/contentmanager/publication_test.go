@@ -2,6 +2,7 @@ package contentmanager
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -166,31 +167,28 @@ func TestReconciliationReplayAndBoundedPages(t *testing.T) {
 		{name: "multiple pages", count: 101}, {name: "explicit replay may duplicate", count: 1, replay: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			p := &cmsIndexNowPostPort{pages: map[int]*post.GetPostsResponse{}}
+			p := &eligibilityPosts{cmsIndexNowPostPort: &cmsIndexNowPostPort{}}
 			for i := 0; i < tc.count; i++ {
-				page := i/100 + 1
-				if p.pages[page] == nil {
-					p.pages[page] = &post.GetPostsResponse{TotalPages: (tc.count + 99) / 100}
-				}
-				item := cmsIndexNowPost("article-story")
+				item := cmsIndexNowPost(fmt.Sprintf("article-story-%03d", i))
+				item.Id = fmt.Sprintf("post-%03d", i)
 				item.PublishedAt = "2026-10-30T12:00:00Z"
-				p.pages[page].Posts = append(p.pages[page].Posts, *item)
+				p.items = append(p.items, *item)
 			}
 			submitter := &cmsIndexNowSubmitter{t: t, status: 200}
-			s := NewService(p, nil, WithIndexNow(submitter, cmsIndexNowConfig(p)))
+			s := eligibilityService(p, &eligibilitySEO{}, submitter, func(context.Context, string, time.Time) (bool, error) { return true, nil })
 			runs := 1
 			if tc.replay {
 				runs = 2
 			}
 			for range runs {
-				response, err := s.ReconcileIndexNowPublications(t.Context(), &ReconcileIndexNowPublicationsRequest{After: cmsIndexNowTime().Add(-time.Hour), Through: cmsIndexNowTime()})
+				response, err := s.ReconcileIndexNowEligibility(t.Context(), &ReconcileIndexNowEligibilityRequest{After: cmsIndexNowTime().Add(-time.Hour), Through: cmsIndexNowTime()})
 				require.NoError(t, err)
 				require.True(t, response.Complete)
 				require.Equal(t, tc.count, response.Inspected)
 			}
 			require.Len(t, submitter.calls, runs)
 			for _, call := range submitter.calls {
-				require.Len(t, call, 1, "duplicate catalogue URLs are deduplicated within a batch")
+				require.Len(t, call, tc.count, "an explicit repeated pass may notify the same current URLs again")
 			}
 		})
 	}
