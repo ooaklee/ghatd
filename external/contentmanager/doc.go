@@ -1,8 +1,11 @@
 // Package contentmanager composes CMS post operations, verified request actors,
-// public content projections and administrator-protected ingestion sources.
+// publication-safe public projections and administrator-protected ingestion.
 //
-// GetChangelogSitemapItems returns due public changelog URL candidates without
-// writing sitemap storage. Its optional handler/service capabilities preserve
-// custom integrations that implement the earlier content-manager interfaces.
-// See README.md for route wiring, timestamp eligibility and wire compatibility.
+// NewService accepts optional ServiceOptions. WithIndexNow adds post-commit URL
+// change notifications and safe receipts while preserving disabled mutation I/O;
+// hosts supply canonical paths and storage policy. ReconcileIndexNowEligibility
+// combines bounded CMS and independent SEO schedules with current host gates.
+// The IndexNow runner owns durable lease/checkpoint execution.
+// IsPublicPostAt shares publication eligibility with host renderers and filters.
+// See README.md for composition, failure semantics and checkpoint responsibilities.
 package contentmanager

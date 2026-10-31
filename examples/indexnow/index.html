@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GHATD · IndexNow local review</title>
+  <style>
+    :root{color-scheme:light;font-family:system-ui,sans-serif;color:#162b35;background:#f3f6f7}*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:auto;padding:32px 20px 60px}h1{font-size:2rem;margin:8px 0 16px}h2{font-size:1.2rem;margin-top:0}p{line-height:1.6}a{color:#006a6d}header{margin-bottom:24px}.tag{font-size:.78rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:#006a6d}.notice{padding:14px 18px;border-left:4px solid #c1761e;background:#fff6e6}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{padding:24px;background:#fff;border:1px solid #d5e1e4;border-radius:8px;margin-bottom:20px}label{display:block;margin-bottom:8px;font-weight:600}textarea,select,button{font:inherit}textarea{width:100%;min-height:138px;resize:vertical;border:1px solid #b6cacf;border-radius:5px;padding:12px}select{width:100%;padding:10px;border:1px solid #b6cacf;border-radius:5px;background:#fff;margin-bottom:18px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}button{background:#006a6d;color:white;padding:11px 18px;border:0;border-radius:5px;cursor:pointer}button.secondary{background:#e9f1f2;color:#004d50}button:disabled{opacity:.6;cursor:wait}.muted{color:#546c76;font-size:.9rem}.small{font-size:.88rem}.status{min-height:24px;margin:12px 0 0}pre{background:#edf3f5;padding:16px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem;max-height:410px;overflow:auto}.wide{overflow:auto}table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:650px}td,th{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid #e2e9eb}th{color:#546c76}td:last-child{max-width:420px;overflow-wrap:anywhere}code{font-size:.9em;overflow-wrap:anywhere}ul{padding-left:20px;line-height:1.7}.inline{display:flex;align-items:center;justify-content:space-between;gap:10px}@media(max-width:760px){.grid{grid-template-columns:1fr}.fields{grid-template-columns:1fr}main{padding-top:24px}h1{font-size:1.6rem}.card{padding:18px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="tag">GHATD / IndexNow</div>
+    <h1>Review URL notifications locally</h1>
+    <p class="notice"><strong>Local simulation only.</strong> The real GHATD service sends requests to a private mock engine. No public search engine is contacted. The example canonical host is <code>https://example.com</code>.</p>
+  </header>
+  <div class="grid">
+    <section class="card">
+      <h2>Send a notification</h2>
+      <form id="submit-form">
+        <div class="fields">
+          <div><label for="mode">Submission method</label><select id="mode"><option value="single">One URL · GET</option><option value="batch">Multiple URLs · POST JSON</option></select></div>
+          <div><label for="simulation">Mock engine result</label><select id="simulation"><option value="200">200 · Received</option><option value="202">202 · Key validation pending</option><option value="400">400 · Invalid format</option><option value="403">403 · Invalid key</option><option value="422">422 · Invalid host or URL</option><option value="429">429 · Rate limit, Retry-After: 30</option><option value="500">500 · Engine failure</option><option value="network">Simulated transport failure</option></select></div>
+        </div>
+        <label for="urls">Absolute URLs, one per line</label>
+        <textarea id="urls" spellcheck="false">https://example.com/guides/first-page</textarea>
+        <p class="muted">Single mode requires one URL. Batch mode supports up to 10,000. Try another host to inspect service validation before any engine request.</p>
+        <button id="send" type="submit">Send to local mock</button>
+        <p id="status" class="status small" aria-live="polite"></p>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Verify the foundation</h2>
+      <ul>
+        <li><a href="/local-demo-indexnow-key-2026.txt" target="_blank" rel="noopener">Open the public key-file route</a> · fixed demo key</li>
+        <li>Inspect the service receipt and the actual GET or POST fields below.</li>
+        <li>Compare 200, 202, denied requests, rate limiting and failures.</li>
+        <li>Retry deliberately using the form. This demo does not run a scheduler or retry worker.</li>
+      </ul>
+      <p class="muted">The key-file route runs locally; its configured canonical location is on example.com. This simulator does not prove real host ownership. Keep production submission controls behind your application's authorization.</p>
+      <p class="muted">A received notification is not proof that a page was crawled, indexed, or ranked. Crawlable HTML, correct canonical URLs, publication-aware sitemaps and real 404 responses still matter.</p>
+    </section>
+  </div>
+  <div class="grid">
+    <section class="card"><h2>Latest service response</h2><pre id="result">Send a request to inspect its receipt.</pre></section>
+    <section class="card"><h2>Latest request received by the mock</h2><pre id="wire">No request received yet.</pre><p class="muted">Local validation and simulated transport failures can produce a service response without an engine request. The fixed key is omitted from this view.</p></section>
+  </div>
+  <section class="card">
+    <div class="inline"><h2>Local invocation history</h2><button class="secondary" id="refresh" type="button">Refresh</button></div>
+    <p class="muted">Most recent 200 invocations, stored in this demo process. Resets on restart; this is not a durable delivery queue.</p>
+    <div class="wide"><table><thead><tr><th>Time</th><th>Method</th><th>URLs</th><th>Simulation</th><th>Service result</th></tr></thead><tbody id="history"><tr><td colspan="5">No invocations yet.</td></tr></tbody></table></div>
+  </section>
+  <section class="card"><h2>Service audit records</h2><p class="muted">The service writes these records through its real AttemptRepository contract. This example's adapter is volatile: at most 200 completed records plus any in-flight records. No durable queue or automatic retry worker runs.</p><pre id="audit">No attempts recorded yet.</pre></section>
+</main>
+<script>
+const el=id=>document.getElementById(id);
+async function refresh(){
+  const response=await fetch('/api/history',{cache:'no-store'});
+  if(!response.ok)throw new Error('History request failed');
+  const data=await response.json();
+  const calls=data.submissions||[];
+  el('history').replaceChildren();
+  if(!calls.length){const row=el('history').insertRow();const cell=row.insertCell();cell.colSpan=5;cell.textContent='No invocations yet.';}
+  for(const call of [...calls].reverse()){
+    const row=el('history').insertRow();
+    for(const value of [new Date(call.at).toLocaleTimeString(),call.mode,call.urls.length,call.simulation,call.error||'Receipt returned; inspect response']){const cell=row.insertCell();cell.textContent=String(value);}
+  }
+  const wire=(data.engine_requests||[]).at(-1);
+  el('wire').textContent=wire?JSON.stringify(wire,null,2):'No request received yet.';
+  const attempts=data.audit_attempts||[];
+  el('audit').textContent=attempts.length?JSON.stringify([...attempts].reverse(),null,2):'No attempts recorded yet.';
+}
+el('mode').addEventListener('change',()=>{if(el('mode').value==='batch'&&el('urls').value.trim()==='https://example.com/guides/first-page')el('urls').value+='\nhttps://example.com/guides/second-page';});
+el('submit-form').addEventListener('submit',async event=>{
+  event.preventDefault();el('send').disabled=true;el('status').textContent='Calling the GHATD service…';
+  try{
+    const urls=el('urls').value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
+    const response=await fetch('/api/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:el('mode').value,urls,simulation:el('simulation').value})});
+    if(!response.ok)throw new Error(await response.text());
+    const result=await response.json();el('result').textContent=JSON.stringify(result,null,2);
+    el('status').textContent=result.error?'Service returned an error. Inspect the receipt and history.':'Service returned a receipt. Inspect its status below.';
+    await refresh();
+  }catch(error){el('status').textContent=error.message;}finally{el('send').disabled=false;}
+});
+el('refresh').addEventListener('click',()=>refresh().catch(error=>{el('status').textContent=error.message;}));
+refresh().catch(error=>{el('status').textContent=error.message;});
+</script>
+</body>
+</html>

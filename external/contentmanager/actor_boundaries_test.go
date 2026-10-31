@@ -147,7 +147,7 @@ func TestContentLatestProjectionIsolation(t *testing.T) {
 		{name: "public", count: 1}, {name: "administrator", admin: true, count: 2}, {name: "anonymous placeholder", admin: true, placeholder: true, count: 1}, {name: "nil result", nilResult: true, want: ErrContentManagerUnavailable}, {name: "native error", failure: post.ErrResourceNotFound, want: post.ErrResourceNotFound},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			response := &post.GetLatestPostsByTypeResponse{Overviews: []post.PostOverview{{Id: "published", PublishedAt: "2026-01-01"}, {Id: "draft"}}}
+			response := &post.GetLatestPostsByTypeResponse{Overviews: []post.PostOverview{{Id: "published", PublishedAt: "2026-01-01T00:00:00Z"}, {Id: "draft"}}}
 			before := append([]post.PostOverview(nil), response.Overviews...)
 			port := &contentPublicPort{latest: response, failure: tc.failure}
 			if tc.nilResult {

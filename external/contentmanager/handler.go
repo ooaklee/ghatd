@@ -115,6 +115,7 @@ func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeIndexNowHeaders(w, newlyCreated.IndexNow)
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusCreated, newlyCreated.Post)
 }
 
@@ -135,6 +136,7 @@ func (h *Handler) UpdatePostById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeIndexNowHeaders(w, updatedPost.IndexNow)
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, updatedPost.Post)
 }
 
@@ -148,13 +150,14 @@ func (h *Handler) DeletePostById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.service.DeletePostById(r.Context(), request)
+	deletedPost, err := h.service.DeletePostById(r.Context(), request)
 	if err != nil {
 		logger.Warn("handler-returning-error-response", zap.Errors("errors", errormanifest.ResponseErrors(err, h.responseManifests())))
 		h.NewHTTPErrorResponse(w, err)
 		return
 	}
 
+	writeIndexNowHeaders(w, deletedPost.IndexNow)
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusNoContent, nil)
 }
 
@@ -175,6 +178,7 @@ func (h *Handler) RestorePostById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	writeIndexNowHeaders(w, restoredPost.IndexNow)
 	h.getBaseResponseHandler().NewHTTPDataResponse(w, http.StatusOK, restoredPost.Post)
 }
 

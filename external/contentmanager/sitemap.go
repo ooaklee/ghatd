@@ -3,6 +3,7 @@ package contentmanager
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/post"
 )
@@ -20,11 +21,11 @@ func (s *Service) GetArticleSitemapItems(ctx context.Context, req *GetArticleSit
 	if err := s.validateOperation(ctx, req); err != nil {
 		return nil, err
 	}
-	return getArticleSitemapItems(ctx, s.postService, req)
+	return getArticleSitemapItems(ctx, s.postService, req, s.publicationTime())
 }
 
 // getArticleSitemapItems builds sitemap-ready URLs from published article posts.
-func getArticleSitemapItems(ctx context.Context, postService postService, req *GetArticleSitemapItemsRequest) (*GetArticleSitemapItemsResponse, error) {
+func getArticleSitemapItems(ctx context.Context, postService postService, req *GetArticleSitemapItemsRequest, now time.Time) (*GetArticleSitemapItemsResponse, error) {
 	if req == nil || ctx == nil {
 		return nil, post.ErrPostBadRequest
 	}
@@ -79,6 +80,9 @@ func getArticleSitemapItems(ctx context.Context, postService postService, req *G
 
 		response.ProcessedArticles += len(articlesResponse.Posts)
 		for _, articlePost := range articlesResponse.Posts {
+			if !IsPublicPostAt(&articlePost, now) {
+				continue
+			}
 			publicHref := articlePost.ToOverview().Href
 			publicSlug := strings.Trim(strings.TrimPrefix(publicHref, defaultArticleSitemapURIPathPrefix), "/")
 			if publicHref == "" || publicSlug == "" {

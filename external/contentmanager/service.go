@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/logger"
@@ -90,15 +91,21 @@ type Service struct {
 
 	// userService represents the user service
 	userService userService
+
+	now      func() time.Time
+	indexNow *indexNowConfiguration
 }
 
 // NewService binds domain ports. Operations reject missing required dependencies;
 // optional author enrichment may fall back to the default display name.
-func NewService(postService postService, userService userService) *Service {
-	return &Service{
-		postService: postService,
-		userService: userService,
+func NewService(postService postService, userService userService, options ...ServiceOption) *Service {
+	s := &Service{postService: postService, userService: userService, now: time.Now}
+	for _, option := range options {
+		if option != nil {
+			option(s)
+		}
 	}
+	return s
 }
 
 // CreatePost authorizes the explicit administrator before forwarding content to
@@ -127,6 +134,7 @@ func (s *Service) CreatePost(ctx context.Context, req *CreatePostRequest) (*Crea
 
 	return &CreatePostResponse{
 		CreatePostResponse: newPost,
+		IndexNow:           s.notifyIndexNow(ctx, nil, newPost.Post, ""),
 	}, nil
 }
 
@@ -157,6 +165,7 @@ func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest
 	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
 	logger.Info("handling-update-post-by-id-request", zap.String("actor-id", req.ActorID))
 
+	previous, snapshotWarning := s.indexNowSnapshot(ctx, target)
 	updatedPost, err := s.postService.UpdatePost(ctx, req.UpdatePostRequest)
 	if err != nil {
 		return nil, err
@@ -167,6 +176,7 @@ func (s *Service) UpdatePostById(ctx context.Context, req *UpdatePostByIdRequest
 
 	return &UpdatePostByIdResponse{
 		UpdatePostResponse: updatedPost,
+		IndexNow:           s.notifyIndexNow(ctx, previous, updatedPost.Post, snapshotWarning),
 	}, nil
 }
 
@@ -186,6 +196,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 	logger := logger.AcquirePackageFrom(ctx, "external/contentmanager")
 	logger.Info("handling-delete-post-by-id-request", zap.String("actor-id", req.ActorID))
 
+	previous, snapshotWarning := s.indexNowSnapshot(ctx, req.Id)
 	deletedPostResponse, err := s.postService.DeletePostById(ctx, req.DeletePostByIdRequest)
 	if err != nil {
 		return nil, err
@@ -196,6 +207,7 @@ func (s *Service) DeletePostById(ctx context.Context, req *DeletePostByIdRequest
 
 	return &DeletePostByIdResponse{
 		DeletePostByIdResponse: deletedPostResponse,
+		IndexNow:               s.notifyIndexNow(ctx, previous, nil, snapshotWarning),
 	}, nil
 }
 
@@ -225,6 +237,7 @@ func (s *Service) RestorePostById(ctx context.Context, req *RestorePostByIdReque
 
 	return &RestorePostByIdResponse{
 		RestorePostByIdResponse: restoredPostResponse,
+		IndexNow:                s.notifyIndexNow(ctx, nil, restoredPostResponse.Post, ""),
 	}, nil
 }
 
@@ -263,8 +276,9 @@ func (s *Service) GetLatestPostsByType(ctx context.Context, req *GetLatestPostsB
 	// Admin users can see all content
 	// The post service already filters for published and non-deleted posts by default
 	// but we explicitly ensure it here for clarity
+	evaluation := s.publicationTime()
 	matchingPostOverviewsResp.Overviews = slices.DeleteFunc(matchingPostOverviewsResp.Overviews, func(overview post.PostOverview) bool {
-		return (requestingUser == nil || !requestingUser.IsAdmin()) && overview.PublishedAt == ""
+		return (requestingUser == nil || !requestingUser.IsAdmin()) && !publicTimestampAt(overview.PublishedAt, evaluation)
 	})
 
 	return &GetLatestPostsByTypeResponse{
@@ -292,8 +306,12 @@ func (s *Service) GetLatestNotificationOverviews(ctx context.Context, req *GetLa
 		return nil, ErrContentManagerUnavailable
 	}
 
+	projection := *overviews
+	projection.Overviews = slices.Clone(overviews.Overviews)
+	evaluation := s.publicationTime()
+	projection.Overviews = slices.DeleteFunc(projection.Overviews, func(item common.NotificationOverview) bool { return !publicTimestampAt(item.OccurredAt, evaluation) })
 	return &GetLatestNotificationOverviewsResponse{
-		GetLatestNotificationOverviewsResponse: overviews,
+		GetLatestNotificationOverviewsResponse: &projection,
 	}, nil
 }
 
@@ -329,7 +347,7 @@ func (s *Service) GetChangelogItemByUrlFriendlyId(ctx context.Context, req *GetC
 		return nil, ErrContentManagerUnavailable
 	}
 
-	if (requestingUser == nil || !requestingUser.IsAdmin()) && (matchingPost.PublishedAt == "" || matchingPost.DeletedAt != "") {
+	if (requestingUser == nil || !requestingUser.IsAdmin()) && !IsPublicPostAt(matchingPost, s.publicationTime()) {
 		// make sure unauthed/ non-admin users can only see published content
 		return nil, ErrUnauthorisedCMUser
 	}
@@ -379,7 +397,7 @@ func (s *Service) GetArticleItemByUrlFriendlyId(ctx context.Context, req *GetArt
 		return nil, ErrContentManagerUnavailable
 	}
 
-	if (requestingUser == nil || !requestingUser.IsAdmin()) && (matchingPost.PublishedAt == "" || matchingPost.DeletedAt != "") {
+	if (requestingUser == nil || !requestingUser.IsAdmin()) && !IsPublicPostAt(matchingPost, s.publicationTime()) {
 		// make sure unauthed/ non-admin users can only see published content
 		return nil, ErrUnauthorisedCMUser
 	}
@@ -429,6 +447,10 @@ func (s *Service) GetChangelogItems(ctx context.Context, req *GetChangelogItemsR
 		return nil, ErrContentManagerUnavailable
 	}
 
+	projection := publicPostProjection(matchingPosts.GetPostsResponse, requestingUser != nil && requestingUser.IsAdmin(), s.publicationTime())
+	copyResponse := *matchingPosts
+	copyResponse.GetPostsResponse = projection
+	matchingPosts = &copyResponse
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetChangelogItemsResponse{
@@ -468,6 +490,10 @@ func (s *Service) GetGlossaryItems(ctx context.Context, req *GetGlossaryItemsReq
 		return nil, ErrContentManagerUnavailable
 	}
 
+	projection := publicPostProjection(matchingPosts.GetPostsResponse, requestingUser != nil && requestingUser.IsAdmin(), s.publicationTime())
+	copyResponse := *matchingPosts
+	copyResponse.GetPostsResponse = projection
+	matchingPosts = &copyResponse
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetGlossaryItemsResponse{
@@ -507,6 +533,10 @@ func (s *Service) GetFaqItems(ctx context.Context, req *GetFaqItemsRequest) (*Ge
 		return nil, ErrContentManagerUnavailable
 	}
 
+	projection := publicPostProjection(matchingPosts.GetPostsResponse, requestingUser != nil && requestingUser.IsAdmin(), s.publicationTime())
+	copyResponse := *matchingPosts
+	copyResponse.GetPostsResponse = projection
+	matchingPosts = &copyResponse
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetFaqItemsResponse{
@@ -546,6 +576,10 @@ func (s *Service) GetArticles(ctx context.Context, req *GetArticlesRequest) (*Ge
 		return nil, ErrContentManagerUnavailable
 	}
 
+	projection := publicPostProjection(matchingPosts.GetPostsResponse, requestingUser != nil && requestingUser.IsAdmin(), s.publicationTime())
+	copyResponse := *matchingPosts
+	copyResponse.GetPostsResponse = projection
+	matchingPosts = &copyResponse
 	s.handleDynamicUpdatingOfPostsWithPublishDateAndNoPublishAsSet(ctx, matchingPosts, userIdToUserFirstNameLastInitial, logger)
 
 	return &GetArticlesResponse{

@@ -8,21 +8,33 @@ import (
 // CreatePostResponse represents the response payload for the CreatePost method
 type CreatePostResponse struct {
 	*post.CreatePostResponse
+
+	// IndexNow reports the optional notification separately from the committed mutation.
+	IndexNow *IndexNowNotificationReceipt `json:"indexnow,omitempty"`
 }
 
 // UpdatePostByIdResponse represents the response payload for the UpdatePostById method
 type UpdatePostByIdResponse struct {
 	*post.UpdatePostResponse
+
+	// IndexNow reports the optional notification separately from the committed mutation.
+	IndexNow *IndexNowNotificationReceipt `json:"indexnow,omitempty"`
 }
 
 // DeletePostByIdResponse represents the response payload for the DeletePostById method
 type DeletePostByIdResponse struct {
 	*post.DeletePostByIdResponse
+
+	// IndexNow reports the optional notification separately from the committed mutation.
+	IndexNow *IndexNowNotificationReceipt `json:"indexnow,omitempty"`
 }
 
 // RestorePostByIdResponse represents the response payload for the RestorePostById method
 type RestorePostByIdResponse struct {
 	*post.RestorePostByIdResponse
+
+	// IndexNow reports the optional notification separately from the committed mutation.
+	IndexNow *IndexNowNotificationReceipt `json:"indexnow,omitempty"`
 }
 
 // GetChangelogItemsResponse represents the response payload for changelog items

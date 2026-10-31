@@ -6,6 +6,8 @@
 // Publication-aware repositories implement SitemapPublicationRepository for
 // atomic metadata/date writes: nil preserves the date, while an explicit empty
 // string clears it. Legacy adapters remain supported for unscheduled entries.
+// SitemapPublicationSource adds bounded, read-only ID keyset inventory for shared
+// due eligibility; PublicationTime uses the same strict gate parser as rendering.
 //
 // Public delivery defaults to file snapshots with optional embedded fallback;
 // PublicSitemapModeDatabase renders current shared storage on each request.

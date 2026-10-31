@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ooaklee/ghatd/external/common"
 	"github.com/ooaklee/ghatd/external/post"
@@ -107,7 +108,7 @@ func TestGetArticleSitemapItemsBuildsPublicBlogURIs(t *testing.T) {
 
 	response, err := getArticleSitemapItems(context.Background(), postService, &GetArticleSitemapItemsRequest{
 		CreatedAtFrom: "2026-05-28T08:00:00",
-	})
+	}, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("getArticleSitemapItems() error = %v", err)
 	}
@@ -163,7 +164,7 @@ func TestGetArticleSitemapItemsSupportsCustomPathPrefixAndLimit(t *testing.T) {
 	response, err := getArticleSitemapItems(context.Background(), postService, &GetArticleSitemapItemsRequest{
 		Limit:         1,
 		URIPathPrefix: "/journal",
-	})
+	}, time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatalf("getArticleSitemapItems() error = %v", err)
 	}
@@ -179,7 +180,7 @@ func TestGetArticleSitemapItemsSupportsCustomPathPrefixAndLimit(t *testing.T) {
 func TestGetArticleSitemapItemsRejectsInvalidRequest(t *testing.T) {
 	postService := &fakeContentManagerPostService{}
 
-	_, err := getArticleSitemapItems(context.Background(), postService, &GetArticleSitemapItemsRequest{Limit: -1})
+	_, err := getArticleSitemapItems(context.Background(), postService, &GetArticleSitemapItemsRequest{Limit: -1}, time.Now())
 	if !errors.Is(err, post.ErrPostBadRequest) {
 		t.Fatalf("getArticleSitemapItems() error = %v, want ErrPostBadRequest", err)
 	}

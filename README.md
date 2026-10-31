@@ -79,6 +79,7 @@ program, referral and earnings services; hosts retain commercial policy and sche
 - **[Encryption](./external/encryption/README.md)** - Reusable AES-256-GCM payload encryption with explicit keys and associated data
 - **[Ephemeral](./external/ephemeral/README.md)** - Redis session storage and opt-in process-local transactional snapshots
 - **[Group](./external/group/README.md)** - User groups, memberships, and hierarchical organisations
+- **[IndexNow](./external/indexnow/README.md)** - Ownership verification, URL-change notifications and submission receipts for participating search engines
 - **[Logger](./external/logger/README.md)** - Structured request logs, trace correlation, original-path policies, and handler duration
 - **[MongoDB Migrator](./external/migrator/mongo/README.md)** - Shared migration command with host-owned registrations and templates
 - **[Notifier](./external/notifier/README.md)** - Push notification registration, preferences, and delivery
