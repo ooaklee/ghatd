@@ -36,27 +36,38 @@ jobs:
       - name: Start an isolated transaction-capable MongoDB
         shell: bash
         run: |
-          docker run --detach --name ghatd-partner-contract-mongo \
+          mongo_container=ghatd-partner-contract-mongo
+          report_mongo_failure() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              docker inspect --format '{{json .State}}' "$mongo_container" || true
+              docker logs --tail 200 "$mongo_container" || true
+            fi
+          }
+          trap report_mongo_failure EXIT
+          # Keep fixture limits independent of Docker daemon defaults.
+          docker run --detach --name "$mongo_container" \
+            --ulimit nofile=65536:65536 \
             --publish 127.0.0.1:27017:27017 mongo:8.0 \
             --replSet ghatd-test --bind_ip_all
-          for attempt in {1..30}; do
-            if docker exec ghatd-partner-contract-mongo mongosh --quiet \
-              --eval 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)'; then
-              break
-            fi
-            sleep 2
-          done
-          docker exec ghatd-partner-contract-mongo mongosh --quiet --eval \
+          wait_for_mongo() {
+            for attempt in {1..30}; do
+              if [ "$(docker inspect --format '{{.State.Running}}' "$mongo_container")" != true ]; then
+                echo 'MongoDB fixture exited before becoming ready' >&2
+                return 1
+              fi
+              if docker exec "$mongo_container" mongosh --quiet --eval "$1"; then
+                return 0
+              fi
+              sleep 2
+            done
+            echo 'MongoDB fixture readiness deadline exceeded' >&2
+            return 1
+          }
+          wait_for_mongo 'quit(db.adminCommand({ping: 1}).ok ? 0 : 1)'
+          docker exec "$mongo_container" mongosh --quiet --eval \
             'rs.initiate({_id: "ghatd-test", members: [{_id: 0, host: "127.0.0.1:27017"}]})'
-          for attempt in {1..30}; do
-            if docker exec ghatd-partner-contract-mongo mongosh --quiet \
-              --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; then
-              exit 0
-            fi
-            sleep 2
-          done
-          docker logs ghatd-partner-contract-mongo
-          exit 1
+          wait_for_mongo 'quit(db.hello().isWritablePrimary ? 0 : 1)'
       - name: Start an isolated session store
         shell: bash
         run: |
@@ -101,4 +112,7 @@ jobs:
         run: docker rm --force ghatd-partner-contract-mongo
       - name: Remove the isolated session store
         if: always()
-        run: docker rm --force ghatd-partner-contract-redis
+        run: |
+          if docker inspect ghatd-partner-contract-redis >/dev/null 2>&1; then
+            docker rm --force ghatd-partner-contract-redis
+          fi
