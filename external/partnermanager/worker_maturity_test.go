@@ -29,7 +29,7 @@ type maturityQueueSpy struct {
 	completed int
 }
 
-func (r *maturityQueueSpy) EnqueueWorkPage(_ context.Context, _, _ string, _, _ DiscoveryCursor, items []WorkItem) error {
+func (r *maturityQueueSpy) EnqueueWorkPage(_ context.Context, _, _ string, _, _ DiscoveryCursor, items []WorkItem, _ time.Time) error {
 	r.calls++
 	r.items = items
 	return nil

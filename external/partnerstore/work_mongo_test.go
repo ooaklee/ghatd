@@ -288,3 +288,49 @@ func (s workFaultStore) Transact(ctx context.Context, key string, fn func(record
 	}
 	return err
 }
+
+// Audit disposition for this addition: independent named cases verify idle and
+// replaying discovery cannot grow page receipts, and receipts carry bounded
+// expiry. Existing unrelated tests still need full audit.
+func TestMongoWorkPageReceiptGrowthBounded(t *testing.T) {
+	_, _, store, db, clock, ctx := mongoEarnings(t)
+	queue := workQueueFixture(t, store, clock)
+	receipts := func() int64 {
+		n, err := db.Collection("ghatd_owned_records").CountDocuments(ctx, bson.M{"kind": kindWorkPage})
+		require.NoError(t, err)
+		return n
+	}
+	// A real first page seeds position 2 at revision 1.
+	page := workCandidates(2)
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, partnermanager.DiscoveryCursor{}, partnermanager.DiscoveryCursor{AfterSequence: 2}, page))
+	require.EqualValues(t, 1, receipts())
+	seeded, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, seeded.AfterSequence)
+	// An idle page (empty candidates with a non-zero position to reset) writes
+	// no receipt but still resets the cursor.
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, seeded, partnermanager.DiscoveryCursor{}, nil))
+	require.EqualValues(t, 1, receipts())
+	reset, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+	require.NoError(t, err)
+	require.Zero(t, reset.AfterSequence)
+	// The same retained page replayed after an intervening revision bump lands
+	// on the same receipt instead of writing a new document per tick.
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, reset, partnermanager.DiscoveryCursor{AfterSequence: 2}, page))
+	require.EqualValues(t, 1, receipts())
+	bumped, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, bumped.Revision)
+	// A resweep from zero over unchanged sources replays the same content and
+	// must neither fail nor duplicate the receipt.
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, bumped, partnermanager.DiscoveryCursor{AfterSequence: 2}, page))
+	require.EqualValues(t, 1, receipts())
+	// Retained receipts carry a bounded expiry the TTL monitor can act on.
+	var row struct {
+		ExpiresAt *time.Time `bson:"expires_at"`
+	}
+	err = db.Collection("ghatd_owned_records").FindOne(ctx, bson.M{"kind": kindWorkPage}).Decode(&row)
+	require.NoError(t, err)
+	require.NotNil(t, row.ExpiresAt)
+	require.True(t, row.ExpiresAt.After(clock.now))
+}
