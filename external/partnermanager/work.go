@@ -33,11 +33,13 @@ const (
 var workCode = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 // pageReceiptRetention bounds how long a retained discovery page's replay
-// receipt lives after enqueue. Replayed identical pages within the window
-// deduplicate; after expiry the TTL monitor removes the receipt and the
-// compare-and-set cursor alone fences discovery. It deliberately exceeds the
-// longest lost-ack reconciliation window so a receipt never expires while its
-// commit may still be retried.
+// receipt lives after enqueue: a bounded replay contract. Replayed identical
+// pages within the window deduplicate; after expiry the TTL monitor removes
+// the receipt and the compare-and-set cursor alone fences discovery. A retry
+// older than this window returns ErrWorkConflict; the caller recovers by
+// re-reading the current cursor and restarting discovery from there, which is
+// safe because discovery reads are idempotent and work items are keyed by
+// source identity, not by cursor position.
 const pageReceiptRetention = 7 * 24 * time.Hour
 
 // WorkCandidate identifies immutable owning-service input. Fingerprints are

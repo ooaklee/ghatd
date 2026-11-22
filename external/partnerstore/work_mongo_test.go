@@ -44,6 +44,10 @@ func TestMongoWorkDiscoveryAtomicRecovery(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, store, db, clock, ctx := mongoEarnings(t)
+			// Receipts now carry a bounded TTL expiry, so this test drives a
+			// current clock; the suite's fixed historical clock would make every
+			// receipt immediately TTL-eligible.
+			clock = &mongoTestClock{time.Now().UTC().Truncate(time.Millisecond)}
 			queue := workQueueFixture(t, store, clock)
 			fault := workQueueFixture(t, workFaultStore{Store: store, failAt: tc.failAt, uncertain: tc.uncertain}, clock)
 			candidates := workCandidates(2)
@@ -492,4 +496,61 @@ func legacyWorkID(program, kind, source string) string {
 	body, _ := json.Marshal([]string{program, kind, source})
 	sum := sha256.Sum256(body)
 	return "work_" + hex.EncodeToString(sum[:])
+}
+
+// Audit disposition for this addition: named cases extend the replay contract:
+// a legacy-format empty-page reset is acknowledged from its legacy receipt
+// after intervening advancement, and a replay whose receipt has expired
+// conflicts but recovers through a fresh cursor read and rediscovery.
+func TestMongoWorkPageReplayContract(t *testing.T) {
+	type proof struct {
+		name string
+		run  func(t *testing.T, queue *partnermanager.WorkQueue, repo *WorkRepository, db *mongo.Database, ctx context.Context)
+	}
+	pos2 := partnermanager.DiscoveryCursor{AfterSequence: 2}
+	zero := partnermanager.DiscoveryCursor{}
+	proofs := []proof{
+		{"legacy_empty_reset_reconciles_after_advance", func(t *testing.T, queue *partnermanager.WorkQueue, repo *WorkRepository, _ *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, zero, pos2, page))
+			at, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			// Pre-fix code committed empty resets with a legacy receipt.
+			require.NoError(t, repo.EnqueueWorkPageLegacy(ctx, "fixture-program", partnermanager.WorkRevenue, at, zero, nil))
+			after, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.Zero(t, after.AfterSequence)
+			// An intervening non-empty advance moves the cursor past the reset.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, after, pos2, page))
+			// Retrying the legacy empty reset after the advance reconciles from
+			// the legacy receipt instead of conflicting.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, zero, nil))
+		}},
+		{"expired_receipt_conflicts_then_recovers_via_cursor", func(t *testing.T, queue *partnermanager.WorkQueue, _ *WorkRepository, db *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, zero, pos2, page))
+			at, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, zero, nil))
+			// Simulate receipt expiry: the TTL monitor removes the receipt.
+			_, err = db.Collection("ghatd_owned_records").DeleteMany(ctx, bson.M{"kind": kindWorkPage})
+			require.NoError(t, err)
+			// The bounded replay contract: an old retry conflicts...
+			require.ErrorIs(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, zero, pos2, page), partnermanager.ErrWorkConflict)
+			// ...and the caller recovers by re-reading the cursor and
+			// restarting discovery from the committed position.
+			current, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.Zero(t, current.AfterSequence)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, current, pos2, page))
+		}},
+	}
+	for _, p := range proofs {
+		t.Run(p.name, func(t *testing.T) {
+			_, _, store, db, _, ctx := mongoEarnings(t)
+			repo, err := NewWorkRepository(store)
+			require.NoError(t, err)
+			p.run(t, workQueueFixture(t, store, &mongoTestClock{time.Now().UTC().Truncate(time.Millisecond)}), repo, db, ctx)
+		})
+	}
 }

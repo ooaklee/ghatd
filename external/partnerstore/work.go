@@ -285,25 +285,24 @@ func (r *WorkRepository) EnqueueWorkPage(ctx context.Context, program, kind stri
 			// a receipt (current or legacy identity), this page was previously
 			// committed and expired or was superseded by a later sweep: replay is
 			// safe and idempotent. Operational lookup errors propagate rather
-			// than masquerading as conflicts.
-			if len(items) > 0 {
-				for _, id := range []string{pageID, legacyPageID} {
-					receipt, getErr := tx.Get(ctx, kindWorkPage, id)
-					if getErr == nil {
-						// Each identity stores its own body shape: the legacy
-						// receipt hashed the expected revision into its payload.
-						want := body
-						if id == legacyPageID {
-							want = legacyBody
-						}
-						if receipt.Partition == part && string(receipt.Data) == string(want) {
-							return nil
-						}
-						continue
+			// than masquerading as conflicts. Pre-fix code also wrote receipts
+			// for empty pages, so the lookup covers empty retries too.
+			for _, id := range []string{pageID, legacyPageID} {
+				receipt, getErr := tx.Get(ctx, kindWorkPage, id)
+				if getErr == nil {
+					// Each identity stores its own body shape: the legacy
+					// receipt hashed the expected revision into its payload.
+					want := body
+					if id == legacyPageID {
+						want = legacyBody
 					}
-					if !singleCauseIs(getErr, recordstore.ErrNotFound) {
-						return getErr
+					if receipt.Partition == part && string(receipt.Data) == string(want) {
+						return nil
 					}
+					continue
+				}
+				if !singleCauseIs(getErr, recordstore.ErrNotFound) {
+					return getErr
 				}
 			}
 			return partnermanager.ErrWorkConflict
