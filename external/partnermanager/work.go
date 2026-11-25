@@ -32,6 +32,16 @@ const (
 
 var workCode = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
+// pageReceiptRetention bounds how long a retained discovery page's replay
+// receipt lives after enqueue: a bounded replay contract. Replayed identical
+// pages within the window deduplicate; after expiry the TTL monitor removes
+// the receipt and the compare-and-set cursor alone fences discovery. A retry
+// older than this window returns ErrWorkConflict; the caller recovers by
+// re-reading the current cursor and restarting discovery from there, which is
+// safe because discovery reads are idempotent and work items are keyed by
+// source identity, not by cursor position.
+const pageReceiptRetention = 7 * 24 * time.Hour
+
 // WorkCandidate identifies immutable owning-service input. Fingerprints are
 // derived from private canonical source fields, not public JSON that omits them.
 type WorkCandidate struct {
@@ -87,7 +97,9 @@ type WorkRepository interface {
 	GetDiscoveryCursor(context.Context, string, string) (DiscoveryCursor, error)
 	// EnqueueWorkPage stores a discovered page of WorkItems between the prior and
 	// new cursors, atomically advancing guarded discovery within WorkRepository.
-	EnqueueWorkPage(context.Context, string, string, DiscoveryCursor, DiscoveryCursor, []WorkItem) error
+	// The absolute expiry, when non-zero, lets the store's TTL monitor remove the
+	// page receipt after the lost-ack replay window has closed.
+	EnqueueWorkPage(context.Context, string, string, DiscoveryCursor, DiscoveryCursor, []WorkItem, time.Time) error
 	// GetWorkItem reads the WorkItem for the identified program and item, a lookup
 	// owned by the work repository.
 	GetWorkItem(context.Context, string, string) (WorkItem, error)
@@ -220,6 +232,10 @@ func (q *WorkQueue) Cursor(ctx context.Context, kind string) (DiscoveryCursor, e
 
 // EnqueuePage advances only discovery, atomically retaining every source in the
 // page. Changed immutable input conflicts; errors cannot skip the whole page.
+// Pages with no retained sources still advance the cursor but write no page
+// receipt, so idle sweeps do not persist a new immutable receipt every tick.
+// Retained pages write a receipt expiring one page-receipt retention after the
+// queue clock's now; the TTL monitor removes expired receipts.
 func (q *WorkQueue) EnqueuePage(ctx context.Context, kind string, expected, next DiscoveryCursor, candidates []WorkCandidate) error {
 	if err := q.ready(ctx); err != nil {
 		return err
@@ -245,7 +261,7 @@ func (q *WorkQueue) EnqueuePage(ctx context.Context, kind string, expected, next
 		}
 		items = append(items, WorkItem{ID: workID(q.config.ProgramID, kind, candidate.SourceID), ProgramID: q.config.ProgramID, Kind: kind, State: WorkPending, SourceID: candidate.SourceID, SourceFingerprint: candidate.SourceFingerprint, InitialDueAt: due, CreatedAt: now, NextAttemptAt: nextAttempt})
 	}
-	return q.repo.EnqueueWorkPage(ctx, q.config.ProgramID, kind, expected, next, items)
+	return q.repo.EnqueueWorkPage(ctx, q.config.ProgramID, kind, expected, next, items, now.Add(pageReceiptRetention))
 }
 
 // Get returns the work item for a kind and source, addressing it by the derived

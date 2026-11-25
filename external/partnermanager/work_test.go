@@ -25,7 +25,7 @@ func (r *workRepositorySpy) GetDiscoveryCursor(context.Context, string, string) 
 	r.calls++
 	return DiscoveryCursor{}, r.cursorErr
 }
-func (r *workRepositorySpy) EnqueueWorkPage(context.Context, string, string, DiscoveryCursor, DiscoveryCursor, []WorkItem) error {
+func (r *workRepositorySpy) EnqueueWorkPage(context.Context, string, string, DiscoveryCursor, DiscoveryCursor, []WorkItem, time.Time) error {
 	r.calls++
 	return nil
 }

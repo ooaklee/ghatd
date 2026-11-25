@@ -2,16 +2,20 @@ package partnerstore
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ooaklee/ghatd/external/encryption"
 	"github.com/ooaklee/ghatd/external/partnermanager"
 	"github.com/ooaklee/ghatd/external/repository/recordstore"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // Audit disposition: named real-Mongo cases cover durable discovery/leases and
@@ -40,6 +44,10 @@ func TestMongoWorkDiscoveryAtomicRecovery(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, store, db, clock, ctx := mongoEarnings(t)
+			// Receipts now carry a bounded TTL expiry, so this test drives a
+			// current clock; the suite's fixed historical clock would make every
+			// receipt immediately TTL-eligible.
+			clock = &mongoTestClock{time.Now().UTC().Truncate(time.Millisecond)}
 			queue := workQueueFixture(t, store, clock)
 			fault := workQueueFixture(t, workFaultStore{Store: store, failAt: tc.failAt, uncertain: tc.uncertain}, clock)
 			candidates := workCandidates(2)
@@ -287,4 +295,262 @@ func (s workFaultStore) Transact(ctx context.Context, key string, fn func(record
 		return recordstore.ErrUncertain
 	}
 	return err
+}
+
+// Audit disposition for this addition: independent named cases verify idle and
+// replaying discovery cannot grow page receipts, and receipts carry bounded
+// expiry. Existing unrelated tests still need full audit.
+func TestMongoWorkPageReceiptGrowthBounded(t *testing.T) {
+	_, _, store, db, _, ctx := mongoEarnings(t)
+	// Receipts now carry a bounded expiry enforced by the real TTL monitor, so
+	// this test drives a current clock instead of the suite's fixed historical
+	// one whose seven-day receipts would already be expired.
+	clock := &mongoTestClock{time.Now().UTC().Truncate(time.Millisecond)}
+	queue := workQueueFixture(t, store, clock)
+	receipts := func() int64 {
+		n, err := db.Collection("ghatd_owned_records").CountDocuments(ctx, bson.M{"kind": kindWorkPage})
+		require.NoError(t, err)
+		return n
+	}
+	// A real first page seeds position 2 at revision 1.
+	page := workCandidates(2)
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, partnermanager.DiscoveryCursor{}, partnermanager.DiscoveryCursor{AfterSequence: 2}, page))
+	require.EqualValues(t, 1, receipts())
+	seeded, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, seeded.AfterSequence)
+	// An idle page (empty candidates with a non-zero position to reset) writes
+	// no receipt but still resets the cursor.
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, seeded, partnermanager.DiscoveryCursor{}, nil))
+	require.EqualValues(t, 1, receipts())
+	reset, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+	require.NoError(t, err)
+	require.Zero(t, reset.AfterSequence)
+	// The same retained page replayed after an intervening revision bump lands
+	// on the same receipt instead of writing a new document per tick.
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, reset, partnermanager.DiscoveryCursor{AfterSequence: 2}, page))
+	require.EqualValues(t, 1, receipts())
+	bumped, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, bumped.Revision)
+	// A resweep from zero over unchanged sources replays the seeded page body;
+	// the cursor has moved on, but the stored receipt proves the replay is safe
+	// and idempotent: no failure and no duplicate receipt.
+	require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, reset, partnermanager.DiscoveryCursor{AfterSequence: 2}, page))
+	require.EqualValues(t, 1, receipts())
+	// Retained receipts carry a bounded expiry the TTL monitor can act on.
+	var row struct {
+		ExpiresAt *time.Time `bson:"expires_at"`
+	}
+	err = db.Collection("ghatd_owned_records").FindOne(ctx, bson.M{"kind": kindWorkPage}).Decode(&row)
+	require.NoError(t, err)
+	require.NotNil(t, row.ExpiresAt)
+	require.True(t, row.ExpiresAt.After(clock.now))
+}
+
+// Audit disposition for this addition: independent named cases verify replay
+// acknowledgement is content-proven, not position-proven, that legacy-format
+// receipts still reconcile cross-version lost-ack replays, and that an empty
+// page's atomic cursor advance is itself durable replay evidence. Existing
+// unrelated tests still need full audit.
+func TestMongoWorkPageReplayProofs(t *testing.T) {
+	type proof struct {
+		name string
+		run  func(t *testing.T, queue *partnermanager.WorkQueue, db *mongo.Database, ctx context.Context)
+	}
+	pos2 := partnermanager.DiscoveryCursor{AfterSequence: 2}
+	proofs := []proof{
+		{"same_endpoint_different_content_is_proven_not_assumed", func(t *testing.T, queue *partnermanager.WorkQueue, _ *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, partnermanager.DiscoveryCursor{}, pos2, page))
+			at, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			// A different page reaching the same endpoint is never falsely
+			// acknowledged: its extra source is actually retained through the
+			// compare-and-set commit, while a changed immutable fingerprint on
+			// an already-retained source conflicts.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, pos2, append(page, workCandidateAt(2))))
+			_, err = queue.Get(ctx, partnermanager.WorkRevenue, "source_0002")
+			require.NoError(t, err)
+			require.ErrorIs(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, pos2, changedFingerprint(page)), partnermanager.ErrWorkConflict)
+		}},
+		{"legacy_receipt_reconciles_cross_version_replay", func(t *testing.T, queue *partnermanager.WorkQueue, db *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			// Simulate a pre-fix receipt for the same durable page: the legacy
+			// digest hashed the expected cursor revision. Receipt payloads are
+			// encrypted by the store, so the legacy document is written through
+			// the store transaction rather than a raw insert.
+			store, err := NewWorkRepository(workStore(t, db))
+			require.NoError(t, err)
+			at := partnermanager.DiscoveryCursor{}
+			require.NoError(t, store.EnqueueWorkPageLegacy(ctx, "fixture-program", partnermanager.WorkRevenue, at, pos2, legacyItems(t, queue, page)))
+			moved, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.EqualValues(t, 1, moved.Revision)
+			// An intervening empty advance moves the cursor past the legacy page.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, moved, partnermanager.DiscoveryCursor{}, nil))
+			// Replaying the legacy page after the cursor moved on must reconcile
+			// against the legacy receipt instead of conflicting.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, pos2, page))
+		}},
+		{"empty_page_reset_is_replay_safe", func(t *testing.T, queue *partnermanager.WorkQueue, _ *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, partnermanager.DiscoveryCursor{}, pos2, page))
+			at, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			// An empty reset's whole commit is the cursor advance: replaying it
+			// is acknowledged by the committed position itself.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, partnermanager.DiscoveryCursor{}, nil))
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, partnermanager.DiscoveryCursor{}, nil))
+			reset, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.Zero(t, reset.AfterSequence)
+		}},
+	}
+	for _, p := range proofs {
+		t.Run(p.name, func(t *testing.T) {
+			_, _, store, db, _, ctx := mongoEarnings(t)
+			p.run(t, workQueueFixture(t, store, &mongoTestClock{time.Now().UTC().Truncate(time.Millisecond)}), db, ctx)
+		})
+	}
+}
+
+func workCandidateAt(i int) partnermanager.WorkCandidate {
+	return partnermanager.WorkCandidate{SourceID: fmt.Sprintf("source_%04d", i), SourceFingerprint: fmt.Sprintf("source_digest_%04d", i)}
+}
+
+func changedFingerprint(page []partnermanager.WorkCandidate) []partnermanager.WorkCandidate {
+	out := append([]partnermanager.WorkCandidate(nil), page...)
+	out[0].SourceFingerprint = "different_digest"
+	return out
+}
+
+// legacyItems rehydrates queue-shaped candidates into stored WorkItems the way
+// the queue does, so the legacy receipt writer sees realistic rows.
+func legacyItems(t *testing.T, queue *partnermanager.WorkQueue, page []partnermanager.WorkCandidate) []partnermanager.WorkItem {
+	t.Helper()
+	out := make([]partnermanager.WorkItem, 0, len(page))
+	for _, c := range page {
+		out = append(out, partnermanager.WorkItem{ID: legacyWorkID("fixture-program", partnermanager.WorkRevenue, c.SourceID), ProgramID: "fixture-program", Kind: partnermanager.WorkRevenue, State: partnermanager.WorkPending, SourceID: c.SourceID, SourceFingerprint: c.SourceFingerprint, CreatedAt: time.Now().UTC(), NextAttemptAt: time.Now().UTC()})
+	}
+	return out
+}
+
+// workStore rebuilds a store handle over an existing database for test-only
+// legacy-format writes.
+func workStore(t *testing.T, db *mongo.Database) recordstore.Store {
+	t.Helper()
+	cipher, err := encryption.NewPayloadCipher([]byte("01234567890123456789012345678901"))
+	require.NoError(t, err)
+	store, err := recordstore.NewMongoStoreFromDatabase(db, cipher)
+	require.NoError(t, err)
+	return store
+}
+
+// EnqueueWorkPageLegacy writes a receipt under the pre-fix page identity that
+// hashed the expected cursor revision, advancing the cursor identically. It
+// exists only so tests can reproduce historical documents; production code
+// always calls EnqueueWorkPage.
+func (r *WorkRepository) EnqueueWorkPageLegacy(ctx context.Context, program, kind string, expected, next partnermanager.DiscoveryCursor, items []partnermanager.WorkItem) error {
+	type source struct {
+		ID, Fingerprint string
+		DueAt           *time.Time `json:",omitempty"`
+	}
+	sources := make([]source, 0, len(items))
+	for _, item := range items {
+		v := source{ID: item.SourceID, Fingerprint: item.SourceFingerprint}
+		if !item.InitialDueAt.IsZero() {
+			due := item.InitialDueAt.UTC()
+			v.DueAt = &due
+		}
+		sources = append(sources, v)
+	}
+	body, _ := json.Marshal([]any{program, kind, expected.Revision, expected.AfterID, expected.AfterSequence, next.AfterID, next.AfterSequence, sources})
+	sum := sha256.Sum256(body)
+	pageID := hex.EncodeToString(sum[:])
+	part := workPartition(program, kind)
+	return workMapped(r.store.Transact(ctx, part, func(tx recordstore.Tx) error {
+		_, old, err := getCursor(ctx, tx, program, kind)
+		absent := singleCauseIs(err, partnermanager.ErrNotFound)
+		if err != nil && !absent {
+			return err
+		}
+		row := recordstore.Record{ID: pageID, Kind: kindWorkPage, Partition: part, Revision: 1, Data: body}
+		if err := tx.Insert(ctx, row); err != nil {
+			return err
+		}
+		next.Revision = expected.Revision + 1
+		cursorRow, err := recordstore.NewRecord(kindWorkCursor, workDigest(program, kind), part, next.Revision, next)
+		if err != nil {
+			return err
+		}
+		if absent {
+			return tx.Insert(ctx, cursorRow)
+		}
+		return tx.Replace(ctx, cursorRow, old.Revision)
+	}))
+}
+
+// legacyWorkID mirrors the manager's unexported workID derivation for tests.
+func legacyWorkID(program, kind, source string) string {
+	body, _ := json.Marshal([]string{program, kind, source})
+	sum := sha256.Sum256(body)
+	return "work_" + hex.EncodeToString(sum[:])
+}
+
+// Audit disposition for this addition: named cases extend the replay contract:
+// a legacy-format empty-page reset is acknowledged from its legacy receipt
+// after intervening advancement, and a replay whose receipt has expired
+// conflicts but recovers through a fresh cursor read and rediscovery.
+func TestMongoWorkPageReplayContract(t *testing.T) {
+	type proof struct {
+		name string
+		run  func(t *testing.T, queue *partnermanager.WorkQueue, repo *WorkRepository, db *mongo.Database, ctx context.Context)
+	}
+	pos2 := partnermanager.DiscoveryCursor{AfterSequence: 2}
+	zero := partnermanager.DiscoveryCursor{}
+	proofs := []proof{
+		{"legacy_empty_reset_reconciles_after_advance", func(t *testing.T, queue *partnermanager.WorkQueue, repo *WorkRepository, _ *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, zero, pos2, page))
+			at, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			// Pre-fix code committed empty resets with a legacy receipt.
+			require.NoError(t, repo.EnqueueWorkPageLegacy(ctx, "fixture-program", partnermanager.WorkRevenue, at, zero, nil))
+			after, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.Zero(t, after.AfterSequence)
+			// An intervening non-empty advance moves the cursor past the reset.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, after, pos2, page))
+			// Retrying the legacy empty reset after the advance reconciles from
+			// the legacy receipt instead of conflicting.
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, zero, nil))
+		}},
+		{"expired_receipt_conflicts_then_recovers_via_cursor", func(t *testing.T, queue *partnermanager.WorkQueue, _ *WorkRepository, db *mongo.Database, ctx context.Context) {
+			page := workCandidates(2)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, zero, pos2, page))
+			at, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, at, zero, nil))
+			// Simulate receipt expiry: the TTL monitor removes the receipt.
+			_, err = db.Collection("ghatd_owned_records").DeleteMany(ctx, bson.M{"kind": kindWorkPage})
+			require.NoError(t, err)
+			// The bounded replay contract: an old retry conflicts...
+			require.ErrorIs(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, zero, pos2, page), partnermanager.ErrWorkConflict)
+			// ...and the caller recovers by re-reading the cursor and
+			// restarting discovery from the committed position.
+			current, err := queue.Cursor(ctx, partnermanager.WorkRevenue)
+			require.NoError(t, err)
+			require.Zero(t, current.AfterSequence)
+			require.NoError(t, queue.EnqueuePage(ctx, partnermanager.WorkRevenue, current, pos2, page))
+		}},
+	}
+	for _, p := range proofs {
+		t.Run(p.name, func(t *testing.T) {
+			_, _, store, db, _, ctx := mongoEarnings(t)
+			repo, err := NewWorkRepository(store)
+			require.NoError(t, err)
+			p.run(t, workQueueFixture(t, store, &mongoTestClock{time.Now().UTC().Truncate(time.Millisecond)}), repo, db, ctx)
+		})
+	}
 }

@@ -227,7 +227,14 @@ func (r *WorkRepository) GetDiscoveryCursor(ctx context.Context, program, kind s
 
 // EnqueueWorkPage commits a bounded page and its read position together. Its
 // immutable receipt makes lost-ack replay safe even after a later page advances.
-func (r *WorkRepository) EnqueueWorkPage(ctx context.Context, program, kind string, expected, next partnermanager.DiscoveryCursor, items []partnermanager.WorkItem) error {
+// The receipt identity covers only durable page content (program, kind, read
+// position, retained sources), never the cursor revision, so replaying the same
+// page after an intervening revision bump lands on the stored receipt instead
+// of writing a new document per tick. A page with no retained sources writes no
+// receipt: the compare-and-set cursor advance alone fences concurrent discovery.
+// Receipts expire at the supplied absolute time, bounding growth through the
+// store's TTL monitor; zero means keep the legacy never-expiring receipt.
+func (r *WorkRepository) EnqueueWorkPage(ctx context.Context, program, kind string, expected, next partnermanager.DiscoveryCursor, items []partnermanager.WorkItem, expires time.Time) error {
 	type source struct {
 		ID, Fingerprint string
 		DueAt           *time.Time `json:",omitempty"`
@@ -241,27 +248,63 @@ func (r *WorkRepository) EnqueueWorkPage(ctx context.Context, program, kind stri
 		}
 		sources = append(sources, v)
 	}
-	body, _ := json.Marshal([]any{program, kind, expected.Revision, expected.AfterID, expected.AfterSequence, next.AfterID, next.AfterSequence, sources})
+	body, _ := json.Marshal([]any{program, kind, expected.AfterID, expected.AfterSequence, next.AfterID, next.AfterSequence, sources})
 	sum := sha256.Sum256(body)
 	pageID := hex.EncodeToString(sum[:])
+	// Pre-fix receipts hashed the cursor revision into the page identity. Compute
+	// the legacy identity too so cross-version lost-ack replay still finds its
+	// evidence after intervening discovery advances.
+	legacyBody, _ := json.Marshal([]any{program, kind, expected.Revision, expected.AfterID, expected.AfterSequence, next.AfterID, next.AfterSequence, sources})
+	legacySum := sha256.Sum256(legacyBody)
+	legacyPageID := hex.EncodeToString(legacySum[:])
 	part := workPartition(program, kind)
 	return workMapped(r.store.Transact(ctx, part, func(tx recordstore.Tx) error {
-		receipt, err := tx.Get(ctx, kindWorkPage, pageID)
-		if err == nil {
-			if receipt.Partition != part || string(receipt.Data) != string(body) {
-				return partnermanager.ErrWorkConflict
-			}
-			return nil
-		}
-		if !singleCauseIs(err, recordstore.ErrNotFound) {
-			return err
-		}
 		cursor, old, err := getCursor(ctx, tx, program, kind)
 		absent := singleCauseIs(err, partnermanager.ErrNotFound)
 		if err != nil && !absent {
 			return err
 		}
+		// A stored cursor already at next may record a lost-ack replay of this
+		// very commit. A cursor position alone is not proof of page identity:
+		// acknowledge the replay only when durable evidence agrees. For a
+		// retained page the receipt must match exactly; for an empty reset the
+		// atomic cursor advance itself is the whole commit, so equality of the
+		// committed position is sufficient.
+		if !absent && cursorEqual(cursor, next) {
+			if len(items) == 0 {
+				return nil
+			}
+			if receipt, getErr := tx.Get(ctx, kindWorkPage, pageID); getErr == nil && receipt.Partition == part && string(receipt.Data) == string(body) {
+				return nil
+			} else if getErr != nil && !singleCauseIs(getErr, recordstore.ErrNotFound) {
+				return getErr
+			}
+		}
 		if cursor != expected || cursor.Revision == math.MaxInt64 {
+			// The expected revision moved on. If this exact page body already has
+			// a receipt (current or legacy identity), this page was previously
+			// committed and expired or was superseded by a later sweep: replay is
+			// safe and idempotent. Operational lookup errors propagate rather
+			// than masquerading as conflicts. Pre-fix code also wrote receipts
+			// for empty pages, so the lookup covers empty retries too.
+			for _, id := range []string{pageID, legacyPageID} {
+				receipt, getErr := tx.Get(ctx, kindWorkPage, id)
+				if getErr == nil {
+					// Each identity stores its own body shape: the legacy
+					// receipt hashed the expected revision into its payload.
+					want := body
+					if id == legacyPageID {
+						want = legacyBody
+					}
+					if receipt.Partition == part && string(receipt.Data) == string(want) {
+						return nil
+					}
+					continue
+				}
+				if !singleCauseIs(getErr, recordstore.ErrNotFound) {
+					return getErr
+				}
+			}
 			return partnermanager.ErrWorkConflict
 		}
 		for _, item := range items {
@@ -295,9 +338,57 @@ func (r *WorkRepository) EnqueueWorkPage(ctx context.Context, program, kind stri
 		if err != nil {
 			return err
 		}
+		if len(items) == 0 {
+			// An idle page retains nothing; the advanced cursor alone carries the
+			// read position and the compare-and-set fences concurrent discovery.
+			return nil
+		}
+		if oldReceipt, getErr := tx.Get(ctx, kindWorkPage, pageID); getErr == nil {
+			// Same durable content already has a receipt (for example a completed
+			// sweep restarted from zero): refresh its expiry rather than failing.
+			if oldReceipt.Partition != part || string(oldReceipt.Data) != string(body) {
+				return partnermanager.ErrWorkConflict
+			}
+			updated := oldReceipt
+			updated.Revision++
+			if !expires.IsZero() {
+				var expErr error
+				updated, expErr = updated.WithExpiration(expires)
+				if expErr != nil {
+					return workMapped(expErr)
+				}
+			}
+			return tx.Replace(ctx, updated, oldReceipt.Revision)
+		} else if !singleCauseIs(getErr, recordstore.ErrNotFound) {
+			return getErr
+		}
+		if legacyReceipt, getErr := tx.Get(ctx, kindWorkPage, legacyPageID); getErr == nil {
+			// A legacy-format receipt for the same durable content was already
+			// migrated by an earlier advance through this position: leave the
+			// historical document untouched and write the current-format receipt.
+			if legacyReceipt.Partition != part || string(legacyReceipt.Data) != string(legacyBody) {
+				return partnermanager.ErrWorkConflict
+			}
+		} else if !singleCauseIs(getErr, recordstore.ErrNotFound) {
+			return getErr
+		}
 		row = recordstore.Record{ID: pageID, Kind: kindWorkPage, Partition: part, Revision: 1, Data: body}
+		if !expires.IsZero() {
+			var expErr error
+			row, expErr = row.WithExpiration(expires)
+			if expErr != nil {
+				return workMapped(expErr)
+			}
+		}
 		return tx.Insert(ctx, row)
 	}))
+}
+
+// cursorEqual compares two discovery cursors ignoring their revisions, matching
+// the durable page identity: the same read position holds the same meaning
+// regardless of how many times discovery advanced through it.
+func cursorEqual(a, b partnermanager.DiscoveryCursor) bool {
+	return a.AfterID == b.AfterID && a.AfterSequence == b.AfterSequence
 }
 
 // GetWorkItem reads one work item, verifying its program binding and full

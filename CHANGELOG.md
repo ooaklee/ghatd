@@ -193,6 +193,13 @@ when the release version has been selected, and remove unused subsections.
 
 - Post pagination uses a stable ID tiebreaker for equal sort values, preventing
   duplicate or missing candidates while traversing unchanged content.
+- Partner work discovery no longer grows `partner_work_page_receipt` storage on
+  idle sweeps: empty pages write no page receipt, the receipt identity excludes
+  the cursor revision so replaying unchanged pages deduplicates, and retained
+  receipts now carry a bounded seven-day expiry enforced by the store's TTL
+  monitor. Existing deployments keep already-written receipts until a separate,
+  explicitly approved cleanup; the TTL monitor only removes receipts that carry
+  the new expiry.
 
 - [Lifecycle source discovery](external/billing/README.md#bounded-lifecycle-source-discovery)
   now validates reviewed historical checkout owners through their retained
